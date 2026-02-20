@@ -94,7 +94,12 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn quit_app(state: State<'_, AppState>) -> Result<(), String> {
     info!("Quit requested via > command");
+
+    // Generate auto-steering document before quitting
     if let Ok(client) = state.acp_client.try_lock() {
+        if let Ok(config) = state.config.try_lock() {
+            crate::auto_steering::generate_steering_on_quit(&client, &config);
+        }
         client.disconnect();
     }
     std::process::exit(0);

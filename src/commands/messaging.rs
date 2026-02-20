@@ -189,9 +189,12 @@ pub async fn send_message_streaming(
 ) -> Result<(), String> {
     info!("Sending message: {}", message);
     let client = state.acp_client.clone();
+    let config = state.config.clone();
     let window_clone = window.clone();
 
     async_runtime::spawn_blocking(move || {
+        let client_arc = client.clone();
+        let config_arc = config.clone();
         let client = async_runtime::block_on(client.lock());
 
         if !client.is_connected() {
@@ -247,6 +250,10 @@ pub async fn send_message_streaming(
         }
 
         let _ = window_clone.emit("message_complete", ());
+
+        // Trigger auto-steering generation periodically
+        drop(client); // Release the lock before spawning background task
+        crate::auto_steering::maybe_generate_steering(client_arc, config_arc);
     });
 
     Ok(())

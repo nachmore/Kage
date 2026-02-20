@@ -1,5 +1,6 @@
 mod acp_client;
 mod app_launcher;
+mod auto_steering;
 mod commands;
 mod config;
 mod logger;
