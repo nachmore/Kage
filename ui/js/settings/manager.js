@@ -5,8 +5,8 @@
 class SettingsManager {
     constructor() {
         this.modules = [];
-        this.invoke = window.__TAURI__.tauri.invoke;
-        this.appWindow = window.__TAURI__.window.appWindow;
+        this.invoke = window.__TAURI__.core.invoke;
+        this.appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     }
 
     /**

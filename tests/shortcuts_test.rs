@@ -5,7 +5,9 @@ fn test_shortcut_config_serialization() {
     let shortcut = ShortcutConfig {
         name: "Test Shortcut".to_string(),
         shortcut: "test".to_string(),
-        path: "/usr/bin/test".to_string(),
+        action_type: "run_program".to_string(),
+        path: Some("/usr/bin/test".to_string()),
+        url: None,
         working_directory: Some("/home/user".to_string()),
         arguments: Some("{*}".to_string()),
     };
@@ -25,7 +27,9 @@ fn test_shortcut_config_optional_fields() {
     let shortcut = ShortcutConfig {
         name: "Simple Shortcut".to_string(),
         shortcut: "simple".to_string(),
-        path: "/usr/bin/simple".to_string(),
+        action_type: "run_program".to_string(),
+        path: Some("/usr/bin/simple".to_string()),
+        url: None,
         working_directory: None,
         arguments: None,
     };
@@ -41,11 +45,13 @@ fn test_shortcut_config_optional_fields() {
 #[test]
 fn test_config_with_shortcuts() {
     let mut config = Config::default();
-    
+
     config.shortcuts.push(ShortcutConfig {
         name: "VSCode".to_string(),
         shortcut: "code".to_string(),
-        path: "C:\\Program Files\\VSCode\\code.exe".to_string(),
+        action_type: "run_program".to_string(),
+        path: Some("C:\\Program Files\\VSCode\\code.exe".to_string()),
+        url: None,
         working_directory: None,
         arguments: Some("{*}".to_string()),
     });
@@ -76,8 +82,11 @@ fn test_shortcut_json_format() {
     let shortcut: ShortcutConfig = serde_json::from_str(json).unwrap();
     assert_eq!(shortcut.name, "Git Status");
     assert_eq!(shortcut.shortcut, "gs");
-    assert_eq!(shortcut.path, "/usr/bin/git");
-    assert_eq!(shortcut.working_directory, Some("/home/user/project".to_string()));
+    assert_eq!(shortcut.path, Some("/usr/bin/git".to_string()));
+    assert_eq!(
+        shortcut.working_directory,
+        Some("/home/user/project".to_string())
+    );
     assert_eq!(shortcut.arguments, Some("status".to_string()));
 }
 

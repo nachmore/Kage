@@ -711,7 +711,7 @@ export class FloatingApp {
         this.elements.contentArea.classList.add('visible');
         
         sourcesEl.innerHTML = this.toolSources.map(source => `
-            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.tauri.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}">
+            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${source.color}">${source.initials}</span>
                     <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
@@ -742,7 +742,7 @@ export class FloatingApp {
         
         compactEl.style.display = 'flex';
         compactEl.innerHTML = this.toolSources.map((source, i) => `
-            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.tauri.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${i * 0.08}s">
+            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${i * 0.08}s">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${source.color}">${source.initials}</span>
                     <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">

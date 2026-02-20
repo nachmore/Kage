@@ -1,52 +1,48 @@
 /**
- * Custom right-click context menu using a separate Tauri popup window.
+ * Custom right-click context menu using a cached Tauri popup window.
+ * The window is pre-created at startup and repositioned/shown on demand.
  */
 
-const { invoke } = window.__TAURI__.tauri;
-const { appWindow } = window.__TAURI__.window;
+const { invoke } = window.__TAURI__.core;
+const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
 async function initContextMenu() {
-    // Suppress default context menu, spawn popup window
+    // Suppress default context menu, show cached popup window
     document.addEventListener('contextmenu', async (e) => {
         e.preventDefault();
-        
+
         try {
-            // Get the floating window's screen position
             const windowPos = await appWindow.outerPosition();
             const scaleFactor = await appWindow.scaleFactor();
-            
-            // Convert click coordinates to screen coordinates
+
             const screenX = Math.round(windowPos.x / scaleFactor + e.clientX);
             const screenY = Math.round(windowPos.y / scaleFactor + e.clientY);
-            
-            // Set flag so blur handler doesn't hide the floating window
+
+            // Prevent blur handler from hiding the floating window
             window._contextMenuOpen = true;
-            
+
             await invoke('show_context_menu', { x: screenX, y: screenY });
         } catch (err) {
             console.error('Failed to show context menu:', err);
             window._contextMenuOpen = false;
         }
     });
-    
+
     // Listen for actions from the context menu popup (global event)
     const { listen: globalListen } = window.__TAURI__.event;
     globalListen('context-menu-action', async (event) => {
         window._contextMenuOpen = false;
         const action = event.payload;
-        
+
         switch (action) {
             case 'cut':
-                // Focus the input first, then execute
                 document.querySelector('.input-box')?.focus();
                 document.execCommand('cut');
                 break;
             case 'copy':
-                // If there's a text selection, copy it; otherwise copy response
                 if (window.getSelection().toString()) {
                     document.execCommand('copy');
                 } else {
-                    // Copy the full response text
                     const responseEl = document.getElementById('responseText');
                     if (responseEl && responseEl.textContent) {
                         navigator.clipboard.writeText(responseEl.textContent).catch(() => {});
@@ -70,7 +66,10 @@ async function initContextMenu() {
                 }
                 break;
             case 'settings':
-                try { await invoke('open_settings_window'); } catch (e) { console.error(e); }
+                try {
+                    await invoke('open_settings_window');
+                    await appWindow.hide();
+                } catch (e) { console.error(e); }
                 break;
             case 'close':
                 await appWindow.hide();

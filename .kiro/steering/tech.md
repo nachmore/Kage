@@ -4,7 +4,7 @@
 
 - Language: Rust (Edition 2021)
 - Build tool: Cargo
-- Framework: Tauri 1.5 (desktop application framework)
+- Framework: Tauri 2.10 (desktop application framework)
 
 ## Core Dependencies
 

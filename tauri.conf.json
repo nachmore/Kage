@@ -1,42 +1,18 @@
 {
+  "productName": "Kiro Assistant",
+  "version": "0.1.0",
+  "identifier": "com.kiro.assistant",
   "build": {
     "beforeDevCommand": "",
     "beforeBuildCommand": "",
-    "devPath": "./ui",
-    "distDir": "./ui",
-    "withGlobalTauri": true
+    "frontendDist": "./ui"
   },
-  "package": {
-    "productName": "Kiro Assistant",
-    "version": "0.1.0"
-  },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "globalShortcut": {
-        "all": true
-      },
-      "window": {
-        "all": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.kiro.assistant",
-      "icon": [
-        "ui/assets/ghost.png",
-        "icons/icon.ico"
-      ]
-    },
+  "app": {
+    "withGlobalTauri": true,
     "security": {
       "csp": null
     },
-    "systemTray": {
+    "trayIcon": {
       "iconPath": "ui/assets/ghost.png",
       "iconAsTemplate": true
     },
@@ -79,7 +55,30 @@
         "visible": false,
         "skipTaskbar": false,
         "center": true
+      },
+      {
+        "label": "context-menu",
+        "url": "context-menu.html",
+        "fullscreen": false,
+        "resizable": false,
+        "title": "",
+        "width": 160,
+        "height": 220,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
       }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "ui/assets/ghost.png",
+      "icons/icon.ico"
     ]
   }
 }

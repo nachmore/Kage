@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Menu</title>
-    <script src="https://unpkg.com/@tauri-apps/api@1"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -44,15 +43,12 @@
     </div>
     <script>
         (async function() {
-            const { invoke } = window.__TAURI__.tauri;
-            const { appWindow, LogicalSize } = window.__TAURI__.window;
+            const { invoke } = window.__TAURI__.core;
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+            const LogicalSize = window.__TAURI__.dpi.LogicalSize;
             const { emit } = window.__TAURI__.event;
-            
-            let actionTaken = false;
 
-            document.addEventListener('contextmenu', (e) => e.preventDefault());
-
-            // Show dev items
+            // Check dev mode once at load
             try {
                 const dev = await invoke('is_dev_mode');
                 if (dev) {
@@ -61,43 +57,50 @@
                 }
             } catch (e) {}
 
-            async function emitAndClose(action) {
-                if (actionTaken) return;
-                actionTaken = true;
-                // Use global emit so ALL windows receive it
-                await emit('context-menu-action', action);
-                await appWindow.close();
-            }
-
-            // mousedown fires before blur
-            document.getElementById('menu').addEventListener('mousedown', (e) => {
-                const item = e.target.closest('.menu-item');
-                if (!item) return;
-                const action = item.dataset.action;
-                if (action) {
-                    e.preventDefault();
-                    emitAndClose(action);
-                }
-            });
-
-            // Close on blur
-            appWindow.listen('tauri://blur', () => {
-                setTimeout(() => {
-                    if (!actionTaken) emitAndClose('dismissed');
-                }, 150);
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') emitAndClose('dismissed');
-            });
-
-            // Auto-size
+            // Auto-size once at load
             requestAnimationFrame(async () => {
                 const rect = document.getElementById('menu').getBoundingClientRect();
                 await appWindow.setSize(new LogicalSize(
                     Math.ceil(rect.width) + 4,
                     Math.ceil(rect.height) + 4
                 ));
+            });
+
+            document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            let actionTaken = false;
+
+            async function emitAndHide(action) {
+                if (actionTaken) return;
+                actionTaken = true;
+                await emit('context-menu-action', action);
+                await appWindow.hide();
+            }
+
+            // Reset actionTaken each time the window becomes visible
+            appWindow.listen('tauri://focus', () => {
+                actionTaken = false;
+            });
+
+            document.getElementById('menu').addEventListener('mousedown', (e) => {
+                const item = e.target.closest('.menu-item');
+                if (!item) return;
+                const action = item.dataset.action;
+                if (action) {
+                    e.preventDefault();
+                    emitAndHide(action);
+                }
+            });
+
+            // Hide on blur
+            appWindow.listen('tauri://blur', () => {
+                setTimeout(() => {
+                    if (!actionTaken) emitAndHide('dismissed');
+                }, 150);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') emitAndHide('dismissed');
             });
         })();
     </script>

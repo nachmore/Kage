@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::PathBuf;
-
 // Note: These tests would normally import from the main crate
 // For now, we'll create a basic test structure
 

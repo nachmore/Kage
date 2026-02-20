@@ -3,8 +3,8 @@
  * Handles tool permission requests from the ACP
  */
 
-const { invoke } = window.__TAURI__.tauri;
-const { appWindow } = window.__TAURI__.window;
+const { invoke } = window.__TAURI__.core;
+const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
 let currentPermissionRequest = null;
 

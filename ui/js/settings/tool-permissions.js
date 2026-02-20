@@ -144,7 +144,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             tool.policy = policy;
             
             try {
-                await window.__TAURI__.tauri.invoke('update_tool_policy', {
+                await window.__TAURI__.core.invoke('update_tool_policy', {
                     toolTitle: tool.title,
                     policy: policy
                 });
@@ -161,7 +161,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             this.renderToolsList();
             
             try {
-                await window.__TAURI__.tauri.invoke('remove_tool_permission', {
+                await window.__TAURI__.core.invoke('remove_tool_permission', {
                     toolTitle: tool.title
                 });
             } catch (error) {

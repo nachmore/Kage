@@ -851,10 +851,10 @@
         let invoke, listen, appWindow;
         
         function initTauri() {
-            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.event && window.__TAURI__.window) {
-                invoke = window.__TAURI__.tauri.invoke;
+            if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.event && window.__TAURI__.webviewWindow) {
+                invoke = window.__TAURI__.core.invoke;
                 listen = window.__TAURI__.event.listen;
-                appWindow = window.__TAURI__.window.appWindow;
+                appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                 console.log('Tauri initialized successfully');
                 initApp();
             } else {
