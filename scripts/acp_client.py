@@ -212,7 +212,45 @@ async def main() -> None:
                 if not line:
                     break
                 msg = JsonLineProtocol.decode(line)
-                if msg.get("type") == "prompt":
+                if msg.get("type") == "raw_jsonrpc":
+                    payload = msg["payload"]
+                    # Inject/override sessionId in params
+                    if "params" in payload and isinstance(payload["params"], dict):
+                        payload["params"]["sessionId"] = sid
+                    elif "method" in payload:
+                        payload.setdefault("params", {})["sessionId"] = sid
+                    raw_conn = conn._conn
+                    has_method = "method" in payload
+                    has_id = "id" in payload
+                    if has_method and has_id:
+                        # JSON-RPC request — send and await response
+                        try:
+                            result = await raw_conn.send_request(
+                                payload["method"], payload.get("params")
+                            )
+                            await client._send_to_chat(
+                                {"type": "info", "text": f"[raw response: {json.dumps(result, indent=2)}]"}
+                            )
+                        except Exception as exc:
+                            await client._send_to_chat(
+                                {"type": "info", "text": f"[raw error: {exc}]"}
+                            )
+                    elif has_method:
+                        # JSON-RPC notification — fire and forget
+                        await raw_conn.send_notification(
+                            payload["method"], payload.get("params")
+                        )
+                        await client._send_to_chat(
+                            {"type": "info", "text": "[notification sent]"}
+                        )
+                    else:
+                        # Arbitrary payload — send as-is
+                        await raw_conn._sender.send(payload)
+                        raw_conn._notify_observers(StreamDirection.OUTGOING, payload)
+                        await client._send_to_chat(
+                            {"type": "info", "text": "[raw payload sent]"}
+                        )
+                elif msg.get("type") == "prompt":
                     await conn.prompt(
                         session_id=sid,
                         prompt=[text_block(msg["text"])],

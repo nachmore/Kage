@@ -31,7 +31,8 @@ async def main():
     reader, writer = await asyncio.open_connection("127.0.0.1", PORT)
     print(f"{BOLD}{GREEN}ACP Chat{RESET}")
     print(f"{DIM}Connected to trace window on port {PORT}{RESET}")
-    print(f"{DIM}Type messages below. Ctrl+C to quit.{RESET}\n")
+    print(f"{DIM}Type messages below. Prefix with : to send raw JSON-RPC.{RESET}")
+    print(f"{DIM}Ctrl+C to quit.{RESET}\n")
 
     loop = asyncio.get_running_loop()
     done_event = asyncio.Event()
@@ -87,6 +88,24 @@ async def main():
                 None, lambda: input(f"{BOLD}You>{RESET} ")
             )
             if not line.strip():
+                continue
+
+            # Raw JSON-RPC mode: lines starting with ':'
+            if line.startswith(":"):
+                raw = line[1:]
+                try:
+                    payload = json.loads(raw)
+                except json.JSONDecodeError as e:
+                    print(f"{YELLOW}Invalid JSON: {e}{RESET}")
+                    continue
+                if not isinstance(payload, dict):
+                    print(f"{YELLOW}JSON must be an object{RESET}")
+                    continue
+                writer.write(
+                    (json.dumps({"type": "raw_jsonrpc", "payload": payload}) + "\n").encode()
+                )
+                await writer.drain()
+                print(f"{DIM}Sent raw JSON-RPC{RESET}")
                 continue
 
             # Reset events for this turn
