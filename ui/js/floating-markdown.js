@@ -87,20 +87,52 @@ async function renderMermaidDiagram(codeBlock, pre) {
     const label = document.createElement('span');
     label.className = 'mermaid-label';
     label.textContent = 'Diagram';
-    
+
+    const headerActions = document.createElement('div');
+    headerActions.className = 'mermaid-actions';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button mermaid-toggle';
+    toggleBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+        <span>Source</span>
+    `;
+
     const copyBtn = createCopyButton(code);
-    
+
+    headerActions.appendChild(toggleBtn);
+    headerActions.appendChild(copyBtn);
     header.appendChild(label);
-    header.appendChild(copyBtn);
+    header.appendChild(headerActions);
     
     const mermaidDiv = document.createElement('div');
     mermaidDiv.className = 'mermaid';
     mermaidDiv.textContent = code;
+
+    // Source code panel (hidden by default)
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'mermaid-source';
+    const sourcePre = document.createElement('pre');
+    const sourceCode = document.createElement('code');
+    sourceCode.className = 'language-mermaid';
+    sourceCode.textContent = code;
+    sourcePre.appendChild(sourceCode);
+    sourceDiv.appendChild(sourcePre);
     
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(header);
     wrapper.appendChild(mermaidDiv);
+    wrapper.appendChild(sourceDiv);
     pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Diagram' : 'Source';
+        mermaidDiv.style.display = showing ? 'none' : '';
+    };
     
     try {
         await mermaid.run({ nodes: [mermaidDiv] });

@@ -91,3 +91,38 @@
     align-items: center;
     background: white;
 }
+
+
+/* Mermaid source toggle */
+.mermaid-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.mermaid-source {
+    display: none;
+    overflow-x: auto;
+}
+
+.mermaid-source.visible {
+    display: block;
+}
+
+.mermaid-source pre {
+    margin: 0;
+    padding: 16px;
+    background: #272822;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.mermaid-source code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #f8f8f2;
+    white-space: pre;
+}
+
+.mermaid-toggle span {
+    pointer-events: none;
+}
