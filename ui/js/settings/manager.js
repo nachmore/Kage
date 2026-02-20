@@ -30,33 +30,15 @@ class SettingsManager {
             return;
         }
 
-        // Group modules by section
-        const kiroModules = this.modules.filter(m => m.id !== 'shortcuts' && m.id !== 'tool-permissions');
-        const shortcutsModule = this.modules.find(m => m.id === 'shortcuts');
-        const toolPermissionsModule = this.modules.find(m => m.id === 'tool-permissions');
-
+        // Each module gets its own section, keyed by module ID.
+        // The first module ('hotkey') is visible by default; the rest are hidden.
         let html = '';
-
-        // Render Kiro section (all modules except shortcuts and tool-permissions)
-        if (kiroModules.length > 0) {
-            html += `<div class="settings-section" data-section-content="kiro">`;
-            html += kiroModules.map(module => module.render()).join('');
+        this.modules.forEach((module, index) => {
+            const hidden = index === 0 ? '' : ' hidden';
+            html += `<div class="settings-section${hidden}" data-section-content="${module.id}">`;
+            html += module.render();
             html += `</div>`;
-        }
-
-        // Render Shortcuts section
-        if (shortcutsModule) {
-            html += `<div class="settings-section hidden" data-section-content="shortcuts">`;
-            html += shortcutsModule.render();
-            html += `</div>`;
-        }
-
-        // Render Tool Permissions section
-        if (toolPermissionsModule) {
-            html += `<div class="settings-section hidden" data-section-content="tool-permissions">`;
-            html += toolPermissionsModule.render();
-            html += `</div>`;
-        }
+        });
 
         container.innerHTML = html;
 
@@ -180,6 +162,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
+    settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     

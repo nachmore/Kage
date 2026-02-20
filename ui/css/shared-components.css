@@ -35,7 +35,7 @@
 
 .streaming-indicator {
     display: inline;
-    color: #8E48FF;
+    color: var(--kiro-accent);
     font-weight: 600;
     margin-left: 2px;
     animation: pulse-fade 1.4s ease-in-out infinite;
@@ -63,7 +63,7 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+    background: var(--kiro-gradient);
     animation: dot-bounce 1.4s ease-in-out infinite;
 }
 

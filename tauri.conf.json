@@ -49,6 +49,8 @@
         "title": "Settings - Kiro Assistant",
         "width": 800,
         "height": 700,
+        "minWidth": 600,
+        "minHeight": 450,
         "visible": false,
         "skipTaskbar": false,
         "center": true

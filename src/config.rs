@@ -49,6 +49,16 @@ impl Default for ToolPermissionsConfig {
     }
 }
 
+impl Default for AssistantConfig {
+    fn default() -> Self {
+        Self {
+            start_session_on_launch: true,
+            auto_steering_enabled: false,
+            user_steering_path: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HotkeyConfig {
     pub modifiers: Vec<String>,
@@ -58,6 +68,18 @@ pub struct HotkeyConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpConfig {
     pub mode: AcpMode,
+    #[serde(default)]
+    pub assistant: AssistantConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AssistantConfig {
+    #[serde(default = "default_true")]
+    pub start_session_on_launch: bool,
+    #[serde(default)]
+    pub auto_steering_enabled: bool,
+    #[serde(default)]
+    pub user_steering_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +148,7 @@ impl Default for Config {
                     port: 8765,
                     timeout_ms: 30000,
                 },
+                assistant: AssistantConfig::default(),
             },
             ui: UiConfig {
                 theme: "dark".to_string(),
@@ -191,5 +214,12 @@ impl Config {
         let mut parts = self.hotkey.modifiers.clone();
         parts.push(self.hotkey.key.clone());
         parts.join("+")
+    }
+
+    /// Get the path to the auto-generated steering document
+    pub fn get_auto_steering_path() -> Result<PathBuf> {
+        let config_dir = dirs::config_dir()
+            .context("Failed to get config directory")?;
+        Ok(config_dir.join("kiro-assistant").join("auto-steering.md"))
     }
 }

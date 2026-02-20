@@ -1,0 +1,207 @@
+/* Kiro shared control styles — buttons, checkboxes, inputs, toggles */
+
+/* Button */
+.setting-button {
+    padding: 6px 16px;
+    background: var(--kiro-accent);
+    border: none;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.setting-button:hover { background: var(--kiro-accent-hover); }
+.setting-button:active { background: var(--kiro-accent-active); }
+
+/* Text Input */
+.setting-input {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--kiro-bg-input);
+    border: 1px solid var(--kiro-border);
+    border-radius: 4px;
+    color: var(--kiro-text);
+    font-size: 13px;
+    font-family: var(--kiro-font);
+    transition: border-color 0.2s;
+}
+.setting-input:focus {
+    outline: none;
+    border-color: var(--kiro-accent);
+}
+
+/* Select */
+.setting-select {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--kiro-bg-input);
+    border: 1px solid var(--kiro-border);
+    border-radius: 4px;
+    color: var(--kiro-text);
+    font-size: 13px;
+    font-family: var(--kiro-font);
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.setting-select:focus {
+    outline: none;
+    border-color: var(--kiro-accent);
+}
+
+/* Kiro Checkbox */
+.kiro-checkbox {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--kiro-text);
+    user-select: none;
+}
+.kiro-checkbox input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--kiro-border);
+    border-radius: 3px;
+    background: var(--kiro-bg-input);
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+.kiro-checkbox input[type="checkbox"]:checked {
+    background: var(--kiro-accent);
+    border-color: var(--kiro-accent);
+}
+.kiro-checkbox input[type="checkbox"]:checked:hover {
+    background: var(--kiro-accent-hover);
+    border-color: var(--kiro-accent-hover);
+}
+.kiro-checkbox input[type="checkbox"]:not(:checked):hover {
+    border-color: var(--kiro-accent);
+}
+.kiro-checkbox input[type="checkbox"]:checked::after {
+    content: '\2713';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+}
+.kiro-checkbox input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--kiro-accent);
+    outline-offset: 1px;
+}
+
+/* Toggle Switch (for specific uses like trust-all) */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--kiro-border);
+    transition: 0.2s;
+    border-radius: 10px;
+    border: 1px solid var(--kiro-border);
+}
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: #ffffff;
+    transition: 0.2s;
+    border-radius: 50%;
+}
+input:checked + .toggle-slider {
+    background-color: var(--kiro-accent);
+    border-color: var(--kiro-accent);
+}
+input:checked + .toggle-slider:hover {
+    background-color: var(--kiro-accent-hover);
+    border-color: var(--kiro-accent-hover);
+}
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Range Slider */
+.range-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.range-slider {
+    flex: 1;
+    height: 4px;
+    background: var(--kiro-border);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+}
+.range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--kiro-accent);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background 0.15s;
+}
+.range-slider::-webkit-slider-thumb:hover {
+    background: var(--kiro-accent-hover);
+}
+.range-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--kiro-accent);
+    cursor: pointer;
+    border-radius: 50%;
+    border: none;
+}
+.range-value {
+    font-size: 13px;
+    color: var(--kiro-text);
+    min-width: 40px;
+    text-align: right;
+}
+
+/* Input Group */
+.input-group {
+    display: flex;
+    gap: 8px;
+}
+.input-group .setting-input { flex: 1; }
+
+/* Hotkey Display */
+.hotkey-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--kiro-bg-input);
+    border: 1px solid var(--kiro-border);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--kiro-text);
+    min-width: 120px;
+}
+.hotkey-display.capturing {
+    border-color: var(--kiro-accent);
+}

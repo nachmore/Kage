@@ -17,6 +17,9 @@ export class FloatingApp {
         this.currentResponse = '';
         this.isWaitingForResponse = false;
         this.shortcuts = [];
+        // Track the length at which pattern matching last failed (returned "chat").
+        // While the input only grows beyond this length, skip redundant backend calls.
+        this._noMatchSinceLen = 0;
         
         this.elements = {};
     }
@@ -150,6 +153,7 @@ export class FloatingApp {
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
+        this._noMatchSinceLen = 0;
         this.elements.contentArea.classList.remove('visible');
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
@@ -341,11 +345,13 @@ export class FloatingApp {
             this.elements.appSuggestions.classList.remove('visible');
             this.currentMatches = [];
             this.selectedIndex = -1;
+            this._noMatchSinceLen = 0;
             return;
         }
         
         // Check for > command prefix
         if (query.startsWith('>')) {
+            this._noMatchSinceLen = 0;
             const commands = matchCommands(query);
             if (commands && commands.length > 0) {
                 this.currentMatches = commands.map(cmd => ({ type: 'command', ...cmd }));
@@ -370,6 +376,17 @@ export class FloatingApp {
 
     async performSearch(query) {
         console.log('Searching for apps:', query);
+
+        // If the input grew past a length where we already know there's no pattern
+        // match, skip the backend call — it will just return "chat" again.
+        if (this._noMatchSinceLen > 0 && query.length >= this._noMatchSinceLen) {
+            this.clearSuggestions();
+            return;
+        }
+        // Input was shortened — reset and re-evaluate
+        if (query.length < this._noMatchSinceLen) {
+            this._noMatchSinceLen = 0;
+        }
         
         // Check for shortcut matches first
         const shortcutMatches = this.matchShortcut(query);
@@ -452,6 +469,9 @@ export class FloatingApp {
                     this.clearSuggestions();
                 }
             } else {
+                // No pattern match — remember this length so we skip future calls
+                // while the user keeps typing (input only grows).
+                this._noMatchSinceLen = query.length;
                 this.clearSuggestions();
             }
         } catch (error) {
@@ -564,9 +584,25 @@ export class FloatingApp {
         this.startThinking();
         this.elements.expandBtn.classList.remove('visible');
         await this.windowManager.resizeWindow();
+
+        // Dismiss any pending permission request from the main chat window
+        // so the session isn't stalled waiting for a response.
+        try {
+            await this.invoke('dismiss_pending_permission');
+        } catch (e) {
+            console.log('No pending permission to dismiss:', e);
+        }
         
         try {
-            const result = await this.invoke('handle_floating_input', { input: message });
+            // If we already know this input has no pattern match (from typing),
+            // skip the redundant backend classification call.
+            let result;
+            if (this._noMatchSinceLen > 0 && message.length >= this._noMatchSinceLen) {
+                result = 'chat';
+            } else {
+                result = await this.invoke('handle_floating_input', { input: message });
+            }
+            this._noMatchSinceLen = 0;
             
             if (result.startsWith('url:')) {
                 await this.openUrl(result.substring(4));

@@ -1,0 +1,202 @@
+/* Settings window layout — sidebar, content area, setting rows */
+
+body {
+    font-family: var(--kiro-font);
+    background: var(--kiro-bg);
+    color: var(--kiro-text);
+    overflow: hidden;
+    height: 100vh;
+}
+
+.settings-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+/* Header */
+.settings-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 35px;
+    background: #323233;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    z-index: 100;
+    border-bottom: 1px solid var(--kiro-border-subtle);
+}
+.settings-title {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--kiro-text);
+}
+.close-btn {
+    background: transparent;
+    border: none;
+    color: var(--kiro-text);
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 3px;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+.close-btn:hover { background: #3e3e42; }
+
+/* Sidebar */
+.settings-sidebar {
+    width: 180px;
+    background: var(--kiro-bg-elevated);
+    border-right: 1px solid var(--kiro-border-subtle);
+    overflow-y: auto;
+    margin-top: 35px;
+    flex-shrink: 0;
+}
+.sidebar-section { margin-bottom: 20px; }
+.sidebar-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--kiro-text-muted);
+    padding: 8px 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.sidebar-item {
+    padding: 6px 20px;
+    font-size: 13px;
+    color: var(--kiro-text);
+    cursor: pointer;
+    transition: background 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.sidebar-item:hover { background: #2a2d2e; }
+.sidebar-item.active {
+    background: #37373d;
+    color: var(--kiro-text-bright);
+    border-left: 2px solid var(--kiro-accent);
+    padding-left: 18px;
+}
+.sidebar-item-icon { font-size: 14px; }
+
+/* Main Content */
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 50px 40px 60px 40px;
+    margin-top: 35px;
+}
+.settings-section { margin-bottom: 40px; }
+.settings-section.hidden { display: none; }
+.settings-section-header {
+    font-size: 20px;
+    font-weight: 300;
+    color: var(--kiro-text-bright);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--kiro-border-subtle);
+}
+
+/* Setting Row — vertical stack layout matching Kiro/VS Code settings */
+.setting-row {
+    padding: 12px 0;
+    margin-bottom: 4px;
+}
+.setting-row:last-child { margin-bottom: 0; }
+
+.setting-label {
+    font-size: 13px;
+    color: var(--kiro-text-bright);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.setting-description {
+    font-size: 13px;
+    color: var(--kiro-text);
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+
+/* Checkbox row: checkbox + description inline */
+.setting-checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 2px;
+}
+.setting-checkbox-row .setting-description {
+    margin-bottom: 0;
+}
+
+/* Control placed below description */
+.setting-control {
+    margin-top: 6px;
+    max-width: 500px;
+}
+
+/* Control with action button beside it */
+.setting-control-with-action {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    max-width: 500px;
+}
+.setting-control-with-action .setting-input {
+    flex: 1;
+}
+
+/* Legacy label container — kept for backward compat but no longer side-by-side */
+.setting-label-container {
+    margin-bottom: 0;
+}
+
+/* Status Message */
+.status-message {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.status-message.success { background: #1e8449; color: #ffffff; }
+.status-message.error { background: #c0392b; color: #ffffff; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--kiro-bg); }
+::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: #4e4e4e; }
+
+/* Save Button */
+.save-button-container {
+    position: fixed;
+    bottom: 0;
+    left: 180px;
+    right: 0;
+    padding: 12px 40px;
+    background: var(--kiro-bg-elevated);
+    border-top: 1px solid var(--kiro-border-subtle);
+    display: flex;
+    justify-content: flex-end;
+}
+.save-button {
+    padding: 8px 24px;
+    background: var(--kiro-accent);
+    border: none;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-weight: 500;
+}
+.save-button:hover { background: var(--kiro-accent-hover); }

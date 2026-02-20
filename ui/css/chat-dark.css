@@ -18,15 +18,15 @@ body.dark-theme .new-session-btn {
 }
 
 body.dark-theme .session-list-separator {
-    background: #8E48FF;
+    background: var(--kiro-accent);
 }
 
 body.dark-theme .session-default-label {
-    color: #C09CFF;
+    color: var(--kiro-accent-light);
 }
 
 body.dark-theme .session-current-badge {
-    color: #C09CFF;
+    color: var(--kiro-accent-light);
 }
 
 body.dark-theme .session-item:hover {
@@ -60,7 +60,7 @@ body.dark-theme .sidebar-footer-btn {
 
 body.dark-theme .sidebar-footer-btn:hover {
     background: #352F3D;
-    color: #C09CFF;
+    color: var(--kiro-accent-light);
 }
 
 body.dark-theme .chat-main {
@@ -104,7 +104,7 @@ body.dark-theme .chat-input-wrapper {
 }
 
 body.dark-theme .chat-input-wrapper:focus-within {
-    border-color: #8E48FF;
+    border-color: var(--kiro-accent);
 }
 
 body.dark-theme .chat-input {

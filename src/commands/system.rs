@@ -2,7 +2,12 @@
 use crate::os;
 use crate::state::AppState;
 use log::{error, info};
+use std::fs;
 use tauri::{Emitter, Manager, State};
+
+/// Prefix used to mark steering messages that should be hidden in the UI.
+/// Only the very first message in a conversation with this prefix is hidden.
+pub const STEERING_MSG_PREFIX: &str = "[KIRO_STEERING_IGNORE]";
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
@@ -189,4 +194,116 @@ pub async fn get_user_info() -> Result<UserInfo, String> {
         avatar_path: profile.avatar_path,
         avatar_base64,
     })
+}
+
+
+/// Build the combined steering content from user and auto-generated docs.
+/// User steering takes precedence (placed first).
+/// Returns None if no steering content is available.
+#[tauri::command]
+pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    let config = state.config.lock().await;
+    let assistant = &config.acp.assistant;
+
+    let mut parts: Vec<String> = Vec::new();
+
+    // User-written steering doc takes precedence (loaded first)
+    if let Some(ref path) = assistant.user_steering_path {
+        if !path.is_empty() {
+            match fs::read_to_string(path) {
+                Ok(content) if !content.trim().is_empty() => {
+                    info!("Loaded user steering doc from: {}", path);
+                    parts.push(content);
+                }
+                Ok(_) => info!("User steering doc is empty: {}", path),
+                Err(e) => error!("Failed to read user steering doc {}: {}", path, e),
+            }
+        }
+    }
+
+    // Auto-generated steering doc
+    if assistant.auto_steering_enabled {
+        match Config::get_auto_steering_path() {
+            Ok(auto_path) => {
+                if auto_path.exists() {
+                    match fs::read_to_string(&auto_path) {
+                        Ok(content) if !content.trim().is_empty() => {
+                            info!("Loaded auto steering doc from: {:?}", auto_path);
+                            parts.push(content);
+                        }
+                        Ok(_) => info!("Auto steering doc is empty"),
+                        Err(e) => error!("Failed to read auto steering doc: {}", e),
+                    }
+                }
+            }
+            Err(e) => error!("Failed to get auto steering path: {}", e),
+        }
+    }
+
+    if parts.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(format!("{} {}", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
+    }
+}
+
+/// Open the auto-generated steering document in the default editor.
+/// Creates the file with a header comment if it doesn't exist yet.
+#[tauri::command]
+pub async fn open_auto_steering_file() -> Result<String, String> {
+    let auto_path = Config::get_auto_steering_path()
+        .map_err(|e| format!("Failed to get auto steering path: {}", e))?;
+
+    // Create with header if it doesn't exist
+    if !auto_path.exists() {
+        if let Some(parent) = auto_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+        let header = "<!-- AUTO-GENERATED STEERING DOCUMENT\n     Any manual changes will be overridden the next time this document is generated.\n     To add your own persistent instructions, use a User Steering Document instead. -->\n\n";
+        fs::write(&auto_path, header)
+            .map_err(|e| format!("Failed to create auto steering file: {}", e))?;
+    }
+
+    let path_str = auto_path
+        .to_str()
+        .ok_or_else(|| "Invalid path encoding".to_string())?
+        .to_string();
+
+    // Open in default editor
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&path_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open file: {}", e))?;
+    }
+
+    Ok(path_str)
+}
+
+/// Get the path to the auto-generated steering document
+#[tauri::command]
+pub async fn get_auto_steering_path() -> Result<String, String> {
+    Config::get_auto_steering_path()
+        .map_err(|e| format!("Failed to get path: {}", e))
+        .and_then(|p| {
+            p.to_str()
+                .map(|s| s.to_string())
+                .ok_or_else(|| "Invalid path encoding".to_string())
+        })
 }

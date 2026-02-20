@@ -5,7 +5,7 @@ body.dark-theme .response-text {
 }
 
 body.dark-theme .streaming-indicator {
-    color: #C09CFF;
+    color: var(--kiro-accent-light);
 }
 
 body.dark-theme .code-block-wrapper {

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Menu</title>
+    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -10,7 +11,7 @@
             background-color: transparent !important;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: var(--kiro-font);
             overflow: hidden;
             padding: 8px;
         }
@@ -29,7 +30,7 @@
             cursor: pointer;
             transition: background 0.1s;
         }
-        .menu-item:hover { background: #007acc; color: #fff; }
+        .menu-item:hover { background: var(--kiro-accent); color: #fff; }
         .menu-sep { height: 1px; background: #444; margin: 4px 0; }
         .hidden { display: none; }
     </style>

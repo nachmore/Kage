@@ -13,4 +13,14 @@ pub struct AppState {
     pub dev_mode: bool,
     /// The session ID used by the floating window (persists across session switches)
     pub floating_session_id: Arc<std::sync::Mutex<Option<String>>>,
+    /// Pending permission request: (request_id, tool_title, session_id)
+    /// Set when a permission_request notification arrives, cleared when responded to.
+    pub pending_permission: Arc<std::sync::Mutex<Option<PendingPermission>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingPermission {
+    pub request_id: serde_json::Value,
+    pub tool_title: String,
+    pub session_id: String,
 }

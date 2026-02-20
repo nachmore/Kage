@@ -1,6 +1,8 @@
 /**
  * Permission Modal Handler for expanded chat window.
- * Reuses the same logic as floating-permissions.js.
+ * - Scoped to the chat content area (not the whole window)
+ * - Tracks which session the request belongs to
+ * - Hides when switching to a different session
  */
 
 function waitForTauri(callback) {
@@ -24,13 +26,17 @@ waitForTauri(() => {
 
         const params = notification.params || {};
         const toolCall = params.toolCall || {};
+        const sessionId = params.sessionId || '';
 
         currentPermissionRequest = {
             id: notification.id,
-            sessionId: params.sessionId,
+            sessionId: sessionId,
             toolCall: toolCall,
             options: params.options || []
         };
+
+        // Store the session this request belongs to
+        modal.dataset.sessionId = sessionId;
 
         toolTitle.textContent = toolCall.title || 'Unknown Tool';
         modal.style.display = 'flex';
@@ -40,6 +46,7 @@ waitForTauri(() => {
         const modal = document.getElementById('permissionModal');
         if (modal) modal.style.display = 'none';
         currentPermissionRequest = null;
+        modal.dataset.sessionId = '';
     }
 
     async function handlePermissionResponse(optionId, policyOverride) {
@@ -92,4 +99,30 @@ waitForTauri(() => {
             handlePermissionResponse('reject_once');
         }
     });
+
+    // Listen for external dismissal (e.g. floating window auto-denied the request)
+    appWindow.listen('permission_dismissed', () => {
+        console.log('Permission dismissed externally');
+        hidePermissionModal();
+    });
+
+    // Expose functions for ChatApp to call when switching sessions
+    window.ChatPermissions = {
+        /** Hide the modal if the active session doesn't match */
+        onSessionSwitch(newSessionId) {
+            const modal = document.getElementById('permissionModal');
+            if (!modal || !currentPermissionRequest) return;
+            if (currentPermissionRequest.sessionId !== newSessionId) {
+                // Different session — hide but don't dismiss (keep the request pending)
+                modal.style.display = 'none';
+            } else {
+                // Same session — show it again
+                modal.style.display = 'flex';
+            }
+        },
+        /** Check if there's a pending request for a given session */
+        hasPendingRequest(sessionId) {
+            return currentPermissionRequest && currentPermissionRequest.sessionId === sessionId;
+        }
+    };
 });

@@ -11,9 +11,9 @@ class ConnectionSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 
-                ${this.createSettingRow(
+                ${this.createControlRow(
                     'Connection Mode',
-                    'Choose how to connect to the ACP server',
+                    'Choose how to connect to the ACP server.',
                     `
                     <select class="setting-select" id="acpMode">
                         <option value="local">Local (Spawn Process)</option>
@@ -23,29 +23,29 @@ class ConnectionSettingsModule extends SettingsModule {
                 )}
                 
                 <div id="localModeSettings" style="display: none;">
-                    ${this.createSettingRow(
+                    ${this.createControlRow(
                         'Spawn Command',
-                        'Full command to spawn the ACP server (including binary path and arguments)',
+                        'Full command to spawn the ACP server (including binary path and arguments).',
                         `<input type="text" class="setting-input" id="spawnCommand" placeholder="e.g., C:\\path\\to\\chat_cli.exe acp">`
                     )}
                 </div>
                 
                 <div id="remoteModeSettings" style="display: none;">
-                    ${this.createSettingRow(
+                    ${this.createControlRow(
                         'Host',
                         '',
                         `<input type="text" class="setting-input" id="acpHost" value="127.0.0.1">`
                     )}
                     
-                    ${this.createSettingRow(
+                    ${this.createControlRow(
                         'Port',
                         '',
                         `<input type="number" class="setting-input" id="acpPort" value="8765">`
                     )}
                     
-                    ${this.createSettingRow(
+                    ${this.createControlRow(
                         'Timeout (ms)',
-                        'Connection timeout in milliseconds',
+                        'Connection timeout in milliseconds.',
                         `<input type="number" class="setting-input" id="acpTimeout" value="30000">`
                     )}
                 </div>

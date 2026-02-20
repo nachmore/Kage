@@ -14,30 +14,19 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         return `
             <div class="settings-section-header">Agent Tools</div>
             
-            <div class="setting-row">
-                <div class="setting-label-container">
-                    <div class="setting-label">Trust All Tools</div>
-                    <div class="setting-description">
-                        Automatically approve all tool requests without prompting.
-                        <span style="color: #f44336;">Warning:</span> This allows the AI to use any tool without your explicit permission.
-                    </div>
-                </div>
-                <div class="setting-control">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="trustAllTools">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
+            ${this.createCheckboxRow(
+                'Trust All Tools',
+                'Automatically approve all tool requests without prompting. <span style="color: #f44336;">Warning:</span> This allows the AI to use any tool without your explicit permission.',
+                'trustAllTools',
+                false
+            )}
 
-            <div class="setting-row" style="flex-direction: column; align-items: stretch;">
-                <div class="setting-label-container" style="padding-right: 0; margin-bottom: 12px;">
-                    <div class="setting-label">Seen Tools</div>
-                    <div class="setting-description">
-                        Tools the AI has requested to use. Set each tool's permission policy.
-                    </div>
+            <div class="setting-row">
+                <div class="setting-label">Seen Tools</div>
+                <div class="setting-description">
+                    Tools the AI has requested to use. Set each tool's permission policy.
                 </div>
-                <div class="agent-tools-list" id="agentToolsList">
+                <div class="agent-tools-list" id="agentToolsList" style="margin-top: 8px;">
                     <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
                 </div>
             </div>
@@ -246,7 +235,7 @@ toolPermStyle.textContent = `
 
     .agent-tool-select:focus {
         outline: none;
-        border-color: #007acc;
+        border-color: var(--kiro-accent);
     }
 
     .agent-tool-remove {

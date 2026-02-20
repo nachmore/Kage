@@ -149,10 +149,38 @@ function initPermissionModal() {
     }
     
     // Listen for permission requests from backend
-    appWindow.listen('permission_request', (event) => {
+    appWindow.listen('permission_request', async (event) => {
         console.log('Permission request received:', event.payload);
         
         const { notification, auto_approve } = event.payload;
+        const requestSessionId = notification.params?.sessionId || '';
+
+        // Only handle permission requests for the floating window's own session.
+        // If the request is for a different session (e.g. one active in the main
+        // chat window), ignore it here — the chat window will handle it.
+        let floatingSessionId = null;
+        try {
+            floatingSessionId = await invoke('get_floating_session_id');
+        } catch (e) { /* ignore */ }
+        let currentSessionId = null;
+        try {
+            currentSessionId = await invoke('get_current_session_id');
+        } catch (e) { /* ignore */ }
+
+        // The floating window owns the "floating session". If the request is for
+        // a session that isn't the current ACP session (which the floating window
+        // would be using), skip it.
+        const isFloatingSession = !requestSessionId
+            || requestSessionId === floatingSessionId
+            || requestSessionId === currentSessionId;
+
+        // If the main chat window is visible and this isn't clearly the floating
+        // session's request, let the chat window handle it.
+        const isFloatingVisible = await appWindow.isVisible();
+        if (!isFloatingVisible && !isFloatingSession) {
+            console.log('Ignoring permission request for non-floating session:', requestSessionId);
+            return;
+        }
         
         if (auto_approve) {
             // Auto-approve the request
@@ -165,8 +193,18 @@ function initPermissionModal() {
                 console.error('Failed to auto-approve:', error);
             });
         } else {
-            // Show modal for user decision
-            showPermissionModal(notification);
+            // Double-check with the backend that this request is still pending.
+            // It may have been auto-denied by dismiss_pending_permission already.
+            let stillPending = false;
+            try {
+                stillPending = await invoke('has_pending_permission');
+            } catch (e) { /* assume pending if check fails */ stillPending = true; }
+
+            if (stillPending) {
+                showPermissionModal(notification);
+            } else {
+                console.log('Permission request already handled, skipping modal');
+            }
         }
     });
     

@@ -3,9 +3,10 @@ use crate::state::AppState;
 use log::{error, info};
 use tauri::{Manager, State};
 
-/// Check if input is a URL
+/// Check if input is a URL (must be the entire input, not embedded in a sentence)
 fn is_url(input: &str) -> bool {
     let trimmed = input.trim();
+    // If there are spaces before the protocol, it's a sentence, not a bare URL
     trimmed.starts_with("http://")
         || trimmed.starts_with("https://")
         || trimmed.starts_with("ftp://")
@@ -13,27 +14,33 @@ fn is_url(input: &str) -> bool {
         || (trimmed.starts_with("www.") && trimmed.contains('.'))
 }
 
-/// Check if input is a file or folder path
+/// Check if input is a file or folder path.
+/// Only matches if the input *starts* with a path-like pattern.
+/// Natural language queries that happen to contain paths mid-sentence are not matched.
 fn is_path(input: &str) -> Option<String> {
     let trimmed = input.trim();
 
-    // Windows paths
+    // Reject if it looks like a natural language query (starts with common words)
+    // A path input should start directly with the path characters.
+    
+    // Windows paths — must start with drive letter or UNC prefix
     if cfg!(target_os = "windows") {
+        // Drive letter: C:\...
         if trimmed.len() >= 3
+            && trimmed.as_bytes()[0].is_ascii_alphabetic()
             && trimmed.chars().nth(1) == Some(':')
             && trimmed.chars().nth(2) == Some('\\')
         {
             return Some(trimmed.to_string());
         }
+        // UNC path: \\server\share
         if trimmed.starts_with("\\\\") {
             return Some(trimmed.to_string());
         }
-        if trimmed.contains('\\') {
-            return Some(trimmed.to_string());
-        }
+        // Don't match trimmed.contains('\\') — that catches paths mid-sentence
     }
 
-    // Unix-like paths
+    // Unix-like paths — must start with / or ~
     if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
         if trimmed.starts_with('/') {
             return Some(trimmed.to_string());
@@ -41,9 +48,7 @@ fn is_path(input: &str) -> Option<String> {
         if trimmed.starts_with('~') {
             return Some(trimmed.to_string());
         }
-        if trimmed.contains('/') && !trimmed.contains("://") {
-            return Some(trimmed.to_string());
-        }
+        // Don't match trimmed.contains('/') — that catches paths mid-sentence
     }
 
     None

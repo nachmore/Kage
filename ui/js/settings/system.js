@@ -1,9 +1,17 @@
 /**
  * System Settings Module
  */
+
+function getSystemIcon() {
+    const platform = navigator.platform || '';
+    if (platform.startsWith('Win')) return '🪟';
+    if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF'; // Apple logo (may not render everywhere)
+    return '🐧';
+}
+
 class SystemSettingsModule extends SettingsModule {
     constructor() {
-        super('system', 'System', '⚡');
+        super('system', 'System', getSystemIcon());
     }
 
     render() {
@@ -11,15 +19,11 @@ class SystemSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 
-                ${this.createSettingRow(
+                ${this.createCheckboxRow(
                     'Auto-start on system startup',
-                    'Launch Kiro Assistant automatically when you log in',
-                    `
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="autoStart">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    `
+                    'Launch Kiro Assistant automatically when you log in.',
+                    'autoStart',
+                    false
                 )}
             </div>
         `;
@@ -31,6 +35,14 @@ class SystemSettingsModule extends SettingsModule {
             if (autoStart) {
                 autoStart.checked = config.system.auto_start;
             }
+        }
+    }
+
+    initialize() {
+        // Update the sidebar icon to match the OS
+        const sidebarIcon = document.getElementById('systemSidebarIcon');
+        if (sidebarIcon) {
+            sidebarIcon.textContent = this.icon;
         }
     }
 

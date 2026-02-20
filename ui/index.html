@@ -27,6 +27,7 @@
     <script src="vendor/lib/mermaid.min.js"></script>
 
     <!-- Styles -->
+    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
     <link rel="stylesheet" href="css/chat.css">
     <link rel="stylesheet" href="css/chat-dark.css">
 </head>
@@ -66,7 +67,7 @@
         </div>
 
         <!-- Main Chat -->
-        <div class="chat-main">
+        <div class="chat-main" style="position: relative;">
             <div class="chat-header">
                 <span class="chat-header-title" id="chatHeaderTitle">New Chat</span>
                 <span class="chat-header-status" id="connectionStatus">Checking...</span>
@@ -87,33 +88,34 @@
                         rows="1"
                         autofocus
                     ></textarea>
-                    <button class="chat-send-btn" id="sendBtn">Send</button>
+                    <!-- Icon: "arrow-up" from https://microsoft.github.io/vscode-codicons/dist/codicon.html -->
+                    <button class="chat-send-btn" id="sendBtn" aria-label="Send message"><svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M13.854 7.14576L8.85401 2.14576C8.65901 1.95076 8.34201 1.95076 8.14701 2.14576L3.14601 7.14576C2.95101 7.34076 2.95101 7.65776 3.14601 7.85276C3.34101 8.04776 3.65801 8.04776 3.85301 7.85276L7.99901 3.70676V13.4998C7.99901 13.7758 8.22301 13.9998 8.49901 13.9998C8.77501 13.9998 8.99901 13.7758 8.99901 13.4998V3.70676L13.145 7.85276C13.243 7.95076 13.371 7.99876 13.499 7.99876C13.627 7.99876 13.755 7.94976 13.853 7.85276C14.048 7.65776 14.048 7.34076 13.853 7.14576H13.854Z"/></svg></button>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Permission Modal -->
-    <div class="permission-modal-overlay" id="permissionModal" style="display: none;">
-        <div class="permission-modal">
-            <div class="permission-header">
-                <h3>Tool Permission Required</h3>
-            </div>
-            <div class="permission-body">
-                <p class="permission-tool-title" id="permissionToolTitle"></p>
-                <p class="permission-description">The AI assistant wants to use this tool. Do you want to allow it?</p>
-                <div class="permission-warning">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v5h1v-5h-1zm0 6v1h1v-1h-1z"/>
-                    </svg>
-                    <span>Only approve tools you trust</span>
+            <!-- Permission Modal — scoped to chat-main, not the whole window -->
+            <div class="permission-modal-overlay chat-scoped" id="permissionModal" style="display: none;" data-session-id="">
+                <div class="permission-modal">
+                    <div class="permission-header">
+                        <h3>Tool Permission Required</h3>
+                    </div>
+                    <div class="permission-body">
+                        <p class="permission-tool-title" id="permissionToolTitle"></p>
+                        <p class="permission-description">The AI assistant wants to use this tool. Do you want to allow it?</p>
+                        <div class="permission-warning">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v5h1v-5h-1zm0 6v1h1v-1h-1z"/>
+                            </svg>
+                            <span>Only approve tools you trust</span>
+                        </div>
+                    </div>
+                    <div class="permission-actions">
+                        <button class="permission-btn permission-btn-deny-always" id="permissionDenyAlways">Always Deny</button>
+                        <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
+                        <button class="permission-btn permission-btn-once" id="permissionOnce">Allow</button>
+                        <button class="permission-btn permission-btn-always" id="permissionAlways">Always Allow</button>
+                    </div>
                 </div>
-            </div>
-            <div class="permission-actions">
-                <button class="permission-btn permission-btn-deny-always" id="permissionDenyAlways">Always Deny</button>
-                <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
-                <button class="permission-btn permission-btn-once" id="permissionOnce">Allow</button>
-                <button class="permission-btn permission-btn-always" id="permissionAlways">Always Allow</button>
             </div>
         </div>
     </div>

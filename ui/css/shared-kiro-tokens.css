@@ -1,0 +1,31 @@
+/* Kiro Design Tokens — single source of truth for brand colors.
+   Import this file in every window's HTML to use these variables. */
+:root {
+    /* Primary accent */
+    --kiro-accent: #7138CC;
+    --kiro-accent-hover: #8E47FF;
+    --kiro-accent-active: #5E2EB3;
+    --kiro-accent-light: #C09CFF;       /* lighter tint for dark-theme text highlights */
+    --kiro-accent-glow: rgba(142, 71, 255, 0.3); /* box-shadow glow */
+
+    /* Kiro gradient (ghost, avatars, user messages) */
+    --kiro-gradient: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+
+    /* Surface colors */
+    --kiro-bg: #1e1e1e;
+    --kiro-bg-elevated: #252526;
+    --kiro-bg-input: #2d2d30;
+    --kiro-border: #3c3c3c;
+    --kiro-border-subtle: #2b2b2b;
+
+    /* Text */
+    --kiro-text: #cccccc;
+    --kiro-text-bright: #ffffff;
+    --kiro-text-muted: #888888;
+
+    /* Semantic */
+    --kiro-section-accent: #00b7c3;
+
+    /* Font stack */
+    --kiro-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}

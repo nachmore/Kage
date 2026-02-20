@@ -14,9 +14,9 @@ class HotkeySettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 
-                ${this.createSettingRow(
+                ${this.createControlRow(
                     'Global Hotkey',
-                    'Press the button and then press your desired hotkey combination',
+                    'Press the button and then press your desired hotkey combination.',
                     `
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <div class="hotkey-display" id="hotkeyDisplay">Alt+Space</div>

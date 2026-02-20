@@ -10,7 +10,7 @@ class SettingsModule {
     }
 
     /**
-     * Render the settings section HTML in IDE style
+     * Render the settings section HTML
      * @returns {string} HTML string for the settings section
      */
     render() {
@@ -18,15 +18,62 @@ class SettingsModule {
     }
 
     /**
-     * Helper to create a setting row
+     * Create a checkbox setting row (title, then checkbox + description inline)
+     */
+    createCheckboxRow(label, description, checkboxId, checked) {
+        const checkedAttr = checked ? ' checked' : '';
+        return `
+            <div class="setting-row">
+                <div class="setting-label">${label}</div>
+                <div class="setting-checkbox-row">
+                    <label class="kiro-checkbox">
+                        <input type="checkbox" id="${checkboxId}"${checkedAttr}>
+                    </label>
+                    ${description ? `<div class="setting-description">${description}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Create a control setting row (title, description, then control below)
+     */
+    createControlRow(label, description, controlHtml) {
+        return `
+            <div class="setting-row">
+                <div class="setting-label">${label}</div>
+                ${description ? `<div class="setting-description">${description}</div>` : ''}
+                <div class="setting-control">
+                    ${controlHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Create a control row with an action button beside the input
+     */
+    createControlWithActionRow(label, description, controlHtml, actionHtml) {
+        return `
+            <div class="setting-row">
+                <div class="setting-label">${label}</div>
+                ${description ? `<div class="setting-description">${description}</div>` : ''}
+                <div class="setting-control-with-action">
+                    ${controlHtml}
+                    ${actionHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Legacy helper — kept for backward compat
      */
     createSettingRow(label, description, control) {
         return `
             <div class="setting-row">
-                <div class="setting-label-container">
-                    <div class="setting-label">${label}</div>
-                    ${description ? `<div class="setting-description">${description}</div>` : ''}
-                </div>
+                <div class="setting-label">${label}</div>
+                ${description ? `<div class="setting-description">${description}</div>` : ''}
                 <div class="setting-control">
                     ${control}
                 </div>

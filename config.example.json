@@ -8,13 +8,19 @@
     "mode": {
       "type": "local",
       "spawn_command": "C:\\workplace\\kiro-cli\\target\\release\\chat_cli.exe acp"
+    },
+    "assistant": {
+      "start_session_on_launch": true,
+      "auto_steering_enabled": false,
+      "user_steering_path": null
     }
   },
   "ui": {
     "theme": "dark",
     "floating_window_opacity": 1.0,
     "chat_window_width": 800,
-    "chat_window_height": 600
+    "chat_window_height": 600,
+    "preserve_last_response": true
   },
   "system": {
     "auto_start": false

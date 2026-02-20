@@ -1,6 +1,9 @@
 // Expanded chat application logic
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
 
+/** Prefix used to identify steering messages that should be hidden in the UI */
+const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
+
 export class ChatApp {
     constructor(invoke, appWindow, listen) {
         this.invoke = invoke;
@@ -243,6 +246,11 @@ export class ChatApp {
         this.activeSessionId = sessionId;
         this.renderSessionList();
 
+        // Hide/show permission modal based on which session is active
+        if (window.ChatPermissions) {
+            window.ChatPermissions.onSessionSwitch(sessionId);
+        }
+
         // Load and display session messages from files immediately
         try {
             const sessionData = await this.invoke('load_session', { sessionId });
@@ -283,15 +291,30 @@ export class ChatApp {
         }
 
         // Walk through the JSONL messages in order
+        let isFirstMessage = true;
+        let skipNextAssistant = false;
         for (const msg of sessionData.messages) {
             if (msg.kind === 'Prompt') {
                 // User message — extract text content
                 for (const item of msg.content) {
                     if (item.kind === 'text' && typeof item.data === 'string') {
+                        // Hide the steering message if it is the very first message
+                        if (isFirstMessage && item.data.startsWith(STEERING_MSG_PREFIX)) {
+                            isFirstMessage = false;
+                            skipNextAssistant = true;
+                            continue;
+                        }
+                        isFirstMessage = false;
                         this.addMessageFromHistory('user', item.data);
                     }
                 }
             } else if (msg.kind === 'AssistantMessage') {
+                isFirstMessage = false;
+                // Skip the assistant response to the steering message
+                if (skipNextAssistant) {
+                    skipNextAssistant = false;
+                    continue;
+                }
                 // Assistant message — extract text content, skip tool use entries
                 const textParts = [];
                 for (const item of msg.content) {
@@ -348,6 +371,13 @@ export class ChatApp {
             }
             this.renderSessionList();
             console.log('Created new ACP session:', newId);
+
+            // Send steering for the new session (fire and forget)
+            try {
+                await this.invoke('send_steering_message');
+            } catch (e) {
+                console.log('Steering message not sent (may be disabled):', e);
+            }
         } catch (error) {
             console.error('Failed to create new session:', error);
             this.renderSessionList();
@@ -622,7 +652,7 @@ export class ChatApp {
         const indicator = document.createElement('div');
         indicator.className = 'typing-indicator';
         indicator.id = 'typingIndicator';
-        indicator.innerHTML = '<span></span><span></span><span></span>';
+        indicator.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
         this.elements.messagesArea.appendChild(indicator);
         this.scrollToBottom();
     }

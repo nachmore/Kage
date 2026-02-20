@@ -131,7 +131,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                 .shortcut-trigger {
                     display: inline-block;
                     padding: 2px 8px;
-                    background: #007acc;
+                    background: var(--kiro-accent);
                     color: #ffffff;
                     border-radius: 3px;
                     font-size: 12px;
@@ -163,7 +163,7 @@ class ShortcutsSettingsModule extends SettingsModule {
 
                 .shortcut-action-btn:hover {
                     background: #3c3c3c;
-                    border-color: #007acc;
+                    border-color: var(--kiro-accent);
                 }
 
                 .shortcut-action-btn.delete:hover {

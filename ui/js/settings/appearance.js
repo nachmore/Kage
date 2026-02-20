@@ -7,57 +7,54 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     render() {
-        return `
-            <div class="settings-section" id="${this.id}-section">
-                <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
-                
-                ${this.createSettingRow(
-                    'Theme',
-                    'Choose your preferred theme or follow system settings',
-                    `
-                    <select class="setting-select" id="theme">
-                        <option value="system">System (Auto)</option>
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>
-                    `
-                )}
-                
-                ${this.createSettingRow(
-                    'Floating Window Opacity',
-                    'Adjust transparency of the floating window',
-                    `
-                    <div class="range-container">
-                        <input type="range" class="range-slider" id="opacity" min="0.5" max="1" step="0.1" value="1">
-                        <span class="range-value" id="opacityValue">1.0</span>
-                    </div>
-                    `
-                )}
-                
-                ${this.createSettingRow(
-                    'Chat Window Size',
-                    '',
-                    `
-                    <div class="input-group">
-                        <input type="number" class="setting-input" id="windowWidth" placeholder="Width" value="800">
-                        <input type="number" class="setting-input" id="windowHeight" placeholder="Height" value="600">
-                    </div>
-                    `
-                )}
-                
-                ${this.createSettingRow(
-                    'Preserve Last Response',
-                    'Keep the last AI response visible when the floating window is reshown',
-                    `
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="preserveLastResponse" checked>
-                        <span class="toggle-slider"></span>
-                    </label>
-                    `
-                )}
-            </div>
-        `;
-    }
+            return `
+                <div class="settings-section" id="${this.id}-section">
+                    <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
+
+                    ${this.createControlRow(
+                        'Theme',
+                        'Choose your preferred theme or follow system settings.',
+                        `
+                        <select class="setting-select" id="theme">
+                            <option value="system">System (Auto)</option>
+                            <option value="dark">Dark</option>
+                            <option value="light">Light</option>
+                        </select>
+                        `
+                    )}
+
+                    ${this.createControlRow(
+                        'Floating Window Opacity',
+                        'Adjust transparency of the floating window.',
+                        `
+                        <div class="range-container">
+                            <input type="range" class="range-slider" id="opacity" min="0.5" max="1" step="0.1" value="1">
+                            <span class="range-value" id="opacityValue">1.0</span>
+                        </div>
+                        `
+                    )}
+
+                    ${this.createControlRow(
+                        'Chat Window Size',
+                        '',
+                        `
+                        <div class="input-group">
+                            <input type="number" class="setting-input" id="windowWidth" placeholder="Width" value="800">
+                            <input type="number" class="setting-input" id="windowHeight" placeholder="Height" value="600">
+                        </div>
+                        `
+                    )}
+
+                    ${this.createCheckboxRow(
+                        'Preserve Last Response',
+                        'Keep the last AI response visible when the floating window is reshown.',
+                        'preserveLastResponse',
+                        true
+                    )}
+                </div>
+            `;
+        }
+
 
     load(config) {
         if (config.ui) {

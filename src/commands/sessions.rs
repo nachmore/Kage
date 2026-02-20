@@ -46,6 +46,7 @@ fn get_sessions_dir() -> Result<PathBuf, String> {
 }
 
 /// Extract a title from the JSONL — use the first user prompt text
+/// Skips steering messages (prefixed with STEERING_MSG_PREFIX)
 fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
     if let Ok(content) = fs::read_to_string(jsonl_path) {
         for line in content.lines() {
@@ -64,6 +65,10 @@ fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
                             if item.get("kind").and_then(|k| k.as_str()) == Some("text") {
                                 if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
                                     let trimmed = text.trim();
+                                    // Skip steering messages
+                                    if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX) {
+                                        continue;
+                                    }
                                     if !trimmed.is_empty() {
                                         let title: String = trimmed.chars().take(60).collect();
                                         if title.len() < trimmed.len() {

@@ -107,6 +107,7 @@ fn main() {
             tcp_writer: tcp_writer_handle,
             dev_mode,
             floating_session_id: Arc::new(std::sync::Mutex::new(None)),
+            pending_permission: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -208,6 +209,80 @@ fn main() {
             println!("Floating window initial state: hidden");
             println!();
 
+            // Start default session on launch if configured
+            if config.acp.assistant.start_session_on_launch {
+                info!("start_session_on_launch enabled, spawning background session init");
+                let state: tauri::State<'_, AppState> = app.state();
+                let acp_client = state.acp_client.clone();
+                let floating_session = state.floating_session_id.clone();
+                let config_arc = state.config.clone();
+
+                tauri::async_runtime::spawn(async move {
+                    let client = acp_client.lock().await;
+                    info!("Connecting ACP client on launch...");
+                    if let Err(e) = client.connect() {
+                        error!("Failed to connect on launch: {}", e);
+                        return;
+                    }
+                    info!("Creating default session on launch...");
+                    match client.create_session(None) {
+                        Ok(session_id) => {
+                            info!("Default session created on launch: {}", session_id);
+                            if let Ok(mut fs) = floating_session.lock() {
+                                *fs = Some(session_id.clone());
+                            }
+
+                            // Send steering content as the first hidden message
+                            let cfg = config_arc.lock().await;
+                            let assistant = &cfg.acp.assistant;
+                            let mut steering_parts: Vec<String> = Vec::new();
+
+                            // User steering (precedence)
+                            if let Some(ref path) = assistant.user_steering_path {
+                                if !path.is_empty() {
+                                    if let Ok(content) = std::fs::read_to_string(path) {
+                                        if !content.trim().is_empty() {
+                                            steering_parts.push(content);
+                                        }
+                                    }
+                                }
+                            }
+                            // Auto steering
+                            if assistant.auto_steering_enabled {
+                                if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
+                                    if auto_path.exists() {
+                                        if let Ok(content) = std::fs::read_to_string(&auto_path) {
+                                            if !content.trim().is_empty() {
+                                                steering_parts.push(content);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            drop(cfg);
+
+                            if !steering_parts.is_empty() {
+                                let steering_msg = format!(
+                                    "{} {}",
+                                    crate::commands::system::STEERING_MSG_PREFIX,
+                                    steering_parts.join("\n\n---\n\n")
+                                );
+                                info!("Sending steering message ({} chars)", steering_msg.len());
+                                if let Err(e) = client.send_chat_streaming(
+                                    steering_msg,
+                                    |_chunk| { /* discard streaming output for steering */ },
+                                    None,
+                                    None,
+                                ) {
+                                    error!("Failed to send steering message: {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => error!("Failed to create default session on launch: {}", e),
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -241,7 +316,13 @@ fn main() {
             commands::switch_acp_session,
             commands::get_current_session_id,
             commands::get_floating_session_id,
-            commands::restore_floating_session
+            commands::restore_floating_session,
+            commands::get_steering_content,
+            commands::open_auto_steering_file,
+            commands::get_auto_steering_path,
+            commands::send_steering_message,
+            commands::dismiss_pending_permission,
+            commands::has_pending_permission
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

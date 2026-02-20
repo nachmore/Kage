@@ -6,7 +6,7 @@
     width: 60px;
     min-width: 60px;
     flex-shrink: 0;
-    background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+    background: var(--kiro-gradient);
     border-radius: 12px 0 0 12px;
     display: flex;
     align-items: center;
@@ -164,7 +164,7 @@
 
 .expand-btn:hover {
     background: #f3f4f6;
-    color: #8E48FF;
+    color: var(--kiro-accent);
 }
 
 /* App Suggestions */
@@ -204,7 +204,7 @@
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+    background: var(--kiro-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -261,7 +261,7 @@
 }
 
 .ctx-item:hover {
-    background: #007acc;
+    background: var(--kiro-accent);
     color: #fff;
 }
 
