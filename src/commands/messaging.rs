@@ -226,7 +226,10 @@ pub async fn send_message_streaming(
                 let reconnected = match client.connect() {
                     Ok(_) => {
                         match client.create_session(None) {
-                            Ok(_) => true,
+                            Ok(_) => {
+                                client.send_builtin_steering();
+                                true
+                            }
                             Err(e) => {
                                 error!("Failed to create new session after image error: {}", e);
                                 false

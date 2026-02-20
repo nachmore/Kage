@@ -412,6 +412,40 @@ pub async fn switch_acp_session(
                 }
             }
 
+            // Send steering documents to the new session
+            {
+                let mut steering_parts: Vec<String> = Vec::new();
+                steering_parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
+
+                if let Some(ref path) = cfg.acp.assistant.user_steering_path {
+                    if !path.is_empty() {
+                        if let Ok(content) = std::fs::read_to_string(path) {
+                            if !content.trim().is_empty() {
+                                steering_parts.push(content);
+                            }
+                        }
+                    }
+                }
+                if cfg.acp.assistant.auto_steering_enabled {
+                    if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
+                        if auto_path.exists() {
+                            if let Ok(content) = std::fs::read_to_string(&auto_path) {
+                                if !content.trim().is_empty() {
+                                    steering_parts.push(content);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let steering_msg = format!(
+                    "{} {}",
+                    crate::commands::system::STEERING_MSG_PREFIX,
+                    steering_parts.join("\n\n---\n\n")
+                );
+                let _ = client_guard.send_chat_streaming(steering_msg, None);
+            }
+
             Ok(new_session_id)
         }
     }

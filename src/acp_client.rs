@@ -470,6 +470,40 @@ impl AcpClient {
         Ok((session_id, models_list))
     }
 
+    /// Send the built-in steering document on the current session.
+    /// This should be called after creating a new session to give the agent
+    /// its identity and behavior guidelines.
+    pub fn send_builtin_steering(&self) {
+        let session_id = match self.get_session_id() {
+            Some(id) => id,
+            None => return,
+        };
+
+        let steering_msg = format!(
+            "{} {}",
+            crate::commands::system::STEERING_MSG_PREFIX,
+            crate::commands::system::BUILTIN_STEERING
+        );
+
+        // Reset accumulator so the steering response doesn't pollute the next message
+        *self.streaming_accumulator.lock().unwrap() = String::new();
+
+        let request = AcpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(98),
+            method: "session/prompt".to_string(),
+            params: serde_json::json!({
+                "sessionId": session_id,
+                "prompt": [{ "type": "text", "text": steering_msg }]
+            }),
+        };
+
+        match self.send_request(&request) {
+            Ok(_) => info!("Built-in steering sent to session {}", session_id),
+            Err(e) => warn!("Failed to send built-in steering: {}", e),
+        }
+    }
+
     pub fn load_existing_session(&self, session_id: &str, cwd: Option<String>) -> Result<String> {
         info!("Loading existing ACP session: {}", session_id);
 
@@ -536,7 +570,9 @@ impl AcpClient {
                 id.clone()
             } else {
                 drop(guard);
-                self.create_session(None)?.0
+                let (id, _) = self.create_session(None)?;
+                self.send_builtin_steering();
+                id
             }
         };
 
@@ -692,6 +728,7 @@ impl AcpClient {
             info!("Creating fresh session for retry");
             self.set_session_id(None);
             self.create_session(None)?;
+            self.send_builtin_steering();
         }
 
         match self.send_chat_streaming(content.clone(), attachments.clone()) {
@@ -709,6 +746,7 @@ impl AcpClient {
         self.restart_connection()?;
         self.set_session_id(None);
         self.create_session(None)?;
+        self.send_builtin_steering();
 
         self.send_chat_streaming(content, attachments)
     }
