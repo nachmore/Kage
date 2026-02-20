@@ -86,34 +86,6 @@
             -webkit-user-select: none;
         }
         
-        .ghost-container.thinking {
-            animation: kiro-pulse 2.3s ease-in infinite;
-        }
-        
-        @keyframes kiro-pulse {
-            0% {
-                transform: scale(1);
-                filter: brightness(1);
-            }
-            50% {
-                transform: scale(1.08);
-                filter: brightness(1.15);
-            }
-            100% {
-                transform: scale(1);
-                filter: brightness(1);
-            }
-        }
-        
-        @keyframes float {
-            0%, 100% {
-                transform: translateY(0px);
-            }
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-        
         .ghost-icon {
             width: 36px;
             height: 36px;
@@ -122,33 +94,30 @@
         }
         
         .ghost-container.thinking .ghost-icon {
-            animation: bounce 1s ease-in-out infinite;
+            animation: thinking-float 2.5s ease-in-out infinite;
         }
         
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-        
-        @keyframes ellipsis {
+        @keyframes thinking-float {
             0% {
-                content: "";
+                transform: translateY(0) translateX(0) rotate(0deg) scaleX(1);
             }
-            25% {
-                content: ".";
+            15% {
+                transform: translateY(-8px) translateX(-3px) rotate(-5deg) scaleX(1);
+            }
+            35% {
+                transform: translateY(-12px) translateX(2px) rotate(3deg) scaleX(-1);
             }
             50% {
-                content: "..";
+                transform: translateY(-8px) translateX(4px) rotate(5deg) scaleX(-1);
             }
-            75% {
-                content: "...";
+            65% {
+                transform: translateY(-12px) translateX(2px) rotate(2deg) scaleX(-1);
+            }
+            85% {
+                transform: translateY(-8px) translateX(-3px) rotate(-4deg) scaleX(1);
             }
             100% {
-                content: "";
+                transform: translateY(0) translateX(0) rotate(0deg) scaleX(1);
             }
         }
         
@@ -296,15 +265,6 @@
             }
         }
         
-        @keyframes kiro-eye-blink {
-            0%, 90%, 100% {
-                transform: scaleY(1);
-            }
-            95%, 97% {
-                transform: scaleY(0.15);
-            }
-        }
-        
         /* Static ghost blinking - random timing */
         .ghost-icon .ghost-eye {
             transform-origin: center;
@@ -325,11 +285,7 @@
             }
         }
         
-        /* When thinking, keep blinking but add bounce */
-        .ghost-container.thinking .ghost-icon {
-            animation: bounce 1s ease-in-out infinite;
-        }
-        
+        /* When thinking, keep blinking */
         .ghost-container.thinking .ghost-icon .ghost-eye {
             transform-origin: center;
             transform-box: fill-box;
