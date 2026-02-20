@@ -310,6 +310,9 @@ export class FloatingApp {
         this.elements.input.style.height = 'auto';
         this.elements.input.style.height = Math.min(this.elements.input.scrollHeight, 100) + 'px';
         
+        // Resize window to fit the growing input
+        await this.windowManager.resizeWindow();
+        
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
         }
@@ -318,7 +321,6 @@ export class FloatingApp {
             this.elements.appSuggestions.classList.remove('visible');
             this.currentMatches = [];
             this.selectedIndex = -1;
-            await this.windowManager.resizeWindow();
             return;
         }
         
