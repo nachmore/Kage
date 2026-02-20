@@ -30,11 +30,53 @@ class SettingsManager {
             return;
         }
 
-        // Render all modules
-        container.innerHTML = this.modules.map(module => module.render()).join('');
+        // Group modules by section (shortcuts gets its own, others go in 'kiro')
+        const kiroModules = this.modules.filter(m => m.id !== 'shortcuts');
+        const shortcutsModule = this.modules.find(m => m.id === 'shortcuts');
+
+        let html = '';
+
+        // Render Kiro section (all modules except shortcuts)
+        if (kiroModules.length > 0) {
+            html += `<div class="settings-section" data-section-content="kiro">`;
+            html += kiroModules.map(module => module.render()).join('');
+            html += `</div>`;
+        }
+
+        // Render Shortcuts section
+        if (shortcutsModule) {
+            html += `<div class="settings-section hidden" data-section-content="shortcuts">`;
+            html += shortcutsModule.render();
+            html += `</div>`;
+        }
+
+        container.innerHTML = html;
 
         // Initialize all modules
         this.modules.forEach(module => module.initialize());
+    }
+
+    /**
+     * Switch to a different section
+     */
+    switchSection(sectionId) {
+        // Update sidebar active state
+        document.querySelectorAll('.sidebar-item').forEach(item => {
+            if (item.dataset.section === sectionId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+
+        // Show/hide section content
+        document.querySelectorAll('[data-section-content]').forEach(section => {
+            if (section.dataset.sectionContent === sectionId) {
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+            }
+        });
     }
 
     /**
@@ -71,7 +113,7 @@ class SettingsManager {
             // Save to backend
             await this.invoke('save_config', { config });
             
-            this.showStatus('Settings saved successfully! Please restart the application for changes to take effect.', 'success');
+            this.showStatus('Settings saved! Most changes apply immediately. Hotkey changes require a restart.', 'success');
             return true;
         } catch (error) {
             this.showStatus('Failed to save settings: ' + error, 'error');
@@ -127,6 +169,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
+    settingsManager.registerModule(new ShortcutsSettingsModule());
     
     // Render and load
     settingsManager.render();
@@ -142,4 +185,8 @@ function saveSettings() {
 
 function closeSettings() {
     settingsManager.close();
+}
+
+function switchSection(sectionId) {
+    settingsManager.switchSection(sectionId);
 }

@@ -10,6 +10,8 @@ pub struct Config {
     pub acp: AcpConfig,
     pub ui: UiConfig,
     pub system: SystemConfig,
+    #[serde(default)]
+    pub shortcuts: Vec<ShortcutConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +51,26 @@ pub struct SystemConfig {
     pub auto_start: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutConfig {
+    pub name: String,
+    pub shortcut: String,
+    #[serde(default = "default_action_type")]
+    pub action_type: String, // "run_program" or "open_url"
+    #[serde(default)]
+    pub path: Option<String>, // For run_program
+    #[serde(default)]
+    pub url: Option<String>, // For open_url
+    #[serde(default)]
+    pub working_directory: Option<String>,
+    #[serde(default)]
+    pub arguments: Option<String>,
+}
+
+fn default_action_type() -> String {
+    "run_program".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -73,6 +95,7 @@ impl Default for Config {
             system: SystemConfig {
                 auto_start: false,
             },
+            shortcuts: vec![],
         }
     }
 }

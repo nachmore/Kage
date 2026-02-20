@@ -121,6 +121,10 @@
             margin-bottom: 40px;
         }
 
+        .settings-section.hidden {
+            display: none;
+        }
+
         .settings-section-header {
             font-size: 20px;
             font-weight: 300;
@@ -421,10 +425,14 @@
         <!-- Sidebar -->
         <div class="settings-sidebar">
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Kiro</div>
-                <div class="sidebar-item active" data-section="kiro">
+                <div class="sidebar-section-title">Settings</div>
+                <div class="sidebar-item active" data-section="kiro" onclick="switchSection('kiro')">
                     <span class="sidebar-item-icon">⚙️</span>
                     <span>Kiro</span>
+                </div>
+                <div class="sidebar-item" data-section="shortcuts" onclick="switchSection('shortcuts')">
+                    <span class="sidebar-item-icon">⚡</span>
+                    <span>Shortcuts</span>
                 </div>
             </div>
         </div>
@@ -449,6 +457,7 @@
     <script src="js/settings/connection.js"></script>
     <script src="js/settings/appearance.js"></script>
     <script src="js/settings/system.js"></script>
+    <script src="js/settings/shortcuts.js"></script>
     <script src="js/settings/manager.js"></script>
 </body>
 </html>

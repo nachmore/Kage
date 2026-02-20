@@ -1,5 +1,5 @@
 // Main application logic
-import { renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection } from './floating-suggestions.js';
+import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection } from './floating-suggestions.js';
 import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
 
@@ -15,16 +15,25 @@ export class FloatingApp {
         this.searchTimeout = null;
         this.currentResponse = '';
         this.isWaitingForResponse = false;
+        this.shortcuts = [];
         
         this.elements = {};
     }
 
-    init() {
+    async init() {
         this.cacheElements();
         this.setupEventListeners();
         this.setupStreamingListeners();
         this.setupVisibilityTracking();
         this.windowManager.setupDragging(this.elements.ghostContainer);
+        
+        await this.loadShortcuts();
+        
+        // Listen for config updates
+        this.listen('config_updated', async () => {
+            console.log('Config updated, reloading shortcuts...');
+            await this.loadShortcuts();
+        });
         
         setTimeout(() => this.elements.input.focus(), 100);
         console.log('Initialization complete!');
@@ -97,6 +106,158 @@ export class FloatingApp {
         this.elements.ghostContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
     }
+    async loadShortcuts() {
+        try {
+            const config = await this.invoke('get_config');
+            this.shortcuts = config.shortcuts || [];
+            console.log('Loaded shortcuts:', this.shortcuts);
+        } catch (error) {
+            console.error('Failed to load shortcuts:', error);
+            this.shortcuts = [];
+        }
+    }
+
+    matchShortcut(input) {
+        const parts = input.split(/\s+/);
+        const trigger = parts[0].toLowerCase();
+        const args = parts.slice(1);
+
+        // Find all shortcuts with matching trigger
+        const matches = this.shortcuts.filter(s => s.shortcut.toLowerCase() === trigger);
+        if (matches.length === 0) return null;
+
+        // Score each match based on argument compatibility
+        const scoredMatches = matches.map(shortcut => {
+            const score = this.scoreShortcutMatch(shortcut, args);
+            return { shortcut, args, score };
+        });
+
+        // Sort by score (highest first)
+        scoredMatches.sort((a, b) => b.score - a.score);
+
+        return scoredMatches;
+    }
+
+    scoreShortcutMatch(shortcut, args) {
+        const actionType = shortcut.action_type || 'run_program';
+        const argCount = args.length;
+
+        // For open_url, check if URL has argument placeholders
+        if (actionType === 'open_url') {
+            const url = shortcut.url || '';
+            
+            // Count specific placeholders {0}, {1}, etc.
+            const placeholderCount = (url.match(/\{\d+\}/g) || []).length;
+            
+            if (placeholderCount > 0) {
+                // Has specific placeholders - prefer exact match
+                if (argCount === placeholderCount) return 100; // Perfect match
+                if (argCount > placeholderCount) return 80;    // Extra args ignored
+                return 60;                                      // Missing args
+            }
+            
+            if (url.includes('{*}')) {
+                // Wildcard - accepts any args but lower priority than exact match
+                return argCount > 0 ? 90 : 50; // Prefer if args provided, but less than exact
+            }
+            
+            // No placeholders - prefer if no args
+            return argCount === 0 ? 100 : 50;
+        }
+
+        // For run_program
+        const argTemplate = shortcut.arguments || '';
+        
+        if (!argTemplate) {
+            // No argument template - prefer if no args
+            return argCount === 0 ? 100 : 50;
+        }
+
+        // Count specific placeholders {0}, {1}, etc.
+        const placeholderCount = (argTemplate.match(/\{\d+\}/g) || []).length;
+        
+        if (placeholderCount > 0) {
+            // Has specific placeholders - prefer exact match
+            if (argCount === placeholderCount) return 100; // Perfect match
+            if (argCount > placeholderCount) return 80;    // Extra args ignored
+            return 60;                                      // Missing args
+        }
+        
+        if (argTemplate.includes('{*}')) {
+            // Wildcard - accepts any args but lower priority than exact match
+            return argCount > 0 ? 90 : 50; // Prefer if args provided, but less than exact
+        }
+
+        // Template exists but no placeholders - prefer if no args
+        return argCount === 0 ? 100 : 50;
+    }
+
+    buildShortcutCommand(shortcut, args) {
+        const actionType = shortcut.action_type || 'run_program';
+        
+        if (actionType === 'open_url') {
+            let url = shortcut.url || '';
+            
+            // Handle {*} - all arguments
+            if (url.includes('{*}')) {
+                // Join args with spaces and encode the entire result
+                const allArgs = args.join(' ');
+                url = url.replace('{*}', encodeURIComponent(allArgs));
+            } else {
+                // Handle {0}, {1}, etc. - specific arguments
+                for (let i = 0; i < args.length; i++) {
+                    url = url.replace(new RegExp(`\\{${i}\\}`, 'g'), encodeURIComponent(args[i]));
+                }
+            }
+            
+            return { type: 'open_url', url };
+        } else {
+            // Run program
+            if (!shortcut.arguments) {
+                return { type: 'run_program', path: shortcut.path, args: [], workDir: shortcut.working_directory };
+            }
+
+            const argTemplate = shortcut.arguments;
+
+            // Handle {*} - all arguments
+            if (argTemplate.includes('{*}')) {
+                const processedArgs = argTemplate.replace('{*}', args.join(' ')).split(/\s+/).filter(a => a);
+                return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
+            }
+
+            // Handle {0}, {1}, etc. - specific arguments
+            let processedArgs = argTemplate;
+            for (let i = 0; i < args.length; i++) {
+                processedArgs = processedArgs.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
+            }
+
+            return {
+                type: 'run_program',
+                path: shortcut.path,
+                args: processedArgs.split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/)),
+                workDir: shortcut.working_directory
+            };
+        }
+    }
+
+    async executeShortcut(command) {
+        try {
+            if (command.type === 'open_url') {
+                await this.openUrl(command.url);
+            } else {
+                await this.invoke('execute_shortcut', {
+                    path: command.path,
+                    args: command.args,
+                    workingDirectory: command.workDir || null
+                });
+            }
+            this.resetUI();
+            await this.appWindow.hide();
+        } catch (error) {
+            console.error('Failed to execute shortcut:', error);
+            this.showError('Failed to execute shortcut: ' + error);
+        }
+    }
 
     async handleInputChange(event) {
         const query = this.elements.input.value.trim();
@@ -123,6 +284,45 @@ export class FloatingApp {
 
     async performSearch(query) {
         console.log('Searching for apps:', query);
+        
+        // Check for shortcut matches first
+        const shortcutMatches = this.matchShortcut(query);
+        if (shortcutMatches && shortcutMatches.length > 0) {
+            if (shortcutMatches.length === 1) {
+                // Single match - show it directly
+                const match = shortcutMatches[0];
+                const command = this.buildShortcutCommand(match.shortcut, match.args);
+                this.selectedIndex = renderShortcutSuggestion(
+                    match.shortcut,
+                    match.args,
+                    this.elements.appSuggestions,
+                    this.currentMatches,
+                    () => this.executeShortcut(command),
+                    () => this.windowManager.resizeWindow()
+                );
+            } else {
+                // Multiple matches - show all with scores
+                this.currentMatches = shortcutMatches.map(match => ({
+                    type: 'shortcut',
+                    shortcut: match.shortcut,
+                    args: match.args,
+                    score: match.score
+                }));
+                this.selectedIndex = 0;
+                renderShortcutSuggestions(
+                    shortcutMatches,
+                    this.elements.appSuggestions,
+                    this.selectedIndex,
+                    (match) => {
+                        const command = this.buildShortcutCommand(match.shortcut, match.args);
+                        this.executeShortcut(command);
+                    },
+                    () => this.windowManager.resizeWindow()
+                );
+            }
+            return;
+        }
+        
         try {
             const result = await this.invoke('handle_floating_input', { input: query });
             console.log('Search result:', result);
@@ -213,13 +413,26 @@ export class FloatingApp {
         
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
             const selected = this.currentMatches[this.selectedIndex];
-            if (selected.type === 'url') {
+            if (selected.type === 'shortcut') {
+                const command = this.buildShortcutCommand(selected.shortcut, selected.args);
+                await this.executeShortcut(command);
+            } else if (selected.type === 'url') {
                 await this.openUrl(selected.value);
             } else if (selected.type === 'path') {
                 await this.openPath(selected.value);
             } else {
                 await this.launchApp(selected.name);
             }
+            return;
+        }
+        
+        // Check if the message itself is a shortcut (without suggestion selected)
+        const shortcutMatches = this.matchShortcut(message);
+        if (shortcutMatches && shortcutMatches.length > 0) {
+            // Use the best match (first one, already sorted by score)
+            const bestMatch = shortcutMatches[0];
+            const command = this.buildShortcutCommand(bestMatch.shortcut, bestMatch.args);
+            await this.executeShortcut(command);
             return;
         }
         

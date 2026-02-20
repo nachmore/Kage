@@ -1,5 +1,56 @@
 // App suggestions and search functionality
 
+export function renderShortcutSuggestion(shortcut, args, appSuggestions, currentMatches, executeShortcut, resizeWindow) {
+    appSuggestions.innerHTML = '';
+    currentMatches.length = 0;
+    currentMatches.push({ type: 'shortcut', shortcut, args });
+    
+    const item = document.createElement('div');
+    item.className = 'app-suggestion-item selected';
+    
+    item.innerHTML = `
+        <div class="app-icon">⚡</div>
+        <div class="app-name">${shortcut.name}</div>
+    `;
+    item.addEventListener('click', async () => await executeShortcut());
+    
+    appSuggestions.appendChild(item);
+    appSuggestions.classList.add('visible');
+    setTimeout(() => resizeWindow(), 10);
+    
+    return 0; // selectedIndex
+}
+
+export function renderShortcutSuggestions(matches, appSuggestions, selectedIndex, executeShortcut, resizeWindow) {
+    console.log('Rendering multiple shortcut suggestions:', matches);
+    appSuggestions.innerHTML = '';
+    
+    matches.forEach((match, index) => {
+        const item = document.createElement('div');
+        item.className = 'app-suggestion-item';
+        if (index === selectedIndex) {
+            item.classList.add('selected');
+        }
+        
+        const actionType = match.shortcut.action_type || 'run_program';
+        const actionIcon = actionType === 'open_url' ? '🌐' : '▶️';
+        
+        item.innerHTML = `
+            <div class="app-icon">⚡</div>
+            <div class="app-info">
+                <div class="app-name">${match.shortcut.name}</div>
+                <div class="app-description">${actionIcon} ${match.shortcut.shortcut}</div>
+            </div>
+        `;
+        
+        item.addEventListener('click', async () => await executeShortcut(match));
+        appSuggestions.appendChild(item);
+    });
+    
+    appSuggestions.classList.add('visible');
+    setTimeout(() => resizeWindow(), 10);
+}
+
 export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl, resizeWindow) {
     appSuggestions.innerHTML = '';
     currentMatches.length = 0;

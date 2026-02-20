@@ -242,6 +242,51 @@ async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn execute_shortcut(
+    path: String,
+    args: Vec<String>,
+    working_directory: Option<String>,
+) -> Result<(), String> {
+    info!("Executing shortcut: {} with args: {:?}", path, args);
+    
+    use std::process::Command;
+    
+    // Expand home directory if needed
+    let expanded_path = if path.starts_with('~') {
+        if let Some(home) = dirs::home_dir() {
+            path.replacen('~', &home.to_string_lossy(), 1)
+        } else {
+            path.clone()
+        }
+    } else {
+        path.clone()
+    };
+    
+    let expanded_work_dir = working_directory.as_ref().and_then(|wd| {
+        if wd.starts_with('~') {
+            dirs::home_dir().map(|home| wd.replacen('~', &home.to_string_lossy(), 1))
+        } else {
+            Some(wd.clone())
+        }
+    });
+    
+    // Build the command
+    let mut command = Command::new(&expanded_path);
+    command.args(&args);
+    
+    if let Some(work_dir) = expanded_work_dir {
+        command.current_dir(work_dir);
+    }
+    
+    // Spawn the process
+    command.spawn()
+        .map_err(|e| format!("Failed to execute shortcut: {}", e))?;
+    
+    info!("Shortcut executed successfully");
+    Ok(())
+}
+
+#[tauri::command]
 async fn send_message_streaming(
     message: String,
     state: State<'_, AppState>,
@@ -364,7 +409,7 @@ async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
 }
 
 #[tauri::command]
-async fn save_config(config: Config, state: State<'_, AppState>) -> Result<(), String> {
+async fn save_config(config: Config, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
     info!("Saving configuration");
     config.save().map_err(|e| {
         error!("Failed to save config: {}", e);
@@ -372,9 +417,15 @@ async fn save_config(config: Config, state: State<'_, AppState>) -> Result<(), S
     })?;
     
     let mut state_config = state.config.lock().await;
-    *state_config = config;
+    *state_config = config.clone();
     
     info!("Configuration saved successfully");
+    
+    // Emit event to all windows to reload config
+    if let Err(e) = app.emit_all("config_updated", ()) {
+        error!("Failed to emit config_updated event: {}", e);
+    }
+    
     Ok(())
 }
 
@@ -877,6 +928,7 @@ fn main() {
             launch_app_by_name,
             open_url,
             open_path,
+            execute_shortcut,
             test_floating_window,
             start_drag_window,
             open_chat_window,
