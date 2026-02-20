@@ -133,7 +133,15 @@ export function updateSelection(appSuggestions, selectedIndex) {
     items.forEach((item, index) => {
         if (index === selectedIndex) {
             item.classList.add('selected');
-            item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            // Scroll within the suggestions container only — don't use scrollIntoView
+            // which can scroll parent containers and push the input off screen.
+            const top = item.offsetTop;
+            const bottom = top + item.offsetHeight;
+            if (top < appSuggestions.scrollTop) {
+                appSuggestions.scrollTop = top;
+            } else if (bottom > appSuggestions.scrollTop + appSuggestions.clientHeight) {
+                appSuggestions.scrollTop = bottom - appSuggestions.clientHeight;
+            }
         } else {
             item.classList.remove('selected');
         }

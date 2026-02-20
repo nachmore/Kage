@@ -2,7 +2,6 @@
 
 const DEFAULT_HEIGHT = 76;
 const MAX_HEIGHT_PERCENT = 0.5;
-const MAX_INPUT_ONLY_HEIGHT = 200; // Cap for when only the input is visible
 const BODY_PADDING = 16; // 8px padding on each side
 
 export class WindowManager {
@@ -11,23 +10,39 @@ export class WindowManager {
         this.userSetHeight = null;
         this.autoGrowHeight = null;
         this.resizeTimeout = null;
-        this.maxHeight = this.calculateMaxHeight();
+        this.isResizing = false; // true while the user is dragging the resize handle
     }
 
-    calculateMaxHeight() {
-        const screenHeight = window.screen.height;
-        return Math.floor(screenHeight * MAX_HEIGHT_PERCENT);
+    /**
+     * Get the max height dynamically based on the current monitor.
+     * Uses the Tauri window API to get the current monitor's size.
+     */
+    async getMaxHeight() {
+        try {
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+            const monitor = await appWindow.currentMonitor();
+            if (monitor && monitor.size) {
+                // Use logical height if available, fall back to physical
+                const scaleFactor = monitor.scaleFactor || 1;
+                const logicalHeight = monitor.size.height / scaleFactor;
+                return Math.floor(logicalHeight * MAX_HEIGHT_PERCENT);
+            }
+        } catch (e) {
+            // fallback
+        }
+        return Math.floor(window.screen.height * MAX_HEIGHT_PERCENT);
     }
 
     async resizeWindow() {
+        // Don't auto-resize while the user is manually dragging the resize handle
+        if (this.isResizing) return;
+
         if (this.resizeTimeout) {
             clearTimeout(this.resizeTimeout);
         }
         
         this.resizeTimeout = setTimeout(async () => {
             try {
-                let contentHeight = 0;
-                
                 const loadingDots = document.getElementById('loadingDots');
                 const contentArea = document.getElementById('contentArea');
                 const responseText = document.getElementById('responseText');
@@ -38,6 +53,19 @@ export class WindowManager {
                 const contentVisible = contentArea?.classList.contains('visible');
                 const suggestionsVisible = appSuggestions?.classList.contains('visible');
                 
+                const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
+
+                // When nothing is expanded (just the input), never shrink the window.
+                if (nothingExpanded) {
+                    return;
+                }
+
+                // All DOM measurements are in CSS/logical pixels.
+                // resize_floating_window expects physical pixels, so we scale at the end.
+                const scale = window.devicePixelRatio || 1;
+
+                let contentHeight = 0;
+
                 if (loadingVisible) {
                     contentHeight += loadingDots.offsetHeight;
                 }
@@ -46,28 +74,21 @@ export class WindowManager {
                     contentHeight += responseText.scrollHeight + 32;
                 }
                 
-                const inputHeight = inputContainer?.offsetHeight || 0;
-                contentHeight += inputHeight;
+                contentHeight += inputContainer?.offsetHeight || 0;
                 
                 if (suggestionsVisible) {
                     contentHeight += appSuggestions.offsetHeight;
                 }
-                
-                const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
 
-                // Don't resize if nothing is expanded and input fits in default height
-                if (nothingExpanded && contentHeight + BODY_PADDING <= DEFAULT_HEIGHT) {
-                    return;
-                }
+                // Convert logical pixels to physical pixels
+                const physicalHeight = Math.round((contentHeight + BODY_PADDING) * scale);
 
-                let maxForState = nothingExpanded ? MAX_INPUT_ONLY_HEIGHT : this.maxHeight;
-                let height = Math.max(DEFAULT_HEIGHT, Math.min(maxForState, contentHeight + BODY_PADDING));
+                const maxHeight = await this.getMaxHeight();
+                let height = Math.max(Math.round(DEFAULT_HEIGHT * scale), Math.min(maxHeight, physicalHeight));
                 
-                if (contentHeight > DEFAULT_HEIGHT && !this.userSetHeight) {
+                if (physicalHeight > DEFAULT_HEIGHT * scale && !this.userSetHeight) {
                     this.autoGrowHeight = height;
                 }
-
-                const currentSize = await window.__TAURI__.webviewWindow.getCurrentWebviewWindow().innerSize();
                 
                 await this.invoke('resize_floating_window', { height });
             } catch (error) {
@@ -78,15 +99,16 @@ export class WindowManager {
 
     async resetHeightForNewMessage() {
         try {
+            const scale = window.devicePixelRatio || 1;
             let height;
             
             if (this.userSetHeight) {
                 height = this.userSetHeight;
             } else if (this.autoGrowHeight) {
-                height = DEFAULT_HEIGHT;
+                height = Math.round(DEFAULT_HEIGHT * scale);
                 this.autoGrowHeight = null;
             } else {
-                height = DEFAULT_HEIGHT;
+                height = Math.round(DEFAULT_HEIGHT * scale);
             }
             
             await this.invoke('resize_floating_window', { height });
@@ -106,7 +128,6 @@ export class WindowManager {
         });
         
         document.addEventListener('mouseup', () => {
-            // Small delay so blur handler sees isDragging before it's cleared
             setTimeout(() => { this.isDragging = false; }, 200);
         });
     }
@@ -116,31 +137,51 @@ export class WindowManager {
         let startY = 0;
         let startWidth = 0;
         let startHeight = 0;
+        let scaleFactor = 1;
 
         const onMouseMove = async (e) => {
-            const maxWidth = Math.floor(window.screen.width * MAX_HEIGHT_PERCENT);
-            const newWidth = Math.max(516, Math.min(maxWidth, startWidth + (e.screenX - startX)));
-            const newHeight = Math.max(DEFAULT_HEIGHT, Math.min(this.maxHeight, startHeight + (e.screenY - startY)));
+            const maxWidth = Math.floor(window.screen.availWidth * 0.8);
+            const maxHeight = await this.getMaxHeight();
+            // Mouse deltas are in logical pixels, convert to physical
+            const dx = (e.screenX - startX) * scaleFactor;
+            const dy = (e.screenY - startY) * scaleFactor;
+            const minWidth = Math.floor(516 * scaleFactor);
+            const minHeight = Math.floor(DEFAULT_HEIGHT * scaleFactor);
+            const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
+            const newHeight = Math.max(minHeight, Math.min(maxHeight * scaleFactor, startHeight + dy));
             this.userSetHeight = newHeight;
             try {
-                await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
+                await this.invoke('resize_floating_window', { width: Math.round(newWidth), height: Math.round(newHeight) });
             } catch (err) {
                 // ignore resize errors during drag
             }
         };
 
         const onMouseUp = () => {
+            this.isResizing = false;
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         };
 
-        resizeHandle.addEventListener('mousedown', (e) => {
+        resizeHandle.addEventListener('mousedown', async (e) => {
             e.preventDefault();
             e.stopPropagation();
+            this.isResizing = true;
             startX = e.screenX;
             startY = e.screenY;
-            startWidth = document.documentElement.offsetWidth;
-            startHeight = document.documentElement.offsetHeight;
+            // Get the actual physical window size from Tauri so we don't jump
+            try {
+                const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+                const size = await appWindow.innerSize();
+                startWidth = size.width;
+                startHeight = size.height;
+                const monitor = await appWindow.currentMonitor();
+                scaleFactor = monitor?.scaleFactor || window.devicePixelRatio || 1;
+            } catch (err) {
+                startWidth = document.documentElement.offsetWidth;
+                startHeight = document.documentElement.offsetHeight;
+                scaleFactor = window.devicePixelRatio || 1;
+            }
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
         });
