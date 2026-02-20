@@ -32,9 +32,14 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             .build()?
     };
 
+    // Load tray icon from embedded PNG
+    let icon_bytes = include_bytes!("../ui/assets/kiro-assistant-icon.png");
+    let icon = tauri::image::Image::from_bytes(icon_bytes)
+        .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
+
     let app_handle = app.handle().clone();
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().cloned().unwrap())
+        .icon(icon)
         .menu(&menu)
         .on_menu_event(move |app_handle_inner, event| {
             info!("System tray menu item clicked: {}", event.id().as_ref());

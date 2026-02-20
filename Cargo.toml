@@ -9,7 +9,7 @@ repository = "https://github.com/kiro/kiro-assistant"
 
 
 [dependencies]
-tauri = { version = "2.10", features = ["tray-icon"] }
+tauri = { version = "2.10", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1.0", features = ["derive"] }
