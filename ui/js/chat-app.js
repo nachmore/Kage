@@ -128,6 +128,29 @@ export class ChatApp {
         this.attachmentManager.onChange((attachments) => {
             renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
         });
+
+        // Image lightbox — click any message image to zoom
+        const lightbox = document.getElementById('imageLightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+
+        this.elements.messagesArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('message-attachment-img')) {
+                lightboxImg.src = e.target.src;
+                lightbox.style.display = 'flex';
+            }
+        });
+
+        lightbox.addEventListener('click', () => {
+            lightbox.style.display = 'none';
+            lightboxImg.src = '';
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && lightbox.style.display !== 'none') {
+                lightbox.style.display = 'none';
+                lightboxImg.src = '';
+            }
+        });
     }
 
     setupStreamingListeners() {
