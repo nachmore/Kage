@@ -95,6 +95,7 @@
     padding: 16px;
     display: none;
     max-height: none;
+    position: relative;
 }
 
 .content-area.visible {
@@ -145,8 +146,11 @@
 }
 
 .expand-btn {
-    width: 32px;
-    height: 32px;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
     border: none;
     background: transparent;
     cursor: pointer;
@@ -155,7 +159,9 @@
     align-items: center;
     justify-content: center;
     color: #6b7280;
-    transition: all 0.2s;
+    opacity: 0.35;
+    transition: opacity 0.2s, background 0.2s, color 0.2s;
+    z-index: 1;
 }
 
 .expand-btn.visible {
@@ -163,6 +169,7 @@
 }
 
 .expand-btn:hover {
+    opacity: 1;
     background: #f3f4f6;
     color: var(--kiro-accent);
 }
@@ -170,7 +177,7 @@
 /* App Suggestions */
 .app-suggestions {
     background: white;
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
     display: none;
     border-top: 1px solid #e5e7eb;
@@ -299,4 +306,11 @@ body.dark-theme .suggestions-hint {
 body.dark-theme .hint-key {
     background: #352F3D;
     color: #938F9B;
+}
+
+/* Selection current indicator */
+.selection-current {
+    margin-left: 6px;
+    color: #8E48FF;
+    font-size: 10px;
 }

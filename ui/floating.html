@@ -51,6 +51,14 @@
                 <div class="loading-dot"></div>
             </div>
             <div class="content-area" id="contentArea">
+                <button class="expand-btn" id="expandBtn" title="Open full chat">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 3 21 3 21 9"/>
+                        <polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/>
+                        <line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                </button>
                 <div class="response-text" id="responseText"></div>
             </div>
             <div class="input-container">
@@ -61,11 +69,6 @@
                     rows="1"
                     autofocus
                 ></textarea>
-                <button class="expand-btn" id="expandBtn" title="Open full chat">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m-3-3h6"/>
-                    </svg>
-                </button>
             </div>
             <div class="app-suggestions" id="appSuggestions"></div>
         </div>
