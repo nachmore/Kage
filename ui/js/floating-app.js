@@ -66,6 +66,12 @@ export class FloatingApp {
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.toolSources = [];
+
+        document.addEventListener('kiro-clear', () => {
+            this.resetUI();
+            this.windowManager.userSetHeight = null;
+            this.windowManager.resizeWindow();
+        });
     }
 
     setupVisibilityTracking() {

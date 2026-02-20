@@ -28,6 +28,14 @@ const COMMANDS = [
         execute: async (invoke) => {
             await invoke('open_devtools');
         }
+    },
+    {
+        name: 'clear',
+        description: 'Clear current response',
+        icon: '🧹',
+        execute: async (_invoke, appWindow) => {
+            document.dispatchEvent(new CustomEvent('kiro-clear'));
+        }
     }
 ];
 
