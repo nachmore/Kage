@@ -1,8 +1,10 @@
 mod acp_client;
+mod app_launcher;
 mod config;
 mod logger;
 
 use acp_client::AcpClient;
+use app_launcher::AppLauncher;
 use config::Config;
 use log::{error, info, warn};
 use std::sync::Arc;
@@ -12,9 +14,86 @@ use tauri::{
 };
 use tokio::sync::Mutex;
 
+#[tauri::command]
+async fn handle_floating_input(
+    input: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    info!("Handling floating input: {}", input);
+    
+    let launcher = state.app_launcher.lock().await;
+    
+    // Check if input matches an application
+    let matches = launcher.find_app(&input);
+    
+    if !matches.is_empty() {
+        let app_to_launch = &matches[0];
+        info!("Found matching application: {}", app_to_launch.name);
+        
+        // If there's only one match, launch it
+        if matches.len() == 1 {
+            match launcher.launch(app_to_launch) {
+                Ok(_) => {
+                    info!("Successfully launched: {}", app_to_launch.name);
+                    
+                    // Hide floating window
+                    if let Some(floating_window) = app.get_window("floating") {
+                        let _ = floating_window.hide();
+                    }
+                    
+                    return Ok(format!("launched:{}", app_to_launch.name));
+                }
+                Err(e) => {
+                    error!("Failed to launch application: {}", e);
+                    return Err(format!("Failed to launch {}: {}", app_to_launch.name, e));
+                }
+            }
+        } else {
+            // Multiple matches - return them for user selection
+            let app_names: Vec<String> = matches.iter().map(|a| a.name.clone()).collect();
+            info!("Multiple matches found: {:?}", app_names);
+            return Ok(format!("multiple:{}", app_names.join(",")));
+        }
+    }
+    
+    // No app match - open chat mode
+    info!("No application match, opening chat mode");
+    Ok("chat".to_string())
+}
+
+#[tauri::command]
+async fn launch_app_by_name(
+    app_name: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    info!("Launching app by name: {}", app_name);
+    
+    let launcher = state.app_launcher.lock().await;
+    let matches = launcher.find_app(&app_name);
+    
+    if let Some(app_to_launch) = matches.first() {
+        launcher.launch(app_to_launch).map_err(|e| {
+            error!("Failed to launch {}: {}", app_name, e);
+            format!("Failed to launch {}: {}", app_name, e)
+        })?;
+        
+        // Hide floating window
+        if let Some(floating_window) = app.get_window("floating") {
+            let _ = floating_window.hide();
+        }
+        
+        Ok(())
+    } else {
+        Err(format!("Application not found: {}", app_name))
+    }
+}
+
 struct AppState {
     acp_client: Arc<Mutex<AcpClient>>,
     config: Arc<Mutex<Config>>,
+    app_launcher: Arc<Mutex<AppLauncher>>,
 }
 
 #[tauri::command]
@@ -201,6 +280,15 @@ fn main() {
     
     let acp_client = AcpClient::new(config.acp.host.clone(), config.acp.port);
     
+    // Initialize app launcher
+    let app_launcher = AppLauncher::new().unwrap_or_else(|e| {
+        error!("Failed to initialize app launcher: {}", e);
+        eprintln!("Failed to initialize app launcher: {}", e);
+        // Create an empty launcher as fallback
+        AppLauncher::new().unwrap()
+    });
+    info!("App launcher initialized");
+    
     // Create system tray menu
     let show = CustomMenuItem::new("show".to_string(), "Show");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
@@ -217,6 +305,7 @@ fn main() {
         .manage(AppState {
             acp_client: Arc::new(Mutex::new(acp_client)),
             config: Arc::new(Mutex::new(config.clone())),
+            app_launcher: Arc::new(Mutex::new(app_launcher)),
         })
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
@@ -322,7 +411,9 @@ fn main() {
             get_config,
             save_config,
             open_settings_window,
-            reconnect_acp
+            reconnect_acp,
+            handle_floating_input,
+            launch_app_by_name
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

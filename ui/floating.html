@@ -292,10 +292,37 @@
                     const message = input.value.trim();
                     if (message) {
                         try {
-                            await invoke('open_chat_with_message', { message });
-                            input.value = '';
+                            // First, check if this is a command to launch an app
+                            const result = await invoke('handle_floating_input', { input: message });
+                            
+                            if (result.startsWith('launched:')) {
+                                // App was launched successfully
+                                const appName = result.substring(9);
+                                console.log('Launched application:', appName);
+                                input.value = '';
+                            } else if (result.startsWith('multiple:')) {
+                                // Multiple apps matched - show selection
+                                const apps = result.substring(9).split(',');
+                                console.log('Multiple matches:', apps);
+                                
+                                // For now, just launch the first one
+                                // TODO: Show a selection UI
+                                await invoke('launch_app_by_name', { appName: apps[0] });
+                                input.value = '';
+                            } else if (result === 'chat') {
+                                // No app match, open chat
+                                await invoke('open_chat_with_message', { message });
+                                input.value = '';
+                            }
                         } catch (error) {
-                            console.error('Error opening chat:', error);
+                            console.error('Error handling input:', error);
+                            // On error, fall back to chat mode
+                            try {
+                                await invoke('open_chat_with_message', { message });
+                                input.value = '';
+                            } catch (chatError) {
+                                console.error('Error opening chat:', chatError);
+                            }
                         }
                     }
                 }
