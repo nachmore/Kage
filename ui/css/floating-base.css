@@ -6,7 +6,8 @@
 }
 
 html, body {
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
 }
 
 body {
@@ -18,7 +19,7 @@ body {
     align-items: stretch;
     justify-content: stretch;
     margin: 0;
-    padding: 4px;
+    padding: 0;
     position: relative;
 }
 
@@ -30,12 +31,11 @@ body {
     animation: fadeIn 0.2s ease-out;
     width: 100%;
     height: 100%;
-    min-width: 490px;
-    min-height: 52px;
+    min-width: 500px;
+    min-height: 60px;
     max-width: 100%;
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
     transition: height 0.3s ease-out;
 }
 

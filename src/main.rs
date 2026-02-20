@@ -1190,6 +1190,13 @@ fn main() {
 
             // Register global hotkey
             let floating_window = app.get_webview_window("floating").unwrap();
+
+            // Make the webview background fully transparent (removes the white border on Windows)
+            let _ = floating_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+            // Remove the DWM window shadow/border on Windows
+            #[cfg(target_os = "windows")]
+            let _ = floating_window.set_shadow(false);
+
             let hotkey_string = config.get_hotkey_string();
 
             info!(
