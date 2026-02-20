@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - Kiro Assistant</title>
+    <title>Kiro Settings</title>
     <style>
         * {
             margin: 0;
@@ -13,150 +13,198 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
-            color: #333;
+            background: #1e1e1e;
+            color: #cccccc;
             overflow: hidden;
+            height: 100vh;
         }
 
         .settings-container {
-            width: 100%;
+            display: flex;
             height: 100vh;
-            display: flex;
-            flex-direction: column;
-            background: white;
+            width: 100%;
         }
 
+        /* Header */
         .settings-header {
-            padding: 20px 30px;
-            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
-            color: #19161D;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 35px;
+            background: #323233;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
+            padding: 0 15px;
+            z-index: 100;
+            border-bottom: 1px solid #2b2b2b;
         }
 
-        .settings-header h1 {
-            font-size: 24px;
-            font-weight: 600;
+        .settings-title {
+            font-size: 13px;
+            font-weight: 400;
+            color: #cccccc;
         }
 
         .close-btn {
-            background: rgba(255, 255, 255, 0.2);
+            background: transparent;
             border: none;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
+            color: #cccccc;
             cursor: pointer;
-            font-size: 14px;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 12px;
             transition: background 0.2s;
         }
 
         .close-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #3e3e42;
         }
 
-        .settings-content {
-            flex: 1;
+        /* Sidebar */
+        .settings-sidebar {
+            width: 200px;
+            background: #252526;
+            border-right: 1px solid #2b2b2b;
             overflow-y: auto;
-            padding: 30px;
+            margin-top: 35px;
+            flex-shrink: 0;
         }
 
-        .settings-section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .settings-section h2 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            color: #8E48FF;
-        }
-
-        .setting-item {
+        .sidebar-section {
             margin-bottom: 20px;
         }
 
-        .setting-item:last-child {
-            margin-bottom: 0;
+        .sidebar-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #888888;
+            padding: 8px 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-item {
+            padding: 6px 20px;
+            font-size: 13px;
+            color: #cccccc;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-item:hover {
+            background: #2a2d2e;
+        }
+
+        .sidebar-item.active {
+            background: #37373d;
+            color: #ffffff;
+        }
+
+        .sidebar-item-icon {
+            font-size: 14px;
+        }
+
+        /* Main Content */
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 50px 40px 40px 40px;
+            margin-top: 35px;
+        }
+
+        .settings-section {
+            margin-bottom: 40px;
+        }
+
+        .settings-section-header {
+            font-size: 20px;
+            font-weight: 300;
+            color: #ffffff;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2b2b2b;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px 0;
+            border-bottom: 1px solid #2b2b2b;
+        }
+
+        .setting-row:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label-container {
+            flex: 1;
+            padding-right: 20px;
         }
 
         .setting-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 8px;
-            color: #555;
+            font-size: 13px;
+            color: #cccccc;
+            margin-bottom: 4px;
+            font-weight: 400;
         }
 
+        .setting-description {
+            font-size: 12px;
+            color: #888888;
+            line-height: 1.5;
+        }
+
+        .setting-control {
+            min-width: 300px;
+            max-width: 500px;
+        }
+
+        /* Input Controls */
         .setting-input {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.2s;
+            padding: 6px 8px;
+            background: #3c3c3c;
+            border: 1px solid #3c3c3c;
+            border-radius: 2px;
+            color: #cccccc;
+            font-size: 13px;
+            font-family: inherit;
         }
 
         .setting-input:focus {
             outline: none;
-            border-color: #8E48FF;
+            border-color: #007acc;
+            background: #3c3c3c;
         }
 
-        .setting-input-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        .setting-input-group .setting-input {
-            flex: 1;
-        }
-
-        .hotkey-capture {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .hotkey-display {
-            flex: 1;
-            padding: 10px 12px;
-            border: 2px solid #8E48FF;
-            border-radius: 6px;
-            background: white;
-            font-size: 14px;
-            font-weight: 500;
-            color: #8E48FF;
-            text-align: center;
-        }
-
-        .capture-btn {
-            padding: 10px 20px;
-            background: #8E48FF;
-            color: white;
-            border: none;
-            border-radius: 6px;
+        .setting-select {
+            width: 100%;
+            padding: 6px 8px;
+            background: #3c3c3c;
+            border: 1px solid #3c3c3c;
+            border-radius: 2px;
+            color: #cccccc;
+            font-size: 13px;
+            font-family: inherit;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: background 0.2s;
         }
 
-        .capture-btn:hover {
-            background: #7a3de6;
+        .setting-select:focus {
+            outline: none;
+            border-color: #007acc;
         }
 
-        .capture-btn.capturing {
-            background: #f59e0b;
-        }
-
+        /* Toggle Switch */
         .toggle-switch {
             position: relative;
             display: inline-block;
-            width: 50px;
-            height: 26px;
+            width: 40px;
+            height: 20px;
         }
 
         .toggle-switch input {
@@ -172,451 +220,235 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background-color: #ccc;
-            transition: 0.3s;
-            border-radius: 26px;
+            background-color: #3c3c3c;
+            transition: 0.2s;
+            border-radius: 10px;
+            border: 1px solid #3c3c3c;
         }
 
         .toggle-slider:before {
             position: absolute;
             content: "";
-            height: 20px;
-            width: 20px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: 0.3s;
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #ffffff;
+            transition: 0.2s;
             border-radius: 50%;
         }
 
         input:checked + .toggle-slider {
-            background-color: #8E48FF;
+            background-color: #007acc;
+            border-color: #007acc;
         }
 
         input:checked + .toggle-slider:before {
-            transform: translateX(24px);
+            transform: translateX(20px);
         }
 
-        .save-btn {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
-            color: #19161D;
-            border: none;
-            border-radius: 6px;
+        /* Button */
+        .setting-button {
+            padding: 6px 14px;
+            background: #0e639c;
+            border: 1px solid #0e639c;
+            border-radius: 2px;
+            color: #ffffff;
+            font-size: 13px;
             cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            transition: opacity 0.2s;
+            transition: background 0.2s;
         }
 
-        .save-btn:hover {
-            opacity: 0.9;
+        .setting-button:hover {
+            background: #1177bb;
         }
 
-        .setting-description {
-            font-size: 12px;
-            color: #888;
-            margin-top: 4px;
+        .setting-button:active {
+            background: #0d5a8f;
         }
 
+        /* Hotkey Display */
+        .hotkey-display {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            background: #3c3c3c;
+            border: 1px solid #3c3c3c;
+            border-radius: 2px;
+            font-size: 13px;
+            color: #cccccc;
+            min-width: 120px;
+        }
+
+        .hotkey-display.capturing {
+            border-color: #007acc;
+            background: #2d2d30;
+        }
+
+        /* Range Slider */
+        .range-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .range-slider {
+            flex: 1;
+            height: 4px;
+            background: #3c3c3c;
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #007acc;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .range-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #007acc;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+
+        .range-value {
+            font-size: 13px;
+            color: #cccccc;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* Input Group */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group .setting-input {
+            flex: 1;
+        }
+
+        /* Status Message */
         .status-message {
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-size: 14px;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 4px;
+            font-size: 13px;
             display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
 
         .status-message.success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #6ee7b7;
+            background: #1e8449;
+            color: #ffffff;
         }
 
         .status-message.error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fca5a5;
+            background: #c0392b;
+            color: #ffffff;
         }
-        
-        /* Dark Theme Styles */
-        body.dark-theme {
-            background: linear-gradient(135deg, #19161D 0%, #28242E 100%);
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
         }
-        
-        body.dark-theme .settings-container {
-            background: #211D25;
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
         }
-        
-        body.dark-theme .settings-content {
-            background: #211D25;
+
+        ::-webkit-scrollbar-thumb {
+            background: #424242;
+            border-radius: 5px;
         }
-        
-        body.dark-theme .settings-section {
-            background: #28242E;
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4e4e4e;
         }
-        
-        body.dark-theme .settings-section h2 {
-            color: #C09CFF;
+
+        /* Save Button */
+        .save-button-container {
+            position: fixed;
+            bottom: 0;
+            left: 200px;
+            right: 0;
+            padding: 12px 40px;
+            background: #252526;
+            border-top: 1px solid #2b2b2b;
+            display: flex;
+            justify-content: flex-end;
         }
-        
-        body.dark-theme .setting-label {
-            color: #E5E7EB;
+
+        .save-button {
+            padding: 8px 20px;
+            background: #0e639c;
+            border: 1px solid #0e639c;
+            border-radius: 2px;
+            color: #ffffff;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
         }
-        
-        body.dark-theme .setting-input {
-            background: #211D25;
-            border-color: #4A464F;
-            color: #E5E7EB;
-        }
-        
-        body.dark-theme .setting-input:focus {
-            border-color: #8E48FF;
-        }
-        
-        body.dark-theme .setting-description {
-            color: #938F9B;
-        }
-        
-        body.dark-theme .hotkey-display {
-            background: #211D25;
-            border-color: #8E48FF;
-            color: #C09CFF;
-        }
-        
-        body.dark-theme .close-btn {
-            background: rgba(0, 0, 0, 0.3);
-        }
-        
-        body.dark-theme .close-btn:hover {
-            background: rgba(0, 0, 0, 0.5);
+
+        .save-button:hover {
+            background: #1177bb;
         }
     </style>
 </head>
 <body>
+    <!-- Header -->
+    <div class="settings-header">
+        <div class="settings-title">Kiro Settings</div>
+        <button class="close-btn" onclick="closeSettings()">Close</button>
+    </div>
+
     <div class="settings-container">
-        <div class="settings-header">
-            <h1>⚙️ Kiro Settings</h1>
-            <button class="close-btn" onclick="closeSettings()">Close</button>
+        <!-- Sidebar -->
+        <div class="settings-sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Kiro</div>
+                <div class="sidebar-item active" data-section="kiro">
+                    <span class="sidebar-item-icon">⚙️</span>
+                    <span>Kiro</span>
+                </div>
+            </div>
         </div>
 
+        <!-- Main Content -->
         <div class="settings-content">
             <div id="statusMessage" class="status-message"></div>
 
-            <!-- Hotkey Settings -->
-            <div class="settings-section">
-                <h2>🎹 Hotkey</h2>
-                <div class="setting-item">
-                    <label class="setting-label">Global Hotkey</label>
-                    <div class="hotkey-capture">
-                        <div class="hotkey-display" id="hotkeyDisplay">Alt+Space</div>
-                        <button class="capture-btn" id="captureBtn" onclick="captureHotkey()">Change</button>
-                    </div>
-                    <div class="setting-description">Press the button and then press your desired hotkey combination</div>
-                </div>
-            </div>
-
-            <!-- ACP Connection Settings -->
-            <div class="settings-section">
-                <h2>🔌 Connection</h2>
-                <div class="setting-item">
-                    <label class="setting-label">Connection Mode</label>
-                    <select class="setting-input" id="acpMode" onchange="toggleAcpMode()">
-                        <option value="local">Local (Spawn Process)</option>
-                        <option value="remote">Remote (TCP Connection)</option>
-                    </select>
-                    <div class="setting-description">Choose how to connect to the ACP server</div>
-                </div>
-                
-                <!-- Local Mode Settings -->
-                <div id="localModeSettings" style="display: none;">
-                    <div class="setting-item">
-                        <label class="setting-label">Spawn Command</label>
-                        <input type="text" class="setting-input" id="spawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
-                        <div class="setting-description">Full command to spawn the ACP server (including binary path and arguments). Example: C:\workplace\kiro-cli\target\release\chat_cli.exe acp</div>
-                    </div>
-                </div>
-                
-                <!-- Remote Mode Settings -->
-                <div id="remoteModeSettings" style="display: none;">
-                    <div class="setting-item">
-                        <label class="setting-label">Host</label>
-                        <input type="text" class="setting-input" id="acpHost" value="127.0.0.1">
-                    </div>
-                    <div class="setting-item">
-                        <label class="setting-label">Port</label>
-                        <input type="number" class="setting-input" id="acpPort" value="8765">
-                    </div>
-                    <div class="setting-item">
-                        <label class="setting-label">Timeout (ms)</label>
-                        <input type="number" class="setting-input" id="acpTimeout" value="30000">
-                        <div class="setting-description">Connection timeout in milliseconds</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- UI Preferences -->
-            <div class="settings-section">
-                <h2>🎨 Appearance</h2>
-                <div class="setting-item">
-                    <label class="setting-label">Theme</label>
-                    <select class="setting-input" id="theme">
-                        <option value="system">System (Auto)</option>
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>
-                    <div class="setting-description">Choose your preferred theme or follow system settings</div>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-label">Floating Window Opacity</label>
-                    <input type="range" class="setting-input" id="opacity" min="0.5" max="1" step="0.1" value="1">
-                    <div class="setting-description">Adjust transparency of the floating window</div>
-                </div>
-                <div class="setting-item">
-                    <label class="setting-label">Chat Window Size</label>
-                    <div class="setting-input-group">
-                        <input type="number" class="setting-input" id="windowWidth" placeholder="Width" value="800">
-                        <input type="number" class="setting-input" id="windowHeight" placeholder="Height" value="600">
-                    </div>
-                </div>
-            </div>
-
-            <!-- System Settings -->
-            <div class="settings-section">
-                <h2>⚡ System</h2>
-                <div class="setting-item">
-                    <label class="setting-label">Auto-start on system startup</label>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="autoStart">
-                        <span class="toggle-slider"></span>
-                    </label>
-                    <div class="setting-description">Launch Kiro Assistant automatically when you log in</div>
-                </div>
-            </div>
-
-            <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+            <!-- Settings modules will be rendered here -->
+            <div id="settingsModules"></div>
         </div>
     </div>
 
-    <script>
-        const { invoke } = window.__TAURI__.tauri;
-        const { appWindow } = window.__TAURI__.window;
+    <!-- Save Button -->
+    <div class="save-button-container">
+        <button class="save-button" onclick="saveSettings()">Save Settings</button>
+    </div>
 
-        let isCapturing = false;
-        let capturedModifiers = [];
-        let capturedKey = '';
-        
-        // Toggle ACP mode settings visibility
-        function toggleAcpMode() {
-            const mode = document.getElementById('acpMode').value;
-            const localSettings = document.getElementById('localModeSettings');
-            const remoteSettings = document.getElementById('remoteModeSettings');
-            
-            if (mode === 'local') {
-                localSettings.style.display = 'block';
-                remoteSettings.style.display = 'none';
-            } else {
-                localSettings.style.display = 'none';
-                remoteSettings.style.display = 'block';
-            }
-        }
-
-        // Load settings on startup
-        async function loadSettings() {
-            try {
-                const config = await invoke('get_config');
-                
-                // Hotkey
-                document.getElementById('hotkeyDisplay').textContent = config.hotkey.modifiers.join('+') + '+' + config.hotkey.key;
-                
-                // ACP Mode
-                if (config.acp.mode.type === 'local') {
-                    document.getElementById('acpMode').value = 'local';
-                    document.getElementById('spawnCommand').value = config.acp.mode.spawn_command || '';
-                } else if (config.acp.mode.type === 'remote') {
-                    document.getElementById('acpMode').value = 'remote';
-                    document.getElementById('acpHost').value = config.acp.mode.host;
-                    document.getElementById('acpPort').value = config.acp.mode.port;
-                    document.getElementById('acpTimeout').value = config.acp.mode.timeout_ms;
-                }
-                
-                // Toggle visibility based on mode
-                toggleAcpMode();
-                
-                // UI
-                document.getElementById('theme').value = config.ui.theme;
-                document.getElementById('opacity').value = config.ui.floating_window_opacity;
-                document.getElementById('windowWidth').value = config.ui.chat_window_width;
-                document.getElementById('windowHeight').value = config.ui.chat_window_height;
-                
-                // System
-                document.getElementById('autoStart').checked = config.system.auto_start;
-            } catch (error) {
-                showStatus('Failed to load settings: ' + error, 'error');
-            }
-        }
-
-        function captureHotkey() {
-            if (isCapturing) {
-                stopCapture();
-                return;
-            }
-
-            isCapturing = true;
-            capturedModifiers = [];
-            capturedKey = '';
-            
-            const btn = document.getElementById('captureBtn');
-            const display = document.getElementById('hotkeyDisplay');
-            
-            btn.textContent = 'Press keys...';
-            btn.classList.add('capturing');
-            display.textContent = 'Waiting...';
-            
-            document.addEventListener('keydown', handleKeyCapture);
-            document.addEventListener('keyup', handleKeyRelease);
-        }
-
-        function handleKeyCapture(e) {
-            if (!isCapturing) return;
-            
-            e.preventDefault();
-            
-            const modifiers = [];
-            if (e.ctrlKey) modifiers.push('Ctrl');
-            if (e.altKey) modifiers.push('Alt');
-            if (e.shiftKey) modifiers.push('Shift');
-            if (e.metaKey) modifiers.push('Meta');
-            
-            // Get the key (not a modifier)
-            let key = e.key;
-            if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
-                capturedModifiers = modifiers;
-                capturedKey = key.toUpperCase();
-                
-                const display = document.getElementById('hotkeyDisplay');
-                display.textContent = [...modifiers, capturedKey].join('+');
-            }
-        }
-
-        function handleKeyRelease(e) {
-            if (!isCapturing) return;
-            
-            // If we have captured a key, stop capturing
-            if (capturedKey) {
-                stopCapture();
-            }
-        }
-
-        function stopCapture() {
-            isCapturing = false;
-            const btn = document.getElementById('captureBtn');
-            btn.textContent = 'Change';
-            btn.classList.remove('capturing');
-            
-            document.removeEventListener('keydown', handleKeyCapture);
-            document.removeEventListener('keyup', handleKeyRelease);
-        }
-
-        async function saveSettings() {
-            try {
-                const mode = document.getElementById('acpMode').value;
-                let acpMode;
-                
-                if (mode === 'local') {
-                    const spawnCommand = document.getElementById('spawnCommand').value.trim();
-                    if (!spawnCommand) {
-                        showStatus('Spawn command is required for local mode', 'error');
-                        return;
-                    }
-                    acpMode = {
-                        type: 'local',
-                        spawn_command: spawnCommand
-                    };
-                } else {
-                    acpMode = {
-                        type: 'remote',
-                        host: document.getElementById('acpHost').value,
-                        port: parseInt(document.getElementById('acpPort').value),
-                        timeout_ms: parseInt(document.getElementById('acpTimeout').value)
-                    };
-                }
-                
-                const config = {
-                    version: 1,
-                    hotkey: {
-                        modifiers: capturedModifiers.length > 0 ? capturedModifiers : document.getElementById('hotkeyDisplay').textContent.split('+').slice(0, -1),
-                        key: capturedKey || document.getElementById('hotkeyDisplay').textContent.split('+').pop()
-                    },
-                    acp: {
-                        mode: acpMode
-                    },
-                    ui: {
-                        theme: document.getElementById('theme').value,
-                        floating_window_opacity: parseFloat(document.getElementById('opacity').value),
-                        chat_window_width: parseInt(document.getElementById('windowWidth').value),
-                        chat_window_height: parseInt(document.getElementById('windowHeight').value)
-                    },
-                    system: {
-                        auto_start: document.getElementById('autoStart').checked
-                    }
-                };
-
-                await invoke('save_config', { config });
-                
-                // Apply theme immediately
-                applyTheme(config.ui.theme);
-                
-                showStatus('Settings saved successfully! Please restart the application for changes to take effect.', 'success');
-            } catch (error) {
-                showStatus('Failed to save settings: ' + error, 'error');
-            }
-        }
-        
-        function applyTheme(theme) {
-            if (theme === 'system') {
-                // Detect system theme
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                document.body.classList.toggle('dark-theme', prefersDark);
-            } else if (theme === 'dark') {
-                document.body.classList.add('dark-theme');
-            } else {
-                document.body.classList.remove('dark-theme');
-            }
-        }
-        
-        // Listen for system theme changes
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-            const currentTheme = document.getElementById('theme').value;
-            if (currentTheme === 'system') {
-                document.body.classList.toggle('dark-theme', e.matches);
-            }
-        });
-
-        function showStatus(message, type) {
-            const statusEl = document.getElementById('statusMessage');
-            statusEl.textContent = message;
-            statusEl.className = 'status-message ' + type;
-            statusEl.style.display = 'block';
-            
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 5000);
-        }
-
-        function closeSettings() {
-            appWindow.hide();
-        }
-
-        // Load settings when page loads
-        window.addEventListener('DOMContentLoaded', () => {
-            loadSettings();
-            
-            // Apply initial theme
-            const theme = document.getElementById('theme').value;
-            applyTheme(theme);
-        });
-    </script>
+    <!-- Load all settings modules -->
+    <script src="js/settings/base.js"></script>
+    <script src="js/settings/hotkey.js"></script>
+    <script src="js/settings/connection.js"></script>
+    <script src="js/settings/appearance.js"></script>
+    <script src="js/settings/system.js"></script>
+    <script src="js/settings/manager.js"></script>
 </body>
 </html>
