@@ -4,10 +4,13 @@ use log::{Level, LevelFilter, Metadata, Record};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 const MAX_LOG_SIZE: u64 = 10 * 1024 * 1024; // 10MB
 const MAX_LOG_FILES: usize = 5;
+
+static CONSOLE_LOGGING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub struct FileLogger {
     log_file: Mutex<File>,
@@ -127,6 +130,14 @@ impl FileLogger {
             }
         }
     }
+    
+    fn log_to_console(&self, record: &Record) {
+        let timestamp = Local::now().format("%H:%M:%S%.3f");
+        let level = record.level();
+        let message = record.args();
+        
+        println!("[{}] {} {}", timestamp, level, message);
+    }
 }
 
 impl log::Log for FileLogger {
@@ -139,7 +150,12 @@ impl log::Log for FileLogger {
             // Log to file
             self.log_to_file(record);
             
-            // Also log to console for errors and warnings
+            // Log to console if enabled
+            if CONSOLE_LOGGING_ENABLED.load(Ordering::Relaxed) {
+                self.log_to_console(record);
+            }
+            
+            // Also log to console for errors and warnings (always)
             if record.level() <= Level::Warn {
                 eprintln!("[{}] {}", record.level(), record.args());
             }
@@ -166,4 +182,8 @@ pub fn init_logger() -> Result<()> {
     log::info!("Log file: {:?}", FileLogger::get_log_path()?);
     
     Ok(())
+}
+
+pub fn enable_console_logging() {
+    CONSOLE_LOGGING_ENABLED.store(true, Ordering::Relaxed);
 }

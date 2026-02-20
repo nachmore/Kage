@@ -26,6 +26,33 @@ When running in dev mode, the system tray menu will include two additional optio
 
 - **Inspect**: Opens the developer tools/inspector window for debugging the UI
 - **Reload UX**: Reloads all HTML content in the application windows without restarting the app
+
+## Debug Mode
+
+To enable detailed ACP (Agent Communication Protocol) logging to the console, use the `/debug` flag:
+
+```bash
+cargo run -- /debug
+```
+
+Or with the built executable:
+
+```bash
+./kiro-assistant /debug
+```
+
+Debug mode prints all ACP messages (requests, responses, and streaming updates) to the console with timestamps. This is useful for:
+- Troubleshooting connection issues with kiro-cli
+- Understanding the ACP protocol flow
+- Debugging message format problems
+- Development and testing
+
+You can combine both flags:
+```bash
+./kiro-assistant /dev /debug
+```
+
+For more details, see [Debug Mode Guide](docs/DEBUG_MODE.md).
  
 
 ## Features
@@ -57,6 +84,7 @@ For detailed documentation, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
 
 ## Documentation
 
+- [Debug Mode Guide](docs/DEBUG_MODE.md) - Enable detailed ACP logging for troubleshooting
 - [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md) - Complete guide to using and configuring shortcuts
 - [OS Abstraction Guide](docs/OS_ABSTRACTION_GUIDE.md) - Cross-platform OS abstraction layer
 - [OS Architecture](docs/OS_ARCHITECTURE.md) - System architecture documentation

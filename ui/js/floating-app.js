@@ -71,7 +71,11 @@ export class FloatingApp {
             try {
                 const isVisible = await this.appWindow.isVisible();
                 if (isVisible && !lastVisibilityState) {
-                    setTimeout(() => this.resetUI(), 50);
+                    // Don't reset UI if permission modal is open
+                    const permissionModal = document.getElementById('permissionModal');
+                    if (!permissionModal || permissionModal.style.display === 'none') {
+                        setTimeout(() => this.resetUI(), 50);
+                    }
                 }
                 lastVisibilityState = isVisible;
             } catch (error) {
@@ -578,6 +582,12 @@ export class FloatingApp {
     }
 
     async handleOutsideClick(event) {
+        // Don't hide if the permission modal is open
+        const permissionModal = document.getElementById('permissionModal');
+        if (permissionModal && permissionModal.style.display !== 'none') {
+            return;
+        }
+        
         const container = document.querySelector('.floating-container');
         if (container && !container.contains(event.target)) {
             await this.appWindow.hide();

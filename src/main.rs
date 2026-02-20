@@ -185,6 +185,9 @@ struct AppState {
     acp_client: Arc<Mutex<AcpClient>>,
     config: Arc<Mutex<Config>>,
     app_launcher: Arc<Mutex<AppLauncher>>,
+    /// Separate write handles for permission responses — no AcpClient lock needed
+    pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
+    tcp_writer: Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
 }
 
 #[tauri::command]
@@ -294,6 +297,10 @@ async fn send_message_streaming(
 ) -> Result<(), String> {
     info!("Sending message: {}", message);
     let client = state.acp_client.clone();
+    let config = state.config.clone();
+    let pipe_stdin_handle = state.pipe_stdin.clone();
+    let tcp_writer_handle = state.tcp_writer.clone();
+    let window_clone = window.clone();
     
     // Spawn a blocking task to handle the streaming
     async_runtime::spawn_blocking(move || {
@@ -313,11 +320,88 @@ async fn send_message_streaming(
             }
         }
         
+        // Create permission callback
+        let window_for_permission = window_clone.clone();
+        let config_for_permission = config.clone();
+        let pipe_stdin_for_perm = pipe_stdin_handle.clone();
+        let tcp_writer_for_perm = tcp_writer_handle.clone();
+        let permission_callback = Box::new(move |notification: serde_json::Value| {
+            let config_guard = async_runtime::block_on(config_for_permission.lock());
+            
+            let should_auto_approve = if config_guard.tool_permissions.trust_all {
+                info!("🔓 Trust all enabled, auto-approving");
+                true
+            } else if let Some(params) = notification.get("params") {
+                if let Some(tool_call) = params.get("toolCall") {
+                    if let Some(title) = tool_call.get("title").and_then(|v| v.as_str()) {
+                        let is_allowed = config_guard.tool_permissions.allowed_tools
+                            .iter()
+                            .any(|t| t.title == title);
+                        if is_allowed {
+                            info!("🔓 Tool already allowed: {}", title);
+                        }
+                        is_allowed
+                    } else { false }
+                } else { false }
+            } else { false };
+            
+            drop(config_guard);
+            
+            if should_auto_approve {
+                // Send permission response directly — no frontend round-trip
+                if let Some(request_id) = notification.get("id") {
+                    let response = serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": { "outcome": { "outcome": "selected", "optionId": "allow_once" } }
+                    });
+                    if let Ok(response_json) = serde_json::to_string(&response) {
+                        use std::io::Write;
+                        info!("📤 Auto-approving permission: {}", response_json);
+                        
+                        // Try pipe
+                        if let Ok(guard) = pipe_stdin_for_perm.lock() {
+                            if let Some(ref stdin_arc) = *guard {
+                                let stdin_clone = stdin_arc.clone();
+                                drop(guard);
+                                if let Ok(mut stdin) = stdin_clone.lock() {
+                                    // Use write! + \n explicitly to avoid \r\n on Windows
+                                    let _ = write!(stdin, "{}\n", response_json);
+                                    let _ = stdin.flush();
+                                    info!("✅ Auto-approve sent via Pipe");
+                                    return;
+                                };
+                            }
+                        }
+                        // Try TCP
+                        if let Ok(guard) = tcp_writer_for_perm.lock() {
+                            if let Some(ref stream) = *guard {
+                                if let Ok(mut ws) = stream.try_clone() {
+                                    drop(guard);
+                                    let _ = write!(ws, "{}\n", response_json);
+                                    let _ = ws.flush();
+                                    info!("✅ Auto-approve sent via TCP");
+                                    return;
+                                }
+                            }
+                        }
+                        error!("❌ Failed to auto-approve: no write handle");
+                    }
+                }
+            } else {
+                // Emit permission request to frontend for user decision
+                let _ = window_for_permission.emit("permission_request", serde_json::json!({
+                    "notification": notification,
+                    "auto_approve": false
+                }));
+            }
+        });
+        
         // Send the message and stream the response
         if let Err(e) = client.send_chat_streaming(message, |chunk| {
             // Emit each chunk to the frontend
             let _ = window.emit("message_chunk", chunk);
-        }) {
+        }, Some(permission_callback)) {
             error!("Send error: {}", e);
             let error_msg = format!(
                 "Failed to send message. The connection may have been lost.\n\nError: {}",
@@ -331,6 +415,104 @@ async fn send_message_streaming(
         let _ = window.emit("message_complete", ());
     });
     
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_permission_response(
+    request_id: serde_json::Value,
+    option_id: String,
+    tool_title: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    info!("Sending permission response: option_id={}, tool_title={}", option_id, tool_title);
+    
+    // Build the JSON-RPC response
+    let response = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {
+            "outcome": {
+                "outcome": "selected",
+                "optionId": option_id
+            }
+        }
+    });
+    let response_json = serde_json::to_string(&response)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+    
+    info!("📤 Permission response JSON: {}", response_json);
+    
+    // Write directly via the separate handles — NO acp_client lock needed.
+    // All std::sync::MutexGuards are dropped before any .await.
+    use std::io::Write;
+    
+    let sent = {
+        // Try pipe first
+        let pipe_guard = state.pipe_stdin.lock()
+            .map_err(|e| format!("Failed to lock pipe_stdin: {}", e))?;
+        if let Some(ref stdin_arc) = *pipe_guard {
+            let stdin_clone = stdin_arc.clone();
+            drop(pipe_guard);
+            let mut stdin = stdin_clone.lock()
+                .map_err(|e| format!("Failed to lock stdin: {}", e))?;
+            write!(stdin, "{}\n", response_json)
+                .map_err(|e| format!("Failed to write: {}", e))?;
+            stdin.flush()
+                .map_err(|e| format!("Failed to flush: {}", e))?;
+            info!("✅ Permission response sent via Pipe");
+            true
+        } else {
+            drop(pipe_guard);
+            // Try TCP
+            let tcp_guard = state.tcp_writer.lock()
+                .map_err(|e| format!("Failed to lock tcp_writer: {}", e))?;
+            if let Some(ref stream) = *tcp_guard {
+                let mut write_stream = stream.try_clone()
+                    .map_err(|e| format!("Failed to clone stream: {}", e))?;
+                drop(tcp_guard);
+                write!(write_stream, "{}\n", response_json)
+                    .map_err(|e| format!("Failed to write: {}", e))?;
+                write_stream.flush()
+                    .map_err(|e| format!("Failed to flush: {}", e))?;
+                info!("✅ Permission response sent via TCP");
+                true
+            } else {
+                drop(tcp_guard);
+                false
+            }
+        }
+    };
+    
+    if !sent {
+        return Err("Not connected - no write handle available".to_string());
+    }
+    
+    // Save "allow_always" to config (safe to .await now, all sync guards dropped)
+    if option_id == "allow_always" {
+        let mut config = state.config.lock().await;
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        if !config.tool_permissions.allowed_tools.iter().any(|t| t.title == tool_title) {
+            config.tool_permissions.allowed_tools.push(crate::config::AllowedTool {
+                tool_call_id: tool_title.clone(),
+                title: tool_title,
+                allowed_at: timestamp,
+            });
+            config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn remove_tool_permission(
+    tool_title: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut config = state.config.lock().await;
+    config.tool_permissions.allowed_tools.retain(|t| t.title != tool_title);
+    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     Ok(())
 }
 
@@ -385,7 +567,7 @@ async fn open_chat_with_message(
             
             if let Err(e) = client.send_chat_streaming(message, |chunk| {
                 let _ = window.emit("message_chunk", chunk);
-            }) {
+            }, None) {
                 error!("Send error: {}", e);
                 let error_msg = format!(
                     "Failed to send message. The connection may have been lost.\n\nError: {}",
@@ -612,9 +794,16 @@ fn main() {
     
     info!("=== Kiro Assistant Starting ===");
     
-    // Check for /dev flag
+    // Check for /dev and /debug flags
     let args: Vec<String> = std::env::args().collect();
     let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");
+    let debug_mode = args.iter().any(|arg| arg == "/debug" || arg == "--debug");
+    
+    if debug_mode {
+        println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
+        info!("🐛 DEBUG MODE ENABLED via command line argument");
+        logger::enable_console_logging();
+    }
     
     // Clean up any orphaned processes from previous runs
     info!("Checking for orphaned processes...");
@@ -623,11 +812,16 @@ fn main() {
     }
     
     // Load configuration
-    let config = Config::load().unwrap_or_else(|e| {
+    let mut config = Config::load().unwrap_or_else(|e| {
         error!("Failed to load config, using defaults: {}", e);
         eprintln!("Failed to load config, using defaults: {}", e);
         Config::default()
     });
+    
+    // Override config debug mode if command line flag is set
+    if debug_mode {
+        config.debug_mode = true;
+    }
     
     info!("Configuration loaded");
     
@@ -646,6 +840,9 @@ fn main() {
             })
         }
     };
+    
+    // Set initial debug mode from config
+    acp_client.set_debug_mode(config.debug_mode);
     
     // Install signal handlers for graceful shutdown
     let process_manager = acp_client.get_process_manager();
@@ -687,11 +884,16 @@ fn main() {
     
     let system_tray = SystemTray::new().with_menu(tray_menu);
     
+    let pipe_stdin_handle = acp_client.get_pipe_stdin();
+    let tcp_writer_handle = acp_client.get_tcp_writer();
+    
     tauri::Builder::default()
         .manage(AppState {
             acp_client: Arc::new(Mutex::new(acp_client)),
             config: Arc::new(Mutex::new(config.clone())),
             app_launcher: Arc::new(Mutex::new(app_launcher)),
+            pipe_stdin: pipe_stdin_handle,
+            tcp_writer: tcp_writer_handle,
         })
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
@@ -932,7 +1134,9 @@ fn main() {
             test_floating_window,
             start_drag_window,
             open_chat_window,
-            resize_floating_window
+            resize_floating_window,
+            send_permission_response,
+            remove_tool_permission
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

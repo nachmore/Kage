@@ -70,7 +70,32 @@
         </div>
     </div>
 
+    <!-- Permission Modal -->
+    <div class="permission-modal-overlay" id="permissionModal" style="display: none;">
+        <div class="permission-modal">
+            <div class="permission-header">
+                <h3>Tool Permission Required</h3>
+            </div>
+            <div class="permission-body">
+                <p class="permission-tool-title" id="permissionToolTitle"></p>
+                <p class="permission-description">The AI assistant wants to use this tool. Do you want to allow it?</p>
+                <div class="permission-warning">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v5h1v-5h-1zm0 6v1h1v-1h-1z"/>
+                    </svg>
+                    <span>Only approve tools you trust</span>
+                </div>
+            </div>
+            <div class="permission-actions">
+                <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
+                <button class="permission-btn permission-btn-once" id="permissionOnce">Trust Once</button>
+                <button class="permission-btn permission-btn-always" id="permissionAlways">Trust Always</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Application Scripts -->
+    <script type="module" src="js/floating-permissions.js"></script>
     <script type="module" src="js/floating-main.js"></script>
 </body>
 </html>

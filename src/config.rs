@@ -12,6 +12,34 @@ pub struct Config {
     pub system: SystemConfig,
     #[serde(default)]
     pub shortcuts: Vec<ShortcutConfig>,
+    #[serde(default)]
+    pub debug_mode: bool,
+    #[serde(default)]
+    pub tool_permissions: ToolPermissionsConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolPermissionsConfig {
+    #[serde(default)]
+    pub trust_all: bool,
+    #[serde(default)]
+    pub allowed_tools: Vec<AllowedTool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowedTool {
+    pub tool_call_id: String,
+    pub title: String,
+    pub allowed_at: String, // ISO 8601 timestamp
+}
+
+impl Default for ToolPermissionsConfig {
+    fn default() -> Self {
+        Self {
+            trust_all: false,
+            allowed_tools: vec![],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +124,8 @@ impl Default for Config {
                 auto_start: false,
             },
             shortcuts: vec![],
+            debug_mode: false,
+            tool_permissions: ToolPermissionsConfig::default(),
         }
     }
 }
