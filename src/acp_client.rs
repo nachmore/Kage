@@ -3,10 +3,12 @@ use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
+
+use crate::process_manager::ProcessManager;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -67,7 +69,7 @@ pub struct AcpClient {
     connection: Arc<Mutex<Option<Connection>>>,
     max_retries: u32,
     initial_retry_delay_ms: u64,
-    kiro_process: Arc<Mutex<Option<Child>>>,
+    process_manager: Arc<Mutex<ProcessManager>>,
     session_id: Arc<Mutex<Option<String>>>,
     initialized: Arc<Mutex<bool>>,
 }
@@ -79,10 +81,15 @@ impl AcpClient {
             connection: Arc::new(Mutex::new(None)),
             max_retries: 5,
             initial_retry_delay_ms: 100,
-            kiro_process: Arc::new(Mutex::new(None)),
+            process_manager: Arc::new(Mutex::new(ProcessManager::new())),
             session_id: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
         }
+    }
+    
+    /// Get the process manager for signal handler registration
+    pub fn get_process_manager(&self) -> Arc<Mutex<ProcessManager>> {
+        self.process_manager.clone()
     }
 
     fn spawn_kiro_process(&self, command_str: &str) -> Result<()> {
@@ -150,9 +157,11 @@ impl AcpClient {
         });
         drop(conn_guard);
         
-        // Store the process
-        let mut process_guard = self.kiro_process.lock().unwrap();
-        *process_guard = Some(child);
+        // Store the process in ProcessManager for cleanup
+        let mut pm = self.process_manager.lock().unwrap();
+        pm.store_process(child)
+            .context("Failed to register process for cleanup")?;
+        drop(pm);
         
         info!("⏱️  Waiting 1 second for process to initialize...");
         thread::sleep(Duration::from_millis(1000));
@@ -560,11 +569,8 @@ impl AcpClient {
         let mut conn = self.connection.lock().unwrap();
         *conn = None;
         
-        // Kill the spawned process if we started it
-        if let Some(mut child) = self.kiro_process.lock().unwrap().take() {
-            info!("Terminating spawned Kiro process");
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        // Terminate the spawned process using ProcessManager
+        let mut pm = self.process_manager.lock().unwrap();
+        pm.terminate();
     }
 }

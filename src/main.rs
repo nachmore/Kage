@@ -2,11 +2,13 @@ mod acp_client;
 mod app_launcher;
 mod config;
 mod logger;
+mod process_manager;
 
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
 use config::Config;
 use log::{error, info, warn};
+use process_manager::ProcessManager;
 use std::sync::Arc;
 use tauri::{
     async_runtime, CustomMenuItem, GlobalShortcutManager, Manager, State, SystemTray,
@@ -346,6 +348,12 @@ fn main() {
     
     info!("=== Kiro Assistant Starting ===");
     
+    // Clean up any orphaned processes from previous runs
+    info!("Checking for orphaned processes...");
+    if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
+        warn!("Failed to cleanup orphaned processes: {}", e);
+    }
+    
     // Load configuration
     let config = Config::load().unwrap_or_else(|e| {
         error!("Failed to load config, using defaults: {}", e);
@@ -370,6 +378,10 @@ fn main() {
             })
         }
     };
+    
+    // Install signal handlers for graceful shutdown
+    let process_manager = acp_client.get_process_manager();
+    process_manager::install_signal_handlers(process_manager);
     
     // Initialize app launcher
     let app_launcher = AppLauncher::new().unwrap_or_else(|e| {
@@ -417,6 +429,14 @@ fn main() {
                     }
                     "quit" => {
                         info!("Application quit requested");
+                        
+                        // Get the ACP client and disconnect (which will cleanup the process)
+                        if let Some(state) = app.try_state::<AppState>() {
+                            if let Ok(client) = state.acp_client.try_lock() {
+                                client.disconnect();
+                            }
+                        }
+                        
                         std::process::exit(0);
                     }
                     _ => {}

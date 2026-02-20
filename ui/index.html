@@ -24,6 +24,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
     <!-- Marked.js for markdown parsing -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Mermaid.js for diagram rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -582,6 +584,58 @@
         body.dark-theme .copy-button:hover {
             background: #3a3a3a;
         }
+        
+        /* Mermaid diagram styles */
+        .mermaid-wrapper {
+            position: relative;
+            margin: 12px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .mermaid-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .mermaid-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .mermaid-wrapper .mermaid {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
+        }
+        
+        body.dark-theme .mermaid-wrapper {
+            background: #1a1a1a;
+            border-color: #2a2a2a;
+        }
+        
+        body.dark-theme .mermaid-header {
+            background: #0d0d0d;
+            border-bottom-color: #2a2a2a;
+        }
+        
+        body.dark-theme .mermaid-label {
+            color: #a6e22e;
+        }
+        
+        body.dark-theme .mermaid-wrapper .mermaid {
+            background: #1a1a1a;
+        }
     </style>
 </head>
 <body>
@@ -622,6 +676,18 @@
     </div>
 
     <script>
+        // Initialize Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+        
         // Markdown rendering with code block support
         function renderMarkdown(markdown, targetElement) {
             if (!markdown) {
@@ -639,7 +705,7 @@
             const html = marked.parse(markdown);
             targetElement.innerHTML = html;
             
-            // Wrap code blocks with copy buttons
+            // Wrap code blocks with copy buttons or render mermaid
             const codeBlocks = targetElement.querySelectorAll('pre code');
             codeBlocks.forEach((codeBlock) => {
                 const pre = codeBlock.parentElement;
@@ -648,6 +714,12 @@
                 const className = codeBlock.className;
                 const langMatch = className.match(/language-(\w+)/);
                 const language = langMatch ? langMatch[1] : 'text';
+                
+                // Check if this is a mermaid diagram
+                if (language === 'mermaid') {
+                    renderMermaidDiagram(codeBlock, pre);
+                    return;
+                }
                 
                 // Apply Prism highlighting manually
                 if (language && language !== 'text') {
@@ -702,6 +774,57 @@
                 wrapper.appendChild(header);
                 wrapper.appendChild(pre);
             });
+        }
+        
+        async function renderMermaidDiagram(codeBlock, pre) {
+            const code = codeBlock.textContent;
+            
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'mermaid-wrapper';
+            
+            // Create header
+            const header = document.createElement('div');
+            header.className = 'mermaid-header';
+            
+            const label = document.createElement('span');
+            label.className = 'mermaid-label';
+            label.textContent = 'Diagram';
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-button';
+            copyBtn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Copy</span>
+            `;
+            copyBtn.onclick = () => copyCode(code, copyBtn);
+            
+            header.appendChild(label);
+            header.appendChild(copyBtn);
+            
+            // Create mermaid container
+            const mermaidDiv = document.createElement('div');
+            mermaidDiv.className = 'mermaid';
+            mermaidDiv.textContent = code;
+            
+            // Replace pre with wrapper
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(header);
+            wrapper.appendChild(mermaidDiv);
+            pre.remove();
+            
+            // Render mermaid diagram
+            try {
+                await mermaid.run({
+                    nodes: [mermaidDiv]
+                });
+            } catch (error) {
+                console.error('Mermaid rendering error:', error);
+                mermaidDiv.innerHTML = `<div style="color: #dc2626; padding: 20px;">Error rendering diagram: ${error.message}</div>`;
+            }
         }
         
         function copyCode(code, button) {
