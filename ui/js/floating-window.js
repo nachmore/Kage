@@ -55,13 +55,17 @@ export class WindowManager {
                 
                 const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
 
-                // When nothing is expanded, shrink back to default
+                // When nothing is expanded, size to fit the input area
                 if (nothingExpanded) {
                     if (!this.userSetHeight) {
                         const scale = window.devicePixelRatio || 1;
-                        const defaultPhysical = Math.round(DEFAULT_HEIGHT * scale);
-                        this.autoGrowHeight = null;
-                        await this.invoke('resize_floating_window', { height: defaultPhysical });
+                        const inputHeight = inputContainer?.offsetHeight || 0;
+                        const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
+                        const neededHeight = Math.round((inputHeight + BODY_PADDING) * scale);
+                        // Grow beyond default if input area needs it (e.g. attachments)
+                        const height = Math.max(baseHeight, neededHeight);
+                        this.autoGrowHeight = height > baseHeight ? height : null;
+                        await this.invoke('resize_floating_window', { height });
                     }
                     return;
                 }

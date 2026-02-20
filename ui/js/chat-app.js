@@ -1,6 +1,6 @@
 // Expanded chat application logic
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
-import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml } from './attachments.js';
+import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -313,7 +313,9 @@ export class ChatApp {
         let skipNextAssistant = false;
         for (const msg of sessionData.messages) {
             if (msg.kind === 'Prompt') {
-                // User message — extract text content
+                // Collect text and images from content blocks
+                let textParts = [];
+                let imageDataUrls = [];
                 for (const item of msg.content) {
                     if (item.kind === 'text' && typeof item.data === 'string') {
                         // Hide the steering message if it is the very first message
@@ -323,8 +325,22 @@ export class ChatApp {
                             continue;
                         }
                         isFirstMessage = false;
-                        this.addMessageFromHistory('user', item.data);
+                        textParts.push(item.data);
+                    } else if (item.kind === 'image') {
+                        isFirstMessage = false;
+                        const dataUrl = sessionImageToDataUrl(item);
+                        if (dataUrl) imageDataUrls.push(dataUrl);
                     }
+                }
+
+                // Render user message with text and images
+                if (textParts.length > 0 || imageDataUrls.length > 0) {
+                    const text = textParts.join('\n');
+                    const snapshots = imageDataUrls.map(url => ({
+                        type: 'image',
+                        previewUrl: url
+                    }));
+                    this.addMessageFromHistory('user', text, snapshots.length > 0 ? snapshots : null);
                 }
             } else if (msg.kind === 'AssistantMessage') {
                 isFirstMessage = false;
@@ -356,13 +372,17 @@ export class ChatApp {
         this.scrollToBottom();
     }
 
-    addMessageFromHistory(role, text) {
+    addMessageFromHistory(role, text, imageSnapshots) {
         const msgEl = this.createMessageElement(role, '');
         const contentDiv = msgEl.querySelector('.message-content');
         if (role === 'assistant') {
             renderMarkdown(text, contentDiv);
         } else {
-            contentDiv.textContent = text;
+            if (text) contentDiv.textContent = text;
+        }
+        // Append image previews if present
+        if (imageSnapshots && imageSnapshots.length > 0) {
+            contentDiv.insertAdjacentHTML('beforeend', attachmentPreviewHtml(imageSnapshots));
         }
         this.elements.messagesArea.appendChild(msgEl);
         this.messages.push({ role, content: text });

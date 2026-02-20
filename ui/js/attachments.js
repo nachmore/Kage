@@ -5,6 +5,7 @@
 
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_ATTACHMENTS = 4;
 
 /**
  * Manages a list of pending attachments for a chat input.
@@ -26,6 +27,7 @@ export class AttachmentManager {
 
     /** Add an image from a base64 data string */
     addImage(base64Data, mimeType, previewUrl) {
+        if (this.attachments.length >= MAX_ATTACHMENTS) return false;
         this.attachments.push({
             type: 'image',
             data: base64Data,
@@ -33,10 +35,12 @@ export class AttachmentManager {
             previewUrl: previewUrl || `data:${mimeType};base64,${base64Data}`
         });
         this._notify();
+        return true;
     }
 
     /** Add a file reference (resource_link) */
     addFile(filePath, fileName, mimeType) {
+        if (this.attachments.length >= MAX_ATTACHMENTS) return false;
         const uri = 'file:///' + filePath.replace(/\\/g, '/');
         this.attachments.push({
             type: 'resource_link',
@@ -45,6 +49,7 @@ export class AttachmentManager {
             mimeType: mimeType || guessMimeType(fileName)
         });
         this._notify();
+        return true;
     }
 
     removeAt(index) {
@@ -91,6 +96,10 @@ export function handlePasteEvent(event, manager) {
     for (const item of items) {
         if (SUPPORTED_IMAGE_TYPES.includes(item.type)) {
             event.preventDefault();
+            if (manager.attachments.length >= MAX_ATTACHMENTS) {
+                showLimitToast(event.target);
+                return;
+            }
             const file = item.getAsFile();
             if (file && file.size <= MAX_IMAGE_SIZE) {
                 fileToBase64(file).then(({ base64, mimeType }) => {
@@ -140,13 +149,15 @@ export function setupDragDrop(dropTarget, overlayTarget, manager) {
         if (!files || files.length === 0) return;
 
         for (const file of files) {
+            if (manager.attachments.length >= MAX_ATTACHMENTS) {
+                showLimitToast(dropTarget);
+                break;
+            }
             if (SUPPORTED_IMAGE_TYPES.includes(file.type) && file.size <= MAX_IMAGE_SIZE) {
                 fileToBase64(file).then(({ base64, mimeType }) => {
                     manager.addImage(base64, mimeType);
                 });
             } else if (file.name) {
-                // Non-image file: add as resource_link using the file path
-                // For drag-drop from OS, we can get the path
                 const path = file.path || file.name;
                 manager.addFile(path, file.name, file.type || guessMimeType(file.name));
             }
@@ -201,6 +212,12 @@ export function renderAttachmentPreviews(container, attachments, manager) {
 
         container.appendChild(item);
     });
+
+    // Always show counter
+    const counter = document.createElement('span');
+    counter.className = 'attachment-counter';
+    counter.textContent = `${attachments.length}/${MAX_ATTACHMENTS}`;
+    container.appendChild(counter);
 }
 
 /**
@@ -223,6 +240,47 @@ export function attachmentPreviewHtml(attachments) {
 }
 
 // --- Utilities ---
+
+/** Show a brief disappearing toast near the target element */
+function showLimitToast(nearElement) {
+    // Remove any existing toast
+    const existing = document.querySelector('.attachment-limit-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = 'attachment-limit-toast';
+    toast.textContent = `Limit of ${MAX_ATTACHMENTS} attachments reached`;
+    document.body.appendChild(toast);
+
+    // Auto-remove after animation
+    setTimeout(() => toast.remove(), 2500);
+}
+
+/**
+ * Convert a JSONL session image content block to a data URL.
+ * JSONL format: {kind:"image", data:{format:"png", source:{kind:"bytes", data:[...bytes]}}}
+ * @param {object} imageItem - the content item from JSONL
+ * @returns {string|null} data URL or null if not convertible
+ */
+export function sessionImageToDataUrl(imageItem) {
+    try {
+        const imgData = imageItem.data;
+        if (!imgData || !imgData.source || !imgData.source.data) return null;
+        const bytes = imgData.source.data;
+        const format = imgData.format || 'png';
+        const mimeType = `image/${format}`;
+        // Convert byte array to base64
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        return `data:${mimeType};base64,${base64}`;
+    } catch (e) {
+        console.error('Failed to convert session image:', e);
+        return null;
+    }
+}
 
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {

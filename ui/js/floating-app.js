@@ -76,9 +76,10 @@ export class FloatingApp {
         // Paste handler for images
         this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
 
-        // Re-render previews when attachments change
+        // Re-render previews when attachments change and resize window
         this.attachmentManager.onChange((attachments) => {
             renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+            this.windowManager.resizeWindow();
         });
     }
 

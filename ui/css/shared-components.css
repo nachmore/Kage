@@ -356,6 +356,7 @@
     gap: 8px;
     padding: 8px 12px 4px 12px;
     align-items: center;
+    width: 100%;
 }
 
 .attachment-preview-item {
@@ -419,6 +420,43 @@
 
 .attachment-preview-item:hover .attachment-remove-btn {
     opacity: 1;
+}
+
+.attachment-limit-notice {
+    font-size: 11px;
+    color: #ef4444;
+    padding: 2px 8px;
+    width: 100%;
+}
+
+.attachment-counter {
+    font-size: 11px;
+    color: #9ca3af;
+    padding: 4px 6px;
+    align-self: flex-end;
+    flex-shrink: 0;
+}
+
+/* Disappearing toast for limit reached */
+.attachment-limit-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 99999;
+    pointer-events: none;
+    animation: toastFade 2.5s ease-out forwards;
+}
+
+@keyframes toastFade {
+    0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    70% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 
 /* Drag-drop overlay */

@@ -22,7 +22,8 @@
         "width": 800,
         "height": 600,
         "visible": false,
-        "skipTaskbar": false
+        "skipTaskbar": false,
+        "dragDropEnabled": false
       },
       {
         "label": "floating",
@@ -39,7 +40,8 @@
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "center": false
+        "center": false,
+        "dragDropEnabled": false
       },
       {
         "label": "settings",
