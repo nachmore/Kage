@@ -5,7 +5,7 @@ body.dark-theme .speech-bubble {
     color: #E5E7EB;
 }
 
-body.dark-theme .speech-bubble::after {
+body.dark-theme .resize-handle {
     background: linear-gradient(135deg, transparent 50%, #4A464F 50%);
 }
 

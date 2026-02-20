@@ -66,7 +66,11 @@
 }
 
 .speech-bubble::after {
-    content: '';
+    display: none;
+}
+
+/* Custom resize handle */
+.resize-handle {
     position: absolute;
     bottom: 0;
     right: 0;
@@ -76,9 +80,10 @@
     cursor: nwse-resize;
     opacity: 0.5;
     transition: opacity 0.2s;
+    z-index: 100;
 }
 
-.speech-bubble:hover::after {
+.resize-handle:hover {
     opacity: 0.8;
 }
 

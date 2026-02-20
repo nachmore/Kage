@@ -27,6 +27,7 @@ export class FloatingApp {
         this.setupStreamingListeners();
         this.setupVisibilityTracking();
         this.windowManager.setupDragging(this.elements.ghostContainer);
+        this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
         
         await this.loadShortcuts();
         

@@ -205,60 +205,19 @@ pub async fn resize_floating_window(
     width: Option<u32>,
     height: Option<u32>,
 ) -> Result<(), String> {
-    let current_size = window.inner_size().map_err(|e| {
-        error!("Failed to get current window size: {}", e);
-        e.to_string()
-    })?;
+    let current_size = window.inner_size().map_err(|e| e.to_string())?;
 
     let target_width = width.unwrap_or(current_size.width);
     let target_height = height.unwrap_or(current_size.height);
-
-    info!(
-        "Resizing floating window to {}x{}",
-        target_width, target_height
-    );
-
-    let current_height = current_size.height;
-
-    if (current_height as i32 - target_height as i32).abs() < 20 {
-        return window
-            .set_size(tauri::Size::Physical(tauri::PhysicalSize {
-                width: target_width,
-                height: target_height,
-            }))
-            .map_err(|e| {
-                error!("Failed to resize window: {}", e);
-                e.to_string()
-            });
-    }
-
-    let steps = 10;
-    let height_diff = target_height as i32 - current_height as i32;
-    let step_size = height_diff as f32 / steps as f32;
-
-    for i in 1..=steps {
-        let new_height = (current_height as f32 + step_size * i as f32) as u32;
-
-        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-            width: target_width,
-            height: new_height,
-        })) {
-            error!("Failed to resize window during animation: {}", e);
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
-    }
 
     window
         .set_size(tauri::Size::Physical(tauri::PhysicalSize {
             width: target_width,
             height: target_height,
         }))
-        .map_err(|e| {
-            error!("Failed to resize window: {}", e);
-            e.to_string()
-        })
+        .map_err(|e| e.to_string())
 }
+
 
 #[tauri::command]
 pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {

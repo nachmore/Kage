@@ -128,4 +128,39 @@ export class WindowManager {
             setTimeout(() => { this.isDragging = false; }, 200);
         });
     }
+
+    setupResizeHandle(resizeHandle) {
+        let startX = 0;
+        let startY = 0;
+        let startWidth = 0;
+        let startHeight = 0;
+
+        const onMouseMove = async (e) => {
+            const maxWidth = Math.floor(window.screen.width * MAX_HEIGHT_PERCENT);
+            const newWidth = Math.max(516, Math.min(maxWidth, startWidth + (e.screenX - startX)));
+            const newHeight = Math.max(DEFAULT_HEIGHT, Math.min(this.maxHeight, startHeight + (e.screenY - startY)));
+            this.userSetHeight = newHeight;
+            try {
+                await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
+            } catch (err) {
+                // ignore resize errors during drag
+            }
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            startX = e.screenX;
+            startY = e.screenY;
+            startWidth = document.documentElement.offsetWidth;
+            startHeight = document.documentElement.offsetHeight;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
 }

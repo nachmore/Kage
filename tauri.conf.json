@@ -28,7 +28,7 @@
         "label": "floating",
         "url": "floating.html",
         "fullscreen": false,
-        "resizable": true,
+        "resizable": false,
         "minWidth": 516,
         "minHeight": 76,
         "title": "Kiro",
