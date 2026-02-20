@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 
+use crate::os;
+
 /// Manages spawned CLI processes with cleanup on exit
 pub struct ProcessManager {
     child: Arc<Mutex<Option<Child>>>,
@@ -87,36 +89,8 @@ impl ProcessManager {
     }
 
     /// Kill a process by PID
-    #[cfg(target_os = "windows")]
     fn kill_process(pid: u32) -> bool {
-        use std::process::Command;
-        
-        // Use taskkill on Windows
-        match Command::new("taskkill")
-            .args(&["/F", "/PID", &pid.to_string()])
-            .output()
-        {
-            Ok(output) => output.status.success(),
-            Err(_) => false,
-        }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    fn kill_process(pid: u32) -> bool {
-        use nix::sys::signal::{kill, Signal};
-        use nix::unistd::Pid;
-        
-        // Try SIGTERM first
-        if kill(Pid::from_raw(pid as i32), Signal::SIGTERM).is_ok() {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            
-            // Check if process is still alive
-            if kill(Pid::from_raw(pid as i32), Signal::SIGKILL).is_ok() {
-                return true;
-            }
-        }
-        
-        false
+        os::kill_process(pid)
     }
 
     /// Terminate the managed process
@@ -178,46 +152,14 @@ impl Drop for ProcessManager {
 }
 
 /// Install signal handlers for graceful shutdown
-#[cfg(not(target_os = "windows"))]
 pub fn install_signal_handlers(process_manager: Arc<Mutex<ProcessManager>>) {
-    use signal_hook::consts::signal::*;
-    use signal_hook::iterator::Signals;
-    
-    std::thread::spawn(move || {
-        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])
-            .expect("Failed to register signal handlers");
-        
-        for sig in signals.forever() {
-            info!("Received signal: {:?}", sig);
-            
-            // Clean up process
-            if let Ok(mut pm) = process_manager.lock() {
-                pm.terminate();
-            }
-            
-            // Exit the application
-            std::process::exit(0);
-        }
-    });
-    
-    info!("✅ Signal handlers installed (SIGTERM, SIGINT, SIGQUIT)");
-}
-
-#[cfg(target_os = "windows")]
-pub fn install_signal_handlers(process_manager: Arc<Mutex<ProcessManager>>) {
-    use ctrlc;
-    
-    ctrlc::set_handler(move || {
-        info!("Received Ctrl+C signal");
-        
-        // Clean up process
+    let cleanup = move || {
         if let Ok(mut pm) = process_manager.lock() {
             pm.terminate();
         }
-        
-        // Exit the application
-        std::process::exit(0);
-    }).expect("Failed to set Ctrl+C handler");
+    };
     
-    info!("✅ Ctrl+C handler installed");
+    if let Err(e) = os::process::install_signal_handlers(cleanup) {
+        warn!("Failed to install signal handlers: {}", e);
+    }
 }

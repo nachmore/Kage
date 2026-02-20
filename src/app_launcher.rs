@@ -1,12 +1,13 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::info;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 
 #[cfg(target_os = "windows")]
 use windows_icons::get_icon_base64_by_path;
+
+use crate::os;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Application {
@@ -34,160 +35,14 @@ impl AppLauncher {
         info!("Refreshing application registry");
         self.app_registry.clear();
 
-        #[cfg(target_os = "windows")]
-        self.scan_windows_apps()?;
-
-        #[cfg(target_os = "macos")]
-        self.scan_macos_apps()?;
-
-        #[cfg(target_os = "linux")]
-        self.scan_linux_apps()?;
+        // Use OS abstraction layer to scan applications
+        let apps = os::scan_applications()?;
+        
+        for app_info in apps {
+            self.add_application(app_info.name, app_info.path, app_info.icon_path);
+        }
 
         info!("Application registry refreshed: {} apps found", self.app_registry.len());
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn scan_windows_apps(&mut self) -> Result<()> {
-        use std::fs;
-        use winreg::enums::*;
-        use winreg::RegKey;
-
-        // Scan Start Menu
-        if let Some(start_menu) = dirs::data_dir() {
-            let start_menu_path = start_menu.join("Microsoft\\Windows\\Start Menu\\Programs");
-            if start_menu_path.exists() {
-                self.scan_directory_for_shortcuts(&start_menu_path)?;
-            }
-        }
-
-        // Scan Common Start Menu
-        let common_start_menu = PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs");
-        if common_start_menu.exists() {
-            self.scan_directory_for_shortcuts(&common_start_menu)?;
-        }
-
-        // Scan registry for installed applications
-        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-        if let Ok(uninstall_key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall") {
-            for subkey_name in uninstall_key.enum_keys().filter_map(|k| k.ok()) {
-                if let Ok(subkey) = uninstall_key.open_subkey(&subkey_name) {
-                    if let Ok(display_name) = subkey.get_value::<String, _>("DisplayName") {
-                        if let Ok(install_location) = subkey.get_value::<String, _>("InstallLocation") {
-                            // Try to find an executable
-                            let install_path = PathBuf::from(&install_location);
-                            if install_path.exists() {
-                                if let Ok(entries) = fs::read_dir(&install_path) {
-                                    for entry in entries.filter_map(|e| e.ok()) {
-                                        let path = entry.path();
-                                        if path.extension().and_then(|s| s.to_str()) == Some("exe") {
-                                            // Use the exe path as icon source
-                                            let icon_path = path.to_string_lossy().to_string();
-                                            self.add_application(display_name.clone(), path, Some(icon_path));
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    fn scan_directory_for_shortcuts(&mut self, dir: &PathBuf) -> Result<()> {
-        use std::fs;
-
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                let path = entry.path();
-                
-                if path.is_dir() {
-                    // Recursively scan subdirectories
-                    self.scan_directory_for_shortcuts(&path)?;
-                } else if path.extension().and_then(|s| s.to_str()) == Some("lnk") {
-                    // Parse .lnk file to get target
-                    if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                        // Use the shortcut path as icon source (Windows can extract icons from .lnk files)
-                        let icon_path = path.to_string_lossy().to_string();
-                        self.add_application(name.to_string(), path, Some(icon_path));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(target_os = "macos")]
-    fn scan_macos_apps(&mut self) -> Result<()> {
-        use std::fs;
-
-        let applications_dir = PathBuf::from("/Applications");
-        if applications_dir.exists() {
-            if let Ok(entries) = fs::read_dir(&applications_dir) {
-                for entry in entries.filter_map(|e| e.ok()) {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("app") {
-                        if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                            let icon_path = path.to_string_lossy().to_string();
-                            self.add_application(name.to_string(), path, Some(icon_path));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(target_os = "linux")]
-    fn scan_linux_apps(&mut self) -> Result<()> {
-        use std::fs;
-
-        // Scan .desktop files in standard locations
-        let desktop_dirs = vec![
-            PathBuf::from("/usr/share/applications"),
-            PathBuf::from("/usr/local/share/applications"),
-        ];
-
-        if let Some(home) = dirs::home_dir() {
-            desktop_dirs.push(home.join(".local/share/applications"));
-        }
-
-        for dir in desktop_dirs {
-            if dir.exists() {
-                if let Ok(entries) = fs::read_dir(&dir) {
-                    for entry in entries.filter_map(|e| e.ok()) {
-                        let path = entry.path();
-                        if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-                            if let Ok(content) = fs::read_to_string(&path) {
-                                // Parse .desktop file
-                                let mut name = None;
-                                let mut exec = None;
-
-                                for line in content.lines() {
-                                    if line.starts_with("Name=") {
-                                        name = Some(line[5..].to_string());
-                                    } else if line.starts_with("Exec=") {
-                                        exec = Some(line[5..].to_string());
-                                    }
-                                }
-
-                                if let (Some(name), Some(exec)) = (name, exec) {
-                                    self.add_application(name, PathBuf::from(&exec), Some(exec));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -296,40 +151,6 @@ impl AppLauncher {
     /// Launch an application
     pub fn launch(&self, app: &Application) -> Result<()> {
         info!("Launching application: {} at {:?}", app.name, app.path);
-
-        #[cfg(target_os = "windows")]
-        {
-            // On Windows, use cmd /c start to launch
-            Command::new("cmd")
-                .args(&["/C", "start", "", app.path.to_str().unwrap()])
-                .spawn()
-                .context("Failed to launch application")?;
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            // On macOS, use open command
-            Command::new("open")
-                .arg(&app.path)
-                .spawn()
-                .context("Failed to launch application")?;
-        }
-
-        #[cfg(target_os = "linux")]
-        {
-            // On Linux, execute directly or use xdg-open
-            if app.path.extension().and_then(|s| s.to_str()) == Some("desktop") {
-                Command::new("xdg-open")
-                    .arg(&app.path)
-                    .spawn()
-                    .context("Failed to launch application")?;
-            } else {
-                Command::new(&app.path)
-                    .spawn()
-                    .context("Failed to launch application")?;
-            }
-        }
-
-        Ok(())
+        os::launch_application(&app.path)
     }
 }

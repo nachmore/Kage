@@ -2,6 +2,7 @@ mod acp_client;
 mod app_launcher;
 mod config;
 mod logger;
+mod os;
 mod process_manager;
 
 use acp_client::AcpClient;
@@ -17,25 +18,8 @@ use tauri::{
 use tokio::sync::Mutex;
 
 // Platform-specific cursor position detection
-#[cfg(target_os = "windows")]
 fn get_cursor_position() -> Option<(i32, i32)> {
-    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-    use windows::Win32::Foundation::POINT;
-    
-    unsafe {
-        let mut point = POINT { x: 0, y: 0 };
-        if GetCursorPos(&mut point).is_ok() {
-            Some((point.x, point.y))
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn get_cursor_position() -> Option<(i32, i32)> {
-    // For non-Windows platforms, return None to fall back to primary monitor
-    None
+    os::get_cursor_position()
 }
 
 /// Find which monitor contains the given point
@@ -214,30 +198,8 @@ async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
         url.clone()
     };
     
-    // Use the OS default browser to open the URL
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(&["/C", "start", &full_url])
-            .spawn()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
-    }
-    
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&full_url)
-            .spawn()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
-    }
-    
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&full_url)
-            .spawn()
-            .map_err(|e| format!("Failed to open URL: {}", e))?;
-    }
+    // Use the OS abstraction layer to open the URL
+    os::open_url(&full_url).map_err(|e| format!("Failed to open URL: {}", e))?;
     
     // Hide floating window
     if let Some(floating_window) = app.get_window("floating") {
@@ -268,30 +230,8 @@ async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
         return Err(format!("Path does not exist: {}", expanded_path));
     }
     
-    // Open with OS default file explorer/application
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .arg(&expanded_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open path: {}", e))?;
-    }
-    
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&expanded_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open path: {}", e))?;
-    }
-    
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&expanded_path)
-            .spawn()
-            .map_err(|e| format!("Failed to open path: {}", e))?;
-    }
+    // Use the OS abstraction layer to open the path
+    os::open_path(&expanded_path).map_err(|e| format!("Failed to open path: {}", e))?;
     
     // Hide floating window
     if let Some(floating_window) = app.get_window("floating") {
@@ -722,14 +662,9 @@ fn main() {
                     "inspect" => {
                         info!("Opening inspector");
                         // Open inspector for the main window
+                        #[cfg(debug_assertions)]
                         if let Some(window) = app.get_window("main") {
-                            #[cfg(debug_assertions)]
                             window.open_devtools();
-                            #[cfg(not(debug_assertions))]
-                            {
-                                // In release mode, we need to enable devtools via the window
-                                window.open_devtools();
-                            }
                         }
                     }
                     "reload" => {

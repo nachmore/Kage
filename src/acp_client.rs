@@ -8,10 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
 
+use crate::os;
 use crate::process_manager::ProcessManager;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpRequest {
@@ -113,27 +111,8 @@ impl AcpClient {
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit()); // Keep stderr for debugging
         
-        // Windows-specific: Hide the console window
-        #[cfg(target_os = "windows")]
-        {
-            const CREATE_NO_WINDOW: u32 = 0x08000000;
-            cmd.creation_flags(CREATE_NO_WINDOW);
-            info!("🪟 Windows: Setting CREATE_NO_WINDOW flag");
-        }
-        
-        // Unix-specific: Detach from parent process group
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            unsafe {
-                cmd.pre_exec(|| {
-                    // Create new process group
-                    libc::setsid();
-                    Ok(())
-                });
-            }
-            info!("🐧 Unix: Setting up process detachment");
-        }
+        // Configure platform-specific process spawning
+        os::configure_process_spawn(&mut cmd);
         
         info!("⏳ Spawning process...");
         let mut child = cmd.spawn()
