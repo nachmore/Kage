@@ -85,10 +85,8 @@ export class WindowManager {
     }
 
     setupDragging(ghostContainer) {
-        let isDragging = false;
-        
         ghostContainer.addEventListener('mousedown', async (e) => {
-            isDragging = true;
+            this.isDragging = true;
             try {
                 await this.invoke('start_drag_window');
             } catch (error) {
@@ -97,7 +95,8 @@ export class WindowManager {
         });
         
         document.addEventListener('mouseup', () => {
-            isDragging = false;
+            // Small delay so blur handler sees isDragging before it's cleared
+            setTimeout(() => { this.isDragging = false; }, 200);
         });
     }
 }

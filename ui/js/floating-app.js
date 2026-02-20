@@ -93,6 +93,10 @@ export class FloatingApp {
             if (permissionModal && permissionModal.style.display !== 'none') {
                 return;
             }
+            // Don't hide if dragging the window
+            if (this.windowManager.isDragging) {
+                return;
+            }
             await this.appWindow.hide();
         });
     }
