@@ -13,8 +13,8 @@ class AssistantSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 ${this.createCheckboxRow(
-                    'Start default session on launch',
-                    'Connect to the ACP backend and create a session immediately when Kiro starts, for faster first interaction.',
+                    'Start Kiro backend on launch',
+                    'Speed up initial responses by pre-launching the Kiro backend on Assistant launch. ',
                     'startSessionOnLaunch',
                     true
                 )}
