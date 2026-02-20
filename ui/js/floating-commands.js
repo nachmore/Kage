@@ -102,6 +102,18 @@ export function matchCommands(input) {
 }
 
 /**
+ * Match commands by name without requiring the > prefix.
+ * Used to show command suggestions inline alongside other results.
+ */
+export function matchCommandsByName(query) {
+    const q = query.trim().toLowerCase();
+    if (q.length === 0) return [];
+    return LOCAL_COMMANDS
+        .filter(cmd => cmd.name.startsWith(q))
+        .map(cmd => ({ type: 'command', ...cmd }));
+}
+
+/**
  * Check if input is a / slash command and return matching commands.
  */
 export function matchSlashCommands(input) {
@@ -148,7 +160,7 @@ export function matchSlashCommands(input) {
  * Render command suggestions into the suggestions container.
  * Works for both > local commands and / slash commands.
  */
-export function renderCommandSuggestions(commands, container, selectedIndex, onExecute, onResize) {
+export function renderCommandSuggestions(commands, container, selectedIndex, onExecute, onResize, showSendHint = false) {
     container.innerHTML = '';
 
     commands.forEach((cmd, index) => {
@@ -165,6 +177,13 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
         item.addEventListener('click', () => onExecute(cmd));
         container.appendChild(item);
     });
+
+    if (showSendHint) {
+        const hint = document.createElement('div');
+        hint.className = 'suggestions-hint';
+        hint.innerHTML = '<span class="hint-key">Shift+Enter</span> to send to agent';
+        container.appendChild(hint);
+    }
 
     container.classList.add('visible');
     if (onResize) setTimeout(onResize, 10);

@@ -147,3 +147,14 @@ export function updateSelection(appSuggestions, selectedIndex) {
         }
     });
 }
+
+export function appendSendHint(container) {
+    // Remove existing hint if any
+    const existing = container.querySelector('.suggestions-hint');
+    if (existing) existing.remove();
+    
+    const hint = document.createElement('div');
+    hint.className = 'suggestions-hint';
+    hint.innerHTML = '<span class="hint-key">Shift+Enter</span> to send to agent';
+    container.appendChild(hint);
+}

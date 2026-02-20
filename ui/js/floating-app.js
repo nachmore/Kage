@@ -1,8 +1,8 @@
 // Main application logic
-import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection } from './floating-suggestions.js';
+import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './floating-suggestions.js';
 import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
-import { matchCommands, matchSlashCommands, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
+import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -400,16 +400,34 @@ export class FloatingApp {
 
         this.searchTimeout = setTimeout(async () => {
             await this.performSearch(query);
+            // Show send hint if suggestions are visible
+            if (this.elements.appSuggestions.classList.contains('visible')) {
+                appendSendHint(this.elements.appSuggestions);
+                this.windowManager.resizeWindow();
+            }
         }, 150);
     }
 
     async performSearch(query) {
-        console.log('Searching for apps:', query);
+        // Check for matching commands (without > prefix) to show at top
+        const cmdMatches = matchCommandsByName(query);
 
         // If the input grew past a length where we already know there's no pattern
         // match, skip the backend call — it will just return "chat" again.
         if (this._noMatchSinceLen > 0 && query.length >= this._noMatchSinceLen) {
-            this.clearSuggestions();
+            // Still show command matches if any
+            if (cmdMatches.length > 0) {
+                this.currentMatches = cmdMatches;
+                this.selectedIndex = 0;
+                renderCommandSuggestions(
+                    cmdMatches, this.elements.appSuggestions, this.selectedIndex,
+                    (cmd) => this.executeCommandAction(cmd),
+                    () => this.windowManager.resizeWindow(),
+                    true
+                );
+            } else {
+                this.clearSuggestions();
+            }
             return;
         }
         // Input was shortened — reset and re-evaluate
@@ -537,6 +555,17 @@ export class FloatingApp {
             }
         } else if (event.key === 'Escape') {
             await this.appWindow.hide();
+        } else if (event.key === 'Enter' && event.shiftKey) {
+            // Shift+Enter: send directly to agent, bypassing suggestions
+            if (this.currentMatches.length > 0) {
+                event.preventDefault();
+                const message = this.elements.input.value.trim();
+                if (message) {
+                    await this.clearSuggestions();
+                    await this.sendChatMessage(message);
+                }
+            }
+            // If no suggestions, default behavior (newline in textarea)
         } else if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             await this.handleEnterKey();

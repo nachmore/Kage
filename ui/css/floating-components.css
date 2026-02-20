@@ -270,3 +270,33 @@
     background: #444;
     margin: 4px 0;
 }
+
+/* Suggestions hint */
+.suggestions-hint {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #9ca3af;
+    border-top: 1px solid #f3f4f6;
+    text-align: center;
+}
+
+.hint-key {
+    display: inline-block;
+    padding: 1px 5px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    font-family: monospace;
+}
+
+body.dark-theme .suggestions-hint {
+    color: #938F9B;
+    border-top-color: #352F3D;
+}
+
+body.dark-theme .hint-key {
+    background: #352F3D;
+    color: #938F9B;
+}
