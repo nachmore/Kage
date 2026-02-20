@@ -1,6 +1,7 @@
 use crate::state::AppState;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::State;
@@ -45,37 +46,69 @@ fn get_sessions_dir() -> Result<PathBuf, String> {
     Ok(home.join(".kiro").join("sessions").join("cli"))
 }
 
+fn get_title_cache_path() -> Result<PathBuf, String> {
+    let dir = get_sessions_dir()?;
+    Ok(dir.join(".title-cache.json"))
+}
+
+fn load_title_cache() -> HashMap<String, String> {
+    get_title_cache_path()
+        .ok()
+        .and_then(|p| fs::read_to_string(&p).ok())
+        .and_then(|content| serde_json::from_str(&content).ok())
+        .unwrap_or_default()
+}
+
+fn save_title_cache(cache: &HashMap<String, String>) {
+    if let Ok(path) = get_title_cache_path() {
+        if let Ok(content) = serde_json::to_string(cache) {
+            let _ = fs::write(&path, content);
+        }
+    }
+}
+
 /// Extract a title from the JSONL — use the first user prompt text
 /// Skips steering messages (prefixed with STEERING_MSG_PREFIX)
 fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
-    if let Ok(content) = fs::read_to_string(jsonl_path) {
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
-                if val.get("kind").and_then(|k| k.as_str()) == Some("Prompt") {
-                    if let Some(content_arr) = val
-                        .get("data")
-                        .and_then(|d| d.get("content"))
-                        .and_then(|c| c.as_array())
-                    {
-                        for item in content_arr {
-                            if item.get("kind").and_then(|k| k.as_str()) == Some("text") {
-                                if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
-                                    let trimmed = text.trim();
-                                    // Skip steering messages
-                                    if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX) {
-                                        continue;
+    // Read only the first few KB to find the title — JSONL files can be huge
+    use std::io::{BufRead, BufReader};
+
+    let file = match fs::File::open(jsonl_path) {
+        Ok(f) => f,
+        Err(_) => return "New Chat".to_string(),
+    };
+
+    let reader = BufReader::new(file);
+
+    for line in reader.lines().take(10) {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        let line = line.trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+            if val.get("kind").and_then(|k| k.as_str()) == Some("Prompt") {
+                if let Some(content_arr) = val
+                    .get("data")
+                    .and_then(|d| d.get("content"))
+                    .and_then(|c| c.as_array())
+                {
+                    for item in content_arr {
+                        if item.get("kind").and_then(|k| k.as_str()) == Some("text") {
+                            if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
+                                let trimmed = text.trim();
+                                if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX) {
+                                    continue;
+                                }
+                                if !trimmed.is_empty() {
+                                    let title: String = trimmed.chars().take(60).collect();
+                                    if title.len() < trimmed.len() {
+                                        return format!("{}...", title);
                                     }
-                                    if !trimmed.is_empty() {
-                                        let title: String = trimmed.chars().take(60).collect();
-                                        if title.len() < trimmed.len() {
-                                            return format!("{}...", title);
-                                        }
-                                        return title;
-                                    }
+                                    return title;
                                 }
                             }
                         }
@@ -170,6 +203,8 @@ pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
     }
 
     let mut sessions: Vec<SessionSummary> = Vec::new();
+    let mut title_cache = load_title_cache();
+    let mut cache_dirty = false;
 
     let entries = fs::read_dir(&sessions_dir).map_err(|e| {
         error!("Failed to read sessions directory: {}", e);
@@ -184,7 +219,7 @@ pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
 
         let path = entry.path();
 
-        // Only process .json files (skip .jsonl and .lock)
+        // Only process .json files (skip .jsonl, .lock, .title-cache.json)
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
@@ -195,66 +230,56 @@ pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
             None => continue,
         };
 
-        match fs::read_to_string(&path) {
-            Ok(content) => {
-                if content.trim().is_empty() {
-                    info!("Skipping empty session file: {}", session_id);
-                    // Still add it with minimal info so it shows up
-                    sessions.push(SessionSummary {
-                        session_id,
-                        title: "New Session".to_string(),
-                        created_at: String::new(),
-                        updated_at: String::new(),
-                    });
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(&content) {
-                    Ok(data) => {
-                        let created_at = data
-                            .get("created_at")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        let updated_at = data
-                            .get("updated_at")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&created_at)
-                            .to_string();
-
-                        // Get title from the JSONL file (first user prompt)
-                        let jsonl_path = path.with_extension("jsonl");
-                        let title = extract_title_from_jsonl(&jsonl_path);
-
-                        sessions.push(SessionSummary {
-                            session_id,
-                            title,
-                            created_at,
-                            updated_at,
-                        });
-                    }
-                    Err(e) => {
-                        error!("Failed to parse session JSON {:?}: {}", path, e);
-                        // Add with minimal info so it still appears
-                        sessions.push(SessionSummary {
-                            session_id,
-                            title: "Session (parse error)".to_string(),
-                            created_at: String::new(),
-                            updated_at: String::new(),
-                        });
-                    }
-                }
-            }
-            Err(e) => {
-                error!("Failed to read session file {:?}: {}", path, e);
-                // File locked or inaccessible — still add it
-                sessions.push(SessionSummary {
-                    session_id,
-                    title: "Session (read error)".to_string(),
-                    created_at: String::new(),
-                    updated_at: String::new(),
-                });
-            }
+        // Skip the title cache file itself
+        if session_id == ".title-cache" {
+            continue;
         }
+
+        // Get dates from file metadata (fast)
+        let (created_at, updated_at) = match fs::metadata(&path) {
+            Ok(meta) => {
+                let updated = meta.modified().ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                        .map(|dt| dt.to_rfc3339())
+                        .unwrap_or_default())
+                    .unwrap_or_default();
+                let created = meta.created().ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                        .map(|dt| dt.to_rfc3339())
+                        .unwrap_or_default())
+                    .unwrap_or_default();
+                (created, updated)
+            }
+            Err(_) => (String::new(), String::new()),
+        };
+
+        // Use cached title if available, otherwise extract and cache
+        let title = if let Some(cached) = title_cache.get(&session_id) {
+            cached.clone()
+        } else {
+            let jsonl_path = path.with_extension("jsonl");
+            let extracted = extract_title_from_jsonl(&jsonl_path);
+            // Only cache non-default titles (session has actual content)
+            if extracted != "New Chat" {
+                title_cache.insert(session_id.clone(), extracted.clone());
+                cache_dirty = true;
+            }
+            extracted
+        };
+
+        sessions.push(SessionSummary {
+            session_id,
+            title,
+            created_at,
+            updated_at,
+        });
+    }
+
+    // Persist cache if we added new entries
+    if cache_dirty {
+        save_title_cache(&title_cache);
     }
 
     // Sort by updated_at descending (most recent first)

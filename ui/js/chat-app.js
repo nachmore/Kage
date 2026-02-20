@@ -36,7 +36,10 @@ export class ChatApp {
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
         await this.loadUserInfo();
-        await this.loadSessions();
+
+        // Load sessions in background — don't block init
+        this.loadSessions();
+
         await this.checkConnection();
 
         console.log('[CHAT] Init - currentAcpSessionId:', this.currentAcpSessionId);
@@ -46,6 +49,10 @@ export class ChatApp {
 
         // Auto-select the current ACP session if one exists
         if (this.currentAcpSessionId) {
+            // Ensure sessions are loaded before trying to find the current one
+            if (this.sessions.length === 0) {
+                await this.loadSessions();
+            }
             let exists = this.sessions.find(s => s.session_id === this.currentAcpSessionId);
             if (!exists) {
                 // Session not on disk yet — add a synthetic entry so it appears in the list
