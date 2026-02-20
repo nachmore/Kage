@@ -16,6 +16,57 @@ use tauri::{
 };
 use tokio::sync::Mutex;
 
+/// Check if input is a URL
+fn is_url(input: &str) -> bool {
+    let trimmed = input.trim();
+    // Check for common URL patterns
+    trimmed.starts_with("http://") 
+        || trimmed.starts_with("https://") 
+        || trimmed.starts_with("ftp://")
+        || trimmed.starts_with("file://")
+        // Also match common patterns like www.example.com
+        || (trimmed.starts_with("www.") && trimmed.contains('.'))
+}
+
+/// Check if input is a file or folder path
+fn is_path(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    
+    // Windows paths
+    if cfg!(target_os = "windows") {
+        // Absolute paths: C:\, D:\, \\network\share
+        if trimmed.len() >= 3 && trimmed.chars().nth(1) == Some(':') && trimmed.chars().nth(2) == Some('\\') {
+            return Some(trimmed.to_string());
+        }
+        // UNC paths
+        if trimmed.starts_with("\\\\") {
+            return Some(trimmed.to_string());
+        }
+        // Relative paths with backslash
+        if trimmed.contains('\\') {
+            return Some(trimmed.to_string());
+        }
+    }
+    
+    // Unix-like paths (Linux, macOS)
+    if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
+        // Absolute paths starting with /
+        if trimmed.starts_with('/') {
+            return Some(trimmed.to_string());
+        }
+        // Home directory paths
+        if trimmed.starts_with('~') {
+            return Some(trimmed.to_string());
+        }
+        // Relative paths with forward slash
+        if trimmed.contains('/') && !trimmed.contains("://") {
+            return Some(trimmed.to_string());
+        }
+    }
+    
+    None
+}
+
 #[tauri::command]
 async fn handle_floating_input(
     input: String,
@@ -23,10 +74,25 @@ async fn handle_floating_input(
 ) -> Result<String, String> {
     info!("Handling floating input: {}", input);
     
-    let launcher = state.app_launcher.lock().await;
+    let trimmed_input = input.trim();
     
-    // Check if input matches an application
-    let matches = launcher.find_app(&input);
+    // Pattern 1: Check if input is a URL
+    if is_url(trimmed_input) {
+        info!("Detected URL pattern: {}", trimmed_input);
+        return Ok(format!("url:{}", trimmed_input));
+    }
+    
+    // Pattern 2: Check if input is a file/folder path
+    if let Some(path) = is_path(trimmed_input) {
+        info!("Detected path pattern: {}", path);
+        // Determine if it's likely a file or folder
+        let is_file = path.contains('.') && !path.ends_with('\\') && !path.ends_with('/');
+        return Ok(format!("path:{}:{}", if is_file { "file" } else { "folder" }, path));
+    }
+    
+    // Pattern 3: Check if input matches an application
+    let launcher = state.app_launcher.lock().await;
+    let matches = launcher.find_app(trimmed_input);
     
     if !matches.is_empty() {
         info!("Found {} matching application(s)", matches.len());
@@ -42,8 +108,8 @@ async fn handle_floating_input(
         }
     }
     
-    // No app match - open chat mode
-    info!("No application match, opening chat mode");
+    // No pattern match - open chat mode
+    info!("No pattern match, opening chat mode");
     Ok("chat".to_string())
 }
 
@@ -79,6 +145,104 @@ struct AppState {
     acp_client: Arc<Mutex<AcpClient>>,
     config: Arc<Mutex<Config>>,
     app_launcher: Arc<Mutex<AppLauncher>>,
+}
+
+#[tauri::command]
+async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+    info!("Opening URL: {}", url);
+    
+    // Ensure URL has a protocol
+    let full_url = if url.starts_with("www.") {
+        format!("https://{}", url)
+    } else {
+        url.clone()
+    };
+    
+    // Use the OS default browser to open the URL
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(&["/C", "start", &full_url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&full_url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&full_url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+    
+    // Hide floating window
+    if let Some(floating_window) = app.get_window("floating") {
+        let _ = floating_window.hide();
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
+    info!("Opening path: {}", path);
+    
+    // Expand home directory if needed
+    let expanded_path = if path.starts_with('~') {
+        if let Some(home) = dirs::home_dir() {
+            path.replacen('~', &home.to_string_lossy(), 1)
+        } else {
+            path.clone()
+        }
+    } else {
+        path.clone()
+    };
+    
+    // Check if path exists
+    let path_obj = std::path::Path::new(&expanded_path);
+    if !path_obj.exists() {
+        return Err(format!("Path does not exist: {}", expanded_path));
+    }
+    
+    // Open with OS default file explorer/application
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(&expanded_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&expanded_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&expanded_path)
+            .spawn()
+            .map_err(|e| format!("Failed to open path: {}", e))?;
+    }
+    
+    // Hide floating window
+    if let Some(floating_window) = app.get_window("floating") {
+        let _ = floating_window.hide();
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -332,6 +496,46 @@ async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn resize_floating_window(window: Window, width: u32, height: u32) -> Result<(), String> {
     info!("Resizing floating window to {}x{}", width, height);
+    
+    // Get current size
+    let current_size = window.inner_size().map_err(|e| {
+        error!("Failed to get current window size: {}", e);
+        e.to_string()
+    })?;
+    
+    let current_height = current_size.height;
+    let target_height = height;
+    
+    // If the height difference is small, just resize directly
+    if (current_height as i32 - target_height as i32).abs() < 20 {
+        return window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+            .map_err(|e| {
+                error!("Failed to resize window: {}", e);
+                e.to_string()
+            });
+    }
+    
+    // Animate the resize for larger changes
+    let steps = 10;
+    let height_diff = target_height as i32 - current_height as i32;
+    let step_size = height_diff as f32 / steps as f32;
+    
+    for i in 1..=steps {
+        let new_height = (current_height as f32 + step_size * i as f32) as u32;
+        
+        if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+            width, 
+            height: new_height 
+        })) {
+            error!("Failed to resize window during animation: {}", e);
+            // Continue anyway, don't fail the whole operation
+        }
+        
+        // Small delay between steps for smooth animation
+        tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
+    }
+    
+    // Ensure we end at exactly the target size
     window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
         .map_err(|e| {
             error!("Failed to resize window: {}", e);
@@ -614,6 +818,8 @@ fn main() {
             reconnect_acp,
             handle_floating_input,
             launch_app_by_name,
+            open_url,
+            open_path,
             test_floating_window,
             start_drag_window,
             open_chat_window,
