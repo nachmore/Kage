@@ -5,13 +5,21 @@
 ```
 kiro-assistant/
 ├── src/                    # Rust source code
-│   ├── main.rs            # Application entry point, Tauri setup
-│   ├── lib.rs             # Library root
+│   ├── main.rs            # Application entry point, Tauri setup, hotkey registration
+│   ├── lib.rs             # Library root, module declarations
+│   ├── state.rs           # AppState struct shared across commands
+│   ├── tray.rs            # System tray icon and menu setup
 │   ├── acp_client.rs      # Agent Communication Protocol client
 │   ├── app_launcher.rs    # Application discovery and launching
 │   ├── config.rs          # Configuration management
 │   ├── logger.rs          # File-based logging system
 │   ├── process_manager.rs # Process lifecycle management
+│   ├── commands/          # Tauri command handlers (IPC from frontend)
+│   │   ├── mod.rs         # Re-exports all command modules
+│   │   ├── window.rs      # Window management (toggle, resize, position, context menu)
+│   │   ├── messaging.rs   # ACP messaging (streaming, permissions, connection)
+│   │   ├── input.rs       # Input routing (URL/path detection, app launch, shortcuts)
+│   │   └── system.rs      # System commands (config, clipboard, devtools, quit)
 │   └── os/                # OS abstraction layer
 │       ├── mod.rs         # Platform selection and re-exports
 │       ├── cursor.rs      # Cross-platform cursor API
@@ -38,12 +46,23 @@ kiro-assistant/
 
 ### Core Application (`src/`)
 
-- `main.rs`: Tauri app initialization, window management, event handlers
+- `main.rs`: Tauri app initialization, hotkey registration, plugin setup (~240 lines)
+- `state.rs`: `AppState` struct shared across all command handlers
+- `tray.rs`: System tray icon, menu construction, and menu event handlers
 - `acp_client.rs`: Handles communication with kiro-cli backend service
 - `app_launcher.rs`: Scans system for installed applications, manages app registry
 - `config.rs`: Loads/saves user configuration (hotkeys, shortcuts, permissions)
 - `logger.rs`: File-based logging with rotation
 - `process_manager.rs`: Tracks and manages spawned child processes
+
+### Tauri Commands (`src/commands/`)
+
+All `#[tauri::command]` handlers are organized by domain:
+
+- `window.rs`: Window management (toggle, resize, drag, settings, context menu)
+- `messaging.rs`: ACP messaging (streaming chat, permissions, connection checks)
+- `input.rs`: Input routing (URL/path detection, app launching, shortcut execution)
+- `system.rs`: System utilities (config get/save, tool permissions, clipboard, devtools, quit)
 
 ### OS Abstraction Layer (`src/os/`)
 
