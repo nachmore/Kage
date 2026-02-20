@@ -260,7 +260,11 @@ fn main() {
                         return;
                     }
                     info!("Creating default session on launch...");
-                    match client.create_session(None) {
+                    let cwd = {
+                        let cfg = config_arc.lock().await;
+                        cfg.acp.assistant.working_directory.clone()
+                    };
+                    match client.create_session(cwd) {
                         Ok((session_id, models_json)) => {
                             info!("Default session created on launch: {}", session_id);
                             if let Ok(mut fs) = floating_session.lock() {

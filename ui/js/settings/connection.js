@@ -56,6 +56,12 @@ class ConnectionSettingsModule extends SettingsModule {
                         `<input type="number" class="setting-input" id="acpTimeout" value="30000">`
                     )}
                 </div>
+
+                ${this.createControlRow(
+                    'Agent workspace folder',
+                    'The folder the agent works in. It can read and modify files under this path. Leave empty to use the current directory.',
+                    `<input type="text" class="setting-input" id="workingDirectory" placeholder="">`
+                )}
             </div>
         `;
     }
@@ -65,6 +71,9 @@ class ConnectionSettingsModule extends SettingsModule {
         const assistant = config.acp?.assistant || {};
         const startSession = document.getElementById('startSessionOnLaunch');
         if (startSession) startSession.checked = assistant.start_session_on_launch !== false;
+
+        const workDir = document.getElementById('workingDirectory');
+        if (workDir) workDir.value = assistant.working_directory || '';
 
         if (config.acp && config.acp.mode) {
             const mode = config.acp.mode;
@@ -95,6 +104,7 @@ class ConnectionSettingsModule extends SettingsModule {
         // Preserve existing assistant settings
         const existingAssistant = config.acp.assistant || {};
         existingAssistant.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
+        existingAssistant.working_directory = document.getElementById('workingDirectory').value.trim() || null;
         
         const mode = document.getElementById('acpMode').value;
         
@@ -133,6 +143,17 @@ class ConnectionSettingsModule extends SettingsModule {
         const modeSelect = document.getElementById('acpMode');
         if (modeSelect) {
             modeSelect.addEventListener('change', () => this.toggleMode());
+        }
+
+        // Set OS-appropriate placeholder for working directory
+        const workDir = document.getElementById('workingDirectory');
+        if (workDir) {
+            const platform = navigator.platform || '';
+            if (platform.startsWith('Win')) {
+                workDir.placeholder = 'e.g., C:\\Projects\\my-app';
+            } else {
+                workDir.placeholder = 'e.g., /home/you/projects/my-app';
+            }
         }
     }
 

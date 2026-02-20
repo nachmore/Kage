@@ -56,6 +56,7 @@ impl Default for AssistantConfig {
             auto_steering_enabled: false,
             user_steering_path: None,
             default_model: None,
+            working_directory: None,
         }
     }
 }
@@ -84,6 +85,9 @@ pub struct AssistantConfig {
     /// Default model ID to select when creating a new session
     #[serde(default)]
     pub default_model: Option<String>,
+    /// Working directory for the agent — it will have access to files under this path
+    #[serde(default)]
+    pub working_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

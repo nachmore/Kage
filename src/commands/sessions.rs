@@ -374,8 +374,12 @@ pub async fn switch_acp_session(
         }
         None => {
             info!("Creating new session");
+            let cwd = {
+                let cfg = state.config.lock().await;
+                cfg.acp.assistant.working_directory.clone()
+            };
             let (new_session_id, models_json) = client_guard
-                .create_session(None)
+                .create_session(cwd)
                 .map_err(|e| format!("Failed to create session: {}", e))?;
 
             // Store available models
