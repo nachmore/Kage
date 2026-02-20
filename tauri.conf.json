@@ -29,6 +29,7 @@
       "targets": "all",
       "identifier": "com.kiro.assistant",
       "icon": [
+        "ui/assets/ghost.png",
         "icons/icon.ico"
       ]
     },
@@ -36,7 +37,7 @@
       "csp": null
     },
     "systemTray": {
-      "iconPath": "icons/icon.ico",
+      "iconPath": "ui/assets/ghost.png",
       "iconAsTemplate": true
     },
     "windows": [
@@ -56,14 +57,14 @@
         "fullscreen": false,
         "resizable": false,
         "title": "Kiro",
-        "width": 400,
-        "height": 450,
+        "width": 500,
+        "height": 60,
         "visible": false,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
-        "center": true
+        "center": false
       },
       {
         "label": "settings",

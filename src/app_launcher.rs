@@ -5,12 +5,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(target_os = "windows")]
+use windows_icons::get_icon_base64_by_path;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Application {
     pub name: String,
     pub path: PathBuf,
     pub aliases: Vec<String>,
-    pub icon_path: Option<String>,
+    pub icon_base64: Option<String>,
 }
 
 pub struct AppLauncher {
@@ -198,11 +201,20 @@ impl AppLauncher {
             aliases.push(no_spaces);
         }
 
+        // Extract icon as base64 on Windows
+        #[cfg(target_os = "windows")]
+        let icon_base64 = icon_path.and_then(|path| {
+            get_icon_base64_by_path(&path).ok()
+        });
+        
+        #[cfg(not(target_os = "windows"))]
+        let icon_base64: Option<String> = None;
+
         let app = Application {
             name: name.clone(),
             path,
             aliases,
-            icon_path,
+            icon_base64,
         };
 
         self.app_registry.insert(normalized_name, app);

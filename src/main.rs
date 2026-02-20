@@ -272,13 +272,13 @@ async fn test_floating_window(app: tauri::AppHandle) -> Result<String, String> {
             })?;
             println!("   ✅ Window focused");
             
-            // Try to center the window
+            // Position at 1/3 from top
             if let Ok(monitor) = window.current_monitor() {
                 if let Some(monitor) = monitor {
                     let size = monitor.size();
                     println!("   Monitor size: {}x{}", size.width, size.height);
-                    let x = (size.width as i32 - 400) / 2;
-                    let y = (size.height as i32 - 250) / 2;
+                    let x = (size.width as i32 - 500) / 2; // 500px window width
+                    let y = size.height as i32 / 3; // 1/3 from top
                     println!("   Positioning at: ({}, {})", x, y);
                     window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
                         .map_err(|e| {
@@ -289,12 +289,52 @@ async fn test_floating_window(app: tauri::AppHandle) -> Result<String, String> {
                 }
             }
             
-            Ok("Window was hidden, now visible and centered".to_string())
+            Ok("Window was hidden, now visible and positioned".to_string())
         }
     } else {
         println!("   ❌ Floating window not found!");
         Err("Floating window not found".to_string())
     }
+}
+
+#[tauri::command]
+async fn start_drag_window(window: Window) -> Result<(), String> {
+    info!("Starting window drag");
+    window.start_dragging().map_err(|e| {
+        error!("Failed to start dragging: {}", e);
+        e.to_string()
+    })
+}
+
+#[tauri::command]
+async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
+    info!("Opening chat window");
+    
+    // Hide floating window
+    if let Some(floating_window) = app.get_window("floating") {
+        let _ = floating_window.hide();
+    }
+    
+    // Get or show main chat window
+    if let Some(window) = app.get_window("main") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    } else {
+        // Create the main window if it doesn't exist (shouldn't happen normally)
+        warn!("Main window not found, this shouldn't happen");
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn resize_floating_window(window: Window, width: u32, height: u32) -> Result<(), String> {
+    info!("Resizing floating window to {}x{}", width, height);
+    window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+        .map_err(|e| {
+            error!("Failed to resize window: {}", e);
+            e.to_string()
+        })
 }
 
 fn main() {
@@ -313,9 +353,23 @@ fn main() {
         Config::default()
     });
     
-    info!("Configuration loaded: ACP host={}:{}", config.acp.host, config.acp.port);
+    info!("Configuration loaded");
     
-    let acp_client = AcpClient::new(config.acp.host.clone(), config.acp.port);
+    let acp_client = match &config.acp.mode {
+        crate::config::AcpMode::Local { spawn_command } => {
+            info!("ACP Mode: Local with spawn command: {}", spawn_command);
+            AcpClient::new(acp_client::AcpConnectionMode::Local {
+                spawn_command: spawn_command.clone(),
+            })
+        }
+        crate::config::AcpMode::Remote { host, port, timeout_ms } => {
+            info!("ACP Mode: Remote at {}:{} (timeout: {}ms)", host, port, timeout_ms);
+            AcpClient::new(acp_client::AcpConnectionMode::Remote {
+                host: host.clone(),
+                port: *port,
+            })
+        }
+    };
     
     // Initialize app launcher
     let app_launcher = AppLauncher::new().unwrap_or_else(|e| {
@@ -425,13 +479,13 @@ fn main() {
                                         Ok(_) => println!("     ✅ Window focused successfully"),
                                         Err(e) => println!("     ⚠️  Failed to focus: {}", e),
                                     }
-                                    // Try to center the window
+                                    // Position at 1/3 from top
                                     if let Ok(monitor) = window_for_primary.current_monitor() {
                                         if let Some(monitor) = monitor {
                                             let size = monitor.size();
                                             println!("     Monitor size: {}x{}", size.width, size.height);
-                                            let x = (size.width as i32 - 400) / 2;
-                                            let y = (size.height as i32 - 250) / 2;
+                                            let x = (size.width as i32 - 500) / 2; // 500px window width
+                                            let y = size.height as i32 / 3; // 1/3 from top
                                             println!("     Positioning at: ({}, {})", x, y);
                                             if let Err(e) = window_for_primary.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
                                                 println!("     ⚠️  Failed to position: {}", e);
@@ -483,13 +537,13 @@ fn main() {
                                                 Ok(_) => println!("     ✅ Window focused successfully"),
                                                 Err(e) => println!("     ⚠️  Failed to focus: {}", e),
                                             }
-                                            // Try to center the window
+                                            // Position at 1/3 from top
                                             if let Ok(monitor) = window_for_fallback.current_monitor() {
                                                 if let Some(monitor) = monitor {
                                                     let size = monitor.size();
                                                     println!("     Monitor size: {}x{}", size.width, size.height);
-                                                    let x = (size.width as i32 - 400) / 2;
-                                                    let y = (size.height as i32 - 250) / 2;
+                                                    let x = (size.width as i32 - 500) / 2; // 500px window width
+                                                    let y = size.height as i32 / 3; // 1/3 from top
                                                     println!("     Positioning at: ({}, {})", x, y);
                                                     if let Err(e) = window_for_fallback.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
                                                         println!("     ⚠️  Failed to position: {}", e);
@@ -540,7 +594,10 @@ fn main() {
             reconnect_acp,
             handle_floating_input,
             launch_app_by_name,
-            test_floating_window
+            test_floating_window,
+            start_drag_window,
+            open_chat_window,
+            resize_floating_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiro Assistant</title>
+    <style>
+        :root {
+            /* Brand Colors - Purple Palette */
+            --purple-100: hsl(263, 100%, 86%);
+            --purple-200: hsl(263, 100%, 80%);
+            --purple-300: hsl(263, 100%, 75%);
+            --purple-400: hsl(263, 100%, 69%);
+            --purple-500: hsl(263, 100%, 64%);
+            --purple-600: hsl(263, 77%, 58%);
+            --purple-700: hsl(263, 59%, 51%);
+            --purple-800: hsl(263, 56%, 45%);
+            --purple-900: hsl(263, 56%, 38%);
+            
+            /* Brand Colors - Blue Palette */
+            --blue-100: hsl(231, 100%, 91%);
+            --blue-200: hsl(230, 100%, 82%);
+            --blue-300: hsl(229, 100%, 74%);
+            --blue-400: hsl(229, 100%, 65%);
+            --blue-500: hsl(233, 91%, 54%);
+            --blue-600: hsl(233, 77%, 45%);
+            --blue-700: hsl(232, 77%, 36%);
+            --blue-800: hsl(232, 77%, 27%);
+            --blue-900: hsl(232, 76%, 18%);
+            
+            /* Prey Palette (Neutrals) */
+            --prey-100: #F2F1F4;
+            --prey-150: #EAE8ED;
+            --prey-200: #DCDADF;
+            --prey-300: #C1BEC6;
+            --prey-400: #938F9B;
+            --prey-500: #5E5966;
+            --prey-600: #4A464F;
+            --prey-700: #352F3D;
+            --prey-750: #28242E;
+            --prey-800: #211D25;
+            --prey-900: #19161D;
+            
+            /* Primary Brand Color */
+            --kiro-primary: #8E48FF;
+            --kiro-gradient-start: #8FCDFC;
+            --kiro-gradient-end: #C09CFF;
+            
+            /* Light Theme Colors */
+            --light-foreground: var(--prey-700);
+            --light-background: var(--prey-200);
+            --light-panel: var(--prey-100);
+            --light-header: var(--prey-150);
+            --light-divider: var(--prey-300);
+            
+            /* Dark Theme Colors */
+            --dark-foreground: #FFFFFF;
+            --dark-background: var(--prey-900);
+            --dark-panel: var(--prey-800);
+            --dark-header: var(--prey-750);
+            --dark-divider: var(--prey-600);
+            
+            /* Shadows */
+            --kiro-shadow: 0px 0.5px 0.6px rgba(0, 0, 0, 0.1),
+                          -0.1px 1.5px 1.7px -0.8px rgba(0, 0, 0, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+            color: var(--light-foreground);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        body.dark-theme {
+            background: var(--dark-background);
+            color: var(--dark-foreground);
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes gentleFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-4px); }
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes typing {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        /* Header */
+        .header {
+            padding: 20px 24px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: var(--kiro-shadow);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        body.dark-theme .header {
+            background: rgba(33, 29, 37, 0.95);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .kiro-logo {
+            width: 40px;
+            height: 40px;
+            animation: gentleFloat 3s ease-in-out infinite;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .theme-toggle {
+            padding: 8px 16px;
+            background: var(--light-panel);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--kiro-primary);
+            transition: all 0.2s;
+        }
+        
+        body.dark-theme .theme-toggle {
+            background: var(--dark-panel);
+        }
+        
+        .theme-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--kiro-shadow);
+        }
+        
+        .connection-status {
+            font-size: 0.85rem;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        
+        .connection-status.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .connection-status.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        /* Main Container */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            overflow: hidden;
+            background: var(--light-background);
+        }
+        
+        body.dark-theme .chat-container {
+            background: var(--dark-background);
+        }
+        
+        /* Messages Area */
+        .messages-area {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: var(--kiro-shadow);
+            scroll-behavior: smooth;
+        }
+        
+        body.dark-theme .messages-area {
+            background: var(--dark-panel);
+        }
+        
+        .messages-area::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .messages-area::-webkit-scrollbar-track {
+            background: var(--light-panel);
+            border-radius: 4px;
+        }
+        
+        body.dark-theme .messages-area::-webkit-scrollbar-track {
+            background: var(--dark-background);
+        }
+        
+        .messages-area::-webkit-scrollbar-thumb {
+            background: var(--prey-300);
+            border-radius: 4px;
+        }
+        
+        body.dark-theme .messages-area::-webkit-scrollbar-thumb {
+            background: var(--prey-600);
+        }
+        
+        /* Messages */
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 85%;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+        }
+        
+        .message.user .message-avatar {
+            background: var(--prey-300);
+        }
+        
+        body.dark-theme .message.user .message-avatar {
+            background: var(--prey-600);
+        }
+        
+        .ghost-icon {
+            width: 24px;
+            height: 24px;
+        }
+        
+        .user-icon {
+            font-size: 18px;
+        }
+        
+        .message-content {
+            background: var(--light-panel);
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+        
+        body.dark-theme .message-content {
+            background: var(--dark-header);
+        }
+        
+        .message.user .message-content {
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+            color: var(--prey-900);
+        }
+        
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 12px;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--kiro-primary);
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        /* Input Area */
+        .input-area {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            box-shadow: var(--kiro-shadow);
+        }
+        
+        body.dark-theme .input-area {
+            background: var(--dark-panel);
+        }
+        
+        .input-box {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid var(--prey-300);
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--light-panel);
+            color: var(--light-foreground);
+            transition: border-color 0.2s;
+        }
+        
+        body.dark-theme .input-box {
+            background: var(--dark-header);
+            border-color: var(--prey-600);
+            color: var(--dark-foreground);
+        }
+        
+        .input-box:focus {
+            outline: none;
+            border-color: var(--kiro-primary);
+        }
+        
+        .send-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+            border: none;
+            border-radius: 12px;
+            color: var(--prey-900);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(142, 72, 255, 0.3);
+        }
+        
+        .send-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Loading Spinner */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 40px;
+        }
+        
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            animation: spin 2s linear infinite;
+        }
+        
+        .loading-text {
+            font-size: 16px;
+            color: var(--prey-500);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* Welcome Screen */
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 24px;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .welcome-ghost {
+            width: 120px;
+            height: 120px;
+            animation: gentleFloat 3s ease-in-out infinite;
+        }
+        
+        .welcome-title {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--kiro-gradient-start) 0%, var(--kiro-gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .welcome-subtitle {
+            font-size: 1.1rem;
+            color: var(--prey-500);
+            max-width: 500px;
+        }
+        
+        body.dark-theme .welcome-subtitle {
+            color: var(--prey-400);
+        }
+        
+        .suggestion-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .chip {
+            padding: 10px 20px;
+            background: var(--light-panel);
+            border: 2px solid var(--prey-300);
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        body.dark-theme .chip {
+            background: var(--dark-header);
+            border-color: var(--prey-600);
+        }
+        
+        .chip:hover {
+            border-color: var(--kiro-primary);
+            transform: translateY(-2px);
+            box-shadow: var(--kiro-shadow);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <svg class="kiro-logo" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="56" height="56" rx="22" fill="url(#paint0_linear)"/>
+                <path d="M22.0412 14.4385C22.0652 14.4385 23.1062 14.3641 25.1643 14.2151C27.2164 14.0717 28.2575 14 28.2874 14C28.6284 14 28.7989 14.1048 28.7989 14.3144C28.7989 14.5516 28.081 17.3262 26.6451 22.6383C25.2092 27.9448 24.4912 30.6505 24.4912 30.7553C25.269 30.3361 25.8164 30.0051 26.1335 29.7624C26.4446 29.5252 27.1028 28.9571 28.1079 28.0579C29.831 26.4693 31.0395 25.4764 31.7335 25.0792C32.8822 24.3621 33.9711 24.0035 35.0002 24.0035C35.8617 24.0035 36.5438 24.2683 37.0463 24.7979C37.5489 25.3274 37.8002 26.0307 37.8002 26.9078C37.8002 27.8621 37.5579 28.6371 37.0733 29.2329C36.5827 29.8286 35.8916 30.1265 35.0002 30.1265C34.4558 30.1265 34.004 29.9803 33.6451 29.6879C33.2861 29.3956 33.1066 29.0122 33.1066 28.5378C33.1066 27.8759 33.3519 27.3132 33.8425 26.8499C34.3271 26.3865 34.9015 26.1135 35.5656 26.0307L35.8617 25.9563C35.5207 25.6363 35.1767 25.4764 34.8297 25.4764C33.8545 25.4764 32.7057 25.9259 31.3835 26.8251C30.8391 27.2222 30.0075 27.9366 28.8887 28.9681C27.5664 30.1596 26.5882 30.9815 25.954 31.4338C27.3361 31.7262 28.2575 31.9523 28.7181 32.1123C30.0942 32.6143 31.0126 33.301 31.4733 34.1726C31.7305 34.6525 31.8592 35.1682 31.8592 35.7199C31.8592 36.0674 31.7814 36.6383 31.6258 37.4326C31.4643 38.227 31.3835 38.7289 31.3835 38.9385C31.3835 39.9976 31.7724 40.5272 32.5502 40.5272C33.0647 40.5272 33.5374 40.3286 33.9681 39.9314C34.6861 39.2695 35.3322 37.8932 35.9066 35.8026C35.9664 35.593 36.2536 35.4882 36.7681 35.4882C37.169 35.4882 37.3993 35.513 37.4592 35.5626C37.6327 35.6675 37.6476 35.946 37.504 36.3983C36.7263 38.8089 35.7361 40.4362 34.5335 41.2801C33.8156 41.76 33.1096 42 32.4156 42C31.0993 42 30.0463 41.6359 29.2566 40.9078C28.4669 40.1797 28.072 39.2061 28.072 37.987C28.072 37.7498 28.1139 37.3802 28.1976 36.8783C28.2814 36.3708 28.3233 36.0122 28.3233 35.8026C28.3233 35.4606 28.2395 35.1296 28.072 34.8097C27.6951 34.1478 26.9891 33.632 25.954 33.2624C25.0087 32.9701 24.3506 32.8239 23.9797 32.8239H23.8899L23.3694 34.6525C23.0583 35.844 22.7233 37.1017 22.3643 38.4255C22.0053 39.7494 21.781 40.5162 21.6912 40.7258C21.5476 41.0733 21.2904 41.3712 20.9194 41.6194C20.5425 41.8731 20.1387 42 19.7079 42C19.3669 42 19.0318 41.9007 18.7028 41.7021C18.3677 41.5035 18.2002 41.2443 18.2002 40.9244C18.2002 40.6596 18.7267 38.5414 19.7797 34.5697C20.8267 30.5981 21.8797 26.6927 22.9387 22.8534L24.5361 17.0946C24.5959 16.725 24.5032 16.4933 24.2579 16.3995C24.0126 16.3058 23.6028 16.2589 23.0284 16.2589C22.9446 16.2589 22.8878 16.2589 22.8579 16.2589C22.828 16.2589 22.7831 16.2589 22.7233 16.2589C22.6694 16.2589 22.6126 16.2589 22.5528 16.2589C21.9485 16.2589 21.6045 16.2203 21.5207 16.143C21.3472 16.0106 21.3322 15.6935 21.4758 15.1915C21.5895 14.8219 21.6912 14.6095 21.781 14.5544C21.8647 14.4771 21.9515 14.4385 22.0412 14.4385Z" fill="#13181F"/>
+                <defs>
+                    <linearGradient id="paint0_linear" x1="0" y1="0" x2="57.3826" y2="1.28291" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#8FCDFC"/>
+                        <stop offset="1" stop-color="#C09CFF"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+            <h1>Kiro Assistant</h1>
+        </div>
+        <div class="header-right">
+            <span class="connection-status connected">Connected</span>
+            <button class="theme-toggle" onclick="toggleTheme()">🌙 Dark Mode</button>
+        </div>
+    </div>
+    
+    <!-- Main Chat Container -->
+    <div class="chat-container">
+        <div class="messages-area" id="messagesArea">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen">
+                <svg class="welcome-ghost" viewBox="0 0 122 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9.46288 62.7153C39.4497 95.5029 82.2859 94.2843 107.514 71.2092C122.902 57.1351 130.598 25.5234 104.759 6.08296C78.9201 -13.3575 60.6403 20.438 31.6125 15.6856C25.62 14.7143 17.5659 16.2751 22.7917 23.3518C23.7844 24.6988 25.1069 25.7677 26.2858 26.6596C18.0576 26.9467 15.1835 26.513 10.144 26.4458C5.58702 26.2442 2.35865 26.4885 0.516924 28.7914C-1.89595 32.5329 4.59743 38.33 10.4861 43.3237C13.8824 46.5796 17.3307 50.9685 19.545 54.6306C16.8848 54.087 16.2403 53.9403 12.2698 53.5311C5.93215 52.8805 1.23467 53.7143 9.46594 62.7153H9.46288Z" fill="white"/>
+                    <path d="M91.5066 41.0053C87.4169 41.3321 86.4151 36.4942 86.1799 33.5804C85.9692 30.9507 86.2715 28.8218 87.0595 27.426C87.7529 26.1982 88.828 25.5171 90.2543 25.4011C91.6837 25.285 92.9573 25.7889 93.9164 26.9037C95.0098 28.1743 95.697 30.2115 95.9047 32.7985C96.2957 37.6853 94.6525 40.7518 91.5066 41.0022V41.0053Z" fill="black"/>
+                    <path d="M108.327 39.6551C104.237 39.9819 103.232 35.1439 103 32.2301C102.789 29.6004 103.092 27.4746 103.88 26.0758C104.57 24.848 105.648 24.1668 107.075 24.0508C108.504 23.9377 109.778 24.4387 110.737 25.5535C111.83 26.8241 112.517 28.8613 112.725 31.4483C113.116 36.3351 111.473 39.4016 108.327 39.652V39.6551Z" fill="black"/>
+                </svg>
+                <h2 class="welcome-title">Welcome to Kiro</h2>
+                <p class="welcome-subtitle">Your AI-powered coding assistant. Ask me anything about your code, get help with debugging, or explore new ideas.</p>
+                <div class="suggestion-chips">
+                    <div class="chip" onclick="sendSuggestion('Explain this code')">💡 Explain this code</div>
+                    <div class="chip" onclick="sendSuggestion('Help me debug')">🐛 Help me debug</div>
+                    <div class="chip" onclick="sendSuggestion('Refactor my code')">✨ Refactor my code</div>
+                    <div class="chip" onclick="sendSuggestion('Write tests')">🧪 Write tests</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="input-area">
+            <input type="text" class="input-box" id="messageInput" placeholder="Ask Kiro anything..." onkeypress="handleKeyPress(event)">
+            <button class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+    
+    <script>
+        // Theme Toggle
+        function toggleTheme() {
+            const body = document.body;
+            const btn = document.querySelector('.theme-toggle');
+            
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                btn.textContent = '🌙 Dark Mode';
+            } else {
+                body.classList.add('dark-theme');
+                btn.textContent = '☀️ Light Mode';
+            }
+        }
+        
+        // Send Message
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message) {
+                addMessage(message, 'user');
+                input.value = '';
+                
+                // Show typing indicator
+                showTypingIndicator();
+                
+                // Simulate response after 2 seconds
+                setTimeout(() => {
+                    hideTypingIndicator();
+                    addMessage('I received your message: "' + message + '". This is a demo response from Kiro!', 'assistant');
+                }, 2000);
+            }
+        }
+        
+        // Handle Enter Key
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+        
+        // Send Suggestion
+        function sendSuggestion(text) {
+            document.getElementById('messageInput').value = text;
+            sendMessage();
+        }
+        
+        // Add Message to Chat
+        function addMessage(text, sender) {
+            const messagesArea = document.getElementById('messagesArea');
+            
+            // Remove welcome screen if it exists
+            const welcomeScreen = messagesArea.querySelector('.welcome-screen');
+            if (welcomeScreen) {
+                welcomeScreen.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            
+            if (sender === 'assistant') {
+                // Kiro Ghost Icon
+                avatarDiv.innerHTML = `
+                    <svg class="ghost-icon" viewBox="0 0 44 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.58762 37.203C2.62272 48.1978 13.1975 50.9578 20.9974 44.5229C23.2923 51.7378 31.8872 46.3529 34.9771 40.758C41.772 28.4282 39.027 15.8585 38.322 13.2635C33.4921 -4.42116 9.34259 -4.45116 5.18767 13.3535C4.21269 16.4734 4.19769 20.0134 3.6577 23.6883C3.3877 25.5483 3.17771 26.7332 2.47272 28.6832C2.05273 29.8082 1.49774 30.7982 0.597756 32.4781C-0.782218 35.0881 -0.197229 40.113 6.94263 37.503L7.61762 37.203H7.58762Z" fill="white" stroke="black" stroke-width="2"/>
+                        <path d="M21.9284 20.928C19.9484 20.928 19.6484 18.5581 19.6484 17.1481C19.6484 15.8731 19.8734 14.8681 20.3084 14.2231C20.6834 13.6532 21.2384 13.3682 21.9284 13.3682C22.6184 13.3682 23.2184 13.6532 23.6384 14.2381C24.1184 14.8981 24.3733 15.9031 24.3733 17.1481C24.3733 19.518 23.4584 20.928 21.9434 20.928H21.9284Z" fill="black"/>
+                        <path d="M30.0729 20.928C28.093 20.928 27.793 18.5581 27.793 17.1481C27.793 15.8731 28.018 14.8681 28.453 14.2231C28.8279 13.6532 29.3829 13.3682 30.0729 13.3682C30.7629 13.3682 31.3629 13.6532 31.7829 14.2381C32.2629 14.8981 32.5179 15.9031 32.5179 17.1481C32.5179 19.518 31.6029 20.928 30.0879 20.928H30.0729Z" fill="black"/>
+                    </svg>
+                `;
+            } else {
+                avatarDiv.innerHTML = '<span class="user-icon">👤</span>';
+            }
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = text;
+            
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(contentDiv);
+            messagesArea.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+        
+        // Show Typing Indicator
+        function showTypingIndicator() {
+            const messagesArea = document.getElementById('messagesArea');
+            
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message assistant typing-indicator';
+            typingDiv.id = 'typingIndicator';
+            
+            typingDiv.innerHTML = `
+                <div class="message-avatar">
+                    <svg class="ghost-icon" viewBox="0 0 44 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7.58762 37.203C2.62272 48.1978 13.1975 50.9578 20.9974 44.5229C23.2923 51.7378 31.8872 46.3529 34.9771 40.758C41.772 28.4282 39.027 15.8585 38.322 13.2635C33.4921 -4.42116 9.34259 -4.45116 5.18767 13.3535C4.21269 16.4734 4.19769 20.0134 3.6577 23.6883C3.3877 25.5483 3.17771 26.7332 2.47272 28.6832C2.05273 29.8082 1.49774 30.7982 0.597756 32.4781C-0.782218 35.0881 -0.197229 40.113 6.94263 37.503L7.61762 37.203H7.58762Z" fill="white" stroke="black" stroke-width="2"/>
+                        <path d="M21.9284 20.928C19.9484 20.928 19.6484 18.5581 19.6484 17.1481C19.6484 15.8731 19.8734 14.8681 20.3084 14.2231C20.6834 13.6532 21.2384 13.3682 21.9284 13.3682C22.6184 13.3682 23.2184 13.6532 23.6384 14.2381C24.1184 14.8981 24.3733 15.9031 24.3733 17.1481C24.3733 19.518 23.4584 20.928 21.9434 20.928H21.9284Z" fill="black"/>
+                        <path d="M30.0729 20.928C28.093 20.928 27.793 18.5581 27.793 17.1481C27.793 15.8731 28.018 14.8681 28.453 14.2231C28.8279 13.6532 29.3829 13.3682 30.0729 13.3682C30.7629 13.3682 31.3629 13.6532 31.7829 14.2381C32.2629 14.8981 32.5179 15.9031 32.5179 17.1481C32.5179 19.518 31.6029 20.928 30.0879 20.928H30.0729Z" fill="black"/>
+                    </svg>
+                </div>
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            
+            messagesArea.appendChild(typingDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+        
+        // Hide Typing Indicator
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+        }
+    </script>
+</body>
+</html>

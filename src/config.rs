@@ -20,9 +20,20 @@ pub struct HotkeyConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpConfig {
-    pub host: String,
-    pub port: u16,
-    pub timeout_ms: u64,
+    pub mode: AcpMode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum AcpMode {
+    Local {
+        spawn_command: String,
+    },
+    Remote {
+        host: String,
+        port: u16,
+        timeout_ms: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,9 +58,11 @@ impl Default for Config {
                 key: "Space".to_string(),
             },
             acp: AcpConfig {
-                host: "127.0.0.1".to_string(),
-                port: 8765,
-                timeout_ms: 30000,
+                mode: AcpMode::Remote {
+                    host: "127.0.0.1".to_string(),
+                    port: 8765,
+                    timeout_ms: 30000,
+                },
             },
             ui: UiConfig {
                 theme: "dark".to_string(),

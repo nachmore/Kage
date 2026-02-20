@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "hotkey": {
+    "modifiers": ["Alt"],
+    "key": "Space"
+  },
+  "acp": {
+    "mode": {
+      "type": "local",
+      "spawn_command": "C:\\workplace\\kiro-cli\\target\\release\\chat_cli.exe acp"
+    }
+  },
+  "ui": {
+    "theme": "dark",
+    "floating_window_opacity": 1.0,
+    "chat_window_width": 800,
+    "chat_window_height": 600
+  },
+  "system": {
+    "auto_start": false
+  }
+}

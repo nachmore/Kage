@@ -13,7 +13,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
             color: #333;
             overflow: hidden;
         }
@@ -28,8 +28,8 @@
 
         .settings-header {
             padding: 20px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+            color: #19161D;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -72,7 +72,7 @@
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 15px;
-            color: #667eea;
+            color: #8E48FF;
         }
 
         .setting-item {
@@ -102,7 +102,7 @@
 
         .setting-input:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #8E48FF;
         }
 
         .setting-input-group {
@@ -123,18 +123,18 @@
         .hotkey-display {
             flex: 1;
             padding: 10px 12px;
-            border: 2px solid #667eea;
+            border: 2px solid #8E48FF;
             border-radius: 6px;
             background: white;
             font-size: 14px;
             font-weight: 500;
-            color: #667eea;
+            color: #8E48FF;
             text-align: center;
         }
 
         .capture-btn {
             padding: 10px 20px;
-            background: #667eea;
+            background: #8E48FF;
             color: white;
             border: none;
             border-radius: 6px;
@@ -145,7 +145,7 @@
         }
 
         .capture-btn:hover {
-            background: #5568d3;
+            background: #7a3de6;
         }
 
         .capture-btn.capturing {
@@ -190,7 +190,7 @@
         }
 
         input:checked + .toggle-slider {
-            background-color: #667eea;
+            background-color: #8E48FF;
         }
 
         input:checked + .toggle-slider:before {
@@ -200,8 +200,8 @@
         .save-btn {
             width: 100%;
             padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
+            color: #19161D;
             border: none;
             border-radius: 6px;
             cursor: pointer;
@@ -239,12 +239,65 @@
             color: #991b1b;
             border: 1px solid #fca5a5;
         }
+        
+        /* Dark Theme Styles */
+        body.dark-theme {
+            background: linear-gradient(135deg, #19161D 0%, #28242E 100%);
+        }
+        
+        body.dark-theme .settings-container {
+            background: #211D25;
+        }
+        
+        body.dark-theme .settings-content {
+            background: #211D25;
+        }
+        
+        body.dark-theme .settings-section {
+            background: #28242E;
+        }
+        
+        body.dark-theme .settings-section h2 {
+            color: #C09CFF;
+        }
+        
+        body.dark-theme .setting-label {
+            color: #E5E7EB;
+        }
+        
+        body.dark-theme .setting-input {
+            background: #211D25;
+            border-color: #4A464F;
+            color: #E5E7EB;
+        }
+        
+        body.dark-theme .setting-input:focus {
+            border-color: #8E48FF;
+        }
+        
+        body.dark-theme .setting-description {
+            color: #938F9B;
+        }
+        
+        body.dark-theme .hotkey-display {
+            background: #211D25;
+            border-color: #8E48FF;
+            color: #C09CFF;
+        }
+        
+        body.dark-theme .close-btn {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        body.dark-theme .close-btn:hover {
+            background: rgba(0, 0, 0, 0.5);
+        }
     </style>
 </head>
 <body>
     <div class="settings-container">
         <div class="settings-header">
-            <h1>⚙️ Settings</h1>
+            <h1>⚙️ Kiro Settings</h1>
             <button class="close-btn" onclick="closeSettings()">Close</button>
         </div>
 
@@ -268,17 +321,38 @@
             <div class="settings-section">
                 <h2>🔌 Connection</h2>
                 <div class="setting-item">
-                    <label class="setting-label">Host</label>
-                    <input type="text" class="setting-input" id="acpHost" value="127.0.0.1">
+                    <label class="setting-label">Connection Mode</label>
+                    <select class="setting-input" id="acpMode" onchange="toggleAcpMode()">
+                        <option value="local">Local (Spawn Process)</option>
+                        <option value="remote">Remote (TCP Connection)</option>
+                    </select>
+                    <div class="setting-description">Choose how to connect to the ACP server</div>
                 </div>
-                <div class="setting-item">
-                    <label class="setting-label">Port</label>
-                    <input type="number" class="setting-input" id="acpPort" value="8765">
+                
+                <!-- Local Mode Settings -->
+                <div id="localModeSettings" style="display: none;">
+                    <div class="setting-item">
+                        <label class="setting-label">Spawn Command</label>
+                        <input type="text" class="setting-input" id="spawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
+                        <div class="setting-description">Full command to spawn the ACP server (including binary path and arguments). Example: C:\workplace\kiro-cli\target\release\chat_cli.exe acp</div>
+                    </div>
                 </div>
-                <div class="setting-item">
-                    <label class="setting-label">Timeout (ms)</label>
-                    <input type="number" class="setting-input" id="acpTimeout" value="30000">
-                    <div class="setting-description">Connection timeout in milliseconds</div>
+                
+                <!-- Remote Mode Settings -->
+                <div id="remoteModeSettings" style="display: none;">
+                    <div class="setting-item">
+                        <label class="setting-label">Host</label>
+                        <input type="text" class="setting-input" id="acpHost" value="127.0.0.1">
+                    </div>
+                    <div class="setting-item">
+                        <label class="setting-label">Port</label>
+                        <input type="number" class="setting-input" id="acpPort" value="8765">
+                    </div>
+                    <div class="setting-item">
+                        <label class="setting-label">Timeout (ms)</label>
+                        <input type="number" class="setting-input" id="acpTimeout" value="30000">
+                        <div class="setting-description">Connection timeout in milliseconds</div>
+                    </div>
                 </div>
             </div>
 
@@ -288,9 +362,11 @@
                 <div class="setting-item">
                     <label class="setting-label">Theme</label>
                     <select class="setting-input" id="theme">
+                        <option value="system">System (Auto)</option>
                         <option value="dark">Dark</option>
                         <option value="light">Light</option>
                     </select>
+                    <div class="setting-description">Choose your preferred theme or follow system settings</div>
                 </div>
                 <div class="setting-item">
                     <label class="setting-label">Floating Window Opacity</label>
@@ -330,6 +406,21 @@
         let isCapturing = false;
         let capturedModifiers = [];
         let capturedKey = '';
+        
+        // Toggle ACP mode settings visibility
+        function toggleAcpMode() {
+            const mode = document.getElementById('acpMode').value;
+            const localSettings = document.getElementById('localModeSettings');
+            const remoteSettings = document.getElementById('remoteModeSettings');
+            
+            if (mode === 'local') {
+                localSettings.style.display = 'block';
+                remoteSettings.style.display = 'none';
+            } else {
+                localSettings.style.display = 'none';
+                remoteSettings.style.display = 'block';
+            }
+        }
 
         // Load settings on startup
         async function loadSettings() {
@@ -339,10 +430,19 @@
                 // Hotkey
                 document.getElementById('hotkeyDisplay').textContent = config.hotkey.modifiers.join('+') + '+' + config.hotkey.key;
                 
-                // ACP
-                document.getElementById('acpHost').value = config.acp.host;
-                document.getElementById('acpPort').value = config.acp.port;
-                document.getElementById('acpTimeout').value = config.acp.timeout_ms;
+                // ACP Mode
+                if (config.acp.mode.type === 'local') {
+                    document.getElementById('acpMode').value = 'local';
+                    document.getElementById('spawnCommand').value = config.acp.mode.spawn_command || '';
+                } else if (config.acp.mode.type === 'remote') {
+                    document.getElementById('acpMode').value = 'remote';
+                    document.getElementById('acpHost').value = config.acp.mode.host;
+                    document.getElementById('acpPort').value = config.acp.mode.port;
+                    document.getElementById('acpTimeout').value = config.acp.mode.timeout_ms;
+                }
+                
+                // Toggle visibility based on mode
+                toggleAcpMode();
                 
                 // UI
                 document.getElementById('theme').value = config.ui.theme;
@@ -421,6 +521,28 @@
 
         async function saveSettings() {
             try {
+                const mode = document.getElementById('acpMode').value;
+                let acpMode;
+                
+                if (mode === 'local') {
+                    const spawnCommand = document.getElementById('spawnCommand').value.trim();
+                    if (!spawnCommand) {
+                        showStatus('Spawn command is required for local mode', 'error');
+                        return;
+                    }
+                    acpMode = {
+                        type: 'local',
+                        spawn_command: spawnCommand
+                    };
+                } else {
+                    acpMode = {
+                        type: 'remote',
+                        host: document.getElementById('acpHost').value,
+                        port: parseInt(document.getElementById('acpPort').value),
+                        timeout_ms: parseInt(document.getElementById('acpTimeout').value)
+                    };
+                }
+                
                 const config = {
                     version: 1,
                     hotkey: {
@@ -428,9 +550,7 @@
                         key: capturedKey || document.getElementById('hotkeyDisplay').textContent.split('+').pop()
                     },
                     acp: {
-                        host: document.getElementById('acpHost').value,
-                        port: parseInt(document.getElementById('acpPort').value),
-                        timeout_ms: parseInt(document.getElementById('acpTimeout').value)
+                        mode: acpMode
                     },
                     ui: {
                         theme: document.getElementById('theme').value,
@@ -444,11 +564,35 @@
                 };
 
                 await invoke('save_config', { config });
-                showStatus('Settings saved successfully! Restart the app for changes to take effect.', 'success');
+                
+                // Apply theme immediately
+                applyTheme(config.ui.theme);
+                
+                showStatus('Settings saved successfully! Please restart the application for changes to take effect.', 'success');
             } catch (error) {
                 showStatus('Failed to save settings: ' + error, 'error');
             }
         }
+        
+        function applyTheme(theme) {
+            if (theme === 'system') {
+                // Detect system theme
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.body.classList.toggle('dark-theme', prefersDark);
+            } else if (theme === 'dark') {
+                document.body.classList.add('dark-theme');
+            } else {
+                document.body.classList.remove('dark-theme');
+            }
+        }
+        
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            const currentTheme = document.getElementById('theme').value;
+            if (currentTheme === 'system') {
+                document.body.classList.toggle('dark-theme', e.matches);
+            }
+        });
 
         function showStatus(message, type) {
             const statusEl = document.getElementById('statusMessage');
@@ -466,7 +610,13 @@
         }
 
         // Load settings when page loads
-        window.addEventListener('DOMContentLoaded', loadSettings);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+            
+            // Apply initial theme
+            const theme = document.getElementById('theme').value;
+            applyTheme(theme);
+        });
     </script>
 </body>
 </html>
