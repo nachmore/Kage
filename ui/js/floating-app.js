@@ -91,9 +91,51 @@ export class FloatingApp {
             this.currentMatches = [];
             this.selectedIndex = -1;
             this.currentResponse = e.detail;
-            this.elements.responseText.textContent = e.detail;
+            renderMarkdown(e.detail, this.elements.responseText);
             this.elements.contentArea.classList.add('visible');
             this.windowManager.resizeWindow();
+        });
+
+        document.addEventListener('kiro-show-selection', (e) => {
+            const { command, options } = e.detail;
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.elements.contentArea.classList.remove('visible');
+
+            // Show options as selectable items in the suggestions dropdown
+            this.currentMatches = options.map(opt => ({
+                type: 'selection',
+                name: opt.label,
+                value: opt.value,
+                current: opt.current,
+                command: command
+            }));
+            this.selectedIndex = options.findIndex(o => o.current);
+            if (this.selectedIndex < 0) this.selectedIndex = 0;
+
+            const container = this.elements.appSuggestions;
+            container.innerHTML = '';
+            container.scrollTop = 0;
+
+            options.forEach((opt, index) => {
+                const item = document.createElement('div');
+                item.className = 'app-suggestion-item' + (index === this.selectedIndex ? ' selected' : '');
+                const currentBadge = opt.current ? '<span class="selection-current">●</span>' : '';
+                item.innerHTML = `
+                    <div class="app-icon">${opt.current ? '✓' : '○'}</div>
+                    <div class="app-info">
+                        <div class="app-name">${opt.label}${currentBadge}</div>
+                        <div class="app-description">${opt.value}</div>
+                    </div>
+                `;
+                item.addEventListener('click', () => this.executeSelection(command, opt.value));
+                container.appendChild(item);
+            });
+
+            container.classList.add('visible');
+            // Defer scroll-to-selected until after layout is complete
+            this.windowManager.resizeWindow();
+            setTimeout(() => updateSelection(container, this.selectedIndex), 20);
         });
     }
 
@@ -540,6 +582,21 @@ export class FloatingApp {
         await cmd.execute(this.invoke, this.appWindow);
     }
 
+    async executeSelection(command, value) {
+        this.clearSuggestions();
+        try {
+            // For selection commands, send the selected value as the argument
+            const result = await this.invoke('execute_slash_command', {
+                command: command,
+                args: { id: value }
+            });
+            const msg = result?.message || `Selected: ${value}`;
+            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: msg }));
+        } catch (e) {
+            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+        }
+    }
+
     async handleKeyDown(event) {
         if (event.key === 'ArrowDown') {
             event.preventDefault();
@@ -610,6 +667,9 @@ export class FloatingApp {
             const selected = this.currentMatches[this.selectedIndex];
             if (selected.type === 'command' || selected.type === 'slash') {
                 await this.executeCommandAction(selected);
+                return;
+            } else if (selected.type === 'selection') {
+                await this.executeSelection(selected.command, selected.value);
                 return;
             } else if (selected.type === 'shortcut') {
                 const command = this.buildShortcutCommand(selected.shortcut, selected.args);

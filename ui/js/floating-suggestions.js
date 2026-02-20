@@ -2,6 +2,7 @@
 
 export function renderShortcutSuggestion(shortcut, args, appSuggestions, currentMatches, executeShortcut, resizeWindow) {
     appSuggestions.innerHTML = '';
+    appSuggestions.scrollTop = 0;
     currentMatches.length = 0;
     currentMatches.push({ type: 'shortcut', shortcut, args });
     
@@ -24,6 +25,7 @@ export function renderShortcutSuggestion(shortcut, args, appSuggestions, current
 export function renderShortcutSuggestions(matches, appSuggestions, selectedIndex, executeShortcut, resizeWindow) {
     console.log('Rendering multiple shortcut suggestions:', matches);
     appSuggestions.innerHTML = '';
+    appSuggestions.scrollTop = 0;
     
     matches.forEach((match, index) => {
         const item = document.createElement('div');
@@ -53,6 +55,7 @@ export function renderShortcutSuggestions(matches, appSuggestions, selectedIndex
 
 export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl, resizeWindow) {
     appSuggestions.innerHTML = '';
+    appSuggestions.scrollTop = 0;
     currentMatches.length = 0;
     currentMatches.push({ type: 'url', value: url });
     
@@ -73,6 +76,7 @@ export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl
 
 export function renderPathSuggestion(type, path, appSuggestions, currentMatches, openPath, resizeWindow) {
     appSuggestions.innerHTML = '';
+    appSuggestions.scrollTop = 0;
     currentMatches.length = 0;
     currentMatches.push({ type: 'path', value: path, pathType: type });
     
@@ -98,6 +102,7 @@ export function renderPathSuggestion(type, path, appSuggestions, currentMatches,
 export function renderSuggestions(apps, appSuggestions, selectedIndex, launchApp, resizeWindow) {
     console.log('Rendering suggestions:', apps);
     appSuggestions.innerHTML = '';
+    appSuggestions.scrollTop = 0;
     
     apps.forEach((app, index) => {
         const item = document.createElement('div');
@@ -135,12 +140,12 @@ export function updateSelection(appSuggestions, selectedIndex) {
             item.classList.add('selected');
             // Scroll within the suggestions container only — don't use scrollIntoView
             // which can scroll parent containers and push the input off screen.
-            const top = item.offsetTop;
-            const bottom = top + item.offsetHeight;
-            if (top < appSuggestions.scrollTop) {
-                appSuggestions.scrollTop = top;
-            } else if (bottom > appSuggestions.scrollTop + appSuggestions.clientHeight) {
-                appSuggestions.scrollTop = bottom - appSuggestions.clientHeight;
+            const itemTop = item.offsetTop - appSuggestions.offsetTop;
+            const itemBottom = itemTop + item.offsetHeight;
+            if (itemTop < appSuggestions.scrollTop) {
+                appSuggestions.scrollTop = itemTop;
+            } else if (itemBottom > appSuggestions.scrollTop + appSuggestions.clientHeight) {
+                appSuggestions.scrollTop = itemBottom - appSuggestions.clientHeight;
             }
         } else {
             item.classList.remove('selected');
