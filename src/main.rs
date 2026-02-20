@@ -290,6 +290,9 @@ fn main() {
                             let assistant = &cfg.acp.assistant;
                             let mut steering_parts: Vec<String> = Vec::new();
 
+                            // Built-in steering (always first)
+                            steering_parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
+
                             // User steering (precedence)
                             if let Some(ref path) = assistant.user_steering_path {
                                 if !path.is_empty() {
@@ -314,7 +317,7 @@ fn main() {
                             }
                             drop(cfg);
 
-                            if !steering_parts.is_empty() {
+                            {
                                 let steering_msg = format!(
                                     "{} {}",
                                     crate::commands::system::STEERING_MSG_PREFIX,

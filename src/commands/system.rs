@@ -9,6 +9,9 @@ use tauri::{Emitter, Manager, State};
 /// Only the very first message in a conversation with this prefix is hidden.
 pub const STEERING_MSG_PREFIX: &str = "[KIRO_STEERING_IGNORE]";
 
+/// Built-in steering document embedded at compile time.
+pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
+
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
     let config = state.config.lock().await;
@@ -230,6 +233,9 @@ pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<S
 
     let mut parts: Vec<String> = Vec::new();
 
+    // Built-in steering document (always included first)
+    parts.push(BUILTIN_STEERING.to_string());
+
     // User-written steering doc takes precedence (loaded first)
     if let Some(ref path) = assistant.user_steering_path {
         if !path.is_empty() {
@@ -263,11 +269,7 @@ pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<S
         }
     }
 
-    if parts.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(format!("{} {}", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
-    }
+    Ok(Some(format!("{} {}", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
 }
 
 /// Open the auto-generated steering document in the default editor.

@@ -447,6 +447,9 @@ pub async fn send_steering_message(
 
     let mut parts: Vec<String> = Vec::new();
 
+    // Built-in steering document (always included first)
+    parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
+
     if let Some(ref path) = assistant.user_steering_path {
         if !path.is_empty() {
             if let Ok(content) = std::fs::read_to_string(path) {
@@ -470,10 +473,6 @@ pub async fn send_steering_message(
     }
 
     drop(config);
-
-    if parts.is_empty() {
-        return Ok(false);
-    }
 
     let steering_msg = format!(
         "{} {}",
