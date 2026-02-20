@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Kiro Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow: hidden;
+        }
+
+        .settings-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+
+        .settings-header {
+            padding: 20px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .settings-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .settings-section h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .setting-item {
+            margin-bottom: 20px;
+        }
+
+        .setting-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .setting-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .setting-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .setting-input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .setting-input-group .setting-input {
+            flex: 1;
+        }
+
+        .hotkey-capture {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .hotkey-display {
+            flex: 1;
+            padding: 10px 12px;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+            font-weight: 500;
+            color: #667eea;
+            text-align: center;
+        }
+
+        .capture-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .capture-btn:hover {
+            background: #5568d3;
+        }
+
+        .capture-btn.capturing {
+            background: #f59e0b;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        .save-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        .save-btn:hover {
+            opacity: 0.9;
+        }
+
+        .setting-description {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+
+        .status-message.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+    </style>
+</head>
+<body>
+    <div class="settings-container">
+        <div class="settings-header">
+            <h1>⚙️ Settings</h1>
+            <button class="close-btn" onclick="closeSettings()">Close</button>
+        </div>
+
+        <div class="settings-content">
+            <div id="statusMessage" class="status-message"></div>
+
+            <!-- Hotkey Settings -->
+            <div class="settings-section">
+                <h2>🎹 Hotkey</h2>
+                <div class="setting-item">
+                    <label class="setting-label">Global Hotkey</label>
+                    <div class="hotkey-capture">
+                        <div class="hotkey-display" id="hotkeyDisplay">Alt+Space</div>
+                        <button class="capture-btn" id="captureBtn" onclick="captureHotkey()">Change</button>
+                    </div>
+                    <div class="setting-description">Press the button and then press your desired hotkey combination</div>
+                </div>
+            </div>
+
+            <!-- ACP Connection Settings -->
+            <div class="settings-section">
+                <h2>🔌 Connection</h2>
+                <div class="setting-item">
+                    <label class="setting-label">Host</label>
+                    <input type="text" class="setting-input" id="acpHost" value="127.0.0.1">
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">Port</label>
+                    <input type="number" class="setting-input" id="acpPort" value="8765">
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">Timeout (ms)</label>
+                    <input type="number" class="setting-input" id="acpTimeout" value="30000">
+                    <div class="setting-description">Connection timeout in milliseconds</div>
+                </div>
+            </div>
+
+            <!-- UI Preferences -->
+            <div class="settings-section">
+                <h2>🎨 Appearance</h2>
+                <div class="setting-item">
+                    <label class="setting-label">Theme</label>
+                    <select class="setting-input" id="theme">
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">Floating Window Opacity</label>
+                    <input type="range" class="setting-input" id="opacity" min="0.5" max="1" step="0.1" value="1">
+                    <div class="setting-description">Adjust transparency of the floating window</div>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">Chat Window Size</label>
+                    <div class="setting-input-group">
+                        <input type="number" class="setting-input" id="windowWidth" placeholder="Width" value="800">
+                        <input type="number" class="setting-input" id="windowHeight" placeholder="Height" value="600">
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Settings -->
+            <div class="settings-section">
+                <h2>⚡ System</h2>
+                <div class="setting-item">
+                    <label class="setting-label">Auto-start on system startup</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoStart">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <div class="setting-description">Launch Kiro Assistant automatically when you log in</div>
+                </div>
+            </div>
+
+            <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+        </div>
+    </div>
+
+    <script>
+        const { invoke } = window.__TAURI__.tauri;
+        const { appWindow } = window.__TAURI__.window;
+
+        let isCapturing = false;
+        let capturedModifiers = [];
+        let capturedKey = '';
+
+        // Load settings on startup
+        async function loadSettings() {
+            try {
+                const config = await invoke('get_config');
+                
+                // Hotkey
+                document.getElementById('hotkeyDisplay').textContent = config.hotkey.modifiers.join('+') + '+' + config.hotkey.key;
+                
+                // ACP
+                document.getElementById('acpHost').value = config.acp.host;
+                document.getElementById('acpPort').value = config.acp.port;
+                document.getElementById('acpTimeout').value = config.acp.timeout_ms;
+                
+                // UI
+                document.getElementById('theme').value = config.ui.theme;
+                document.getElementById('opacity').value = config.ui.floating_window_opacity;
+                document.getElementById('windowWidth').value = config.ui.chat_window_width;
+                document.getElementById('windowHeight').value = config.ui.chat_window_height;
+                
+                // System
+                document.getElementById('autoStart').checked = config.system.auto_start;
+            } catch (error) {
+                showStatus('Failed to load settings: ' + error, 'error');
+            }
+        }
+
+        function captureHotkey() {
+            if (isCapturing) {
+                stopCapture();
+                return;
+            }
+
+            isCapturing = true;
+            capturedModifiers = [];
+            capturedKey = '';
+            
+            const btn = document.getElementById('captureBtn');
+            const display = document.getElementById('hotkeyDisplay');
+            
+            btn.textContent = 'Press keys...';
+            btn.classList.add('capturing');
+            display.textContent = 'Waiting...';
+            
+            document.addEventListener('keydown', handleKeyCapture);
+            document.addEventListener('keyup', handleKeyRelease);
+        }
+
+        function handleKeyCapture(e) {
+            if (!isCapturing) return;
+            
+            e.preventDefault();
+            
+            const modifiers = [];
+            if (e.ctrlKey) modifiers.push('Ctrl');
+            if (e.altKey) modifiers.push('Alt');
+            if (e.shiftKey) modifiers.push('Shift');
+            if (e.metaKey) modifiers.push('Meta');
+            
+            // Get the key (not a modifier)
+            let key = e.key;
+            if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
+                capturedModifiers = modifiers;
+                capturedKey = key.toUpperCase();
+                
+                const display = document.getElementById('hotkeyDisplay');
+                display.textContent = [...modifiers, capturedKey].join('+');
+            }
+        }
+
+        function handleKeyRelease(e) {
+            if (!isCapturing) return;
+            
+            // If we have captured a key, stop capturing
+            if (capturedKey) {
+                stopCapture();
+            }
+        }
+
+        function stopCapture() {
+            isCapturing = false;
+            const btn = document.getElementById('captureBtn');
+            btn.textContent = 'Change';
+            btn.classList.remove('capturing');
+            
+            document.removeEventListener('keydown', handleKeyCapture);
+            document.removeEventListener('keyup', handleKeyRelease);
+        }
+
+        async function saveSettings() {
+            try {
+                const config = {
+                    version: 1,
+                    hotkey: {
+                        modifiers: capturedModifiers.length > 0 ? capturedModifiers : document.getElementById('hotkeyDisplay').textContent.split('+').slice(0, -1),
+                        key: capturedKey || document.getElementById('hotkeyDisplay').textContent.split('+').pop()
+                    },
+                    acp: {
+                        host: document.getElementById('acpHost').value,
+                        port: parseInt(document.getElementById('acpPort').value),
+                        timeout_ms: parseInt(document.getElementById('acpTimeout').value)
+                    },
+                    ui: {
+                        theme: document.getElementById('theme').value,
+                        floating_window_opacity: parseFloat(document.getElementById('opacity').value),
+                        chat_window_width: parseInt(document.getElementById('windowWidth').value),
+                        chat_window_height: parseInt(document.getElementById('windowHeight').value)
+                    },
+                    system: {
+                        auto_start: document.getElementById('autoStart').checked
+                    }
+                };
+
+                await invoke('save_config', { config });
+                showStatus('Settings saved successfully! Restart the app for changes to take effect.', 'success');
+            } catch (error) {
+                showStatus('Failed to save settings: ' + error, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = 'status-message ' + type;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function closeSettings() {
+            appWindow.hide();
+        }
+
+        // Load settings when page loads
+        window.addEventListener('DOMContentLoaded', loadSettings);
+    </script>
+</body>
+</html>

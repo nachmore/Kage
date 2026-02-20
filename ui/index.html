@@ -15,62 +15,128 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             height: 100vh;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            color: #1f2937;
             display: flex;
             flex-direction: column;
         }
         
         .header {
-            padding: 20px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.2);
+            padding: 20px 24px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .settings-btn {
+            padding: 8px 16px;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #667eea;
+            transition: all 0.2s;
+        }
+        
+        .settings-btn:hover {
+            background: #e5e7eb;
+            transform: translateY(-1px);
+        }
+        
+        .header-ghost {
+            font-size: 32px;
+            animation: gentleFloat 3s ease-in-out infinite;
+        }
+        
+        @keyframes gentleFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-4px); }
         }
         
         h1 {
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            color: #667eea;
         }
         
         .connection-status {
-            margin-top: 10px;
-            font-size: 0.9rem;
-            opacity: 0.8;
+            font-size: 0.85rem;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: 500;
         }
         
         .connection-status.connected {
-            color: #4ade80;
+            background: #d1fae5;
+            color: #065f46;
         }
         
         .connection-status.disconnected {
-            color: #f87171;
+            background: #fee2e2;
+            color: #991b1b;
         }
         
         .chat-container {
             flex: 1;
             display: flex;
             flex-direction: column;
-            padding: 20px;
+            padding: 24px;
             overflow: hidden;
+            background: #f9fafb;
         }
         
         .messages-area {
             flex: 1;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 20px;
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
             margin-bottom: 20px;
             overflow-y: auto;
-            backdrop-filter: blur(10px);
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            scroll-behavior: smooth;
+        }
+        
+        .messages-area::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .messages-area::-webkit-scrollbar-track {
+            background: #f3f4f6;
+            border-radius: 4px;
+        }
+        
+        .messages-area::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+        
+        .messages-area::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
         }
         
         .message {
             display: flex;
-            flex-direction: column;
-            max-width: 80%;
+            gap: 12px;
+            max-width: 85%;
             animation: slideIn 0.3s ease-out;
         }
         
@@ -87,17 +153,43 @@
         
         .message.user {
             align-self: flex-end;
+            flex-direction: row-reverse;
         }
         
         .message.assistant {
             align-self: flex-start;
         }
         
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+        }
+        
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .message-bubble {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
         .message-header {
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             font-weight: 600;
-            margin-bottom: 5px;
-            opacity: 0.8;
+            color: #6b7280;
+            padding: 0 4px;
         }
         
         .message.user .message-header {
@@ -105,41 +197,65 @@
         }
         
         .message-content {
-            padding: 12px 16px;
-            border-radius: 12px;
+            padding: 14px 18px;
+            border-radius: 18px;
             white-space: pre-wrap;
             word-wrap: break-word;
-            line-height: 1.5;
+            line-height: 1.6;
+            font-size: 0.95rem;
         }
         
         .message.user .message-content {
-            background: rgba(74, 222, 128, 0.3);
-            border: 1px solid rgba(74, 222, 128, 0.5);
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            color: white;
+            border-radius: 18px 18px 4px 18px;
         }
         
         .message.assistant .message-content {
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: #f3f4f6;
+            color: #1f2937;
+            border-radius: 18px 18px 18px 4px;
         }
         
         .message-placeholder {
-            opacity: 0.5;
+            color: #9ca3af;
             font-style: italic;
             text-align: center;
-            padding: 40px;
+            padding: 60px 20px;
+            font-size: 1rem;
+        }
+        
+        .loading-container {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 12px 0;
+        }
+        
+        .loading-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
         }
         
         .typing-indicator {
             display: flex;
-            gap: 5px;
-            padding: 12px 16px;
+            gap: 6px;
+            padding: 14px 18px;
+            background: #f3f4f6;
+            border-radius: 18px 18px 18px 4px;
         }
         
         .typing-indicator span {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.6);
+            background: #9ca3af;
             animation: typing 1.4s infinite;
         }
         
@@ -154,76 +270,145 @@
         @keyframes typing {
             0%, 60%, 100% {
                 transform: translateY(0);
-                opacity: 0.6;
+                opacity: 0.4;
             }
             30% {
-                transform: translateY(-10px);
+                transform: translateY(-6px);
                 opacity: 1;
             }
         }
         
         .input-container {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             display: flex;
-            gap: 10px;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
         
         .input-box {
-            flex: 1;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            color: #1f2937;
+            resize: vertical;
+            min-height: 44px;
+            max-height: 120px;
+            transition: border-color 0.2s;
         }
         
         .input-box:focus {
             outline: none;
-            background: white;
+            border-color: #667eea;
+        }
+        
+        .input-box::placeholder {
+            color: #9ca3af;
         }
         
         .send-button {
-            padding: 15px 30px;
+            padding: 12px 24px;
             border: none;
-            border-radius: 8px;
-            font-size: 1rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
             font-weight: 600;
-            background: #4ade80;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
+            height: 44px;
         }
         
-        .send-button:hover {
-            background: #22c55e;
+        .send-button:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(74, 222, 128, 0.4);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
         }
         
-        .send-button:active {
+        .send-button:active:not(:disabled) {
             transform: translateY(0);
         }
         
         .send-button:disabled {
-            background: #9ca3af;
+            background: #e5e7eb;
+            color: #9ca3af;
             cursor: not-allowed;
             transform: none;
         }
         
         .error-message {
-            background: rgba(248, 113, 113, 0.2);
-            border: 1px solid #f87171;
+            background: #fee2e2;
+            border: 1px solid #fca5a5;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            color: #991b1b;
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .error-message-text {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        
+        .error-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .error-button {
+            padding: 8px 16px;
+            border: none;
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-            color: #fecaca;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .error-button.reconnect {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .error-button.reconnect:hover {
+            background: #b91c1c;
+        }
+        
+        .error-button.dismiss {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        .error-button.dismiss:hover {
+            background: #e5e7eb;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Kiro Assistant</h1>
-        <div class="connection-status" id="connectionStatus">Checking connection...</div>
+        <div class="header-left">
+            <div class="header-ghost">👻</div>
+            <h1>Kiro Assistant</h1>
+        </div>
+        <div class="header-right">
+            <div class="connection-status" id="connectionStatus">Checking...</div>
+            <button class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
+        </div>
     </div>
     
     <div class="chat-container">
@@ -234,13 +419,14 @@
         </div>
         
         <div class="input-container">
-            <input 
-                type="text" 
-                class="input-box" 
-                id="messageInput" 
-                placeholder="Type your message here..."
-                onkeypress="handleKeyPress(event)"
-            />
+            <div class="input-wrapper">
+                <textarea 
+                    class="input-box" 
+                    id="messageInput" 
+                    placeholder="Type your message here..."
+                    rows="1"
+                ></textarea>
+            </div>
             <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -248,10 +434,31 @@
     <script>
         const { invoke } = window.__TAURI__.tauri;
         const { listen } = window.__TAURI__.event;
+        const { appWindow } = window.__TAURI__.window;
         
         let isConnected = false;
         let messages = [];
         let currentStreamingMessage = null;
+        let isWaitingForResponse = false;
+        
+        function openSettings() {
+            invoke('open_settings_window');
+        }
+        
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+        
+        // Handle Enter key (Shift+Enter for new line)
+        messageInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
         
         // Listen for initial message from floating window
         listen('initial_message', (event) => {
@@ -261,14 +468,12 @@
                 addMessage('user', message);
                 messages.push({ role: 'user', content: message });
                 
-                // Disable input while processing
-                const sendButton = document.getElementById('sendButton');
-                const input = document.getElementById('messageInput');
-                sendButton.disabled = true;
-                input.disabled = true;
+                // Show loading indicator
+                showLoadingIndicator();
+                isWaitingForResponse = true;
+                updateInputState();
                 
                 // Add assistant message placeholder
-                removeTypingIndicator();
                 currentStreamingMessage = addMessage('assistant', '');
             }
         });
@@ -279,9 +484,8 @@
                 const contentDiv = currentStreamingMessage.querySelector('.message-content');
                 contentDiv.textContent = event.payload;
                 
-                // Scroll to bottom
-                const messagesArea = document.getElementById('messagesArea');
-                messagesArea.scrollTop = messagesArea.scrollHeight;
+                // Auto-scroll to bottom
+                smoothScrollToBottom();
             }
         });
         
@@ -293,17 +497,15 @@
                 currentStreamingMessage = null;
             }
             
-            // Re-enable input
-            const sendButton = document.getElementById('sendButton');
-            const input = document.getElementById('messageInput');
-            sendButton.disabled = false;
-            input.disabled = false;
-            input.focus();
+            hideLoadingIndicator();
+            isWaitingForResponse = false;
+            updateInputState();
+            messageInput.focus();
         });
         
         // Listen for errors
         listen('message_error', (event) => {
-            removeTypingIndicator();
+            hideLoadingIndicator();
             if (currentStreamingMessage) {
                 currentStreamingMessage.remove();
                 currentStreamingMessage = null;
@@ -312,12 +514,9 @@
             isConnected = false;
             updateConnectionStatus();
             
-            // Re-enable input
-            const sendButton = document.getElementById('sendButton');
-            const input = document.getElementById('messageInput');
-            sendButton.disabled = false;
-            input.disabled = false;
-            input.focus();
+            isWaitingForResponse = false;
+            updateInputState();
+            messageInput.focus();
         });
         
         async function checkConnection() {
@@ -333,23 +532,98 @@
         function updateConnectionStatus() {
             const statusEl = document.getElementById('connectionStatus');
             if (isConnected) {
-                statusEl.textContent = 'Connected to kiro-cli';
+                statusEl.textContent = 'Connected';
                 statusEl.className = 'connection-status connected';
             } else {
-                statusEl.textContent = 'Not connected to kiro-cli';
+                statusEl.textContent = 'Disconnected';
                 statusEl.className = 'connection-status disconnected';
             }
         }
         
-        function showError(message) {
-            const errorContainer = document.getElementById('errorContainer');
-            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
-            setTimeout(() => {
-                errorContainer.innerHTML = '';
-            }, 5000);
+        function updateInputState() {
+            const sendButton = document.getElementById('sendButton');
+            sendButton.disabled = isWaitingForResponse;
+            messageInput.disabled = isWaitingForResponse;
         }
         
-        function addMessage(role, content, isTyping = false) {
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    <div class="error-message-text">${message}</div>
+                    <div class="error-actions">
+                        <button class="error-button reconnect" onclick="reconnect()">Reconnect</button>
+                        <button class="error-button dismiss" onclick="dismissError()">Dismiss</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function dismissError() {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '';
+        }
+        
+        async function reconnect() {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    <div class="error-message-text">Reconnecting to Kiro CLI...</div>
+                </div>
+            `;
+            
+            try {
+                const success = await invoke('reconnect_acp');
+                if (success) {
+                    errorContainer.innerHTML = `
+                        <div class="error-message" style="background: #d1fae5; border-color: #6ee7b7; color: #065f46;">
+                            <div class="error-message-text">Successfully reconnected!</div>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        errorContainer.innerHTML = '';
+                    }, 3000);
+                    
+                    isConnected = true;
+                    updateConnectionStatus();
+                } else {
+                    showError('Reconnection failed. Please ensure kiro-cli is running.');
+                }
+            } catch (error) {
+                showError(`Reconnection failed: ${error}`);
+            }
+        }
+        
+        function showLoadingIndicator() {
+            const messagesArea = document.getElementById('messagesArea');
+            
+            // Remove any existing loading indicator
+            hideLoadingIndicator();
+            
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading-container';
+            loadingDiv.id = 'loadingIndicator';
+            loadingDiv.innerHTML = `
+                <div class="loading-avatar">👻</div>
+                <div class="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            `;
+            
+            messagesArea.appendChild(loadingDiv);
+            smoothScrollToBottom();
+        }
+        
+        function hideLoadingIndicator() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            if (loadingIndicator) {
+                loadingIndicator.remove();
+            }
+        }
+        
+        function addMessage(role, content) {
             const messagesArea = document.getElementById('messagesArea');
             
             // Remove placeholder if it exists
@@ -361,58 +635,61 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
             
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            avatarDiv.textContent = role === 'user' ? '👤' : '👻';
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'message-bubble';
+            
             const headerDiv = document.createElement('div');
             headerDiv.className = 'message-header';
             headerDiv.textContent = role === 'user' ? 'You' : 'Kiro';
             
             const contentDiv = document.createElement('div');
             contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
             
-            if (isTyping) {
-                contentDiv.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
-            } else {
-                contentDiv.textContent = content;
-            }
+            bubbleDiv.appendChild(headerDiv);
+            bubbleDiv.appendChild(contentDiv);
             
-            messageDiv.appendChild(headerDiv);
-            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(avatarDiv);
+            messageDiv.appendChild(bubbleDiv);
+            
             messagesArea.appendChild(messageDiv);
             
-            // Scroll to bottom
-            messagesArea.scrollTop = messagesArea.scrollHeight;
+            // Smooth scroll to bottom
+            smoothScrollToBottom();
             
             return messageDiv;
         }
         
-        function removeTypingIndicator() {
+        function smoothScrollToBottom() {
             const messagesArea = document.getElementById('messagesArea');
-            const typingMessages = messagesArea.querySelectorAll('.message.assistant');
-            typingMessages.forEach(msg => {
-                const content = msg.querySelector('.message-content');
-                if (content && content.querySelector('.typing-indicator')) {
-                    msg.remove();
-                }
+            messagesArea.scrollTo({
+                top: messagesArea.scrollHeight,
+                behavior: 'smooth'
             });
         }
         
         async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const sendButton = document.getElementById('sendButton');
-            
-            const message = input.value.trim();
-            if (!message) return;
+            const message = messageInput.value.trim();
+            if (!message || isWaitingForResponse) return;
             
             // Add user message to chat
             addMessage('user', message);
             messages.push({ role: 'user', content: message });
             
-            // Clear input and disable controls
-            input.value = '';
-            sendButton.disabled = true;
-            input.disabled = true;
+            // Clear input and reset height
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
             
-            // Remove any existing typing indicator and add new assistant message
-            removeTypingIndicator();
+            // Show loading indicator
+            showLoadingIndicator();
+            isWaitingForResponse = true;
+            updateInputState();
+            
+            // Add assistant message placeholder
             currentStreamingMessage = addMessage('assistant', '');
             
             try {
@@ -420,22 +697,16 @@
                 isConnected = true;
                 updateConnectionStatus();
             } catch (error) {
-                removeTypingIndicator();
+                hideLoadingIndicator();
+                currentStreamingMessage.remove();
                 currentStreamingMessage = null;
                 showError(`Error: ${error}`);
                 isConnected = false;
                 updateConnectionStatus();
                 
-                // Re-enable input on error
-                sendButton.disabled = false;
-                input.disabled = false;
-                input.focus();
-            }
-        }
-        
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+                isWaitingForResponse = false;
+                updateInputState();
+                messageInput.focus();
             }
         }
         
@@ -443,7 +714,7 @@
         checkConnection();
         
         // Focus input on load
-        document.getElementById('messageInput').focus();
+        messageInput.focus();
     </script>
 </body>
 </html>

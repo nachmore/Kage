@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kiro</title>
+    <script type="module">
+        // Import Tauri API
+        import { invoke } from 'https://unpkg.com/@tauri-apps/api@1/tauri';
+        import { appWindow } from 'https://unpkg.com/@tauri-apps/api@1/window';
+        
+        window.__KIRO_TAURI__ = { invoke, appWindow };
+    </script>
     <style>
         * {
             margin: 0;
@@ -116,6 +123,30 @@
             color: #9ca3af;
             text-align: center;
         }
+        
+        .context-menu {
+            position: fixed;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            padding: 4px;
+            display: none;
+            z-index: 1000;
+            min-width: 150px;
+        }
+        
+        .context-menu-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #333;
+            transition: background 0.1s;
+        }
+        
+        .context-menu-item:hover {
+            background: #f3f4f6;
+        }
     </style>
 </head>
 <body>
@@ -135,63 +166,173 @@
             <div class="hint-text">Press Enter to chat • Esc to dismiss</div>
         </div>
     </div>
+    
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="openSettings()">⚙️ Settings</div>
+    </div>
 
     <script>
-        const { invoke } = window.__TAURI__.tauri;
-        const { appWindow } = window.__TAURI__.window;
+        // Wait for our custom Tauri import
+        function initializeTauri(attempt = 0) {
+            console.log(`Attempt ${attempt + 1}: Checking Tauri...`);
+            
+            // Check for our custom import
+            if (window.__KIRO_TAURI__ && window.__KIRO_TAURI__.invoke && window.__KIRO_TAURI__.appWindow) {
+                console.log('Successfully loaded Tauri APIs via module import!');
+                setupEventHandlers(window.__KIRO_TAURI__.invoke, window.__KIRO_TAURI__.appWindow);
+                return;
+            }
+            
+            // Fallback: check standard Tauri
+            if (!window.__TAURI__) {
+                if (attempt < 20) {
+                    setTimeout(() => initializeTauri(attempt + 1), 100);
+                }
+                return;
+            }
+            
+            console.log('Tauri object:', window.__TAURI__);
+            console.log('Tauri keys:', Object.keys(window.__TAURI__));
+            
+            // Try different API access patterns
+            let invoke, appWindow;
+            
+            // Pattern 1: window.__TAURI__.tauri.invoke
+            if (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
+                invoke = window.__TAURI__.tauri.invoke;
+                console.log('Found invoke via tauri.invoke');
+            }
+            // Pattern 2: window.__TAURI__.invoke
+            else if (window.__TAURI__.invoke) {
+                invoke = window.__TAURI__.invoke;
+                console.log('Found invoke directly');
+            }
+            
+            // Pattern 1: window.__TAURI__.window.appWindow
+            if (window.__TAURI__.window && window.__TAURI__.window.appWindow) {
+                appWindow = window.__TAURI__.window.appWindow;
+                console.log('Found appWindow via window.appWindow');
+            }
+            // Pattern 2: window.__TAURI__.window.getCurrent()
+            else if (window.__TAURI__.window && window.__TAURI__.window.getCurrent) {
+                appWindow = window.__TAURI__.window.getCurrent();
+                console.log('Found appWindow via getCurrent()');
+            }
+            // Pattern 3: Direct appWindow
+            else if (window.__TAURI__.appWindow) {
+                appWindow = window.__TAURI__.appWindow;
+                console.log('Found appWindow directly');
+            }
+            
+            if (!invoke || !appWindow) {
+                console.error('Could not find invoke or appWindow');
+                if (attempt < 20) {
+                    setTimeout(() => initializeTauri(attempt + 1), 100);
+                }
+                return;
+            }
+            
+            console.log('Successfully loaded Tauri APIs!');
+            setupEventHandlers(invoke, appWindow);
+        }
         
-        const input = document.getElementById('promptInput');
-        
-        // Handle Enter key to open chat window
-        input.addEventListener('keydown', async (event) => {
-            if (event.key === 'Enter') {
-                const message = input.value.trim();
-                if (message) {
-                    try {
-                        // Send message to open chat window
-                        await invoke('open_chat_with_message', { message });
-                        // Clear input
-                        input.value = '';
-                    } catch (error) {
-                        console.error('Error opening chat:', error);
+        function setupEventHandlers(invoke, appWindow) {
+            const input = document.getElementById('promptInput');
+            const contextMenu = document.getElementById('contextMenu');
+            
+            // Handle right-click to show context menu
+            document.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                contextMenu.style.display = 'block';
+                contextMenu.style.left = event.clientX + 'px';
+                contextMenu.style.top = event.clientY + 'px';
+            });
+            
+            // Handle clicks
+            document.addEventListener('click', async (event) => {
+                console.log('Click detected');
+                // Hide context menu if it's open
+                if (contextMenu.style.display === 'block') {
+                    contextMenu.style.display = 'none';
+                    if (event.target.classList.contains('context-menu-item')) {
+                        return;
                     }
                 }
-            } else if (event.key === 'Escape') {
-                // Hide floating window on Escape
-                await appWindow.hide();
+                
+                // Check if click is outside the floating container
+                const container = document.querySelector('.floating-container');
+                const isOutside = container && !container.contains(event.target);
+                if (isOutside) {
+                    console.log('Hiding window due to outside click');
+                    try {
+                        await appWindow.hide();
+                    } catch (error) {
+                        console.error('Error hiding window:', error);
+                    }
+                }
+            });
+            
+            async function openSettings() {
+                await invoke('open_settings_window');
             }
-        });
-        
-        // Handle click outside to dismiss
-        document.addEventListener('click', async (event) => {
-            // Check if click is outside the floating container
-            const container = document.querySelector('.floating-container');
-            if (container && !container.contains(event.target)) {
-                await appWindow.hide();
-            }
-        });
-        
-        // Focus input when window becomes visible
-        appWindow.listen('tauri://focus', () => {
-            input.focus();
-        });
-        
-        // Listen for blur event to hide window
-        appWindow.onFocusChanged(({ payload: focused }) => {
-            if (!focused) {
-                // Small delay to allow clicking within the window
+            
+            window.openSettings = openSettings;
+            
+            // Handle Escape key on input
+            input.addEventListener('keydown', async (event) => {
+                console.log('Key pressed:', event.key);
+                if (event.key === 'Escape') {
+                    console.log('Escape pressed, hiding window');
+                    try {
+                        await appWindow.hide();
+                    } catch (error) {
+                        console.error('Error hiding window:', error);
+                    }
+                } else if (event.key === 'Enter') {
+                    const message = input.value.trim();
+                    if (message) {
+                        try {
+                            await invoke('open_chat_with_message', { message });
+                            input.value = '';
+                        } catch (error) {
+                            console.error('Error opening chat:', error);
+                        }
+                    }
+                }
+            });
+            
+            // Handle input blur
+            input.addEventListener('blur', async () => {
+                console.log('Input lost focus');
                 setTimeout(async () => {
                     if (!document.hasFocus()) {
-                        await appWindow.hide();
+                        console.log('Hiding window due to blur');
+                        try {
+                            await appWindow.hide();
+                        } catch (error) {
+                            console.error('Error hiding window:', error);
+                        }
                     }
-                }, 200);
+                }, 150);
+            });
+            
+            // Focus input when window becomes visible
+            if (appWindow.listen) {
+                appWindow.listen('tauri://focus', () => {
+                    setTimeout(() => input.focus(), 50);
+                });
             }
-        });
+            
+            // Auto-focus on load
+            setTimeout(() => input.focus(), 100);
+        }
         
-        // Auto-focus on load
-        setTimeout(() => {
-            input.focus();
-        }, 100);
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => initializeTauri());
+        } else {
+            initializeTauri();
+        }
     </script>
 </body>
 </html>

@@ -18,6 +18,9 @@
       },
       "globalShortcut": {
         "all": true
+      },
+      "window": {
+        "all": true
       }
     },
     "bundle": {
@@ -59,6 +62,18 @@
         "transparent": true,
         "alwaysOnTop": true,
         "skipTaskbar": true,
+        "center": true
+      },
+      {
+        "label": "settings",
+        "url": "settings.html",
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Settings - Kiro Assistant",
+        "width": 600,
+        "height": 700,
+        "visible": false,
+        "skipTaskbar": false,
         "center": true
       }
     ]
