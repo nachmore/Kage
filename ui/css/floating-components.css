@@ -141,11 +141,17 @@
 /* Input Container */
 .input-container {
     padding: 12px;
-    border-top: 1px solid #e5e7eb;
+    border-top: none;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+}
+
+/* Show border-top only when content area above is visible */
+.content-area.visible + .input-container,
+.loading-dots.visible ~ .input-container {
+    border-top: 1px solid #e5e7eb;
 }
 
 .input-box {

@@ -17,7 +17,8 @@ body.dark-theme .streaming-indicator {
     color: #C09CFF;
 }
 
-body.dark-theme .input-container {
+body.dark-theme .content-area.visible + .input-container,
+body.dark-theme .loading-dots.visible ~ .input-container {
     border-top-color: #4A464F;
 }
 
