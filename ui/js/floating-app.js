@@ -2,7 +2,7 @@
 import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection } from './floating-suggestions.js';
 import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
-import { matchCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
+import { matchCommands, matchSlashCommands, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -34,11 +34,18 @@ export class FloatingApp {
         this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
         
         await this.loadShortcuts();
+        await loadSlashCommands(this.invoke);
         
         // Listen for config updates
         this.listen('config_updated', async () => {
             console.log('Config updated, reloading shortcuts...');
             await this.loadShortcuts();
+        });
+
+        // Listen for slash commands from ACP
+        this.listen('slash_commands_available', async () => {
+            console.log('Slash commands updated, reloading...');
+            await loadSlashCommands(this.invoke);
         });
         
         setTimeout(() => this.elements.input.focus(), 100);
@@ -371,6 +378,26 @@ export class FloatingApp {
             return;
         }
 
+        // Check for / slash command prefix (ACP commands)
+        if (query.startsWith('/')) {
+            this._noMatchSinceLen = 0;
+            const slashCmds = matchSlashCommands(query);
+            if (slashCmds && slashCmds.length > 0) {
+                this.currentMatches = slashCmds;
+                this.selectedIndex = 0;
+                renderCommandSuggestions(
+                    slashCmds,
+                    this.elements.appSuggestions,
+                    this.selectedIndex,
+                    (cmd) => this.executeCommandAction(cmd),
+                    () => this.windowManager.resizeWindow()
+                );
+            } else {
+                this.clearSuggestions();
+            }
+            return;
+        }
+
         this.searchTimeout = setTimeout(async () => {
             await this.performSearch(query);
         }, 150);
@@ -537,10 +564,22 @@ export class FloatingApp {
             }
         }
 
-        // Handle selected suggestion (command or otherwise)
+        // Handle / slash commands
+        if (message.startsWith('/')) {
+            const slashCmds = matchSlashCommands(message);
+            if (slashCmds && slashCmds.length === 1) {
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+                await slashCmds[0].execute(this.invoke, this.appWindow);
+                return;
+            }
+        }
+
+        // Handle selected suggestion (command, slash, or otherwise)
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
             const selected = this.currentMatches[this.selectedIndex];
-            if (selected.type === 'command') {
+            if (selected.type === 'command' || selected.type === 'slash') {
                 await this.executeCommandAction(selected);
                 return;
             } else if (selected.type === 'shortcut') {

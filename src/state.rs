@@ -16,6 +16,8 @@ pub struct AppState {
     /// Pending permission request: (request_id, tool_title, session_id)
     /// Set when a permission_request notification arrives, cleared when responded to.
     pub pending_permission: Arc<std::sync::Mutex<Option<PendingPermission>>>,
+    /// Slash commands received from the ACP server via _kiro.dev/commands/available
+    pub slash_commands: Arc<std::sync::Mutex<Vec<SlashCommand>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -23,4 +25,22 @@ pub struct PendingPermission {
     pub request_id: serde_json::Value,
     pub tool_title: String,
     pub session_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SlashCommand {
+    pub name: String,
+    pub description: String,
+    #[serde(default)]
+    pub meta: Option<SlashCommandMeta>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SlashCommandMeta {
+    #[serde(rename = "optionsMethod")]
+    pub options_method: Option<String>,
+    #[serde(rename = "inputType")]
+    pub input_type: Option<String>,
+    pub hint: Option<String>,
+    pub local: Option<bool>,
 }

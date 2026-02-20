@@ -14,6 +14,7 @@ pub async fn send_message_streaming(
     let pipe_stdin_handle = state.pipe_stdin.clone();
     let tcp_writer_handle = state.tcp_writer.clone();
     let pending_perm = state.pending_permission.clone();
+    let slash_cmds_handle = state.slash_commands.clone();
     let window_clone = window.clone();
 
     async_runtime::spawn_blocking(move || {
@@ -160,9 +161,24 @@ pub async fn send_message_streaming(
             }
         });
 
-        // Create notification callback for tool_call updates
+        // Create notification callback for tool_call updates and _kiro.dev notifications
         let window_for_notif = window.clone();
+        let slash_cmds = slash_cmds_handle.clone();
         let notification_callback = Box::new(move |notification: serde_json::Value| {
+            // Capture slash commands from _kiro.dev/commands/available
+            let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
+            if method == "_kiro.dev/commands/available" {
+                if let Some(commands) = notification.get("params").and_then(|p| p.get("commands")).and_then(|c| c.as_array()) {
+                    if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::SlashCommand>>(serde_json::Value::Array(commands.clone())) {
+                        info!("Received {} slash commands from ACP", parsed.len());
+                        if let Ok(mut cmds) = slash_cmds.lock() {
+                            *cmds = parsed;
+                        }
+                    }
+                }
+                let _ = window_for_notif.emit("slash_commands_available", notification);
+                return;
+            }
             let _ = window_for_notif.emit("tool_call_update", notification);
         });
 
@@ -562,4 +578,90 @@ pub async fn has_pending_permission(
         .lock()
         .map_err(|e| format!("Lock error: {}", e))?;
     Ok(guard.is_some())
+}
+
+
+/// Get the list of slash commands received from the ACP server.
+#[tauri::command]
+pub async fn get_slash_commands(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::state::SlashCommand>, String> {
+    let cmds = state
+        .slash_commands
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
+    Ok(cmds.clone())
+}
+
+/// Execute a slash command via _kiro.dev/commands/execute.
+/// The command field is a tagged enum: { "command": "agent", "args": { ... } }
+/// Uses send_request for synchronous request-response (not streaming).
+#[tauri::command]
+pub async fn execute_slash_command(
+    command: String,
+    args: Option<serde_json::Value>,
+    state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<serde_json::Value, String> {
+    info!("Executing slash command: {} args={:?}", command, args);
+    let client = state.acp_client.clone();
+
+    let result = async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+
+        if !client.is_connected() {
+            return Err("Not connected to ACP server".to_string());
+        }
+
+        let session_id = client
+            .get_session_id()
+            .ok_or_else(|| "No active session".to_string())?;
+
+        // Strip leading / from command name if present
+        let cmd_name = command.strip_prefix('/').unwrap_or(&command);
+
+        let request = crate::acp_client::AcpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(3),
+            method: "_kiro.dev/commands/execute".to_string(),
+            params: serde_json::json!({
+                "sessionId": session_id,
+                "command": {
+                    "command": cmd_name,
+                    "args": args.unwrap_or(serde_json::json!({}))
+                }
+            }),
+        };
+
+        let response = client
+            .send_request(&request)
+            .map_err(|e| format!("Command failed: {}", e))?;
+
+        if let Some(error) = response.error {
+            return Err(format!("{} (code: {})", error.message, error.code));
+        }
+
+        Ok(response.result.unwrap_or(serde_json::json!(null)))
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))??;
+
+    // Emit the result to the window so the UI can display it
+    let _ = window.emit("slash_command_result", &result);
+    info!("Slash command result: {:?}", result);
+
+    Ok(result)
+}
+
+/// Fetch options for a slash command via _kiro.dev/commands/options.
+#[tauri::command]
+pub async fn get_slash_command_options(
+    command: String,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    info!("Fetching options for slash command: {}", command);
+    // TODO: Wire up _kiro.dev/commands/options when the full protocol is available.
+    // For now, return empty options.
+    let _ = (command, state);
+    Ok(serde_json::json!({ "options": [] }))
 }

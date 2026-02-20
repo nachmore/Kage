@@ -108,6 +108,7 @@ fn main() {
             dev_mode,
             floating_session_id: Arc::new(std::sync::Mutex::new(None)),
             pending_permission: Arc::new(std::sync::Mutex::new(None)),
+            slash_commands: Arc::new(std::sync::Mutex::new(Vec::new())),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -322,7 +323,10 @@ fn main() {
             commands::get_auto_steering_path,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
-            commands::has_pending_permission
+            commands::has_pending_permission,
+            commands::get_slash_commands,
+            commands::execute_slash_command,
+            commands::get_slash_command_options
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

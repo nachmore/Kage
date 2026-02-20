@@ -396,6 +396,31 @@ export class ChatApp {
         this.elements.chatInput.value = '';
         this.elements.chatInput.style.height = 'auto';
 
+        // Handle / slash commands
+        if (message.startsWith('/')) {
+            try {
+                const parts = message.split(' ');
+                const cmdName = parts[0].substring(1); // strip leading /
+                const cmdArgs = parts.length > 1 ? { input: parts.slice(1).join(' ') } : {};
+                const result = await this.invoke('execute_slash_command', {
+                    command: cmdName,
+                    args: cmdArgs
+                });
+                // Show the command and result in the chat
+                this.addUserMessage(message);
+                const resultText = result?.message || JSON.stringify(result, null, 2);
+                this.addMessageFromHistory('assistant', resultText);
+                this.scrollToBottom();
+                return;
+            } catch (e) {
+                console.error('Slash command failed:', e);
+                this.addUserMessage(message);
+                this.addMessageFromHistory('assistant', 'Command failed: ' + e);
+                this.scrollToBottom();
+                return;
+            }
+        }
+
         this.addUserMessage(message);
         this.startStreaming();
 

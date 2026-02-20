@@ -1,9 +1,8 @@
 /**
- * Command registry for > prefix commands.
- * Easy to extend — just add entries to the COMMANDS array.
+ * Command registry for > prefix (local) and / prefix (ACP slash) commands.
  */
 
-const COMMANDS = [
+const LOCAL_COMMANDS = [
     {
         name: 'settings',
         description: 'Open settings window',
@@ -62,25 +61,91 @@ const COMMANDS = [
     }
 ];
 
+/** Cached ACP slash commands */
+let acpSlashCommands = [];
+
+/** Load slash commands from the backend */
+export async function loadSlashCommands(invoke) {
+    try {
+        acpSlashCommands = await invoke('get_slash_commands');
+        console.log('Loaded ACP slash commands:', acpSlashCommands);
+    } catch (e) {
+        console.log('No slash commands available yet:', e);
+        acpSlashCommands = [];
+    }
+}
+
+/** Get icon for a slash command based on its name */
+function getSlashIcon(name) {
+    const n = name.toLowerCase();
+    if (n.includes('agent')) return '🤖';
+    if (n.includes('model')) return '🧠';
+    if (n.includes('clear')) return '🧹';
+    if (n.includes('compact')) return '📦';
+    if (n.includes('context')) return '📊';
+    if (n.includes('help')) return '❓';
+    if (n.includes('quit')) return '🚪';
+    return '⚡';
+}
+
 /**
  * Check if input is a > command and return matching commands.
- * Returns null if input doesn't start with >.
  */
 export function matchCommands(input) {
     const trimmed = input.trim();
     if (!trimmed.startsWith('>')) return null;
 
     const query = trimmed.substring(1).trim().toLowerCase();
+    if (query.length === 0) return [...LOCAL_COMMANDS];
+    return LOCAL_COMMANDS.filter(cmd => cmd.name.startsWith(query));
+}
 
-    // Empty query after > — show all commands
-    if (query.length === 0) return [...COMMANDS];
+/**
+ * Check if input is a / slash command and return matching commands.
+ */
+export function matchSlashCommands(input) {
+    const trimmed = input.trim();
+    if (!trimmed.startsWith('/')) return null;
 
-    // Filter by prefix match
-    return COMMANDS.filter(cmd => cmd.name.startsWith(query));
+    const query = trimmed.substring(1).trim().toLowerCase();
+
+    // Map ACP commands to the display format
+    const mapped = acpSlashCommands
+        .filter(cmd => {
+            // Skip /quit if it's marked as local — we handle that with >quit
+            if (cmd.meta?.local) return false;
+            if (query.length === 0) return true;
+            return cmd.name.substring(1).toLowerCase().startsWith(query);
+        })
+        .map(cmd => ({
+            type: 'slash',
+            name: cmd.name,
+            description: cmd.description,
+            icon: getSlashIcon(cmd.name),
+            meta: cmd.meta,
+            execute: async (invoke, appWindow) => {
+                // Execute via ACP — command is a tagged enum: { command: "name", args: {} }
+                const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
+                try {
+                    const result = await invoke('execute_slash_command', {
+                        command: cmdName,
+                        args: null
+                    });
+                    // Show the result message in the floating window
+                    const msg = result?.message || result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed';
+                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: result?.message || msg }));
+                } catch (e) {
+                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                }
+            }
+        }));
+
+    return mapped.length > 0 ? mapped : null;
 }
 
 /**
  * Render command suggestions into the suggestions container.
+ * Works for both > local commands and / slash commands.
  */
 export function renderCommandSuggestions(commands, container, selectedIndex, onExecute, onResize) {
     container.innerHTML = '';
@@ -88,10 +153,11 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
     commands.forEach((cmd, index) => {
         const item = document.createElement('div');
         item.className = 'app-suggestion-item' + (index === selectedIndex ? ' selected' : '');
+        const prefix = cmd.type === 'slash' ? '' : '&gt; ';
         item.innerHTML = `
             <div class="app-icon">${cmd.icon}</div>
             <div class="app-info">
-                <div class="app-name">&gt; ${cmd.name}</div>
+                <div class="app-name">${prefix}${cmd.name}</div>
                 <div class="app-description">${cmd.description}</div>
             </div>
         `;
@@ -106,10 +172,10 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
 }
 
 /**
- * Execute a command by name. Returns true if found and executed.
+ * Execute a > command by name. Returns true if found and executed.
  */
 export async function executeCommand(name, invoke, appWindow) {
-    const cmd = COMMANDS.find(c => c.name === name.toLowerCase());
+    const cmd = LOCAL_COMMANDS.find(c => c.name === name.toLowerCase());
     if (!cmd) return false;
     await cmd.execute(invoke, appWindow);
     return true;
