@@ -505,6 +505,62 @@ async fn send_permission_response(
     Ok(())
 }
 
+/// Send a slash command (like /tools) and collect the full text response
+#[tauri::command]
+async fn fetch_agent_tools(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    info!("Fetching agent tools via /tools command");
+    let client = state.acp_client.clone();
+    
+    let result = async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+        
+        if !client.is_connected() {
+            return Err("Not connected to ACP".to_string());
+        }
+        
+        let mut full_response = String::new();
+        client.send_chat_streaming("/tools".to_string(), |chunk| {
+            full_response = chunk;
+        }, None).map_err(|e| format!("Failed to fetch tools: {}", e))?;
+        
+        Ok(full_response)
+    }).await.map_err(|e| format!("Task failed: {}", e))?;
+    
+    result
+}
+
+/// Send /tools trust <name> or /tools untrust <name>
+#[tauri::command]
+async fn set_tool_trust(
+    tool_name: String,
+    trusted: bool,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let action = if trusted { "trust" } else { "untrust" };
+    let command = format!("/tools {} {}", action, tool_name);
+    info!("Setting tool trust: {}", command);
+    let client = state.acp_client.clone();
+    
+    let result = async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+        
+        if !client.is_connected() {
+            return Err("Not connected to ACP".to_string());
+        }
+        
+        let mut full_response = String::new();
+        client.send_chat_streaming(command, |chunk| {
+            full_response = chunk;
+        }, None).map_err(|e| format!("Failed to set tool trust: {}", e))?;
+        
+        Ok(full_response)
+    }).await.map_err(|e| format!("Task failed: {}", e))?;
+    
+    result
+}
+
 #[tauri::command]
 async fn remove_tool_permission(
     tool_title: String,
@@ -1136,7 +1192,9 @@ fn main() {
             open_chat_window,
             resize_floating_window,
             send_permission_response,
-            remove_tool_permission
+            remove_tool_permission,
+            fetch_agent_tools,
+            set_tool_trust
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
