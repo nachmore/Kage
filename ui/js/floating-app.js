@@ -406,6 +406,9 @@ export class FloatingApp {
         this.elements.input.style.height = 'auto';
         this.elements.input.style.height = Math.min(this.elements.input.scrollHeight, 100) + 'px';
         
+        // Reset tab cycle state when user types
+        this._tabCycleActive = false;
+        
         // Resize window to fit the growing input
         await this.windowManager.resizeWindow();
         
@@ -623,17 +626,23 @@ export class FloatingApp {
     async handleKeyDown(event) {
         if (event.key === 'Tab') {
             event.preventDefault();
-            // Autocomplete to the top suggestion if one exists
+            // Cycle through suggestions on repeated Tab presses
             if (this.currentMatches.length > 0) {
-                const top = this.currentMatches[0];
-                if (top.type === 'command') {
-                    this.elements.input.value = '>' + top.name + ' ';
-                } else if (top.type === 'slash') {
-                    this.elements.input.value = top.name + ' ';
-                } else if (top.name) {
-                    this.elements.input.value = top.name;
+                if (this._tabCycleActive) {
+                    this._tabCycleIndex = (this._tabCycleIndex + 1) % this.currentMatches.length;
+                } else {
+                    this._tabCycleIndex = 0;
+                    this._tabCycleActive = true;
                 }
-                this.selectedIndex = 0;
+                const pick = this.currentMatches[this._tabCycleIndex];
+                if (pick.type === 'command') {
+                    this.elements.input.value = '>' + pick.name + ' ';
+                } else if (pick.type === 'slash') {
+                    this.elements.input.value = pick.name + ' ';
+                } else if (pick.name) {
+                    this.elements.input.value = pick.name;
+                }
+                this.selectedIndex = this._tabCycleIndex;
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
         } else if (event.key === 'ArrowDown') {

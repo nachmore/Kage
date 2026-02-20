@@ -111,6 +111,7 @@ export class ChatApp {
         this.elements.chatInput.addEventListener('input', () => {
             this.elements.chatInput.style.height = 'auto';
             this.elements.chatInput.style.height = Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
+            this._tabCycleActive = false;
             this.updateSuggestions();
         });
 
@@ -118,13 +119,20 @@ export class ChatApp {
             if (e.key === 'Tab') {
                 e.preventDefault();
                 if (this.currentSuggestions.length > 0) {
-                    const top = this.currentSuggestions[0];
-                    if (top.type === 'command') {
-                        this.elements.chatInput.value = '>' + top.name + ' ';
-                    } else if (top.type === 'slash') {
-                        this.elements.chatInput.value = top.name + ' ';
+                    // Cycle through suggestions on repeated Tab presses
+                    if (this._tabCycleActive) {
+                        this._tabCycleIndex = (this._tabCycleIndex + 1) % this.currentSuggestions.length;
+                    } else {
+                        this._tabCycleIndex = 0;
+                        this._tabCycleActive = true;
                     }
-                    this.suggestionIndex = 0;
+                    const pick = this.currentSuggestions[this._tabCycleIndex];
+                    if (pick.type === 'command') {
+                        this.elements.chatInput.value = '>' + pick.name + ' ';
+                    } else if (pick.type === 'slash') {
+                        this.elements.chatInput.value = pick.name + ' ';
+                    }
+                    this.suggestionIndex = this._tabCycleIndex;
                     this.renderSuggestions();
                 }
             } else if (e.key === 'ArrowDown' && this.currentSuggestions.length > 0) {
@@ -150,6 +158,11 @@ export class ChatApp {
 
         this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
+
+        // Reload slash commands when input is focused (may not have been available at init)
+        this.elements.chatInput.addEventListener('focus', () => {
+            loadSlashCommands(this.invoke);
+        });
 
         this.elements.settingsBtn.addEventListener('click', async () => {
             await this.invoke('open_settings_window');
@@ -215,6 +228,48 @@ export class ChatApp {
                 this.addUserMessage(message);
                 this.startStreaming();
             }
+        });
+
+        // Handle slash command results (dispatched by floating-commands.js execute functions)
+        document.addEventListener('kiro-show-response', (e) => {
+            if (e.detail) {
+                this.addMessageFromHistory('assistant', e.detail);
+                this.scrollToBottom();
+            }
+        });
+
+        document.addEventListener('kiro-show-selection', (e) => {
+            const { command, options } = e.detail;
+            if (!options || options.length === 0) return;
+            // Show selection as a system message with clickable options
+            const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
+            if (placeholder) placeholder.remove();
+
+            const container = document.createElement('div');
+            container.className = 'session-reset-notice';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'chat-error-btn reconnect';
+                btn.style.margin = '4px';
+                btn.textContent = opt.label + (opt.current ? ' ●' : '');
+                btn.addEventListener('click', async () => {
+                    try {
+                        const result = await this.invoke('execute_slash_command', {
+                            command,
+                            args: { input: opt.value }
+                        });
+                        container.remove();
+                        const msg = result?.message || 'Done';
+                        this.addMessageFromHistory('assistant', msg);
+                        this.scrollToBottom();
+                    } catch (err) {
+                        this.showError('Command failed: ' + err);
+                    }
+                });
+                container.appendChild(btn);
+            });
+            this.elements.messagesArea.appendChild(container);
+            this.scrollToBottom();
         });
     }
 
