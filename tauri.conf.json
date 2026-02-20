@@ -1,0 +1,38 @@
+{
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devPath": "./ui",
+    "distDir": "./ui"
+  },
+  "package": {
+    "productName": "Kiro Assistant",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.kiro.assistant"
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Kiro Assistant",
+        "width": 800,
+        "height": 600
+      }
+    ]
+  }
+}
