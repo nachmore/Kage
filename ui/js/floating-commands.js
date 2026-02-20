@@ -36,6 +36,29 @@ const COMMANDS = [
         execute: async (_invoke, appWindow) => {
             document.dispatchEvent(new CustomEvent('kiro-clear'));
         }
+    },
+    {
+        name: 'sessions',
+        description: 'Open full chat with sessions',
+        icon: '💬',
+        execute: async (invoke, appWindow) => {
+            await invoke('open_chat_window');
+            await appWindow.hide();
+        }
+    },
+    {
+        name: 'session-id',
+        description: 'Show current ACP session ID',
+        icon: '🔑',
+        execute: async (invoke) => {
+            try {
+                const id = await invoke('get_current_session_id');
+                const text = id || 'No active session';
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: text }));
+            } catch (e) {
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+            }
+        }
     }
 ];
 

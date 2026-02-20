@@ -72,6 +72,18 @@ export class FloatingApp {
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
         });
+
+        document.addEventListener('kiro-show-response', (e) => {
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.elements.appSuggestions.classList.remove('visible');
+            this.currentMatches = [];
+            this.selectedIndex = -1;
+            this.currentResponse = e.detail;
+            this.elements.responseText.textContent = e.detail;
+            this.elements.contentArea.classList.add('visible');
+            this.windowManager.resizeWindow();
+        });
     }
 
     setupVisibilityTracking() {
