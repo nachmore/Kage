@@ -423,7 +423,7 @@ impl AcpClient {
         Ok(())
     }
 
-    pub fn create_session(&self, cwd: Option<String>) -> Result<String> {
+    pub fn create_session(&self, cwd: Option<String>) -> Result<(String, Vec<serde_json::Value>)> {
         info!("Creating new ACP session");
 
         {
@@ -459,13 +459,15 @@ impl AcpClient {
             .map(|s| s.to_string())
             .context("No sessionId in response")?;
 
-        if let Some(models) = result.get("models").and_then(|m| m.get("availableModels")) {
-            info!("Session has {} available models", models.as_array().map_or(0, |a| a.len()));
+        let mut models_list = Vec::new();
+        if let Some(models) = result.get("models").and_then(|m| m.get("availableModels")).and_then(|a| a.as_array()) {
+            info!("Session has {} available models", models.len());
+            models_list = models.clone();
         }
 
         info!("Session created: {}", session_id);
         *self.session_id.lock().unwrap() = Some(session_id.clone());
-        Ok(session_id)
+        Ok((session_id, models_list))
     }
 
     pub fn load_existing_session(&self, session_id: &str, cwd: Option<String>) -> Result<String> {
@@ -531,7 +533,7 @@ impl AcpClient {
                 id.clone()
             } else {
                 drop(guard);
-                self.create_session(None)?
+                self.create_session(None)?.0
             }
         };
 

@@ -374,9 +374,41 @@ pub async fn switch_acp_session(
         }
         None => {
             info!("Creating new session");
-            client_guard
+            let (new_session_id, models_json) = client_guard
                 .create_session(None)
-                .map_err(|e| format!("Failed to create session: {}", e))
+                .map_err(|e| format!("Failed to create session: {}", e))?;
+
+            // Store available models
+            if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
+                serde_json::Value::Array(models_json),
+            ) {
+                if let Ok(mut m) = state.available_models.lock() {
+                    *m = parsed;
+                }
+            }
+
+            // Apply default model if configured
+            let cfg = state.config.lock().await;
+            if let Some(ref default_model) = cfg.acp.assistant.default_model {
+                if !default_model.is_empty() {
+                    info!("Applying default model to new session: {}", default_model);
+                    let request = crate::acp_client::AcpRequest {
+                        jsonrpc: "2.0".to_string(),
+                        id: serde_json::json!(4),
+                        method: "_kiro.dev/commands/execute".to_string(),
+                        params: serde_json::json!({
+                            "sessionId": new_session_id,
+                            "command": { "command": "model", "args": { "modelName": default_model } }
+                        }),
+                    };
+                    match client_guard.send_request(&request) {
+                        Ok(_) => info!("Default model applied: {}", default_model),
+                        Err(e) => error!("Failed to apply default model: {}", e),
+                    }
+                }
+            }
+
+            Ok(new_session_id)
         }
     }
 }

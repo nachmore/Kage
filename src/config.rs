@@ -55,6 +55,7 @@ impl Default for AssistantConfig {
             start_session_on_launch: true,
             auto_steering_enabled: false,
             user_steering_path: None,
+            default_model: None,
         }
     }
 }
@@ -80,6 +81,9 @@ pub struct AssistantConfig {
     pub auto_steering_enabled: bool,
     #[serde(default)]
     pub user_steering_path: Option<String>,
+    /// Default model ID to select when creating a new session
+    #[serde(default)]
+    pub default_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

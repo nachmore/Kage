@@ -29,8 +29,8 @@ const LOCAL_COMMANDS = [
         }
     },
     {
-        name: 'clear',
-        description: 'Clear current response',
+        name: 'clear-ux',
+        description: 'Clear the visible response (does not clear conversation history)',
         icon: '🧹',
         execute: async (_invoke, appWindow) => {
             document.dispatchEvent(new CustomEvent('kiro-clear'));
@@ -133,19 +133,55 @@ export function matchSlashCommands(input) {
         .map(cmd => ({
             type: 'slash',
             name: cmd.name,
-            description: cmd.description,
+            description: cmd.description + (cmd.meta?.hint ? ` (${cmd.meta.hint})` : ''),
             icon: getSlashIcon(cmd.name),
             meta: cmd.meta,
             execute: async (invoke, appWindow) => {
-                // Execute via ACP — command is a tagged enum: { command: "name", args: {} }
                 const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
+
+                // Selection-type commands: show options as a selectable list
+                if (cmd.meta?.inputType === 'selection') {
+                    try {
+                        const result = await invoke('execute_slash_command', {
+                            command: cmdName,
+                            args: null
+                        });
+                        // Parse the message to extract options
+                        const msg = result?.message || '';
+                        const lines = msg.split('\n').filter(l => l.trim());
+                        if (lines.length > 0) {
+                            document.dispatchEvent(new CustomEvent('kiro-show-selection', {
+                                detail: {
+                                    command: cmdName,
+                                    options: lines.map(line => {
+                                        const isCurrent = line.trim().startsWith('→') || line.trim().startsWith('*');
+                                        const clean = line.replace(/^[\s→*]+/, '').trim();
+                                        // Extract name and id: "name (id)" or just "name"
+                                        const match = clean.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+                                        return {
+                                            label: match ? match[1].trim() : clean,
+                                            value: match ? match[2].trim() : clean,
+                                            current: isCurrent
+                                        };
+                                    })
+                                }
+                            }));
+                        } else {
+                            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: msg || 'No options available' }));
+                        }
+                    } catch (e) {
+                        document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                    }
+                    return;
+                }
+
+                // Regular commands: execute and show result
                 try {
                     const result = await invoke('execute_slash_command', {
                         command: cmdName,
                         args: null
                     });
-                    // Show the result message in the floating window
-                    const msg = result?.message || result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed';
+                    const msg = result?.message || (result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed');
                     document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: result?.message || msg }));
                 } catch (e) {
                     document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));

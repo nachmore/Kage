@@ -102,12 +102,14 @@ fn main() {
     let config_arc = Arc::new(Mutex::new(config));
     let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
     let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
+    let available_models_arc = Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
 
     // Clone Arcs for the notification handler setup
     let config_for_handler = config_arc.clone();
     let slash_cmds_for_handler = slash_commands_arc.clone();
     let pending_perm_for_handler = pending_permission_arc.clone();
     let acp_for_handler = acp_client_arc.clone();
+    let models_for_handler = available_models_arc.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -122,7 +124,7 @@ fn main() {
             floating_session_id: Arc::new(std::sync::Mutex::new(None)),
             pending_permission: pending_permission_arc,
             slash_commands: slash_commands_arc,
-            available_models: Arc::new(std::sync::Mutex::new(Vec::new())),
+            available_models: available_models_arc,
             current_model_id: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
@@ -152,6 +154,7 @@ fn main() {
                     tcp_writer_for_handler,
                     slash_cmds_for_handler,
                     pending_perm_for_handler,
+                    models_for_handler,
                 );
             }
 
@@ -246,6 +249,7 @@ fn main() {
                 let acp_client = state.acp_client.clone();
                 let floating_session = state.floating_session_id.clone();
                 let config_arc = state.config.clone();
+                let models_arc = state.available_models.clone();
 
                 tauri::async_runtime::spawn(async move {
                     let client = acp_client.lock().await;
@@ -256,10 +260,24 @@ fn main() {
                     }
                     info!("Creating default session on launch...");
                     match client.create_session(None) {
-                        Ok(session_id) => {
+                        Ok((session_id, models_json)) => {
                             info!("Default session created on launch: {}", session_id);
                             if let Ok(mut fs) = floating_session.lock() {
                                 *fs = Some(session_id.clone());
+                            }
+
+                            // Store available models
+                            let models_value = serde_json::Value::Array(models_json);
+                            match serde_json::from_value::<Vec<crate::state::AcpModel>>(models_value.clone()) {
+                                Ok(parsed) => {
+                                    info!("Storing {} models from session", parsed.len());
+                                    if let Ok(mut m) = models_arc.lock() {
+                                        *m = parsed;
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to parse models: {}. Raw: {}", e, models_value);
+                                }
                             }
 
                             // Send steering content as the first hidden message
@@ -302,6 +320,28 @@ fn main() {
                                     error!("Failed to send steering message: {}", e);
                                 }
                             }
+
+                            // Apply default model if configured
+                            let cfg = config_arc.lock().await;
+                            if let Some(ref default_model) = cfg.acp.assistant.default_model {
+                                if !default_model.is_empty() {
+                                    info!("Applying default model: {}", default_model);
+                                    let request = crate::acp_client::AcpRequest {
+                                        jsonrpc: "2.0".to_string(),
+                                        id: serde_json::json!(4),
+                                        method: "_kiro.dev/commands/execute".to_string(),
+                                        params: serde_json::json!({
+                                            "sessionId": session_id,
+                                            "command": { "command": "model", "args": { "modelName": default_model } }
+                                        }),
+                                    };
+                                    match client.send_request(&request) {
+                                        Ok(_) => info!("Default model applied: {}", default_model),
+                                        Err(e) => error!("Failed to apply default model: {}", e),
+                                    }
+                                }
+                            }
+                            drop(cfg);
                         }
                         Err(e) => error!("Failed to create default session on launch: {}", e),
                     }
@@ -350,7 +390,8 @@ fn main() {
             commands::has_pending_permission,
             commands::get_slash_commands,
             commands::execute_slash_command,
-            commands::get_slash_command_options
+            commands::get_slash_command_options,
+            commands::get_available_models
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

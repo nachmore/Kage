@@ -163,6 +163,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
     settingsManager.registerModule(new AssistantSettingsModule());
+    settingsManager.registerModule(new ModelSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     
