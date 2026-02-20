@@ -14,7 +14,19 @@ body.dark-theme .sidebar-header {
 }
 
 body.dark-theme .new-session-btn {
-    color: #19161D;
+    color: #ffffff;
+}
+
+body.dark-theme .session-list-separator {
+    background: #8E48FF;
+}
+
+body.dark-theme .session-default-label {
+    color: #C09CFF;
+}
+
+body.dark-theme .session-current-badge {
+    color: #C09CFF;
 }
 
 body.dark-theme .session-item:hover {

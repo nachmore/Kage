@@ -15,6 +15,7 @@ export class ChatApp {
         this.sessions = [];
         this.activeSessionId = null;
         this.floatingSessionId = null;
+        this.currentAcpSessionId = null;
         this.toolSources = [];
 
         this.elements = {};
@@ -26,8 +27,43 @@ export class ChatApp {
         this.setupEventListeners();
         this.setupStreamingListeners();
         await this.loadFloatingSessionId();
+        await this.loadCurrentSessionId();
         await this.loadSessions();
         await this.checkConnection();
+
+        console.log('[CHAT] Init - currentAcpSessionId:', this.currentAcpSessionId);
+        console.log('[CHAT] Init - floatingSessionId:', this.floatingSessionId);
+        console.log('[CHAT] Init - sessions count:', this.sessions.length);
+        console.log('[CHAT] Init - session IDs:', this.sessions.map(s => s.session_id));
+
+        // Auto-select the current ACP session if one exists
+        if (this.currentAcpSessionId) {
+            let exists = this.sessions.find(s => s.session_id === this.currentAcpSessionId);
+            if (!exists) {
+                // Session not on disk yet — add a synthetic entry so it appears in the list
+                console.log('[CHAT] Current session not on disk, adding synthetic entry:', this.currentAcpSessionId);
+                const synthetic = {
+                    session_id: this.currentAcpSessionId,
+                    title: 'Current Session',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                this.sessions.unshift(synthetic);
+                this.renderSessionList();
+            }
+            // Select it — load from disk if available, otherwise just mark it active
+            this.activeSessionId = this.currentAcpSessionId;
+            this.renderSessionList();
+            try {
+                const sessionData = await this.invoke('load_session', { sessionId: this.currentAcpSessionId });
+                this.displaySession(sessionData);
+            } catch (e) {
+                console.log('[CHAT] Could not load session from disk (may be new):', e);
+                // Session is new / not on disk — just show empty chat
+                this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Continue your conversation...</div>';
+            }
+            this.elements.chatHeaderTitle.textContent = exists?.title || 'Current Session';
+        }
 
         this.elements.chatInput.focus();
         console.log('Chat app initialized');
@@ -99,6 +135,15 @@ export class ChatApp {
         }
     }
 
+    async loadCurrentSessionId() {
+        try {
+            this.currentAcpSessionId = await this.invoke('get_current_session_id');
+        } catch (e) {
+            console.error('Failed to get current session ID:', e);
+            this.currentAcpSessionId = null;
+        }
+    }
+
     async loadSessions() {
         try {
             const sessions = await this.invoke('list_sessions');
@@ -119,26 +164,48 @@ export class ChatApp {
             return;
         }
 
+        // Sort: default session (current/floating) first, then by updated_at descending
+        const defaultId = this.currentAcpSessionId || this.floatingSessionId;
+        const sorted = [...this.sessions].sort((a, b) => {
+            const aIsDefault = a.session_id === defaultId;
+            const bIsDefault = b.session_id === defaultId;
+            if (aIsDefault && !bIsDefault) return -1;
+            if (!aIsDefault && bIsDefault) return 1;
+            return (b.updated_at || '').localeCompare(a.updated_at || '');
+        });
+
         list.innerHTML = '';
-        for (const session of this.sessions) {
+        for (const session of sorted) {
             const item = document.createElement('div');
             item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
             item.dataset.sessionId = session.session_id;
 
             const isFloating = session.session_id === this.floatingSessionId;
+            const isCurrent = session.session_id === this.currentAcpSessionId;
             const title = session.title || 'New Chat';
             const date = new Date(session.updated_at || session.created_at);
             const dateStr = this.formatDate(date);
 
-            const floatingBadge = isFloating ? '<span class="session-floating-badge">💬</span>' : '';
+            let badges = '';
+            if (isCurrent || isFloating) badges += '<span class="session-current-badge">●</span>';
+
+            let dateSuffix = '';
+            if (isCurrent || isFloating) dateSuffix = ' · <span class="session-default-label">default session</span>';
 
             item.innerHTML = `
-                <div class="session-item-title">${this.escapeHtml(title)}${floatingBadge}</div>
-                <div class="session-item-date">${dateStr}${isFloating ? ' · floating' : ''}</div>
+                <div class="session-item-title">${this.escapeHtml(title)}${badges}</div>
+                <div class="session-item-date">${dateStr}${dateSuffix}</div>
             `;
 
             item.addEventListener('click', () => this.selectSession(session.session_id));
             list.appendChild(item);
+
+            // Add separator after the default session
+            if ((isCurrent || isFloating) && list.querySelectorAll('.session-list-separator').length === 0) {
+                const sep = document.createElement('div');
+                sep.className = 'session-list-separator';
+                list.appendChild(sep);
+            }
         }
     }
 
@@ -249,21 +316,29 @@ export class ChatApp {
     }
 
     async createNewSession() {
-        this.activeSessionId = null;
         this.messages = [];
         this.toolSources = [];
         this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kiro...</div>';
         this.elements.chatHeaderTitle.textContent = 'New Chat';
-        this.renderSessionList();
         this.elements.chatInput.focus();
 
         try {
-            // Create a new ACP session
             const newId = await this.invoke('switch_acp_session', { sessionId: null });
             this.activeSessionId = newId;
+            // Add the new session to the list so it appears immediately
+            if (!this.sessions.find(s => s.session_id === newId)) {
+                this.sessions.push({
+                    session_id: newId,
+                    title: 'New Chat',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                });
+            }
+            this.renderSessionList();
             console.log('Created new ACP session:', newId);
         } catch (error) {
             console.error('Failed to create new session:', error);
+            this.renderSessionList();
         }
     }
 

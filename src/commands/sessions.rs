@@ -191,36 +191,63 @@ pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
         };
 
         match fs::read_to_string(&path) {
-            Ok(content) => match serde_json::from_str::<serde_json::Value>(&content) {
-                Ok(data) => {
-                    let created_at = data
-                        .get("created_at")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let updated_at = data
-                        .get("updated_at")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or(&created_at)
-                        .to_string();
-
-                    // Get title from the JSONL file (first user prompt)
-                    let jsonl_path = path.with_extension("jsonl");
-                    let title = extract_title_from_jsonl(&jsonl_path);
-
+            Ok(content) => {
+                if content.trim().is_empty() {
+                    info!("Skipping empty session file: {}", session_id);
+                    // Still add it with minimal info so it shows up
                     sessions.push(SessionSummary {
                         session_id,
-                        title,
-                        created_at,
-                        updated_at,
+                        title: "New Session".to_string(),
+                        created_at: String::new(),
+                        updated_at: String::new(),
                     });
+                    continue;
                 }
-                Err(e) => {
-                    error!("Failed to parse session JSON {:?}: {}", path, e);
+                match serde_json::from_str::<serde_json::Value>(&content) {
+                    Ok(data) => {
+                        let created_at = data
+                            .get("created_at")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let updated_at = data
+                            .get("updated_at")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&created_at)
+                            .to_string();
+
+                        // Get title from the JSONL file (first user prompt)
+                        let jsonl_path = path.with_extension("jsonl");
+                        let title = extract_title_from_jsonl(&jsonl_path);
+
+                        sessions.push(SessionSummary {
+                            session_id,
+                            title,
+                            created_at,
+                            updated_at,
+                        });
+                    }
+                    Err(e) => {
+                        error!("Failed to parse session JSON {:?}: {}", path, e);
+                        // Add with minimal info so it still appears
+                        sessions.push(SessionSummary {
+                            session_id,
+                            title: "Session (parse error)".to_string(),
+                            created_at: String::new(),
+                            updated_at: String::new(),
+                        });
+                    }
                 }
-            },
+            }
             Err(e) => {
                 error!("Failed to read session file {:?}: {}", path, e);
+                // File locked or inaccessible — still add it
+                sessions.push(SessionSummary {
+                    session_id,
+                    title: "Session (read error)".to_string(),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                });
             }
         }
     }
