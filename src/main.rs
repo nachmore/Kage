@@ -552,6 +552,10 @@ fn main() {
     
     info!("=== Kiro Assistant Starting ===");
     
+    // Check for /dev flag
+    let args: Vec<String> = std::env::args().collect();
+    let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");
+    
     // Clean up any orphaned processes from previous runs
     info!("Checking for orphaned processes...");
     if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
@@ -600,9 +604,24 @@ fn main() {
     let show = CustomMenuItem::new("show".to_string(), "Show");
     let settings = CustomMenuItem::new("settings".to_string(), "Settings");
     let quit = CustomMenuItem::new("quit".to_string(), "Quit");
-    let tray_menu = SystemTrayMenu::new()
+    
+    let mut tray_menu = SystemTrayMenu::new()
         .add_item(show)
-        .add_item(settings)
+        .add_item(settings);
+    
+    // Add dev menu items if in dev mode
+    if dev_mode {
+        info!("Dev mode enabled - adding developer menu items");
+        println!("🔧 Dev mode enabled - adding developer menu items");
+        let inspect = CustomMenuItem::new("inspect".to_string(), "Inspect");
+        let reload = CustomMenuItem::new("reload".to_string(), "Reload UX");
+        tray_menu = tray_menu
+            .add_native_item(SystemTrayMenuItem::Separator)
+            .add_item(inspect)
+            .add_item(reload);
+    }
+    
+    tray_menu = tray_menu
         .add_native_item(SystemTrayMenuItem::Separator)
         .add_item(quit);
     
@@ -629,6 +648,32 @@ fn main() {
                         if let Some(window) = app.get_window("settings") {
                             let _ = window.show();
                             let _ = window.set_focus();
+                        }
+                    }
+                    "inspect" => {
+                        info!("Opening inspector");
+                        // Open inspector for the main window
+                        if let Some(window) = app.get_window("main") {
+                            #[cfg(debug_assertions)]
+                            window.open_devtools();
+                            #[cfg(not(debug_assertions))]
+                            {
+                                // In release mode, we need to enable devtools via the window
+                                window.open_devtools();
+                            }
+                        }
+                    }
+                    "reload" => {
+                        info!("Reloading UX");
+                        // Reload all windows
+                        if let Some(window) = app.get_window("main") {
+                            let _ = window.eval("window.location.reload()");
+                        }
+                        if let Some(window) = app.get_window("floating") {
+                            let _ = window.eval("window.location.reload()");
+                        }
+                        if let Some(window) = app.get_window("settings") {
+                            let _ = window.eval("window.location.reload()");
                         }
                     }
                     "quit" => {

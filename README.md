@@ -7,4 +7,23 @@ _TODO: If this is a library package, consider linking to the rustdoc build artif
 ## Useful links
 
 - [Code Browser](https://code.amazon.com/packages/Kiro-Assistant/)
+
+## Development Mode
+
+To run the application in development mode with additional debugging features, use the `/dev` flag:
+
+```bash
+cargo run -- /dev
+```
+
+Or with the built executable:
+
+```bash
+./kiro-assistant /dev
+```
+
+When running in dev mode, the system tray menu will include two additional options:
+
+- **Inspect**: Opens the developer tools/inspector window for debugging the UI
+- **Reload UX**: Reloads all HTML content in the application windows without restarting the app
  
