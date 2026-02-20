@@ -93,22 +93,37 @@ fn main() {
     let pipe_stdin_handle = acp_client.get_pipe_stdin();
     let tcp_writer_handle = acp_client.get_tcp_writer();
 
+    let pipe_stdin_for_handler = pipe_stdin_handle.clone();
+    let tcp_writer_for_handler = tcp_writer_handle.clone();
     let config_for_setup = config.clone();
     let dev_mode_for_setup = dev_mode;
+
+    let acp_client_arc = Arc::new(Mutex::new(acp_client));
+    let config_arc = Arc::new(Mutex::new(config));
+    let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
+
+    // Clone Arcs for the notification handler setup
+    let config_for_handler = config_arc.clone();
+    let slash_cmds_for_handler = slash_commands_arc.clone();
+    let pending_perm_for_handler = pending_permission_arc.clone();
+    let acp_for_handler = acp_client_arc.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .manage(AppState {
-            acp_client: Arc::new(Mutex::new(acp_client)),
-            config: Arc::new(Mutex::new(config)),
+            acp_client: acp_client_arc,
+            config: config_arc,
             app_launcher: Arc::new(Mutex::new(app_launcher)),
             pipe_stdin: pipe_stdin_handle,
             tcp_writer: tcp_writer_handle,
             dev_mode,
             floating_session_id: Arc::new(std::sync::Mutex::new(None)),
-            pending_permission: Arc::new(std::sync::Mutex::new(None)),
-            slash_commands: Arc::new(std::sync::Mutex::new(Vec::new())),
+            pending_permission: pending_permission_arc,
+            slash_commands: slash_commands_arc,
+            available_models: Arc::new(std::sync::Mutex::new(Vec::new())),
+            current_model_id: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -125,6 +140,20 @@ fn main() {
 
             // Build system tray
             tray::setup_tray(app, dev_mode)?;
+
+            // Set up the ACP notification handler
+            {
+                let client = tauri::async_runtime::block_on(acp_for_handler.lock());
+                commands::messaging::setup_notification_handler(
+                    &client,
+                    app.handle(),
+                    config_for_handler,
+                    pipe_stdin_for_handler,
+                    tcp_writer_for_handler,
+                    slash_cmds_for_handler,
+                    pending_perm_for_handler,
+                );
+            }
 
             // Configure floating window
             let floating_window = app.get_webview_window("floating").unwrap();
@@ -269,12 +298,7 @@ fn main() {
                                     steering_parts.join("\n\n---\n\n")
                                 );
                                 info!("Sending steering message ({} chars)", steering_msg.len());
-                                if let Err(e) = client.send_chat_streaming(
-                                    steering_msg,
-                                    |_chunk| { /* discard streaming output for steering */ },
-                                    None,
-                                    None,
-                                ) {
+                                if let Err(e) = client.send_chat_streaming(steering_msg) {
                                     error!("Failed to send steering message: {}", e);
                                 }
                             }

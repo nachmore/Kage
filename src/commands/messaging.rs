@@ -1,6 +1,182 @@
 use crate::state::AppState;
-use log::{error, info};
+use log::info;
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
+
+/// Set up the notification handler on the ACP client.
+/// This should be called once after the client is created.
+/// The handler dispatches all ACP notifications to the appropriate Tauri events.
+pub fn setup_notification_handler(
+    client: &crate::acp_client::AcpClient,
+    app: &tauri::AppHandle,
+    state_config: std::sync::Arc<tokio::sync::Mutex<crate::config::Config>>,
+    pipe_stdin: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
+    tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
+    pending_permission: std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
+) {
+    let app_handle = app.clone();
+    let config = state_config;
+    let pipe_stdin = pipe_stdin;
+    let tcp_writer = tcp_writer;
+    let slash_cmds = slash_commands;
+    let pending_perm = pending_permission;
+    let accumulated = client.streaming_accumulator.clone();
+
+    client.set_notification_handler(move |notification: serde_json::Value| {
+        let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
+
+        if method == "session/request_permission" {
+            handle_permission_notification(
+                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm,
+            );
+            return;
+        }
+
+        if method == "session/update" {
+            if let Some(update) = notification.get("params").and_then(|p| p.get("update")) {
+                if let Some(kind) = update.get("sessionUpdate").and_then(|v| v.as_str()) {
+                    if kind == "agent_message_chunk" {
+                        if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
+                            let mut acc = accumulated.lock().unwrap();
+                            acc.push_str(text);
+                            let _ = app_handle.emit("message_chunk", acc.clone());
+                        }
+                        return;
+                    }
+                    if kind == "tool_call" || kind == "tool_call_update" {
+                        let _ = app_handle.emit("tool_call_update", &notification);
+                        return;
+                    }
+                }
+            }
+            return;
+        }
+
+        if method == "_kiro.dev/commands/available" {
+            if let Some(commands) = notification.get("params")
+                .and_then(|p| p.get("commands"))
+                .and_then(|c| c.as_array())
+            {
+                if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::SlashCommand>>(
+                    serde_json::Value::Array(commands.clone()),
+                ) {
+                    info!("Received {} slash commands from ACP", parsed.len());
+                    if let Ok(mut cmds) = slash_cmds.lock() {
+                        *cmds = parsed;
+                    }
+                }
+            }
+            let _ = app_handle.emit("slash_commands_available", &notification);
+            return;
+        }
+
+        if method.starts_with("_kiro.dev/") {
+            let _ = app_handle.emit("tool_call_update", &notification);
+            return;
+        }
+
+        info!("Unhandled notification: {}", method);
+    });
+}
+
+fn handle_permission_notification(
+    notification: &serde_json::Value,
+    app_handle: &tauri::AppHandle,
+    config: &std::sync::Arc<tokio::sync::Mutex<crate::config::Config>>,
+    pipe_stdin: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
+    tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
+) {
+    let tool_title = notification
+        .get("params")
+        .and_then(|p| p.get("toolCall"))
+        .and_then(|tc| tc.get("title"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("unknown");
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let mut config_guard = async_runtime::block_on(config.lock());
+
+    let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
+    if let Some(tool) = existing {
+        tool.last_seen = timestamp;
+    } else {
+        config_guard.tool_permissions.tools.push(crate::config::ToolPolicy {
+            title: tool_title.to_string(),
+            policy: "ask".to_string(),
+            last_seen: timestamp,
+        });
+    }
+    let _ = config_guard.save();
+
+    let policy = if config_guard.tool_permissions.trust_all {
+        "allow".to_string()
+    } else {
+        config_guard.tool_permissions.tools.iter()
+            .find(|t| t.title == tool_title)
+            .map(|t| t.policy.clone())
+            .unwrap_or_else(|| "ask".to_string())
+    };
+    drop(config_guard);
+
+    let send_response = |option_id: &str| {
+        if let Some(request_id) = notification.get("id") {
+            let response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
+            });
+            if let Ok(json) = serde_json::to_string(&response) {
+                use std::io::Write;
+                let stdin_arc = {
+                    let guard = pipe_stdin.lock().ok();
+                    guard.and_then(|g| g.as_ref().map(|a| a.clone()))
+                };
+                if let Some(arc) = stdin_arc {
+                    if let Ok(mut stdin) = arc.lock() {
+                        let _ = write!(stdin, "{}\n", json);
+                        let _ = stdin.flush();
+                        return;
+                    }
+                }
+                if let Ok(guard) = tcp_writer.lock() {
+                    if let Some(ref stream) = *guard {
+                        if let Ok(mut ws) = stream.try_clone() {
+                            drop(guard);
+                            let _ = write!(ws, "{}\n", json);
+                            let _ = ws.flush();
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    match policy.as_str() {
+        "allow" => send_response("allow_once"),
+        "deny" => send_response("reject_once"),
+        _ => {
+            let session_id = notification.get("params")
+                .and_then(|p| p.get("sessionId"))
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            if let Ok(mut pending) = pending_perm.lock() {
+                *pending = Some(crate::state::PendingPermission {
+                    request_id: notification.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                    tool_title: tool_title.to_string(),
+                    session_id,
+                });
+            }
+            let _ = app_handle.emit("permission_request", serde_json::json!({
+                "notification": notification,
+                "auto_approve": false
+            }));
+        }
+    }
+}
+
+// --- Tauri Commands ---
 
 #[tauri::command]
 pub async fn send_message_streaming(
@@ -10,196 +186,26 @@ pub async fn send_message_streaming(
 ) -> Result<(), String> {
     info!("Sending message: {}", message);
     let client = state.acp_client.clone();
-    let config = state.config.clone();
-    let pipe_stdin_handle = state.pipe_stdin.clone();
-    let tcp_writer_handle = state.tcp_writer.clone();
-    let pending_perm = state.pending_permission.clone();
-    let slash_cmds_handle = state.slash_commands.clone();
     let window_clone = window.clone();
 
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
 
         if !client.is_connected() {
-            info!("Not connected, attempting to connect...");
             if let Err(e) = client.connect() {
-                error!("Connection failed: {}", e);
-                let error_msg = format!(
-                    "Unable to connect to Kiro CLI. Please ensure kiro-cli is running.\n\nError: {}",
-                    e
-                );
-                let _ = window.emit("message_error", error_msg);
+                let _ = window.emit("message_error", format!("Unable to connect: {}", e));
                 return;
             }
         }
 
-        // Create permission callback
-        let window_for_permission = window_clone.clone();
-        let config_for_permission = config.clone();
-        let pipe_stdin_for_perm = pipe_stdin_handle.clone();
-        let tcp_writer_for_perm = tcp_writer_handle.clone();
-        let pending_perm_for_cb = pending_perm.clone();
-        let permission_callback = Box::new(move |notification: serde_json::Value| {
-            let mut config_guard = async_runtime::block_on(config_for_permission.lock());
-
-            let tool_title = notification
-                .get("params")
-                .and_then(|p| p.get("toolCall"))
-                .and_then(|tc| tc.get("title"))
-                .and_then(|t| t.as_str())
-                .unwrap_or("unknown");
-
-            let timestamp = chrono::Utc::now().to_rfc3339();
-            let existing = config_guard
-                .tool_permissions
-                .tools
-                .iter_mut()
-                .find(|t| t.title == tool_title);
-            if let Some(tool) = existing {
-                tool.last_seen = timestamp;
-            } else {
-                config_guard
-                    .tool_permissions
-                    .tools
-                    .push(crate::config::ToolPolicy {
-                        title: tool_title.to_string(),
-                        policy: "ask".to_string(),
-                        last_seen: timestamp,
-                    });
-            }
-            let _ = config_guard.save();
-
-            let policy = if config_guard.tool_permissions.trust_all {
-                "allow".to_string()
-            } else {
-                config_guard
-                    .tool_permissions
-                    .tools
-                    .iter()
-                    .find(|t| t.title == tool_title)
-                    .map(|t| t.policy.clone())
-                    .unwrap_or_else(|| "ask".to_string())
-            };
-
-            drop(config_guard);
-
-            let send_response = |option_id: &str| {
-                if let Some(request_id) = notification.get("id") {
-                    let response = serde_json::json!({
-                        "jsonrpc": "2.0",
-                        "id": request_id,
-                        "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
-                    });
-                    if let Ok(response_json) = serde_json::to_string(&response) {
-                        use std::io::Write;
-                        info!(
-                            "📤 Auto-responding permission ({}): {}",
-                            option_id, response_json
-                        );
-
-                        if let Ok(guard) = pipe_stdin_for_perm.lock() {
-                            if let Some(ref stdin_arc) = *guard {
-                                let stdin_clone = stdin_arc.clone();
-                                drop(guard);
-                                if let Ok(mut stdin) = stdin_clone.lock() {
-                                    let _ = write!(stdin, "{}\n", response_json);
-                                    let _ = stdin.flush();
-                                    info!("✅ Auto-response sent via Pipe");
-                                    return;
-                                };
-                            }
-                        }
-                        if let Ok(guard) = tcp_writer_for_perm.lock() {
-                            if let Some(ref stream) = *guard {
-                                if let Ok(mut ws) = stream.try_clone() {
-                                    drop(guard);
-                                    let _ = write!(ws, "{}\n", response_json);
-                                    let _ = ws.flush();
-                                    info!("✅ Auto-response sent via TCP");
-                                    return;
-                                }
-                            }
-                        }
-                        error!("❌ Failed to send auto-response: no write handle");
-                    }
-                }
-            };
-
-            match policy.as_str() {
-                "allow" => {
-                    info!("🔓 Policy=allow for tool: {}", tool_title);
-                    send_response("allow_once");
-                }
-                "deny" => {
-                    info!("🚫 Policy=deny for tool: {}", tool_title);
-                    send_response("reject_once");
-                }
-                _ => {
-                    info!("❓ Policy=ask for tool: {}", tool_title);
-                    // Track the pending permission so other windows can detect and auto-deny it
-                    let session_id = notification
-                        .get("params")
-                        .and_then(|p| p.get("sessionId"))
-                        .and_then(|s| s.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if let Ok(mut pending) = pending_perm_for_cb.lock() {
-                        *pending = Some(crate::state::PendingPermission {
-                            request_id: notification.get("id").cloned().unwrap_or(serde_json::Value::Null),
-                            tool_title: tool_title.to_string(),
-                            session_id,
-                        });
-                    }
-                    let _ = window_for_permission.emit(
-                        "permission_request",
-                        serde_json::json!({
-                            "notification": notification,
-                            "auto_approve": false
-                        }),
-                    );
-                }
-            }
-        });
-
-        // Create notification callback for tool_call updates and _kiro.dev notifications
-        let window_for_notif = window.clone();
-        let slash_cmds = slash_cmds_handle.clone();
-        let notification_callback = Box::new(move |notification: serde_json::Value| {
-            // Capture slash commands from _kiro.dev/commands/available
-            let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
-            if method == "_kiro.dev/commands/available" {
-                if let Some(commands) = notification.get("params").and_then(|p| p.get("commands")).and_then(|c| c.as_array()) {
-                    if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::SlashCommand>>(serde_json::Value::Array(commands.clone())) {
-                        info!("Received {} slash commands from ACP", parsed.len());
-                        if let Ok(mut cmds) = slash_cmds.lock() {
-                            *cmds = parsed;
-                        }
-                    }
-                }
-                let _ = window_for_notif.emit("slash_commands_available", notification);
-                return;
-            }
-            let _ = window_for_notif.emit("tool_call_update", notification);
-        });
-
-        if let Err(e) = client.send_chat_streaming(
-            message,
-            |chunk| {
-                let _ = window.emit("message_chunk", chunk);
-            },
-            Some(permission_callback),
-            Some(notification_callback),
-        ) {
-            error!("Send error: {}", e);
-            let error_msg = format!(
-                "Failed to send message. The connection may have been lost.\n\nError: {}",
-                e
-            );
-            let _ = window.emit("message_error", error_msg);
+        // The notification handler (set up at app init) handles all streaming
+        // chunks, permissions, and tool calls via Tauri events.
+        if let Err(e) = client.send_chat_streaming(message) {
+            let _ = window.emit("message_error", format!("Failed to send: {}", e));
             return;
         }
 
-        let _ = window.emit("message_complete", ());
+        let _ = window_clone.emit("message_complete", ());
     });
 
     Ok(())
@@ -212,91 +218,26 @@ pub async fn send_permission_response(
     tool_title: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    info!(
-        "Sending permission response: option_id={}, tool_title={}",
-        option_id, tool_title
-    );
+    info!("Permission response: {}={}", tool_title, option_id);
 
     let response = serde_json::json!({
         "jsonrpc": "2.0",
         "id": request_id,
-        "result": {
-            "outcome": {
-                "outcome": "selected",
-                "optionId": option_id
-            }
-        }
+        "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
     });
-    let response_json =
-        serde_json::to_string(&response).map_err(|e| format!("Failed to serialize: {}", e))?;
+    let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
 
-    info!("📤 Permission response JSON: {}", response_json);
-
-    use std::io::Write;
-
-    let sent = {
-        let pipe_guard = state
-            .pipe_stdin
-            .lock()
-            .map_err(|e| format!("Failed to lock pipe_stdin: {}", e))?;
-        if let Some(ref stdin_arc) = *pipe_guard {
-            let stdin_clone = stdin_arc.clone();
-            drop(pipe_guard);
-            let mut stdin = stdin_clone
-                .lock()
-                .map_err(|e| format!("Failed to lock stdin: {}", e))?;
-            write!(stdin, "{}\n", response_json)
-                .map_err(|e| format!("Failed to write: {}", e))?;
-            stdin
-                .flush()
-                .map_err(|e| format!("Failed to flush: {}", e))?;
-            info!("✅ Permission response sent via Pipe");
-            true
-        } else {
-            drop(pipe_guard);
-            let tcp_guard = state
-                .tcp_writer
-                .lock()
-                .map_err(|e| format!("Failed to lock tcp_writer: {}", e))?;
-            if let Some(ref stream) = *tcp_guard {
-                let mut write_stream = stream
-                    .try_clone()
-                    .map_err(|e| format!("Failed to clone stream: {}", e))?;
-                drop(tcp_guard);
-                write!(write_stream, "{}\n", response_json)
-                    .map_err(|e| format!("Failed to write: {}", e))?;
-                write_stream
-                    .flush()
-                    .map_err(|e| format!("Failed to flush: {}", e))?;
-                info!("✅ Permission response sent via TCP");
-                true
-            } else {
-                drop(tcp_guard);
-                false
-            }
-        }
-    };
-
-    if !sent {
-        return Err("Not connected - no write handle available".to_string());
-    }
+    let client = state.acp_client.lock().await;
+    client.write_line(&json).map_err(|e| format!("Write: {}", e))?;
 
     if option_id == "allow_always" {
         let mut config = state.config.lock().await;
-        if let Some(tool) = config
-            .tool_permissions
-            .tools
-            .iter_mut()
-            .find(|t| t.title == tool_title)
-        {
+        if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
             tool.policy = "allow".to_string();
         }
-        config
-            .save()
-            .map_err(|e| format!("Failed to save config: {}", e))?;
+        config.save().map_err(|e| format!("Save: {}", e))?;
     }
 
-    // Clear the pending permission tracker
     if let Ok(mut pending) = state.pending_permission.lock() {
         *pending = None;
     }
@@ -307,32 +248,15 @@ pub async fn send_permission_response(
 #[tauri::command]
 pub async fn check_connection(state: State<'_, AppState>) -> Result<bool, String> {
     let client = state.acp_client.lock().await;
-    let is_connected = client.is_connected();
-    info!(
-        "Connection check: {}",
-        if is_connected {
-            "connected"
-        } else {
-            "disconnected"
-        }
-    );
-    Ok(is_connected)
+    Ok(client.is_connected())
 }
 
 #[tauri::command]
 pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, String> {
-    info!("Manual reconnection requested");
     let client = state.acp_client.lock().await;
-
     match client.connect() {
-        Ok(_) => {
-            info!("Reconnection successful");
-            Ok(true)
-        }
-        Err(e) => {
-            error!("Reconnection failed: {}", e);
-            Err(format!("Failed to reconnect: {}", e))
-        }
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Failed to reconnect: {}", e)),
     }
 }
 
@@ -342,76 +266,137 @@ pub async fn open_chat_with_message(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    info!("Opening chat with message: {}", message);
-
-    if let Some(floating_window) = app.get_webview_window("floating") {
-        let _ = floating_window.hide();
+    if let Some(floating) = app.get_webview_window("floating") {
+        let _ = floating.hide();
     }
-
-    if let Some(main_window) = app.get_webview_window("main") {
-        let _ = main_window.show();
-        let _ = main_window.set_focus();
-
-        let _ = main_window.emit("initial_message", message.clone());
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+        let _ = main.emit("initial_message", message.clone());
 
         let client = state.acp_client.clone();
-        let window = main_window.clone();
+        let window = main.clone();
 
         async_runtime::spawn_blocking(move || {
             let client = async_runtime::block_on(client.lock());
-
             if !client.is_connected() {
-                info!("Not connected, attempting to connect...");
                 if let Err(e) = client.connect() {
-                    error!("Connection failed: {}", e);
-                    let error_msg = format!(
-                        "Unable to connect to Kiro CLI. Please ensure kiro-cli is running.\n\nError: {}",
-                        e
-                    );
-                    let _ = window.emit("message_error", error_msg);
+                    let _ = window.emit("message_error", format!("Unable to connect: {}", e));
                     return;
                 }
             }
-
-            if let Err(e) = client.send_chat_streaming(
-                message,
-                |chunk| {
-                    let _ = window.emit("message_chunk", chunk);
-                },
-                None,
-                None,
-            ) {
-                error!("Send error: {}", e);
-                let error_msg = format!(
-                    "Failed to send message. The connection may have been lost.\n\nError: {}",
-                    e
-                );
-                let _ = window.emit("message_error", error_msg);
+            if let Err(e) = client.send_chat_streaming(message) {
+                let _ = window.emit("message_error", format!("Failed to send: {}", e));
                 return;
             }
-
             let _ = window.emit("message_complete", ());
         });
     }
-
     Ok(())
 }
 
+#[tauri::command]
+pub async fn dismiss_pending_permission(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<bool, String> {
+    let pending = {
+        let guard = state.pending_permission.lock().map_err(|e| format!("Lock: {}", e))?;
+        guard.clone()
+    };
 
-/// Send steering content as the first message of a new session.
-/// This should only be called for brand new sessions, not when loading existing ones.
-/// The steering message is prefixed with STEERING_MSG_PREFIX so the UI can hide it.
+    if let Some(perm) = pending {
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": perm.request_id,
+            "result": { "outcome": { "outcome": "selected", "optionId": "reject_once" } }
+        });
+        let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
+
+        let client = state.acp_client.lock().await;
+        client.write_line(&json).map_err(|e| format!("Write: {}", e))?;
+
+        if let Ok(mut guard) = state.pending_permission.lock() {
+            *guard = None;
+        }
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.emit("permission_dismissed", ());
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn has_pending_permission(state: State<'_, AppState>) -> Result<bool, String> {
+    let guard = state.pending_permission.lock().map_err(|e| format!("Lock: {}", e))?;
+    Ok(guard.is_some())
+}
+
+#[tauri::command]
+pub async fn get_slash_commands(state: State<'_, AppState>) -> Result<Vec<crate::state::SlashCommand>, String> {
+    let cmds = state.slash_commands.lock().map_err(|e| format!("Lock: {}", e))?;
+    Ok(cmds.clone())
+}
+
+#[tauri::command]
+pub async fn execute_slash_command(
+    command: String,
+    args: Option<serde_json::Value>,
+    state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<serde_json::Value, String> {
+    let client = state.acp_client.clone();
+
+    let result = async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+        if !client.is_connected() {
+            return Err("Not connected".to_string());
+        }
+        let session_id = client.get_session_id().ok_or("No active session")?;
+        let cmd_name = command.strip_prefix('/').unwrap_or(&command);
+
+        let request = crate::acp_client::AcpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(3),
+            method: "_kiro.dev/commands/execute".to_string(),
+            params: serde_json::json!({
+                "sessionId": session_id,
+                "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
+            }),
+        };
+
+        let response = client.send_request(&request).map_err(|e| format!("Command failed: {}", e))?;
+        if let Some(error) = response.error {
+            return Err(format!("{} (code: {})", error.message, error.code));
+        }
+        Ok(response.result.unwrap_or(serde_json::json!(null)))
+    })
+    .await
+    .map_err(|e| format!("Task: {}", e))??;
+
+    let _ = window.emit("slash_command_result", &result);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_slash_command_options(
+    _command: String,
+    _state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({ "options": [] }))
+}
+
 #[tauri::command]
 pub async fn send_steering_message(
     state: State<'_, AppState>,
-    _window: WebviewWindow,
 ) -> Result<bool, String> {
     let config = state.config.lock().await;
     let assistant = &config.acp.assistant;
 
     let mut parts: Vec<String> = Vec::new();
 
-    // User steering (takes precedence)
     if let Some(ref path) = assistant.user_steering_path {
         if !path.is_empty() {
             if let Ok(content) = std::fs::read_to_string(path) {
@@ -422,7 +407,6 @@ pub async fn send_steering_message(
         }
     }
 
-    // Auto steering
     if assistant.auto_steering_enabled {
         if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
             if auto_path.exists() {
@@ -447,221 +431,13 @@ pub async fn send_steering_message(
         parts.join("\n\n---\n\n")
     );
 
-    info!("Sending steering message ({} chars)", steering_msg.len());
-
     let client = state.acp_client.clone();
-
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
-
-        if !client.is_connected() {
-            error!("Cannot send steering: not connected");
-            return;
-        }
-
-        if let Err(e) = client.send_chat_streaming(
-            steering_msg,
-            |_chunk| { /* discard streaming output for steering */ },
-            None,
-            None,
-        ) {
-            error!("Failed to send steering message: {}", e);
-        } else {
-            info!("Steering message sent successfully");
+        if client.is_connected() {
+            let _ = client.send_chat_streaming(steering_msg);
         }
     });
 
     Ok(true)
-}
-
-/// Dismiss any pending permission request by auto-denying it.
-/// Called by the floating window before sending a new message when the session
-/// has a stalled permission request from the main chat window.
-#[tauri::command]
-pub async fn dismiss_pending_permission(
-    state: State<'_, AppState>,
-    app: tauri::AppHandle,
-) -> Result<bool, String> {
-    let pending = {
-        let guard = state
-            .pending_permission
-            .lock()
-            .map_err(|e| format!("Lock error: {}", e))?;
-        guard.clone()
-    };
-
-    if let Some(perm) = pending {
-        info!(
-            "Auto-denying pending permission for tool '{}' (session {})",
-            perm.tool_title, perm.session_id
-        );
-
-        let response = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": perm.request_id,
-            "result": {
-                "outcome": {
-                    "outcome": "selected",
-                    "optionId": "reject_once"
-                }
-            }
-        });
-        let response_json =
-            serde_json::to_string(&response).map_err(|e| format!("Failed to serialize: {}", e))?;
-
-        use std::io::Write;
-
-        let sent = {
-            let pipe_guard = state
-                .pipe_stdin
-                .lock()
-                .map_err(|e| format!("Lock: {}", e))?;
-            if let Some(ref stdin_arc) = *pipe_guard {
-                let stdin_clone = stdin_arc.clone();
-                drop(pipe_guard);
-                let ok = {
-                    if let Ok(mut stdin) = stdin_clone.lock() {
-                        let _ = write!(stdin, "{}\n", response_json);
-                        let _ = stdin.flush();
-                        true
-                    } else {
-                        false
-                    }
-                };
-                ok
-            } else {
-                drop(pipe_guard);
-                let tcp_guard = state
-                    .tcp_writer
-                    .lock()
-                    .map_err(|e| format!("Lock: {}", e))?;
-                if let Some(ref stream) = *tcp_guard {
-                    let mut ws = stream
-                        .try_clone()
-                        .map_err(|e| format!("Clone: {}", e))?;
-                    drop(tcp_guard);
-                    let _ = write!(ws, "{}\n", response_json);
-                    let _ = ws.flush();
-                    true
-                } else {
-                    false
-                }
-            }
-        };
-
-        if sent {
-            // Clear the pending permission
-            if let Ok(mut guard) = state.pending_permission.lock() {
-                *guard = None;
-            }
-            // Tell the main chat window to dismiss its permission modal
-            if let Some(main_window) = app.get_webview_window("main") {
-                let _ = main_window.emit("permission_dismissed", ());
-            }
-            info!("Pending permission auto-denied successfully");
-            Ok(true)
-        } else {
-            Err("Failed to send deny response".to_string())
-        }
-    } else {
-        Ok(false)
-    }
-}
-
-/// Check if there is a pending (unhandled) permission request.
-#[tauri::command]
-pub async fn has_pending_permission(
-    state: State<'_, AppState>,
-) -> Result<bool, String> {
-    let guard = state
-        .pending_permission
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-    Ok(guard.is_some())
-}
-
-
-/// Get the list of slash commands received from the ACP server.
-#[tauri::command]
-pub async fn get_slash_commands(
-    state: State<'_, AppState>,
-) -> Result<Vec<crate::state::SlashCommand>, String> {
-    let cmds = state
-        .slash_commands
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-    Ok(cmds.clone())
-}
-
-/// Execute a slash command via _kiro.dev/commands/execute.
-/// The command field is a tagged enum: { "command": "agent", "args": { ... } }
-/// Uses send_request for synchronous request-response (not streaming).
-#[tauri::command]
-pub async fn execute_slash_command(
-    command: String,
-    args: Option<serde_json::Value>,
-    state: State<'_, AppState>,
-    window: WebviewWindow,
-) -> Result<serde_json::Value, String> {
-    info!("Executing slash command: {} args={:?}", command, args);
-    let client = state.acp_client.clone();
-
-    let result = async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-
-        if !client.is_connected() {
-            return Err("Not connected to ACP server".to_string());
-        }
-
-        let session_id = client
-            .get_session_id()
-            .ok_or_else(|| "No active session".to_string())?;
-
-        // Strip leading / from command name if present
-        let cmd_name = command.strip_prefix('/').unwrap_or(&command);
-
-        let request = crate::acp_client::AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(3),
-            method: "_kiro.dev/commands/execute".to_string(),
-            params: serde_json::json!({
-                "sessionId": session_id,
-                "command": {
-                    "command": cmd_name,
-                    "args": args.unwrap_or(serde_json::json!({}))
-                }
-            }),
-        };
-
-        let response = client
-            .send_request(&request)
-            .map_err(|e| format!("Command failed: {}", e))?;
-
-        if let Some(error) = response.error {
-            return Err(format!("{} (code: {})", error.message, error.code));
-        }
-
-        Ok(response.result.unwrap_or(serde_json::json!(null)))
-    })
-    .await
-    .map_err(|e| format!("Task error: {}", e))??;
-
-    // Emit the result to the window so the UI can display it
-    let _ = window.emit("slash_command_result", &result);
-    info!("Slash command result: {:?}", result);
-
-    Ok(result)
-}
-
-/// Fetch options for a slash command via _kiro.dev/commands/options.
-#[tauri::command]
-pub async fn get_slash_command_options(
-    command: String,
-    state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
-    info!("Fetching options for slash command: {}", command);
-    // TODO: Wire up _kiro.dev/commands/options when the full protocol is available.
-    // For now, return empty options.
-    let _ = (command, state);
-    Ok(serde_json::json!({ "options": [] }))
 }

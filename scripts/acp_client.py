@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from typing import Any
 
 from acp import spawn_agent_process, text_block, PROTOCOL_VERSION
@@ -35,10 +36,11 @@ BOLD = "\033[1m"
 
 def trace(event: StreamEvent) -> None:
     """Print every JSON-RPC frame to the trace window."""
+    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
     if event.direction == StreamDirection.OUTGOING:
-        arrow = f"{CYAN}>>> CLIENT → AGENT{RESET}"
+        arrow = f"{CYAN}>>> CLIENT → AGENT  {DIM}{ts}{RESET}"
     else:
-        arrow = f"{YELLOW}<<< AGENT → CLIENT{RESET}"
+        arrow = f"{YELLOW}<<< AGENT → CLIENT  {DIM}{ts}{RESET}"
     method = event.message.get("method", "")
     msg_id = event.message.get("id", "")
     header = method or (f"response id={msg_id}" if msg_id != "" else "")

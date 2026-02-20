@@ -8,7 +8,9 @@ pub struct AppState {
     pub acp_client: Arc<Mutex<AcpClient>>,
     pub config: Arc<Mutex<Config>>,
     pub app_launcher: Arc<Mutex<AppLauncher>>,
+    #[allow(dead_code)]
     pub pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
+    #[allow(dead_code)]
     pub tcp_writer: Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     pub dev_mode: bool,
     /// The session ID used by the floating window (persists across session switches)
@@ -18,9 +20,16 @@ pub struct AppState {
     pub pending_permission: Arc<std::sync::Mutex<Option<PendingPermission>>>,
     /// Slash commands received from the ACP server via _kiro.dev/commands/available
     pub slash_commands: Arc<std::sync::Mutex<Vec<SlashCommand>>>,
+    /// Available models from the ACP session/new response
+    #[allow(dead_code)]
+    pub available_models: Arc<std::sync::Mutex<Vec<AcpModel>>>,
+    /// Current model ID
+    #[allow(dead_code)]
+    pub current_model_id: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PendingPermission {
     pub request_id: serde_json::Value,
     pub tool_title: String,
@@ -43,4 +52,12 @@ pub struct SlashCommandMeta {
     pub input_type: Option<String>,
     pub hint: Option<String>,
     pub local: Option<bool>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AcpModel {
+    #[serde(rename = "modelId")]
+    pub model_id: String,
+    pub name: String,
+    pub description: String,
 }
