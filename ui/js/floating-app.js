@@ -62,6 +62,8 @@ export class FloatingApp {
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
         this.listen('message_complete', () => this.handleMessageComplete());
         this.listen('message_error', (event) => this.handleMessageError(event));
+        this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+        this.toolSources = [];
     }
 
     setupVisibilityTracking() {
@@ -111,6 +113,11 @@ export class FloatingApp {
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
         this.currentResponse = '';
+        this.toolSources = [];
+        const sourcesEl = document.getElementById('toolSources');
+        if (sourcesEl) sourcesEl.remove();
+        const compactEl = document.getElementById('toolSourcesCompact');
+        if (compactEl) compactEl.remove();
         this.elements.input.focus();
     }
 
@@ -463,6 +470,11 @@ export class FloatingApp {
         this.currentMatches = [];
         this.selectedIndex = -1;
         this.elements.contentArea.classList.remove('visible');
+        this.toolSources = [];
+        const sourcesEl2 = document.getElementById('toolSources');
+        if (sourcesEl2) sourcesEl2.remove();
+        const compactEl2 = document.getElementById('toolSourcesCompact');
+        if (compactEl2) compactEl2.remove();
         
         await this.windowManager.resetHeightForNewMessage();
         this.startThinking();
@@ -508,6 +520,15 @@ export class FloatingApp {
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');
             this.elements.ghostContainer.classList.remove('thinking');
+            
+            // Transition compact sources to full (bottom) layout
+            const compactEl = document.getElementById('toolSourcesCompact');
+            if (compactEl) {
+                compactEl.remove();
+                if (this.toolSources.length > 0) {
+                    this.renderSources();
+                }
+            }
         }
         
         renderMarkdown(this.currentResponse, this.elements.responseText);
@@ -544,6 +565,171 @@ export class FloatingApp {
         
         this.showError('Error: ' + event.payload);
         this.isWaitingForResponse = false;
+    }
+
+    handleToolCallUpdate(event) {
+        const notification = event.payload;
+        const update = notification?.params?.update;
+        if (!update) return;
+        
+        const kind = update.kind;
+        const rawOutput = update.rawOutput;
+        
+        // Extract URLs from search results in rawOutput (arrives on tool_call_update with status=completed)
+        if (rawOutput && (kind === 'search' || update.title?.toLowerCase().includes('search'))) {
+            this.extractSources(rawOutput);
+        }
+        
+        // Also check content for URLs
+        if (update.content && Array.isArray(update.content)) {
+            for (const item of update.content) {
+                if (item.type === 'content' && item.content?.text) {
+                    this.extractSourcesFromText(item.content.text);
+                }
+            }
+        }
+        
+        if (this.toolSources.length > 0) {
+            // If no text content yet, show compact sources in place of loading dots
+            if (!this.currentResponse || this.currentResponse.trim().length === 0) {
+                this.renderSourcesCompact();
+            } else {
+                this.renderSources();
+            }
+        }
+    }
+
+    extractSources(rawOutput) {
+        // rawOutput structure from web_search:
+        // { items: [{ Json: { results: [{ url, title, domain, ... }] } }] }
+        if (rawOutput && rawOutput.items && Array.isArray(rawOutput.items)) {
+            for (const item of rawOutput.items) {
+                const results = item?.Json?.results || item?.results;
+                if (Array.isArray(results)) {
+                    for (const result of results) {
+                        if (result.url) {
+                            this.addSource(result.url, result.title, result.domain);
+                        }
+                    }
+                }
+            }
+        } else if (Array.isArray(rawOutput)) {
+            for (const result of rawOutput) {
+                if (result.url) this.addSource(result.url, result.title, result.domain);
+            }
+        } else if (typeof rawOutput === 'object') {
+            const results = rawOutput.results || rawOutput.searchResults;
+            if (Array.isArray(results)) {
+                for (const result of results) {
+                    if (result.url) this.addSource(result.url, result.title, result.domain);
+                }
+            }
+        }
+    }
+
+    extractSourcesFromText(text) {
+        // Extract URLs from markdown-style links [title](url) or plain URLs
+        const linkRegex = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+        let match;
+        while ((match = linkRegex.exec(text)) !== null) {
+            this.addSource(match[2], match[1]);
+        }
+    }
+
+    addSource(url, title, domainHint) {
+        try {
+            const parsed = new URL(url);
+            const domain = domainHint || parsed.hostname.replace(/^www\./, '');
+            // Deduplicate by domain
+            if (!this.toolSources.find(s => s.domain === domain)) {
+                const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
+                // Generate a consistent color from domain name
+                let hash = 0;
+                for (let i = 0; i < domain.length; i++) {
+                    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const hue = Math.abs(hash) % 360;
+                const color = `hsl(${hue}, 55%, 45%)`;
+                
+                this.toolSources.push({
+                    url: url,
+                    domain: domain,
+                    title: title || domain,
+                    initials: initials,
+                    color: color,
+                    favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+                });
+            }
+        } catch (e) {
+            // Invalid URL, skip
+        }
+    }
+
+    renderSources() {
+        // Remove compact version if it exists
+        const compactEl = document.getElementById('toolSourcesCompact');
+        if (compactEl) compactEl.remove();
+        
+        let sourcesEl = document.getElementById('toolSources');
+        if (!sourcesEl) {
+            sourcesEl = document.createElement('div');
+            sourcesEl.id = 'toolSources';
+            sourcesEl.className = 'tool-sources';
+            const contentArea = this.elements.contentArea;
+            if (contentArea) {
+                contentArea.appendChild(sourcesEl);
+            }
+        }
+        
+        if (this.toolSources.length === 0) {
+            sourcesEl.style.display = 'none';
+            return;
+        }
+        
+        sourcesEl.style.display = 'flex';
+        this.elements.contentArea.classList.add('visible');
+        
+        sourcesEl.innerHTML = this.toolSources.map(source => `
+            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.tauri.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}">
+                <span class="source-icon-wrapper">
+                    <span class="source-initials" style="background:${source.color}">${source.initials}</span>
+                    <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                </span>
+                <span class="source-domain">${source.domain}</span>
+            </a>
+        `).join('');
+        
+        this.windowManager.resizeWindow();
+    }
+
+    renderSourcesCompact() {
+        // Hide loading dots and show compact source icons in their place
+        this.elements.loadingDots.classList.remove('visible');
+        this.elements.ghostContainer.classList.remove('thinking');
+        
+        let compactEl = document.getElementById('toolSourcesCompact');
+        if (!compactEl) {
+            compactEl = document.createElement('div');
+            compactEl.id = 'toolSourcesCompact';
+            compactEl.className = 'tool-sources-compact';
+            // Insert where loading dots are — inside the speech bubble, before content area
+            const speechBubble = document.querySelector('.speech-bubble');
+            if (speechBubble) {
+                speechBubble.insertBefore(compactEl, this.elements.contentArea);
+            }
+        }
+        
+        compactEl.style.display = 'flex';
+        compactEl.innerHTML = this.toolSources.map((source, i) => `
+            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.tauri.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${i * 0.08}s">
+                <span class="source-icon-wrapper">
+                    <span class="source-initials" style="background:${source.color}">${source.initials}</span>
+                    <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                </span>
+            </a>
+        `).join('');
+        
+        this.windowManager.resizeWindow();
     }
 
     showError(message) {

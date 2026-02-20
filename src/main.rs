@@ -421,11 +421,17 @@ async fn send_message_streaming(
             }
         });
         
+        // Create notification callback for tool_call updates
+        let window_for_notif = window.clone();
+        let notification_callback = Box::new(move |notification: serde_json::Value| {
+            let _ = window_for_notif.emit("tool_call_update", notification);
+        });
+        
         // Send the message and stream the response
         if let Err(e) = client.send_chat_streaming(message, |chunk| {
             // Emit each chunk to the frontend
             let _ = window.emit("message_chunk", chunk);
-        }, Some(permission_callback)) {
+        }, Some(permission_callback), Some(notification_callback)) {
             error!("Send error: {}", e);
             let error_msg = format!(
                 "Failed to send message. The connection may have been lost.\n\nError: {}",
@@ -602,7 +608,7 @@ async fn open_chat_with_message(
             
             if let Err(e) = client.send_chat_streaming(message, |chunk| {
                 let _ = window.emit("message_chunk", chunk);
-            }, None) {
+            }, None, None) {
                 error!("Send error: {}", e);
                 let error_msg = format!(
                     "Failed to send message. The connection may have been lost.\n\nError: {}",

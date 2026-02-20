@@ -1,4 +1,4 @@
-﻿use anyhow::{Context, Result};
+use anyhow::{Context, Result};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -439,7 +439,7 @@ impl AcpClient {
 
     /// Execute a Kiro slash command via _kiro.dev/commands/execute extension.
     /// Returns the AcpResponse result value.
-    pub fn send_chat_streaming<F>(&self, content: String, mut callback: F, permission_callback: Option<Box<dyn Fn(serde_json::Value) + Send>>) -> Result<()>
+    pub fn send_chat_streaming<F>(&self, content: String, mut callback: F, permission_callback: Option<Box<dyn Fn(serde_json::Value) + Send>>, notification_callback: Option<Box<dyn Fn(serde_json::Value) + Send>>) -> Result<()>
     where
         F: FnMut(String),
     {
@@ -556,6 +556,12 @@ impl AcpClient {
                                             }
                                         }
                                     }
+                                    // Forward tool_call updates to notification callback
+                                    if session_update == "tool_call" || session_update == "tool_call_update" {
+                                        if let Some(ref notif_cb) = notification_callback {
+                                            notif_cb(serde_json::to_value(&notification).unwrap_or_default());
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -636,6 +642,12 @@ impl AcpClient {
                                                 info!("ðŸ“ Accumulated: {} chars", full_response.len());
                                                 callback(full_response.clone());
                                             }
+                                        }
+                                    }
+                                    // Forward tool_call updates to notification callback
+                                    if session_update == "tool_call" || session_update == "tool_call_update" {
+                                        if let Some(ref notif_cb) = notification_callback {
+                                            notif_cb(serde_json::to_value(&notification).unwrap_or_default());
                                         }
                                     }
                                 }

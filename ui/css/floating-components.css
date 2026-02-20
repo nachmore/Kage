@@ -434,3 +434,131 @@
     background: rgba(244, 67, 54, 0.35);
     border-color: rgba(244, 67, 54, 0.7);
 }
+
+/* Tool Sources */
+.tool-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 12px 0 8px 0;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 8px;
+    transition: all 0.2s ease;
+}
+
+.source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 4px;
+    background: #f3f4f6;
+    border-radius: 16px;
+    text-decoration: none;
+    color: #555;
+    font-size: 12px;
+    transition: background 0.15s;
+    cursor: pointer;
+}
+
+.source-chip:hover {
+    background: #e5e7eb;
+    color: #333;
+}
+
+.source-icon-wrapper {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.source-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.source-favicon {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #f3f4f6;
+}
+
+.source-domain {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Compact source bubbles (shown while waiting for text) */
+.tool-sources-compact {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 20px 0;
+    flex: 1;
+    min-height: 60px;
+}
+
+.source-bubble {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    animation: sourcePop 0.3s ease-out both, sourceBob 1.4s ease-in-out infinite 0.3s;
+    transition: transform 0.15s;
+}
+
+.source-bubble:hover {
+    animation-play-state: paused;
+    transform: scale(1.15);
+}
+
+.source-bubble .source-icon-wrapper {
+    width: 32px;
+    height: 32px;
+}
+
+.source-bubble .source-initials {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+}
+
+.source-bubble .source-favicon {
+    width: 32px;
+    height: 32px;
+}
+
+@keyframes sourcePop {
+    0% {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    70% {
+        transform: scale(1.1);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes sourceBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
