@@ -86,6 +86,15 @@ export class FloatingApp {
         this.appWindow.listen('tauri://focus', async () => {
             setTimeout(() => this.elements.input.focus(), 50);
         });
+        
+        this.appWindow.listen('tauri://blur', async () => {
+            // Don't hide if permission modal is open
+            const permissionModal = document.getElementById('permissionModal');
+            if (permissionModal && permissionModal.style.display !== 'none') {
+                return;
+            }
+            await this.appWindow.hide();
+        });
     }
 
     resetUI() {
