@@ -518,3 +518,23 @@ pub async fn restore_floating_session(
 
     Ok(floating_id)
 }
+
+/// Rename a session by updating its title in the cache
+#[tauri::command]
+pub async fn rename_session(
+    session_id: String,
+    title: String,
+) -> Result<(), String> {
+    let title = title.trim().to_string();
+    if title.is_empty() {
+        return Err("Title cannot be empty".to_string());
+    }
+
+    info!("Renaming session {} to: {}", session_id, title);
+
+    let mut cache = load_title_cache();
+    cache.insert(session_id, title);
+    save_title_cache(&cache);
+
+    Ok(())
+}

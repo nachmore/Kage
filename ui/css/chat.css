@@ -473,3 +473,22 @@ body {
 .message-attachment-img:hover {
     opacity: 0.85;
 }
+
+/* Inline title editing */
+.chat-header-title {
+    cursor: default;
+}
+
+.chat-header-title-input {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    background: transparent;
+    border: 1px solid var(--kiro-accent);
+    border-radius: 4px;
+    padding: 2px 6px;
+    outline: none;
+    font-family: inherit;
+    width: 300px;
+    max-width: 60%;
+}

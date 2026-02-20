@@ -59,6 +59,29 @@ const LOCAL_COMMANDS = [
                 document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
             }
         }
+    },
+    {
+        name: 'session-title',
+        description: 'Rename current session (>session-title My Project Chat)',
+        icon: '✏️',
+        execute: async (invoke, _appWindow, args) => {
+            const title = args?.trim();
+            if (!title) {
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Usage: >session-title New Session Name' }));
+                return;
+            }
+            try {
+                const sessionId = await invoke('get_current_session_id');
+                if (!sessionId) {
+                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'No active session to rename' }));
+                    return;
+                }
+                await invoke('rename_session', { sessionId, title });
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: `Session renamed to: ${title}` }));
+            } catch (e) {
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+            }
+        }
     }
 ];
 
@@ -231,8 +254,11 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
  * Execute a > command by name. Returns true if found and executed.
  */
 export async function executeCommand(name, invoke, appWindow) {
-    const cmd = LOCAL_COMMANDS.find(c => c.name === name.toLowerCase());
+    const parts = name.toLowerCase().split(/\s+/);
+    const cmdName = parts[0];
+    const args = parts.length > 1 ? name.substring(name.indexOf(' ') + 1) : '';
+    const cmd = LOCAL_COMMANDS.find(c => c.name === cmdName);
     if (!cmd) return false;
-    await cmd.execute(invoke, appWindow);
+    await cmd.execute(invoke, appWindow, args);
     return true;
 }

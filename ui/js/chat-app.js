@@ -95,6 +95,7 @@ export class ChatApp {
             floatingBtn: document.getElementById('floatingBtn'),
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
+            chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
             errorContainer: document.getElementById('errorContainer'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
             chatMain: document.querySelector('.chat-main')
@@ -127,6 +128,14 @@ export class ChatApp {
 
         // Paste handler for images
         this.elements.chatInput.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
+
+        // Double-click header title to rename session
+        this.elements.chatHeaderTitle.addEventListener('dblclick', () => this.startTitleEdit());
+        this.elements.chatHeaderTitleInput.addEventListener('blur', () => this.finishTitleEdit());
+        this.elements.chatHeaderTitleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); this.finishTitleEdit(); }
+            if (e.key === 'Escape') { this.cancelTitleEdit(); }
+        });
 
         // Drag-and-drop for files on the main chat area
         setupDragDrop(this.elements.chatMain, this.elements.chatMain, this.attachmentManager);
@@ -903,6 +912,47 @@ export class ChatApp {
         msgEl.innerHTML = `<span>${this.escapeHtml(message)}</span>`;
         this.elements.messagesArea.appendChild(msgEl);
         this.scrollToBottom();
+    }
+
+    startTitleEdit() {
+        if (!this.activeSessionId) return;
+        const titleEl = this.elements.chatHeaderTitle;
+        const inputEl = this.elements.chatHeaderTitleInput;
+        inputEl.value = titleEl.textContent;
+        titleEl.style.display = 'none';
+        inputEl.style.display = 'inline-block';
+        inputEl.focus();
+        inputEl.select();
+    }
+
+    cancelTitleEdit() {
+        this.elements.chatHeaderTitleInput.style.display = 'none';
+        this.elements.chatHeaderTitle.style.display = '';
+    }
+
+    async finishTitleEdit() {
+        const inputEl = this.elements.chatHeaderTitleInput;
+        const titleEl = this.elements.chatHeaderTitle;
+        const newTitle = inputEl.value.trim();
+
+        inputEl.style.display = 'none';
+        titleEl.style.display = '';
+
+        if (!newTitle || !this.activeSessionId || newTitle === titleEl.textContent) return;
+
+        try {
+            await this.invoke('rename_session', {
+                sessionId: this.activeSessionId,
+                title: newTitle
+            });
+            titleEl.textContent = newTitle;
+            // Update in the sessions list too
+            const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+            if (session) session.title = newTitle;
+            this.renderSessionList();
+        } catch (e) {
+            console.error('Failed to rename session:', e);
+        }
     }
 
     scrollToBottom() {
