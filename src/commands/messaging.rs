@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use log::info;
+use log::{info, error};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 
 /// Set up the notification handler on the ACP client.
@@ -183,6 +183,7 @@ fn handle_permission_notification(
 #[tauri::command]
 pub async fn send_message_streaming(
     message: String,
+    attachments: Option<Vec<serde_json::Value>>,
     state: State<'_, AppState>,
     window: WebviewWindow,
 ) -> Result<(), String> {
@@ -202,8 +203,46 @@ pub async fn send_message_streaming(
 
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
-        if let Err(e) = client.send_chat_streaming(message) {
-            let _ = window.emit("message_error", format!("Failed to send: {}", e));
+        let had_attachments = attachments.as_ref().map_or(false, |a| !a.is_empty());
+        if let Err(e) = client.send_chat_streaming(message, attachments) {
+            let error_str = format!("{}", e);
+            let is_image_error = had_attachments && (
+                error_str.contains("Internal error")
+                || error_str.contains("image")
+                || error_str.contains("unsupported")
+                || error_str.contains("response stream")
+            );
+
+            if is_image_error {
+                // The ACP connection is likely stuck after an image error.
+                // Disconnect, clear the session, reconnect, and start fresh.
+                info!("Image-related error detected — resetting ACP connection and session");
+                client.disconnect();
+                client.set_session_id(None);
+
+                let reconnected = match client.connect() {
+                    Ok(_) => {
+                        match client.create_session(None) {
+                            Ok(_) => true,
+                            Err(e) => {
+                                error!("Failed to create new session after image error: {}", e);
+                                false
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to reconnect after image error: {}", e);
+                        false
+                    }
+                };
+
+                let _ = window.emit("session_reset", serde_json::json!({
+                    "reason": "image_unsupported",
+                    "reconnected": reconnected,
+                }));
+            } else {
+                let _ = window.emit("message_error", format!("Failed to send: {}", error_str));
+            }
             return;
         }
 
@@ -287,7 +326,7 @@ pub async fn open_chat_with_message(
                     return;
                 }
             }
-            if let Err(e) = client.send_chat_streaming(message) {
+            if let Err(e) = client.send_chat_streaming(message, None) {
                 let _ = window.emit("message_error", format!("Failed to send: {}", e));
                 return;
             }
@@ -437,7 +476,7 @@ pub async fn send_steering_message(
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
         if client.is_connected() {
-            let _ = client.send_chat_streaming(steering_msg);
+            let _ = client.send_chat_streaming(steering_msg, None);
         }
     });
 

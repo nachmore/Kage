@@ -1,5 +1,6 @@
 // Expanded chat application logic
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
+import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml } from './attachments.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -22,6 +23,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this.userInfo = null;
+        this.attachmentManager = new AttachmentManager();
 
         this.elements = {};
     }
@@ -86,7 +88,9 @@ export class ChatApp {
             floatingBtn: document.getElementById('floatingBtn'),
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
-            errorContainer: document.getElementById('errorContainer')
+            errorContainer: document.getElementById('errorContainer'),
+            attachmentPreviews: document.getElementById('attachmentPreviews'),
+            chatMain: document.querySelector('.chat-main')
         };
     }
 
@@ -113,6 +117,17 @@ export class ChatApp {
         this.elements.floatingBtn.addEventListener('click', async () => {
             await this.invoke('test_floating_window');
         });
+
+        // Paste handler for images
+        this.elements.chatInput.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
+
+        // Drag-and-drop for files on the main chat area
+        setupDragDrop(this.elements.chatMain, this.elements.chatMain, this.attachmentManager);
+
+        // Re-render previews when attachments change
+        this.attachmentManager.onChange((attachments) => {
+            renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+        });
     }
 
     setupStreamingListeners() {
@@ -120,6 +135,7 @@ export class ChatApp {
         this.listen('message_complete', () => this.handleMessageComplete());
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+        this.listen('session_reset', (event) => this.handleSessionReset(event));
 
         this.listen('initial_message', (event) => {
             const message = event.payload;
@@ -391,13 +407,18 @@ export class ChatApp {
 
     async sendMessage() {
         const message = this.elements.chatInput.value.trim();
-        if (!message || this.isWaitingForResponse) return;
+        const hasAttachments = this.attachmentManager.hasAttachments();
+        if ((!message && !hasAttachments) || this.isWaitingForResponse) return;
+
+        const attachments = this.attachmentManager.toContentBlocks();
+        const attachmentSnapshots = hasAttachments ? [...this.attachmentManager.attachments] : null;
+        this.attachmentManager.clear();
 
         this.elements.chatInput.value = '';
         this.elements.chatInput.style.height = 'auto';
 
-        // Handle / slash commands
-        if (message.startsWith('/')) {
+        // Handle / slash commands (only if no attachments)
+        if (!hasAttachments && message.startsWith('/')) {
             try {
                 const parts = message.split(' ');
                 const cmdName = parts[0].substring(1); // strip leading /
@@ -421,11 +442,11 @@ export class ChatApp {
             }
         }
 
-        this.addUserMessage(message);
+        this.addUserMessage(message, attachmentSnapshots);
         this.startStreaming();
 
         try {
-            await this.invoke('send_message_streaming', { message });
+            await this.invoke('send_message_streaming', { message, attachments });
             this.isConnected = true;
             this.updateConnectionStatus();
         } catch (error) {
@@ -442,12 +463,21 @@ export class ChatApp {
         }
     }
 
-    addUserMessage(text) {
+    addUserMessage(text, attachmentSnapshots) {
         const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
         if (placeholder) placeholder.remove();
 
         this.messages.push({ role: 'user', content: text });
         const msgEl = this.createMessageElement('user', text);
+
+        // Append attachment previews to the message bubble
+        if (attachmentSnapshots && attachmentSnapshots.length > 0) {
+            const contentDiv = msgEl.querySelector('.message-content');
+            if (contentDiv) {
+                contentDiv.insertAdjacentHTML('beforeend', attachmentPreviewHtml(attachmentSnapshots));
+            }
+        }
+
         this.elements.messagesArea.appendChild(msgEl);
         this.scrollToBottom();
     }
@@ -584,6 +614,42 @@ export class ChatApp {
         this.isWaitingForResponse = false;
         this.updateInputState();
         this.elements.chatInput.focus();
+    }
+
+    handleSessionReset(event) {
+        this.hideTypingIndicator();
+
+        if (this.currentStreamingMessage) {
+            this.currentStreamingMessage.remove();
+            this.currentStreamingMessage = null;
+        }
+
+        const data = event.payload;
+        if (data?.reason === 'image_unsupported') {
+            const reconnected = data.reconnected;
+            if (reconnected) {
+                this.isConnected = true;
+                this.updateConnectionStatus();
+                this.showSessionResetMessage(
+                    '🖼️ The current model doesn\'t support images. A new session has been started automatically — try switching to a vision-capable model.'
+                );
+            } else {
+                this.isConnected = false;
+                this.updateConnectionStatus();
+                this.showError(
+                    '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.'
+                );
+            }
+        } else {
+            this.showError('Session was reset due to an error.');
+        }
+
+        this.isWaitingForResponse = false;
+        this.updateInputState();
+        this.elements.chatInput.focus();
+
+        // Reload sessions since a new one was created
+        this.loadSessions();
     }
 
     handleToolCallUpdate(event) {
@@ -775,6 +841,18 @@ export class ChatApp {
                 this.showError('Reconnection failed: ' + e);
             }
         });
+    }
+
+    showSessionResetMessage(message) {
+        // Show as an inline system message in the chat area
+        const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
+        if (placeholder) placeholder.remove();
+
+        const msgEl = document.createElement('div');
+        msgEl.className = 'session-reset-notice';
+        msgEl.innerHTML = `<span>${this.escapeHtml(message)}</span>`;
+        this.elements.messagesArea.appendChild(msgEl);
+        this.scrollToBottom();
     }
 
     scrollToBottom() {

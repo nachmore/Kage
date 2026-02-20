@@ -3,6 +3,7 @@ import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestio
 import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
+import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -21,6 +22,7 @@ export class FloatingApp {
         // While the input only grows beyond this length, skip redundant backend calls.
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this.attachmentManager = new AttachmentManager();
         
         this.elements = {};
     }
@@ -60,7 +62,8 @@ export class FloatingApp {
             responseText: document.getElementById('responseText'),
             loadingDots: document.getElementById('loadingDots'),
             expandBtn: document.getElementById('expandBtn'),
-            ghostContainer: document.querySelector('.ghost-container')
+            ghostContainer: document.querySelector('.ghost-container'),
+            attachmentPreviews: document.getElementById('attachmentPreviews')
         };
     }
 
@@ -69,6 +72,14 @@ export class FloatingApp {
         this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
         document.addEventListener('click', (e) => this.handleOutsideClick(e));
+
+        // Paste handler for images
+        this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
+
+        // Re-render previews when attachments change
+        this.attachmentManager.onChange((attachments) => {
+            renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+        });
     }
 
     setupStreamingListeners() {
@@ -76,6 +87,7 @@ export class FloatingApp {
         this.listen('message_complete', () => this.handleMessageComplete());
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+        this.listen('session_reset', (event) => this.handleSessionReset(event));
         this.toolSources = [];
 
         document.addEventListener('kiro-clear', () => {
@@ -205,6 +217,7 @@ export class FloatingApp {
         this.selectedIndex = -1;
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
@@ -633,9 +646,10 @@ export class FloatingApp {
 
     async handleEnterKey() {
         const message = this.elements.input.value.trim();
+        const hasAttachments = this.attachmentManager.hasAttachments();
 
         // Allow Enter to work on selection lists even when input is empty
-        if (!message && !(this.currentMatches.length > 0 && this.selectedIndex >= 0)) return;
+        if (!message && !hasAttachments && !(this.currentMatches.length > 0 && this.selectedIndex >= 0)) return;
         
         if (this.isWaitingForResponse) {
             console.log('Interrupting current response with new question');
@@ -702,6 +716,8 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message) {
+        const attachments = this.attachmentManager.toContentBlocks();
+        this.attachmentManager.clear();
         this.elements.input.value = '';
         this.elements.input.style.height = 'auto';
         this.elements.appSuggestions.classList.remove('visible');
@@ -729,10 +745,11 @@ export class FloatingApp {
         }
         
         try {
-            // If we already know this input has no pattern match (from typing),
-            // skip the redundant backend classification call.
+            // If we have attachments, skip input classification and go straight to chat
             let result;
-            if (this._noMatchSinceLen > 0 && message.length >= this._noMatchSinceLen) {
+            if (attachments) {
+                result = 'chat';
+            } else if (this._noMatchSinceLen > 0 && message.length >= this._noMatchSinceLen) {
                 result = 'chat';
             } else {
                 result = await this.invoke('handle_floating_input', { input: message });
@@ -759,7 +776,7 @@ export class FloatingApp {
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
                 await this.windowManager.resizeWindow();
-                await this.invoke('send_message_streaming', { message });
+                await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {
             console.error('Error handling input:', error);
@@ -820,6 +837,20 @@ export class FloatingApp {
         
         this.showError('Error: ' + event.payload);
         this.isWaitingForResponse = false;
+    }
+
+    handleSessionReset(event) {
+        this.isWaitingForResponse = false;
+        const data = event.payload;
+        if (data?.reason === 'image_unsupported') {
+            const reconnected = data.reconnected;
+            const msg = reconnected
+                ? '🖼️ The current model doesn\'t support images. A new session has been started — try switching to a vision-capable model.'
+                : '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.';
+            this.showError(msg);
+        } else {
+            this.showError('Session was reset due to an error.');
+        }
     }
 
     handleToolCallUpdate(event) {

@@ -346,3 +346,135 @@
 .tool-bubble {
     cursor: default;
 }
+
+
+/* ===== Attachment Previews ===== */
+
+.attachment-preview-strip {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 12px 4px 12px;
+    align-items: center;
+}
+
+.attachment-preview-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 4px;
+    max-width: 140px;
+    animation: attachPop 0.2s ease-out;
+}
+
+@keyframes attachPop {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.attachment-preview-img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.attachment-preview-file-icon {
+    font-size: 20px;
+    padding: 4px;
+}
+
+.attachment-preview-file-name {
+    font-size: 11px;
+    color: #555;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 80px;
+}
+
+.attachment-remove-btn {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: #ef4444;
+    color: white;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.attachment-preview-item:hover .attachment-remove-btn {
+    opacity: 1;
+}
+
+/* Drag-drop overlay */
+.drag-over::after {
+    content: 'Drop files here';
+    position: absolute;
+    inset: 0;
+    background: rgba(142, 72, 255, 0.1);
+    border: 2px dashed var(--kiro-accent);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--kiro-accent);
+    z-index: 50;
+    pointer-events: none;
+}
+
+/* Attachments shown in sent messages */
+.message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.message-attachment-img {
+    max-width: 200px;
+    max-height: 150px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid #e5e7eb;
+}
+
+.message-attachment-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+/* Dark theme overrides for attachments */
+body.dark-theme .attachment-preview-item {
+    background: #2a2630;
+    border-color: #3d3748;
+}
+
+body.dark-theme .attachment-preview-file-name {
+    color: #b0aab8;
+}
+
+body.dark-theme .attachment-remove-btn {
+    background: #dc2626;
+}

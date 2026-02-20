@@ -514,7 +514,10 @@ impl AcpClient {
     /// Streaming chunks, permissions, and tool updates are delivered via
     /// the notification handler (set via set_notification_handler).
     /// This method blocks until the prompt response is received.
-    pub fn send_chat_streaming(&self, content: String) -> Result<()> {
+    /// Send a chat message with optional attachments.
+    /// `content` is the text message.
+    /// `attachments` is an optional list of content blocks (images, resource_links) to include.
+    pub fn send_chat_streaming(&self, content: String, attachments: Option<Vec<serde_json::Value>>) -> Result<()> {
         let debug = *self.debug_mode.lock().unwrap();
 
         // Reset the streaming accumulator for the new message
@@ -537,13 +540,33 @@ impl AcpClient {
             }
         };
 
+        // Build the prompt content array
+        let mut prompt: Vec<serde_json::Value> = Vec::new();
+
+        // Add text block if non-empty
+        if !content.is_empty() {
+            prompt.push(serde_json::json!({ "type": "text", "text": content }));
+        }
+
+        // Append any attachments (images, resource_links)
+        if let Some(att) = attachments {
+            for block in att {
+                prompt.push(block);
+            }
+        }
+
+        // Ensure we have at least one content block
+        if prompt.is_empty() {
+            prompt.push(serde_json::json!({ "type": "text", "text": "" }));
+        }
+
         let request = AcpRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(2),
             method: "session/prompt".to_string(),
             params: serde_json::json!({
                 "sessionId": session_id,
-                "prompt": [{ "type": "text", "text": content }]
+                "prompt": prompt
             }),
         };
 
@@ -553,7 +576,16 @@ impl AcpClient {
         let response = self.send_request(&request)?;
 
         if let Some(error) = response.error {
-            anyhow::bail!("ACP error: {}", error.message);
+            // Include the error data if available for richer error messages
+            let detail = error.data
+                .as_ref()
+                .and_then(|d| d.as_str())
+                .unwrap_or("");
+            if detail.is_empty() {
+                anyhow::bail!("ACP error: {}", error.message);
+            } else {
+                anyhow::bail!("ACP error: {} — {}", error.message, detail);
+            }
         }
 
         info!("Prompt completed");

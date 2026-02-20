@@ -120,3 +120,18 @@ body.dark-theme .chat-error {
     border-color: rgba(220, 38, 38, 0.3);
     color: #fca5a5;
 }
+
+body.dark-theme .message-attachment-img {
+    border-color: #4A464F;
+}
+
+body.dark-theme .message-attachment-file {
+    background: rgba(255,255,255,0.08);
+    color: #E5E7EB;
+}
+
+body.dark-theme .session-reset-notice {
+    background: rgba(142, 72, 255, 0.1);
+    border-color: rgba(142, 72, 255, 0.25);
+    color: #b0aab8;
+}
