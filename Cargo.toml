@@ -8,7 +8,7 @@ license = "MIT"
 repository = "https://github.com/kiro/kiro-assistant"
 
 [dependencies]
-tauri = { version = "1.5", features = ["shell-open"] }
+tauri = { version = "1.5", features = ["shell-open", "system-tray", "global-shortcut", "global-shortcut-all"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.35", features = ["full"] }

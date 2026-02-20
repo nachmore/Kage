@@ -15,15 +15,25 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "globalShortcut": {
+        "all": true
       }
     },
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.kiro.assistant"
+      "identifier": "com.kiro.assistant",
+      "icon": [
+        "icons/icon.ico"
+      ]
     },
     "security": {
       "csp": null
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": true
     },
     "windows": [
       {
@@ -31,7 +41,9 @@
         "resizable": true,
         "title": "Kiro Assistant",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "visible": false,
+        "skipTaskbar": false
       }
     ]
   }
