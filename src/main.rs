@@ -106,6 +106,7 @@ fn main() {
             pipe_stdin: pipe_stdin_handle,
             tcp_writer: tcp_writer_handle,
             dev_mode,
+            floating_session_id: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -235,7 +236,11 @@ fn main() {
             commands::read_clipboard,
             commands::show_context_menu,
             commands::list_sessions,
-            commands::load_session
+            commands::load_session,
+            commands::switch_acp_session,
+            commands::get_current_session_id,
+            commands::get_floating_session_id,
+            commands::restore_floating_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

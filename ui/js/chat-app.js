@@ -14,6 +14,7 @@ export class ChatApp {
         this.isConnected = false;
         this.sessions = [];
         this.activeSessionId = null;
+        this.floatingSessionId = null;
         this.toolSources = [];
 
         this.elements = {};
@@ -24,6 +25,7 @@ export class ChatApp {
         this.cacheElements();
         this.setupEventListeners();
         this.setupStreamingListeners();
+        await this.loadFloatingSessionId();
         await this.loadSessions();
         await this.checkConnection();
 
@@ -88,6 +90,15 @@ export class ChatApp {
 
     // --- Session Management ---
 
+    async loadFloatingSessionId() {
+        try {
+            this.floatingSessionId = await this.invoke('get_floating_session_id');
+        } catch (e) {
+            console.error('Failed to get floating session ID:', e);
+            this.floatingSessionId = null;
+        }
+    }
+
     async loadSessions() {
         try {
             const sessions = await this.invoke('list_sessions');
@@ -114,13 +125,16 @@ export class ChatApp {
             item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
             item.dataset.sessionId = session.session_id;
 
+            const isFloating = session.session_id === this.floatingSessionId;
             const title = session.title || 'New Chat';
             const date = new Date(session.updated_at || session.created_at);
             const dateStr = this.formatDate(date);
 
+            const floatingBadge = isFloating ? '<span class="session-floating-badge">💬</span>' : '';
+
             item.innerHTML = `
-                <div class="session-item-title">${this.escapeHtml(title)}</div>
-                <div class="session-item-date">${dateStr}</div>
+                <div class="session-item-title">${this.escapeHtml(title)}${floatingBadge}</div>
+                <div class="session-item-date">${dateStr}${isFloating ? ' · floating' : ''}</div>
             `;
 
             item.addEventListener('click', () => this.selectSession(session.session_id));
@@ -150,12 +164,32 @@ export class ChatApp {
         this.activeSessionId = sessionId;
         this.renderSessionList();
 
+        // Load and display session messages from files immediately
         try {
             const sessionData = await this.invoke('load_session', { sessionId });
             this.displaySession(sessionData);
         } catch (error) {
-            console.error('Failed to load session:', error);
+            console.error('Failed to load session files:', error);
             this.showError('Failed to load session: ' + error);
+        }
+
+        // Show connecting state in the input
+        this.elements.chatInput.disabled = true;
+        this.elements.chatInput.placeholder = 'Connecting to session...';
+        this.elements.sendBtn.disabled = true;
+
+        // Switch ACP session in parallel
+        try {
+            await this.invoke('switch_acp_session', { sessionId });
+            console.log('ACP session switched to:', sessionId);
+        } catch (error) {
+            console.error('Failed to switch ACP session:', error);
+            this.showError('Failed to connect to session: ' + error);
+        } finally {
+            this.elements.chatInput.disabled = false;
+            this.elements.chatInput.placeholder = 'Type your message...';
+            this.elements.sendBtn.disabled = false;
+            this.elements.chatInput.focus();
         }
     }
 
@@ -214,7 +248,7 @@ export class ChatApp {
         this.messages.push({ role, content: text });
     }
 
-    createNewSession() {
+    async createNewSession() {
         this.activeSessionId = null;
         this.messages = [];
         this.toolSources = [];
@@ -222,6 +256,15 @@ export class ChatApp {
         this.elements.chatHeaderTitle.textContent = 'New Chat';
         this.renderSessionList();
         this.elements.chatInput.focus();
+
+        try {
+            // Create a new ACP session
+            const newId = await this.invoke('switch_acp_session', { sessionId: null });
+            this.activeSessionId = newId;
+            console.log('Created new ACP session:', newId);
+        } catch (error) {
+            console.error('Failed to create new session:', error);
+        }
     }
 
     // --- Messaging ---
@@ -361,6 +404,7 @@ export class ChatApp {
 
         // Reload sessions to pick up new/updated session
         this.loadSessions();
+        this.loadFloatingSessionId();
     }
 
     handleMessageError(event) {

@@ -1,7 +1,9 @@
+use crate::state::AppState;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::State;
 
 /// Summary of a session for the sidebar list
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,4 +279,115 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
         updated_at,
         messages,
     })
+}
+
+
+/// Switch the ACP client to a different session.
+/// If session_id is provided, loads that session via session/load.
+/// If session_id is None, creates a new session via session/new.
+/// Saves the floating session before switching so it can be restored.
+#[tauri::command]
+pub async fn switch_acp_session(
+    session_id: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let client = state.acp_client.clone();
+    let client_guard = client.lock().await;
+
+    // Ensure connected
+    if !client_guard.is_connected() {
+        info!("Not connected, attempting to connect for session switch...");
+        if let Err(e) = client_guard.connect() {
+            error!("Connection failed: {}", e);
+            return Err(format!("Failed to connect: {}", e));
+        }
+    }
+
+    // Save the current session as floating session if we don't have one yet
+    {
+        let mut floating = state
+            .floating_session_id
+            .lock()
+            .map_err(|e| format!("Lock error: {}", e))?;
+        if floating.is_none() {
+            *floating = client_guard.get_session_id();
+        }
+    }
+
+    match session_id {
+        Some(id) => {
+            info!("Switching to existing session: {}", id);
+
+            // Read the cwd from the session's .json metadata file
+            let cwd = {
+                let sessions_dir = get_sessions_dir()?;
+                let json_path = sessions_dir.join(format!("{}.json", id));
+                if json_path.exists() {
+                    fs::read_to_string(&json_path)
+                        .ok()
+                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .and_then(|data| {
+                            data.get("cwd")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                        })
+                } else {
+                    None
+                }
+            };
+
+            client_guard
+                .load_existing_session(&id, cwd)
+                .map_err(|e| format!("Failed to load session: {}", e))
+        }
+        None => {
+            info!("Creating new session");
+            client_guard
+                .create_session(None)
+                .map_err(|e| format!("Failed to create session: {}", e))
+        }
+    }
+}
+
+/// Get the current ACP session ID
+#[tauri::command]
+pub async fn get_current_session_id(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let client = state.acp_client.lock().await;
+    Ok(client.get_session_id())
+}
+
+/// Get the floating window's session ID
+#[tauri::command]
+pub async fn get_floating_session_id(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let floating = state
+        .floating_session_id
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
+    Ok(floating.clone())
+}
+
+/// Restore the floating session as the active ACP session
+#[tauri::command]
+pub async fn restore_floating_session(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let floating_id = {
+        let floating = state
+            .floating_session_id
+            .lock()
+            .map_err(|e| format!("Lock error: {}", e))?;
+        floating.clone()
+    };
+
+    if let Some(ref id) = floating_id {
+        let client = state.acp_client.lock().await;
+        client.set_session_id(Some(id.clone()));
+        info!("Restored floating session: {}", id);
+    }
+
+    Ok(floating_id)
 }

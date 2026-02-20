@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+﻿use anyhow::{Context, Result};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -101,9 +101,9 @@ impl AcpClient {
         let mut debug = self.debug_mode.lock().unwrap();
         *debug = enabled;
         if enabled {
-            info!("ðŸ› ACP Debug mode ENABLED - detailed logging active");
+            info!("Ã°Å¸Ââ€º ACP Debug mode ENABLED - detailed logging active");
         } else {
-            info!("ðŸ› ACP Debug mode DISABLED");
+            info!("Ã°Å¸Ââ€º ACP Debug mode DISABLED");
         }
     }
     
@@ -124,7 +124,7 @@ impl AcpClient {
 
     /// Get the current session ID, creating one if needed
     fn spawn_kiro_process(&self, command_str: &str) -> Result<()> {
-        info!("ðŸš€ Spawning Kiro process with command: {}", command_str);
+        info!("Ã°Å¸Å¡â‚¬ Spawning Kiro process with command: {}", command_str);
         
         // Parse the command string into program and arguments
         let parts: Vec<&str> = command_str.split_whitespace().collect();
@@ -135,7 +135,7 @@ impl AcpClient {
         let program = parts[0];
         let args = &parts[1..];
         
-        info!("ðŸ“¦ Program: {}, Args: {:?}", program, args);
+        info!("Ã°Å¸â€œÂ¦ Program: {}, Args: {:?}", program, args);
         
         // Create command with piped stdin/stdout for communication
         let mut cmd = Command::new(program);
@@ -147,11 +147,11 @@ impl AcpClient {
         // Configure platform-specific process spawning
         os::configure_process_spawn(&mut cmd);
         
-        info!("â³ Spawning process...");
+        info!("Ã¢ÂÂ³ Spawning process...");
         let mut child = cmd.spawn()
             .context("Failed to spawn Kiro process")?;
         
-        info!("âœ… Process spawned successfully (PID: {:?})", child.id());
+        info!("Ã¢Å“â€¦ Process spawned successfully (PID: {:?})", child.id());
         
         // Take ownership of stdin and stdout
         let stdin = child.stdin.take()
@@ -159,7 +159,7 @@ impl AcpClient {
         let stdout = child.stdout.take()
             .context("Failed to get stdout handle")?;
         
-        info!("ðŸ“¡ Pipe handles acquired");
+        info!("Ã°Å¸â€œÂ¡ Pipe handles acquired");
         
         // Store the connection
         let stdin_arc = Arc::new(Mutex::new(stdin));
@@ -181,30 +181,30 @@ impl AcpClient {
             .context("Failed to register process for cleanup")?;
         drop(pm);
         
-        info!("â±ï¸  Waiting 1 second for process to initialize...");
+        info!("Ã¢ÂÂ±Ã¯Â¸Â  Waiting 1 second for process to initialize...");
         thread::sleep(Duration::from_millis(1000));
         
-        info!("ðŸŽ‰ Kiro process ready for communication");
+        info!("Ã°Å¸Å½â€° Kiro process ready for communication");
         Ok(())
     }
 
     pub fn connect(&self) -> Result<()> {
         match &self.mode {
             AcpConnectionMode::Local { ref spawn_command } => {
-                info!("ðŸ”§ Local mode: Checking if process needs to be spawned");
+                info!("Ã°Å¸â€Â§ Local mode: Checking if process needs to be spawned");
                 let conn_guard = self.connection.lock().unwrap();
                 if conn_guard.is_none() {
                     drop(conn_guard);
-                    info!("ðŸ“ No existing connection, spawning process");
+                    info!("Ã°Å¸â€œÂ No existing connection, spawning process");
                     self.spawn_kiro_process(spawn_command)?;
-                    info!("âœ… Local mode ready - using pipe communication");
+                    info!("Ã¢Å“â€¦ Local mode ready - using pipe communication");
                 } else {
-                    info!("âœ… Local mode already connected via pipes");
+                    info!("Ã¢Å“â€¦ Local mode already connected via pipes");
                 }
                 Ok(())
             }
             AcpConnectionMode::Remote { .. } => {
-                info!("ðŸŒ Remote mode: Establishing TCP connection");
+                info!("Ã°Å¸Å’Â Remote mode: Establishing TCP connection");
                 self.connect_with_retry(0)
             }
         }
@@ -220,7 +220,7 @@ impl AcpClient {
         
         let addr = format!("{}:{}", host, port);
         
-        info!("ðŸ”Œ Attempting TCP connection to {} (attempt {}/{})", 
+        info!("Ã°Å¸â€Å’ Attempting TCP connection to {} (attempt {}/{})", 
               addr, attempt + 1, self.max_retries + 1);
         
         match TcpStream::connect_timeout(
@@ -244,22 +244,22 @@ impl AcpClient {
                 let mut conn = self.connection.lock().unwrap();
                 *conn = Some(Connection::Tcp(stream));
                 
-                info!("âœ… Successfully connected to kiro-cli at {}", addr);
+                info!("Ã¢Å“â€¦ Successfully connected to kiro-cli at {}", addr);
                 Ok(())
             }
             Err(e) => {
-                warn!("âŒ Connection attempt {} failed: {}", attempt + 1, e);
+                warn!("Ã¢ÂÅ’ Connection attempt {} failed: {}", attempt + 1, e);
                 
                 if attempt < self.max_retries {
                     let delay_ms = self.initial_retry_delay_ms * 2_u64.pow(attempt);
                     let delay_ms = delay_ms.min(30000);
                     
-                    info!("â³ Retrying in {}ms...", delay_ms);
+                    info!("Ã¢ÂÂ³ Retrying in {}ms...", delay_ms);
                     thread::sleep(Duration::from_millis(delay_ms));
                     
                     self.connect_with_retry(attempt + 1)
                 } else {
-                    error!("ðŸ’¥ Failed to connect after {} attempts", self.max_retries + 1);
+                    error!("Ã°Å¸â€™Â¥ Failed to connect after {} attempts", self.max_retries + 1);
                     Err(e).context(format!(
                         "Failed to connect to kiro-cli at {} after {} attempts",
                         addr, self.max_retries + 1
@@ -278,14 +278,14 @@ impl AcpClient {
         let debug_enabled = *self.debug_mode.lock().unwrap();
         
         if debug_enabled {
-            info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-            info!("ðŸ› [ACP DEBUG] ðŸ“¤ SENDING REQUEST");
-            info!("ðŸ› [ACP DEBUG] Method: {}", request.method);
-            info!("ðŸ› [ACP DEBUG] ID: {:?}", request.id);
-            info!("ðŸ› [ACP DEBUG] Full JSON: {}", request_json);
-            info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã°Å¸â€œÂ¤ SENDING REQUEST");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Method: {}", request.method);
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] ID: {:?}", request.id);
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Full JSON: {}", request_json);
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
         } else {
-            info!("ðŸ“¤ Sending request: method={}, id={:?}", request.method, request.id);
+            info!("Ã°Å¸â€œÂ¤ Sending request: method={}, id={:?}", request.method, request.id);
         }
 
         let mut conn_guard = self.connection.lock().unwrap();
@@ -305,12 +305,12 @@ impl AcpClient {
                 reader.read_line(&mut response_line)?;
                 
                 if debug_enabled {
-                    info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-                    info!("ðŸ› [ACP DEBUG] ðŸ“¥ RECEIVED RESPONSE (TCP)");
-                    info!("ðŸ› [ACP DEBUG] Raw: {}", response_line.trim());
-                    info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
+                    info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã°Å¸â€œÂ¥ RECEIVED RESPONSE (TCP)");
+                    info!("Ã°Å¸Ââ€º [ACP DEBUG] Raw: {}", response_line.trim());
+                    info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
                 } else {
-                    info!("ðŸ“¥ TCP response: {}", response_line.trim());
+                    info!("Ã°Å¸â€œÂ¥ TCP response: {}", response_line.trim());
                 }
                 
                 serde_json::from_str(&response_line).context("Failed to parse response")
@@ -321,26 +321,37 @@ impl AcpClient {
                 stdin_guard.flush()?;
                 drop(stdin_guard);
                 
-                // Read response
-                let mut response_line = String::new();
-                stdout.read_line(&mut response_line)?;
-                
-                if debug_enabled {
-                    info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-                    info!("ðŸ› [ACP DEBUG] ðŸ“¥ RECEIVED RESPONSE (Pipe)");
-                    info!("ðŸ› [ACP DEBUG] Raw: {}", response_line.trim());
-                    info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-                } else {
-                    info!("ðŸ“¥ Pipe response: {}", response_line.trim());
+                // Read response, skipping any notifications (lines with "method" but no "id")
+                loop {
+                    let mut response_line = String::new();
+                    stdout.read_line(&mut response_line)?;
+                    
+                    if debug_enabled {
+                        info!("[ACP DEBUG] RECEIVED (Pipe): {}", response_line.trim());
+                    } else {
+                        info!("Pipe response: {}", response_line.trim());
+                    }
+                    
+                    if response_line.trim().is_empty() {
+                        continue;
+                    }
+                    
+                    // Check if this is a notification (has "method" key but no "id")
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&response_line) {
+                        if val.get("method").is_some() && val.get("id").is_none() {
+                            info!("Skipping notification in send_request: {:?}", val.get("method"));
+                            continue;
+                        }
+                    }
+                    
+                    return serde_json::from_str(&response_line).context("Failed to parse response");
                 }
-                
-                serde_json::from_str(&response_line).context("Failed to parse response")
             }
         }
     }
 
     pub fn initialize(&self) -> Result<()> {
-        info!("ðŸ”§ Initializing ACP connection");
+        info!("Ã°Å¸â€Â§ Initializing ACP connection");
         
         let request = AcpRequest {
             jsonrpc: "2.0".to_string(),
@@ -369,8 +380,8 @@ impl AcpClient {
             anyhow::bail!("Initialize failed: {} (code: {})", error.message, error.code);
         }
 
-        info!("âœ… ACP initialized successfully");
-        info!("ðŸ“‹ Agent info: {:?}", response.result);
+        info!("Ã¢Å“â€¦ ACP initialized successfully");
+        info!("Ã°Å¸â€œâ€¹ Agent info: {:?}", response.result);
         
         let mut initialized = self.initialized.lock().unwrap();
         *initialized = true;
@@ -380,7 +391,7 @@ impl AcpClient {
 
 
     pub fn create_session(&self, cwd: Option<String>) -> Result<String> {
-        info!("ðŸ†• Creating new ACP session");
+        info!("Ã°Å¸â€ â€¢ Creating new ACP session");
         
         // Ensure we're initialized
         {
@@ -419,7 +430,7 @@ impl AcpClient {
             .and_then(|v| v.as_str().map(|s| s.to_string()))
             .context("No sessionId in response")?;
 
-        info!("âœ… Session created: {}", session_id);
+        info!("Ã¢Å“â€¦ Session created: {}", session_id);
         
         let mut stored_session_id = self.session_id.lock().unwrap();
         *stored_session_id = Some(session_id.clone());
@@ -427,15 +438,65 @@ impl AcpClient {
         Ok(session_id)
     }
 
-    // TODO: Update this method to work with both Connection types if needed
-    // Currently unused (#[allow(dead_code)])
-    /*
-    #[allow(dead_code)]
-    pub fn send_message(&self, message: AcpRequest) -> Result<AcpResponse> {
-        // This method needs to be updated to work with Connection enum
-        unimplemented!("send_message needs to be updated for pipe support")
+    /// Load an existing session by ID via session/load
+    pub fn load_existing_session(&self, session_id: &str, cwd: Option<String>) -> Result<String> {
+        info!("Loading existing ACP session: {}", session_id);
+
+        // Ensure we're initialized
+        {
+            let initialized = self.initialized.lock().unwrap();
+            if !*initialized {
+                drop(initialized);
+                self.initialize()?;
+            }
+        }
+
+        let cwd = cwd.unwrap_or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.to_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "/".to_string())
+        });
+
+        let request = AcpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(1),
+            method: "session/load".to_string(),
+            params: serde_json::json!({
+                "sessionId": session_id,
+                "cwd": cwd,
+                "mcpServers": []
+            }),
+        };
+
+        let response = self.send_request(&request)?;
+
+        if let Some(error) = response.error {
+            anyhow::bail!(
+                "Session load failed: {} (code: {})",
+                error.message,
+                error.code
+            );
+        }
+
+        info!("Session loaded: {}", session_id);
+
+        let mut stored_session_id = self.session_id.lock().unwrap();
+        *stored_session_id = Some(session_id.to_string());
+
+        Ok(session_id.to_string())
     }
-    */
+
+    /// Get the current active session ID
+    pub fn get_session_id(&self) -> Option<String> {
+        self.session_id.lock().unwrap().clone()
+    }
+
+    /// Directly set the active session ID (for switching without a load call)
+    pub fn set_session_id(&self, session_id: Option<String>) {
+        let mut stored = self.session_id.lock().unwrap();
+        *stored = session_id;
+    }
 
     /// Execute a Kiro slash command via _kiro.dev/commands/execute extension.
     /// Returns the AcpResponse result value.
@@ -446,13 +507,13 @@ impl AcpClient {
         let debug_enabled = *self.debug_mode.lock().unwrap();
         
         if debug_enabled {
-            info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-            info!("ðŸ› [ACP DEBUG] ðŸ’¬ SENDING CHAT MESSAGE");
-            info!("ðŸ› [ACP DEBUG] Length: {} chars", content.len());
-            info!("ðŸ› [ACP DEBUG] Content: {}", content);
-            info!("ðŸ› [ACP DEBUG] â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã°Å¸â€™Â¬ SENDING CHAT MESSAGE");
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Length: {} chars", content.len());
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Content: {}", content);
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â");
         } else {
-            info!("ðŸ’¬ Sending chat message (length: {})", content.len());
+            info!("Ã°Å¸â€™Â¬ Sending chat message (length: {})", content.len());
         }
         
         // Ensure we have a session
@@ -484,10 +545,10 @@ impl AcpClient {
         let request_json = serde_json::to_string(&request)?;
         
         if debug_enabled {
-            info!("ðŸ› [ACP DEBUG] Full request JSON: {}", request_json);
+            info!("Ã°Å¸Ââ€º [ACP DEBUG] Full request JSON: {}", request_json);
         } else {
-            info!("ðŸ“¤ Sending session/prompt");
-            info!("ðŸ“ JSON: {}", request_json);
+            info!("Ã°Å¸â€œÂ¤ Sending session/prompt");
+            info!("Ã°Å¸â€œÂ JSON: {}", request_json);
         }
 
         let mut conn_guard = self.connection.lock().unwrap();
@@ -503,7 +564,7 @@ impl AcpClient {
             Connection::Tcp(stream) => {
                 writeln!(stream, "{}", request_json)?;
                 stream.flush()?;
-                info!("âœ… Request sent via TCP");
+                info!("Ã¢Å“â€¦ Request sent via TCP");
                 
                 let mut reader = BufReader::new(stream.try_clone()?);
                 // Drop the connection lock so permission responses can write
@@ -513,12 +574,12 @@ impl AcpClient {
                     let mut line = String::new();
                     match reader.read_line(&mut line) {
                         Ok(0) => {
-                            warn!("âš ï¸  TCP stream closed");
+                            warn!("Ã¢Å¡Â Ã¯Â¸Â  TCP stream closed");
                             break;
                         }
-                        Ok(n) => info!("ðŸ“¨ Read {} bytes", n),
+                        Ok(n) => info!("Ã°Å¸â€œÂ¨ Read {} bytes", n),
                         Err(e) => {
-                            error!("âŒ Read error: {}", e);
+                            error!("Ã¢ÂÅ’ Read error: {}", e);
                             let mut cg = self.connection.lock().unwrap();
                             *cg = None;
                             return Err(e).context("Failed to read response");
@@ -529,13 +590,13 @@ impl AcpClient {
                         continue;
                     }
 
-                    info!("ðŸ“„ Line: {}", line.trim());
+                    info!("Ã°Å¸â€œâ€ž Line: {}", line.trim());
                     
                     if let Ok(notification) = serde_json::from_str::<AcpNotification>(&line) {
-                        info!("ðŸ”” Notification: method={}", notification.method);
+                        info!("Ã°Å¸â€â€ Notification: method={}", notification.method);
                         
                         if notification.method == "session/request_permission" {
-                            info!("ðŸ” Permission request received");
+                            info!("Ã°Å¸â€Â Permission request received");
                             if let Some(ref perm_cb) = permission_callback {
                                 let notification_value = serde_json::to_value(&notification)
                                     .unwrap_or(serde_json::json!({}));
@@ -551,7 +612,7 @@ impl AcpClient {
                                         if let Some(content_obj) = update.get("content") {
                                             if let Some(text) = content_obj.get("text").and_then(|v| v.as_str()) {
                                                 full_response.push_str(text);
-                                                info!("ðŸ“ Accumulated: {} chars", full_response.len());
+                                                info!("Ã°Å¸â€œÂ Accumulated: {} chars", full_response.len());
                                                 callback(full_response.clone());
                                             }
                                         }
@@ -569,14 +630,14 @@ impl AcpClient {
                     }
                     
                     if let Ok(response) = serde_json::from_str::<AcpResponse>(&line) {
-                        info!("ðŸ“¬ Response: id={:?}", response.id);
+                        info!("Ã°Å¸â€œÂ¬ Response: id={:?}", response.id);
                         
                         if let Some(error) = response.error {
-                            error!("âŒ ACP error: {} (code: {})", error.message, error.code);
+                            error!("Ã¢ÂÅ’ ACP error: {} (code: {})", error.message, error.code);
                             anyhow::bail!("ACP error: {}", error.message);
                         }
                         
-                        info!("âœ… Prompt completed");
+                        info!("Ã¢Å“â€¦ Prompt completed");
                         break;
                     }
                 }
@@ -586,7 +647,7 @@ impl AcpClient {
                 writeln!(stdin_guard, "{}", request_json)?;
                 stdin_guard.flush()?;
                 drop(stdin_guard);
-                info!("âœ… Request sent via pipe");
+                info!("Ã¢Å“â€¦ Request sent via pipe");
                 
                 // We need to keep reading from stdout, but drop the connection lock
                 // so send_permission_response can access stdin via the Arc<Mutex<>>
@@ -602,12 +663,12 @@ impl AcpClient {
                     let mut line = String::new();
                     match stdout.read_line(&mut line) {
                         Ok(0) => {
-                            warn!("âš ï¸  Pipe closed");
+                            warn!("Ã¢Å¡Â Ã¯Â¸Â  Pipe closed");
                             break;
                         }
-                        Ok(n) => info!("ðŸ“¨ Read {} bytes", n),
+                        Ok(n) => info!("Ã°Å¸â€œÂ¨ Read {} bytes", n),
                         Err(e) => {
-                            error!("âŒ Read error: {}", e);
+                            error!("Ã¢ÂÅ’ Read error: {}", e);
                             *conn_guard = None;
                             return Err(e).context("Failed to read response");
                         }
@@ -617,13 +678,13 @@ impl AcpClient {
                         continue;
                     }
 
-                    info!("ðŸ“„ Line: {}", line.trim());
+                    info!("Ã°Å¸â€œâ€ž Line: {}", line.trim());
                     
                     if let Ok(notification) = serde_json::from_str::<AcpNotification>(&line) {
-                        info!("ðŸ”” Notification: method={}", notification.method);
+                        info!("Ã°Å¸â€â€ Notification: method={}", notification.method);
                         
                         if notification.method == "session/request_permission" {
-                            info!("ðŸ” Permission request received");
+                            info!("Ã°Å¸â€Â Permission request received");
                             if let Some(ref perm_cb) = permission_callback {
                                 let notification_value = serde_json::to_value(&notification)
                                     .unwrap_or(serde_json::json!({}));
@@ -639,7 +700,7 @@ impl AcpClient {
                                         if let Some(content_obj) = update.get("content") {
                                             if let Some(text) = content_obj.get("text").and_then(|v| v.as_str()) {
                                                 full_response.push_str(text);
-                                                info!("ðŸ“ Accumulated: {} chars", full_response.len());
+                                                info!("Ã°Å¸â€œÂ Accumulated: {} chars", full_response.len());
                                                 callback(full_response.clone());
                                             }
                                         }
@@ -657,14 +718,14 @@ impl AcpClient {
                     }
                     
                     if let Ok(response) = serde_json::from_str::<AcpResponse>(&line) {
-                        info!("ðŸ“¬ Response: id={:?}", response.id);
+                        info!("Ã°Å¸â€œÂ¬ Response: id={:?}", response.id);
                         
                         if let Some(error) = response.error {
-                            error!("âŒ ACP error: {} (code: {})", error.message, error.code);
+                            error!("Ã¢ÂÅ’ ACP error: {} (code: {})", error.message, error.code);
                             anyhow::bail!("ACP error: {}", error.message);
                         }
                         
-                        info!("âœ… Prompt completed");
+                        info!("Ã¢Å“â€¦ Prompt completed");
                         break;
                     }
                 }

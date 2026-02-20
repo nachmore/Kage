@@ -451,3 +451,10 @@ body {
     color: #6b7280;
 }
 .chat-error-btn.dismiss:hover { background: #e5e7eb; }
+
+
+/* Floating session badge */
+.session-floating-badge {
+    margin-left: 4px;
+    font-size: 11px;
+}
