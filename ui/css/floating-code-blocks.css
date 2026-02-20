@@ -1,0 +1,101 @@
+/* Code block and diagram styles */
+
+.code-block-wrapper {
+    position: relative;
+    margin: 12px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #272822;
+}
+
+.code-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #1e1e1e;
+    border-bottom: 1px solid #3e3e3e;
+}
+
+.code-block-language {
+    font-size: 12px;
+    color: #a6e22e;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.copy-button {
+    padding: 4px 12px;
+    background: #3e3e3e;
+    border: none;
+    border-radius: 4px;
+    color: #d4d4d4;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.copy-button:hover {
+    background: #4e4e4e;
+    color: #fff;
+}
+
+.copy-button.copied {
+    background: #a6e22e;
+    color: #272822;
+}
+
+.code-block-wrapper pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    background: #272822;
+}
+
+.code-block-wrapper code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.code-block-wrapper pre[class*="language-"] {
+    background: #272822;
+    text-shadow: none;
+}
+
+/* Mermaid diagram styles */
+.mermaid-wrapper {
+    position: relative;
+    margin: 12px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+}
+
+.mermaid-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f3f4f6;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.mermaid-label {
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.mermaid-wrapper .mermaid {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: white;
+}

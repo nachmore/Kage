@@ -16,6 +16,62 @@ use tauri::{
 };
 use tokio::sync::Mutex;
 
+// Platform-specific cursor position detection
+#[cfg(target_os = "windows")]
+fn get_cursor_position() -> Option<(i32, i32)> {
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    use windows::Win32::Foundation::POINT;
+    
+    unsafe {
+        let mut point = POINT { x: 0, y: 0 };
+        if GetCursorPos(&mut point).is_ok() {
+            Some((point.x, point.y))
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_cursor_position() -> Option<(i32, i32)> {
+    // For non-Windows platforms, return None to fall back to primary monitor
+    None
+}
+
+/// Find which monitor contains the given point
+fn find_monitor_at_position(window: &Window, x: i32, y: i32) -> Option<tauri::Monitor> {
+    if let Ok(monitors) = window.available_monitors() {
+        for monitor in monitors {
+            let pos = monitor.position();
+            let size = monitor.size();
+            
+            if x >= pos.x && x < pos.x + size.width as i32
+                && y >= pos.y && y < pos.y + size.height as i32 {
+                return Some(monitor);
+            }
+        }
+    }
+    None
+}
+
+/// Get the active monitor (where cursor is) or fall back to primary
+fn get_active_monitor(window: &Window) -> Option<tauri::Monitor> {
+    // Try to get cursor position
+    if let Some((cursor_x, cursor_y)) = get_cursor_position() {
+        println!("     Cursor position: ({}, {})", cursor_x, cursor_y);
+        
+        // Find monitor containing cursor
+        if let Some(monitor) = find_monitor_at_position(window, cursor_x, cursor_y) {
+            println!("     Found active monitor at cursor position");
+            return Some(monitor);
+        }
+    }
+    
+    // Fall back to primary monitor
+    println!("     Falling back to primary monitor");
+    window.primary_monitor().ok().flatten()
+}
+
 /// Check if input is a URL
 fn is_url(input: &str) -> bool {
     let trimmed = input.trim();
@@ -438,21 +494,25 @@ async fn test_floating_window(app: tauri::AppHandle) -> Result<String, String> {
             })?;
             println!("   ✅ Window focused");
             
-            // Position at 1/3 from top
-            if let Ok(monitor) = window.current_monitor() {
-                if let Some(monitor) = monitor {
-                    let size = monitor.size();
-                    println!("   Monitor size: {}x{}", size.width, size.height);
-                    let x = (size.width as i32 - 500) / 2; // 500px window width
-                    let y = size.height as i32 / 3; // 1/3 from top
-                    println!("   Positioning at: ({}, {})", x, y);
-                    window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
-                        .map_err(|e| {
-                            println!("   ⚠️  Failed to position: {}", e);
-                            format!("Failed to position: {}", e)
-                        })?;
-                    println!("   ✅ Window positioned");
-                }
+            // Position at 1/3 from top, centered horizontally on the active monitor
+            if let Some(monitor) = get_active_monitor(&window) {
+                let pos = monitor.position();
+                let size = monitor.size();
+                println!("   Monitor position: ({}, {}), size: {}x{}", pos.x, pos.y, size.width, size.height);
+                
+                // Get actual window width
+                let window_size = window.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
+                let x = pos.x + (size.width as i32 - window_size.width as i32) / 2; // Center horizontally on monitor
+                let y = pos.y + size.height as i32 / 3; // 1/3 from top of monitor
+                
+                println!("   Window size: {}x{}", window_size.width, window_size.height);
+                println!("   Positioning at: ({}, {})", x, y);
+                window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
+                    .map_err(|e| {
+                        println!("   ⚠️  Failed to position: {}", e);
+                        format!("Failed to position: {}", e)
+                    })?;
+                println!("   ✅ Window positioned");
             }
             
             Ok("Window was hidden, now visible and positioned".to_string())
@@ -494,21 +554,27 @@ async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn resize_floating_window(window: Window, width: u32, height: u32) -> Result<(), String> {
-    info!("Resizing floating window to {}x{}", width, height);
-    
+async fn resize_floating_window(window: Window, width: Option<u32>, height: Option<u32>) -> Result<(), String> {
     // Get current size
     let current_size = window.inner_size().map_err(|e| {
         error!("Failed to get current window size: {}", e);
         e.to_string()
     })?;
     
+    // Use provided dimensions or keep current ones
+    let target_width = width.unwrap_or(current_size.width);
+    let target_height = height.unwrap_or(current_size.height);
+    
+    info!("Resizing floating window to {}x{}", target_width, target_height);
+    
     let current_height = current_size.height;
-    let target_height = height;
     
     // If the height difference is small, just resize directly
     if (current_height as i32 - target_height as i32).abs() < 20 {
-        return window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+        return window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+            width: target_width, 
+            height: target_height 
+        }))
             .map_err(|e| {
                 error!("Failed to resize window: {}", e);
                 e.to_string()
@@ -524,7 +590,7 @@ async fn resize_floating_window(window: Window, width: u32, height: u32) -> Resu
         let new_height = (current_height as f32 + step_size * i as f32) as u32;
         
         if let Err(e) = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
-            width, 
+            width: target_width, 
             height: new_height 
         })) {
             error!("Failed to resize window during animation: {}", e);
@@ -536,7 +602,10 @@ async fn resize_floating_window(window: Window, width: u32, height: u32) -> Resu
     }
     
     // Ensure we end at exactly the target size
-    window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+    window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+        width: target_width, 
+        height: target_height 
+    }))
         .map_err(|e| {
             error!("Failed to resize window: {}", e);
             e.to_string()
@@ -748,17 +817,21 @@ fn main() {
                                         Ok(_) => println!("     ✅ Window focused successfully"),
                                         Err(e) => println!("     ⚠️  Failed to focus: {}", e),
                                     }
-                                    // Position at 1/3 from top
-                                    if let Ok(monitor) = window_for_primary.current_monitor() {
-                                        if let Some(monitor) = monitor {
-                                            let size = monitor.size();
-                                            println!("     Monitor size: {}x{}", size.width, size.height);
-                                            let x = (size.width as i32 - 500) / 2; // 500px window width
-                                            let y = size.height as i32 / 3; // 1/3 from top
-                                            println!("     Positioning at: ({}, {})", x, y);
-                                            if let Err(e) = window_for_primary.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
-                                                println!("     ⚠️  Failed to position: {}", e);
-                                            }
+                                    // Position at 1/3 from top, centered horizontally on the active monitor
+                                    if let Some(monitor) = get_active_monitor(&window_for_primary) {
+                                        let pos = monitor.position();
+                                        let size = monitor.size();
+                                        println!("     Monitor position: ({}, {}), size: {}x{}", pos.x, pos.y, size.width, size.height);
+                                        
+                                        // Get actual window width
+                                        let window_size = window_for_primary.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
+                                        let x = pos.x + (size.width as i32 - window_size.width as i32) / 2; // Center horizontally on monitor
+                                        let y = pos.y + size.height as i32 / 3; // 1/3 from top of monitor
+                                        
+                                        println!("     Window size: {}x{}", window_size.width, window_size.height);
+                                        println!("     Positioning at: ({}, {})", x, y);
+                                        if let Err(e) = window_for_primary.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
+                                            println!("     ⚠️  Failed to position: {}", e);
                                         }
                                     }
                                 }
@@ -806,17 +879,21 @@ fn main() {
                                                 Ok(_) => println!("     ✅ Window focused successfully"),
                                                 Err(e) => println!("     ⚠️  Failed to focus: {}", e),
                                             }
-                                            // Position at 1/3 from top
-                                            if let Ok(monitor) = window_for_fallback.current_monitor() {
-                                                if let Some(monitor) = monitor {
-                                                    let size = monitor.size();
-                                                    println!("     Monitor size: {}x{}", size.width, size.height);
-                                                    let x = (size.width as i32 - 500) / 2; // 500px window width
-                                                    let y = size.height as i32 / 3; // 1/3 from top
-                                                    println!("     Positioning at: ({}, {})", x, y);
-                                                    if let Err(e) = window_for_fallback.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
-                                                        println!("     ⚠️  Failed to position: {}", e);
-                                                    }
+                                            // Position at 1/3 from top, centered horizontally on the active monitor
+                                            if let Some(monitor) = get_active_monitor(&window_for_fallback) {
+                                                let pos = monitor.position();
+                                                let size = monitor.size();
+                                                println!("     Monitor position: ({}, {}), size: {}x{}", pos.x, pos.y, size.width, size.height);
+                                                
+                                                // Get actual window width
+                                                let window_size = window_for_fallback.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
+                                                let x = pos.x + (size.width as i32 - window_size.width as i32) / 2; // Center horizontally on monitor
+                                                let y = pos.y + size.height as i32 / 3; // 1/3 from top of monitor
+                                                
+                                                println!("     Window size: {}x{}", window_size.width, window_size.height);
+                                                println!("     Positioning at: ({}, {})", x, y);
+                                                if let Err(e) = window_for_fallback.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
+                                                    println!("     ⚠️  Failed to position: {}", e);
                                                 }
                                             }
                                         }

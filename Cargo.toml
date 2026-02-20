@@ -23,6 +23,7 @@ ctrlc = "3.4"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 windows-icons = "0.3"
+windows = { version = "0.52", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
