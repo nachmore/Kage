@@ -311,6 +311,8 @@ pub async fn open_chat_with_message(
         let _ = floating.hide();
     }
     if let Some(main) = app.get_webview_window("main") {
+        // Center on the active monitor
+        crate::commands::window::center_window_on_active_monitor(&main);
         let _ = main.show();
         let _ = main.set_focus();
         let _ = main.emit("initial_message", message.clone());

@@ -181,6 +181,23 @@ pub async fn start_drag_window(window: WebviewWindow) -> Result<(), String> {
     })
 }
 
+/// Center a window on the active monitor (where the cursor is)
+pub fn center_window_on_active_monitor(window: &WebviewWindow) {
+    if let Some(monitor) = get_active_monitor(window) {
+        let mon_pos = monitor.position();
+        let mon_size = monitor.size();
+        let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize {
+            width: 800,
+            height: 600,
+        });
+        let x = mon_pos.x + (mon_size.width as i32 - win_size.width as i32) / 2;
+        let y = mon_pos.y + (mon_size.height as i32 - win_size.height as i32) / 2;
+        let _ = window.set_position(tauri::Position::Physical(
+            tauri::PhysicalPosition { x, y },
+        ));
+    }
+}
+
 #[tauri::command]
 pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
     info!("Opening chat window");
@@ -190,6 +207,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     if let Some(window) = app.get_webview_window("main") {
+        center_window_on_active_monitor(&window);
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
     } else {
