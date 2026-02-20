@@ -207,7 +207,7 @@ pub async fn send_message_streaming(
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
         let had_attachments = attachments.as_ref().map_or(false, |a| !a.is_empty());
-        if let Err(e) = client.send_chat_streaming(message, attachments) {
+        if let Err(e) = client.send_chat_streaming_with_recovery(message, attachments) {
             let error_str = format!("{}", e);
             let is_image_error = had_attachments && (
                 error_str.contains("Internal error")
@@ -335,7 +335,7 @@ pub async fn open_chat_with_message(
                     return;
                 }
             }
-            if let Err(e) = client.send_chat_streaming(message, None) {
+            if let Err(e) = client.send_chat_streaming_with_recovery(message, None) {
                 let _ = window.emit("message_error", format!("Failed to send: {}", e));
                 return;
             }

@@ -38,7 +38,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
 
     let app_handle = app.handle().clone();
-    TrayIconBuilder::new()
+    TrayIconBuilder::with_id("main-tray")
         .icon(icon)
         .menu(&menu)
         .on_menu_event(move |app_handle_inner, event| {
@@ -77,12 +77,33 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 }
                 "quit" => {
                     info!("Application quit requested");
-                    if let Some(state) = app_handle_inner.try_state::<AppState>() {
-                        if let Ok(client) = state.acp_client.try_lock() {
-                            client.disconnect();
+
+                    // Immediately hide all windows and tray
+                    for label in &["floating", "main", "settings", "context-menu"] {
+                        if let Some(window) = app_handle_inner.get_webview_window(label) {
+                            let _ = window.hide();
                         }
                     }
-                    std::process::exit(0);
+                    if let Some(tray) = app_handle_inner.tray_by_id("main-tray") {
+                        let _ = tray.set_visible(false);
+                    }
+
+                    // Generate steering doc in background, then exit
+                    if let Some(state) = app_handle_inner.try_state::<AppState>() {
+                        let acp_client = state.acp_client.clone();
+                        let config = state.config.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Ok(client) = acp_client.try_lock() {
+                                if let Ok(config) = config.try_lock() {
+                                    crate::auto_steering::generate_steering_on_quit(&client, &config);
+                                }
+                                client.disconnect();
+                            }
+                            std::process::exit(0);
+                        });
+                    } else {
+                        std::process::exit(0);
+                    }
                 }
                 _ => {}
             }

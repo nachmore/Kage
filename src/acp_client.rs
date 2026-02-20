@@ -592,7 +592,6 @@ impl AcpClient {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn disconnect(&self) {
         info!("Disconnecting from ACP server");
         *self.connected.lock().unwrap() = false;
@@ -604,6 +603,114 @@ impl AcpClient {
         // Terminate the spawned process
         let mut pm = self.process_manager.lock().unwrap();
         pm.terminate();
+    }
+
+    /// Full teardown: disconnect, kill process, reset initialized state.
+    /// After this, the next connect() + initialize() will start completely fresh.
+    fn force_disconnect(&self) {
+        info!("Force-disconnecting ACP (full teardown)");
+        *self.connected.lock().unwrap() = false;
+        *self.initialized.lock().unwrap() = false;
+
+        // Drop the response channel so any blocked recv unblocks
+        *self.response_rx.lock().unwrap() = None;
+
+        // Clear write handles
+        *self.pipe_stdin.lock().unwrap() = None;
+        *self.tcp_writer.lock().unwrap() = None;
+
+        // Kill the spawned process (Local mode) or just sever TCP
+        let mut pm = self.process_manager.lock().unwrap();
+        pm.terminate();
+    }
+
+    /// Tear down the current connection and establish a fresh one.
+    /// Returns Ok(()) if reconnected and re-initialized successfully.
+    fn restart_connection(&self) -> Result<()> {
+        info!("Restarting ACP connection");
+        self.force_disconnect();
+
+        // Small delay to let the OS clean up sockets / process handles
+        thread::sleep(Duration::from_millis(500));
+
+        self.connect()?;
+        self.initialize()?;
+        Ok(())
+    }
+
+    /// Send a chat message with automatic recovery on timeout.
+    ///
+    /// Recovery strategy:
+    /// 1. Send the prompt normally.
+    /// 2. On timeout → restart the connection, try to reload the same session,
+    ///    and resend the prompt.
+    /// 3. If the reload+resend also times out → restart again with a brand-new
+    ///    session and resend one last time.
+    /// 4. If that still fails → give up and return the error.
+    ///
+    /// This means a single prompt will never cause more than one automatic
+    /// restart cycle. But if the prompt eventually succeeds and a *later*
+    /// prompt hangs, the restart budget resets.
+    pub fn send_chat_streaming_with_recovery(
+        &self,
+        content: String,
+        attachments: Option<Vec<serde_json::Value>>,
+    ) -> Result<()> {
+        // --- Attempt 1: normal send ---
+        match self.send_chat_streaming(content.clone(), attachments.clone()) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let err_str = format!("{}", e);
+                if !err_str.contains("Timeout") && !err_str.contains("Connection lost") {
+                    // Not a timeout/disconnect — don't retry
+                    return Err(e);
+                }
+                warn!("Prompt failed ({}), attempting recovery…", err_str);
+            }
+        }
+
+        // --- Attempt 2: restart + reload session + resend ---
+        let old_session_id = self.get_session_id();
+        self.restart_connection()?;
+
+        // Try to reload the previous session so the user keeps their history
+        let mut session_restored = false;
+        if let Some(ref sid) = old_session_id {
+            info!("Attempting to reload session {} after restart", sid);
+            match self.load_existing_session(sid, None) {
+                Ok(_) => {
+                    info!("Session {} reloaded successfully", sid);
+                    session_restored = true;
+                }
+                Err(e) => {
+                    warn!("Could not reload session {}: {}", sid, e);
+                }
+            }
+        }
+
+        if !session_restored {
+            info!("Creating fresh session for retry");
+            self.set_session_id(None);
+            self.create_session(None)?;
+        }
+
+        match self.send_chat_streaming(content.clone(), attachments.clone()) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let err_str = format!("{}", e);
+                if !err_str.contains("Timeout") && !err_str.contains("Connection lost") {
+                    return Err(e);
+                }
+                warn!("Prompt failed again after session reload ({}), trying fresh session…", err_str);
+            }
+        }
+
+        // --- Attempt 3: restart + brand-new session + resend (last chance) ---
+        self.restart_connection()?;
+        self.set_session_id(None);
+        self.create_session(None)?;
+
+        self.send_chat_streaming(content, attachments)
     }
 }
 

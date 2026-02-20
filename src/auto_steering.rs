@@ -45,9 +45,14 @@ pub fn reset_message_counter() {
 }
 
 /// The prompt sent to the LLM to extract user preferences from conversation history.
-const EXTRACTION_PROMPT: &str = r#"You are a preference extraction system. Analyze the following conversation excerpts between a user and an AI assistant. Extract key personal information and preferences about the USER only.
+const EXTRACTION_PROMPT: &str = r#"You are a preference extraction system. Analyze the following conversation between a user and an AI assistant. Extract key personal information and preferences about the USER only.
 
-Focus on:
+Pay close attention to:
+- Direct statements ("My name is...", "I prefer...", "I work on...")
+- Responses to questions the assistant asked (e.g., if the assistant asks "What's your name?" and the user replies "Omer", extract that their name is Omer)
+- Implicit preferences revealed by how they interact (brief vs detailed messages, technical level, etc.)
+
+Extract these categories:
 - Name, pronouns, and how they prefer to be addressed
 - Communication style preferences (formal/casual, brief/detailed, technical level)
 - Topics they're interested in or work on frequently
@@ -72,9 +77,9 @@ Output a concise markdown document with these sections (omit any section where n
 
 Be factual — only include information clearly stated or strongly implied by the conversations. Do not speculate. Keep each section brief (2-4 bullet points max). If very little information is available, output a minimal document with just what you found."#;
 
-/// Read recent user messages from the current session's JSONL file.
-/// Returns the concatenated text of user messages (skipping images, tool calls, etc.)
-fn read_recent_user_messages(session_id: &str, max_messages: usize) -> Result<Vec<String>> {
+/// Read recent conversation turns from the current session's JSONL file.
+/// Returns labeled turns (both user and assistant) for full context.
+fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<String>> {
     let home = dirs::home_dir().context("Failed to get home directory")?;
     let jsonl_path = home
         .join(".kiro")
@@ -88,7 +93,7 @@ fn read_recent_user_messages(session_id: &str, max_messages: usize) -> Result<Ve
 
     let content = fs::read_to_string(&jsonl_path).context("Failed to read session JSONL")?;
 
-    let mut user_messages = Vec::new();
+    let mut turns = Vec::new();
 
     for line in content.lines() {
         let line = line.trim();
@@ -102,9 +107,12 @@ fn read_recent_user_messages(session_id: &str, max_messages: usize) -> Result<Ve
         };
 
         let kind = val.get("kind").and_then(|k| k.as_str()).unwrap_or("");
-        if kind != "Prompt" {
-            continue;
-        }
+
+        let role = match kind {
+            "Prompt" => "User",
+            "AssistantMessage" => "Assistant",
+            _ => continue,
+        };
 
         let data = match val.get("data") {
             Some(d) => d,
@@ -116,31 +124,36 @@ fn read_recent_user_messages(session_id: &str, max_messages: usize) -> Result<Ve
             None => continue,
         };
 
-        // Extract only text content from user prompts
+        // Extract text content from this turn
+        let mut text_parts = Vec::new();
         for item in content_arr {
             let item_kind = item.get("kind").and_then(|k| k.as_str()).unwrap_or("");
             if item_kind == "text" {
                 if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
                     let text = text.trim();
-                    // Skip steering messages
+                    // Skip steering messages and extraction prompts
                     if !text.is_empty()
                         && !text.starts_with("[KIRO_STEERING_IGNORE]")
                     {
-                        user_messages.push(text.to_string());
+                        text_parts.push(text.to_string());
                     }
                 }
             }
         }
+
+        if !text_parts.is_empty() {
+            turns.push(format!("{}: {}", role, text_parts.join("\n")));
+        }
     }
 
-    // Return only the most recent messages
-    let start = if user_messages.len() > max_messages {
-        user_messages.len() - max_messages
+    // Return only the most recent turns
+    let start = if turns.len() > max_turns {
+        turns.len() - max_turns
     } else {
         0
     };
 
-    Ok(user_messages[start..].to_vec())
+    Ok(turns[start..].to_vec())
 }
 
 /// Generate the auto-steering document by sending conversation excerpts to the LLM.
@@ -157,24 +170,19 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 
     info!("Starting auto-steering document generation for session {}", session_id);
 
-    // Read recent user messages (last 30 messages should give good signal)
-    let messages = read_recent_user_messages(&session_id, 30)?;
+    // Read recent conversation turns (last 50 turns = ~25 exchanges)
+    let turns = read_recent_conversation(&session_id, 50)?;
 
-    if messages.len() < 3 {
-        info!("Too few user messages ({}) for meaningful extraction — skipping", messages.len());
+    if turns.len() < 2 {
+        info!("Too few conversation turns ({}) for meaningful extraction — skipping", turns.len());
         return Ok(());
     }
 
     // Build the extraction prompt with conversation excerpts
-    let excerpts = messages
-        .iter()
-        .enumerate()
-        .map(|(i, msg)| format!("User message {}:\n{}", i + 1, msg))
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n");
+    let excerpts = turns.join("\n\n");
 
     let full_prompt = format!(
-        "{}\n\n---\n\nConversation excerpts to analyze:\n\n{}",
+        "{}\n\n---\n\nConversation to analyze:\n\n{}",
         EXTRACTION_PROMPT, excerpts
     );
 

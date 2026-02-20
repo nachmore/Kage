@@ -92,17 +92,35 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn quit_app(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
     info!("Quit requested via > command");
 
-    // Generate auto-steering document before quitting
-    if let Ok(client) = state.acp_client.try_lock() {
-        if let Ok(config) = state.config.try_lock() {
-            crate::auto_steering::generate_steering_on_quit(&client, &config);
+    // Immediately hide all windows and tray so the user sees instant feedback
+    for label in &["floating", "main", "settings", "context-menu"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.hide();
         }
-        client.disconnect();
     }
-    std::process::exit(0);
+    // Hide the tray icon
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(false);
+    }
+
+    // Generate auto-steering document in background, then exit
+    let acp_client = state.acp_client.clone();
+    let config = state.config.clone();
+
+    tauri::async_runtime::spawn(async move {
+        if let Ok(client) = acp_client.try_lock() {
+            if let Ok(config) = config.try_lock() {
+                crate::auto_steering::generate_steering_on_quit(&client, &config);
+            }
+            client.disconnect();
+        }
+        std::process::exit(0);
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
