@@ -1,4 +1,5 @@
-/* Dark theme overrides */
+/* Floating dark theme - imports shared + floating-specific overrides */
+@import url('shared-theme-dark.css');
 
 body.dark-theme .speech-bubble {
     background: #28242E;
@@ -7,14 +8,6 @@ body.dark-theme .speech-bubble {
 
 body.dark-theme .resize-handle {
     background: linear-gradient(135deg, transparent 50%, #4A464F 50%);
-}
-
-body.dark-theme .response-text {
-    color: #E5E7EB;
-}
-
-body.dark-theme .streaming-indicator {
-    color: #C09CFF;
 }
 
 body.dark-theme .content-area.visible + .input-container,
@@ -56,39 +49,4 @@ body.dark-theme .app-suggestions {
 
 body.dark-theme .app-name {
     color: #E5E7EB;
-}
-
-body.dark-theme .code-block-wrapper {
-    background: #1a1a1a;
-}
-
-body.dark-theme .code-block-header {
-    background: #0d0d0d;
-    border-bottom-color: #2a2a2a;
-}
-
-body.dark-theme .copy-button {
-    background: #2a2a2a;
-}
-
-body.dark-theme .copy-button:hover {
-    background: #3a3a3a;
-}
-
-body.dark-theme .mermaid-wrapper {
-    background: #1a1a1a;
-    border-color: #2a2a2a;
-}
-
-body.dark-theme .mermaid-header {
-    background: #0d0d0d;
-    border-bottom-color: #2a2a2a;
-}
-
-body.dark-theme .mermaid-label {
-    color: #a6e22e;
-}
-
-body.dark-theme .mermaid-wrapper .mermaid {
-    background: #1a1a1a;
 }

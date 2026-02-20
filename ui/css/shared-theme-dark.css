@@ -1,0 +1,56 @@
+/* Shared dark theme overrides */
+
+body.dark-theme .response-text {
+    color: #E5E7EB;
+}
+
+body.dark-theme .streaming-indicator {
+    color: #C09CFF;
+}
+
+body.dark-theme .code-block-wrapper {
+    background: #1a1a1a;
+}
+
+body.dark-theme .code-block-header {
+    background: #0d0d0d;
+    border-bottom-color: #2a2a2a;
+}
+
+body.dark-theme .copy-button {
+    background: #2a2a2a;
+}
+body.dark-theme .copy-button:hover {
+    background: #3a3a3a;
+}
+
+body.dark-theme .mermaid-wrapper {
+    background: #1a1a1a;
+    border-color: #2a2a2a;
+}
+
+body.dark-theme .mermaid-header {
+    background: #0d0d0d;
+    border-bottom-color: #2a2a2a;
+}
+
+body.dark-theme .mermaid-label {
+    color: #a6e22e;
+}
+
+body.dark-theme .mermaid-wrapper .mermaid {
+    background: #1a1a1a;
+}
+
+body.dark-theme .tool-sources {
+    border-top-color: #4A464F;
+}
+
+body.dark-theme .source-chip {
+    background: #352F3D;
+    color: #938F9B;
+}
+body.dark-theme .source-chip:hover {
+    background: #4A464F;
+    color: #E5E7EB;
+}

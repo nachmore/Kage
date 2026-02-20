@@ -15,3 +15,6 @@ Thumbs.db
 
 # Local config
 .cargo/
+
+# Sample data
+sample_sessions/

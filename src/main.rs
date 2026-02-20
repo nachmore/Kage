@@ -233,7 +233,9 @@ fn main() {
             commands::open_devtools,
             commands::quit_app,
             commands::read_clipboard,
-            commands::show_context_menu
+            commands::show_context_menu,
+            commands::list_sessions,
+            commands::load_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

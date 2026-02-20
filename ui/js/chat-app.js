@@ -1,0 +1,555 @@
+// Expanded chat application logic
+import { renderMarkdown, initMarkdown } from './floating-markdown.js';
+
+export class ChatApp {
+    constructor(invoke, appWindow, listen) {
+        this.invoke = invoke;
+        this.appWindow = appWindow;
+        this.listen = listen;
+
+        this.messages = [];
+        this.currentStreamingMessage = null;
+        this.currentStreamingContent = '';
+        this.isWaitingForResponse = false;
+        this.isConnected = false;
+        this.sessions = [];
+        this.activeSessionId = null;
+        this.toolSources = [];
+
+        this.elements = {};
+    }
+
+    async init() {
+        initMarkdown();
+        this.cacheElements();
+        this.setupEventListeners();
+        this.setupStreamingListeners();
+        await this.loadSessions();
+        await this.checkConnection();
+
+        this.elements.chatInput.focus();
+        console.log('Chat app initialized');
+    }
+
+    cacheElements() {
+        this.elements = {
+            chatInput: document.getElementById('chatInput'),
+            sendBtn: document.getElementById('sendBtn'),
+            messagesArea: document.getElementById('messagesArea'),
+            sessionList: document.getElementById('sessionList'),
+            newSessionBtn: document.getElementById('newSessionBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            floatingBtn: document.getElementById('floatingBtn'),
+            connectionStatus: document.getElementById('connectionStatus'),
+            chatHeaderTitle: document.getElementById('chatHeaderTitle'),
+            errorContainer: document.getElementById('errorContainer')
+        };
+    }
+
+    setupEventListeners() {
+        this.elements.chatInput.addEventListener('input', () => {
+            this.elements.chatInput.style.height = 'auto';
+            this.elements.chatInput.style.height = Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
+        });
+
+        this.elements.chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
+        });
+
+        this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
+
+        this.elements.settingsBtn.addEventListener('click', async () => {
+            await this.invoke('open_settings_window');
+        });
+
+        this.elements.floatingBtn.addEventListener('click', async () => {
+            await this.invoke('test_floating_window');
+        });
+    }
+
+    setupStreamingListeners() {
+        this.listen('message_chunk', (event) => this.handleMessageChunk(event));
+        this.listen('message_complete', () => this.handleMessageComplete());
+        this.listen('message_error', (event) => this.handleMessageError(event));
+        this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+
+        this.listen('initial_message', (event) => {
+            const message = event.payload;
+            if (message) {
+                this.addUserMessage(message);
+                this.startStreaming();
+            }
+        });
+    }
+
+    // --- Session Management ---
+
+    async loadSessions() {
+        try {
+            const sessions = await this.invoke('list_sessions');
+            this.sessions = sessions;
+            this.renderSessionList();
+        } catch (error) {
+            console.error('Failed to load sessions:', error);
+            this.sessions = [];
+            this.renderSessionList();
+        }
+    }
+
+    renderSessionList() {
+        const list = this.elements.sessionList;
+
+        if (this.sessions.length === 0) {
+            list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
+            return;
+        }
+
+        list.innerHTML = '';
+        for (const session of this.sessions) {
+            const item = document.createElement('div');
+            item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
+            item.dataset.sessionId = session.session_id;
+
+            const title = session.title || 'New Chat';
+            const date = new Date(session.updated_at || session.created_at);
+            const dateStr = this.formatDate(date);
+
+            item.innerHTML = `
+                <div class="session-item-title">${this.escapeHtml(title)}</div>
+                <div class="session-item-date">${dateStr}</div>
+            `;
+
+            item.addEventListener('click', () => this.selectSession(session.session_id));
+            list.appendChild(item);
+        }
+    }
+
+    formatDate(date) {
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+        if (days === 0) {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (days === 1) {
+            return 'Yesterday';
+        } else if (days < 7) {
+            return date.toLocaleDateString([], { weekday: 'short' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    }
+
+    async selectSession(sessionId) {
+        if (sessionId === this.activeSessionId) return;
+
+        this.activeSessionId = sessionId;
+        this.renderSessionList();
+
+        try {
+            const sessionData = await this.invoke('load_session', { sessionId });
+            this.displaySession(sessionData);
+        } catch (error) {
+            console.error('Failed to load session:', error);
+            this.showError('Failed to load session: ' + error);
+        }
+    }
+
+    displaySession(sessionData) {
+        this.messages = [];
+        this.elements.messagesArea.innerHTML = '';
+        this.toolSources = [];
+
+        if (!sessionData.messages || sessionData.messages.length === 0) {
+            this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
+            return;
+        }
+
+        // Walk through the JSONL messages in order
+        for (const msg of sessionData.messages) {
+            if (msg.kind === 'Prompt') {
+                // User message — extract text content
+                for (const item of msg.content) {
+                    if (item.kind === 'text' && typeof item.data === 'string') {
+                        this.addMessageFromHistory('user', item.data);
+                    }
+                }
+            } else if (msg.kind === 'AssistantMessage') {
+                // Assistant message — extract text content, skip tool use entries
+                const textParts = [];
+                for (const item of msg.content) {
+                    if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
+                        textParts.push(item.data);
+                    }
+                }
+                if (textParts.length > 0) {
+                    this.addMessageFromHistory('assistant', textParts.join('\n\n'));
+                }
+            }
+            // ToolResults are skipped in the display — they're intermediate
+        }
+
+        // Update header title
+        const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+        if (session) {
+            this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
+        }
+
+        this.scrollToBottom();
+    }
+
+    addMessageFromHistory(role, text) {
+        const msgEl = this.createMessageElement(role, '');
+        const contentDiv = msgEl.querySelector('.message-content');
+        if (role === 'assistant') {
+            renderMarkdown(text, contentDiv);
+        } else {
+            contentDiv.textContent = text;
+        }
+        this.elements.messagesArea.appendChild(msgEl);
+        this.messages.push({ role, content: text });
+    }
+
+    createNewSession() {
+        this.activeSessionId = null;
+        this.messages = [];
+        this.toolSources = [];
+        this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kiro...</div>';
+        this.elements.chatHeaderTitle.textContent = 'New Chat';
+        this.renderSessionList();
+        this.elements.chatInput.focus();
+    }
+
+    // --- Messaging ---
+
+    async sendMessage() {
+        const message = this.elements.chatInput.value.trim();
+        if (!message || this.isWaitingForResponse) return;
+
+        this.elements.chatInput.value = '';
+        this.elements.chatInput.style.height = 'auto';
+
+        this.addUserMessage(message);
+        this.startStreaming();
+
+        try {
+            await this.invoke('send_message_streaming', { message });
+            this.isConnected = true;
+            this.updateConnectionStatus();
+        } catch (error) {
+            this.hideTypingIndicator();
+            if (this.currentStreamingMessage) {
+                this.currentStreamingMessage.remove();
+                this.currentStreamingMessage = null;
+            }
+            this.showError('Error: ' + error);
+            this.isConnected = false;
+            this.updateConnectionStatus();
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+        }
+    }
+
+    addUserMessage(text) {
+        const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
+        if (placeholder) placeholder.remove();
+
+        this.messages.push({ role: 'user', content: text });
+        const msgEl = this.createMessageElement('user', text);
+        this.elements.messagesArea.appendChild(msgEl);
+        this.scrollToBottom();
+    }
+
+    startStreaming() {
+        this.currentStreamingContent = '';
+        this.toolSources = [];
+        this.isWaitingForResponse = true;
+        this.updateInputState();
+        this.showTypingIndicator();
+
+        this.currentStreamingMessage = this.createMessageElement('assistant', '');
+        this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+        this.scrollToBottom();
+    }
+
+    createMessageElement(role, content) {
+        const msg = document.createElement('div');
+        msg.className = `message ${role}`;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        if (role === 'assistant') {
+            avatar.innerHTML = `<svg width="18" height="18" viewBox="0 0 65 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.71599 33.2597C21.3537 50.3579 43.692 49.7224 56.8482 37.6892C64.8725 30.3497 68.8862 13.8647 55.4115 3.72686C41.9368 -6.41103 32.4042 11.2128 17.2667 8.73447C14.1417 8.22797 9.94157 9.04188 12.6668 12.7323C13.1844 13.4347 13.8741 13.9921 14.4889 14.4572C10.198 14.6069 8.69922 14.3808 6.07118 14.3457C3.69479 14.2406 2.01125 14.368 1.05082 15.569C-0.207458 17.5201 3.17874 20.5431 6.24957 23.1473C8.02071 24.8452 9.81893 27.134 10.9737 29.0437C9.58639 28.7602 9.25032 28.6837 7.17973 28.4703C3.87477 28.131 1.42511 28.5658 5.71759 33.2597H5.71599Z" fill="white"/>
+                <path d="M48.5012 21.9388C46.3685 22.1093 45.8461 19.5864 45.7234 18.0669C45.6135 16.6955 45.7712 15.5853 46.1821 14.8574C46.5437 14.2172 47.1044 13.862 47.8482 13.8015C48.5936 13.7409 49.2578 14.0037 49.7579 14.5851C50.3281 15.2477 50.6865 16.3101 50.7948 17.6591C50.9986 20.2075 50.1417 21.8066 48.5012 21.9372V21.9388Z" fill="black"/>
+                <path d="M57.2707 21.2344C55.138 21.4048 54.614 18.8819 54.493 17.3624C54.3831 15.991 54.5407 14.8825 54.9517 14.153C55.3116 13.5127 55.8739 13.1575 56.6177 13.097C57.3631 13.0381 58.0273 13.2993 58.5274 13.8807C59.0976 14.5433 59.456 15.6056 59.5643 16.9547C59.7682 19.5031 58.9113 21.1022 57.2707 21.2328V21.2344Z" fill="black"/>
+            </svg>`;
+        } else {
+            avatar.textContent = '👤';
+        }
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+
+        const header = document.createElement('div');
+        header.className = 'message-header';
+        header.textContent = role === 'user' ? 'You' : 'Kiro';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        if (content) contentDiv.textContent = content;
+
+        bubble.appendChild(header);
+        bubble.appendChild(contentDiv);
+        msg.appendChild(avatar);
+        msg.appendChild(bubble);
+
+        return msg;
+    }
+
+    // --- Streaming Handlers ---
+
+    handleMessageChunk(event) {
+        if (!this.isWaitingForResponse || !this.currentStreamingMessage) return;
+
+        this.currentStreamingContent = event.payload;
+        this.hideTypingIndicator();
+
+        const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+        renderMarkdown(this.currentStreamingContent, contentDiv);
+
+        let indicator = contentDiv.querySelector('.streaming-indicator');
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'streaming-indicator';
+            indicator.textContent = '...';
+            contentDiv.appendChild(indicator);
+        }
+
+        this.scrollToBottom();
+    }
+
+    handleMessageComplete() {
+        if (!this.isWaitingForResponse) return;
+
+        this.hideTypingIndicator();
+
+        if (this.currentStreamingMessage) {
+            const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+            const indicator = contentDiv.querySelector('.streaming-indicator');
+            if (indicator) indicator.remove();
+
+            renderMarkdown(this.currentStreamingContent, contentDiv);
+
+            if (this.toolSources.length > 0) {
+                this.renderSourcesInMessage(contentDiv);
+            }
+
+            this.messages.push({ role: 'assistant', content: this.currentStreamingContent });
+            this.currentStreamingMessage = null;
+        }
+
+        this.currentStreamingContent = '';
+        this.isWaitingForResponse = false;
+        this.updateInputState();
+        this.elements.chatInput.focus();
+        this.scrollToBottom();
+
+        // Reload sessions to pick up new/updated session
+        this.loadSessions();
+    }
+
+    handleMessageError(event) {
+        this.hideTypingIndicator();
+
+        if (this.currentStreamingMessage) {
+            this.currentStreamingMessage.remove();
+            this.currentStreamingMessage = null;
+        }
+
+        this.showError('Error: ' + event.payload);
+        this.isConnected = false;
+        this.updateConnectionStatus();
+        this.isWaitingForResponse = false;
+        this.updateInputState();
+        this.elements.chatInput.focus();
+    }
+
+    handleToolCallUpdate(event) {
+        const notification = event.payload;
+        const update = notification?.params?.update;
+        if (!update) return;
+
+        const rawOutput = update.rawOutput;
+        if (rawOutput && (update.kind === 'search' || update.title?.toLowerCase().includes('search'))) {
+            this.extractSources(rawOutput);
+        }
+
+        if (update.content && Array.isArray(update.content)) {
+            for (const item of update.content) {
+                if (item.type === 'content' && item.content?.text) {
+                    this.extractSourcesFromText(item.content.text);
+                }
+            }
+        }
+    }
+
+    // --- Tool Sources ---
+
+    extractSources(rawOutput) {
+        const tryExtract = (results) => {
+            if (Array.isArray(results)) {
+                for (const r of results) { if (r.url) this.addSource(r.url, r.title, r.domain); }
+            }
+        };
+
+        if (rawOutput?.items && Array.isArray(rawOutput.items)) {
+            for (const item of rawOutput.items) {
+                tryExtract(item?.Json?.results || item?.results);
+            }
+        } else if (Array.isArray(rawOutput)) {
+            tryExtract(rawOutput);
+        } else if (typeof rawOutput === 'object') {
+            tryExtract(rawOutput.results || rawOutput.searchResults);
+        }
+    }
+
+    extractSourcesFromText(text) {
+        const linkRegex = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
+        let match;
+        while ((match = linkRegex.exec(text)) !== null) {
+            this.addSource(match[2], match[1]);
+        }
+    }
+
+    addSource(url, title, domainHint) {
+        try {
+            const parsed = new URL(url);
+            const domain = domainHint || parsed.hostname.replace(/^www\./, '');
+            if (!this.toolSources.find(s => s.domain === domain)) {
+                const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
+                let hash = 0;
+                for (let i = 0; i < domain.length; i++) {
+                    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const hue = Math.abs(hash) % 360;
+                this.toolSources.push({
+                    url, domain,
+                    title: title || domain,
+                    initials,
+                    color: `hsl(${hue}, 55%, 45%)`,
+                    favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+                });
+            }
+        } catch (e) { /* skip */ }
+    }
+
+    renderSourcesInMessage(contentDiv) {
+        let sourcesEl = contentDiv.querySelector('.tool-sources');
+        if (!sourcesEl) {
+            sourcesEl = document.createElement('div');
+            sourcesEl.className = 'tool-sources';
+            contentDiv.appendChild(sourcesEl);
+        }
+
+        sourcesEl.innerHTML = this.toolSources.map(s => `
+            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${this.escapeHtml(s.title)}">
+                <span class="source-icon-wrapper">
+                    <span class="source-initials" style="background:${s.color}">${s.initials}</span>
+                    <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                </span>
+                <span class="source-domain">${this.escapeHtml(s.domain)}</span>
+            </a>
+        `).join('');
+    }
+
+    // --- UI Helpers ---
+
+    showTypingIndicator() {
+        this.hideTypingIndicator();
+        const indicator = document.createElement('div');
+        indicator.className = 'typing-indicator';
+        indicator.id = 'typingIndicator';
+        indicator.innerHTML = '<span></span><span></span><span></span>';
+        this.elements.messagesArea.appendChild(indicator);
+        this.scrollToBottom();
+    }
+
+    hideTypingIndicator() {
+        const el = document.getElementById('typingIndicator');
+        if (el) el.remove();
+    }
+
+    updateInputState() {
+        this.elements.sendBtn.disabled = this.isWaitingForResponse;
+        this.elements.chatInput.disabled = this.isWaitingForResponse;
+    }
+
+    async checkConnection() {
+        try {
+            this.isConnected = await this.invoke('check_connection');
+        } catch (e) {
+            this.isConnected = false;
+        }
+        this.updateConnectionStatus();
+    }
+
+    updateConnectionStatus() {
+        const el = this.elements.connectionStatus;
+        if (this.isConnected) {
+            el.textContent = 'Connected';
+            el.className = 'chat-header-status connected';
+        } else {
+            el.textContent = 'Disconnected';
+            el.className = 'chat-header-status disconnected';
+        }
+    }
+
+    showError(message) {
+        this.elements.errorContainer.innerHTML = `
+            <div class="chat-error">
+                <span>${this.escapeHtml(message)}</span>
+                <div class="chat-error-actions">
+                    <button class="chat-error-btn reconnect" id="errorReconnectBtn">Reconnect</button>
+                    <button class="chat-error-btn dismiss" id="errorDismissBtn">Dismiss</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('errorDismissBtn')?.addEventListener('click', () => {
+            this.elements.errorContainer.innerHTML = '';
+        });
+
+        document.getElementById('errorReconnectBtn')?.addEventListener('click', async () => {
+            try {
+                const success = await this.invoke('reconnect_acp');
+                if (success) {
+                    this.isConnected = true;
+                    this.updateConnectionStatus();
+                    this.elements.errorContainer.innerHTML = '';
+                } else {
+                    this.showError('Reconnection failed.');
+                }
+            } catch (e) {
+                this.showError('Reconnection failed: ' + e);
+            }
+        });
+    }
+
+    scrollToBottom() {
+        const area = this.elements.messagesArea;
+        requestAnimationFrame(() => {
+            area.scrollTo({ top: area.scrollHeight, behavior: 'smooth' });
+        });
+    }
+
+    escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+}
