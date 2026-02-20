@@ -640,6 +640,8 @@ export class FloatingApp {
     }
 
     handleToolCallUpdate(event) {
+        if (!this.isWaitingForResponse) return;
+
         const notification = event.payload;
         const update = notification?.params?.update;
         if (!update) return;
