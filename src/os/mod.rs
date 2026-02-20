@@ -30,9 +30,11 @@ pub mod cursor;
 pub mod launcher;
 pub mod process;
 pub mod shell;
+pub mod user;
 
 // Re-export common functionality
 pub use cursor::get_cursor_position;
 pub use launcher::{scan_applications, launch_application};
 pub use process::{kill_process, configure_process_spawn};
 pub use shell::{open_url, open_path};
+pub use user::get_user_profile;

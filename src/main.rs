@@ -235,6 +235,7 @@ fn main() {
             commands::quit_app,
             commands::read_clipboard,
             commands::show_context_menu,
+            commands::get_user_info,
             commands::list_sessions,
             commands::load_session,
             commands::switch_acp_session,

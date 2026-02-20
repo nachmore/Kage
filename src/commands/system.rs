@@ -1,4 +1,5 @@
-use crate::config::Config;
+﻿use crate::config::Config;
+use crate::os;
 use crate::state::AppState;
 use log::{error, info};
 use tauri::{Emitter, Manager, State};
@@ -125,4 +126,67 @@ pub async fn read_clipboard() -> Result<String, String> {
         let text = String::from_utf8_lossy(&output.stdout).to_string();
         return Ok(text);
     }
+}
+
+#[derive(serde::Serialize)]
+pub struct UserInfo {
+    pub display_name: String,
+    pub initials: String,
+    pub avatar_path: Option<String>,
+    pub avatar_base64: Option<String>,
+}
+
+#[tauri::command]
+pub async fn get_user_info() -> Result<UserInfo, String> {
+    let profile = os::get_user_profile();
+
+    // Build initials from display name, falling back to username
+    let name_for_initials = if profile.display_name == profile.username {
+        &profile.username
+    } else {
+        &profile.display_name
+    };
+
+    let initials = name_for_initials
+        .split_whitespace()
+        .filter_map(|w| w.chars().next())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+
+    let initials = if initials.is_empty() {
+        profile
+            .username
+            .chars()
+            .next()
+            .unwrap_or('U')
+            .to_uppercase()
+            .to_string()
+    } else {
+        initials
+    };
+
+    // Read avatar file as base64 for direct use in img src
+    let avatar_base64 = profile.avatar_path.as_ref().and_then(|path| {
+        use base64::Engine;
+        let bytes = std::fs::read(path).ok()?;
+        let ext = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png");
+        let mime = match ext {
+            "jpg" | "jpeg" => "image/jpeg",
+            "bmp" => "image/bmp",
+            _ => "image/png",
+        };
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        Some(format!("data:{};base64,{}", mime, b64))
+    });
+
+    Ok(UserInfo {
+        display_name: profile.display_name,
+        initials,
+        avatar_path: profile.avatar_path,
+        avatar_base64,
+    })
 }

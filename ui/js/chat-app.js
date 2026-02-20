@@ -17,6 +17,7 @@ export class ChatApp {
         this.floatingSessionId = null;
         this.currentAcpSessionId = null;
         this.toolSources = [];
+        this.userInfo = null;
 
         this.elements = {};
     }
@@ -28,6 +29,7 @@ export class ChatApp {
         this.setupStreamingListeners();
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
+        await this.loadUserInfo();
         await this.loadSessions();
         await this.checkConnection();
 
@@ -141,6 +143,16 @@ export class ChatApp {
         } catch (e) {
             console.error('Failed to get current session ID:', e);
             this.currentAcpSessionId = null;
+        }
+    }
+
+    async loadUserInfo() {
+        try {
+            this.userInfo = await this.invoke('get_user_info');
+            console.log('[USER] User info loaded:', JSON.stringify(this.userInfo));
+        } catch (e) {
+            console.error('[USER] Failed to get user info:', e);
+            this.userInfo = null;
         }
     }
 
@@ -407,7 +419,24 @@ export class ChatApp {
                 <path d="M57.2707 21.2344C55.138 21.4048 54.614 18.8819 54.493 17.3624C54.3831 15.991 54.5407 14.8825 54.9517 14.153C55.3116 13.5127 55.8739 13.1575 56.6177 13.097C57.3631 13.0381 58.0273 13.2993 58.5274 13.8807C59.0976 14.5433 59.456 15.6056 59.5643 16.9547C59.7682 19.5031 58.9113 21.1022 57.2707 21.2328V21.2344Z" fill="black"/>
             </svg>`;
         } else {
-            avatar.textContent = '👤';
+            // User avatar: profile picture > initials > fallback
+            if (this.userInfo?.avatar_base64) {
+                console.log('[USER] Using base64 avatar, length:', this.userInfo.avatar_base64.length);
+                const img = document.createElement('img');
+                img.src = this.userInfo.avatar_base64;
+                img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
+                img.onload = () => console.log('[USER] Avatar image loaded successfully');
+                img.onerror = (e) => {
+                    console.error('[USER] Avatar image failed to load:', e);
+                    avatar.textContent = this.userInfo?.initials || '?';
+                    img.remove();
+                };
+                avatar.appendChild(img);
+            } else {
+                avatar.textContent = this.userInfo?.initials || '?';
+                avatar.style.fontSize = '13px';
+                avatar.style.fontWeight = '600';
+            }
         }
 
         const bubble = document.createElement('div');
@@ -415,7 +444,7 @@ export class ChatApp {
 
         const header = document.createElement('div');
         header.className = 'message-header';
-        header.textContent = role === 'user' ? 'You' : 'Kiro';
+        header.textContent = role === 'user' ? (this.userInfo?.display_name || 'You') : 'Kiro';
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
@@ -670,5 +699,14 @@ export class ChatApp {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    convertFileSrc(path) {
+        // Tauri 2 uses asset protocol for local files
+        if (window.__TAURI__?.core?.convertFileSrc) {
+            return window.__TAURI__.core.convertFileSrc(path);
+        }
+        // Fallback: use file:// protocol
+        return 'file://' + path.replace(/\\/g, '/');
     }
 }
