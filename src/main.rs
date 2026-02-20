@@ -1197,6 +1197,13 @@ fn main() {
             #[cfg(target_os = "windows")]
             let _ = floating_window.set_shadow(false);
 
+            // Apply same transparency fixes to the cached context-menu window
+            if let Some(ctx_menu) = app.get_webview_window("context-menu") {
+                let _ = ctx_menu.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                #[cfg(target_os = "windows")]
+                let _ = ctx_menu.set_shadow(false);
+            }
+
             let hotkey_string = config.get_hotkey_string();
 
             info!(
