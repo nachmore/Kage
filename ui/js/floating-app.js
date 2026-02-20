@@ -2,6 +2,7 @@
 import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection } from './floating-suggestions.js';
 import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
+import { matchCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -324,6 +325,25 @@ export class FloatingApp {
             return;
         }
         
+        // Check for > command prefix
+        if (query.startsWith('>')) {
+            const commands = matchCommands(query);
+            if (commands && commands.length > 0) {
+                this.currentMatches = commands.map(cmd => ({ type: 'command', ...cmd }));
+                this.selectedIndex = 0;
+                renderCommandSuggestions(
+                    commands,
+                    this.elements.appSuggestions,
+                    this.selectedIndex,
+                    (cmd) => this.executeCommandAction(cmd),
+                    () => this.windowManager.resizeWindow()
+                );
+            } else {
+                this.clearSuggestions();
+            }
+            return;
+        }
+
         this.searchTimeout = setTimeout(async () => {
             await this.performSearch(query);
         }, 150);
@@ -427,6 +447,13 @@ export class FloatingApp {
         await this.windowManager.resizeWindow();
     }
 
+    async executeCommandAction(cmd) {
+        this.elements.input.value = '';
+        this.elements.input.style.height = 'auto';
+        this.clearSuggestions();
+        await cmd.execute(this.invoke, this.appWindow);
+    }
+
     async handleKeyDown(event) {
         if (event.key === 'ArrowDown') {
             event.preventDefault();
@@ -458,9 +485,24 @@ export class FloatingApp {
             this.isWaitingForResponse = false;
         }
         
+        // Handle > commands
+        if (message.startsWith('>')) {
+            const cmdName = message.substring(1).trim();
+            if (await executeCommand(cmdName, this.invoke, this.appWindow)) {
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+                return;
+            }
+        }
+
+        // Handle selected suggestion (command or otherwise)
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
             const selected = this.currentMatches[this.selectedIndex];
-            if (selected.type === 'shortcut') {
+            if (selected.type === 'command') {
+                await this.executeCommandAction(selected);
+                return;
+            } else if (selected.type === 'shortcut') {
                 const command = this.buildShortcutCommand(selected.shortcut, selected.args);
                 await this.executeShortcut(command);
             } else if (selected.type === 'url') {

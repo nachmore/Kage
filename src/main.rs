@@ -588,6 +588,15 @@ async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn quit_app(state: State<'_, AppState>) -> Result<(), String> {
+    info!("Quit requested via > command");
+    if let Ok(client) = state.acp_client.try_lock() {
+        client.disconnect();
+    }
+    std::process::exit(0);
+}
+
+#[tauri::command]
 async fn read_clipboard() -> Result<String, String> {
     use std::process::Command;
     #[cfg(target_os = "windows")]
@@ -1311,6 +1320,7 @@ fn main() {
             update_tool_policy,
             is_dev_mode,
             open_devtools,
+            quit_app,
             read_clipboard,
             show_context_menu
         ])
