@@ -76,7 +76,19 @@ export class FloatingApp {
                     // Don't reset UI if permission modal is open
                     const permissionModal = document.getElementById('permissionModal');
                     if (!permissionModal || permissionModal.style.display === 'none') {
-                        setTimeout(() => this.resetUI(), 50);
+                        // Check if we should preserve the last response
+                        try {
+                            const config = await this.invoke('get_config');
+                            if (config.ui?.preserve_last_response === false) {
+                                setTimeout(() => this.resetUI(), 50);
+                            } else {
+                                // Just focus the input, keep the response
+                                setTimeout(() => this.elements.input.focus(), 50);
+                            }
+                        } catch (e) {
+                            // Fallback: preserve by default
+                            setTimeout(() => this.elements.input.focus(), 50);
+                        }
                     }
                 }
                 lastVisibilityState = isVisible;

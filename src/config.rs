@@ -79,6 +79,12 @@ pub struct UiConfig {
     pub floating_window_opacity: f32,
     pub chat_window_width: u32,
     pub chat_window_height: u32,
+    #[serde(default = "default_true")]
+    pub preserve_last_response: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +132,7 @@ impl Default for Config {
                 floating_window_opacity: 1.0,
                 chat_window_width: 800,
                 chat_window_height: 600,
+                preserve_last_response: true,
             },
             system: SystemConfig {
                 auto_start: false,

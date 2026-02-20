@@ -44,6 +44,17 @@ class AppearanceSettingsModule extends SettingsModule {
                     </div>
                     `
                 )}
+                
+                ${this.createSettingRow(
+                    'Preserve Last Response',
+                    'Keep the last AI response visible when the floating window is reshown',
+                    `
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="preserveLastResponse" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    `
+                )}
             </div>
         `;
     }
@@ -55,6 +66,7 @@ class AppearanceSettingsModule extends SettingsModule {
             const opacityValue = document.getElementById('opacityValue');
             const width = document.getElementById('windowWidth');
             const height = document.getElementById('windowHeight');
+            const preserve = document.getElementById('preserveLastResponse');
             
             if (theme) theme.value = config.ui.theme;
             if (opacity) {
@@ -63,6 +75,7 @@ class AppearanceSettingsModule extends SettingsModule {
             }
             if (width) width.value = config.ui.chat_window_width;
             if (height) height.value = config.ui.chat_window_height;
+            if (preserve) preserve.checked = config.ui.preserve_last_response !== false;
             
             this.applyTheme(config.ui.theme);
         }
@@ -73,7 +86,8 @@ class AppearanceSettingsModule extends SettingsModule {
             theme: document.getElementById('theme').value,
             floating_window_opacity: parseFloat(document.getElementById('opacity').value),
             chat_window_width: parseInt(document.getElementById('windowWidth').value),
-            chat_window_height: parseInt(document.getElementById('windowHeight').value)
+            chat_window_height: parseInt(document.getElementById('windowHeight').value),
+            preserve_last_response: document.getElementById('preserveLastResponse').checked
         };
         
         // Apply theme immediately
