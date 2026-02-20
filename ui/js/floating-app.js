@@ -73,6 +73,13 @@ export class FloatingApp {
         this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
         document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
+        // Global Escape to hide the floating window regardless of focus
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.appWindow.hide();
+            }
+        });
+
         // Paste handler for images
         this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
 
