@@ -41,6 +41,7 @@ const LOCAL_COMMANDS = [
         description: 'Open full chat with sessions',
         icon: '💬',
         execute: async (invoke, appWindow) => {
+            document.dispatchEvent(new CustomEvent('kiro-clear'));
             await invoke('open_chat_window');
             await appWindow.hide();
         }

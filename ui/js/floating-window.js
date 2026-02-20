@@ -55,8 +55,14 @@ export class WindowManager {
                 
                 const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
 
-                // When nothing is expanded (just the input), never shrink the window.
+                // When nothing is expanded, shrink back to default
                 if (nothingExpanded) {
+                    if (!this.userSetHeight) {
+                        const scale = window.devicePixelRatio || 1;
+                        const defaultPhysical = Math.round(DEFAULT_HEIGHT * scale);
+                        this.autoGrowHeight = null;
+                        await this.invoke('resize_floating_window', { height: defaultPhysical });
+                    }
                     return;
                 }
 
