@@ -331,3 +331,18 @@
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-6px); }
 }
+
+
+/* Tool usage chips */
+.tool-chip {
+    cursor: default;
+}
+.tool-chip-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+.tool-bubble {
+    cursor: default;
+}

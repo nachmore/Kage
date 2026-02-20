@@ -20,6 +20,7 @@ export class ChatApp {
         this.floatingSessionId = null;
         this.currentAcpSessionId = null;
         this.toolSources = [];
+        this.toolUsages = [];
         this.userInfo = null;
 
         this.elements = {};
@@ -284,6 +285,7 @@ export class ChatApp {
         this.messages = [];
         this.elements.messagesArea.innerHTML = '';
         this.toolSources = [];
+        this.toolUsages = [];
 
         if (!sessionData.messages || sessionData.messages.length === 0) {
             this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
@@ -353,6 +355,7 @@ export class ChatApp {
     async createNewSession() {
         this.messages = [];
         this.toolSources = [];
+        this.toolUsages = [];
         this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kiro...</div>';
         this.elements.chatHeaderTitle.textContent = 'New Chat';
         this.elements.chatInput.focus();
@@ -427,6 +430,7 @@ export class ChatApp {
     startStreaming() {
         this.currentStreamingContent = '';
         this.toolSources = [];
+        this.toolUsages = [];
         this.isWaitingForResponse = true;
         this.updateInputState();
         this.showTypingIndicator();
@@ -522,7 +526,7 @@ export class ChatApp {
 
             renderMarkdown(this.currentStreamingContent, contentDiv);
 
-            if (this.toolSources.length > 0) {
+            if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
                 this.renderSourcesInMessage(contentDiv);
             }
 
@@ -561,6 +565,17 @@ export class ChatApp {
         const notification = event.payload;
         const update = notification?.params?.update;
         if (!update) return;
+
+        // Track tool usage for display
+        if (update.title && update.toolCallId) {
+            if (!this.toolUsages.find(t => t.toolCallId === update.toolCallId)) {
+                this.toolUsages.push({
+                    toolCallId: update.toolCallId,
+                    title: update.title,
+                    kind: update.kind
+                });
+            }
+        }
 
         const rawOutput = update.rawOutput;
         if (rawOutput && (update.kind === 'search' || update.title?.toLowerCase().includes('search'))) {
@@ -634,7 +649,24 @@ export class ChatApp {
             contentDiv.appendChild(sourcesEl);
         }
 
-        sourcesEl.innerHTML = this.toolSources.map(s => `
+        const getToolIcon = (kind) => {
+            const k = (kind || '').toLowerCase();
+            if (k === 'search' || k === 'web_search') return '🔍';
+            if (k === 'edit' || k === 'write') return '✏️';
+            if (k === 'read') return '📖';
+            if (k === 'shell' || k === 'terminal') return '💻';
+            if (k === 'fetch' || k === 'web') return '🌐';
+            return '🔧';
+        };
+
+        const toolChips = this.toolUsages.map(t => `
+            <span class="source-chip tool-chip" title="Tool: ${this.escapeHtml(t.title)}">
+                <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
+                <span class="source-domain">Tool: ${this.escapeHtml(t.title)}</span>
+            </span>
+        `).join('');
+
+        const sourceChips = this.toolSources.map(s => `
             <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${this.escapeHtml(s.title)}">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${s.color}">${s.initials}</span>
@@ -643,6 +675,8 @@ export class ChatApp {
                 <span class="source-domain">${this.escapeHtml(s.domain)}</span>
             </a>
         `).join('');
+
+        sourcesEl.innerHTML = toolChips + sourceChips;
     }
 
     // --- UI Helpers ---

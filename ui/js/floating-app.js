@@ -20,6 +20,7 @@ export class FloatingApp {
         // Track the length at which pattern matching last failed (returned "chat").
         // While the input only grows beyond this length, skip redundant backend calls.
         this._noMatchSinceLen = 0;
+        this.toolUsages = [];
         
         this.elements = {};
     }
@@ -154,6 +155,7 @@ export class FloatingApp {
         this.currentMatches = [];
         this.selectedIndex = -1;
         this._noMatchSinceLen = 0;
+        this.toolUsages = [];
         this.elements.contentArea.classList.remove('visible');
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
@@ -575,6 +577,7 @@ export class FloatingApp {
         this.selectedIndex = -1;
         this.elements.contentArea.classList.remove('visible');
         this.toolSources = [];
+        this.toolUsages = [];
         const sourcesEl2 = document.getElementById('toolSources');
         if (sourcesEl2) sourcesEl2.remove();
         const compactEl2 = document.getElementById('toolSourcesCompact');
@@ -645,7 +648,7 @@ export class FloatingApp {
             const compactEl = document.getElementById('toolSourcesCompact');
             if (compactEl) {
                 compactEl.remove();
-                if (this.toolSources.length > 0) {
+                if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
                     this.renderSources();
                 }
             }
@@ -696,6 +699,11 @@ export class FloatingApp {
         
         const kind = update.kind;
         const rawOutput = update.rawOutput;
+
+        // Track tool usage for display
+        if (update.title && update.toolCallId) {
+            this.addToolUsage(update.toolCallId, update.title, kind);
+        }
         
         // Extract URLs from search results in rawOutput (arrives on tool_call_update with status=completed)
         if (rawOutput && (kind === 'search' || update.title?.toLowerCase().includes('search'))) {
@@ -711,7 +719,7 @@ export class FloatingApp {
             }
         }
         
-        if (this.toolSources.length > 0) {
+        if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
             // If no text content yet, show compact sources in place of loading dots
             if (!this.currentResponse || this.currentResponse.trim().length === 0) {
                 this.renderSourcesCompact();
@@ -787,6 +795,21 @@ export class FloatingApp {
         }
     }
 
+    addToolUsage(toolCallId, title, kind) {
+        if (this.toolUsages.find(t => t.toolCallId === toolCallId)) return;
+        this.toolUsages.push({ toolCallId, title, kind });
+    }
+
+    getToolIcon(kind) {
+        const k = (kind || '').toLowerCase();
+        if (k === 'search' || k === 'web_search') return '🔍';
+        if (k === 'edit' || k === 'write') return '✏️';
+        if (k === 'read') return '📖';
+        if (k === 'shell' || k === 'terminal') return '💻';
+        if (k === 'fetch' || k === 'web') return '🌐';
+        return '🔧';
+    }
+
     renderSources() {
         // Remove compact version if it exists
         const compactEl = document.getElementById('toolSourcesCompact');
@@ -803,15 +826,22 @@ export class FloatingApp {
             }
         }
         
-        if (this.toolSources.length === 0) {
+        if (this.toolSources.length === 0 && this.toolUsages.length === 0) {
             sourcesEl.style.display = 'none';
             return;
         }
         
         sourcesEl.style.display = 'flex';
         this.elements.contentArea.classList.add('visible');
-        
-        sourcesEl.innerHTML = this.toolSources.map(source => `
+
+        const toolChips = this.toolUsages.map(t => `
+            <span class="source-chip tool-chip" title="Tool: ${t.title}">
+                <span class="tool-chip-icon">${this.getToolIcon(t.kind)}</span>
+                <span class="source-domain">Tool: ${t.title}</span>
+            </span>
+        `).join('');
+
+        const sourceChips = this.toolSources.map(source => `
             <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${source.color}">${source.initials}</span>
@@ -820,6 +850,8 @@ export class FloatingApp {
                 <span class="source-domain">${source.domain}</span>
             </a>
         `).join('');
+        
+        sourcesEl.innerHTML = toolChips + sourceChips;
         
         this.windowManager.resizeWindow();
     }
@@ -842,14 +874,24 @@ export class FloatingApp {
         }
         
         compactEl.style.display = 'flex';
-        compactEl.innerHTML = this.toolSources.map((source, i) => `
-            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${i * 0.08}s">
+
+        const toolBubbles = this.toolUsages.map((t, i) => `
+            <span class="source-bubble tool-bubble" title="${t.title}" style="animation-delay: ${i * 0.08}s">
+                <span class="tool-chip-icon" style="font-size: 18px;">${this.getToolIcon(t.kind)}</span>
+            </span>
+        `).join('');
+
+        const offset = this.toolUsages.length;
+        const sourceBubbles = this.toolSources.map((source, i) => `
+            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${(offset + i) * 0.08}s">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${source.color}">${source.initials}</span>
                     <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
                 </span>
             </a>
         `).join('');
+
+        compactEl.innerHTML = toolBubbles + sourceBubbles;
         
         this.windowManager.resizeWindow();
     }
