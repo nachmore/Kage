@@ -3,7 +3,7 @@
  */
 class ConnectionSettingsModule extends SettingsModule {
     constructor() {
-        super('connection', 'Connection', '🔌');
+        super('connection', 'Agent Connection', '🔌');
     }
 
     render() {
@@ -11,6 +11,13 @@ class ConnectionSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 
+                ${this.createCheckboxRow(
+                    'Start Kiro backend on launch',
+                    'Speed up initial responses by pre-launching the Kiro backend on Assistant launch.',
+                    'startSessionOnLaunch',
+                    true
+                )}
+
                 ${this.createControlRow(
                     'Connection Mode',
                     'Choose how to connect to the ACP server.',
@@ -54,6 +61,11 @@ class ConnectionSettingsModule extends SettingsModule {
     }
 
     load(config) {
+        // Load start-on-launch setting
+        const assistant = config.acp?.assistant || {};
+        const startSession = document.getElementById('startSessionOnLaunch');
+        if (startSession) startSession.checked = assistant.start_session_on_launch !== false;
+
         if (config.acp && config.acp.mode) {
             const mode = config.acp.mode;
             const modeSelect = document.getElementById('acpMode');
@@ -78,26 +90,30 @@ class ConnectionSettingsModule extends SettingsModule {
     }
 
     save(config) {
+        if (!config.acp) config.acp = {};
+
+        // Preserve existing assistant settings
+        const existingAssistant = config.acp.assistant || {};
+        existingAssistant.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
+        
         const mode = document.getElementById('acpMode').value;
         
         if (mode === 'local') {
             const spawnCommand = document.getElementById('spawnCommand').value.trim();
-            config.acp = {
-                mode: {
-                    type: 'local',
-                    spawn_command: spawnCommand
-                }
+            config.acp.mode = {
+                type: 'local',
+                spawn_command: spawnCommand
             };
         } else {
-            config.acp = {
-                mode: {
-                    type: 'remote',
-                    host: document.getElementById('acpHost').value,
-                    port: parseInt(document.getElementById('acpPort').value),
-                    timeout_ms: parseInt(document.getElementById('acpTimeout').value)
-                }
+            config.acp.mode = {
+                type: 'remote',
+                host: document.getElementById('acpHost').value,
+                port: parseInt(document.getElementById('acpPort').value),
+                timeout_ms: parseInt(document.getElementById('acpTimeout').value)
             };
         }
+
+        config.acp.assistant = existingAssistant;
     }
 
     validate() {

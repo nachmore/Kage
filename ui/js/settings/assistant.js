@@ -4,20 +4,13 @@
  */
 class AssistantSettingsModule extends SettingsModule {
     constructor() {
-        super('assistant', 'Assistant', '🤖');
+        super('assistant', 'Personalization', '✨');
     }
 
     render() {
         return `
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
-
-                ${this.createCheckboxRow(
-                    'Start Kiro backend on launch',
-                    'Speed up initial responses by pre-launching the Kiro backend on Assistant launch. ',
-                    'startSessionOnLaunch',
-                    true
-                )}
 
                 <div class="setting-row">
                     <div class="setting-label">Auto-generate steering document</div>
@@ -44,22 +37,18 @@ class AssistantSettingsModule extends SettingsModule {
 
     load(config) {
         const assistant = config.acp?.assistant || {};
-        const startSession = document.getElementById('startSessionOnLaunch');
         const autoSteering = document.getElementById('autoSteeringEnabled');
         const userPath = document.getElementById('userSteeringPath');
 
-        if (startSession) startSession.checked = assistant.start_session_on_launch !== false;
         if (autoSteering) autoSteering.checked = assistant.auto_steering_enabled || false;
         if (userPath) userPath.value = assistant.user_steering_path || '';
     }
 
     save(config) {
         if (!config.acp) config.acp = {};
-        config.acp.assistant = {
-            start_session_on_launch: document.getElementById('startSessionOnLaunch').checked,
-            auto_steering_enabled: document.getElementById('autoSteeringEnabled').checked,
-            user_steering_path: document.getElementById('userSteeringPath').value.trim() || null
-        };
+        if (!config.acp.assistant) config.acp.assistant = {};
+        config.acp.assistant.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
+        config.acp.assistant.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
     }
 
     initialize() {
