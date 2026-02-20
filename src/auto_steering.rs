@@ -187,20 +187,21 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     );
 
     // Read existing steering content to include for incremental updates
+    // Strip the HTML header comment so the LLM doesn't echo it back
     let existing_content = Config::get_auto_steering_path()
         .ok()
         .and_then(|p| fs::read_to_string(&p).ok())
         .unwrap_or_default();
+    let existing_body = strip_header_comment(&existing_content);
 
-    let prompt_with_existing = if existing_content.trim().is_empty()
-        || existing_content.starts_with("<!--")
-            && !existing_content.contains("## ")
+    let prompt_with_existing = if existing_body.trim().is_empty()
+        || !existing_body.contains("## ")
     {
         full_prompt
     } else {
         format!(
             "{}\n\n---\n\nExisting preference document (update and merge with new findings, don't lose existing information unless contradicted):\n\n{}",
-            full_prompt, existing_content
+            full_prompt, existing_body.trim()
         )
     };
 
@@ -239,6 +240,9 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         return Ok(());
     }
 
+    // Strip markdown code fences the LLM may wrap the response in
+    let cleaned = strip_code_fences(&result);
+
     // Write to the auto-steering file
     let auto_path = Config::get_auto_steering_path()?;
     if let Some(parent) = auto_path.parent() {
@@ -247,7 +251,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 
     let header = "<!-- AUTO-GENERATED STEERING DOCUMENT\n     This file is automatically updated based on your conversations.\n     Any manual changes may be overridden.\n     To add your own persistent instructions, use a User Steering Document instead. -->\n\n";
 
-    let content = format!("{}{}", header, result.trim());
+    let content = format!("{}{}", header, cleaned.trim());
     fs::write(&auto_path, &content)?;
 
     info!(
@@ -304,4 +308,41 @@ pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
     if let Err(e) = generate_steering_document(client) {
         error!("Auto-steering generation on quit failed: {}", e);
     }
+}
+
+/// Strip markdown code fences (```markdown ... ``` or ``` ... ```) from LLM output.
+fn strip_code_fences(text: &str) -> String {
+    let trimmed = text.trim();
+
+    // Check if the entire response is wrapped in a code fence
+    if trimmed.starts_with("```") {
+        let after_opening = if let Some(first_newline) = trimmed.find('\n') {
+            &trimmed[first_newline + 1..]
+        } else {
+            return trimmed.to_string();
+        };
+
+        // Strip trailing fence
+        let result = if after_opening.trim_end().ends_with("```") {
+            let end = after_opening.trim_end();
+            &end[..end.len() - 3]
+        } else {
+            after_opening
+        };
+
+        result.trim().to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+/// Strip the HTML header comment from the steering document content.
+fn strip_header_comment(text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.starts_with("<!--") {
+        if let Some(end_pos) = trimmed.find("-->") {
+            return trimmed[end_pos + 3..].trim().to_string();
+        }
+    }
+    trimmed.to_string()
 }
