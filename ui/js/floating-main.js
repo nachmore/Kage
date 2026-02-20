@@ -23,6 +23,7 @@ function initApp() {
     initThemeListener();
     
     const app = new FloatingApp(invoke, appWindow, listen);
+    window._floatingApp = app; // Expose for permission modal resize
     app.init();
 }
 

@@ -47,13 +47,14 @@ async function showPermissionModal(notification) {
         console.error('Failed to set window focus:', error);
     }
     
-    // Resize window to fit modal (modal needs ~400px height)
+    // Resize window to fit modal
     try {
         const currentSize = await appWindow.innerSize();
-        const modalHeight = 400;
-        const modalWidth = 520;
+        const scale = window.devicePixelRatio || 1;
+        const modalHeight = Math.round(420 * scale);
+        const modalWidth = Math.round(520 * scale);
         
-        // Only resize if current window is smaller than modal
+        // Only resize if current window is smaller than modal needs
         const newWidth = Math.max(currentSize.width, modalWidth);
         const newHeight = Math.max(currentSize.height, modalHeight);
         
@@ -77,9 +78,16 @@ async function hidePermissionModal() {
         modal.style.display = 'none';
     }
     currentPermissionRequest = null;
-    
-    // Optionally resize window back to original size
-    // For now, we'll leave it at the expanded size for better UX
+
+    // Trigger a resize back to fit the current content
+    try {
+        // Use the FloatingApp's window manager if available
+        if (window._floatingApp?.windowManager) {
+            await window._floatingApp.windowManager.resizeWindow();
+        }
+    } catch (e) {
+        // ignore
+    }
 }
 
 /**
