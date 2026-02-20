@@ -37,6 +37,7 @@
     },
     "windows": [
       {
+        "label": "main",
         "fullscreen": false,
         "resizable": true,
         "title": "Kiro Assistant",
@@ -44,6 +45,21 @@
         "height": 600,
         "visible": false,
         "skipTaskbar": false
+      },
+      {
+        "label": "floating",
+        "url": "floating.html",
+        "fullscreen": false,
+        "resizable": false,
+        "title": "Kiro",
+        "width": 400,
+        "height": 250,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "center": true
       }
     ]
   }

@@ -253,6 +253,26 @@
         let messages = [];
         let currentStreamingMessage = null;
         
+        // Listen for initial message from floating window
+        listen('initial_message', (event) => {
+            const message = event.payload;
+            if (message) {
+                // Add user message to chat
+                addMessage('user', message);
+                messages.push({ role: 'user', content: message });
+                
+                // Disable input while processing
+                const sendButton = document.getElementById('sendButton');
+                const input = document.getElementById('messageInput');
+                sendButton.disabled = true;
+                input.disabled = true;
+                
+                // Add assistant message placeholder
+                removeTypingIndicator();
+                currentStreamingMessage = addMessage('assistant', '');
+            }
+        });
+        
         // Listen for streaming message chunks
         listen('message_chunk', (event) => {
             if (currentStreamingMessage) {

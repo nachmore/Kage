@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: transparent;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .floating-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            animation: fadeIn 0.2s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .ghost-container {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4);
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        .ghost-icon {
+            font-size: 40px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
+        
+        .speech-bubble {
+            position: relative;
+            background: white;
+            border-radius: 20px;
+            padding: 15px 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            min-width: 300px;
+            max-width: 400px;
+        }
+        
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 10px solid white;
+        }
+        
+        .input-box {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #333;
+            transition: all 0.2s;
+        }
+        
+        .input-box:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .input-box::placeholder {
+            color: #9ca3af;
+        }
+        
+        .hint-text {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #9ca3af;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-container">
+        <div class="ghost-container">
+            <div class="ghost-icon">👻</div>
+        </div>
+        
+        <div class="speech-bubble">
+            <input 
+                type="text" 
+                class="input-box" 
+                id="promptInput" 
+                placeholder="Ask me anything..."
+                autofocus
+            />
+            <div class="hint-text">Press Enter to chat • Esc to dismiss</div>
+        </div>
+    </div>
+
+    <script>
+        const { invoke } = window.__TAURI__.tauri;
+        const { appWindow } = window.__TAURI__.window;
+        
+        const input = document.getElementById('promptInput');
+        
+        // Handle Enter key to open chat window
+        input.addEventListener('keydown', async (event) => {
+            if (event.key === 'Enter') {
+                const message = input.value.trim();
+                if (message) {
+                    try {
+                        // Send message to open chat window
+                        await invoke('open_chat_with_message', { message });
+                        // Clear input
+                        input.value = '';
+                    } catch (error) {
+                        console.error('Error opening chat:', error);
+                    }
+                }
+            } else if (event.key === 'Escape') {
+                // Hide floating window on Escape
+                await appWindow.hide();
+            }
+        });
+        
+        // Handle click outside to dismiss
+        document.addEventListener('click', async (event) => {
+            // Check if click is outside the floating container
+            const container = document.querySelector('.floating-container');
+            if (container && !container.contains(event.target)) {
+                await appWindow.hide();
+            }
+        });
+        
+        // Focus input when window becomes visible
+        appWindow.listen('tauri://focus', () => {
+            input.focus();
+        });
+        
+        // Listen for blur event to hide window
+        appWindow.onFocusChanged(({ payload: focused }) => {
+            if (!focused) {
+                // Small delay to allow clicking within the window
+                setTimeout(async () => {
+                    if (!document.hasFocus()) {
+                        await appWindow.hide();
+                    }
+                }, 200);
+            }
+        });
+        
+        // Auto-focus on load
+        setTimeout(() => {
+            input.focus();
+        }, 100);
+    </script>
+</body>
+</html>

@@ -54,6 +54,53 @@ async fn check_connection(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(client.is_connected())
 }
 
+#[tauri::command]
+async fn open_chat_with_message(
+    message: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Hide floating window
+    if let Some(floating_window) = app.get_window("floating") {
+        let _ = floating_window.hide();
+    }
+    
+    // Show main chat window
+    if let Some(main_window) = app.get_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.set_focus();
+        
+        // Send the message to the chat window
+        let _ = main_window.emit("initial_message", message.clone());
+        
+        // Also send it to the ACP client
+        let client = state.acp_client.clone();
+        let window = main_window.clone();
+        
+        async_runtime::spawn_blocking(move || {
+            let client = async_runtime::block_on(client.lock());
+            
+            if !client.is_connected() {
+                if let Err(e) = client.connect() {
+                    let _ = window.emit("message_error", format!("Connection error: {}", e));
+                    return;
+                }
+            }
+            
+            if let Err(e) = client.send_chat_streaming(message, |chunk| {
+                let _ = window.emit("message_chunk", chunk);
+            }) {
+                let _ = window.emit("message_error", format!("Send error: {}", e));
+                return;
+            }
+            
+            let _ = window.emit("message_complete", ());
+        });
+    }
+    
+    Ok(())
+}
+
 fn main() {
     let acp_client = AcpClient::new("127.0.0.1".to_string(), 8765);
     
@@ -103,11 +150,11 @@ fn main() {
         .setup(|app| {
             // Register global hotkey Alt+K (Alt+Space may be in use on some systems)
             let mut shortcut_manager = app.global_shortcut_manager();
-            let window = app.get_window("main").unwrap();
+            let floating_window = app.get_window("floating").unwrap();
             
             // Try Alt+Space first, fall back to Alt+K if it fails
             let hotkey = if shortcut_manager.register("Alt+Space", {
-                let window = window.clone();
+                let window = floating_window.clone();
                 move || {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
@@ -122,11 +169,11 @@ fn main() {
             } else {
                 eprintln!("Failed to register Alt+Space, trying Alt+K instead...");
                 match shortcut_manager.register("Alt+K", move || {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
+                    if floating_window.is_visible().unwrap_or(false) {
+                        let _ = floating_window.hide();
                     } else {
-                        let _ = window.show();
-                        let _ = window.set_focus();
+                        let _ = floating_window.show();
+                        let _ = floating_window.set_focus();
                     }
                 }) {
                     Ok(_) => {
@@ -145,7 +192,7 @@ fn main() {
             
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![send_message_streaming, check_connection])
+        .invoke_handler(tauri::generate_handler![send_message_streaming, check_connection, open_chat_with_message])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
