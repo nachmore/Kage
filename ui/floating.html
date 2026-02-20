@@ -4,13 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kiro</title>
-    <script type="module">
-        // Import Tauri API
-        import { invoke } from 'https://unpkg.com/@tauri-apps/api@1/tauri';
-        import { appWindow } from 'https://unpkg.com/@tauri-apps/api@1/window';
-        
-        window.__KIRO_TAURI__ = { invoke, appWindow };
-    </script>
+    <script src="https://unpkg.com/@tauri-apps/api@1"></script>
     <style>
         * {
             margin: 0;
@@ -124,28 +118,68 @@
             text-align: center;
         }
         
-        .context-menu {
-            position: fixed;
+        .app-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 8px;
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-            padding: 4px;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            max-height: 200px;
+            overflow-y: auto;
             display: none;
-            z-index: 1000;
-            min-width: 150px;
+            z-index: 100;
         }
         
-        .context-menu-item {
-            padding: 8px 12px;
+        .app-suggestions.visible {
+            display: block;
+        }
+        
+        .app-suggestion-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
             cursor: pointer;
-            border-radius: 4px;
-            font-size: 13px;
-            color: #333;
             transition: background 0.1s;
+            border-bottom: 1px solid #f3f4f6;
         }
         
-        .context-menu-item:hover {
+        .app-suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .app-suggestion-item:hover,
+        .app-suggestion-item.selected {
             background: #f3f4f6;
+        }
+        
+        .app-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .app-icon-img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+        
+        .app-name {
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
         }
     </style>
 </head>
@@ -163,163 +197,248 @@
                 placeholder="Ask me anything..."
                 autofocus
             />
+            <div class="app-suggestions" id="appSuggestions"></div>
             <div class="hint-text">Press Enter to chat • Esc to dismiss</div>
         </div>
     </div>
-    
-    <div class="context-menu" id="contextMenu">
-        <div class="context-menu-item" onclick="openSettings()">⚙️ Settings</div>
-    </div>
 
     <script>
-        // Wait for our custom Tauri import
-        function initializeTauri(attempt = 0) {
-            console.log(`Attempt ${attempt + 1}: Checking Tauri...`);
+        // Wait for Tauri to be ready
+        function initApp() {
+            console.log('initApp called, checking Tauri...');
+            console.log('window.__TAURI__:', window.__TAURI__);
             
-            // Check for our custom import
-            if (window.__KIRO_TAURI__ && window.__KIRO_TAURI__.invoke && window.__KIRO_TAURI__.appWindow) {
-                console.log('Successfully loaded Tauri APIs via module import!');
-                setupEventHandlers(window.__KIRO_TAURI__.invoke, window.__KIRO_TAURI__.appWindow);
+            if (!window.__TAURI__ || !window.__TAURI__.tauri || !window.__TAURI__.window) {
+                console.log('Tauri not ready, retrying in 50ms...');
+                setTimeout(initApp, 50);
                 return;
             }
             
-            // Fallback: check standard Tauri
-            if (!window.__TAURI__) {
-                if (attempt < 20) {
-                    setTimeout(() => initializeTauri(attempt + 1), 100);
-                }
-                return;
-            }
+            console.log('Tauri ready! Initializing...');
             
-            console.log('Tauri object:', window.__TAURI__);
-            console.log('Tauri keys:', Object.keys(window.__TAURI__));
+            const { invoke } = window.__TAURI__.tauri;
+            const { appWindow } = window.__TAURI__.window;
             
-            // Try different API access patterns
-            let invoke, appWindow;
+            console.log('invoke:', invoke);
+            console.log('appWindow:', appWindow);
             
-            // Pattern 1: window.__TAURI__.tauri.invoke
-            if (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke) {
-                invoke = window.__TAURI__.tauri.invoke;
-                console.log('Found invoke via tauri.invoke');
-            }
-            // Pattern 2: window.__TAURI__.invoke
-            else if (window.__TAURI__.invoke) {
-                invoke = window.__TAURI__.invoke;
-                console.log('Found invoke directly');
-            }
-            
-            // Pattern 1: window.__TAURI__.window.appWindow
-            if (window.__TAURI__.window && window.__TAURI__.window.appWindow) {
-                appWindow = window.__TAURI__.window.appWindow;
-                console.log('Found appWindow via window.appWindow');
-            }
-            // Pattern 2: window.__TAURI__.window.getCurrent()
-            else if (window.__TAURI__.window && window.__TAURI__.window.getCurrent) {
-                appWindow = window.__TAURI__.window.getCurrent();
-                console.log('Found appWindow via getCurrent()');
-            }
-            // Pattern 3: Direct appWindow
-            else if (window.__TAURI__.appWindow) {
-                appWindow = window.__TAURI__.appWindow;
-                console.log('Found appWindow directly');
-            }
-            
-            if (!invoke || !appWindow) {
-                console.error('Could not find invoke or appWindow');
-                if (attempt < 20) {
-                    setTimeout(() => initializeTauri(attempt + 1), 100);
-                }
-                return;
-            }
-            
-            console.log('Successfully loaded Tauri APIs!');
-            setupEventHandlers(invoke, appWindow);
-        }
-        
-        function setupEventHandlers(invoke, appWindow) {
             const input = document.getElementById('promptInput');
-            const contextMenu = document.getElementById('contextMenu');
+            const appSuggestions = document.getElementById('appSuggestions');
             
-            // Handle right-click to show context menu
-            document.addEventListener('contextmenu', (event) => {
-                event.preventDefault();
-                contextMenu.style.display = 'block';
-                contextMenu.style.left = event.clientX + 'px';
-                contextMenu.style.top = event.clientY + 'px';
-            });
+            console.log('input element:', input);
+            console.log('appSuggestions element:', appSuggestions);
             
-            // Handle clicks
-            document.addEventListener('click', async (event) => {
-                console.log('Click detected');
-                // Hide context menu if it's open
-                if (contextMenu.style.display === 'block') {
-                    contextMenu.style.display = 'none';
-                    if (event.target.classList.contains('context-menu-item')) {
-                        return;
-                    }
+            let currentMatches = [];
+            let selectedIndex = -1;
+            let searchTimeout = null;
+            
+            // Handle input changes for live search
+            input.addEventListener('input', async (event) => {
+                const query = input.value.trim();
+                console.log('Input changed:', query);
+                
+                // Clear previous timeout
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
                 }
                 
-                // Check if click is outside the floating container
-                const container = document.querySelector('.floating-container');
-                const isOutside = container && !container.contains(event.target);
-                if (isOutside) {
-                    console.log('Hiding window due to outside click');
-                    try {
-                        await appWindow.hide();
-                    } catch (error) {
-                        console.error('Error hiding window:', error);
-                    }
+                if (query.length === 0) {
+                    appSuggestions.classList.remove('visible');
+                    currentMatches = [];
+                    selectedIndex = -1;
+                    return;
                 }
+                
+                // Debounce search
+                searchTimeout = setTimeout(async () => {
+                    console.log('Searching for apps:', query);
+                    try {
+                        const result = await invoke('handle_floating_input', { input: query });
+                        console.log('Search result:', result);
+                        
+                        if (result.startsWith('multiple:')) {
+                            // Multiple matches - parse JSON
+                            const jsonStr = result.substring(9);
+                            const apps = JSON.parse(jsonStr);
+                            console.log('Found apps:', apps);
+                            
+                            if (apps.length > 0) {
+                                currentMatches = apps;
+                                selectedIndex = 0;
+                                renderSuggestions(apps);
+                            } else {
+                                appSuggestions.classList.remove('visible');
+                                currentMatches = [];
+                                selectedIndex = -1;
+                            }
+                        } else if (result.startsWith('launched:')) {
+                            // Single match found - parse JSON
+                            const jsonStr = result.substring(9);
+                            const apps = JSON.parse(jsonStr);
+                            console.log('Single match found:', apps);
+                            currentMatches = apps;
+                            selectedIndex = 0;
+                            renderSuggestions(apps);
+                        } else {
+                            // No app matches
+                            console.log('No app matches');
+                            appSuggestions.classList.remove('visible');
+                            currentMatches = [];
+                            selectedIndex = -1;
+                        }
+                    } catch (error) {
+                        console.error('Error searching apps:', error);
+                    }
+                }, 150);
             });
             
-            async function openSettings() {
-                await invoke('open_settings_window');
+            function renderSuggestions(apps) {
+                console.log('Rendering suggestions:', apps);
+                appSuggestions.innerHTML = '';
+                
+                apps.forEach((app, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'app-suggestion-item';
+                    if (index === selectedIndex) {
+                        item.classList.add('selected');
+                    }
+                    
+                    // Check if app has an icon_path
+                    let iconHtml;
+                    if (app.icon_path) {
+                        // Use Tauri's convertFileSrc to convert the path to a usable URL
+                        const iconUrl = window.__TAURI__.tauri.convertFileSrc(app.icon_path);
+                        iconHtml = `<img src="${iconUrl}" class="app-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                    <div class="app-icon" style="display:none;">${app.name.charAt(0).toUpperCase()}</div>`;
+                    } else {
+                        // Fallback to first letter
+                        const firstLetter = app.name.charAt(0).toUpperCase();
+                        iconHtml = `<div class="app-icon">${firstLetter}</div>`;
+                    }
+                    
+                    item.innerHTML = `
+                        ${iconHtml}
+                        <div class="app-name">${app.name}</div>
+                    `;
+                    
+                    item.addEventListener('click', async () => {
+                        await launchApp(app.name);
+                    });
+                    
+                    appSuggestions.appendChild(item);
+                });
+                
+                appSuggestions.classList.add('visible');
+                console.log('Suggestions rendered and visible');
             }
             
-            window.openSettings = openSettings;
+            async function launchApp(appName) {
+                console.log('Launching app:', appName);
+                try {
+                    await invoke('launch_app_by_name', { appName });
+                    input.value = '';
+                    appSuggestions.classList.remove('visible');
+                    currentMatches = [];
+                    selectedIndex = -1;
+                } catch (error) {
+                    console.error('Error launching app:', error);
+                }
+            }
             
-            // Handle Escape key on input
+            function updateSelection() {
+                const items = appSuggestions.querySelectorAll('.app-suggestion-item');
+                items.forEach((item, index) => {
+                    if (index === selectedIndex) {
+                        item.classList.add('selected');
+                        item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
+            
+            // Handle keyboard navigation
             input.addEventListener('keydown', async (event) => {
                 console.log('Key pressed:', event.key);
-                if (event.key === 'Escape') {
-                    console.log('Escape pressed, hiding window');
-                    try {
-                        await appWindow.hide();
-                    } catch (error) {
-                        console.error('Error hiding window:', error);
+                
+                // Arrow key navigation
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    if (currentMatches.length > 0) {
+                        selectedIndex = (selectedIndex + 1) % currentMatches.length;
+                        updateSelection();
                     }
-                } else if (event.key === 'Enter') {
+                    return;
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    if (currentMatches.length > 0) {
+                        selectedIndex = selectedIndex <= 0 ? currentMatches.length - 1 : selectedIndex - 1;
+                        updateSelection();
+                    }
+                    return;
+                }
+                
+                // Escape key
+                if (event.key === 'Escape') {
+                    console.log('Escape pressed');
+                    // Hide window immediately
+                    await appWindow.hide();
+                }
+                
+                // Enter key
+                else if (event.key === 'Enter') {
+                    console.log('Enter pressed');
                     const message = input.value.trim();
                     if (message) {
+                        console.log('Message:', message);
+                        // If there are suggestions and one is selected, launch it
+                        if (currentMatches.length > 0 && selectedIndex >= 0) {
+                            console.log('Launching selected app');
+                            event.preventDefault();
+                            await launchApp(currentMatches[selectedIndex].name);
+                            return;
+                        }
+                        
                         try {
-                            // First, check if this is a command to launch an app
+                            console.log('Calling handle_floating_input');
                             const result = await invoke('handle_floating_input', { input: message });
+                            console.log('Result:', result);
                             
                             if (result.startsWith('launched:')) {
-                                // App was launched successfully
-                                const appName = result.substring(9);
-                                console.log('Launched application:', appName);
+                                const jsonStr = result.substring(9);
+                                const apps = JSON.parse(jsonStr);
+                                console.log('Launched application:', apps[0].name);
+                                await invoke('launch_app_by_name', { appName: apps[0].name });
                                 input.value = '';
+                                appSuggestions.classList.remove('visible');
+                                currentMatches = [];
+                                selectedIndex = -1;
                             } else if (result.startsWith('multiple:')) {
-                                // Multiple apps matched - show selection
-                                const apps = result.substring(9).split(',');
-                                console.log('Multiple matches:', apps);
-                                
-                                // For now, just launch the first one
-                                // TODO: Show a selection UI
-                                await invoke('launch_app_by_name', { appName: apps[0] });
+                                const jsonStr = result.substring(9);
+                                const apps = JSON.parse(jsonStr);
+                                const appToLaunch = selectedIndex >= 0 ? apps[selectedIndex].name : apps[0].name;
+                                console.log('Launching first match:', appToLaunch);
+                                await invoke('launch_app_by_name', { appName: appToLaunch });
                                 input.value = '';
+                                appSuggestions.classList.remove('visible');
+                                currentMatches = [];
+                                selectedIndex = -1;
                             } else if (result === 'chat') {
-                                // No app match, open chat
+                                console.log('Opening chat');
                                 await invoke('open_chat_with_message', { message });
                                 input.value = '';
+                                appSuggestions.classList.remove('visible');
+                                currentMatches = [];
+                                selectedIndex = -1;
                             }
                         } catch (error) {
                             console.error('Error handling input:', error);
-                            // On error, fall back to chat mode
                             try {
                                 await invoke('open_chat_with_message', { message });
                                 input.value = '';
+                                appSuggestions.classList.remove('visible');
+                                currentMatches = [];
+                                selectedIndex = -1;
                             } catch (chatError) {
                                 console.error('Error opening chat:', chatError);
                             }
@@ -328,37 +447,37 @@
                 }
             });
             
-            // Handle input blur
-            input.addEventListener('blur', async () => {
-                console.log('Input lost focus');
-                setTimeout(async () => {
-                    if (!document.hasFocus()) {
-                        console.log('Hiding window due to blur');
-                        try {
-                            await appWindow.hide();
-                        } catch (error) {
-                            console.error('Error hiding window:', error);
-                        }
-                    }
-                }, 150);
+            // Handle click outside to dismiss
+            document.addEventListener('click', async (event) => {
+                const container = document.querySelector('.floating-container');
+                if (container && !container.contains(event.target)) {
+                    await appWindow.hide();
+                }
             });
             
             // Focus input when window becomes visible
-            if (appWindow.listen) {
-                appWindow.listen('tauri://focus', () => {
-                    setTimeout(() => input.focus(), 50);
-                });
-            }
+            appWindow.listen('tauri://focus', () => {
+                setTimeout(() => {
+                    input.value = '';
+                    appSuggestions.classList.remove('visible');
+                    currentMatches = [];
+                    selectedIndex = -1;
+                    input.focus();
+                }, 50);
+            });
             
             // Auto-focus on load
             setTimeout(() => input.focus(), 100);
+            
+            console.log('Initialization complete!');
         }
         
-        // Start initialization when DOM is ready
+        // Start initialization
+        console.log('Script loaded, document.readyState:', document.readyState);
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => initializeTauri());
+            document.addEventListener('DOMContentLoaded', initApp);
         } else {
-            initializeTauri();
+            initApp();
         }
     </script>
 </body>

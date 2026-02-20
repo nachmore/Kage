@@ -1,14 +1,16 @@
 use anyhow::{Context, Result};
 use log::info;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Application {
     pub name: String,
     pub path: PathBuf,
     pub aliases: Vec<String>,
+    pub icon_path: Option<String>,
 }
 
 pub struct AppLauncher {
@@ -76,7 +78,9 @@ impl AppLauncher {
                                     for entry in entries.filter_map(|e| e.ok()) {
                                         let path = entry.path();
                                         if path.extension().and_then(|s| s.to_str()) == Some("exe") {
-                                            self.add_application(display_name.clone(), path);
+                                            // Use the exe path as icon source
+                                            let icon_path = path.to_string_lossy().to_string();
+                                            self.add_application(display_name.clone(), path, Some(icon_path));
                                             break;
                                         }
                                     }
@@ -105,9 +109,9 @@ impl AppLauncher {
                 } else if path.extension().and_then(|s| s.to_str()) == Some("lnk") {
                     // Parse .lnk file to get target
                     if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                        // For now, just store the shortcut path
-                        // In a full implementation, we'd resolve the .lnk target
-                        self.add_application(name.to_string(), path);
+                        // Use the shortcut path as icon source (Windows can extract icons from .lnk files)
+                        let icon_path = path.to_string_lossy().to_string();
+                        self.add_application(name.to_string(), path, Some(icon_path));
                     }
                 }
             }
@@ -127,7 +131,8 @@ impl AppLauncher {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("app") {
                         if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-                            self.add_application(name.to_string(), path);
+                            let icon_path = path.to_string_lossy().to_string();
+                            self.add_application(name.to_string(), path, Some(icon_path));
                         }
                     }
                 }
@@ -171,7 +176,7 @@ impl AppLauncher {
                                 }
 
                                 if let (Some(name), Some(exec)) = (name, exec) {
-                                    self.add_application(name, PathBuf::from(exec));
+                                    self.add_application(name, PathBuf::from(&exec), Some(exec));
                                 }
                             }
                         }
@@ -183,7 +188,7 @@ impl AppLauncher {
         Ok(())
     }
 
-    fn add_application(&mut self, name: String, path: PathBuf) {
+    fn add_application(&mut self, name: String, path: PathBuf, icon_path: Option<String>) {
         let normalized_name = name.to_lowercase();
         
         // Generate aliases (lowercase, without spaces, etc.)
@@ -197,6 +202,7 @@ impl AppLauncher {
             name: name.clone(),
             path,
             aliases,
+            icon_path,
         };
 
         self.app_registry.insert(normalized_name, app);

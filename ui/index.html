@@ -407,6 +407,7 @@
         </div>
         <div class="header-right">
             <div class="connection-status" id="connectionStatus">Checking...</div>
+            <button class="settings-btn" onclick="testFloatingWindow()" style="background: #fef3c7; color: #92400e;">🧪 Test Hotkey</button>
             <button class="settings-btn" onclick="openSettings()">⚙️ Settings</button>
         </div>
     </div>
@@ -432,9 +433,21 @@
     </div>
 
     <script>
-        const { invoke } = window.__TAURI__.tauri;
-        const { listen } = window.__TAURI__.event;
-        const { appWindow } = window.__TAURI__.window;
+        // Wait for Tauri to be ready
+        let invoke, listen, appWindow;
+        
+        function initTauri() {
+            if (window.__TAURI__ && window.__TAURI__.tauri && window.__TAURI__.event && window.__TAURI__.window) {
+                invoke = window.__TAURI__.tauri.invoke;
+                listen = window.__TAURI__.event.listen;
+                appWindow = window.__TAURI__.window.appWindow;
+                console.log('Tauri initialized successfully');
+                initApp();
+            } else {
+                console.log('Waiting for Tauri...');
+                setTimeout(initTauri, 50);
+            }
+        }
         
         let isConnected = false;
         let messages = [];
@@ -442,9 +455,27 @@
         let isWaitingForResponse = false;
         
         function openSettings() {
-            invoke('open_settings_window');
+            if (invoke) {
+                invoke('open_settings_window');
+            }
         }
         
+        async function testFloatingWindow() {
+            if (!invoke) {
+                alert('Tauri not ready yet');
+                return;
+            }
+            try {
+                const result = await invoke('test_floating_window');
+                console.log('Test result:', result);
+                alert(result);
+            } catch (error) {
+                console.error('Test failed:', error);
+                alert('Test failed: ' + error);
+            }
+        }
+        
+        function initApp() {
         // Auto-resize textarea
         const messageInput = document.getElementById('messageInput');
         messageInput.addEventListener('input', function() {
@@ -715,6 +746,14 @@
         
         // Focus input on load
         messageInput.focus();
+        }
+        
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initTauri);
+        } else {
+            initTauri();
+        }
     </script>
 </body>
 </html>

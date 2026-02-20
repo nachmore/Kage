@@ -18,7 +18,6 @@ use tokio::sync::Mutex;
 async fn handle_floating_input(
     input: String,
     state: State<'_, AppState>,
-    app: tauri::AppHandle,
 ) -> Result<String, String> {
     info!("Handling floating input: {}", input);
     
@@ -28,32 +27,16 @@ async fn handle_floating_input(
     let matches = launcher.find_app(&input);
     
     if !matches.is_empty() {
-        let app_to_launch = &matches[0];
-        info!("Found matching application: {}", app_to_launch.name);
+        info!("Found {} matching application(s)", matches.len());
         
-        // If there's only one match, launch it
+        // Serialize matches to JSON
+        let json = serde_json::to_string(&matches).map_err(|e| e.to_string())?;
+        
+        // Return matches for display, don't auto-launch
         if matches.len() == 1 {
-            match launcher.launch(app_to_launch) {
-                Ok(_) => {
-                    info!("Successfully launched: {}", app_to_launch.name);
-                    
-                    // Hide floating window
-                    if let Some(floating_window) = app.get_window("floating") {
-                        let _ = floating_window.hide();
-                    }
-                    
-                    return Ok(format!("launched:{}", app_to_launch.name));
-                }
-                Err(e) => {
-                    error!("Failed to launch application: {}", e);
-                    return Err(format!("Failed to launch {}: {}", app_to_launch.name, e));
-                }
-            }
+            return Ok(format!("launched:{}", json));
         } else {
-            // Multiple matches - return them for user selection
-            let app_names: Vec<String> = matches.iter().map(|a| a.name.clone()).collect();
-            info!("Multiple matches found: {:?}", app_names);
-            return Ok(format!("multiple:{}", app_names.join(",")));
+            return Ok(format!("multiple:{}", json));
         }
     }
     
@@ -260,6 +243,60 @@ async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, String> {
     }
 }
 
+#[tauri::command]
+async fn test_floating_window(app: tauri::AppHandle) -> Result<String, String> {
+    info!("Testing floating window visibility");
+    println!("🧪 Testing floating window...");
+    
+    if let Some(window) = app.get_window("floating") {
+        let is_visible = window.is_visible().unwrap_or(false);
+        println!("   Current state: {}", if is_visible { "VISIBLE" } else { "HIDDEN" });
+        
+        if is_visible {
+            println!("   Action: Hiding window");
+            window.hide().map_err(|e| format!("Failed to hide: {}", e))?;
+            println!("   ✅ Window hidden");
+            Ok("Window was visible, now hidden".to_string())
+        } else {
+            println!("   Action: Showing window");
+            window.show().map_err(|e| {
+                println!("   ❌ Failed to show: {}", e);
+                format!("Failed to show: {}", e)
+            })?;
+            println!("   ✅ Window shown");
+            
+            println!("   Action: Setting focus");
+            window.set_focus().map_err(|e| {
+                println!("   ⚠️  Failed to focus: {}", e);
+                format!("Failed to focus: {}", e)
+            })?;
+            println!("   ✅ Window focused");
+            
+            // Try to center the window
+            if let Ok(monitor) = window.current_monitor() {
+                if let Some(monitor) = monitor {
+                    let size = monitor.size();
+                    println!("   Monitor size: {}x{}", size.width, size.height);
+                    let x = (size.width as i32 - 400) / 2;
+                    let y = (size.height as i32 - 250) / 2;
+                    println!("   Positioning at: ({}, {})", x, y);
+                    window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
+                        .map_err(|e| {
+                            println!("   ⚠️  Failed to position: {}", e);
+                            format!("Failed to position: {}", e)
+                        })?;
+                    println!("   ✅ Window positioned");
+                }
+            }
+            
+            Ok("Window was hidden, now visible and centered".to_string())
+        }
+    } else {
+        println!("   ❌ Floating window not found!");
+        Err("Floating window not found".to_string())
+    }
+}
+
 fn main() {
     // Initialize logger first
     if let Err(e) = logger::init_logger() {
@@ -349,6 +386,7 @@ fn main() {
         })
         .setup(move |app| {
             info!("Setting up application");
+            println!("=== KIRO ASSISTANT SETUP ===");
             
             // Register global hotkey from config
             let mut shortcut_manager = app.global_shortcut_manager();
@@ -358,49 +396,137 @@ fn main() {
             let hotkey_string = config.get_hotkey_string();
             
             info!("Attempting to register global hotkey: {}", hotkey_string);
+            println!("Attempting to register global hotkey: {}", hotkey_string);
+            
+            // Clone window for closures
+            let window_for_primary = floating_window.clone();
+            let window_for_fallback = floating_window.clone();
             
             // Try to register the configured hotkey
-            let hotkey = if shortcut_manager.register(&hotkey_string, {
-                let window = floating_window.clone();
-                move || {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                }
-            }).is_ok() {
-                info!("Successfully registered global hotkey: {}", hotkey_string);
-                println!("Successfully registered global hotkey {}", hotkey_string);
-                hotkey_string
-            } else {
-                warn!("Failed to register {}, trying Alt+K instead...", hotkey_string);
-                eprintln!("Failed to register {}, trying Alt+K instead...", hotkey_string);
-                match shortcut_manager.register("Alt+K", move || {
-                    if floating_window.is_visible().unwrap_or(false) {
-                        let _ = floating_window.hide();
-                    } else {
-                        let _ = floating_window.show();
-                        let _ = floating_window.set_focus();
-                    }
-                }) {
-                    Ok(_) => {
-                        info!("Successfully registered fallback hotkey: Alt+K");
-                        println!("Successfully registered global hotkey Alt+K");
-                        "Alt+K".to_string()
+            let registration_result = shortcut_manager.register(&hotkey_string, move || {
+                println!("🔥 HOTKEY TRIGGERED: {}", chrono::Local::now().format("%H:%M:%S%.3f"));
+                info!("Hotkey triggered");
+                
+                match window_for_primary.is_visible() {
+                    Ok(is_visible) => {
+                        println!("   Window visible state: {}", is_visible);
+                        if is_visible {
+                            println!("  → Hiding floating window");
+                            match window_for_primary.hide() {
+                                Ok(_) => println!("     ✅ Window hidden successfully"),
+                                Err(e) => println!("     ❌ Failed to hide: {}", e),
+                            }
+                        } else {
+                            println!("  → Showing floating window");
+                            match window_for_primary.show() {
+                                Ok(_) => {
+                                    println!("     ✅ Window shown successfully");
+                                    match window_for_primary.set_focus() {
+                                        Ok(_) => println!("     ✅ Window focused successfully"),
+                                        Err(e) => println!("     ⚠️  Failed to focus: {}", e),
+                                    }
+                                    // Try to center the window
+                                    if let Ok(monitor) = window_for_primary.current_monitor() {
+                                        if let Some(monitor) = monitor {
+                                            let size = monitor.size();
+                                            println!("     Monitor size: {}x{}", size.width, size.height);
+                                            let x = (size.width as i32 - 400) / 2;
+                                            let y = (size.height as i32 - 250) / 2;
+                                            println!("     Positioning at: ({}, {})", x, y);
+                                            if let Err(e) = window_for_primary.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
+                                                println!("     ⚠️  Failed to position: {}", e);
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(e) => println!("     ❌ Failed to show: {}", e),
+                            }
+                        }
                     }
                     Err(e) => {
-                        error!("Failed to register global hotkey: {}", e);
-                        eprintln!("Failed to register global hotkey: {}", e);
-                        eprintln!("You can still use the system tray to show/hide the window.");
-                        "None".to_string()
+                        println!("     ❌ Failed to check visibility: {}", e);
+                    }
+                }
+            });
+            
+            let hotkey = match registration_result {
+                Ok(_) => {
+                    info!("✅ Successfully registered global hotkey: {}", hotkey_string);
+                    println!("✅ Successfully registered global hotkey: {}", hotkey_string);
+                    println!("   Press {} to toggle the floating window", hotkey_string);
+                    hotkey_string
+                }
+                Err(e) => {
+                    warn!("❌ Failed to register {}: {}", hotkey_string, e);
+                    eprintln!("❌ Failed to register {}: {}", hotkey_string, e);
+                    eprintln!("   Trying Alt+K instead...");
+                    
+                    match shortcut_manager.register("Alt+K", move || {
+                        println!("🔥 HOTKEY TRIGGERED (Alt+K): {}", chrono::Local::now().format("%H:%M:%S%.3f"));
+                        info!("Hotkey triggered (Alt+K)");
+                        
+                        match window_for_fallback.is_visible() {
+                            Ok(is_visible) => {
+                                println!("   Window visible state: {}", is_visible);
+                                if is_visible {
+                                    println!("  → Hiding floating window");
+                                    match window_for_fallback.hide() {
+                                        Ok(_) => println!("     ✅ Window hidden successfully"),
+                                        Err(e) => println!("     ❌ Failed to hide: {}", e),
+                                    }
+                                } else {
+                                    println!("  → Showing floating window");
+                                    match window_for_fallback.show() {
+                                        Ok(_) => {
+                                            println!("     ✅ Window shown successfully");
+                                            match window_for_fallback.set_focus() {
+                                                Ok(_) => println!("     ✅ Window focused successfully"),
+                                                Err(e) => println!("     ⚠️  Failed to focus: {}", e),
+                                            }
+                                            // Try to center the window
+                                            if let Ok(monitor) = window_for_fallback.current_monitor() {
+                                                if let Some(monitor) = monitor {
+                                                    let size = monitor.size();
+                                                    println!("     Monitor size: {}x{}", size.width, size.height);
+                                                    let x = (size.width as i32 - 400) / 2;
+                                                    let y = (size.height as i32 - 250) / 2;
+                                                    println!("     Positioning at: ({}, {})", x, y);
+                                                    if let Err(e) = window_for_fallback.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y })) {
+                                                        println!("     ⚠️  Failed to position: {}", e);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Err(e) => println!("     ❌ Failed to show: {}", e),
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("     ❌ Failed to check visibility: {}", e);
+                            }
+                        }
+                    }) {
+                        Ok(_) => {
+                            info!("✅ Successfully registered fallback hotkey: Alt+K");
+                            println!("✅ Successfully registered fallback hotkey: Alt+K");
+                            println!("   Press Alt+K to toggle the floating window");
+                            "Alt+K".to_string()
+                        }
+                        Err(e) => {
+                            error!("❌ Failed to register global hotkey: {}", e);
+                            eprintln!("❌ Failed to register global hotkey: {}", e);
+                            eprintln!("   You can still use the system tray to show/hide the window.");
+                            "None".to_string()
+                        }
                     }
                 }
             };
             
             info!("Active hotkey: {}", hotkey);
+            println!("=== SETUP COMPLETE ===");
             println!("Active hotkey: {}", hotkey);
+            println!("Floating window initial state: hidden");
+            println!("");
             
             Ok(())
         })
@@ -413,7 +539,8 @@ fn main() {
             open_settings_window,
             reconnect_acp,
             handle_floating_input,
-            launch_app_by_name
+            launch_app_by_name,
+            test_floating_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
