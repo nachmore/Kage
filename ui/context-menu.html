@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Menu</title>
+    <script src="https://unpkg.com/@tauri-apps/api@1"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: transparent;
+            overflow: hidden;
+        }
+        .menu {
+            background: #2a2a2e;
+            border: 1px solid #555;
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 150px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            font-size: 13px;
+        }
+        .menu-item {
+            padding: 7px 20px;
+            color: #ddd;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .menu-item:hover { background: #007acc; color: #fff; }
+        .menu-sep { height: 1px; background: #444; margin: 4px 0; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="menu" id="menu">
+        <div class="menu-item" data-action="cut">Cut</div>
+        <div class="menu-item" data-action="copy">Copy</div>
+        <div class="menu-item" data-action="paste">Paste</div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" data-action="settings">Settings</div>
+        <div class="menu-item" data-action="close">Close</div>
+        <div class="menu-sep hidden" id="devSep"></div>
+        <div class="menu-item hidden" id="devInspect" data-action="inspect">Inspect</div>
+    </div>
+    <script>
+        (async function() {
+            const { invoke } = window.__TAURI__.tauri;
+            const { appWindow, LogicalSize } = window.__TAURI__.window;
+            const { emit } = window.__TAURI__.event;
+            
+            let actionTaken = false;
+
+            document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Show dev items
+            try {
+                const dev = await invoke('is_dev_mode');
+                if (dev) {
+                    document.getElementById('devSep').classList.remove('hidden');
+                    document.getElementById('devInspect').classList.remove('hidden');
+                }
+            } catch (e) {}
+
+            async function emitAndClose(action) {
+                if (actionTaken) return;
+                actionTaken = true;
+                // Use global emit so ALL windows receive it
+                await emit('context-menu-action', action);
+                await appWindow.close();
+            }
+
+            // mousedown fires before blur
+            document.getElementById('menu').addEventListener('mousedown', (e) => {
+                const item = e.target.closest('.menu-item');
+                if (!item) return;
+                const action = item.dataset.action;
+                if (action) {
+                    e.preventDefault();
+                    emitAndClose(action);
+                }
+            });
+
+            // Close on blur
+            appWindow.listen('tauri://blur', () => {
+                setTimeout(() => {
+                    if (!actionTaken) emitAndClose('dismissed');
+                }, 150);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') emitAndClose('dismissed');
+            });
+
+            // Auto-size
+            requestAnimationFrame(async () => {
+                const rect = document.getElementById('menu').getBoundingClientRect();
+                await appWindow.setSize(new LogicalSize(
+                    Math.ceil(rect.width) + 4,
+                    Math.ceil(rect.height) + 4
+                ));
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -111,6 +111,15 @@ export class FloatingApp {
             if (this.windowManager.isDragging) {
                 return;
             }
+            // Don't hide if context menu is open
+            const contextMenu = document.querySelector('.context-menu');
+            if (contextMenu && contextMenu.style.display !== 'none') {
+                return;
+            }
+            // Don't hide if context menu popup window is open
+            if (window._contextMenuOpen) {
+                return;
+            }
             await this.appWindow.hide();
         });
     }

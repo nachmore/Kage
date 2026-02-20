@@ -188,6 +188,7 @@ struct AppState {
     /// Separate write handles for permission responses — no AcpClient lock needed
     pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
     tcp_writer: Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    dev_mode: bool,
 }
 
 #[tauri::command]
@@ -554,6 +555,83 @@ async fn remove_tool_permission(
     let mut config = state.config.lock().await;
     config.tool_permissions.tools.retain(|t| t.title != tool_title);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.dev_mode)
+}
+
+#[tauri::command]
+async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_window("floating") {
+        window.open_devtools();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn read_clipboard() -> Result<String, String> {
+    use std::process::Command;
+    // Use PowerShell to read clipboard on Windows
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-Command", "Get-Clipboard"])
+            .output()
+            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
+        let text = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
+        return Ok(text);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("pbpaste")
+            .output()
+            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
+        let text = String::from_utf8_lossy(&output.stdout).to_string();
+        return Ok(text);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("xclip")
+            .args(["-selection", "clipboard", "-o"])
+            .output()
+            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
+        let text = String::from_utf8_lossy(&output.stdout).to_string();
+        return Ok(text);
+    }
+}
+
+#[tauri::command]
+async fn show_context_menu(
+    x: i32,
+    y: i32,
+    _state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Close existing context menu if any
+    if let Some(existing) = app.get_window("context-menu") {
+        let _ = existing.close();
+    }
+    
+    tauri::WindowBuilder::new(
+        &app,
+        "context-menu",
+        tauri::WindowUrl::App("context-menu.html".into()),
+    )
+    .title("")
+    .inner_size(160.0, 220.0)
+    .position(x as f64, y as f64)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(true)
+    .resizable(false)
+    .build()
+    .map_err(|e| format!("Failed to create context menu: {}", e))?;
+    
     Ok(())
 }
 
@@ -935,6 +1013,7 @@ fn main() {
             app_launcher: Arc::new(Mutex::new(app_launcher)),
             pipe_stdin: pipe_stdin_handle,
             tcp_writer: tcp_writer_handle,
+            dev_mode,
         })
         .system_tray(system_tray)
         .on_system_tray_event(|app, event| match event {
@@ -1178,7 +1257,11 @@ fn main() {
             resize_floating_window,
             send_permission_response,
             remove_tool_permission,
-            update_tool_policy
+            update_tool_policy,
+            is_dev_mode,
+            open_devtools,
+            read_clipboard,
+            show_context_menu
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
