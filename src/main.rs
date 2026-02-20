@@ -326,74 +326,98 @@ async fn send_message_streaming(
         let pipe_stdin_for_perm = pipe_stdin_handle.clone();
         let tcp_writer_for_perm = tcp_writer_handle.clone();
         let permission_callback = Box::new(move |notification: serde_json::Value| {
-            let config_guard = async_runtime::block_on(config_for_permission.lock());
+            let mut config_guard = async_runtime::block_on(config_for_permission.lock());
             
-            let should_auto_approve = if config_guard.tool_permissions.trust_all {
-                info!("🔓 Trust all enabled, auto-approving");
-                true
-            } else if let Some(params) = notification.get("params") {
-                if let Some(tool_call) = params.get("toolCall") {
-                    if let Some(title) = tool_call.get("title").and_then(|v| v.as_str()) {
-                        let is_allowed = config_guard.tool_permissions.allowed_tools
-                            .iter()
-                            .any(|t| t.title == title);
-                        if is_allowed {
-                            info!("🔓 Tool already allowed: {}", title);
-                        }
-                        is_allowed
-                    } else { false }
-                } else { false }
-            } else { false };
+            // Extract tool title
+            let tool_title = notification.get("params")
+                .and_then(|p| p.get("toolCall"))
+                .and_then(|tc| tc.get("title"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("unknown");
+            
+            // Track this tool as seen
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
+            if let Some(tool) = existing {
+                tool.last_seen = timestamp;
+            } else {
+                config_guard.tool_permissions.tools.push(crate::config::ToolPolicy {
+                    title: tool_title.to_string(),
+                    policy: "ask".to_string(),
+                    last_seen: timestamp,
+                });
+            }
+            let _ = config_guard.save();
+            
+            // Determine action based on policy
+            let policy = if config_guard.tool_permissions.trust_all {
+                "allow".to_string()
+            } else {
+                config_guard.tool_permissions.tools.iter()
+                    .find(|t| t.title == tool_title)
+                    .map(|t| t.policy.clone())
+                    .unwrap_or_else(|| "ask".to_string())
+            };
             
             drop(config_guard);
             
-            if should_auto_approve {
-                // Send permission response directly — no frontend round-trip
+            // Helper to send a permission response directly
+            let send_response = |option_id: &str| {
                 if let Some(request_id) = notification.get("id") {
                     let response = serde_json::json!({
                         "jsonrpc": "2.0",
                         "id": request_id,
-                        "result": { "outcome": { "outcome": "selected", "optionId": "allow_once" } }
+                        "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
                     });
                     if let Ok(response_json) = serde_json::to_string(&response) {
                         use std::io::Write;
-                        info!("📤 Auto-approving permission: {}", response_json);
+                        info!("📤 Auto-responding permission ({}): {}", option_id, response_json);
                         
-                        // Try pipe
                         if let Ok(guard) = pipe_stdin_for_perm.lock() {
                             if let Some(ref stdin_arc) = *guard {
                                 let stdin_clone = stdin_arc.clone();
                                 drop(guard);
                                 if let Ok(mut stdin) = stdin_clone.lock() {
-                                    // Use write! + \n explicitly to avoid \r\n on Windows
                                     let _ = write!(stdin, "{}\n", response_json);
                                     let _ = stdin.flush();
-                                    info!("✅ Auto-approve sent via Pipe");
+                                    info!("✅ Auto-response sent via Pipe");
                                     return;
                                 };
                             }
                         }
-                        // Try TCP
                         if let Ok(guard) = tcp_writer_for_perm.lock() {
                             if let Some(ref stream) = *guard {
                                 if let Ok(mut ws) = stream.try_clone() {
                                     drop(guard);
                                     let _ = write!(ws, "{}\n", response_json);
                                     let _ = ws.flush();
-                                    info!("✅ Auto-approve sent via TCP");
+                                    info!("✅ Auto-response sent via TCP");
                                     return;
                                 }
                             }
                         }
-                        error!("❌ Failed to auto-approve: no write handle");
+                        error!("❌ Failed to send auto-response: no write handle");
                     }
                 }
-            } else {
-                // Emit permission request to frontend for user decision
-                let _ = window_for_permission.emit("permission_request", serde_json::json!({
-                    "notification": notification,
-                    "auto_approve": false
-                }));
+            };
+            
+            match policy.as_str() {
+                "allow" => {
+                    info!("🔓 Policy=allow for tool: {}", tool_title);
+                    send_response("allow_once");
+                }
+                "deny" => {
+                    info!("🚫 Policy=deny for tool: {}", tool_title);
+                    send_response("reject_once");
+                }
+                _ => {
+                    // "ask" — show the modal to the user
+                    info!("❓ Policy=ask for tool: {}", tool_title);
+                    let _ = window_for_permission.emit("permission_request", serde_json::json!({
+                        "notification": notification,
+                        "auto_approve": false
+                    }));
+                }
             }
         });
         
@@ -488,77 +512,32 @@ async fn send_permission_response(
         return Err("Not connected - no write handle available".to_string());
     }
     
-    // Save "allow_always" to config (safe to .await now, all sync guards dropped)
+    // Update policy based on user choice
     if option_id == "allow_always" {
         let mut config = state.config.lock().await;
-        let timestamp = chrono::Utc::now().to_rfc3339();
-        if !config.tool_permissions.allowed_tools.iter().any(|t| t.title == tool_title) {
-            config.tool_permissions.allowed_tools.push(crate::config::AllowedTool {
-                tool_call_id: tool_title.clone(),
-                title: tool_title,
-                allowed_at: timestamp,
-            });
-            config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+        if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
+            tool.policy = "allow".to_string();
         }
+        config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     }
     
     Ok(())
 }
 
-/// Send a slash command (like /tools) and collect the full text response
+/// Update a tool's permission policy
 #[tauri::command]
-async fn fetch_agent_tools(
+async fn update_tool_policy(
+    tool_title: String,
+    policy: String,
     state: State<'_, AppState>,
-) -> Result<String, String> {
-    info!("Fetching agent tools via /tools command");
-    let client = state.acp_client.clone();
-    
-    let result = async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-        
-        if !client.is_connected() {
-            return Err("Not connected to ACP".to_string());
-        }
-        
-        let mut full_response = String::new();
-        client.send_chat_streaming("/tools".to_string(), |chunk| {
-            full_response = chunk;
-        }, None).map_err(|e| format!("Failed to fetch tools: {}", e))?;
-        
-        Ok(full_response)
-    }).await.map_err(|e| format!("Task failed: {}", e))?;
-    
-    result
-}
-
-/// Send /tools trust <name> or /tools untrust <name>
-#[tauri::command]
-async fn set_tool_trust(
-    tool_name: String,
-    trusted: bool,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
-    let action = if trusted { "trust" } else { "untrust" };
-    let command = format!("/tools {} {}", action, tool_name);
-    info!("Setting tool trust: {}", command);
-    let client = state.acp_client.clone();
-    
-    let result = async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-        
-        if !client.is_connected() {
-            return Err("Not connected to ACP".to_string());
-        }
-        
-        let mut full_response = String::new();
-        client.send_chat_streaming(command, |chunk| {
-            full_response = chunk;
-        }, None).map_err(|e| format!("Failed to set tool trust: {}", e))?;
-        
-        Ok(full_response)
-    }).await.map_err(|e| format!("Task failed: {}", e))?;
-    
-    result
+) -> Result<(), String> {
+    info!("Updating tool policy: {} -> {}", tool_title, policy);
+    let mut config = state.config.lock().await;
+    if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
+        tool.policy = policy;
+    }
+    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -567,7 +546,7 @@ async fn remove_tool_permission(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut config = state.config.lock().await;
-    config.tool_permissions.allowed_tools.retain(|t| t.title != tool_title);
+    config.tool_permissions.tools.retain(|t| t.title != tool_title);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     Ok(())
 }
@@ -1193,8 +1172,7 @@ fn main() {
             resize_floating_window,
             send_permission_response,
             remove_tool_permission,
-            fetch_agent_tools,
-            set_tool_trust
+            update_tool_policy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

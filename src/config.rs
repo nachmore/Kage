@@ -23,21 +23,28 @@ pub struct ToolPermissionsConfig {
     #[serde(default)]
     pub trust_all: bool,
     #[serde(default)]
-    pub allowed_tools: Vec<AllowedTool>,
+    pub tools: Vec<ToolPolicy>,
 }
 
+/// Per-tool permission policy: "ask", "allow", or "deny"
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AllowedTool {
-    pub tool_call_id: String,
+pub struct ToolPolicy {
     pub title: String,
-    pub allowed_at: String, // ISO 8601 timestamp
+    #[serde(default = "default_policy")]
+    pub policy: String, // "ask", "allow", "deny"
+    #[serde(default)]
+    pub last_seen: String, // ISO 8601 timestamp
+}
+
+fn default_policy() -> String {
+    "ask".to_string()
 }
 
 impl Default for ToolPermissionsConfig {
     fn default() -> Self {
         Self {
             trust_all: false,
-            allowed_tools: vec![],
+            tools: vec![],
         }
     }
 }

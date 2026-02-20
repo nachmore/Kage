@@ -423,3 +423,14 @@
     background: rgba(76, 175, 80, 0.25);
     border-color: rgba(76, 175, 80, 0.6);
 }
+
+.permission-btn-deny-always {
+    background: rgba(244, 67, 54, 0.25);
+    color: #ff5252;
+    border: 1px solid rgba(244, 67, 54, 0.5);
+}
+
+.permission-btn-deny-always:hover {
+    background: rgba(244, 67, 54, 0.35);
+    border-color: rgba(244, 67, 54, 0.7);
+}

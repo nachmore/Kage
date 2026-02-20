@@ -1,15 +1,13 @@
 /**
  * Agent Tools Settings Module
- * Shows tools from the ACP agent and lets users toggle trust per tool.
+ * Shows tools seen during permission requests with per-tool policy toggles.
  */
 
 class ToolPermissionsSettingsModule extends SettingsModule {
     constructor() {
         super('tool-permissions', 'Agent Tools');
         this.trustAll = false;
-        this.allowedTools = [];
-        this.agentTools = []; // parsed from /tools output
-        this.loading = false;
+        this.tools = [];
     }
 
     render() {
@@ -33,17 +31,14 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             </div>
 
             <div class="setting-row" style="flex-direction: column; align-items: stretch;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div class="setting-label-container" style="padding-right: 0;">
-                        <div class="setting-label">Available Tools</div>
-                        <div class="setting-description">
-                            Tools available to the AI agent. Toggle trust to allow tools without per-request prompting.
-                        </div>
+                <div class="setting-label-container" style="padding-right: 0; margin-bottom: 12px;">
+                    <div class="setting-label">Seen Tools</div>
+                    <div class="setting-description">
+                        Tools the AI has requested to use. Set each tool's permission policy.
                     </div>
-                    <button class="setting-button" id="refreshToolsBtn" onclick="refreshAgentTools()">Refresh</button>
                 </div>
                 <div class="agent-tools-list" id="agentToolsList">
-                    <div class="tools-loading">Connect to the agent and click Refresh to load tools.</div>
+                    <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
                 </div>
             </div>
         `;
@@ -70,18 +65,20 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
     load(config) {
         this.trustAll = config.tool_permissions?.trust_all || false;
-        this.allowedTools = config.tool_permissions?.allowed_tools || [];
+        this.tools = config.tool_permissions?.tools || [];
         
         const trustAllCheckbox = document.getElementById('trustAllTools');
         if (trustAllCheckbox) {
             trustAllCheckbox.checked = this.trustAll;
         }
+        
+        this.renderToolsList();
     }
 
     save(config) {
         config.tool_permissions = {
             trust_all: this.trustAll,
-            allowed_tools: this.allowedTools
+            tools: this.tools
         };
     }
 
@@ -89,123 +86,33 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         return { valid: true };
     }
 
-    async fetchTools() {
-        this.loading = true;
-        this.renderToolsList();
-        
-        try {
-            const response = await window.__TAURI__.tauri.invoke('fetch_agent_tools');
-            this.agentTools = this.parseToolsResponse(response);
-            this.loading = false;
-            this.renderToolsList();
-        } catch (error) {
-            console.error('Failed to fetch tools:', error);
-            this.loading = false;
-            this.agentTools = [];
-            this.renderToolsList(error.toString());
-        }
-    }
-
-    parseToolsResponse(text) {
-        // Parse the /tools output which looks like:
-        // Tool Name     Status
-        // read           trusted
-        // write          per-request
-        // shell          per-request
-        // etc.
-        const tools = [];
-        const lines = text.split('\n');
-        
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith('Tool') || trimmed.startsWith('---') || trimmed.startsWith('Available')) {
-                continue;
-            }
-            
-            // Try to match "toolname    status" or "toolname (source)    status"
-            // Common patterns: "read           trusted", "write          per-request"
-            // Also handle: "✓ read    trusted" or "• read    per-request"
-            const cleaned = trimmed.replace(/^[✓•✗\-\s]+/, '');
-            
-            // Split on multiple spaces or tabs
-            const parts = cleaned.split(/\s{2,}|\t+/);
-            if (parts.length >= 2) {
-                const name = parts[0].trim();
-                const status = parts[parts.length - 1].trim().toLowerCase();
-                
-                if (name && (status.includes('trust') || status.includes('per-request') || status.includes('request'))) {
-                    tools.push({
-                        name: name,
-                        trusted: status.includes('trust') && !status.includes('per-request'),
-                        status: status
-                    });
-                }
-            } else if (parts.length === 1) {
-                // Might be just a tool name, try regex
-                const match = cleaned.match(/^(\S+)\s+(.+)$/);
-                if (match) {
-                    const name = match[1].trim();
-                    const status = match[2].trim().toLowerCase();
-                    tools.push({
-                        name: name,
-                        trusted: status.includes('trust') && !status.includes('per-request'),
-                        status: status
-                    });
-                }
-            }
-        }
-        
-        return tools;
-    }
-
-    renderToolsList(error) {
+    renderToolsList() {
         const container = document.getElementById('agentToolsList');
         if (!container) return;
         
-        if (this.loading) {
+        if (this.tools.length === 0) {
             container.innerHTML = `
-                <div class="tools-loading">
-                    <div class="tools-spinner"></div>
-                    Loading tools from agent...
-                </div>
+                <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
             `;
             return;
         }
         
-        if (error) {
-            container.innerHTML = `
-                <div class="tools-loading" style="color: #f44336;">
-                    Failed to load tools: ${this.escapeHtml(error)}
-                </div>
-            `;
-            return;
-        }
-        
-        if (this.agentTools.length === 0) {
-            container.innerHTML = `
-                <div class="tools-loading">
-                    No tools found. Make sure the agent is connected and click Refresh.
-                </div>
-            `;
-            return;
-        }
-        
-        const toolsHtml = this.agentTools.map((tool, index) => {
-            const kindIcon = this.getToolIcon(tool.name);
+        const toolsHtml = this.tools.map((tool, index) => {
+            const icon = this.getToolIcon(tool.title);
+            const lastSeen = tool.last_seen ? new Date(tool.last_seen).toLocaleDateString() : '';
             return `
                 <div class="agent-tool-item">
-                    <div class="agent-tool-icon">${kindIcon}</div>
+                    <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
-                        <div class="agent-tool-name">${this.escapeHtml(tool.name)}</div>
-                        <div class="agent-tool-status ${tool.trusted ? 'trusted' : 'per-request'}">
-                            ${tool.trusted ? '✓ Trusted' : '⚡ Per-request'}
-                        </div>
+                        <div class="agent-tool-name">${this.escapeHtml(tool.title)}</div>
+                        <div class="agent-tool-meta">Last seen: ${lastSeen}</div>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${tool.trusted ? 'checked' : ''} 
-                               onchange="toggleToolTrust('${this.escapeHtml(tool.name)}', this.checked)">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <select class="agent-tool-select" data-index="${index}" onchange="updateToolPolicy(${index}, this.value)">
+                        <option value="ask" ${tool.policy === 'ask' ? 'selected' : ''}>Always Ask</option>
+                        <option value="allow" ${tool.policy === 'allow' ? 'selected' : ''}>Allow</option>
+                        <option value="deny" ${tool.policy === 'deny' ? 'selected' : ''}>Deny</option>
+                    </select>
+                    <button class="agent-tool-remove" onclick="removeSeenTool(${index})" title="Remove">✕</button>
                 </div>
             `;
         }).join('');
@@ -213,13 +120,16 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         container.innerHTML = toolsHtml;
     }
 
-    getToolIcon(name) {
-        const icons = {
-            'read': '📖', 'write': '✏️', 'shell': '💻', 'aws': '☁️',
-            'web_search': '🔍', 'web_fetch': '🌐', 'report': '📋',
-            'glob': '📁', 'grep': '🔎', 'subagent': '🤖'
-        };
-        return icons[name.toLowerCase()] || '🔧';
+    getToolIcon(title) {
+        const lower = (title || '').toLowerCase();
+        if (lower.includes('search')) return '🔍';
+        if (lower.includes('fetch') || lower.includes('web')) return '🌐';
+        if (lower.includes('read')) return '📖';
+        if (lower.includes('write') || lower.includes('edit')) return '✏️';
+        if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+        if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
+        if (lower.includes('file')) return '📁';
+        return '🔧';
     }
 
     escapeHtml(text) {
@@ -227,36 +137,52 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    async updatePolicy(index, policy) {
+        if (index >= 0 && index < this.tools.length) {
+            const tool = this.tools[index];
+            tool.policy = policy;
+            
+            try {
+                await window.__TAURI__.tauri.invoke('update_tool_policy', {
+                    toolTitle: tool.title,
+                    policy: policy
+                });
+            } catch (error) {
+                console.error('Failed to update tool policy:', error);
+            }
+        }
+    }
+
+    async removeTool(index) {
+        if (index >= 0 && index < this.tools.length) {
+            const tool = this.tools[index];
+            this.tools.splice(index, 1);
+            this.renderToolsList();
+            
+            try {
+                await window.__TAURI__.tauri.invoke('remove_tool_permission', {
+                    toolTitle: tool.title
+                });
+            } catch (error) {
+                console.error('Failed to remove tool:', error);
+            }
+        }
+    }
 }
 
-// Global functions
-async function refreshAgentTools() {
+// Global functions for onclick handlers
+function updateToolPolicy(index, policy) {
     const module = settingsManager.modules.find(m => m.id === 'tool-permissions');
-    if (module) {
-        await module.fetchTools();
-    }
+    if (module) module.updatePolicy(index, policy);
 }
 
-async function toggleToolTrust(toolName, trusted) {
-    try {
-        await window.__TAURI__.tauri.invoke('set_tool_trust', { toolName, trusted });
-        // Refresh the list to show updated state
-        await refreshAgentTools();
-    } catch (error) {
-        console.error('Failed to toggle tool trust:', error);
-        alert('Failed to update tool trust: ' + error);
-        await refreshAgentTools();
-    }
-}
-
-function removeToolPermission(index) {
+function removeSeenTool(index) {
     const module = settingsManager.modules.find(m => m.id === 'tool-permissions');
-    if (module) {
-        module.removeToolAtIndex(index);
-    }
+    if (module) module.removeTool(index);
 }
 
-// Styles for agent tools
+// Styles
 const toolPermStyle = document.createElement('style');
 toolPermStyle.textContent = `
     .agent-tools-list {
@@ -271,7 +197,7 @@ toolPermStyle.textContent = `
         display: flex;
         align-items: center;
         gap: 12px;
-        padding: 12px 16px;
+        padding: 10px 16px;
         border-bottom: 1px solid #2b2b2b;
     }
 
@@ -284,57 +210,66 @@ toolPermStyle.textContent = `
     }
 
     .agent-tool-icon {
-        font-size: 20px;
-        width: 32px;
+        font-size: 18px;
+        width: 28px;
         text-align: center;
         flex-shrink: 0;
     }
 
     .agent-tool-info {
         flex: 1;
+        min-width: 0;
     }
 
     .agent-tool-name {
-        font-size: 14px;
+        font-size: 13px;
         color: #cccccc;
         font-weight: 500;
-        margin-bottom: 2px;
     }
 
-    .agent-tool-status {
+    .agent-tool-meta {
+        font-size: 11px;
+        color: #666666;
+        margin-top: 2px;
+    }
+
+    .agent-tool-select {
+        padding: 4px 8px;
+        background: #3c3c3c;
+        border: 1px solid #3c3c3c;
+        border-radius: 3px;
+        color: #cccccc;
         font-size: 12px;
+        cursor: pointer;
+        flex-shrink: 0;
     }
 
-    .agent-tool-status.trusted {
-        color: #4caf50;
+    .agent-tool-select:focus {
+        outline: none;
+        border-color: #007acc;
     }
 
-    .agent-tool-status.per-request {
-        color: #ff9800;
+    .agent-tool-remove {
+        background: transparent;
+        border: none;
+        color: #666;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 4px 6px;
+        border-radius: 3px;
+        flex-shrink: 0;
     }
 
-    .tools-loading {
+    .agent-tool-remove:hover {
+        background: rgba(244, 67, 54, 0.15);
+        color: #f44336;
+    }
+
+    .tools-empty {
         padding: 30px 20px;
         text-align: center;
-        color: #888888;
+        color: #666666;
         font-size: 13px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .tools-spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid #444;
-        border-top-color: #007acc;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-        to { transform: rotate(360deg); }
     }
 `;
 document.head.appendChild(toolPermStyle);

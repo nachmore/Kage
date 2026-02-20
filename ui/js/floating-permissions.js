@@ -85,13 +85,13 @@ async function hidePermissionModal() {
 /**
  * Handle permission response
  */
-async function handlePermissionResponse(optionId) {
+async function handlePermissionResponse(optionId, policyOverride) {
     if (!currentPermissionRequest) {
         console.error('No active permission request');
         return;
     }
     
-    console.log('Handling permission response:', optionId);
+    console.log('Handling permission response:', optionId, policyOverride || '');
     
     try {
         console.log('Sending permission response to backend...');
@@ -100,6 +100,14 @@ async function handlePermissionResponse(optionId) {
             optionId: optionId,
             toolTitle: currentPermissionRequest.toolCall.title || 'Unknown'
         });
+        
+        // If "Always Deny", update the tool policy to "deny"
+        if (policyOverride) {
+            await invoke('update_tool_policy', {
+                toolTitle: currentPermissionRequest.toolCall.title || 'Unknown',
+                policy: policyOverride
+            });
+        }
         
         console.log('Permission response sent successfully');
         
@@ -119,9 +127,14 @@ async function handlePermissionResponse(optionId) {
  */
 function initPermissionModal() {
     // Set up button handlers
+    const denyAlwaysBtn = document.getElementById('permissionDenyAlways');
     const denyBtn = document.getElementById('permissionDeny');
     const onceBtn = document.getElementById('permissionOnce');
     const alwaysBtn = document.getElementById('permissionAlways');
+    
+    if (denyAlwaysBtn) {
+        denyAlwaysBtn.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
+    }
     
     if (denyBtn) {
         denyBtn.addEventListener('click', () => handlePermissionResponse('reject_once'));

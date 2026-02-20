@@ -122,6 +122,7 @@ impl AcpClient {
         self.tcp_writer.clone()
     }
 
+    /// Get the current session ID, creating one if needed
     fn spawn_kiro_process(&self, command_str: &str) -> Result<()> {
         info!("ðŸš€ Spawning Kiro process with command: {}", command_str);
         
@@ -436,6 +437,8 @@ impl AcpClient {
     }
     */
 
+    /// Execute a Kiro slash command via _kiro.dev/commands/execute extension.
+    /// Returns the AcpResponse result value.
     pub fn send_chat_streaming<F>(&self, content: String, mut callback: F, permission_callback: Option<Box<dyn Fn(serde_json::Value) + Send>>) -> Result<()>
     where
         F: FnMut(String),

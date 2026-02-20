@@ -85,6 +85,9 @@ class SettingsManager {
                 section.classList.add('hidden');
             }
         });
+
+        // Reload config when switching tabs so data is fresh
+        this.load();
     }
 
     /**
