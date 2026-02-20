@@ -585,10 +585,12 @@ export class FloatingApp {
     async executeSelection(command, value) {
         this.clearSuggestions();
         try {
-            // For selection commands, send the selected value as the argument
+            // For selection commands, use the convention: arg key is commandName + "Name"
+            // e.g. "model" command → { modelName: value }
+            const argKey = command + 'Name';
             const result = await this.invoke('execute_slash_command', {
                 command: command,
-                args: { id: value }
+                args: { [argKey]: value }
             });
             const msg = result?.message || `Selected: ${value}`;
             document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: msg }));
@@ -631,7 +633,9 @@ export class FloatingApp {
 
     async handleEnterKey() {
         const message = this.elements.input.value.trim();
-        if (!message) return;
+
+        // Allow Enter to work on selection lists even when input is empty
+        if (!message && !(this.currentMatches.length > 0 && this.selectedIndex >= 0)) return;
         
         if (this.isWaitingForResponse) {
             console.log('Interrupting current response with new question');
