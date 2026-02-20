@@ -15,11 +15,8 @@ export class WindowManager {
     }
 
     calculateMaxHeight() {
-        // Calculate 50% of screen height
         const screenHeight = window.screen.height;
-        const maxHeight = Math.floor(screenHeight * MAX_HEIGHT_PERCENT);
-        console.log('Screen height:', screenHeight, 'Max height (50%):', maxHeight);
-        return maxHeight;
+        return Math.floor(screenHeight * MAX_HEIGHT_PERCENT);
     }
 
     async resizeWindow() {
@@ -72,19 +69,6 @@ export class WindowManager {
 
                 const currentSize = await window.__TAURI__.webviewWindow.getCurrentWebviewWindow().innerSize();
                 
-                console.log('[RESIZE DEBUG]', {
-                    contentHeight,
-                    inputHeight,
-                    loadingVisible,
-                    contentVisible,
-                    suggestionsVisible,
-                    calculatedHeight: height,
-                    currentWindowHeight: currentSize.height,
-                    nothingExpanded
-                });
-                
-                console.log('Resizing window height:', { contentHeight, height, maxHeight: this.maxHeight });
-                // Only pass height, width will remain unchanged
                 await this.invoke('resize_floating_window', { height });
             } catch (error) {
                 console.error('Error resizing window:', error);
@@ -104,8 +88,6 @@ export class WindowManager {
             } else {
                 height = DEFAULT_HEIGHT;
             }
-            
-            console.log('[RESIZE DEBUG] resetHeightForNewMessage:', { height, userSetHeight: this.userSetHeight, autoGrowHeight: this.autoGrowHeight });
             
             await this.invoke('resize_floating_window', { height });
         } catch (error) {

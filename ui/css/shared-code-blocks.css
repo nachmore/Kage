@@ -58,8 +58,8 @@
     text-shadow: none;
 }
 
-/* Mermaid diagram styles */
-.mermaid-wrapper {
+/* Generic diagram styles (mermaid + PlantUML) */
+.diagram-wrapper {
     position: relative;
     margin: 12px 0;
     border-radius: 8px;
@@ -68,7 +68,7 @@
     border: 1px solid #e5e7eb;
 }
 
-.mermaid-header {
+.diagram-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -77,14 +77,20 @@
     border-bottom: 1px solid #e5e7eb;
 }
 
-.mermaid-label {
+.diagram-label {
     font-size: 12px;
     color: #6b7280;
     font-weight: 600;
     text-transform: uppercase;
 }
 
-.mermaid-wrapper .mermaid {
+.diagram-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.diagram-content {
     padding: 20px;
     display: flex;
     justify-content: center;
@@ -92,24 +98,20 @@
     background: white;
 }
 
-
-/* Mermaid source toggle */
-.mermaid-actions {
-    display: flex;
-    gap: 6px;
-    align-items: center;
+.diagram-content.mermaid {
+    /* mermaid overrides handled by mermaid.js */
 }
 
-.mermaid-source {
+.diagram-source {
     display: none;
     overflow-x: auto;
 }
 
-.mermaid-source.visible {
+.diagram-source.visible {
     display: block;
 }
 
-.mermaid-source pre {
+.diagram-source pre {
     margin: 0;
     padding: 16px;
     background: #272822;
@@ -117,12 +119,14 @@
     line-height: 1.5;
 }
 
-.mermaid-source code {
+.diagram-source code {
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     color: #f8f8f2;
     white-space: pre;
 }
 
-.mermaid-toggle span {
+.diagram-toggle span {
     pointer-events: none;
 }
+
+/* PlantUML is rendered as formatted source code (no remote server) */

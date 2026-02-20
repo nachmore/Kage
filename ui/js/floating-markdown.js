@@ -1,55 +1,49 @@
-// Markdown rendering with code block and mermaid support
+// Markdown rendering with code block, mermaid, graphviz, and PlantUML support
+
+const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
+
+let graphvizInstance = null;
+async function getGraphviz() {
+    if (graphvizInstance) return graphvizInstance;
+    try {
+        const module = await import('../vendor/lib/graphviz.js');
+        graphvizInstance = await module.Graphviz.load();
+        return graphvizInstance;
+    } catch (e) {
+        console.error('Failed to load Graphviz WASM:', e);
+        return null;
+    }
+}
 
 export function initMarkdown() {
-    mermaid.initialize({ 
+    mermaid.initialize({
         startOnLoad: false,
         theme: 'default',
         securityLevel: 'loose',
-        flowchart: {
-            useMaxWidth: true,
-            htmlLabels: true,
-            curve: 'basis'
-        }
+        flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
     });
 }
 
 export function renderMarkdown(markdown, targetElement) {
-    if (!markdown) {
-        targetElement.innerHTML = '';
-        return;
-    }
-    
-    marked.setOptions({
-        breaks: true,
-        gfm: true
-    });
-    
-    const html = marked.parse(markdown);
-    targetElement.innerHTML = html;
-    
-    const codeBlocks = targetElement.querySelectorAll('pre code');
-    codeBlocks.forEach((codeBlock) => {
+    if (!markdown) { targetElement.innerHTML = ''; return; }
+    marked.setOptions({ breaks: true, gfm: true });
+    targetElement.innerHTML = marked.parse(markdown);
+
+    targetElement.querySelectorAll('pre code').forEach((codeBlock) => {
         const pre = codeBlock.parentElement;
-        const className = codeBlock.className;
-        const langMatch = className.match(/language-(\w+)/);
+        const langMatch = codeBlock.className.match(/language-(\w+)/);
         const language = langMatch ? langMatch[1] : 'text';
-        
-        if (language === 'mermaid') {
-            renderMermaidDiagram(codeBlock, pre);
+
+        if (DIAGRAM_LANGUAGES.has(language)) {
+            renderDiagram(codeBlock, pre, language);
             return;
         }
-        
         if (language && language !== 'text' && Prism.languages[language]) {
             try {
-                const code = codeBlock.textContent;
-                const highlighted = Prism.highlight(code, Prism.languages[language], language);
-                codeBlock.innerHTML = highlighted;
-                codeBlock.className = `language-${language}`;
-            } catch (e) {
-                console.warn(`Failed to highlight ${language}:`, e);
-            }
+                codeBlock.innerHTML = Prism.highlight(codeBlock.textContent, Prism.languages[language], language);
+                codeBlock.className = 'language-' + language;
+            } catch (e) { /* skip */ }
         }
-        
         wrapCodeBlock(codeBlock, pre, language);
     });
 }
@@ -57,121 +51,144 @@ export function renderMarkdown(markdown, targetElement) {
 function wrapCodeBlock(codeBlock, pre, language) {
     const wrapper = document.createElement('div');
     wrapper.className = 'code-block-wrapper';
-    
     const header = document.createElement('div');
     header.className = 'code-block-header';
-    
     const langLabel = document.createElement('span');
     langLabel.className = 'code-block-language';
     langLabel.textContent = language;
-    
-    const copyBtn = createCopyButton(codeBlock.textContent);
-    
     header.appendChild(langLabel);
-    header.appendChild(copyBtn);
-    
+    header.appendChild(createCopyButton(codeBlock.textContent));
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(header);
     wrapper.appendChild(pre);
 }
 
-async function renderMermaidDiagram(codeBlock, pre) {
+// --- Generic diagram rendering ---
+
+async function renderDiagram(codeBlock, pre, language) {
     const code = codeBlock.textContent;
-    
+
+    // Don't render incomplete diagrams during streaming
+    if (language === 'mermaid' && !code.trim()) return;
+    if ((language === 'plantuml' || language === 'puml') && !code.includes('@enduml')) {
+        wrapCodeBlock(codeBlock, pre, language); return;
+    }
+    if ((language === 'dot' || language === 'graphviz' || language === 'neato') && !code.includes('}')) {
+        wrapCodeBlock(codeBlock, pre, language); return;
+    }
+
+    const labels = { mermaid:'Mermaid', plantuml:'PlantUML', puml:'PlantUML', dot:'Graphviz', graphviz:'Graphviz', neato:'Graphviz (neato)' };
+
     const wrapper = document.createElement('div');
-    wrapper.className = 'mermaid-wrapper';
-    
+    wrapper.className = 'diagram-wrapper';
+
     const header = document.createElement('div');
-    header.className = 'mermaid-header';
-    
+    header.className = 'diagram-header';
     const label = document.createElement('span');
-    label.className = 'mermaid-label';
-    label.textContent = 'Diagram';
+    label.className = 'diagram-label';
+    label.textContent = labels[language] || language;
 
-    const headerActions = document.createElement('div');
-    headerActions.className = 'mermaid-actions';
-
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
     const toggleBtn = document.createElement('button');
-    toggleBtn.className = 'copy-button mermaid-toggle';
-    toggleBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="16 18 22 12 16 6"></polyline>
-            <polyline points="8 6 2 12 8 18"></polyline>
-        </svg>
-        <span>Source</span>
-    `;
-
-    const copyBtn = createCopyButton(code);
-
-    headerActions.appendChild(toggleBtn);
-    headerActions.appendChild(copyBtn);
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
     header.appendChild(label);
-    header.appendChild(headerActions);
-    
-    const mermaidDiv = document.createElement('div');
-    mermaidDiv.className = 'mermaid';
-    mermaidDiv.textContent = code;
+    header.appendChild(actions);
 
-    // Source code panel (hidden by default)
+    const diagramDiv = document.createElement('div');
+    diagramDiv.className = 'diagram-content';
+
     const sourceDiv = document.createElement('div');
-    sourceDiv.className = 'mermaid-source';
-    const sourcePre = document.createElement('pre');
-    const sourceCode = document.createElement('code');
-    sourceCode.className = 'language-mermaid';
-    sourceCode.textContent = code;
-    sourcePre.appendChild(sourceCode);
-    sourceDiv.appendChild(sourcePre);
-    
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(header);
-    wrapper.appendChild(mermaidDiv);
+    wrapper.appendChild(diagramDiv);
     wrapper.appendChild(sourceDiv);
     pre.remove();
 
     toggleBtn.onclick = () => {
         const showing = sourceDiv.classList.toggle('visible');
         toggleBtn.querySelector('span').textContent = showing ? 'Diagram' : 'Source';
-        mermaidDiv.style.display = showing ? 'none' : '';
+        diagramDiv.style.display = showing ? 'none' : '';
     };
-    
-    try {
-        await mermaid.run({ nodes: [mermaidDiv] });
-    } catch (error) {
-        console.error('Mermaid rendering error:', error);
-        mermaidDiv.innerHTML = `<div style="color: #dc2626; padding: 20px;">Error rendering diagram: ${error.message}</div>`;
+
+    if (language === 'mermaid') {
+        await renderMermaidInto(diagramDiv, code);
+    } else if (language === 'dot' || language === 'graphviz' || language === 'neato') {
+        await renderGraphvizInto(diagramDiv, code, language);
+    } else {
+        renderPlantUMLInto(diagramDiv, code);
     }
 }
 
+// --- Engine-specific renderers ---
+
+async function renderMermaidInto(container, code) {
+    container.classList.add('mermaid');
+    container.textContent = code;
+    try {
+        await mermaid.run({ nodes: [container] });
+    } catch (error) {
+        console.error('Mermaid rendering error:', error);
+        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
+    }
+}
+
+async function renderGraphvizInto(container, code, language) {
+    try {
+        const graphviz = await getGraphviz();
+        if (!graphviz) {
+            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
+            return;
+        }
+        const engine = language === 'neato' ? 'neato' : 'dot';
+        const svg = graphviz.layout(code, 'svg', engine);
+        container.innerHTML = svg;
+        const svgEl = container.querySelector('svg');
+        if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
+    } catch (error) {
+        console.error('Graphviz rendering error:', error);
+        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz error: ' + error.message + '</div>';
+    }
+}
+
+function renderPlantUMLInto(container, code) {
+    // PlantUML requires Java — no pure JS renderer exists. Show formatted source.
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'margin:0;padding:16px;background:#272822;overflow-x:auto';
+    const codeEl = document.createElement('code');
+    codeEl.style.cssText = "font-family:'Consolas','Monaco','Courier New',monospace;font-size:13px;line-height:1.5;color:#f8f8f2;white-space:pre";
+    codeEl.textContent = code;
+    pre.appendChild(codeEl);
+    container.style.padding = '0';
+    container.style.background = '#272822';
+    container.appendChild(pre);
+}
+
+// --- Shared utilities ---
+
 function createCopyButton(code) {
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'copy-button';
-    copyBtn.innerHTML = `
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg>
-        <span>Copy</span>
-    `;
-    copyBtn.onclick = () => copyCode(code, copyBtn);
-    return copyBtn;
+    const btn = document.createElement('button');
+    btn.className = 'copy-button';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
+    btn.onclick = () => copyCode(code, btn);
+    return btn;
 }
 
 function copyCode(code, button) {
     navigator.clipboard.writeText(code).then(() => {
-        const originalHTML = button.innerHTML;
+        const orig = button.innerHTML;
         button.classList.add('copied');
-        button.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            <span>Copied!</span>
-        `;
-        
-        setTimeout(() => {
-            button.classList.remove('copied');
-            button.innerHTML = originalHTML;
-        }, 2000);
-    }).catch(err => {
-        console.error('Failed to copy code:', err);
-    });
+        button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
+        setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
+    }).catch(err => console.error('Copy failed:', err));
 }
