@@ -140,3 +140,22 @@ body.dark-theme .chat-header-title-input {
     color: #E5E7EB;
     border-color: var(--kiro-accent);
 }
+
+body.dark-theme .chat-suggestions {
+    background: #28242E;
+    border-color: #4A464F;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-theme .chat-suggestion-item:hover,
+body.dark-theme .chat-suggestion-item.selected {
+    background: #352F3D;
+}
+
+body.dark-theme .chat-suggestion-name {
+    color: #E5E7EB;
+}
+
+body.dark-theme .chat-suggestion-desc {
+    color: #938F9B;
+}

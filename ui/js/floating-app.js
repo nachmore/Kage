@@ -621,18 +621,35 @@ export class FloatingApp {
     }
 
     async handleKeyDown(event) {
-        if (event.key === 'ArrowDown') {
+        if (event.key === 'Tab') {
             event.preventDefault();
+            // Autocomplete to the top suggestion if one exists
             if (this.currentMatches.length > 0) {
+                const top = this.currentMatches[0];
+                if (top.type === 'command') {
+                    this.elements.input.value = '>' + top.name + ' ';
+                } else if (top.type === 'slash') {
+                    this.elements.input.value = top.name + ' ';
+                } else if (top.name) {
+                    this.elements.input.value = top.name;
+                }
+                this.selectedIndex = 0;
+                updateSelection(this.elements.appSuggestions, this.selectedIndex);
+            }
+        } else if (event.key === 'ArrowDown') {
+            if (this.currentMatches.length > 0) {
+                event.preventDefault();
                 this.selectedIndex = (this.selectedIndex + 1) % this.currentMatches.length;
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
+            // When no suggestions, let the default behavior handle cursor movement in textarea
         } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
             if (this.currentMatches.length > 0) {
+                event.preventDefault();
                 this.selectedIndex = this.selectedIndex <= 0 ? this.currentMatches.length - 1 : this.selectedIndex - 1;
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
+            // When no suggestions, let the default behavior handle cursor movement in textarea
         } else if (event.key === 'Escape') {
             await this.appWindow.hide();
         } else if (event.key === 'Enter' && event.shiftKey) {

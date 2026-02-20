@@ -1,6 +1,7 @@
 // Expanded chat application logic
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
+import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -24,6 +25,8 @@ export class ChatApp {
         this.toolUsages = [];
         this.userInfo = null;
         this.attachmentManager = new AttachmentManager();
+        this.currentSuggestions = [];
+        this.suggestionIndex = -1;
 
         this.elements = {};
     }
@@ -36,6 +39,7 @@ export class ChatApp {
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
         await this.loadUserInfo();
+        await loadSlashCommands(this.invoke);
 
         // Load sessions in background — don't block init
         this.loadSessions();
@@ -97,6 +101,7 @@ export class ChatApp {
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
             chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
             errorContainer: document.getElementById('errorContainer'),
+            chatSuggestions: document.getElementById('chatSuggestions'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
             chatMain: document.querySelector('.chat-main')
         };
@@ -106,12 +111,40 @@ export class ChatApp {
         this.elements.chatInput.addEventListener('input', () => {
             this.elements.chatInput.style.height = 'auto';
             this.elements.chatInput.style.height = Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
+            this.updateSuggestions();
         });
 
         this.elements.chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Tab') {
                 e.preventDefault();
-                this.sendMessage();
+                if (this.currentSuggestions.length > 0) {
+                    const top = this.currentSuggestions[0];
+                    if (top.type === 'command') {
+                        this.elements.chatInput.value = '>' + top.name + ' ';
+                    } else if (top.type === 'slash') {
+                        this.elements.chatInput.value = top.name + ' ';
+                    }
+                    this.suggestionIndex = 0;
+                    this.renderSuggestions();
+                }
+            } else if (e.key === 'ArrowDown' && this.currentSuggestions.length > 0) {
+                e.preventDefault();
+                this.suggestionIndex = (this.suggestionIndex + 1) % this.currentSuggestions.length;
+                this.renderSuggestions();
+            } else if (e.key === 'ArrowUp' && this.currentSuggestions.length > 0) {
+                e.preventDefault();
+                this.suggestionIndex = this.suggestionIndex <= 0 ? this.currentSuggestions.length - 1 : this.suggestionIndex - 1;
+                this.renderSuggestions();
+            } else if (e.key === 'Escape' && this.currentSuggestions.length > 0) {
+                e.preventDefault();
+                this.clearSuggestions();
+            } else if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (this.currentSuggestions.length > 0 && this.suggestionIndex >= 0) {
+                    this.executeSuggestion(this.currentSuggestions[this.suggestionIndex]);
+                } else {
+                    this.sendMessage();
+                }
             }
         });
 
@@ -469,12 +502,23 @@ export class ChatApp {
         const hasAttachments = this.attachmentManager.hasAttachments();
         if ((!message && !hasAttachments) || this.isWaitingForResponse) return;
 
+        // Clear suggestions
+        this.clearSuggestions();
+
         const attachments = this.attachmentManager.toContentBlocks();
         const attachmentSnapshots = hasAttachments ? [...this.attachmentManager.attachments] : null;
         this.attachmentManager.clear();
 
         this.elements.chatInput.value = '';
         this.elements.chatInput.style.height = 'auto';
+
+        // Handle > local commands
+        if (!hasAttachments && message.startsWith('>')) {
+            const cmdText = message.substring(1).trim();
+            if (cmdText && await executeCommand(cmdText, this.invoke, this.appWindow)) {
+                return;
+            }
+        }
 
         // Handle / slash commands (only if no attachments)
         if (!hasAttachments && message.startsWith('/')) {
@@ -952,6 +996,77 @@ export class ChatApp {
             this.renderSessionList();
         } catch (e) {
             console.error('Failed to rename session:', e);
+        }
+    }
+
+    updateSuggestions() {
+        const input = this.elements.chatInput.value;
+        const trimmed = input.trim();
+
+        // Match > commands
+        const cmdMatches = matchCommands(trimmed);
+        if (cmdMatches && cmdMatches.length > 0) {
+            this.currentSuggestions = cmdMatches.map(c => ({ type: 'command', ...c }));
+            this.suggestionIndex = 0;
+            this.renderSuggestions();
+            return;
+        }
+
+        // Match / slash commands
+        const slashMatches = matchSlashCommands(trimmed);
+        if (slashMatches && slashMatches.length > 0) {
+            this.currentSuggestions = slashMatches;
+            this.suggestionIndex = 0;
+            this.renderSuggestions();
+            return;
+        }
+
+        this.clearSuggestions();
+    }
+
+    renderSuggestions() {
+        const container = this.elements.chatSuggestions;
+        container.innerHTML = '';
+
+        if (this.currentSuggestions.length === 0) {
+            container.classList.remove('visible');
+            return;
+        }
+
+        this.currentSuggestions.forEach((cmd, index) => {
+            const item = document.createElement('div');
+            item.className = 'chat-suggestion-item' + (index === this.suggestionIndex ? ' selected' : '');
+            const prefix = cmd.type === 'slash' ? '' : '> ';
+            item.innerHTML = `
+                <span class="chat-suggestion-icon">${cmd.icon}</span>
+                <div class="chat-suggestion-info">
+                    <div class="chat-suggestion-name">${prefix}${this.escapeHtml(cmd.name)}</div>
+                    <div class="chat-suggestion-desc">${this.escapeHtml(cmd.description)}</div>
+                </div>
+            `;
+            item.addEventListener('click', () => this.executeSuggestion(cmd));
+            container.appendChild(item);
+        });
+
+        container.classList.add('visible');
+    }
+
+    clearSuggestions() {
+        this.currentSuggestions = [];
+        this.suggestionIndex = -1;
+        this.elements.chatSuggestions.innerHTML = '';
+        this.elements.chatSuggestions.classList.remove('visible');
+    }
+
+    async executeSuggestion(cmd) {
+        this.elements.chatInput.value = '';
+        this.elements.chatInput.style.height = 'auto';
+        this.clearSuggestions();
+
+        if (cmd.type === 'command') {
+            await executeCommand(cmd.name, this.invoke, this.appWindow);
+        } else if (cmd.execute) {
+            await cmd.execute(this.invoke, this.appWindow);
         }
     }
 
