@@ -312,8 +312,31 @@ pub async fn send_permission_response(
     });
     let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
 
-    let client = state.acp_client.lock().await;
-    client.write_line(&json).map_err(|e| format!("Write: {}", e))?;
+    // Write directly via the pipe/tcp handles — do NOT lock the ACP client,
+    // because send_message_streaming may be holding that lock waiting for this
+    // permission response (which would deadlock).
+    {
+        use std::io::Write;
+        let stdin_arc = {
+            let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
+            guard.as_ref().map(|a| a.clone())
+        };
+        if let Some(arc) = stdin_arc {
+            let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
+            writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
+            stdin.flush().map_err(|e| format!("Flush: {}", e))?;
+        } else {
+            let guard = state.tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
+            if let Some(ref stream) = *guard {
+                let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
+                drop(guard);
+                writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
+                ws.flush().map_err(|e| format!("Flush: {}", e))?;
+            } else {
+                return Err("No write handle available".to_string());
+            }
+        }
+    }
 
     if option_id == "allow_always" {
         let mut config = state.config.lock().await;
@@ -400,8 +423,27 @@ pub async fn dismiss_pending_permission(
         });
         let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
 
-        let client = state.acp_client.lock().await;
-        client.write_line(&json).map_err(|e| format!("Write: {}", e))?;
+        // Write directly via pipe/tcp handles to avoid deadlock with send_message_streaming
+        {
+            use std::io::Write;
+            let stdin_arc = {
+                let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
+                guard.as_ref().map(|a| a.clone())
+            };
+            if let Some(arc) = stdin_arc {
+                let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
+                let _ = writeln!(stdin, "{}", json);
+                let _ = stdin.flush();
+            } else if let Ok(guard) = state.tcp_writer.lock() {
+                if let Some(ref stream) = *guard {
+                    if let Ok(mut ws) = stream.try_clone() {
+                        drop(guard);
+                        let _ = writeln!(ws, "{}", json);
+                        let _ = ws.flush();
+                    }
+                }
+            }
+        }
 
         if let Ok(mut guard) = state.pending_permission.lock() {
             *guard = None;

@@ -481,8 +481,14 @@ pub async fn switch_acp_session(
 pub async fn get_current_session_id(
     state: State<'_, AppState>,
 ) -> Result<Option<String>, String> {
-    let client = state.acp_client.lock().await;
-    Ok(client.get_session_id())
+    // Use try_lock to avoid deadlocking when send_message_streaming holds the client lock
+    match state.acp_client.try_lock() {
+        Ok(client) => Ok(client.get_session_id()),
+        Err(_) => {
+            // Client is locked (likely mid-request) — return None rather than deadlocking
+            Ok(None)
+        }
+    }
 }
 
 /// Get the floating window's session ID
