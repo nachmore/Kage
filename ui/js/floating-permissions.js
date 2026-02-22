@@ -47,21 +47,30 @@ async function showPermissionModal(notification) {
         console.error('Failed to set window focus:', error);
     }
     
-    // Resize window to fit modal
+    // Resize window to fit the permission modal.
+    // Two-pass: first grow large enough, then measure and fine-tune.
     try {
-        const currentSize = await appWindow.innerSize();
         const scale = window.devicePixelRatio || 1;
-        const modalHeight = Math.round(420 * scale);
-        const modalWidth = Math.round(520 * scale);
-        
-        // Only resize if current window is smaller than modal needs
-        const newWidth = Math.max(currentSize.width, modalWidth);
-        const newHeight = Math.max(currentSize.height, modalHeight);
-        
-        if (newWidth !== currentSize.width || newHeight !== currentSize.height) {
+
+        // First pass: grow to a generous size so the modal can lay out fully
+        await invoke('resize_floating_window', {
+            width: Math.round(540 * scale),
+            height: Math.round(520 * scale)
+        });
+
+        // Wait for layout to settle
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // Second pass: measure the actual modal and fit precisely
+        const modalEl = modal.querySelector('.permission-modal');
+        if (modalEl) {
+            const rect = modalEl.getBoundingClientRect();
+            // Account for overlay padding (20px top + 20px bottom) and some breathing room
+            const neededHeight = Math.round((rect.height + 60) * scale);
+            const neededWidth = Math.round(540 * scale);
             await invoke('resize_floating_window', {
-                width: newWidth,
-                height: newHeight
+                width: neededWidth,
+                height: Math.max(neededHeight, Math.round(520 * scale))
             });
         }
     } catch (error) {
