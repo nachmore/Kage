@@ -179,6 +179,11 @@ function saveSettings() {
     settingsManager.save();
 }
 
+async function saveAndClose() {
+    const success = await settingsManager.save();
+    if (success) settingsManager.close();
+}
+
 function closeSettings() {
     settingsManager.close();
 }

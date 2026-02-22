@@ -23,13 +23,13 @@ class ShortcutsSettingsModule extends SettingsModule {
                 </div>
             </div>
 
-            <div class="shortcuts-list" id="shortcutsList"></div>
-
             <div class="shortcuts-actions">
                 <button class="setting-button" onclick="shortcutsModule.showAddDialog()">Add Shortcut</button>
                 <button class="setting-button" onclick="shortcutsModule.exportShortcuts()">Export to JSON</button>
                 <button class="setting-button" onclick="shortcutsModule.importShortcuts()">Import from JSON</button>
             </div>
+
+            <div class="shortcuts-list" id="shortcutsList"></div>
 
             <!-- Add/Edit Dialog -->
             <div id="shortcutDialog" class="shortcut-dialog" style="display: none;">
@@ -175,7 +175,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                 .shortcuts-actions {
                     display: flex;
                     gap: 12px;
-                    margin-top: 16px;
+                    margin-bottom: 16px;
                 }
 
                 .shortcut-dialog {

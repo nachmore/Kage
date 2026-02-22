@@ -695,6 +695,7 @@ export class ChatApp {
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
+        contentDiv.dir = 'auto';
         if (content) contentDiv.textContent = content;
 
         bubble.appendChild(header);

@@ -29,6 +29,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 <div class="agent-tools-list" id="agentToolsList" style="margin-top: 8px;">
                     <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
                 </div>
+                <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">Reset All Permissions</button>
             </div>
         `;
     }
@@ -47,6 +48,26 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                         e.target.checked = false;
                         this.trustAll = false;
                     }
+                }
+            });
+        }
+
+        const resetBtn = document.getElementById('resetPermissionsBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', async () => {
+                if (!confirm('This will remove all tool permissions and reset to "Always Ask" for everything. Continue?')) return;
+                this.tools = [];
+                this.trustAll = false;
+                const trustAllCheckbox = document.getElementById('trustAllTools');
+                if (trustAllCheckbox) trustAllCheckbox.checked = false;
+                this.renderToolsList();
+                // Save immediately
+                try {
+                    const config = await window.__TAURI__.core.invoke('get_config');
+                    config.tool_permissions = { trust_all: false, tools: [] };
+                    await window.__TAURI__.core.invoke('save_config', { config });
+                } catch (e) {
+                    console.error('Failed to reset permissions:', e);
                 }
             });
         }
@@ -259,6 +280,23 @@ toolPermStyle.textContent = `
         text-align: center;
         color: #666666;
         font-size: 13px;
+    }
+
+    .reset-permissions-btn {
+        padding: 8px 16px;
+        background: rgba(244, 67, 54, 0.12);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        border-radius: 6px;
+        color: #f44336;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .reset-permissions-btn:hover {
+        background: rgba(244, 67, 54, 0.2);
+        border-color: rgba(244, 67, 54, 0.5);
     }
 `;
 document.head.appendChild(toolPermStyle);

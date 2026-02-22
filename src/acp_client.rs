@@ -285,7 +285,9 @@ impl AcpClient {
 
                 let debug = *debug_mode.lock().unwrap();
                 if debug {
-                    info!("[READER] {}", &trimmed[..trimmed.len().min(200)]);
+                    // Truncate at a char boundary to avoid panicking on multi-byte UTF-8
+                    let display: String = trimmed.chars().take(200).collect();
+                    info!("[READER] {}", display);
                 }
 
                 // Try to parse as a JSON value first to classify
@@ -558,9 +560,9 @@ impl AcpClient {
         *self.streaming_accumulator.lock().unwrap() = String::new();
 
         if debug {
-            info!("[CHAT] Sending message ({} chars): {}", content.len(), content);
+            info!("[CHAT] Sending message ({} chars): {}", content.chars().count(), content);
         } else {
-            info!("Sending chat message ({} chars)", content.len());
+            info!("Sending chat message ({} chars)", content.chars().count());
         }
 
         // Ensure we have a session

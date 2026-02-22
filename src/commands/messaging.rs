@@ -24,12 +24,18 @@ pub fn setup_notification_handler(
     let _models = available_models;
     let accumulated = client.streaming_accumulator.clone();
 
+    // Map toolCallId → first tool name (e.g. "write") from the initial tool_call update.
+    // The permission request arrives later with a descriptive title (e.g. "Creating hello.txt")
+    // but we want to track policies by the actual tool name.
+    let tool_names: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+
     client.set_notification_handler(move |notification: serde_json::Value| {
         let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
 
         if method == "session/request_permission" {
             handle_permission_notification(
-                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm,
+                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm, &tool_names,
             );
             return;
         }
@@ -46,6 +52,15 @@ pub fn setup_notification_handler(
                         return;
                     }
                     if kind == "tool_call" || kind == "tool_call_update" {
+                        // Track the first title for each toolCallId — that's the real tool name
+                        if let (Some(call_id), Some(title)) = (
+                            update.get("toolCallId").and_then(|v| v.as_str()),
+                            update.get("title").and_then(|v| v.as_str()),
+                        ) {
+                            if let Ok(mut names) = tool_names.lock() {
+                                names.entry(call_id.to_string()).or_insert_with(|| title.to_string());
+                            }
+                        }
                         let _ = app_handle.emit("tool_call_update", &notification);
                         return;
                     }
@@ -88,13 +103,32 @@ fn handle_permission_notification(
     pipe_stdin: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
     tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
+    tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
 ) {
-    let tool_title = notification
+    // The permission request has a descriptive title (e.g. "Creating hello.txt")
+    // but we want the actual tool name (e.g. "write") from the first tool_call update.
+    let tool_call_id = notification
+        .get("params")
+        .and_then(|p| p.get("toolCall"))
+        .and_then(|tc| tc.get("toolCallId"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    let fallback_title = notification
         .get("params")
         .and_then(|p| p.get("toolCall"))
         .and_then(|tc| tc.get("title"))
         .and_then(|t| t.as_str())
         .unwrap_or("unknown");
+
+    // Look up the real tool name from the first tool_call update
+    let tool_title = if !tool_call_id.is_empty() {
+        tool_names.lock().ok()
+            .and_then(|names| names.get(tool_call_id).cloned())
+            .unwrap_or_else(|| fallback_title.to_string())
+    } else {
+        fallback_title.to_string()
+    };
 
     let timestamp = chrono::Utc::now().to_rfc3339();
     let mut config_guard = async_runtime::block_on(config.lock());
