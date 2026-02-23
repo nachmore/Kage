@@ -106,3 +106,76 @@ export function addSource(url, title, domainHint, state) {
         }
     } catch { /* invalid URL */ }
 }
+
+import { getToolIcon, escapeHtml } from './tool-utils.js';
+
+/**
+ * Generate HTML for tool usage chips.
+ * @param {Array} toolUsages - [{ toolCallId, title, kind }]
+ * @returns {string} HTML string
+ */
+export function renderToolChipsHtml(toolUsages) {
+    return toolUsages.map(t => `
+        <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}">
+            <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
+            <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>
+        </span>
+    `).join('');
+}
+
+/**
+ * Generate HTML for source domain chips (clickable links).
+ * @param {Array} toolSources - [{ url, domain, title, initials, color, favicon }]
+ * @returns {string} HTML string
+ */
+export function renderSourceChipsHtml(toolSources) {
+    return toolSources.map(s => `
+        <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}">
+            <span class="source-icon-wrapper">
+                <span class="source-initials" style="background:${s.color}">${s.initials}</span>
+                <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+            </span>
+            <span class="source-domain">${escapeHtml(s.domain)}</span>
+        </a>
+    `).join('');
+}
+
+/**
+ * Generate HTML for compact source bubbles (floating window streaming state).
+ * @param {Array} toolUsages
+ * @param {Array} toolSources
+ * @returns {string} HTML string
+ */
+export function renderSourceBubblesHtml(toolUsages, toolSources) {
+    const toolBubbles = toolUsages.map((t, i) => `
+        <span class="source-bubble tool-bubble" title="${escapeHtml(t.title)}" style="animation-delay: ${i * 0.08}s">
+            <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
+        </span>
+    `).join('');
+
+    const offset = toolUsages.length;
+    const sourceBubbles = toolSources.map((s, i) => `
+        <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
+            <span class="source-icon-wrapper">
+                <span class="source-initials" style="background:${s.color}">${s.initials}</span>
+                <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+            </span>
+        </a>
+    `).join('');
+
+    return toolBubbles + sourceBubbles;
+}
+
+/**
+ * Get the appropriate error/info message for a session reset event.
+ * @param {Object} data - event payload data
+ * @returns {string} message
+ */
+export function getSessionResetMessage(data) {
+    if (data?.reason === 'image_unsupported') {
+        return data.reconnected
+            ? '🖼️ The current model doesn\'t support images. A new session has been started — try switching to a vision-capable model.'
+            : '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.';
+    }
+    return 'Session was reset due to an error.';
+}

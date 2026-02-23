@@ -5,8 +5,7 @@ import { renderMarkdown } from './floating-markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 import { evaluateMath } from './math-eval.js';
-import { getToolIcon, escapeHtml } from './tool-utils.js';
-import { processToolCallUpdate } from './streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -1039,18 +1038,9 @@ export class FloatingApp {
     }
 
     handleSessionReset(event) {
-        this.isWaitingForResponse = false;
-        const data = event.payload;
-        if (data?.reason === 'image_unsupported') {
-            const reconnected = data.reconnected;
-            const msg = reconnected
-                ? '🖼️ The current model doesn\'t support images. A new session has been started — try switching to a vision-capable model.'
-                : '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.';
-            this.showError(msg);
-        } else {
-            this.showError('Session was reset due to an error.');
+            this.isWaitingForResponse = false;
+            this.showError(getSessionResetMessage(event.payload));
         }
-    }
 
     handleToolCallUpdate(event) {
             if (!this.isWaitingForResponse) return;
@@ -1070,90 +1060,45 @@ export class FloatingApp {
 
 
     renderSources() {
-        // Remove compact version if it exists
-        const compactEl = document.getElementById('toolSourcesCompact');
-        if (compactEl) compactEl.remove();
-        
-        let sourcesEl = document.getElementById('toolSources');
-        if (!sourcesEl) {
-            sourcesEl = document.createElement('div');
-            sourcesEl.id = 'toolSources';
-            sourcesEl.className = 'tool-sources';
-            const contentArea = this.elements.contentArea;
-            if (contentArea) {
-                contentArea.appendChild(sourcesEl);
+            const compactEl = document.getElementById('toolSourcesCompact');
+            if (compactEl) compactEl.remove();
+
+            let sourcesEl = document.getElementById('toolSources');
+            if (!sourcesEl) {
+                sourcesEl = document.createElement('div');
+                sourcesEl.id = 'toolSources';
+                sourcesEl.className = 'tool-sources';
+                if (this.elements.contentArea) this.elements.contentArea.appendChild(sourcesEl);
             }
-        }
-        
-        if (this.toolSources.length === 0 && this.toolUsages.length === 0) {
-            sourcesEl.style.display = 'none';
-            return;
-        }
-        
-        sourcesEl.style.display = 'flex';
-        this.elements.contentArea.classList.add('visible');
 
-        const toolChips = this.toolUsages.map(t => `
-            <span class="source-chip tool-chip" title="Tool: ${t.title}">
-                <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
-                <span class="source-domain">Tool: ${t.title}</span>
-            </span>
-        `).join('');
+            if (this.toolSources.length === 0 && this.toolUsages.length === 0) {
+                sourcesEl.style.display = 'none';
+                return;
+            }
 
-        const sourceChips = this.toolSources.map(source => `
-            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}">
-                <span class="source-icon-wrapper">
-                    <span class="source-initials" style="background:${source.color}">${source.initials}</span>
-                    <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
-                </span>
-                <span class="source-domain">${source.domain}</span>
-            </a>
-        `).join('');
-        
-        sourcesEl.innerHTML = toolChips + sourceChips;
-        
-        this.windowManager.resizeWindow();
-    }
+            sourcesEl.style.display = 'flex';
+            this.elements.contentArea.classList.add('visible');
+            sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+            this.windowManager.resizeWindow();
+        }
 
     renderSourcesCompact() {
-        // Hide loading dots and show compact source icons in their place
-        this.elements.loadingDots.classList.remove('visible');
-        this.elements.ghostContainer.classList.remove('thinking');
-        
-        let compactEl = document.getElementById('toolSourcesCompact');
-        if (!compactEl) {
-            compactEl = document.createElement('div');
-            compactEl.id = 'toolSourcesCompact';
-            compactEl.className = 'tool-sources-compact';
-            // Insert where loading dots are — inside the speech bubble, before content area
-            const speechBubble = document.querySelector('.speech-bubble');
-            if (speechBubble) {
-                speechBubble.insertBefore(compactEl, this.elements.contentArea);
+            this.elements.loadingDots.classList.remove('visible');
+            this.elements.ghostContainer.classList.remove('thinking');
+
+            let compactEl = document.getElementById('toolSourcesCompact');
+            if (!compactEl) {
+                compactEl = document.createElement('div');
+                compactEl.id = 'toolSourcesCompact';
+                compactEl.className = 'tool-sources-compact';
+                const speechBubble = document.querySelector('.speech-bubble');
+                if (speechBubble) speechBubble.insertBefore(compactEl, this.elements.contentArea);
             }
+
+            compactEl.style.display = 'flex';
+            compactEl.innerHTML = renderSourceBubblesHtml(this.toolUsages, this.toolSources);
+            this.windowManager.resizeWindow();
         }
-        
-        compactEl.style.display = 'flex';
-
-        const toolBubbles = this.toolUsages.map((t, i) => `
-            <span class="source-bubble tool-bubble" title="${t.title}" style="animation-delay: ${i * 0.08}s">
-                <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
-            </span>
-        `).join('');
-
-        const offset = this.toolUsages.length;
-        const sourceBubbles = this.toolSources.map((source, i) => `
-            <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${source.url.replace(/'/g, "\\'")}' })" title="${source.title}" style="animation-delay: ${(offset + i) * 0.08}s">
-                <span class="source-icon-wrapper">
-                    <span class="source-initials" style="background:${source.color}">${source.initials}</span>
-                    <img class="source-favicon" src="${source.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
-                </span>
-            </a>
-        `).join('');
-
-        compactEl.innerHTML = toolBubbles + sourceBubbles;
-        
-        this.windowManager.resizeWindow();
-    }
 
     showError(message) {
         this.stopThinking();

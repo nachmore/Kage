@@ -2,8 +2,8 @@
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
-import { getToolIcon, escapeHtml } from './tool-utils.js';
-import { processToolCallUpdate } from './streaming-utils.js';
+import { escapeHtml } from './tool-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from './streaming-utils.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -778,40 +778,32 @@ export class ChatApp {
     }
 
     handleSessionReset(event) {
-        this.hideTypingIndicator();
+            this.hideTypingIndicator();
 
-        if (this.currentStreamingMessage) {
-            this.currentStreamingMessage.remove();
-            this.currentStreamingMessage = null;
-        }
+            if (this.currentStreamingMessage) {
+                this.currentStreamingMessage.remove();
+                this.currentStreamingMessage = null;
+            }
 
-        const data = event.payload;
-        if (data?.reason === 'image_unsupported') {
-            const reconnected = data.reconnected;
-            if (reconnected) {
+            const data = event.payload;
+            const msg = getSessionResetMessage(data);
+            if (data?.reason === 'image_unsupported' && data.reconnected) {
                 this.isConnected = true;
                 this.updateConnectionStatus();
-                this.showSessionResetMessage(
-                    '🖼️ The current model doesn\'t support images. A new session has been started automatically — try switching to a vision-capable model.'
-                );
+                this.showSessionResetMessage(msg);
             } else {
-                this.isConnected = false;
-                this.updateConnectionStatus();
-                this.showError(
-                    '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.'
-                );
+                if (data?.reason === 'image_unsupported') {
+                    this.isConnected = false;
+                    this.updateConnectionStatus();
+                }
+                this.showError(msg);
             }
-        } else {
-            this.showError('Session was reset due to an error.');
+
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+            this.elements.chatInput.focus();
+            this.loadSessions();
         }
-
-        this.isWaitingForResponse = false;
-        this.updateInputState();
-        this.elements.chatInput.focus();
-
-        // Reload sessions since a new one was created
-        this.loadSessions();
-    }
 
     handleToolCallUpdate(event) {
             const { updated } = processToolCallUpdate(event, this);
@@ -823,32 +815,14 @@ export class ChatApp {
 
 
     renderSourcesInMessage(contentDiv) {
-        let sourcesEl = contentDiv.querySelector('.tool-sources');
-        if (!sourcesEl) {
-            sourcesEl = document.createElement('div');
-            sourcesEl.className = 'tool-sources';
-            contentDiv.appendChild(sourcesEl);
+            let sourcesEl = contentDiv.querySelector('.tool-sources');
+            if (!sourcesEl) {
+                sourcesEl = document.createElement('div');
+                sourcesEl.className = 'tool-sources';
+                contentDiv.appendChild(sourcesEl);
+            }
+            sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
         }
-
-        const toolChips = this.toolUsages.map(t => `
-            <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}">
-                <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
-                <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>
-            </span>
-        `).join('');
-
-        const sourceChips = this.toolSources.map(s => `
-            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}">
-                <span class="source-icon-wrapper">
-                    <span class="source-initials" style="background:${s.color}">${s.initials}</span>
-                    <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
-                </span>
-                <span class="source-domain">${escapeHtml(s.domain)}</span>
-            </a>
-        `).join('');
-
-        sourcesEl.innerHTML = toolChips + sourceChips;
-    }
 
     // --- UI Helpers ---
 
