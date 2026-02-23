@@ -106,7 +106,7 @@ class SettingsManager {
             // Save to backend
             await this.invoke('save_config', { config });
             
-            this.showStatus('Settings saved! Most changes apply immediately. Hotkey changes require a restart.', 'success');
+            this.showStatus('Settings saved! All changes apply immediately.', 'success');
             return true;
         } catch (error) {
             this.showStatus('Failed to save settings: ' + error, 'error');

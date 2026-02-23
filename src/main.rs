@@ -18,6 +18,7 @@ use process_manager::ProcessManager;
 use state::AppState;
 use std::sync::Arc;
 use tauri::Manager;
+use tauri::Listener;
 use tokio::sync::Mutex;
 
 fn main() {
@@ -176,71 +177,95 @@ fn main() {
             // Register global hotkey
             let hotkey_string = config.get_hotkey_string();
             info!("Attempting to register global hotkey: {}", hotkey_string);
-            println!("Attempting to register global hotkey: {}", hotkey_string);
 
-            use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+            // Helper to register a hotkey
+            fn register_hotkey(app: &tauri::App, hotkey: &str, window: tauri::WebviewWindow) -> Result<(), String> {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+                app.global_shortcut().on_shortcut(
+                    hotkey,
+                    move |_app, _shortcut, event| {
+                        if event.state != ShortcutState::Pressed { return; }
+                        info!("Hotkey triggered");
+                        toggle_floating_window(&window);
+                    },
+                ).map_err(|e| format!("{}", e))
+            }
 
-            let window_for_primary = floating_window.clone();
-            let hotkey_str = hotkey_string.clone();
-            let registration_result = app.global_shortcut().on_shortcut(
-                hotkey_string.as_str(),
-                move |_app, _shortcut, event| {
-                    if event.state != ShortcutState::Pressed {
-                        return;
-                    }
-                    println!(
-                        "🔥 HOTKEY TRIGGERED: {}",
-                        chrono::Local::now().format("%H:%M:%S%.3f")
-                    );
-                    info!("Hotkey triggered");
-                    toggle_floating_window(&window_for_primary);
-                },
-            );
-
-            let hotkey = match registration_result {
+            let active_hotkey = match register_hotkey(app, &hotkey_string, floating_window.clone()) {
                 Ok(_) => {
-                    info!("✅ Successfully registered global hotkey: {}", hotkey_str);
-                    println!("✅ Successfully registered global hotkey: {}", hotkey_str);
-                    println!("   Press {} to toggle the floating window", hotkey_str);
-                    hotkey_str
+                    info!("✅ Registered global hotkey: {}", hotkey_string);
+                    hotkey_string.clone()
                 }
                 Err(e) => {
-                    warn!("❌ Failed to register {}: {}", hotkey_str, e);
-                    eprintln!("❌ Failed to register {}: {}", hotkey_str, e);
-                    eprintln!("   Trying Alt+K instead...");
-
-                    let window_for_fallback = floating_window.clone();
-                    match app.global_shortcut().on_shortcut(
-                        "Alt+K",
-                        move |_app, _shortcut, event| {
-                            if event.state != ShortcutState::Pressed {
-                                return;
-                            }
-                            println!(
-                                "🔥 HOTKEY TRIGGERED (Alt+K): {}",
-                                chrono::Local::now().format("%H:%M:%S%.3f")
-                            );
-                            info!("Hotkey triggered (Alt+K)");
-                            toggle_floating_window(&window_for_fallback);
-                        },
-                    ) {
+                    warn!("❌ Failed to register {}: {}", hotkey_string, e);
+                    match register_hotkey(app, "Alt+K", floating_window.clone()) {
                         Ok(_) => {
-                            info!("✅ Successfully registered fallback hotkey: Alt+K");
-                            println!("✅ Successfully registered fallback hotkey: Alt+K");
+                            info!("✅ Registered fallback hotkey: Alt+K");
                             "Alt+K".to_string()
                         }
                         Err(e2) => {
-                            error!("❌ Failed to register fallback hotkey: {}", e2);
-                            eprintln!("❌ Failed to register any hotkey: {}", e2);
+                            error!("❌ Failed to register any hotkey: {}", e2);
                             "None".to_string()
                         }
                     }
                 }
             };
 
-            info!("Active hotkey: {}", hotkey);
+            info!("Active hotkey: {}", active_hotkey);
+
+            // Hot-reload hotkey when config changes
+            let current_hotkey = Arc::new(std::sync::Mutex::new(active_hotkey));
+            let hotkey_app = app.handle().clone();
+            let hotkey_window = floating_window.clone();
+            let hotkey_current = current_hotkey.clone();
+            app.listen("config_updated", move |_| {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+                // Read config from file to avoid async mutex deadlock
+                let new_hotkey = match config::Config::load() {
+                    Ok(config) => config.get_hotkey_string(),
+                    Err(_) => return,
+                };
+
+                let mut current = hotkey_current.lock().unwrap();
+                if *current == new_hotkey { return; }
+
+                info!("Hotkey changed: {} → {}", *current, new_hotkey);
+
+                // Unregister all existing shortcuts
+                let _ = hotkey_app.global_shortcut().unregister_all();
+
+                // Register the new one
+                let window_clone = hotkey_window.clone();
+                match hotkey_app.global_shortcut().on_shortcut(
+                    new_hotkey.as_str(),
+                    move |_app, _shortcut, event| {
+                        if event.state != ShortcutState::Pressed { return; }
+                        info!("Hotkey triggered");
+                        toggle_floating_window(&window_clone);
+                    },
+                ) {
+                    Ok(_) => {
+                        info!("✅ Hot-reloaded hotkey: {}", new_hotkey);
+                        *current = new_hotkey;
+                    }
+                    Err(e) => {
+                        error!("❌ Failed to register new hotkey {}: {}", new_hotkey, e);
+                        // Try to re-register the old one
+                        let old = current.clone();
+                        let window_clone2 = hotkey_window.clone();
+                        let _ = hotkey_app.global_shortcut().on_shortcut(
+                            old.as_str(),
+                            move |_app, _shortcut, event| {
+                                if event.state != ShortcutState::Pressed { return; }
+                                toggle_floating_window(&window_clone2);
+                            },
+                        );
+                    }
+                }
+            });
+
             info!("=== Setup Complete ===");
-            info!("Active hotkey: {}", hotkey);
             
             
 

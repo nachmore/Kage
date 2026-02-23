@@ -208,3 +208,67 @@ body.light-theme .sidebar-item.active { background: #d8d8d8; }
 body.light-theme ::-webkit-scrollbar-thumb { background: #c0c0c0; }
 body.light-theme ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
 body.light-theme .settings-section-header { color: var(--kiro-text-bright); }
+
+/* Keycap badges (VSCode-style) */
+.keycap-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    min-height: 28px;
+}
+.keycap {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: #ffffff;
+    font-family: var(--kiro-font);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 20px;
+    min-width: 20px;
+    text-align: center;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.keycap-sep {
+    color: #666;
+    font-size: 11px;
+    padding: 0 4px;
+}
+body.light-theme .keycap {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.15);
+    color: #333;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+body.light-theme .keycap-sep { color: #999; }
+.keycap-preview.capturing .keycap {
+    border-color: var(--kiro-accent);
+    box-shadow: 0 0 0 1px var(--kiro-accent-glow);
+}
+
+/* Custom hotkey dropdown */
+.hotkey-dropdown { position: relative; width: 100%; }
+.hotkey-dropdown-selected {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; cursor: pointer;
+    background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px;
+    transition: border-color 0.2s; min-height: 34px;
+}
+.hotkey-dropdown-selected:hover { border-color: var(--kiro-accent); }
+.hotkey-dropdown-arrow { color: var(--kiro-text-muted); font-size: 12px; margin-left: 8px; }
+.hotkey-dropdown-menu {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    background: var(--kiro-bg-elevated); border: 1px solid var(--kiro-border); border-radius: 4px;
+    margin-top: 2px; padding: 4px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    max-height: 300px; overflow-y: auto;
+}
+.hotkey-dropdown-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; cursor: pointer; transition: background 0.1s;
+}
+.hotkey-dropdown-item:hover { background: rgba(113, 56, 204, 0.15); }
+.hotkey-dropdown-item.active { background: rgba(113, 56, 204, 0.25); }
+.hotkey-dropdown-label { font-size: 11px; color: var(--kiro-text-muted); }
+.hotkey-dropdown-divider { height: 1px; background: var(--kiro-border); margin: 4px 0; }
