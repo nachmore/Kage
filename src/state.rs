@@ -26,6 +26,8 @@ pub struct AppState {
     /// Current model ID
     #[allow(dead_code)]
     pub current_model_id: Arc<std::sync::Mutex<Option<String>>>,
+    /// Text that was selected in the previously active window when the hotkey was pressed
+    pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 #[derive(Debug, Clone)]

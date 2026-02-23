@@ -127,6 +127,7 @@ fn main() {
             slash_commands: slash_commands_arc,
             available_models: available_models_arc,
             current_model_id: Arc::new(std::sync::Mutex::new(None)),
+            last_selection: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -386,6 +387,7 @@ fn main() {
             commands::set_floating_opacity,
             commands::apply_chat_window_size,
             commands::save_window_position,
+            commands::get_last_selection,
             commands::get_user_info,
             commands::list_sessions,
             commands::load_session,

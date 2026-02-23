@@ -148,6 +148,34 @@
     border-top: 1px solid #e5e7eb;
 }
 
+.selection-indicator {
+    width: 100%;
+    padding: 4px 0;
+}
+
+.selection-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #6b7280;
+    cursor: pointer;
+    user-select: none;
+}
+
+.selection-checkbox input[type="checkbox"] {
+    accent-color: var(--kiro-accent);
+    cursor: pointer;
+}
+
+.selection-label {
+    opacity: 0.85;
+}
+
+body.dark-theme .selection-checkbox {
+    color: #938F9B;
+}
+
 .input-box {
     flex: 1;
     padding: 10px 12px;

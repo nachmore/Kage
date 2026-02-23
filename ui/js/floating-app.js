@@ -25,6 +25,7 @@ export class FloatingApp {
         this.toolUsages = [];
         this.attachmentManager = new AttachmentManager();
         this.mathConfig = { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
+        this.lastSelection = null;
         
         this.elements = {};
     }
@@ -101,6 +102,26 @@ export class FloatingApp {
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => this.handleSessionReset(event));
         this.toolSources = [];
+
+        // Listen for selection captured from previous window
+        this.listen('selection_captured', async (event) => {
+            const hasSelection = event.payload;
+            const indicator = document.getElementById('selectionIndicator');
+            const checkbox = document.getElementById('useSelectionCheckbox');
+            if (hasSelection) {
+                try {
+                    this.lastSelection = await this.invoke('get_last_selection');
+                } catch { this.lastSelection = null; }
+                if (this.lastSelection) {
+                    if (indicator) indicator.style.display = '';
+                    if (checkbox) checkbox.checked = true;
+                    this.windowManager.resizeWindow();
+                    return;
+                }
+            }
+            this.lastSelection = null;
+            if (indicator) indicator.style.display = 'none';
+        });
 
         document.addEventListener('kiro-clear', () => {
             this.resetUI();
@@ -367,6 +388,10 @@ export class FloatingApp {
             const substitute = (template, encode = false) => {
                 if (!template) return '';
                 let result = template;
+                // {selection} — currently selected text from previous window
+                const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
+                const sel = useSelection && this.lastSelection ? this.lastSelection : '';
+                result = result.replace(/\{selection\}/g, encode ? encodeURIComponent(sel) : sel);
                 if (result.includes('{*}')) {
                     const all = args.join(' ');
                     result = result.replace('{*}', encode ? encodeURIComponent(all) : all);
@@ -879,6 +904,17 @@ export class FloatingApp {
     async sendChatMessage(message) {
         const attachments = this.attachmentManager.toContentBlocks();
         this.attachmentManager.clear();
+
+        // Include selected text as context if checkbox is checked
+        const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
+        if (useSelection && this.lastSelection) {
+            message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection}\n\`\`\`\n\n${message}`;
+        }
+        // Hide selection indicator after use
+        const indicator = document.getElementById('selectionIndicator');
+        if (indicator) indicator.style.display = 'none';
+        this.lastSelection = null;
+
         this.elements.input.value = '';
         this.elements.input.style.height = 'auto';
         this.elements.appSuggestions.classList.remove('visible');
