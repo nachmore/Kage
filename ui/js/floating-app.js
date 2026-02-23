@@ -201,12 +201,18 @@ export class FloatingApp {
                             if (config.ui?.preserve_last_response === false) {
                                 setTimeout(() => this.resetUI(), 50);
                             } else {
-                                // Just focus the input, keep the response
-                                setTimeout(() => this.elements.input.focus(), 50);
+                                // Just focus and select the input, keep the response
+                                setTimeout(() => {
+                                    this.elements.input.focus();
+                                    this.elements.input.select();
+                                }, 50);
                             }
                         } catch (e) {
                             // Fallback: preserve by default
-                            setTimeout(() => this.elements.input.focus(), 50);
+                            setTimeout(() => {
+                                this.elements.input.focus();
+                                this.elements.input.select();
+                            }, 50);
                         }
                     }
                 }
@@ -217,7 +223,10 @@ export class FloatingApp {
         }, 100);
         
         this.appWindow.listen('tauri://focus', async () => {
-            setTimeout(() => this.elements.input.focus(), 50);
+            setTimeout(() => {
+                this.elements.input.focus();
+                this.elements.input.select();
+            }, 50);
         });
         
         this.appWindow.listen('tauri://blur', async () => {

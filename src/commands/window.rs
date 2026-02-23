@@ -46,8 +46,6 @@ fn capture_selection() -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         extern "system" {
-            fn GetForegroundWindow() -> usize;
-            fn GetWindowTextW(hwnd: usize, text: *mut u16, max: i32) -> i32;
             fn GetClipboardSequenceNumber() -> u32;
             fn SendInput(count: u32, inputs: *const WinInput, size: i32) -> u32;
             fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
@@ -72,12 +70,6 @@ fn capture_selection() -> Option<String> {
         let size = std::mem::size_of::<WinInput>() as i32;
 
         unsafe {
-            let fg = GetForegroundWindow();
-            let mut buf = [0u16; 256];
-            let len = GetWindowTextW(fg, buf.as_mut_ptr(), 256);
-            let title = String::from_utf16_lossy(&buf[..len as usize]);
-            info!("[selection] Target window: {:?}", title);
-
             // Save clipboard state
             let original_clipboard = read_clipboard_raw();
             let seq_before = GetClipboardSequenceNumber();
@@ -138,7 +130,7 @@ fn capture_selection() -> Option<String> {
                 }
                 if let Some(ref text) = new_text {
                     if !text.is_empty() && new_text != original_clipboard {
-                        info!("[selection] Captured {} chars from {:?}", text.len(), title);
+                        info!("[selection] Captured {} chars", text.len());
                         return Some(text.clone());
                     }
                 }
