@@ -23,21 +23,65 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
                             name: name.to_string(),
                             path: path.clone(),
                             icon_path: Some(icon_path),
+                            emoji_icon: None,
+                            icon_data: None,
                         });
                     }
                 }
             }
         }
     }
+
+    // Add System Settings pages (macOS Ventura+)
+    let settings: Vec<(&str, &str, &str)> = vec![
+        ("System Settings", "x-apple.systempreferences:", "⚙️"),
+        ("Settings: Wi-Fi", "x-apple.systempreferences:com.apple.wifi-settings-extension", "📶"),
+        ("Settings: Bluetooth", "x-apple.systempreferences:com.apple.BluetoothSettings", "🔵"),
+        ("Settings: Network", "x-apple.systempreferences:com.apple.Network-Settings.extension", "🌐"),
+        ("Settings: Sound", "x-apple.systempreferences:com.apple.Sound-Settings.extension", "🔊"),
+        ("Settings: Display", "x-apple.systempreferences:com.apple.Displays-Settings.extension", "🖥️"),
+        ("Settings: Wallpaper", "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension", "🖼️"),
+        ("Settings: Notifications", "x-apple.systempreferences:com.apple.Notifications-Settings.extension", "🔔"),
+        ("Settings: Keyboard", "x-apple.systempreferences:com.apple.Keyboard-Settings.extension", "⌨️"),
+        ("Settings: Trackpad", "x-apple.systempreferences:com.apple.Trackpad-Settings.extension", "🖱️"),
+        ("Settings: Mouse", "x-apple.systempreferences:com.apple.Mouse-Settings.extension", "🖱️"),
+        ("Settings: Printers & Scanners", "x-apple.systempreferences:com.apple.Print-Scan-Settings.extension", "🖨️"),
+        ("Settings: Battery", "x-apple.systempreferences:com.apple.Battery-Settings.extension", "🔋"),
+        ("Settings: Privacy & Security", "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension", "🛡️"),
+        ("Settings: General", "x-apple.systempreferences:com.apple.General-Settings.extension", "⚙️"),
+        ("Settings: Accessibility", "x-apple.systempreferences:com.apple.Accessibility-Settings.extension", "♿"),
+        ("Settings: Users & Groups", "x-apple.systempreferences:com.apple.Users-Groups-Settings.extension", "👥"),
+        ("Settings: Software Update", "x-apple.systempreferences:com.apple.Software-Update-Settings.extension", "🔄"),
+    ];
+
+    for (name, uri, emoji) in settings {
+        apps.push(AppInfo {
+            name: name.to_string(),
+            path: PathBuf::from(uri),
+            icon_path: None,
+            emoji_icon: Some(emoji.to_string()),
+            icon_data: None,
+        });
+    }
     
     Ok(apps)
 }
 
 pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
-    info!("Launching macOS application at {:?}", path);
-    Command::new("open")
-        .arg(path)
-        .spawn()
-        .context("Failed to launch application")?;
+    let path_str = path.to_str().unwrap_or("");
+    if path_str.contains(':') && !path_str.starts_with('/') {
+        // URI-based launch (x-apple.systempreferences:, etc.)
+        info!("Launching URI: {}", path_str);
+        Command::new("open")
+            .arg(path_str)
+            .spawn()
+            .context("Failed to launch URI")?;
+    } else {
+        info!("Launching macOS application at {:?}", path);
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .context("Failed to launch application")?;
+    }
     Ok(())
 }

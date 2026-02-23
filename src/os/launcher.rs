@@ -9,6 +9,10 @@ pub struct AppInfo {
     pub name: String,
     pub path: PathBuf,
     pub icon_path: Option<String>,
+    /// Emoji icon for built-in/system apps that don't have extractable icons
+    pub emoji_icon: Option<String>,
+    /// Pre-computed icon data URI (e.g., data:image/svg+xml;base64,...)
+    pub icon_data: Option<String>,
 }
 
 /// Scan the system for installed applications

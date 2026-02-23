@@ -15,6 +15,7 @@ pub struct Application {
     pub path: PathBuf,
     pub aliases: Vec<String>,
     pub icon_base64: Option<String>,
+    pub emoji_icon: Option<String>,
 }
 
 pub struct AppLauncher {
@@ -39,14 +40,14 @@ impl AppLauncher {
         let apps = os::scan_applications()?;
         
         for app_info in apps {
-            self.add_application(app_info.name, app_info.path, app_info.icon_path);
+            self.add_application(app_info.name, app_info.path, app_info.icon_path, app_info.emoji_icon, app_info.icon_data);
         }
 
         info!("Application registry refreshed: {} apps found", self.app_registry.len());
         Ok(())
     }
 
-    fn add_application(&mut self, name: String, path: PathBuf, icon_path: Option<String>) {
+    fn add_application(&mut self, name: String, path: PathBuf, icon_path: Option<String>, emoji_icon: Option<String>, icon_data: Option<String>) {
         let normalized_name = name.to_lowercase();
         
         // Generate aliases (lowercase, without spaces, etc.)
@@ -65,11 +66,19 @@ impl AppLauncher {
         #[cfg(not(target_os = "windows"))]
         let icon_base64: Option<String> = None;
 
+        // Use pre-computed icon data if available, otherwise extract from path
+        let final_icon = if icon_data.is_some() {
+            icon_data
+        } else {
+            icon_base64
+        };
+
         let app = Application {
             name: name.clone(),
             path,
             aliases,
-            icon_base64,
+            icon_base64: final_icon,
+            emoji_icon,
         };
 
         self.app_registry.insert(normalized_name, app);

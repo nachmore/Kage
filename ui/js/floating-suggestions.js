@@ -113,8 +113,12 @@ export function renderSuggestions(apps, appSuggestions, selectedIndex, launchApp
         
         let iconHtml;
         if (app.icon_base64) {
-            iconHtml = `<img src="data:image/png;base64,${app.icon_base64}" class="app-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                        <div class="app-icon" style="display:none;">${app.name.charAt(0).toUpperCase()}</div>`;
+            // Support both raw base64 (PNG) and full data URIs (SVG)
+            const src = app.icon_base64.startsWith('data:') ? app.icon_base64 : `data:image/png;base64,${app.icon_base64}`;
+            iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div class="app-icon" style="display:none;">${app.emoji_icon || app.name.charAt(0).toUpperCase()}</div>`;
+        } else if (app.emoji_icon) {
+            iconHtml = `<div class="app-icon">${app.emoji_icon}</div>`;
         } else {
             const firstLetter = app.name.charAt(0).toUpperCase();
             iconHtml = `<div class="app-icon">${firstLetter}</div>`;

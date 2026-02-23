@@ -58,6 +58,8 @@ fn parse_desktop_file(content: &str, path: &PathBuf) -> Option<AppInfo> {
             name,
             path: PathBuf::from(&exec),
             icon_path: Some(exec),
+            emoji_icon: None,
+            icon_data: None,
         })
     } else {
         None
