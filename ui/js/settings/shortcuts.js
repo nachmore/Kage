@@ -11,7 +11,7 @@ class ShortcutsSettingsModule extends SettingsModule {
 
     render() {
         return `
-            <div class="settings-section-header">Shortcuts</div>
+            <div class="settings-section-header">${this.icon} Shortcuts</div>
             
             <div class="setting-row">
                 <div class="setting-label-container">

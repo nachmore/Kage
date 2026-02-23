@@ -12,7 +12,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
     render() {
         return `
-            <div class="settings-section-header">Agent Tools</div>
+            <div class="settings-section-header">${this.icon} Agent Tools</div>
             
             ${this.createCheckboxRow(
                 'Trust All Tools',
