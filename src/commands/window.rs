@@ -328,9 +328,10 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                     *sel = selection;
                 }
 
+                // Position before showing to avoid visual jump
+                position_floating_window(window, &start_pos, last_x, last_y);
                 let _ = window.show();
                 let _ = window.set_focus();
-                position_floating_window(window, &start_pos, last_x, last_y);
 
                 let _ = app.emit("selection_captured", has_sel);
             }
