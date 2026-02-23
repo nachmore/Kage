@@ -392,6 +392,9 @@ export class ChatApp {
             this.activeSessionId = sessionId;
             this.renderSessionList();
 
+            // Clear any previous error
+            this.elements.errorContainer.innerHTML = '';
+
             // Hide/show permission modal based on which session is active
             if (window.ChatPermissions) {
                 window.ChatPermissions.onSessionSwitch(sessionId);
@@ -403,7 +406,7 @@ export class ChatApp {
                 this.displaySession(sessionData);
             } catch (error) {
                 console.error('Failed to load session files:', error);
-                this.showError(this.formatError(error));
+                this.showError('Failed to load session: ' + this.formatError(error));
             }
 
             // Show connecting state in the input
@@ -415,6 +418,8 @@ export class ChatApp {
             try {
                 await this.invoke('switch_acp_session', { sessionId });
                 console.log('ACP session switched to:', sessionId);
+                this.isConnected = true;
+                this.updateConnectionStatus();
                 this.elements.chatInput.disabled = false;
                 this.elements.chatInput.placeholder = 'Type your message...';
                 this.elements.sendBtn.disabled = false;
@@ -423,6 +428,8 @@ export class ChatApp {
                 console.error('Failed to switch ACP session:', error);
                 const msg = this.formatError(error);
                 this.showError(msg);
+                this.isConnected = false;
+                this.updateConnectionStatus();
                 // Keep input disabled on session error
                 this.elements.chatInput.disabled = true;
                 this.elements.chatInput.placeholder = 'Session unavailable';
