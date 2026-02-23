@@ -267,8 +267,38 @@ pub async fn show_context_menu(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("context-menu") {
+        // Get the menu window size
+        let win_size = window.outer_size().unwrap_or(tauri::PhysicalSize {
+            width: 160,
+            height: 220,
+        });
+
+        let mut final_x = x;
+        let mut final_y = y;
+
+        // Find which monitor the click is on and clamp to its bounds
+        if let Some(monitor) = find_monitor_at_position(&window, x, y) {
+            let mon_pos = monitor.position();
+            let mon_size = monitor.size();
+            let scale = monitor.scale_factor();
+
+            let mon_right = mon_pos.x + mon_size.width as i32;
+            let mon_bottom = mon_pos.y + mon_size.height as i32;
+            let menu_w = (win_size.width as f64 / scale) as i32;
+            let menu_h = (win_size.height as f64 / scale) as i32;
+
+            // If menu would overflow right edge, flip to left of cursor
+            if final_x + menu_w > mon_right {
+                final_x = (mon_right - menu_w).max(mon_pos.x);
+            }
+            // If menu would overflow bottom edge, flip upward
+            if final_y + menu_h > mon_bottom {
+                final_y = (mon_bottom - menu_h).max(mon_pos.y);
+            }
+        }
+
         window
-            .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
+            .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x: final_x, y: final_y }))
             .map_err(|e| format!("Failed to position context menu: {}", e))?;
         window
             .show()
