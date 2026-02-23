@@ -17,11 +17,30 @@ waitForTauri(() => {
     const { invoke } = window.__TAURI__.core;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
+    function getToolEmoji(name) {
+        const lower = (name || '').toLowerCase();
+        if (lower.includes('search')) return '🔍';
+        if (lower.includes('fetch') || lower.includes('web')) return '🌐';
+        if (lower.includes('read')) return '📖';
+        if (lower.includes('write') || lower.includes('edit')) return '✏️';
+        if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+        if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
+        if (lower.includes('file')) return '📁';
+        return '🔧';
+    }
+
+    function escapeHtmlPerm(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     let currentPermissionRequest = null;
 
-    function showPermissionModal(notification) {
+    function showPermissionModal(notification, toolName) {
         const modal = document.getElementById('permissionModal');
         const toolTitle = document.getElementById('permissionToolTitle');
+        const toolNameEl = document.getElementById('permissionToolName');
         if (!modal || !toolTitle) return;
 
         const params = notification.params || {};
@@ -32,13 +51,26 @@ waitForTauri(() => {
             id: notification.id,
             sessionId: sessionId,
             toolCall: toolCall,
-            options: params.options || []
+            options: params.options || [],
+            toolName: toolName || null
         };
 
         // Store the session this request belongs to
         modal.dataset.sessionId = sessionId;
 
         toolTitle.textContent = toolCall.title || 'Unknown Tool';
+
+        // Show tool name with emoji if available
+        if (toolNameEl) {
+            if (toolName) {
+                const emoji = getToolEmoji(toolName);
+                toolNameEl.innerHTML = `<span class="tool-emoji">${emoji}</span><span class="tool-label">${escapeHtmlPerm(toolName)}</span>`;
+                toolNameEl.style.display = 'flex';
+            } else {
+                toolNameEl.style.display = 'none';
+            }
+        }
+
         modal.style.display = 'flex';
     }
 
@@ -53,15 +85,17 @@ waitForTauri(() => {
         if (!currentPermissionRequest) return;
 
         try {
+            // Use the resolved tool name for policy tracking, fall back to action title
+            const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
             await invoke('send_permission_response', {
                 requestId: currentPermissionRequest.id,
                 optionId: optionId,
-                toolTitle: currentPermissionRequest.toolCall.title || 'Unknown'
+                toolTitle: policyTitle
             });
 
             if (policyOverride) {
                 await invoke('update_tool_policy', {
-                    toolTitle: currentPermissionRequest.toolCall.title || 'Unknown',
+                    toolTitle: policyTitle,
                     policy: policyOverride
                 });
             }
@@ -89,7 +123,7 @@ waitForTauri(() => {
                 toolTitle: notification.params?.toolCall?.title || 'Unknown'
             }).catch(e => console.error('Auto-approve failed:', e));
         } else {
-            showPermissionModal(notification);
+            showPermissionModal(notification, event.payload.toolName);
         }
     });
 

@@ -206,7 +206,8 @@ fn handle_permission_notification(
             }
             let _ = app_handle.emit("permission_request", serde_json::json!({
                 "notification": notification,
-                "auto_approve": false
+                "auto_approve": false,
+                "toolName": tool_title
             }));
         }
     }

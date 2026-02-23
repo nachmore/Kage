@@ -9,11 +9,33 @@ const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 let currentPermissionRequest = null;
 
 /**
+ * Get emoji for a tool name
+ */
+function getToolEmoji(name) {
+    const lower = (name || '').toLowerCase();
+    if (lower.includes('search')) return '🔍';
+    if (lower.includes('fetch') || lower.includes('web')) return '🌐';
+    if (lower.includes('read')) return '📖';
+    if (lower.includes('write') || lower.includes('edit')) return '✏️';
+    if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+    if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
+    if (lower.includes('file')) return '📁';
+    return '🔧';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
  * Show permission modal
  */
-async function showPermissionModal(notification) {
+async function showPermissionModal(notification, toolName) {
     const modal = document.getElementById('permissionModal');
     const toolTitle = document.getElementById('permissionToolTitle');
+    const toolNameEl = document.getElementById('permissionToolName');
     
     if (!modal || !toolTitle) {
         console.error('Permission modal elements not found');
@@ -30,11 +52,23 @@ async function showPermissionModal(notification) {
         id: notification.id,
         sessionId: params.sessionId,
         toolCall: toolCall,
-        options: params.options || []
+        options: params.options || [],
+        toolName: toolName || null
     };
     
     // Update modal content
     toolTitle.textContent = title;
+    
+    // Show tool name with emoji if available
+    if (toolNameEl) {
+        if (toolName) {
+            const emoji = getToolEmoji(toolName);
+            toolNameEl.innerHTML = `<span class="tool-emoji">${emoji}</span><span class="tool-label">${escapeHtml(toolName)}</span>`;
+            toolNameEl.style.display = 'flex';
+        } else {
+            toolNameEl.style.display = 'none';
+        }
+    }
     
     // Show modal
     modal.style.display = 'flex';
@@ -112,16 +146,18 @@ async function handlePermissionResponse(optionId, policyOverride) {
     
     try {
         console.log('Sending permission response to backend...');
+        // Use the resolved tool name for policy tracking, fall back to action title
+        const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
         await invoke('send_permission_response', {
             requestId: currentPermissionRequest.id,
             optionId: optionId,
-            toolTitle: currentPermissionRequest.toolCall.title || 'Unknown'
+            toolTitle: policyTitle
         });
         
         // If "Always Deny", update the tool policy to "deny"
         if (policyOverride) {
             await invoke('update_tool_policy', {
-                toolTitle: currentPermissionRequest.toolCall.title || 'Unknown',
+                toolTitle: policyTitle,
                 policy: policyOverride
             });
         }
@@ -218,7 +254,7 @@ function initPermissionModal() {
             } catch (e) { /* assume pending if check fails */ stillPending = true; }
 
             if (stillPending) {
-                showPermissionModal(notification);
+                showPermissionModal(notification, event.payload.toolName);
             } else {
                 console.log('Permission request already handled, skipping modal');
             }
