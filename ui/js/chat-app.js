@@ -3,6 +3,7 @@ import { renderMarkdown, initMarkdown } from './floating-markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
 import { getToolIcon, escapeHtml } from './tool-utils.js';
+import { processToolCallUpdate } from './streaming-utils.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -813,84 +814,13 @@ export class ChatApp {
     }
 
     handleToolCallUpdate(event) {
-        const notification = event.payload;
-        const update = notification?.params?.update;
-        if (!update) return;
-
-        // Track tool usage for display
-        if (update.title && update.toolCallId) {
-            if (!this.toolUsages.find(t => t.toolCallId === update.toolCallId)) {
-                this.toolUsages.push({
-                    toolCallId: update.toolCallId,
-                    title: update.title,
-                    kind: update.kind
-                });
-            }
+            const { updated } = processToolCallUpdate(event, this);
+            // Chat app doesn't render sources inline during streaming —
+            // they're rendered when the message completes in renderSourcesInMessage()
         }
 
-        const rawOutput = update.rawOutput;
-        if (rawOutput && (update.kind === 'search' || update.title?.toLowerCase().includes('search'))) {
-            this.extractSources(rawOutput);
-        }
 
-        if (update.content && Array.isArray(update.content)) {
-            for (const item of update.content) {
-                if (item.type === 'content' && item.content?.text) {
-                    this.extractSourcesFromText(item.content.text);
-                }
-            }
-        }
-    }
 
-    // --- Tool Sources ---
-
-    extractSources(rawOutput) {
-        const tryExtract = (results) => {
-            if (Array.isArray(results)) {
-                for (const r of results) { if (r.url) this.addSource(r.url, r.title, r.domain); }
-            }
-        };
-
-        if (rawOutput?.items && Array.isArray(rawOutput.items)) {
-            for (const item of rawOutput.items) {
-                tryExtract(item?.Json?.results || item?.results);
-            }
-        } else if (Array.isArray(rawOutput)) {
-            tryExtract(rawOutput);
-        } else if (typeof rawOutput === 'object') {
-            tryExtract(rawOutput.results || rawOutput.searchResults);
-        }
-    }
-
-    extractSourcesFromText(text) {
-        const linkRegex = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
-        let match;
-        while ((match = linkRegex.exec(text)) !== null) {
-            this.addSource(match[2], match[1]);
-        }
-    }
-
-    addSource(url, title, domainHint) {
-        try {
-            const parsed = new URL(url);
-            const domain = domainHint || parsed.hostname.replace(/^www\./, '');
-            if (!this.toolSources.find(s => s.domain === domain)) {
-                const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
-                let hash = 0;
-                for (let i = 0; i < domain.length; i++) {
-                    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                const hue = Math.abs(hash) % 360;
-                this.toolSources.push({
-                    url, domain,
-                    title: title || domain,
-                    initials,
-                    color: `hsl(${hue}, 55%, 45%)`,
-                    favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
-                });
-            }
-        } catch (e) { /* skip */ }
-    }
 
     renderSourcesInMessage(contentDiv) {
         let sourcesEl = contentDiv.querySelector('.tool-sources');

@@ -6,6 +6,7 @@ import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashComman
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 import { evaluateMath } from './math-eval.js';
 import { getToolIcon, escapeHtml } from './tool-utils.js';
+import { processToolCallUpdate } from './streaming-utils.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -1052,114 +1053,20 @@ export class FloatingApp {
     }
 
     handleToolCallUpdate(event) {
-        if (!this.isWaitingForResponse) return;
-
-        const notification = event.payload;
-        const update = notification?.params?.update;
-        if (!update) return;
-        
-        const kind = update.kind;
-        const rawOutput = update.rawOutput;
-
-        // Track tool usage for display
-        if (update.title && update.toolCallId) {
-            this.addToolUsage(update.toolCallId, update.title, kind);
-        }
-        
-        // Extract URLs from search results in rawOutput (arrives on tool_call_update with status=completed)
-        if (rawOutput && (kind === 'search' || update.title?.toLowerCase().includes('search'))) {
-            this.extractSources(rawOutput);
-        }
-        
-        // Also check content for URLs
-        if (update.content && Array.isArray(update.content)) {
-            for (const item of update.content) {
-                if (item.type === 'content' && item.content?.text) {
-                    this.extractSourcesFromText(item.content.text);
+            if (!this.isWaitingForResponse) return;
+            const { updated } = processToolCallUpdate(event, this);
+            if (updated && (this.toolSources.length > 0 || this.toolUsages.length > 0)) {
+                if (!this.currentResponse || this.currentResponse.trim().length === 0) {
+                    this.renderSourcesCompact();
+                } else {
+                    this.renderSources();
                 }
             }
         }
-        
-        if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
-            // If no text content yet, show compact sources in place of loading dots
-            if (!this.currentResponse || this.currentResponse.trim().length === 0) {
-                this.renderSourcesCompact();
-            } else {
-                this.renderSources();
-            }
-        }
-    }
 
-    extractSources(rawOutput) {
-        // rawOutput structure from web_search:
-        // { items: [{ Json: { results: [{ url, title, domain, ... }] } }] }
-        if (rawOutput && rawOutput.items && Array.isArray(rawOutput.items)) {
-            for (const item of rawOutput.items) {
-                const results = item?.Json?.results || item?.results;
-                if (Array.isArray(results)) {
-                    for (const result of results) {
-                        if (result.url) {
-                            this.addSource(result.url, result.title, result.domain);
-                        }
-                    }
-                }
-            }
-        } else if (Array.isArray(rawOutput)) {
-            for (const result of rawOutput) {
-                if (result.url) this.addSource(result.url, result.title, result.domain);
-            }
-        } else if (typeof rawOutput === 'object') {
-            const results = rawOutput.results || rawOutput.searchResults;
-            if (Array.isArray(results)) {
-                for (const result of results) {
-                    if (result.url) this.addSource(result.url, result.title, result.domain);
-                }
-            }
-        }
-    }
 
-    extractSourcesFromText(text) {
-        // Extract URLs from markdown-style links [title](url) or plain URLs
-        const linkRegex = /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
-        let match;
-        while ((match = linkRegex.exec(text)) !== null) {
-            this.addSource(match[2], match[1]);
-        }
-    }
 
-    addSource(url, title, domainHint) {
-        try {
-            const parsed = new URL(url);
-            const domain = domainHint || parsed.hostname.replace(/^www\./, '');
-            // Deduplicate by domain
-            if (!this.toolSources.find(s => s.domain === domain)) {
-                const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
-                // Generate a consistent color from domain name
-                let hash = 0;
-                for (let i = 0; i < domain.length; i++) {
-                    hash = domain.charCodeAt(i) + ((hash << 5) - hash);
-                }
-                const hue = Math.abs(hash) % 360;
-                const color = `hsl(${hue}, 55%, 45%)`;
-                
-                this.toolSources.push({
-                    url: url,
-                    domain: domain,
-                    title: title || domain,
-                    initials: initials,
-                    color: color,
-                    favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
-                });
-            }
-        } catch (e) {
-            // Invalid URL, skip
-        }
-    }
 
-    addToolUsage(toolCallId, title, kind) {
-        if (this.toolUsages.find(t => t.toolCallId === toolCallId)) return;
-        this.toolUsages.push({ toolCallId, title, kind });
-    }
 
 
     renderSources() {
