@@ -81,7 +81,19 @@ export class WindowManager {
                 }
                 
                 if (contentVisible) {
-                    contentHeight += responseText.scrollHeight + 32;
+                    // Measure response text + any tool/source pills inside content area
+                    contentHeight += responseText.scrollHeight + 16; // 16px content area padding top
+                    const toolSourcesEl = document.getElementById('toolSources');
+                    if (toolSourcesEl && toolSourcesEl.offsetHeight > 0) {
+                        contentHeight += toolSourcesEl.offsetHeight + 8; // 8px gap
+                    }
+                    contentHeight += 16; // content area padding bottom
+                }
+
+                // Compact source bubbles (shown before content area during streaming)
+                const compactSources = document.getElementById('toolSourcesCompact');
+                if (compactSources && compactSources.offsetHeight > 0) {
+                    contentHeight += compactSources.offsetHeight;
                 }
                 
                 contentHeight += inputContainer?.offsetHeight || 0;
