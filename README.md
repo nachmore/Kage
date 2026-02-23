@@ -1,110 +1,59 @@
-# amzn-kiro-assistant
+# Kiro Assistant
 
-_TODO: Describe the package, its customers and owner. You should also include the recommended channels for support and a CTI for any bugs._
+A cross-platform desktop AI assistant with a floating window interface. Provides quick access to AI capabilities through a system tray application activated via global shortcuts.
 
-_TODO: If this is a library package, consider linking to the rustdoc build artifact for the Version Set your consumers will be consuming this package from. [Example link](https://code.amazon.com/packages/YourPackageName/releases/0.1/latest_artifact?version_set=YourPackageName/development&path=brazil-documentation/your_crate_name/index.html). [More information](https://docs.hub.amazon.dev/languages/rust/cargobrazil/#accessing-produced-documentation)_
-
-## Useful links
-
-- [Code Browser](https://code.amazon.com/packages/Kiro-Assistant/)
-
-## Development Mode
-
-To run the application in development mode with additional debugging features, use the `/dev` flag:
+## Quick Start
 
 ```bash
-cargo run -- /dev
+cargo run -- /dev          # Development mode (inspector + reload)
+cargo run -- /debug        # Debug logging (ACP protocol messages)
+cargo build --release      # Optimized release build
 ```
-
-Or with the built executable:
-
-```bash
-./kiro-assistant /dev
-```
-
-When running in dev mode, the system tray menu will include two additional options:
-
-- **Inspect**: Opens the developer tools/inspector window for debugging the UI
-- **Reload UX**: Reloads all HTML content in the application windows without restarting the app
-
-## Debug Mode
-
-To enable detailed ACP (Agent Communication Protocol) logging to the console, use the `/debug` flag:
-
-```bash
-cargo run -- /debug
-```
-
-Or with the built executable:
-
-```bash
-./kiro-assistant /debug
-```
-
-Debug mode prints all ACP messages (requests, responses, and streaming updates) to the console with timestamps. This is useful for:
-- Troubleshooting connection issues with kiro-cli
-- Understanding the ACP protocol flow
-- Debugging message format problems
-- Development and testing
-
-You can combine both flags:
-```bash
-./kiro-assistant /dev /debug
-```
-
-For more details, see [Debug Mode Guide](docs/DEBUG_MODE.md).
- 
 
 ## Features
 
+### Floating Window
+Summoned via global hotkey (default: Alt+Space). Supports:
+- AI chat with streaming responses
+- Inline math calculator (type expressions, get instant results)
+- Selected text capture from the active window (included as context)
+- Application launcher (type app names to launch)
+- URL and path detection
+
 ### Shortcuts
+Custom command shortcuts executed directly from the floating window:
+- **Run Program** — launch executables with argument templates
+- **Open URL** — open URLs with argument substitution
+- **Send Prompt** — send templated messages to the agent
+- **Script** — run JavaScript with AI-assisted script generation
 
-Kiro supports custom command shortcuts that allow you to execute commands directly from the floating window without sending them to the LLM. This is perfect for quick access to frequently used tools, scripts, or applications.
+Use `{*}` for all arguments, `{0}`, `{1}` for specific ones, `{selection}` for captured text.
 
-**Key Features:**
-- Execute commands instantly by typing a trigger word
-- Pass dynamic arguments using `{*}` or `{0}`, `{1}`, etc.
-- Visual feedback in the suggestion dropdown
-- Import/Export shortcuts as JSON
-- Full management UI in settings
+For details, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
 
-**Quick Example:**
-```json
-{
-  "name": "Open VSCode",
-  "shortcut": "code",
-  "path": "C:\\Program Files\\Microsoft VS Code\\Code.exe",
-  "arguments": "{*}"
-}
-```
-
-Type `code myproject` in the floating window to instantly open VSCode with your project.
-
-For detailed documentation, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
-
-## Documentation
-
-- [Debug Mode Guide](docs/DEBUG_MODE.md) - Enable detailed ACP logging for troubleshooting
-- [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md) - Complete guide to using and configuring shortcuts
-- [OS Abstraction Guide](docs/OS_ABSTRACTION_GUIDE.md) - Cross-platform OS abstraction layer
-- [OS Architecture](docs/OS_ARCHITECTURE.md) - System architecture documentation
+### Appearance
+- Dark / Light / System theme
+- Configurable floating window opacity
+- Window start position (center, near mouse, remember last)
+- Adjustable font size
+- Configurable chat window dimensions
 
 ## Frontend Dependencies
 
-JavaScript libraries used by the UI are managed via npm in the `ui/vendor/` directory. The browser-ready bundles are copied into `ui/vendor/lib/` and loaded via `<script>` tags in the HTML files.
-
-To install or update dependencies:
+JavaScript libraries are managed via npm in `ui/vendor/`:
 
 ```bash
-cd ui/vendor
-npm install
+cd ui/vendor && npm install
 ```
 
-After installing a new package, copy its browser bundle into `ui/vendor/lib/` and add a `<script>` tag to the relevant HTML files (`floating.html`, `index.html`, `settings.html`).
+After adding a new package, copy its browser bundle to `ui/vendor/lib/` and add a `<script>` tag to the relevant HTML files.
 
-Current vendor dependencies:
-- **marked** — Markdown parser
-- **mermaid** — Diagram rendering
-- **prismjs** — Syntax highlighting
-- **@hpcc-js/wasm-graphviz** — Graphviz diagram rendering
-- **mathjs** — Math expression evaluation
+Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
+
+## Documentation
+
+- [Debug Mode Guide](docs/DEBUG_MODE.md)
+- [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md)
+- [OS Abstraction Guide](docs/OS_ABSTRACTION_GUIDE.md)
+- [OS Architecture](docs/OS_ARCHITECTURE.md)
+- [Tool Permissions](docs/TOOL_PERMISSIONS.md)

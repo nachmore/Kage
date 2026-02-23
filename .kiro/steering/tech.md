@@ -1,13 +1,11 @@
 # Technology Stack
 
 ## Build System & Language
-
 - Language: Rust (Edition 2021)
 - Build tool: Cargo
 - Framework: Tauri 2.10 (desktop application framework)
 
 ## Core Dependencies
-
 - tauri: Desktop app framework with system tray, global shortcuts, window management
 - tokio: Async runtime with full feature set
 - serde/serde_json: Serialization and JSON handling
@@ -17,81 +15,41 @@
 - log/env_logger: Logging infrastructure
 - chrono: Date and time handling
 
-## Platform-Specific Dependencies
-
-### Windows
-- winreg: Windows registry access
-- windows-icons: Icon extraction
-- windows: Win32 API bindings
-
-### Unix (macOS/Linux)
-- libc: C library bindings
-- nix: Unix system calls (signals)
-- signal-hook: Signal handling
-
 ## Frontend
-
 - Pure HTML/CSS/JavaScript (no framework)
 - Located in `ui/` directory
-- Multiple windows: floating.html, settings.html, index.html
-- Custom CSS theming with dark mode support
+- NPM-managed vendor dependencies in `ui/vendor/` (marked, mermaid, prismjs, mathjs)
+- Custom CSS theming with dark/light mode via CSS variables
+- ES modules for floating/chat windows, regular scripts for settings
 
 ## Common Commands
 
-### Development
 ```bash
-# Run in development mode (with dev tools)
-cargo run -- /dev
+# Development
+cargo run -- /dev          # Dev mode (inspector, reload)
+cargo run -- /debug        # Debug logging (ACP messages)
+cargo run -- /dev /debug   # Both
 
-# Run with debug logging (ACP protocol messages)
-cargo run -- /debug
+# Building
+cargo build                # Debug build
+cargo build --release      # Release build (optimized)
 
-# Run with both dev and debug modes
-cargo run -- /dev /debug
+# Testing
+cargo test                 # All tests
+cargo test --test acp_client_test  # Specific test
+
+# Code Quality
+cargo check                # Check without building
+cargo fmt                  # Format code
+cargo clippy               # Lint code
+
+# Frontend Dependencies
+cd ui/vendor && npm install  # Install/update JS dependencies
 ```
-
-### Building
-```bash
-# Debug build
-cargo build
-
-# Release build (optimized)
-cargo build --release
-```
-
-### Testing
-```bash
-# Run all tests
-cargo test
-
-# Run specific test file
-cargo test --test acp_client_test
-
-# Run with output
-cargo test -- --nocapture
-```
-
-### Code Quality
-```bash
-# Check code without building
-cargo check
-
-# Format code
-cargo fmt
-
-# Lint code
-cargo clippy
-```
-
-## Build Configuration
-
-Release builds use aggressive optimization:
-- opt-level = 3 (maximum optimization)
-- lto = true (link-time optimization)
-- codegen-units = 1 (better optimization, slower compile)
 
 ## Architecture Notes
-
-- Uses compile-time platform selection via `#[cfg(target_os = "...")]`
+- Compile-time platform selection via `#[cfg(target_os = "...")]`
 - Zero-cost abstractions for cross-platform code
-- No dynamic dispatch or runtime overhead for OS abstraction layer
+- Win32 API used directly for performance-critical operations (clipboard, SendInput)
+- All config fields must have serde defaults for backward compatibility
+- Use `log::*` macros for logging, avoid `println!` except for startup banner

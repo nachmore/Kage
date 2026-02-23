@@ -3,31 +3,12 @@
  * Handles tool permission requests from the ACP
  */
 
+import { getToolEmoji, escapeHtml } from './tool-utils.js';
+
 const { invoke } = window.__TAURI__.core;
 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
 let currentPermissionRequest = null;
-
-/**
- * Get emoji for a tool name
- */
-function getToolEmoji(name) {
-    const lower = (name || '').toLowerCase();
-    if (lower.includes('search')) return '🔍';
-    if (lower.includes('fetch') || lower.includes('web')) return '🌐';
-    if (lower.includes('read')) return '📖';
-    if (lower.includes('write') || lower.includes('edit')) return '✏️';
-    if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
-    if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
-    if (lower.includes('file')) return '📁';
-    return '🔧';
-}
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
 
 /**
  * Show permission modal

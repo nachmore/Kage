@@ -137,7 +137,7 @@ fn main() {
         })
         .setup(move |app| {
             info!("Setting up application");
-            println!("=== KIRO ASSISTANT SETUP ===");
+            info!("=== Kiro Assistant Setup ===");
 
             let config = config_for_setup;
             let dev_mode = dev_mode_for_setup;
@@ -239,10 +239,10 @@ fn main() {
             };
 
             info!("Active hotkey: {}", hotkey);
-            println!("=== SETUP COMPLETE ===");
-            println!("Active hotkey: {}", hotkey);
-            println!("Floating window initial state: hidden");
-            println!();
+            info!("=== Setup Complete ===");
+            info!("Active hotkey: {}", hotkey);
+            
+            
 
             // Start default session on launch if configured
             if config.acp.assistant.start_session_on_launch {

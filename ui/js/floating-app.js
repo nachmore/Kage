@@ -5,6 +5,7 @@ import { renderMarkdown } from './floating-markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 import { evaluateMath } from './math-eval.js';
+import { getToolIcon, escapeHtml } from './tool-utils.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -1160,15 +1161,6 @@ export class FloatingApp {
         this.toolUsages.push({ toolCallId, title, kind });
     }
 
-    getToolIcon(kind) {
-        const k = (kind || '').toLowerCase();
-        if (k === 'search' || k === 'web_search') return '🔍';
-        if (k === 'edit' || k === 'write') return '✏️';
-        if (k === 'read') return '📖';
-        if (k === 'shell' || k === 'terminal') return '💻';
-        if (k === 'fetch' || k === 'web') return '🌐';
-        return '🔧';
-    }
 
     renderSources() {
         // Remove compact version if it exists
@@ -1196,7 +1188,7 @@ export class FloatingApp {
 
         const toolChips = this.toolUsages.map(t => `
             <span class="source-chip tool-chip" title="Tool: ${t.title}">
-                <span class="tool-chip-icon">${this.getToolIcon(t.kind)}</span>
+                <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
                 <span class="source-domain">Tool: ${t.title}</span>
             </span>
         `).join('');
@@ -1237,7 +1229,7 @@ export class FloatingApp {
 
         const toolBubbles = this.toolUsages.map((t, i) => `
             <span class="source-bubble tool-bubble" title="${t.title}" style="animation-delay: ${i * 0.08}s">
-                <span class="tool-chip-icon" style="font-size: 18px;">${this.getToolIcon(t.kind)}</span>
+                <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
             </span>
         `).join('');
 

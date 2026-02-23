@@ -2,6 +2,7 @@
 import { renderMarkdown, initMarkdown } from './floating-markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
+import { getToolIcon, escapeHtml } from './tool-utils.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -899,18 +900,8 @@ export class ChatApp {
             contentDiv.appendChild(sourcesEl);
         }
 
-        const getToolIcon = (kind) => {
-            const k = (kind || '').toLowerCase();
-            if (k === 'search' || k === 'web_search') return '🔍';
-            if (k === 'edit' || k === 'write') return '✏️';
-            if (k === 'read') return '📖';
-            if (k === 'shell' || k === 'terminal') return '💻';
-            if (k === 'fetch' || k === 'web') return '🌐';
-            return '🔧';
-        };
-
         const toolChips = this.toolUsages.map(t => `
-            <span class="source-chip tool-chip" title="Tool: ${this.escapeHtml(t.title)}">
+            <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}">
                 <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
                 <span class="source-domain">Tool: ${this.escapeHtml(t.title)}</span>
             </span>
