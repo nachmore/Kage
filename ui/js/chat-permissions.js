@@ -134,6 +134,19 @@ waitForTauri(() => {
         }
     });
 
+    // Esc to deny, block all keyboard input while modal is open
+    document.addEventListener('keydown', (e) => {
+        if (!currentPermissionRequest) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            handlePermissionResponse('reject_once');
+        } else {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
+
     // Listen for external dismissal (e.g. floating window auto-denied the request)
     appWindow.listen('permission_dismissed', () => {
         console.log('Permission dismissed externally');
