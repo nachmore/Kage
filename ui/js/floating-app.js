@@ -227,6 +227,9 @@ export class FloatingApp {
             setTimeout(() => {
                 this.elements.input.focus();
                 this.elements.input.select();
+                // Re-show datetime on window focus
+                const dtDisplay = document.getElementById('datetimeDisplay');
+                if (dtDisplay) dtDisplay.style.opacity = '1';
             }, 50);
         });
         
@@ -272,6 +275,9 @@ export class FloatingApp {
         const compactEl = document.getElementById('toolSourcesCompact');
         if (compactEl) compactEl.remove();
         this.elements.input.focus();
+        // Re-show datetime when input is cleared
+        const dtDisplay = document.getElementById('datetimeDisplay');
+        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
     }
 
     startThinking() {

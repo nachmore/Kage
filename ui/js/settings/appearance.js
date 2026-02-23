@@ -62,6 +62,49 @@ class AppearanceSettingsModule extends SettingsModule {
                     'preserveLastResponse',
                     true
                 )}
+
+                ${this.createCheckboxRow(
+                    'Show Time',
+                    'Display the current time in the floating window input area.',
+                    'showTime',
+                    false
+                )}
+
+                <div id="timeFormatRow" style="display:none; padding-left: 28px;">
+                    ${this.createControlRow(
+                        'Time Format',
+                        '',
+                        '<select class="setting-select" id="timeFormat">' +
+                            '<option value="HH:mm">14:30 (24h)</option>' +
+                            '<option value="HH:mm:ss">14:30:45 (24h + sec)</option>' +
+                            '<option value="h:mm A">2:30 PM (12h)</option>' +
+                            '<option value="h:mm:ss A">2:30:45 PM (12h + sec)</option>' +
+                        '</select>'
+                    )}
+                </div>
+
+                ${this.createCheckboxRow(
+                    'Show Date',
+                    'Display the current date in the floating window input area.',
+                    'showDate',
+                    false
+                )}
+
+                <div id="dateFormatRow" style="display:none; padding-left: 28px;">
+                    ${this.createControlRow(
+                        'Date Format',
+                        '',
+                        '<select class="setting-select" id="dateFormat">' +
+                            '<option value="ddd, MMM D">Mon, Jan 5</option>' +
+                            '<option value="dddd, MMMM D">Monday, January 5</option>' +
+                            '<option value="MMM D, YYYY">Jan 5, 2026</option>' +
+                            '<option value="D MMM YYYY">5 Jan 2026</option>' +
+                            '<option value="YYYY-MM-DD">2026-01-05</option>' +
+                            '<option value="MM/DD/YYYY">01/05/2026</option>' +
+                            '<option value="DD/MM/YYYY">05/01/2026</option>' +
+                        '</select>'
+                    )}
+                </div>
             </div>
         `;
     }
@@ -84,6 +127,15 @@ class AppearanceSettingsModule extends SettingsModule {
             if (opacityValue) opacityValue.textContent = (config.ui.floating_window_opacity ?? 1.0).toFixed(2);
         }
         if (preserve) preserve.checked = config.ui.preserve_last_response !== false;
+        const showTime = document.getElementById('showTime');
+        const showDate = document.getElementById('showDate');
+        const timeFormat = document.getElementById('timeFormat');
+        const dateFormat = document.getElementById('dateFormat');
+        if (showTime) showTime.checked = config.ui.show_time === true;
+        if (showDate) showDate.checked = config.ui.show_date === true;
+        if (timeFormat) timeFormat.value = config.ui.time_format || 'HH:mm';
+        if (dateFormat) dateFormat.value = config.ui.date_format || 'ddd, MMM D';
+        this.toggleDateTimeFormats();
         if (rememberChat) rememberChat.checked = (config.ui.chat_window_width || 0) > 0;
         if (startPos) startPos.value = config.ui.window_start_position || 'center';
         if (fontSize) {
@@ -107,6 +159,10 @@ class AppearanceSettingsModule extends SettingsModule {
         }
         // Don't overwrite saved geometry when checkbox is on — it's saved by the chat window itself
         config.ui.preserve_last_response = document.getElementById('preserveLastResponse')?.checked ?? true;
+        config.ui.show_time = document.getElementById('showTime')?.checked ?? false;
+        config.ui.show_date = document.getElementById('showDate')?.checked ?? false;
+        config.ui.time_format = document.getElementById('timeFormat')?.value || 'HH:mm';
+        config.ui.date_format = document.getElementById('dateFormat')?.value || 'ddd, MMM D';
         config.ui.window_start_position = document.getElementById('windowStartPosition')?.value || 'center';
         config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14');
 
@@ -131,6 +187,10 @@ class AppearanceSettingsModule extends SettingsModule {
             });
         }
 
+        // Show/hide date/time format selectors
+        document.getElementById('showTime')?.addEventListener('change', () => this.toggleDateTimeFormats());
+        document.getElementById('showDate')?.addEventListener('change', () => this.toggleDateTimeFormats());
+
         // Listen for system theme changes
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         this.themeChangeHandler = (e) => {
@@ -140,6 +200,15 @@ class AppearanceSettingsModule extends SettingsModule {
             }
         };
         mediaQuery.addEventListener('change', this.themeChangeHandler);
+    }
+
+    toggleDateTimeFormats() {
+        const showTime = document.getElementById('showTime')?.checked;
+        const showDate = document.getElementById('showDate')?.checked;
+        const timeRow = document.getElementById('timeFormatRow');
+        const dateRow = document.getElementById('dateFormatRow');
+        if (timeRow) timeRow.style.display = showTime ? '' : 'none';
+        if (dateRow) dateRow.style.display = showDate ? '' : 'none';
     }
 
     applyTheme(theme) {

@@ -136,6 +136,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    position: relative;
 }
 
 .input-container .attachment-preview-strip {
@@ -372,4 +373,31 @@ body.dark-theme .hint-key {
     margin-left: 6px;
     color: #8E48FF;
     font-size: 10px;
+}
+
+/* Date/time display in input area */
+.datetime-display {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: right;
+    pointer-events: none;
+    transition: opacity 0.2s ease-out;
+}
+.datetime-time {
+    font-size: 13px;
+    color: #9ca3af;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+}
+.datetime-date {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.3;
+    opacity: 0.8;
+}
+body.dark-theme .datetime-time,
+body.dark-theme .datetime-date {
+    color: #938F9B;
 }

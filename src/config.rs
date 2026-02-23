@@ -151,6 +151,14 @@ pub struct UiConfig {
     pub last_window_y: Option<i32>,
     #[serde(default = "default_font_size")]
     pub font_size: u8,
+    #[serde(default)]
+    pub show_time: bool,
+    #[serde(default)]
+    pub show_date: bool,
+    #[serde(default = "default_time_format")]
+    pub time_format: String,
+    #[serde(default = "default_date_format")]
+    pub date_format: String,
 }
 
 fn default_theme() -> String {
@@ -168,6 +176,15 @@ fn default_font_size() -> u8 {
 fn default_chat_size() -> u32 {
     0 // 0 means "use default / don't remember"
 }
+
+fn default_time_format() -> String {
+    "HH:mm".to_string()
+}
+
+fn default_date_format() -> String {
+    "ddd, MMM D".to_string()
+}
+
 
 fn default_true() -> bool {
     true
@@ -236,6 +253,10 @@ impl Default for Config {
                 last_window_x: None,
                 last_window_y: None,
                 font_size: 14,
+                show_time: false,
+                show_date: false,
+                time_format: "HH:mm".to_string(),
+                date_format: "ddd, MMM D".to_string(),
             },
             system: SystemConfig {
                 auto_start: false,
