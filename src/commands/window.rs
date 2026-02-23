@@ -129,9 +129,10 @@ fn capture_selection() -> Option<String> {
                     write_clipboard_raw("");
                 }
                 if let Some(ref text) = new_text {
-                    if !text.is_empty() && new_text != original_clipboard {
-                        info!("[selection] Captured {} chars", text.len());
-                        return Some(text.clone());
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() && new_text != original_clipboard {
+                        info!("[selection] Captured {} chars", trimmed.len());
+                        return Some(trimmed.to_string());
                     }
                 }
             }

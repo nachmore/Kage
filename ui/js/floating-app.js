@@ -111,7 +111,8 @@ export class FloatingApp {
             const checkbox = document.getElementById('useSelectionCheckbox');
             if (hasSelection) {
                 try {
-                    this.lastSelection = await this.invoke('get_last_selection');
+                    const raw = await this.invoke('get_last_selection');
+                    this.lastSelection = raw?.trim() || null;
                 } catch { this.lastSelection = null; }
                 if (this.lastSelection) {
                     if (indicator) indicator.style.display = '';
@@ -917,8 +918,8 @@ export class FloatingApp {
 
         // Include selected text as context if checkbox is checked
         const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
-        if (useSelection && this.lastSelection) {
-            message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection}\n\`\`\`\n\n${message}`;
+        if (useSelection && this.lastSelection && this.lastSelection.trim()) {
+            message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection.trim()}\n\`\`\`\n\n${message}`;
         }
         // Hide selection indicator after use
         const indicator = document.getElementById('selectionIndicator');
