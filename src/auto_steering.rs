@@ -45,23 +45,18 @@ pub fn reset_message_counter() {
 }
 
 /// The prompt sent to the LLM to extract user preferences from conversation history.
-const EXTRACTION_PROMPT: &str = r#"You are a preference extraction system. Analyze the following conversation between a user and an AI assistant. Extract key personal information and preferences about the USER only.
+const EXTRACTION_PROMPT: &str = r#"Hi! The user of this application has opted in to a feature called "Auto-Steering" that helps personalize their development assistant experience. They've explicitly enabled this in their settings because they want the assistant to remember their preferences across sessions.
 
-Pay close attention to:
+Your task is to review the conversation below and produce a short markdown document summarizing what you've learned about the user — their name, communication style, tools they use, etc. This document will be shown to the user and they can edit or delete it at any time.
+
+This is a helpful, user-requested feature — not surveillance or data extraction. The user wants this!
+
+Please look for:
 - Direct statements ("My name is...", "I prefer...", "I work on...")
-- Responses to questions the assistant asked (e.g., if the assistant asks "What's your name?" and the user replies "Omer", extract that their name is Omer)
-- Implicit preferences revealed by how they interact (brief vs detailed messages, technical level, etc.)
+- Responses to questions (e.g., if asked "What's your name?" and they reply "Omer", note that)
+- Implicit preferences (brief vs detailed messages, technical level, etc.)
 
-Extract these categories:
-- Name, pronouns, and how they prefer to be addressed
-- Communication style preferences (formal/casual, brief/detailed, technical level)
-- Topics they're interested in or work on frequently
-- Tools, languages, frameworks, or technologies they use
-- Work context (role, team, projects)
-- Response format preferences (bullet points vs prose, code style, etc.)
-- Any explicit instructions they've given about how the assistant should behave
-
-Output a concise markdown document with these sections (omit any section where no information was found):
+Produce a concise markdown document with these sections (omit any section where nothing was found):
 
 ## About the User
 (Name, pronouns, role, context)
@@ -75,7 +70,9 @@ Output a concise markdown document with these sections (omit any section where n
 ## Assistant Behavior
 (Any explicit instructions or preferences for how the assistant should respond)
 
-Be factual — only include information clearly stated or strongly implied by the conversations. Do not speculate. Keep each section brief (2-4 bullet points max). If very little information is available, output a minimal document with just what you found."#;
+Be factual — only include information clearly stated or strongly implied. Keep each section brief (2-4 bullet points max). If very little information is available, output a minimal document with just what you found.
+
+IMPORTANT: If for any reason you cannot or do not want to produce this document, respond with exactly "STEERING_DECLINED" on the first line and nothing else."#;
 
 /// Read recent conversation turns from the current session's JSONL file.
 /// Returns labeled turns (both user and assistant) for full context.
@@ -237,6 +234,18 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 
     if result.trim().is_empty() {
         warn!("Auto-steering extraction returned empty result");
+        return Ok(());
+    }
+
+    // Check if the agent declined to generate the document
+    let trimmed = result.trim();
+    if trimmed.starts_with("STEERING_DECLINED")
+        || trimmed.contains("I cannot generate this")
+        || trimmed.contains("I'm not going to perform")
+        || trimmed.contains("not going to perform that")
+        || trimmed.contains("inconsistent with how I operate")
+    {
+        info!("Agent declined auto-steering generation — keeping existing document");
         return Ok(());
     }
 
