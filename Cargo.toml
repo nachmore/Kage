@@ -36,7 +36,6 @@ windows = { version = "0.59", features = [
     "ApplicationModel_Core",
     "Foundation",
     "Foundation_Collections",
-    "Storage_Streams",
 ] }
 
 [target.'cfg(unix)'.dependencies]
