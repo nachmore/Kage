@@ -157,15 +157,19 @@ let settingsManager;
 window.addEventListener('DOMContentLoaded', async () => {
     settingsManager = new SettingsManager();
     
-    // Register all modules
-    settingsManager.registerModule(new HotkeySettingsModule());
-    settingsManager.registerModule(new ConnectionSettingsModule());
+    // Register all modules (order matches sidebar)
+    // User Experience
     settingsManager.registerModule(new AppearanceSettingsModule());
+    settingsManager.registerModule(new HotkeySettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
+    // Kiro Assistant
+    settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
-    settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
+    // Advanced
+    settingsManager.registerModule(new IntegrationSettingsModule());
+    settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new MathSettingsModule());
     
     // Render and load

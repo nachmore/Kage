@@ -42,21 +42,21 @@
         <div class="settings-sidebar">
             <div class="sidebar-section">
                 <div class="sidebar-section-title">User Experience</div>
-                <div class="sidebar-item active" data-section="hotkey" onclick="switchSection('hotkey')">
-                    <span class="sidebar-item-icon">🎹</span>
-                    <span>Hotkey</span>
-                </div>
-                <div class="sidebar-item" data-section="appearance" onclick="switchSection('appearance')">
+                <div class="sidebar-item active" data-section="appearance" onclick="switchSection('appearance')">
                     <span class="sidebar-item-icon">🎨</span>
                     <span>Appearance</span>
                 </div>
+                <div class="sidebar-item" data-section="hotkey" onclick="switchSection('hotkey')">
+                    <span class="sidebar-item-icon">🎹</span>
+                    <span>Hotkey</span>
+                </div>
                 <div class="sidebar-item" data-section="system" onclick="switchSection('system')">
-                    <span class="sidebar-item-icon" id="systemSidebarIcon">⚡</span>
-                    <span>System</span>
+                    <span class="sidebar-item-icon" id="systemSidebarIcon">🚀</span>
+                    <span>Startup</span>
                 </div>
             </div>
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Kiro Assistant</div>
+                <div class="sidebar-section-title">Kiro AI</div>
                 <div class="sidebar-item" data-section="connection" onclick="switchSection('connection')">
                     <span class="sidebar-item-icon">🔌</span>
                     <span>Agent Connection</span>
@@ -75,7 +75,11 @@
                 </div>
             </div>
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Advanced</div>
+                <div class="sidebar-section-title">Extensions</div>
+                <div class="sidebar-item" data-section="integration" onclick="switchSection('integration')">
+                    <span class="sidebar-item-icon" id="integrationSidebarIcon">🔗</span>
+                    <span>System Integration</span>
+                </div>
                 <div class="sidebar-item" data-section="shortcuts" onclick="switchSection('shortcuts')">
                     <span class="sidebar-item-icon">⚡</span>
                     <span>Shortcuts</span>
@@ -152,6 +156,7 @@
     <script src="js/settings/model.js"></script>
     <script src="js/settings/shortcuts.js"></script>
     <script src="js/settings/tool-permissions.js"></script>
+    <script src="js/settings/integration.js"></script>
     <script src="js/settings/math.js"></script>
     <script src="js/settings/manager.js"></script>
 </body>

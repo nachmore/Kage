@@ -293,14 +293,15 @@ fn write_clipboard_raw(text: &str) {
 
 /// Toggle the floating window visibility and position it
 pub fn toggle_floating_window(window: &WebviewWindow) {
-    // Read config for positioning preference
     let app = window.app_handle();
     let state: tauri::State<'_, crate::state::AppState> = app.state();
 
-    // Capture selection FIRST, before any config reads or window ops
-    // (the target app may lose focus during config lock)
+    // Check if we should capture selection (read from file to avoid async lock)
     let is_showing = !window.is_visible().unwrap_or(true);
-    let selection = if is_showing { capture_selection() } else { None };
+    let capture_enabled = crate::config::Config::load()
+        .map(|c| c.system.capture_selection)
+        .unwrap_or(true);
+    let selection = if is_showing && capture_enabled { capture_selection() } else { None };
 
     let config = tauri::async_runtime::block_on(state.config.lock());
     let start_pos = config.ui.window_start_position.clone();

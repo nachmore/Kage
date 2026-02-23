@@ -113,7 +113,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                                 </div>
                             </div>
                             <div class="dialog-field">
-                                <label>✨ Ask Kiro to write the script</label>
+                                <label>✨ Ask Kiro to write or update the script</label>
                                 <div class="ai-prompt-row">
                                     <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="e.g., Parse a Jira ticket URL and return the ticket ID" onkeydown="if(event.key==='Enter'){event.preventDefault();shortcutsModule.generateScript()}">
                                     <button class="setting-button" id="scriptAiBtn" onclick="shortcutsModule.generateScript()">Generate</button>

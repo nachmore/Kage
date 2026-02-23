@@ -176,6 +176,10 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemConfig {
     pub auto_start: bool,
+    /// Capture selected text from the active window when the hotkey is pressed.
+    /// Disable this if the Ctrl+C simulation interferes with terminal apps.
+    #[serde(default = "default_true")]
+    pub capture_selection: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,6 +239,7 @@ impl Default for Config {
             },
             system: SystemConfig {
                 auto_start: false,
+                capture_selection: true,
             },
             shortcuts: vec![],
             debug_mode: false,

@@ -1,17 +1,17 @@
 /**
- * System Settings Module
+ * Startup Settings Module
  */
 
 function getSystemIcon() {
     const platform = navigator.platform || '';
     if (platform.startsWith('Win')) return '🪟';
-    if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF'; // Apple logo (may not render everywhere)
+    if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF';
     return '🐧';
 }
 
 class SystemSettingsModule extends SettingsModule {
     constructor() {
-        super('system', 'System', getSystemIcon());
+        super('system', 'Startup', '🚀');
     }
 
     render() {
@@ -32,23 +32,17 @@ class SystemSettingsModule extends SettingsModule {
     load(config) {
         if (config.system) {
             const autoStart = document.getElementById('autoStart');
-            if (autoStart) {
-                autoStart.checked = config.system.auto_start;
-            }
+            if (autoStart) autoStart.checked = config.system.auto_start;
         }
     }
 
     initialize() {
-        // Update the sidebar icon to match the OS
         const sidebarIcon = document.getElementById('systemSidebarIcon');
-        if (sidebarIcon) {
-            sidebarIcon.textContent = this.icon;
-        }
+        if (sidebarIcon) sidebarIcon.textContent = this.icon;
     }
 
     save(config) {
-        config.system = {
-            auto_start: document.getElementById('autoStart').checked
-        };
+        config.system = config.system || {};
+        config.system.auto_start = document.getElementById('autoStart')?.checked ?? false;
     }
 }
