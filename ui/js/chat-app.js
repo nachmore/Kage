@@ -102,6 +102,8 @@ export class ChatApp {
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
             chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
+            editTitleBtn: document.getElementById('editTitleBtn'),
+            revealFileBtn: document.getElementById('revealFileBtn'),
             errorContainer: document.getElementById('errorContainer'),
             chatSuggestions: document.getElementById('chatSuggestions'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
@@ -179,6 +181,8 @@ export class ChatApp {
 
         // Double-click header title to rename session
         this.elements.chatHeaderTitle.addEventListener('dblclick', () => this.startTitleEdit());
+        this.elements.editTitleBtn.addEventListener('click', () => this.startTitleEdit());
+        this.elements.revealFileBtn.addEventListener('click', () => this.revealSessionFile());
         this.elements.chatHeaderTitleInput.addEventListener('blur', () => this.finishTitleEdit());
         this.elements.chatHeaderTitleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); this.finishTitleEdit(); }
@@ -1009,6 +1013,16 @@ export class ChatApp {
             console.error('Failed to rename session:', e);
         }
     }
+
+    async revealSessionFile() {
+        if (!this.activeSessionId) return;
+        try {
+            await this.invoke('reveal_session_file', { sessionId: this.activeSessionId });
+        } catch (e) {
+            console.error('Failed to reveal session file:', e);
+        }
+    }
+
 
     updateSuggestions() {
         const input = this.elements.chatInput.value;

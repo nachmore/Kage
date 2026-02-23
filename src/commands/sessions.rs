@@ -338,6 +338,43 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
     })
 }
 
+/// Open the session's JSON file in the system file explorer
+#[tauri::command]
+pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
+    let sessions_dir = get_sessions_dir()?;
+    let json_path = sessions_dir.join(format!("{}.json", session_id));
+
+    if !json_path.exists() {
+        return Err("Session file not found".to_string());
+    }
+
+    let path_str = json_path.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", &path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open explorer: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open Finder: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(sessions_dir.to_string_lossy().to_string())
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {}", e))?;
+    }
+
+    Ok(())
+}
+
 
 /// Switch the ACP client to a different session.
 /// If session_id is provided, loads that session via session/load.

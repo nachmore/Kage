@@ -632,3 +632,42 @@ body.light-theme .steering-header { background: rgba(113, 56, 204, 0.06); }
 body.light-theme .steering-header:hover { background: rgba(113, 56, 204, 0.12); }
 body.light-theme .steering-body { border-top-color: #d4d4d4; }
 body.light-theme .steering-ack { border-top-color: #d4d4d4; }
+
+/* Chat header action buttons (rename, reveal file) */
+.chat-header-title-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+.chat-header-title-group .chat-header-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.chat-header-title-group .chat-header-title-input {
+    flex: 1;
+    min-width: 100px;
+}
+.chat-header-action {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #ffffff;
+    transition: background 0.15s;
+    line-height: 1;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px;
+}
+.chat-header-action:hover {
+    background: var(--kiro-accent-hover);
+}
+body.light-theme .chat-header-action {
+    color: #333333;
+}
+body.light-theme .chat-header-action:hover {
+    background: rgba(113, 56, 204, 0.15);
+}
