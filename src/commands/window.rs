@@ -469,24 +469,60 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     if let Some(window) = app.get_webview_window("main") {
-        // Apply configured chat window size
         let state: tauri::State<'_, crate::state::AppState> = app.state();
         let config = state.config.lock().await;
-        let width = config.ui.chat_window_width;
-        let height = config.ui.chat_window_height;
+        let saved_w = config.ui.chat_window_width;
+        let saved_h = config.ui.chat_window_height;
+        let saved_x = config.ui.chat_window_x;
+        let saved_y = config.ui.chat_window_y;
         drop(config);
 
         let scale = window.scale_factor().unwrap_or(1.0);
-        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
-            width: (width as f64 * scale) as u32,
-            height: (height as f64 * scale) as u32,
-        }));
 
-        center_window_on_active_monitor(&window);
+        // Get active monitor bounds
+        let monitor = get_active_monitor(&window);
+        let (mon_x, mon_y, mon_w, mon_h) = monitor.as_ref().map(|m| {
+            let p = m.position();
+            let s = m.size();
+            (p.x, p.y, s.width as i32, s.height as i32)
+        }).unwrap_or((0, 0, 1920, 1080));
+
+        if saved_w > 0 && saved_h > 0 {
+            // Clamp size to monitor dimensions
+            let phys_w = ((saved_w as f64 * scale) as i32).min(mon_w);
+            let phys_h = ((saved_h as f64 * scale) as i32).min(mon_h);
+            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                width: phys_w as u32,
+                height: phys_h as u32,
+            }));
+
+            // Restore position if saved, clamped to screen
+            if let (Some(x), Some(y)) = (saved_x, saved_y) {
+                let win_w = phys_w;
+                let win_h = phys_h;
+                let cx = x.max(mon_x).min(mon_x + mon_w - win_w);
+                let cy = y.max(mon_y).min(mon_y + mon_h - win_h);
+                let _ = window.set_position(tauri::Position::Physical(
+                    tauri::PhysicalPosition { x: cx, y: cy },
+                ));
+            } else {
+                center_window_on_active_monitor(&window);
+            }
+        } else {
+            // Default: 800x600 centered
+            let def_w = (800.0 * scale) as u32;
+            let def_h = (600.0 * scale) as u32;
+            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                width: def_w.min(mon_w as u32),
+                height: def_h.min(mon_h as u32),
+            }));
+            center_window_on_active_monitor(&window);
+        }
+
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
     } else {
-        warn!("Main window not found, this shouldn't happen");
+        warn!("Main window not found");
     }
 
     Ok(())
@@ -615,6 +651,23 @@ pub async fn save_window_position(
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
     config.save().map_err(|e| format!("Failed to save window position: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_chat_window_geometry(
+    state: tauri::State<'_, crate::state::AppState>,
+    width: u32,
+    height: u32,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    let mut config = state.config.lock().await;
+    config.ui.chat_window_width = width;
+    config.ui.chat_window_height = height;
+    config.ui.chat_window_x = Some(x);
+    config.ui.chat_window_y = Some(y);
+    config.save().map_err(|e| format!("Failed to save chat window geometry: {}", e))?;
     Ok(())
 }
 

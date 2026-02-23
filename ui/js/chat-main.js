@@ -23,6 +23,23 @@ function initApp() {
     app = new ChatApp(invoke, appWindow, listen);
     app.init();
 
+    // Save chat window geometry when it loses focus or is about to close
+    async function saveChatGeometry() {
+        try {
+            const size = await appWindow.innerSize();
+            const pos = await appWindow.outerPosition();
+            const scale = await appWindow.scaleFactor();
+            await invoke('save_chat_window_geometry', {
+                width: Math.round(size.width / scale),
+                height: Math.round(size.height / scale),
+                x: pos.x,
+                y: pos.y,
+            });
+        } catch (e) { /* ignore */ }
+    }
+    appWindow.listen('tauri://blur', saveChatGeometry);
+    appWindow.listen('tauri://close-requested', saveChatGeometry);
+
     // Re-refresh sessions + current session every time the window becomes visible
     appWindow.listen('tauri://focus', async () => {
         if (app) {

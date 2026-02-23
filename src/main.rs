@@ -387,6 +387,7 @@ fn main() {
             commands::set_floating_opacity,
             commands::apply_chat_window_size,
             commands::save_window_position,
+            commands::save_chat_window_geometry,
             commands::get_last_selection,
             commands::get_user_info,
             commands::list_sessions,

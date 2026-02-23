@@ -40,14 +40,11 @@ class AppearanceSettingsModule extends SettingsModule {
                     </select>`
                 )}
 
-                ${this.createControlRow(
-                    'Chat Window Size',
-                    'Default size of the expanded chat window (width × height in pixels).',
-                    `<div class="input-group">
-                        <input type="number" class="setting-input" id="windowWidth" placeholder="Width" min="400" max="3000" value="800">
-                        <span style="color: #938F9B; padding: 0 4px;">×</span>
-                        <input type="number" class="setting-input" id="windowHeight" placeholder="Height" min="300" max="2000" value="600">
-                    </div>`
+                ${this.createCheckboxRow(
+                    'Remember Session Manager Window Size & Position',
+                    'Restore the full size Session Manager chat window to its last size and position when reopened.',
+                    'rememberChatGeometry',
+                    true
                 )}
 
                 ${this.createControlRow(
@@ -75,9 +72,8 @@ class AppearanceSettingsModule extends SettingsModule {
         const theme = document.getElementById('theme');
         const opacity = document.getElementById('opacity');
         const opacityValue = document.getElementById('opacityValue');
-        const width = document.getElementById('windowWidth');
-        const height = document.getElementById('windowHeight');
         const preserve = document.getElementById('preserveLastResponse');
+        const rememberChat = document.getElementById('rememberChatGeometry');
         const startPos = document.getElementById('windowStartPosition');
         const fontSize = document.getElementById('fontSize');
         const fontSizeValue = document.getElementById('fontSizeValue');
@@ -87,9 +83,8 @@ class AppearanceSettingsModule extends SettingsModule {
             opacity.value = config.ui.floating_window_opacity ?? 1.0;
             if (opacityValue) opacityValue.textContent = (config.ui.floating_window_opacity ?? 1.0).toFixed(2);
         }
-        if (width) width.value = config.ui.chat_window_width || 800;
-        if (height) height.value = config.ui.chat_window_height || 600;
         if (preserve) preserve.checked = config.ui.preserve_last_response !== false;
+        if (rememberChat) rememberChat.checked = (config.ui.chat_window_width || 0) > 0;
         if (startPos) startPos.value = config.ui.window_start_position || 'center';
         if (fontSize) {
             fontSize.value = config.ui.font_size || 14;
@@ -103,8 +98,14 @@ class AppearanceSettingsModule extends SettingsModule {
         config.ui = config.ui || {};
         config.ui.theme = document.getElementById('theme')?.value || 'system';
         config.ui.floating_window_opacity = parseFloat(document.getElementById('opacity')?.value ?? '1');
-        config.ui.chat_window_width = parseInt(document.getElementById('windowWidth')?.value ?? '800');
-        config.ui.chat_window_height = parseInt(document.getElementById('windowHeight')?.value ?? '600');
+        const rememberChat = document.getElementById('rememberChatGeometry')?.checked ?? true;
+        if (!rememberChat) {
+            config.ui.chat_window_width = 0;
+            config.ui.chat_window_height = 0;
+            config.ui.chat_window_x = null;
+            config.ui.chat_window_y = null;
+        }
+        // Don't overwrite saved geometry when checkbox is on — it's saved by the chat window itself
         config.ui.preserve_last_response = document.getElementById('preserveLastResponse')?.checked ?? true;
         config.ui.window_start_position = document.getElementById('windowStartPosition')?.value || 'center';
         config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14');
@@ -154,14 +155,6 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     validate() {
-        const width = parseInt(document.getElementById('windowWidth')?.value ?? '800');
-        const height = parseInt(document.getElementById('windowHeight')?.value ?? '600');
-        if (width < 400 || width > 3000) {
-            return { valid: false, error: 'Chat window width must be between 400 and 3000 pixels' };
-        }
-        if (height < 300 || height > 2000) {
-            return { valid: false, error: 'Chat window height must be between 300 and 2000 pixels' };
-        }
         return { valid: true };
     }
 

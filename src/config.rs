@@ -133,8 +133,14 @@ pub struct UiConfig {
     #[serde(default = "default_theme")]
     pub theme: String,
     pub floating_window_opacity: f32,
+    #[serde(default = "default_chat_size")]
     pub chat_window_width: u32,
+    #[serde(default = "default_chat_size")]
     pub chat_window_height: u32,
+    #[serde(default)]
+    pub chat_window_x: Option<i32>,
+    #[serde(default)]
+    pub chat_window_y: Option<i32>,
     #[serde(default = "default_true")]
     pub preserve_last_response: bool,
     #[serde(default = "default_window_start_position")]
@@ -157,6 +163,10 @@ fn default_window_start_position() -> String {
 
 fn default_font_size() -> u8 {
     14
+}
+
+fn default_chat_size() -> u32 {
+    0 // 0 means "use default / don't remember"
 }
 
 fn default_true() -> bool {
@@ -213,8 +223,10 @@ impl Default for Config {
             ui: UiConfig {
                 theme: "system".to_string(),
                 floating_window_opacity: 1.0,
-                chat_window_width: 800,
-                chat_window_height: 600,
+                chat_window_width: 0,
+                chat_window_height: 0,
+                chat_window_x: None,
+                chat_window_y: None,
                 preserve_last_response: true,
                 window_start_position: "center".to_string(),
                 last_window_x: None,
