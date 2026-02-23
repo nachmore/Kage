@@ -354,7 +354,7 @@ export class ChatApp {
             if (isCurrent || isFloating) dateSuffix = ' · <span class="session-default-label">default session</span>';
 
             item.innerHTML = `
-                <div class="session-item-title">${this.escapeHtml(title)}${badges}</div>
+                <div class="session-item-title">${escapeHtml(title)}${badges}</div>
                 <div class="session-item-date">${dateStr}${dateSuffix}</div>
             `;
 
@@ -833,17 +833,17 @@ export class ChatApp {
         const toolChips = this.toolUsages.map(t => `
             <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}">
                 <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
-                <span class="source-domain">Tool: ${this.escapeHtml(t.title)}</span>
+                <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>
             </span>
         `).join('');
 
         const sourceChips = this.toolSources.map(s => `
-            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${this.escapeHtml(s.title)}">
+            <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}">
                 <span class="source-icon-wrapper">
                     <span class="source-initials" style="background:${s.color}">${s.initials}</span>
                     <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
                 </span>
-                <span class="source-domain">${this.escapeHtml(s.domain)}</span>
+                <span class="source-domain">${escapeHtml(s.domain)}</span>
             </a>
         `).join('');
 
@@ -895,7 +895,7 @@ export class ChatApp {
     showError(message) {
         this.elements.errorContainer.innerHTML = `
             <div class="chat-error">
-                <span>${this.escapeHtml(message)}</span>
+                <span>${escapeHtml(message)}</span>
                 <div class="chat-error-actions">
                     <button class="chat-error-btn reconnect" id="errorReconnectBtn">Reconnect</button>
                     <button class="chat-error-btn dismiss" id="errorDismissBtn">Dismiss</button>
@@ -930,7 +930,7 @@ export class ChatApp {
 
         const msgEl = document.createElement('div');
         msgEl.className = 'session-reset-notice';
-        msgEl.innerHTML = `<span>${this.escapeHtml(message)}</span>`;
+        msgEl.innerHTML = `<span>${escapeHtml(message)}</span>`;
         this.elements.messagesArea.appendChild(msgEl);
         this.scrollToBottom();
     }
@@ -1017,8 +1017,8 @@ export class ChatApp {
             item.innerHTML = `
                 <span class="chat-suggestion-icon">${cmd.icon}</span>
                 <div class="chat-suggestion-info">
-                    <div class="chat-suggestion-name">${prefix}${this.escapeHtml(cmd.name)}</div>
-                    <div class="chat-suggestion-desc">${this.escapeHtml(cmd.description)}</div>
+                    <div class="chat-suggestion-name">${prefix}${escapeHtml(cmd.name)}</div>
+                    <div class="chat-suggestion-desc">${escapeHtml(cmd.description)}</div>
                 </div>
             `;
             item.addEventListener('click', () => this.executeSuggestion(cmd));
@@ -1054,11 +1054,6 @@ export class ChatApp {
         });
     }
 
-    escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
 
     convertFileSrc(path) {
         // Tauri 2 uses asset protocol for local files

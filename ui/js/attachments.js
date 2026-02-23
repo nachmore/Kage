@@ -3,6 +3,8 @@
  * Supports image paste, file drag-drop, and attachment preview rendering.
  */
 
+import { escapeHtml } from './tool-utils.js';
+
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_ATTACHMENTS = 4;
@@ -310,10 +312,4 @@ function guessMimeType(filename) {
         'gif': 'image/gif', 'webp': 'image/webp', 'svg': 'image/svg+xml',
     };
     return map[ext] || 'application/octet-stream';
-}
-
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
 }

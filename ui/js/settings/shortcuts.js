@@ -252,24 +252,24 @@ class ShortcutsSettingsModule extends SettingsModule {
             let details = `<div><strong>Type:</strong> ${label}</div>`;
 
             if (at === 'open_url') {
-                details += `<div><strong>URL:</strong> ${this.escapeHtml(s.url || '')}</div>`;
+                details += `<div><strong>URL:</strong> ${escapeHtml(s.url || '')}</div>`;
             } else if (at === 'prompt') {
-                details += `<div><strong>Prompt:</strong> ${this.escapeHtml(s.prompt || '')}</div>`;
+                details += `<div><strong>Prompt:</strong> ${escapeHtml(s.prompt || '')}</div>`;
             } else if (at === 'script') {
                 const saLabels = { text: '📝 Display', prompt: '💬 Agent', open_url: '🌐 URL', run_program: '▶️ Run' };
                 details += `<div><strong>Action:</strong> ${saLabels[s.script_action] || 'Display'}</div>`;
-                details += `<div><strong>Script:</strong> <code>${this.escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
+                details += `<div><strong>Script:</strong> <code>${escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
             } else {
-                details += `<div><strong>Path:</strong> ${this.escapeHtml(s.path || '')}</div>`;
-                if (s.working_directory) details += `<div><strong>Dir:</strong> ${this.escapeHtml(s.working_directory)}</div>`;
-                if (s.arguments) details += `<div><strong>Args:</strong> ${this.escapeHtml(s.arguments)}</div>`;
+                details += `<div><strong>Path:</strong> ${escapeHtml(s.path || '')}</div>`;
+                if (s.working_directory) details += `<div><strong>Dir:</strong> ${escapeHtml(s.working_directory)}</div>`;
+                if (s.arguments) details += `<div><strong>Args:</strong> ${escapeHtml(s.arguments)}</div>`;
             }
 
             return `
                 <div class="shortcut-item">
                     <div class="shortcut-info">
-                        <div class="shortcut-name">${this.escapeHtml(s.name)}</div>
-                        <div class="shortcut-trigger">${this.escapeHtml(s.shortcut)}</div>
+                        <div class="shortcut-name">${escapeHtml(s.name)}</div>
+                        <div class="shortcut-trigger">${escapeHtml(s.shortcut)}</div>
                         <div class="shortcut-details">${details}</div>
                     </div>
                     <div class="shortcut-actions">
@@ -535,12 +535,6 @@ class ShortcutsSettingsModule extends SettingsModule {
             reader.readAsText(file);
         };
         input.click();
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     destroy() { delete window.shortcutsModule; }

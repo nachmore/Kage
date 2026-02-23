@@ -108,13 +108,13 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         }
         
         const toolsHtml = this.tools.map((tool, index) => {
-            const icon = this.getToolIcon(tool.title);
+            const icon = getToolEmoji(tool.title);
             const lastSeen = tool.last_seen ? new Date(tool.last_seen).toLocaleDateString() : '';
             return `
                 <div class="agent-tool-item">
                     <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
-                        <div class="agent-tool-name">${this.escapeHtml(tool.title)}</div>
+                        <div class="agent-tool-name">${escapeHtml(tool.title)}</div>
                         <div class="agent-tool-meta">Last seen: ${lastSeen}</div>
                     </div>
                     <select class="agent-tool-select" data-index="${index}" onchange="updateToolPolicy(${index}, this.value)">
@@ -128,24 +128,6 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         }).join('');
         
         container.innerHTML = toolsHtml;
-    }
-
-    getToolIcon(title) {
-        const lower = (title || '').toLowerCase();
-        if (lower.includes('search')) return '🔍';
-        if (lower.includes('fetch') || lower.includes('web')) return '🌐';
-        if (lower.includes('read')) return '📖';
-        if (lower.includes('write') || lower.includes('edit')) return '✏️';
-        if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
-        if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
-        if (lower.includes('file')) return '📁';
-        return '🔧';
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     async updatePolicy(index, policy) {

@@ -10,6 +10,25 @@
     <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
     <script src="vendor/lib/prism.js"></script>
     <script src="vendor/lib/prism-components/prism-javascript.min.js"></script>
+    <script>
+        // Shared utilities — available to all settings modules
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        function getToolEmoji(name) {
+            const lower = (name || '').toLowerCase();
+            if (lower.includes('search')) return '🔍';
+            if (lower.includes('fetch') || lower.includes('web')) return '🌐';
+            if (lower.includes('read')) return '📖';
+            if (lower.includes('write') || lower.includes('edit')) return '✏️';
+            if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+            if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
+            if (lower.includes('file')) return '📁';
+            return '🔧';
+        }
+    </script>
     <style>
         /* Reset — kept inline since shared-base.css has light-theme defaults */
         * { margin: 0; padding: 0; box-sizing: border-box; }

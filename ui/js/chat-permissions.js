@@ -5,6 +5,8 @@
  * - Hides when switching to a different session
  */
 
+import { getToolEmoji, escapeHtml } from './tool-utils.js';
+
 function waitForTauri(callback) {
     if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.webviewWindow) {
         callback();
@@ -16,24 +18,6 @@ function waitForTauri(callback) {
 waitForTauri(() => {
     const { invoke } = window.__TAURI__.core;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-
-    function getToolEmoji(name) {
-        const lower = (name || '').toLowerCase();
-        if (lower.includes('search')) return '🔍';
-        if (lower.includes('fetch') || lower.includes('web')) return '🌐';
-        if (lower.includes('read')) return '📖';
-        if (lower.includes('write') || lower.includes('edit')) return '✏️';
-        if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
-        if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
-        if (lower.includes('file')) return '📁';
-        return '🔧';
-    }
-
-    function escapeHtmlPerm(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     let currentPermissionRequest = null;
 
@@ -64,7 +48,7 @@ waitForTauri(() => {
         if (toolNameEl) {
             if (toolName) {
                 const emoji = getToolEmoji(toolName);
-                toolNameEl.innerHTML = `<span class="tool-emoji">${emoji}</span><span class="tool-label">${escapeHtmlPerm(toolName)}</span>`;
+                toolNameEl.innerHTML = `<span class="tool-emoji">${emoji}</span><span class="tool-label">${escapeHtml(toolName)}</span>`;
                 toolNameEl.style.display = 'flex';
             } else {
                 toolNameEl.style.display = 'none';
