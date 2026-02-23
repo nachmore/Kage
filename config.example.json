@@ -16,11 +16,13 @@
     }
   },
   "ui": {
-    "theme": "dark",
+    "theme": "system",
     "floating_window_opacity": 1.0,
     "chat_window_width": 800,
     "chat_window_height": 600,
-    "preserve_last_response": true
+    "preserve_last_response": true,
+    "window_start_position": "center",
+    "font_size": 14
   },
   "system": {
     "auto_start": false

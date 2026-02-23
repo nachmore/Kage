@@ -1,6 +1,6 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './chat-app.js';
-import { applyTheme, initThemeListener } from './floating-theme.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './floating-theme.js';
 
 let app = null;
 
@@ -14,8 +14,11 @@ function initApp() {
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const { listen } = window.__TAURI__.event;
 
-    applyTheme();
     initThemeListener();
+    loadAndApplyTheme(invoke);
+
+    // Re-apply theme when config changes
+    listen('config_updated', () => loadAndApplyTheme(invoke));
 
     app = new ChatApp(invoke, appWindow, listen);
     app.init();

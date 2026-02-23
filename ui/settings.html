@@ -79,6 +79,47 @@
         <button class="save-button" onclick="saveAndClose()">Save &amp; Close</button>
     </div>
 
+    <!-- Theme initialization for settings window -->
+    <script>
+        function applySettingsTheme(theme) {
+            document.body.classList.remove('light-theme');
+            if (theme === 'light') {
+                document.body.classList.add('light-theme');
+            } else if (theme === 'system') {
+                if (!window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.body.classList.add('light-theme');
+                }
+            }
+        }
+        // Apply theme on load
+        (async function() {
+            function waitForTauri(cb) {
+                if (window.__TAURI__ && window.__TAURI__.core) cb();
+                else setTimeout(() => waitForTauri(cb), 50);
+            }
+            waitForTauri(async () => {
+                try {
+                    const config = await window.__TAURI__.core.invoke('get_config');
+                    applySettingsTheme(config.ui?.theme || 'system');
+                } catch (e) { applySettingsTheme('system'); }
+                // Listen for config updates
+                window.__TAURI__.event.listen('config_updated', async () => {
+                    try {
+                        const config = await window.__TAURI__.core.invoke('get_config');
+                        applySettingsTheme(config.ui?.theme || 'system');
+                    } catch (e) {}
+                });
+                // Listen for system theme changes
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+                    try {
+                        const config = await window.__TAURI__.core.invoke('get_config');
+                        if ((config.ui?.theme || 'system') === 'system') applySettingsTheme('system');
+                    } catch (e) {}
+                });
+            });
+        })();
+    </script>
+
     <!-- Load all settings modules -->
     <script src="js/settings/base.js"></script>
     <script src="js/settings/hotkey.js"></script>

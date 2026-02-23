@@ -1,7 +1,7 @@
 // Main entry point
 import { FloatingApp } from './floating-app.js';
 import { initMarkdown } from './floating-markdown.js';
-import { applyTheme, initThemeListener } from './floating-theme.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './floating-theme.js';
 
 function initApp() {
     console.log('initApp called, checking Tauri...');
@@ -19,8 +19,13 @@ function initApp() {
     const { listen } = window.__TAURI__.event;
     
     initMarkdown();
-    applyTheme();
     initThemeListener();
+    loadAndApplyTheme(invoke);
+    
+    // Re-apply theme and opacity when config changes
+    listen('config_updated', async () => {
+        await loadAndApplyTheme(invoke);
+    });
     
     const app = new FloatingApp(invoke, appWindow, listen);
     window._floatingApp = app; // Expose for permission modal resize

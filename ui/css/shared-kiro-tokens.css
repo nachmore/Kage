@@ -11,7 +11,7 @@
     /* Kiro gradient (ghost, avatars, user messages) */
     --kiro-gradient: linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%);
 
-    /* Surface colors */
+    /* Surface colors (dark defaults) */
     --kiro-bg: #1e1e1e;
     --kiro-bg-elevated: #252526;
     --kiro-bg-input: #2d2d30;
@@ -28,4 +28,18 @@
 
     /* Font stack */
     --kiro-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Light theme overrides */
+body.light-theme {
+    --kiro-bg: #f5f5f5;
+    --kiro-bg-elevated: #ffffff;
+    --kiro-bg-input: #ffffff;
+    --kiro-border: #d4d4d4;
+    --kiro-border-subtle: #e5e5e5;
+    --kiro-text: #333333;
+    --kiro-text-bright: #111111;
+    --kiro-text-muted: #777777;
+    --kiro-accent-light: #7138CC;
+    --kiro-accent-glow: rgba(113, 56, 204, 0.15);
 }

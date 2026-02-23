@@ -65,6 +65,7 @@
     min-width: 0;
     overflow: visible;
     max-height: none;
+    opacity: var(--window-opacity, 1);
 }
 
 .speech-bubble::after {

@@ -199,3 +199,12 @@ body {
 }
 .save-button:hover { background: var(--kiro-accent-hover); }
 
+
+/* Light theme overrides for settings */
+body.light-theme .settings-header { background: #e8e8e8; }
+body.light-theme .close-btn:hover { background: #d0d0d0; }
+body.light-theme .sidebar-item:hover { background: #e0e0e0; }
+body.light-theme .sidebar-item.active { background: #d8d8d8; }
+body.light-theme ::-webkit-scrollbar-thumb { background: #c0c0c0; }
+body.light-theme ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
+body.light-theme .settings-section-header { color: var(--kiro-text-bright); }
