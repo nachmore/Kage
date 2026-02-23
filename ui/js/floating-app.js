@@ -361,71 +361,116 @@ export class FloatingApp {
     }
 
     buildShortcutCommand(shortcut, args) {
-        const actionType = shortcut.action_type || 'run_program';
-        
-        if (actionType === 'open_url') {
-            let url = shortcut.url || '';
-            
-            // Handle {*} - all arguments
-            if (url.includes('{*}')) {
-                // Join args with spaces and encode the entire result
-                const allArgs = args.join(' ');
-                url = url.replace('{*}', encodeURIComponent(allArgs));
-            } else {
-                // Handle {0}, {1}, etc. - specific arguments
-                for (let i = 0; i < args.length; i++) {
-                    url = url.replace(new RegExp(`\\{${i}\\}`, 'g'), encodeURIComponent(args[i]));
+            const actionType = shortcut.action_type || 'run_program';
+
+            // Helper: substitute {*} and {0},{1},... in a template string
+            const substitute = (template, encode = false) => {
+                if (!template) return '';
+                let result = template;
+                if (result.includes('{*}')) {
+                    const all = args.join(' ');
+                    result = result.replace('{*}', encode ? encodeURIComponent(all) : all);
+                } else {
+                    for (let i = 0; i < args.length; i++) {
+                        const val = encode ? encodeURIComponent(args[i]) : args[i];
+                        result = result.replace(new RegExp(`\\{${i}\\}`, 'g'), val);
+                    }
+                }
+                return result;
+            };
+
+            if (actionType === 'open_url') {
+                return { type: 'open_url', url: substitute(shortcut.url || '', true) };
+            }
+
+            if (actionType === 'prompt') {
+                return { type: 'prompt', message: substitute(shortcut.prompt || '{*}') };
+            }
+
+            if (actionType === 'script') {
+                try {
+                    const fn = new Function('...args', shortcut.script || 'return args.join(" ")');
+                    const result = fn(...args);
+                    if (result === null || result === undefined) {
+                        return { type: 'noop' };
+                    }
+                    const scriptAction = shortcut.script_action || 'text';
+
+                    if (scriptAction === 'run_program') {
+                        if (!Array.isArray(result)) {
+                            return { type: 'error', message: 'Script must return an array [cmd, workDir, ...args] for Run as Command' };
+                        }
+                        return {
+                            type: 'run_program',
+                            path: result[0] || '',
+                            workDir: result[1] || null,
+                            args: result.slice(2).map(String)
+                        };
+                    }
+
+                    // All other actions expect a string
+                    if (typeof result !== 'string') {
+                        return { type: 'error', message: 'Script must return a string, got ' + typeof result };
+                    }
+                    if (scriptAction === 'open_url') return { type: 'open_url', url: result };
+                    if (scriptAction === 'prompt') return { type: 'prompt', message: result };
+                    return { type: 'text', message: result };
+                } catch (e) {
+                    return { type: 'error', message: `Script ${e.constructor?.name || 'Error'}: ${e.message}` };
                 }
             }
-            
-            return { type: 'open_url', url };
-        } else {
-            // Run program
+
+            // run_program (default)
             if (!shortcut.arguments) {
                 return { type: 'run_program', path: shortcut.path, args: [], workDir: shortcut.working_directory };
             }
-
-            const argTemplate = shortcut.arguments;
-
-            // Handle {*} - all arguments
-            if (argTemplate.includes('{*}')) {
-                const processedArgs = argTemplate.replace('{*}', args.join(' ')).split(/\s+/).filter(a => a);
-                return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
-            }
-
-            // Handle {0}, {1}, etc. - specific arguments
-            let processedArgs = argTemplate;
-            for (let i = 0; i < args.length; i++) {
-                processedArgs = processedArgs.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
-            }
-
-            return {
-                type: 'run_program',
-                path: shortcut.path,
-                args: processedArgs.split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/)),
-                workDir: shortcut.working_directory
-            };
+            const processedArgs = substitute(shortcut.arguments).split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/));
+            return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
         }
-    }
 
     async executeShortcut(command) {
-        try {
-            if (command.type === 'open_url') {
-                await this.openUrl(command.url);
-            } else {
-                await this.invoke('execute_shortcut', {
-                    path: command.path,
-                    args: command.args,
-                    workingDirectory: command.workDir || null
-                });
+            try {
+                if (command.type === 'error') {
+                    this.showError(command.message);
+                    return;
+                }
+                if (command.type === 'noop') {
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                    this.clearSuggestions();
+                    return;
+                }
+                if (command.type === 'open_url') {
+                    await this.openUrl(command.url);
+                    this.resetUI();
+                    await this.appWindow.hide();
+                } else if (command.type === 'prompt') {
+                    // Send to agent as if the user typed it
+                    await this.sendChatMessage(command.message);
+                } else if (command.type === 'text') {
+                    // Display result in the response area
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                    this.clearSuggestions();
+                    this.currentResponse = command.message;
+                    renderMarkdown(command.message, this.elements.responseText);
+                    this.elements.contentArea.classList.add('visible');
+                    this.windowManager.resizeWindow();
+                } else {
+                    // run_program
+                    await this.invoke('execute_shortcut', {
+                        path: command.path,
+                        args: command.args,
+                        workingDirectory: command.workDir || null
+                    });
+                    this.resetUI();
+                    await this.appWindow.hide();
+                }
+            } catch (error) {
+                console.error('Failed to execute shortcut:', error);
+                this.showError('Failed to execute shortcut: ' + error);
             }
-            this.resetUI();
-            await this.appWindow.hide();
-        } catch (error) {
-            console.error('Failed to execute shortcut:', error);
-            this.showError('Failed to execute shortcut: ' + error);
         }
-    }
 
     async handleInputChange(event) {
         const query = this.elements.input.value.trim();

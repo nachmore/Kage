@@ -173,7 +173,7 @@ pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
     #[serde(default = "default_action_type")]
-    pub action_type: String, // "run_program" or "open_url"
+    pub action_type: String, // "run_program", "open_url", "prompt", "text", "script"
     #[serde(default)]
     pub path: Option<String>, // For run_program
     #[serde(default)]
@@ -182,6 +182,12 @@ pub struct ShortcutConfig {
     pub working_directory: Option<String>,
     #[serde(default)]
     pub arguments: Option<String>,
+    #[serde(default)]
+    pub prompt: Option<String>, // For prompt action type — template sent to agent
+    #[serde(default)]
+    pub script: Option<String>, // For script action type — JS function body
+    #[serde(default)]
+    pub script_action: Option<String>, // What to do with script result: "run_program", "open_url", "prompt", "text"
 }
 
 fn default_action_type() -> String {
