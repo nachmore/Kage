@@ -1,6 +1,7 @@
 // Markdown rendering with code block, mermaid, graphviz, and PlantUML support
 
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
+const HTML_LANGUAGES = new Set(['html', 'htm']);
 
 let graphvizInstance = null;
 async function getGraphviz() {
@@ -36,6 +37,10 @@ export function renderMarkdown(markdown, targetElement) {
 
         if (DIAGRAM_LANGUAGES.has(language)) {
             renderDiagram(codeBlock, pre, language);
+            return;
+        }
+        if (HTML_LANGUAGES.has(language)) {
+            renderHtmlPreview(codeBlock, pre);
             return;
         }
         if (language && language !== 'text' && Prism.languages[language]) {
@@ -172,6 +177,77 @@ function renderPlantUMLInto(container, code) {
     container.style.padding = '0';
     container.style.background = '#272822';
     container.appendChild(pre);
+}
+
+// --- HTML preview rendering ---
+
+function renderHtmlPreview(codeBlock, pre) {
+    const code = codeBlock.textContent;
+
+    // Don't render incomplete HTML during streaming
+    if (!code.trim()) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = 'HTML Preview';
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    // Sandboxed iframe — no JS execution
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'diagram-content html-preview-content';
+    const iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-same-origin'; // No allow-scripts
+    iframe.style.cssText = 'width:100%;border:none;background:#fff;min-height:60px;';
+    iframe.srcdoc = code;
+    previewDiv.appendChild(iframe);
+
+    // Auto-resize iframe to fit content
+    iframe.onload = () => {
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            // Strip any script tags that might have been included
+            doc.querySelectorAll('script').forEach(s => s.remove());
+            const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
+            iframe.style.height = Math.min(Math.max(h, 60), 600) + 'px';
+        } catch { /* cross-origin, ignore */ }
+    };
+
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    if (Prism.languages.markup) {
+        sCode.innerHTML = Prism.highlight(code, Prism.languages.markup, 'html');
+    }
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(previewDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
+        previewDiv.style.display = showing ? 'none' : '';
+    };
 }
 
 // --- Shared utilities ---
