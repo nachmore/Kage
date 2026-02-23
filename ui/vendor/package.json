@@ -7,6 +7,7 @@
     "marked": "^15.0.0",
     "mermaid": "^10.0.0",
     "prismjs": "^1.29.0",
-    "@hpcc-js/wasm-graphviz": "^1.6.0"
+    "@hpcc-js/wasm-graphviz": "^1.6.0",
+    "mathjs": "^14.0.0"
   }
 }

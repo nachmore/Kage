@@ -88,3 +88,23 @@ For detailed documentation, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
 - [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md) - Complete guide to using and configuring shortcuts
 - [OS Abstraction Guide](docs/OS_ABSTRACTION_GUIDE.md) - Cross-platform OS abstraction layer
 - [OS Architecture](docs/OS_ARCHITECTURE.md) - System architecture documentation
+
+## Frontend Dependencies
+
+JavaScript libraries used by the UI are managed via npm in the `ui/vendor/` directory. The browser-ready bundles are copied into `ui/vendor/lib/` and loaded via `<script>` tags in the HTML files.
+
+To install or update dependencies:
+
+```bash
+cd ui/vendor
+npm install
+```
+
+After installing a new package, copy its browser bundle into `ui/vendor/lib/` and add a `<script>` tag to the relevant HTML files (`floating.html`, `index.html`, `settings.html`).
+
+Current vendor dependencies:
+- **marked** — Markdown parser
+- **mermaid** — Diagram rendering
+- **prismjs** — Syntax highlighting
+- **@hpcc-js/wasm-graphviz** — Graphviz diagram rendering
+- **mathjs** — Math expression evaluation

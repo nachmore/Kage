@@ -230,6 +230,13 @@
     background: #f3f4f6;
 }
 
+.math-result-value {
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    color: #4fc3f7;
+}
+
 .app-icon {
     width: 32px;
     height: 32px;

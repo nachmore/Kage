@@ -16,6 +16,8 @@ pub struct Config {
     pub debug_mode: bool,
     #[serde(default)]
     pub tool_permissions: ToolPermissionsConfig,
+    #[serde(default)]
+    pub math: MathConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,29 @@ impl Default for ToolPermissionsConfig {
         Self {
             trust_all: false,
             tools: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MathConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub precision: u8,
+    #[serde(default = "default_true")]
+    pub auto_copy: bool,
+    #[serde(default)]
+    pub thousands_separator: bool,
+}
+
+impl Default for MathConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            precision: 0,
+            auto_copy: true,
+            thousands_separator: false,
         }
     }
 }
@@ -171,6 +196,7 @@ impl Default for Config {
             shortcuts: vec![],
             debug_mode: false,
             tool_permissions: ToolPermissionsConfig::default(),
+            math: MathConfig::default(),
         }
     }
 }

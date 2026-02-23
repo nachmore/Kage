@@ -4,6 +4,7 @@ import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
+import { evaluateMath } from './math-eval.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -23,6 +24,7 @@ export class FloatingApp {
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
         this.attachmentManager = new AttachmentManager();
+        this.mathConfig = { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
         
         this.elements = {};
     }
@@ -37,11 +39,13 @@ export class FloatingApp {
         
         await this.loadShortcuts();
         await loadSlashCommands(this.invoke);
+        await this.loadMathConfig();
         
         // Listen for config updates
         this.listen('config_updated', async () => {
             console.log('Config updated, reloading shortcuts...');
             await this.loadShortcuts();
+            await this.loadMathConfig();
         });
 
         // Listen for slash commands from ACP
@@ -258,6 +262,29 @@ export class FloatingApp {
         }
     }
 
+    async loadMathConfig() {
+        try {
+            const config = await this.invoke('get_config');
+            this.mathConfig = config.math || { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
+        } catch (error) {
+            console.error('Failed to load math config:', error);
+        }
+    }
+
+    formatMathResult(display) {
+        if (this.mathConfig.thousands_separator) {
+            const parts = display.split('.');
+            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return parts.join('.');
+        }
+        return display;
+    }
+
+    tryEvaluateMath(query) {
+        if (!this.mathConfig.enabled) return null;
+        return evaluateMath(query, this.mathConfig.precision);
+    }
+
     matchShortcut(input) {
         const parts = input.split(/\s+/);
         const trigger = parts[0].toLowerCase();
@@ -424,6 +451,36 @@ export class FloatingApp {
             return;
         }
         
+        // Check for math expression
+        const mathResult = this.tryEvaluateMath(query);
+        if (mathResult) {
+            const formatted = this.formatMathResult(mathResult.display);
+            this.currentMatches = [{ type: 'math', value: formatted, raw: mathResult.result }];
+            this.selectedIndex = 0;
+            const container = this.elements.appSuggestions;
+            container.innerHTML = '';
+            container.scrollTop = 0;
+            const item = document.createElement('div');
+            item.className = 'app-suggestion-item selected';
+            item.innerHTML = `
+                <div class="app-icon">🧮</div>
+                <div class="app-info">
+                    <div class="app-name math-result-value">= ${formatted}</div>
+                    <div class="app-description">Press Enter to copy result</div>
+                </div>
+            `;
+            item.addEventListener('click', async () => {
+                await navigator.clipboard.writeText(formatted);
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+            });
+            container.appendChild(item);
+            container.classList.add('visible');
+            setTimeout(() => this.windowManager.resizeWindow(), 10);
+            return;
+        }
+
         // Check for > command prefix
         if (query.startsWith('>')) {
             this._noMatchSinceLen = 0;
@@ -691,6 +748,31 @@ export class FloatingApp {
             this.isWaitingForResponse = false;
         }
         
+        // Handle math result
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'math') {
+            const mathMatch = this.currentMatches[0];
+            const formatted = mathMatch.value;
+            
+            // Show result in response area
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            this.currentResponse = formatted;
+            renderMarkdown(`\`= ${formatted}\``, this.elements.responseText);
+            this.elements.contentArea.classList.add('visible');
+            this.windowManager.resizeWindow();
+            
+            // Auto-copy to clipboard
+            if (this.mathConfig.auto_copy) {
+                try {
+                    await navigator.clipboard.writeText(formatted);
+                } catch (e) {
+                    console.error('Failed to copy math result:', e);
+                }
+            }
+            return;
+        }
+
         // Handle > commands
         if (message.startsWith('>')) {
             const cmdName = message.substring(1).trim();

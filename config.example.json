@@ -24,5 +24,11 @@
   },
   "system": {
     "auto_start": false
+  },
+  "math": {
+    "enabled": true,
+    "precision": 0,
+    "auto_copy": true,
+    "thousands_separator": false
   }
 }
