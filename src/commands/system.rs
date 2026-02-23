@@ -269,7 +269,7 @@ pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<S
         }
     }
 
-    Ok(Some(format!("{} {}", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
+    Ok(Some(format!("{} {}\n\n---\n\nPlease respond with only \"ack\" to confirm you've received this context.", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
 }
 
 /// Open the auto-generated steering document in the default editor.

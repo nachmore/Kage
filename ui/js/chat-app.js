@@ -387,44 +387,48 @@ export class ChatApp {
     }
 
     async selectSession(sessionId) {
-        if (sessionId === this.activeSessionId) return;
+            if (sessionId === this.activeSessionId) return;
 
-        this.activeSessionId = sessionId;
-        this.renderSessionList();
+            this.activeSessionId = sessionId;
+            this.renderSessionList();
 
-        // Hide/show permission modal based on which session is active
-        if (window.ChatPermissions) {
-            window.ChatPermissions.onSessionSwitch(sessionId);
+            // Hide/show permission modal based on which session is active
+            if (window.ChatPermissions) {
+                window.ChatPermissions.onSessionSwitch(sessionId);
+            }
+
+            // Load and display session messages from files immediately
+            try {
+                const sessionData = await this.invoke('load_session', { sessionId });
+                this.displaySession(sessionData);
+            } catch (error) {
+                console.error('Failed to load session files:', error);
+                this.showError(this.formatError(error));
+            }
+
+            // Show connecting state in the input
+            this.elements.chatInput.disabled = true;
+            this.elements.chatInput.placeholder = 'Connecting to session...';
+            this.elements.sendBtn.disabled = true;
+
+            // Switch ACP session in parallel
+            try {
+                await this.invoke('switch_acp_session', { sessionId });
+                console.log('ACP session switched to:', sessionId);
+                this.elements.chatInput.disabled = false;
+                this.elements.chatInput.placeholder = 'Type your message...';
+                this.elements.sendBtn.disabled = false;
+                this.elements.chatInput.focus();
+            } catch (error) {
+                console.error('Failed to switch ACP session:', error);
+                const msg = this.formatError(error);
+                this.showError(msg);
+                // Keep input disabled on session error
+                this.elements.chatInput.disabled = true;
+                this.elements.chatInput.placeholder = 'Session unavailable';
+                this.elements.sendBtn.disabled = true;
+            }
         }
-
-        // Load and display session messages from files immediately
-        try {
-            const sessionData = await this.invoke('load_session', { sessionId });
-            this.displaySession(sessionData);
-        } catch (error) {
-            console.error('Failed to load session files:', error);
-            this.showError('Failed to load session: ' + error);
-        }
-
-        // Show connecting state in the input
-        this.elements.chatInput.disabled = true;
-        this.elements.chatInput.placeholder = 'Connecting to session...';
-        this.elements.sendBtn.disabled = true;
-
-        // Switch ACP session in parallel
-        try {
-            await this.invoke('switch_acp_session', { sessionId });
-            console.log('ACP session switched to:', sessionId);
-        } catch (error) {
-            console.error('Failed to switch ACP session:', error);
-            this.showError('Failed to connect to session: ' + error);
-        } finally {
-            this.elements.chatInput.disabled = false;
-            this.elements.chatInput.placeholder = 'Type your message...';
-            this.elements.sendBtn.disabled = false;
-            this.elements.chatInput.focus();
-        }
-    }
 
     displaySession(sessionData) {
         this.messages = [];
@@ -445,12 +449,12 @@ export class ChatApp {
                 // Collect text and images from content blocks
                 let textParts = [];
                 let imageDataUrls = [];
+                let isSteering = false;
                 for (const item of msg.content) {
                     if (item.kind === 'text' && typeof item.data === 'string') {
-                        // Hide the steering message if it is the very first message
-                        if (isFirstMessage && item.data.startsWith(STEERING_MSG_PREFIX)) {
-                            isFirstMessage = false;
-                            skipNextAssistant = true;
+                        if (item.data.startsWith(STEERING_MSG_PREFIX)) {
+                            isSteering = true;
+                            textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                             continue;
                         }
                         isFirstMessage = false;
@@ -460,6 +464,27 @@ export class ChatApp {
                         const dataUrl = sessionImageToDataUrl(item);
                         if (dataUrl) imageDataUrls.push(dataUrl);
                     }
+                }
+
+                if (isSteering) {
+                    // Show as collapsed steering bubble
+                    skipNextAssistant = true;
+                    const steeringEl = document.createElement('div');
+                    steeringEl.className = 'steering-message collapsed';
+                    steeringEl.innerHTML = `
+                        <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                            <span class="steering-icon">🛞</span>
+                            <span class="steering-label">Steering context sent</span>
+                            <span class="steering-toggle">▶</span>
+                        </div>
+                        <div class="steering-body">
+                            <div class="steering-content"></div>
+                        </div>
+                    `;
+                    const contentEl = steeringEl.querySelector('.steering-content');
+                    renderMarkdown(textParts.join('\n\n'), contentEl);
+                    this.elements.messagesArea.appendChild(steeringEl);
+                    continue;
                 }
 
                 // Render user message with text and images
@@ -473,9 +498,25 @@ export class ChatApp {
                 }
             } else if (msg.kind === 'AssistantMessage') {
                 isFirstMessage = false;
-                // Skip the assistant response to the steering message
+                // Collapse the ack response into the steering bubble
                 if (skipNextAssistant) {
                     skipNextAssistant = false;
+                    // Find the last steering bubble and append the ack
+                    const lastSteering = this.elements.messagesArea.querySelector('.steering-message:last-of-type');
+                    if (lastSteering) {
+                        const ackText = [];
+                        for (const item of msg.content) {
+                            if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
+                                ackText.push(item.data.trim());
+                            }
+                        }
+                        if (ackText.length > 0) {
+                            const ackEl = document.createElement('div');
+                            ackEl.className = 'steering-ack';
+                            ackEl.textContent = '↩ ' + ackText.join(' ');
+                            lastSteering.querySelector('.steering-body').appendChild(ackEl);
+                        }
+                    }
                     continue;
                 }
                 // Assistant message — extract text content, skip tool use entries
@@ -908,6 +949,18 @@ export class ChatApp {
         this.elements.messagesArea.appendChild(msgEl);
         this.scrollToBottom();
     }
+
+    /**
+     * Format an error for display — extracts message and data from structured errors
+     */
+    formatError(error) {
+        if (!error) return 'Unknown error';
+        const str = typeof error === 'string' ? error : String(error);
+        // Try to extract structured error fields (e.g., "Internal error: Failed to start session: ...")
+        // The Rust backend often formats as "message: data" or just the data string
+        return str;
+    }
+
 
     startTitleEdit() {
         if (!this.activeSessionId) return;

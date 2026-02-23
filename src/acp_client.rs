@@ -48,6 +48,20 @@ pub struct AcpError {
     pub data: Option<serde_json::Value>,
 }
 
+/// Format an ACP error including the data field if present
+fn format_acp_error(error: &AcpError) -> String {
+    match &error.data {
+        Some(data) => {
+            let data_str = match data {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            format!("{} — {}", error.message, data_str)
+        }
+        None => format!("{} (code: {})", error.message, error.code),
+    }
+}
+
 pub enum AcpConnectionMode {
     Local { spawn_command: String },
     Remote { host: String, port: u16 },
@@ -417,7 +431,7 @@ impl AcpClient {
 
         let response = self.send_request(&request)?;
         if let Some(error) = response.error {
-            anyhow::bail!("Initialize failed: {} (code: {})", error.message, error.code);
+            anyhow::bail!("Initialize failed: {}", format_acp_error(&error));
         }
 
         info!("ACP initialized successfully");
@@ -452,7 +466,7 @@ impl AcpClient {
 
         let response = self.send_request(&request)?;
         if let Some(error) = response.error {
-            anyhow::bail!("Session creation failed: {} (code: {})", error.message, error.code);
+            anyhow::bail!("Session creation failed: {}", format_acp_error(&error));
         }
 
         let result = response.result.context("No result in session/new response")?;
@@ -537,7 +551,7 @@ impl AcpClient {
 
         let response = self.send_request(&request)?;
         if let Some(error) = response.error {
-            anyhow::bail!("Session load failed: {} (code: {})", error.message, error.code);
+            anyhow::bail!("Session load failed: {}", format_acp_error(&error));
         }
 
         info!("Session loaded: {}", session_id);

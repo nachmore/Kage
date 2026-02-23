@@ -320,7 +320,7 @@ fn main() {
 
                             {
                                 let steering_msg = format!(
-                                    "{} {}",
+                                    "{} {}\n\n---\n\nPlease respond with only \"ack\" to confirm you've received this context.",
                                     crate::commands::system::STEERING_MSG_PREFIX,
                                     steering_parts.join("\n\n---\n\n")
                                 );
