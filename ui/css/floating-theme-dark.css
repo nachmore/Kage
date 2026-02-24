@@ -24,6 +24,19 @@ body.dark-theme .input-box::placeholder {
     color: #938F9B;
 }
 
+body.dark-theme .response-text a,
+body.dark-theme .content-area a {
+    color: #7cacf8;
+}
+body.dark-theme .response-text a:visited,
+body.dark-theme .content-area a:visited {
+    color: #b4a0e8;
+}
+body.dark-theme .response-text a:hover,
+body.dark-theme .content-area a:hover {
+    color: #a3c6ff;
+}
+
 body.dark-theme .expand-btn {
     color: #938F9B;
 }

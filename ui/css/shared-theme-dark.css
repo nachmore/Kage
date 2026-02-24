@@ -4,6 +4,16 @@ body.dark-theme .response-text {
     color: #E5E7EB;
 }
 
+body.dark-theme a {
+    color: #7cacf8;
+}
+body.dark-theme a:visited {
+    color: #b4a0e8;
+}
+body.dark-theme a:hover {
+    color: #a3c6ff;
+}
+
 body.dark-theme .streaming-indicator {
     color: var(--kiro-accent-light);
 }

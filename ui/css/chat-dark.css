@@ -80,6 +80,19 @@ body.dark-theme .messages-area {
     background: #211D25;
 }
 
+body.dark-theme .messages-area a,
+body.dark-theme .message-content a {
+    color: #7cacf8;
+}
+body.dark-theme .messages-area a:visited,
+body.dark-theme .message-content a:visited {
+    color: #b4a0e8;
+}
+body.dark-theme .messages-area a:hover,
+body.dark-theme .message-content a:hover {
+    color: #a3c6ff;
+}
+
 body.dark-theme .message.assistant .message-content {
     background: #28242E;
     color: #E5E7EB;
