@@ -404,6 +404,24 @@ body {
     transform: none;
 }
 
+.chat-send-btn.stop-mode {
+    background: rgba(220, 38, 38, 0.12);
+    color: #ef4444;
+    cursor: pointer;
+}
+.chat-send-btn.stop-mode:hover {
+    background: rgba(220, 38, 38, 0.22);
+    transform: none;
+    box-shadow: none;
+}
+body.light-theme .chat-send-btn.stop-mode {
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
+}
+body.light-theme .chat-send-btn.stop-mode:hover {
+    background: rgba(220, 38, 38, 0.15);
+}
+
 /* Error */
 .chat-error {
     background: #fee2e2;
@@ -812,14 +830,7 @@ body.light-theme .sidebar-toggle-btn {
     color: #333;
 }
 
-/* Chat stop generating button */
-.chat-stop-btn {
-    position: absolute;
-    top: -36px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
-}
+/* (chat-stop-btn removed — send button now toggles to stop mode) */
 .chat-input-area {
     position: relative;
 }

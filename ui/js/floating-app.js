@@ -70,6 +70,7 @@ export class FloatingApp {
             loadingDots: document.getElementById('loadingDots'),
             expandBtn: document.getElementById('expandBtn'),
             stopBtn: document.getElementById('stopGeneratingBtn'),
+            floatingStopBtn: document.getElementById('floatingStopBtn'),
             ghostContainer: document.querySelector('.ghost-container'),
             attachmentPreviews: document.getElementById('attachmentPreviews')
         };
@@ -80,6 +81,7 @@ export class FloatingApp {
             this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
             this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
             this.elements.stopBtn.addEventListener('click', () => this.stopGenerating());
+            this.elements.floatingStopBtn.addEventListener('click', () => this.stopGenerating());
             document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
             // Global keyboard shortcuts
@@ -89,6 +91,10 @@ export class FloatingApp {
                     if (this.isWaitingForResponse) {
                         e.preventDefault();
                         this.stopGenerating();
+                        return;
+                    }
+                    if (this._justStoppedGenerating) {
+                        e.preventDefault();
                         return;
                     }
                     this.appWindow.hide();
@@ -296,6 +302,10 @@ export class FloatingApp {
             if (window._contextMenuOpen) {
                 return;
             }
+            // Don't hide if currently generating a response
+            if (this.isWaitingForResponse || this._justStoppedGenerating) {
+                return;
+            }
             await this.appWindow.hide();
         });
     }
@@ -314,6 +324,7 @@ export class FloatingApp {
         this.elements.expandBtn.classList.remove('visible');
         this.currentResponse = '';
         this.toolSources = [];
+        this.elements.floatingStopBtn.style.display = 'none';
         const sourcesEl = document.getElementById('toolSources');
         if (sourcesEl) sourcesEl.remove();
         const compactEl = document.getElementById('toolSourcesCompact');
@@ -328,6 +339,10 @@ export class FloatingApp {
         this.elements.ghostContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
         this.elements.stopBtn.style.display = 'none'; // Show after first chunk
+        // Show inline stop button in input area, hide datetime
+        const dtDisplay = document.getElementById('datetimeDisplay');
+        if (dtDisplay) dtDisplay.style.display = 'none';
+        this.elements.floatingStopBtn.style.display = '';
     }
 
     stopThinking() {
@@ -338,8 +353,14 @@ export class FloatingApp {
     stopGenerating() {
         if (!this.isWaitingForResponse) return;
         this.isWaitingForResponse = false;
+        this._justStoppedGenerating = true;
+        setTimeout(() => { this._justStoppedGenerating = false; }, 300);
         this.stopThinking();
         this.elements.stopBtn.style.display = 'none';
+        this.elements.floatingStopBtn.style.display = 'none';
+        // Restore datetime display
+        const dtDisplay = document.getElementById('datetimeDisplay');
+        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
         // Remove streaming indicator
         const indicator = this.elements.responseText.querySelector('.streaming-indicator');
         if (indicator) indicator.remove();
@@ -865,7 +886,14 @@ export class FloatingApp {
             }
             // When no suggestions, let the default behavior handle cursor movement in textarea
         } else if (event.key === 'Escape') {
-            await this.appWindow.hide();
+            if (this.isWaitingForResponse) {
+                event.preventDefault();
+                this.stopGenerating();
+            } else if (this._justStoppedGenerating) {
+                event.preventDefault();
+            } else {
+                await this.appWindow.hide();
+            }
         } else if (event.key === 'Enter' && event.shiftKey) {
             // Shift+Enter: send directly to agent, bypassing suggestions
             if (this.currentMatches.length > 0) {
@@ -1099,6 +1127,10 @@ export class FloatingApp {
 
             this.stopThinking();
             this.elements.stopBtn.style.display = 'none';
+            this.elements.floatingStopBtn.style.display = 'none';
+            // Restore datetime display
+            const dtDisplay = document.getElementById('datetimeDisplay');
+            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
             const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
             if (streamingIndicator) streamingIndicator.remove();
 
@@ -1121,10 +1153,18 @@ export class FloatingApp {
         
         this.showError('Error: ' + event.payload);
         this.isWaitingForResponse = false;
+        this.elements.floatingStopBtn.style.display = 'none';
+        // Restore datetime display
+        const dtDisplay = document.getElementById('datetimeDisplay');
+        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
     }
 
     handleSessionReset(event) {
             this.isWaitingForResponse = false;
+            this.elements.floatingStopBtn.style.display = 'none';
+            // Restore datetime display
+            const dtDisplay = document.getElementById('datetimeDisplay');
+            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
             this.showError(getSessionResetMessage(event.payload));
         }
 

@@ -431,3 +431,36 @@ body.light-theme .stop-generating-btn:hover {
     background: rgba(220, 38, 38, 0.08);
     color: #dc2626;
 }
+
+/* Inline stop button in floating input area */
+.floating-stop-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: rgba(220, 38, 38, 0.12);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    border-radius: 6px;
+    color: #ef4444;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.floating-stop-btn:hover {
+    background: rgba(220, 38, 38, 0.22);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+body.light-theme .floating-stop-btn {
+    background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.15);
+    color: #dc2626;
+}
+body.light-theme .floating-stop-btn:hover {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.3);
+}

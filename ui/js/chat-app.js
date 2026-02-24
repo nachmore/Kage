@@ -95,7 +95,6 @@ export class ChatApp {
         this.elements = {
             chatInput: document.getElementById('chatInput'),
             sendBtn: document.getElementById('sendBtn'),
-            chatStopBtn: document.getElementById('chatStopBtn'),
             messagesArea: document.getElementById('messagesArea'),
             sessionList: document.getElementById('sessionList'),
             sessionSearch: document.getElementById('sessionSearch'),
@@ -161,8 +160,13 @@ export class ChatApp {
             }
         });
 
-        this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
-        this.elements.chatStopBtn.addEventListener('click', () => this.stopGenerating());
+        this.elements.sendBtn.addEventListener('click', () => {
+            if (this.isWaitingForResponse) {
+                this.stopGenerating();
+            } else {
+                this.sendMessage();
+            }
+        });
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
 
         // Session search
@@ -810,7 +814,6 @@ export class ChatApp {
             this.isWaitingForResponse = true;
             this.updateInputState();
             this.showTypingIndicator();
-            this.elements.chatStopBtn.style.display = '';
 
             this.currentStreamingMessage = this.createMessageElement('assistant', '');
             this.elements.messagesArea.appendChild(this.currentStreamingMessage);
@@ -821,7 +824,6 @@ export class ChatApp {
         if (!this.isWaitingForResponse) return;
         this.isWaitingForResponse = false;
         this.hideTypingIndicator();
-        this.elements.chatStopBtn.style.display = 'none';
 
         if (this.currentStreamingMessage) {
             const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
@@ -921,7 +923,6 @@ export class ChatApp {
             if (!this.isWaitingForResponse) return;
 
             this.hideTypingIndicator();
-            this.elements.chatStopBtn.style.display = 'none';
 
             if (this.currentStreamingMessage) {
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
@@ -1038,7 +1039,24 @@ export class ChatApp {
     }
 
     updateInputState() {
-        this.elements.sendBtn.disabled = this.isWaitingForResponse;
+        const btn = this.elements.sendBtn;
+        const sendIcon = btn.querySelector('.send-icon');
+        const stopIcon = btn.querySelector('.stop-icon');
+        if (this.isWaitingForResponse) {
+            btn.classList.add('stop-mode');
+            btn.disabled = false;
+            btn.setAttribute('aria-label', 'Stop generating');
+            btn.title = 'Stop generating (Esc)';
+            if (sendIcon) sendIcon.style.display = 'none';
+            if (stopIcon) stopIcon.style.display = '';
+        } else {
+            btn.classList.remove('stop-mode');
+            btn.disabled = false;
+            btn.setAttribute('aria-label', 'Send message');
+            btn.title = 'Send message';
+            if (sendIcon) sendIcon.style.display = '';
+            if (stopIcon) stopIcon.style.display = 'none';
+        }
         this.elements.chatInput.disabled = this.isWaitingForResponse;
     }
 
