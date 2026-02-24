@@ -547,3 +547,73 @@ body.dark-theme .attachment-preview-file-name {
 body.dark-theme .attachment-remove-btn {
     background: #dc2626;
 }
+
+/* Hotkey Picker */
+.hk-picker { display: flex; flex-direction: column; gap: 6px; }
+.hk-picker-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    min-height: 42px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+}
+.hk-picker-display:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    background: rgba(255,255,255,0.08);
+}
+.hk-picker-display.hk-capturing {
+    border-color: var(--kiro-accent, #6366f1);
+    background: rgba(99, 102, 241, 0.08);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+.hk-picker-keycaps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.hk-picker-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 5px;
+    font-size: 13px;
+    font-family: inherit;
+    min-width: 28px;
+    text-align: center;
+}
+.hk-picker-sep { color: #6b7280; font-size: 12px; }
+.hk-picker-edit-hint {
+    font-size: 11px;
+    color: #6b7280;
+    margin-left: 8px;
+}
+.hk-picker-waiting { color: #938F9B; font-size: 13px; }
+.hk-picker-status {
+    font-size: 12px;
+    min-height: 18px;
+}
+.hk-status-success { color: #22c55e; }
+.hk-status-error { color: #ef4444; }
+
+/* Light theme overrides */
+body.light-theme .hk-picker-display {
+    background: rgba(0,0,0,0.03);
+    border-color: rgba(0,0,0,0.12);
+}
+body.light-theme .hk-picker-display:hover {
+    background: rgba(0,0,0,0.05);
+}
+body.light-theme .hk-picker-key {
+    background: rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.12);
+    color: #333;
+}

@@ -4,20 +4,20 @@
  */
 class ShortcutsSettingsModule extends SettingsModule {
     constructor() {
-        super('shortcuts', 'Shortcuts', '⚡');
+        super('shortcuts', 'Quick Commands', '⚡');
         this.shortcuts = [];
         this.editingIndex = -1;
     }
 
     render() {
         return `
-            <div class="settings-section-header">${this.icon} Shortcuts</div>
+            <div class="settings-section-header">${this.icon} Quick Commands</div>
             
             <div class="setting-row">
                 <div class="setting-label-container">
-                    <div class="setting-label">Command Shortcuts</div>
+                    <div class="setting-label">Quick Commands</div>
                     <div class="setting-description">
-                        Create shortcuts to run programs, open URLs, send prompts to the agent, or run custom scripts.
+                        Create quick commands to run programs, open URLs, send prompts to the agent, or run custom scripts.
                         Use {*} for all arguments after the shortcut, or {0}, {1}, etc. for specific arguments.
                     </div>
                 </div>

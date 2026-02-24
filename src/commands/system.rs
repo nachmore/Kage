@@ -155,6 +155,74 @@ pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn get_app_info() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "authors": env!("CARGO_PKG_AUTHORS"),
+        "description": env!("CARGO_PKG_DESCRIPTION"),
+        "license": env!("CARGO_PKG_LICENSE"),
+        "repository": env!("CARGO_PKG_REPOSITORY"),
+        "homepage": env!("CARGO_PKG_HOMEPAGE"),
+        "name": env!("CARGO_PKG_NAME"),
+    }))
+}
+
+#[tauri::command]
+pub async fn try_register_hotkey(
+    app: tauri::AppHandle,
+    modifiers: Vec<String>,
+    key: String,
+) -> Result<bool, String> {
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+    let hotkey_str = if modifiers.is_empty() {
+        key.clone()
+    } else {
+        format!("{}+{}", modifiers.join("+"), key)
+    };
+    info!("Trying to register hotkey: {}", hotkey_str);
+
+    // Unregister all existing shortcuts first
+    let _ = app.global_shortcut().unregister_all();
+
+    // Try to register the new one
+    let floating = app.get_webview_window("floating");
+    match app.global_shortcut().on_shortcut(
+        hotkey_str.as_str(),
+        move |_app, _shortcut, event| {
+            if event.state != ShortcutState::Pressed { return; }
+            if let Some(ref w) = floating {
+                crate::commands::window::toggle_floating_window(w);
+            }
+        },
+    ) {
+        Ok(_) => {
+            info!("✅ Hotkey registered: {}", hotkey_str);
+            Ok(true)
+        }
+        Err(e) => {
+            let msg = format!("{}", e);
+            info!("❌ Hotkey registration failed: {}", msg);
+            // Try to re-register the old hotkey from config
+            let state: tauri::State<'_, AppState> = app.state();
+            let config = state.config.lock().await;
+            let old_hotkey = config.get_hotkey_string();
+            drop(config);
+            if let Some(floating) = app.get_webview_window("floating") {
+                let _ = app.global_shortcut().on_shortcut(
+                    old_hotkey.as_str(),
+                    move |_app, _shortcut, event| {
+                        if event.state != ShortcutState::Pressed { return; }
+                        crate::commands::window::toggle_floating_window(&floating);
+                    },
+                );
+            }
+            Err(msg)
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     #[cfg(target_os = "windows")]
     {

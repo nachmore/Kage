@@ -332,6 +332,25 @@ body.light-theme .keycap-sep { color: #999; }
     color: var(--kiro-text-muted, #938F9B);
     margin-top: 2px;
 }
+.about-homepage {
+    font-size: 12px;
+    margin-top: 2px;
+}
+.about-homepage a {
+    color: var(--kiro-accent, #6366f1);
+    text-decoration: none;
+}
+.about-homepage a:hover {
+    text-decoration: underline;
+}
+.about-description {
+    font-size: 13px;
+    color: var(--kiro-text-muted, #938F9B);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--kiro-border-subtle);
+}
 .about-info {
     display: flex;
     flex-direction: column;

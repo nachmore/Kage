@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Kiro Assistant</title>
     <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <link rel="stylesheet" href="css/shared-components.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -146,8 +147,7 @@
     <div class="welcome-section">
         <div class="welcome-label">Global Hotkey</div>
         <div class="welcome-desc">Press this shortcut anywhere to summon Kiro</div>
-        <div class="welcome-hotkey-display" id="hotkeyDisplay" title="Click to change">Loading...</div>
-        <div class="welcome-hotkey-hint" id="hotkeyHint" style="display:none">Press a key combination, then release...</div>
+        <div id="hotkeyPickerContainer"></div>
     </div>
 
     <div class="welcome-section">
@@ -160,9 +160,11 @@
     <div class="welcome-actions">
         <button class="welcome-btn welcome-btn-primary" id="getStartedBtn">Get Started</button>
     </div>
-    <div class="welcome-hint">You can change these settings anytime in Settings → About</div>
+    <div class="welcome-hint">You can change these anytime in Settings</div>
 
-    <script>
+    <script type="module">
+        import { HotkeyPicker } from './js/hotkey-picker.js';
+
         function initWelcome() {
             if (!window.__TAURI__?.core) {
                 setTimeout(initWelcome, 50);
@@ -174,60 +176,32 @@
             // Show window now that content is loaded
             appWindow.show().then(() => appWindow.setFocus());
 
-            let currentHotkey = { modifiers: ['Alt'], key: 'Space' };
-            function renderHotkey(hk) {
-                const parts = [...(hk.modifiers || []), hk.key];
-                const display = document.getElementById('hotkeyDisplay');
-                display.innerHTML = parts.map(k =>
-                    '<span class="hotkey-key">' + k + '</span>'
-                ).join('<span style="color:#6b7280">+</span>');
-            }
+            // Initialize hotkey picker
+            const picker = new HotkeyPicker(
+                document.getElementById('hotkeyPickerContainer'),
+                invoke,
+                { modifiers: ['Alt'], key: 'Space' }
+            );
 
-            // Load current hotkey
+            // Load current hotkey from config
             invoke('get_config').then(config => {
-                currentHotkey = config.hotkey;
-                renderHotkey(currentHotkey);
-            }).catch(() => {
-                renderHotkey(currentHotkey);
-            });
+                if (config.hotkey) picker.setHotkey(config.hotkey);
+            }).catch(() => {});
 
-            // Click to capture new hotkey via low-level keyboard hook
-            const display = document.getElementById('hotkeyDisplay');
-            const hint = document.getElementById('hotkeyHint');
-            let captureInProgress = false;
-
-            display.addEventListener('click', async () => {
-                if (captureInProgress) return;
-                captureInProgress = true;
-                display.classList.add('capturing');
-                display.innerHTML = '<span style="color:#938F9B">Press any key combo...</span>';
-                hint.textContent = 'Press your desired shortcut now';
-                hint.style.display = '';
-
+            // Save on hotkey change
+            picker.onChange(async (hk) => {
                 try {
-                    const result = await invoke('capture_hotkey_combo');
-                    if (result) {
-                        currentHotkey = { modifiers: result.modifiers, key: result.key };
-                        renderHotkey(currentHotkey);
-                    } else {
-                        renderHotkey(currentHotkey);
-                    }
+                    const config = await invoke('get_config');
+                    config.hotkey = hk;
+                    await invoke('save_config', { config });
                 } catch (e) {
-                    console.error('Hotkey capture failed:', e);
-                    renderHotkey(currentHotkey);
+                    console.error('Failed to save hotkey:', e);
                 }
-                display.classList.remove('capturing');
-                hint.style.display = 'none';
-                captureInProgress = false;
             });
 
             document.getElementById('getStartedBtn').addEventListener('click', async () => {
                 const launchAtStartup = document.getElementById('launchStartup').checked;
                 try {
-                    // Save hotkey if changed
-                    const config = await invoke('get_config');
-                    config.hotkey = currentHotkey;
-                    await invoke('save_config', { config });
                     await invoke('complete_first_run', { launchAtStartup });
                 } catch (e) {
                     console.error('Failed to complete first run:', e);

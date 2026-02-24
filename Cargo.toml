@@ -2,11 +2,11 @@
 name = "kiro-assistant"
 version = "0.2.0"
 edition = "2021"
-authors = ["Kiro Team"]
-description = "Kiro Desktop Assistant - A cross-platform AI assistant with floating window interface"
+authors = ["Oren Nachman (nachmano@)"]
+description = "Your AI-powered desktop companion!"
 license = "MIT"
-repository = "https://github.com/kiro/kiro-assistant"
-
+repository = "TBD"
+homepage = "TBD"
 
 [dependencies]
 tauri = { version = "2.10", features = ["tray-icon", "image-png"] }

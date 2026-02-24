@@ -1,213 +1,65 @@
 /**
- * Hotkey Settings Module — custom dropdown with keycap badges
+ * Hotkey & Shortcuts Settings Module - uses shared HotkeyPicker component
  */
 class HotkeySettingsModule extends SettingsModule {
     constructor() {
-        super('hotkey', 'Hotkeys & Shortcuts', '🎹');
-        this._selectedValue = 'Alt+Space';
-        this._customHotkey = '';
-        this._capturing = false;
-        this._open = false;
+        super('hotkey', 'Hotkey & Shortcuts', '\u{1F3B9}');
+        this._picker = null;
     }
-
     render() {
-        const presets = [
-            { value: 'Alt+Space', label: 'default' },
-            { value: 'Ctrl+Space' },
-            { value: 'Alt+K' },
-            { value: 'Ctrl+Shift+K' },
-            { value: 'Alt+Shift+Space' },
-            { value: 'Ctrl+Shift+Space' },
-            { value: 'Alt+J' },
-            { value: 'Ctrl+Shift+J' },
-        ];
-
-        const items = presets.map(p => {
-            const label = p.label ? ' <span class="hotkey-dropdown-label">' + p.label + '</span>' : '';
-            return '<div class="hotkey-dropdown-item" data-value="' + p.value + '" onclick="hotkeyModule.selectPreset(this)">'
-                + '<span class="hotkey-dropdown-keycaps-inner" data-keys="' + p.value + '"></span>' + label + '</div>';
-        }).join('');
-
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
-            + this.createControlRow('Global Hotkey', 'Choose a preset or capture a custom hotkey combination.',
-                '<div class="hotkey-dropdown" id="hotkeyDropdown">'
-                + '<div class="hotkey-dropdown-selected" id="hotkeySelected" onclick="hotkeyModule.toggleDropdown()">'
-                +   '<span class="keycap-preview" id="hotkeySelectedKeycaps"></span>'
-                +   '<span class="hotkey-dropdown-arrow">▾</span>'
-                + '</div>'
-                + '<div class="hotkey-dropdown-menu" id="hotkeyMenu" style="display:none;">'
-                +   items
-                +   '<div class="hotkey-dropdown-divider"></div>'
-                +   '<div class="hotkey-dropdown-item" data-value="custom" onclick="hotkeyModule.selectPreset(this)">'
-                +     '<span style="opacity:0.6">Custom…</span>'
-                +   '</div>'
-                + '</div>'
-                + '</div>'
-                + '<div id="customHotkeyRow" style="display:none; margin-top: 8px;">'
-                +   '<div style="display: flex; gap: 8px; align-items: center;">'
-                +     '<div class="keycap-preview" id="customHotkeyDisplay"></div>'
-                +     '<button class="setting-button" id="captureBtn" onclick="hotkeyModule.startCapture()">Capture</button>'
-                +   '</div>'
-                +   '<div class="setting-description" style="margin-top: 4px;">Click Capture, then press your desired key combination.</div>'
-                + '</div>'
-            )
-            + '<div class="setting-row" style="margin-top: 24px;">'
-            +   '<div class="setting-label">Keyboard Shortcuts</div>'
-            +   '<div class="setting-description">Built-in shortcuts available across the application.</div>'
-            + '</div>'
+            + this.createControlRow('Global Hotkey', 'The shortcut to summon Kiro from anywhere.', '<div id="settingsHotkeyPicker"></div>')
+            + '<div class="setting-row" style="margin-top: 6px;"><div class="setting-label">Keyboard Shortcuts</div><div class="setting-description">Built-in shortcuts available across the application.</div></div>'
             + '<div class="shortcuts-reference">'
-            +   this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
-            +   this.shortcutRow('Ctrl+W', 'Close / hide window', 'All windows')
-            +   this.shortcutRow('Ctrl+,', 'Open settings', 'Floating & Chat')
-            +   this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Floating')
-            +   this.shortcutRow('Ctrl+L', 'Clear / reset', 'Floating')
-            +   this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Floating & Chat')
-            +   this.shortcutRow('Escape', 'Hide window', 'Floating')
-            +   this.shortcutRow('Enter', 'Send message', 'All')
-            +   this.shortcutRow('Shift+Enter', 'Send to agent (with suggestions)', 'Floating')
-            + '</div>'
-            + '</div>';
+            + this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
+            + this.shortcutRow('Ctrl+W', 'Close / hide window', 'All windows')
+            + this.shortcutRow('Ctrl+,', 'Open settings', 'Floating & Chat')
+            + this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Floating')
+            + this.shortcutRow('Ctrl+L', 'Clear / reset', 'Floating')
+            + this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Floating & Chat')
+            + this.shortcutRow('Ctrl+Enter', 'Send to agent (bypass suggestions)', 'Floating')
+            + this.shortcutRow('Escape', 'Stop generating / Hide window', 'Floating')
+            + this.shortcutRow('Enter', 'Send message', 'All')
+            + this.shortcutRow('Shift+Enter', 'New line', 'All')
+            + '</div></div>';
     }
-
-    initialize() {
-        window.hotkeyModule = this;
-        // Render keycaps inside each dropdown item
-        document.querySelectorAll('.hotkey-dropdown-keycaps-inner[data-keys]').forEach(el => {
-            this.renderKeycaps(el, el.dataset.keys);
+    async initialize() {
+        const { HotkeyPicker } = await import('../hotkey-picker.js');
+        const invoke = window.__TAURI__.core.invoke;
+        const container = document.getElementById('settingsHotkeyPicker');
+        if (!container) return;
+        this._picker = new HotkeyPicker(container, invoke, { modifiers: ['Alt'], key: 'Space' });
+        this._picker.onChange(async (hk) => {
+            try {
+                const config = await invoke('get_config');
+                config.hotkey = hk;
+                await invoke('save_config', { config });
+            } catch (e) { console.error('Failed to save hotkey:', e); }
         });
-        // Render keycaps in shortcuts reference
         document.querySelectorAll('.shortcut-ref-keys[data-keys]').forEach(el => {
             this.renderKeycaps(el, el.dataset.keys);
         });
-        // Close dropdown on outside click
-        document.addEventListener('click', (e) => {
-            if (this._open && !document.getElementById('hotkeyDropdown')?.contains(e.target)) {
-                this.closeDropdown();
-            }
-        });
     }
-
     load(config) {
-        if (!config.hotkey) return;
-        const hotkeyStr = config.hotkey.modifiers.join('+') + '+' + config.hotkey.key;
-        const presetExists = document.querySelector('.hotkey-dropdown-item[data-value="' + hotkeyStr + '"]');
-        if (presetExists) {
-            this._selectedValue = hotkeyStr;
-        } else {
-            this._selectedValue = 'custom';
-            this._customHotkey = hotkeyStr;
-            const customDisplay = document.getElementById('customHotkeyDisplay');
-            if (customDisplay) this.renderKeycaps(customDisplay, hotkeyStr);
-            document.getElementById('customHotkeyRow').style.display = '';
-        }
-        this.renderKeycaps(document.getElementById('hotkeySelectedKeycaps'),
-            this._selectedValue === 'custom' ? null : this._selectedValue);
-        if (this._selectedValue === 'custom') {
-            document.getElementById('hotkeySelectedKeycaps').innerHTML = '<span style="opacity:0.5">Custom…</span>';
-        }
-        this.updateActiveItem();
+        if (config.hotkey && this._picker) this._picker.setHotkey(config.hotkey);
     }
-
     save(config) {
-        const hotkeyStr = this._selectedValue === 'custom' ? (this._customHotkey || 'Alt+Space') : this._selectedValue;
-        const parts = hotkeyStr.split('+').map(s => s.trim()).filter(Boolean);
-        config.hotkey = parts.length >= 2
-            ? { modifiers: parts.slice(0, -1), key: parts[parts.length - 1] }
-            : { modifiers: ['Alt'], key: 'Space' };
-    }
-
-    toggleDropdown() {
-        this._open ? this.closeDropdown() : this.openDropdown();
-    }
-
-    openDropdown() {
-        document.getElementById('hotkeyMenu').style.display = '';
-        this._open = true;
-    }
-
-    closeDropdown() {
-        document.getElementById('hotkeyMenu').style.display = 'none';
-        this._open = false;
-    }
-
-    selectPreset(el) {
-        const value = el.dataset.value;
-        this._selectedValue = value;
-        this.closeDropdown();
-
-        const customRow = document.getElementById('customHotkeyRow');
-        if (value === 'custom') {
-            customRow.style.display = '';
-            document.getElementById('hotkeySelectedKeycaps').innerHTML = '<span style="opacity:0.5">Custom…</span>';
-        } else {
-            customRow.style.display = 'none';
-            this.renderKeycaps(document.getElementById('hotkeySelectedKeycaps'), value);
+        // Hotkey is saved immediately on capture via try_register_hotkey,
+        // but we need to ensure the field exists for the save_config call
+        if (!config.hotkey && this._picker) {
+            config.hotkey = this._picker.hotkey;
         }
-        this.updateActiveItem();
     }
-
-    updateActiveItem() {
-        document.querySelectorAll('.hotkey-dropdown-item').forEach(el => {
-            el.classList.toggle('active', el.dataset.value === this._selectedValue);
-        });
-    }
-
     renderKeycaps(container, hotkeyStr) {
         if (!container || !hotkeyStr) return;
         const parts = hotkeyStr.split('+').map(s => s.trim()).filter(Boolean);
         container.innerHTML = parts.map((key, i) => {
             const sep = i < parts.length - 1 ? '<span class="keycap-sep">+</span>' : '';
-            return '<kbd class="keycap">' + escapeHtml(key) + '</kbd>' + sep;
+            return '<kbd class="keycap">' + key + '</kbd>' + sep;
         }).join('');
     }
-
-    startCapture() {
-        if (this._capturing) { this.stopCapture(); return; }
-        this._capturing = true;
-        const btn = document.getElementById('captureBtn');
-        const display = document.getElementById('customHotkeyDisplay');
-        btn.textContent = 'Cancel';
-        display.classList.add('capturing');
-        display.innerHTML = '<kbd class="keycap" style="opacity:0.5">Waiting…</kbd>';
-
-        this._keyHandler = (e) => {
-            if (!this._capturing) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const mods = [];
-            if (e.ctrlKey) mods.push('Ctrl');
-            if (e.altKey) mods.push('Alt');
-            if (e.shiftKey) mods.push('Shift');
-            if (e.metaKey) mods.push('Meta');
-            const key = e.key;
-            if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return;
-            const keyMap = { ' ': 'Space', 'ArrowUp': 'Up', 'ArrowDown': 'Down', 'ArrowLeft': 'Left', 'ArrowRight': 'Right', 'Escape': 'Escape', 'Enter': 'Enter', 'Backspace': 'Backspace', 'Delete': 'Delete', 'Tab': 'Tab' };
-            const mapped = keyMap[key] || key.toUpperCase();
-            this._customHotkey = [...mods, mapped].join('+');
-            this.renderKeycaps(display, this._customHotkey);
-            this.stopCapture();
-        };
-        document.addEventListener('keydown', this._keyHandler, true);
-    }
-
-    stopCapture() {
-        this._capturing = false;
-        document.getElementById('captureBtn').textContent = 'Capture';
-        document.getElementById('customHotkeyDisplay')?.classList.remove('capturing');
-        if (this._keyHandler) {
-            document.removeEventListener('keydown', this._keyHandler, true);
-            this._keyHandler = null;
-        }
-    }
-
-    validate() {
-        if (this._selectedValue === 'custom' && (!this._customHotkey || !this._customHotkey.includes('+'))) {
-            return { valid: false, error: 'Please capture a custom hotkey combination first.' };
-        }
-        return { valid: true };
-    }
-
+    validate() { return { valid: true }; }
     shortcutRow(keys, description, scope) {
         return '<div class="shortcut-ref-row">'
             + '<span class="shortcut-ref-keys" data-keys="' + keys + '"></span>'
@@ -215,6 +67,5 @@ class HotkeySettingsModule extends SettingsModule {
             + '<span class="shortcut-ref-scope">' + scope + '</span>'
             + '</div>';
     }
-
-    destroy() { delete window.hotkeyModule; }
+    destroy() { this._picker = null; }
 }

@@ -450,6 +450,8 @@ fn main() {
             commands::open_devtools,
             commands::capture_hotkey_combo,
             commands::cancel_hotkey_capture,
+            commands::try_register_hotkey,
+            commands::get_app_info,
             commands::open_welcome_window,
             commands::complete_first_run,
             commands::is_first_run,
