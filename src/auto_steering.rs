@@ -197,7 +197,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         full_prompt
     } else {
         format!(
-            "{}\n\n---\n\nExisting preference document (update and merge with new findings, don't lose existing information unless contradicted):\n\n{}",
+            "{}\n\n---\n\nExisting preference document (update and merge with new findings, critical personal information should always be retained, don't lose it):\n\n{}",
             full_prompt, existing_body.trim()
         )
     };
