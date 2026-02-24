@@ -1,5 +1,19 @@
 /* Shared component styles: response text, streaming, loading, permissions, tool sources */
 
+/* Sortable table headers */
+.response-text th[data-sort-dir],
+.message-content th[data-sort-dir] {
+    transition: background 0.15s;
+}
+.response-text th:hover,
+.message-content th:hover {
+    background: rgba(0,0,0,0.04);
+}
+body.dark-theme .response-text th:hover,
+body.dark-theme .message-content th:hover {
+    background: rgba(255,255,255,0.06);
+}
+
 /* Response Text */
 .response-text {
     font-size: 14px;

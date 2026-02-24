@@ -51,6 +51,9 @@ export function renderMarkdown(markdown, targetElement) {
         }
         wrapCodeBlock(codeBlock, pre, language);
     });
+
+    // Make tables sortable by clicking column headers
+    makeTablesSortable(targetElement);
 }
 
 function wrapCodeBlock(codeBlock, pre, language) {
@@ -267,4 +270,49 @@ function copyCode(code, button) {
         button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
         setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
     }).catch(err => console.error('Copy failed:', err));
+}
+
+function makeTablesSortable(container) {
+    container.querySelectorAll('table').forEach(table => {
+        const thead = table.querySelector('thead');
+        const tbody = table.querySelector('tbody');
+        if (!thead || !tbody) return;
+
+        const headers = thead.querySelectorAll('th');
+        headers.forEach((th, colIndex) => {
+            th.style.cursor = 'pointer';
+            th.style.userSelect = 'none';
+            th.title = 'Click to sort';
+            th.addEventListener('click', () => {
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const currentDir = th.dataset.sortDir || 'none';
+                const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+                // Reset all headers
+                headers.forEach(h => {
+                    h.dataset.sortDir = 'none';
+                    h.textContent = h.textContent.replace(/ [▲▼]$/, '');
+                });
+
+                th.dataset.sortDir = newDir;
+                th.textContent += newDir === 'asc' ? ' ▲' : ' ▼';
+
+                rows.sort((a, b) => {
+                    const aText = (a.cells[colIndex]?.textContent || '').trim();
+                    const bText = (b.cells[colIndex]?.textContent || '').trim();
+                    const aNum = parseFloat(aText);
+                    const bNum = parseFloat(bText);
+                    // Numeric sort if both are numbers
+                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                        return newDir === 'asc' ? aNum - bNum : bNum - aNum;
+                    }
+                    // String sort
+                    const cmp = aText.localeCompare(bText, undefined, { numeric: true, sensitivity: 'base' });
+                    return newDir === 'asc' ? cmp : -cmp;
+                });
+
+                rows.forEach(row => tbody.appendChild(row));
+            });
+        });
+    });
 }
