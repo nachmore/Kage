@@ -74,27 +74,63 @@ export class FloatingApp {
     }
 
     setupEventListeners() {
-        this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
-        this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
-        this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
-        document.addEventListener('click', (e) => this.handleOutsideClick(e));
+            this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
+            this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
+            this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
+            document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
-        // Global Escape to hide the floating window regardless of focus
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.appWindow.hide();
-            }
-        });
+            // Global keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                // Escape — hide floating window
+                if (e.key === 'Escape') {
+                    this.appWindow.hide();
+                    return;
+                }
+                // Ctrl+, — open settings
+                if (e.ctrlKey && e.key === ',') {
+                    e.preventDefault();
+                    this.invoke('open_settings_window');
+                    return;
+                }
+                // Ctrl+E — expand to full chat
+                if (e.ctrlKey && e.key === 'e') {
+                    e.preventDefault();
+                    this.handleExpandClick();
+                    return;
+                }
+                // Ctrl+L — clear/reset
+                if (e.ctrlKey && e.key === 'l') {
+                    e.preventDefault();
+                    this.resetUI();
+                    this.windowManager.userSetHeight = null;
+                    this.windowManager.resizeWindow();
+                    return;
+                }
+                // Ctrl+Shift+C — copy last response
+                if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                    e.preventDefault();
+                    if (this.currentResponse) {
+                        navigator.clipboard.writeText(this.currentResponse).catch(() => {});
+                    }
+                    return;
+                }
+                // Ctrl+W — hide window
+                if (e.ctrlKey && e.key === 'w') {
+                    e.preventDefault();
+                    this.appWindow.hide();
+                    return;
+                }
+            });
 
-        // Paste handler for images
-        this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
+            // Paste handler for images
+            this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
 
-        // Re-render previews when attachments change and resize window
-        this.attachmentManager.onChange((attachments) => {
-            renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
-            this.windowManager.resizeWindow();
-        });
-    }
+            // Re-render previews when attachments change and resize window
+            this.attachmentManager.onChange((attachments) => {
+                renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+                this.windowManager.resizeWindow();
+            });
+        }
 
     setupStreamingListeners() {
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));

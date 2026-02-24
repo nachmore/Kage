@@ -3,7 +3,7 @@
  */
 class HotkeySettingsModule extends SettingsModule {
     constructor() {
-        super('hotkey', 'Hotkey', '🎹');
+        super('hotkey', 'Hotkeys & Shortcuts', '🎹');
         this._selectedValue = 'Alt+Space';
         this._customHotkey = '';
         this._capturing = false;
@@ -52,6 +52,21 @@ class HotkeySettingsModule extends SettingsModule {
                 +   '<div class="setting-description" style="margin-top: 4px;">Click Capture, then press your desired key combination.</div>'
                 + '</div>'
             )
+            + '<div class="setting-row" style="margin-top: 24px;">'
+            +   '<div class="setting-label">Keyboard Shortcuts</div>'
+            +   '<div class="setting-description">Built-in shortcuts available across the application.</div>'
+            + '</div>'
+            + '<div class="shortcuts-reference">'
+            +   this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
+            +   this.shortcutRow('Ctrl+W', 'Close / hide window', 'All windows')
+            +   this.shortcutRow('Ctrl+,', 'Open settings', 'Floating & Chat')
+            +   this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Floating')
+            +   this.shortcutRow('Ctrl+L', 'Clear / reset', 'Floating')
+            +   this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Floating & Chat')
+            +   this.shortcutRow('Escape', 'Hide window', 'Floating')
+            +   this.shortcutRow('Enter', 'Send message', 'All')
+            +   this.shortcutRow('Shift+Enter', 'Send to agent (with suggestions)', 'Floating')
+            + '</div>'
             + '</div>';
     }
 
@@ -59,6 +74,10 @@ class HotkeySettingsModule extends SettingsModule {
         window.hotkeyModule = this;
         // Render keycaps inside each dropdown item
         document.querySelectorAll('.hotkey-dropdown-keycaps-inner[data-keys]').forEach(el => {
+            this.renderKeycaps(el, el.dataset.keys);
+        });
+        // Render keycaps in shortcuts reference
+        document.querySelectorAll('.shortcut-ref-keys[data-keys]').forEach(el => {
             this.renderKeycaps(el, el.dataset.keys);
         });
         // Close dropdown on outside click
@@ -187,6 +206,14 @@ class HotkeySettingsModule extends SettingsModule {
             return { valid: false, error: 'Please capture a custom hotkey combination first.' };
         }
         return { valid: true };
+    }
+
+    shortcutRow(keys, description, scope) {
+        return '<div class="shortcut-ref-row">'
+            + '<span class="shortcut-ref-keys" data-keys="' + keys + '"></span>'
+            + '<span class="shortcut-ref-desc">' + description + '</span>'
+            + '<span class="shortcut-ref-scope">' + scope + '</span>'
+            + '</div>';
     }
 
     destroy() { delete window.hotkeyModule; }

@@ -214,9 +214,37 @@ export class ChatApp {
         });
 
         document.addEventListener('keydown', (e) => {
+            // Lightbox close
             if (e.key === 'Escape' && lightbox.style.display !== 'none') {
                 lightbox.style.display = 'none';
                 lightboxImg.src = '';
+                return;
+            }
+            // Ctrl+N — new session
+            if (e.ctrlKey && e.key === 'n') {
+                e.preventDefault();
+                this.createNewSession();
+                return;
+            }
+            // Ctrl+, — open settings
+            if (e.ctrlKey && e.key === ',') {
+                e.preventDefault();
+                this.invoke('open_settings_window');
+                return;
+            }
+            // Ctrl+W — hide window
+            if (e.ctrlKey && e.key === 'w') {
+                e.preventDefault();
+                this.appWindow.hide();
+                return;
+            }
+            // Ctrl+Shift+C — copy last response
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                if (this.currentStreamingContent) {
+                    navigator.clipboard.writeText(this.currentStreamingContent).catch(() => {});
+                }
+                return;
             }
         });
     }

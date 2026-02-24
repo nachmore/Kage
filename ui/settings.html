@@ -48,7 +48,7 @@
                 </div>
                 <div class="sidebar-item" data-section="hotkey" onclick="switchSection('hotkey')">
                     <span class="sidebar-item-icon">🎹</span>
-                    <span>Hotkey</span>
+                    <span>Hotkeys & Shortcuts</span>
                 </div>
                 <div class="sidebar-item" data-section="system" onclick="switchSection('system')">
                     <span class="sidebar-item-icon" id="systemSidebarIcon">🚀</span>
@@ -144,6 +144,16 @@
                 });
             });
         })();
+
+        // Ctrl+W to close settings
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'w') {
+                e.preventDefault();
+                if (window.__TAURI__) {
+                    window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
+                }
+            }
+        });
     </script>
 
     <!-- Load all settings modules -->

@@ -272,3 +272,34 @@ body.light-theme .keycap-sep { color: #999; }
 .hotkey-dropdown-item.active { background: rgba(113, 56, 204, 0.25); }
 .hotkey-dropdown-label { font-size: 11px; color: var(--kiro-text-muted); }
 .hotkey-dropdown-divider { height: 1px; background: var(--kiro-border); margin: 4px 0; }
+
+/* Shortcuts reference table */
+.shortcuts-reference {
+    margin: 8px 0;
+    border: 1px solid var(--kiro-border-subtle);
+    border-radius: 6px;
+    overflow: hidden;
+}
+.shortcut-ref-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--kiro-border-subtle);
+    gap: 12px;
+}
+.shortcut-ref-row:last-child { border-bottom: none; }
+.shortcut-ref-keys {
+    min-width: 140px;
+    display: inline-flex;
+    align-items: center;
+}
+.shortcut-ref-desc {
+    flex: 1;
+    font-size: 13px;
+    color: var(--kiro-text);
+}
+.shortcut-ref-scope {
+    font-size: 11px;
+    color: var(--kiro-text-muted);
+    white-space: nowrap;
+}
