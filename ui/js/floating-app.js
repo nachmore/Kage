@@ -6,6 +6,7 @@ import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashComman
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 import { evaluateMath } from './math-eval.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
+import { sendAppNotification } from './notify.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -68,6 +69,7 @@ export class FloatingApp {
             responseText: document.getElementById('responseText'),
             loadingDots: document.getElementById('loadingDots'),
             expandBtn: document.getElementById('expandBtn'),
+            stopBtn: document.getElementById('stopGeneratingBtn'),
             ghostContainer: document.querySelector('.ghost-container'),
             attachmentPreviews: document.getElementById('attachmentPreviews')
         };
@@ -77,12 +79,18 @@ export class FloatingApp {
             this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
             this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
             this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
+            this.elements.stopBtn.addEventListener('click', () => this.stopGenerating());
             document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                // Escape — hide floating window
+                // Escape — stop generating first, then hide
                 if (e.key === 'Escape') {
+                    if (this.isWaitingForResponse) {
+                        e.preventDefault();
+                        this.stopGenerating();
+                        return;
+                    }
                     this.appWindow.hide();
                     return;
                 }
@@ -319,12 +327,29 @@ export class FloatingApp {
     startThinking() {
         this.elements.ghostContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
+        this.elements.stopBtn.style.display = 'none'; // Show after first chunk
     }
 
     stopThinking() {
         this.elements.ghostContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
     }
+
+    stopGenerating() {
+        if (!this.isWaitingForResponse) return;
+        this.isWaitingForResponse = false;
+        this.stopThinking();
+        this.elements.stopBtn.style.display = 'none';
+        // Remove streaming indicator
+        const indicator = this.elements.responseText.querySelector('.streaming-indicator');
+        if (indicator) indicator.remove();
+        // Re-render final markdown cleanly
+        if (this.currentResponse) {
+            renderMarkdown(this.currentResponse, this.elements.responseText);
+        }
+        this.windowManager.resizeWindow();
+    }
+
     async loadShortcuts() {
         try {
             const config = await this.invoke('get_config');
@@ -1042,6 +1067,7 @@ export class FloatingApp {
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');
             this.elements.ghostContainer.classList.remove('thinking');
+            this.elements.stopBtn.style.display = '';
             
             // Transition compact sources to full (bottom) layout
             const compactEl = document.getElementById('toolSourcesCompact');
@@ -1069,18 +1095,26 @@ export class FloatingApp {
     }
 
     async handleMessageComplete() {
-        if (!this.isWaitingForResponse) return;
-        
-        this.stopThinking();
-        const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
-        if (streamingIndicator) {
-            streamingIndicator.remove();
+            if (!this.isWaitingForResponse) return;
+
+            this.stopThinking();
+            this.elements.stopBtn.style.display = 'none';
+            const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
+            if (streamingIndicator) streamingIndicator.remove();
+
+            renderMarkdown(this.currentResponse, this.elements.responseText);
+            await this.windowManager.resizeWindow();
+            this.isWaitingForResponse = false;
+
+            // Notify if window is hidden
+            try {
+                const isVisible = await this.appWindow.isVisible();
+                if (!isVisible && this.currentResponse) {
+                    const preview = this.currentResponse.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
+                    await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'floating');
+                }
+            } catch { /* ignore */ }
         }
-        
-        renderMarkdown(this.currentResponse, this.elements.responseText);
-        await this.windowManager.resizeWindow();
-        this.isWaitingForResponse = false;
-    }
 
     async handleMessageError(event) {
         if (!this.isWaitingForResponse) return;

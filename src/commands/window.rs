@@ -681,3 +681,37 @@ pub async fn get_last_selection(
     let sel = state.last_selection.lock().map_err(|e| e.to_string())?;
     Ok(sel.clone())
 }
+
+#[tauri::command]
+pub async fn set_notification_source(
+    state: tauri::State<'_, crate::state::AppState>,
+    source: String,
+) -> Result<(), String> {
+    if let Ok(mut s) = state.notification_source.lock() {
+        *s = source;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn show_notification_source_window(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<(), String> {
+    let source = state.notification_source.lock()
+        .map(|s| s.clone())
+        .unwrap_or_else(|_| "floating".to_string());
+
+    if source == "main" {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    } else {
+        if let Some(window) = app.get_webview_window("floating") {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+    Ok(())
+}

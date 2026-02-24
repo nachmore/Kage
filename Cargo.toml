@@ -24,6 +24,7 @@ chrono = "0.4"
 ctrlc = "3.4"
 whoami = "1.5"
 base64 = "0.22"
+tauri-plugin-notification = "2.3.3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

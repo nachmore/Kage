@@ -4,6 +4,7 @@ import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPre
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
 import { escapeHtml } from './tool-utils.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from './streaming-utils.js';
+import { sendAppNotification } from './notify.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -94,6 +95,7 @@ export class ChatApp {
         this.elements = {
             chatInput: document.getElementById('chatInput'),
             sendBtn: document.getElementById('sendBtn'),
+            chatStopBtn: document.getElementById('chatStopBtn'),
             messagesArea: document.getElementById('messagesArea'),
             sessionList: document.getElementById('sessionList'),
             sessionSearch: document.getElementById('sessionSearch'),
@@ -160,6 +162,7 @@ export class ChatApp {
         });
 
         this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
+        this.elements.chatStopBtn.addEventListener('click', () => this.stopGenerating());
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
 
         // Session search
@@ -214,11 +217,18 @@ export class ChatApp {
         });
 
         document.addEventListener('keydown', (e) => {
-            // Lightbox close
-            if (e.key === 'Escape' && lightbox.style.display !== 'none') {
-                lightbox.style.display = 'none';
-                lightboxImg.src = '';
-                return;
+            // Escape — stop generating or close lightbox
+            if (e.key === 'Escape') {
+                if (lightbox.style.display !== 'none') {
+                    lightbox.style.display = 'none';
+                    lightboxImg.src = '';
+                    return;
+                }
+                if (this.isWaitingForResponse) {
+                    e.preventDefault();
+                    this.stopGenerating();
+                    return;
+                }
             }
             // Ctrl+N — new session
             if (e.ctrlKey && e.key === 'n') {
@@ -794,17 +804,43 @@ export class ChatApp {
     }
 
     startStreaming() {
-        this.currentStreamingContent = '';
-        this.toolSources = [];
-        this.toolUsages = [];
-        this.isWaitingForResponse = true;
-        this.updateInputState();
-        this.showTypingIndicator();
+            this.currentStreamingContent = '';
+            this.toolSources = [];
+            this.toolUsages = [];
+            this.isWaitingForResponse = true;
+            this.updateInputState();
+            this.showTypingIndicator();
+            this.elements.chatStopBtn.style.display = '';
 
-        this.currentStreamingMessage = this.createMessageElement('assistant', '');
-        this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+            this.currentStreamingMessage = this.createMessageElement('assistant', '');
+            this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+            this.scrollToBottom();
+        }
+
+    stopGenerating() {
+        if (!this.isWaitingForResponse) return;
+        this.isWaitingForResponse = false;
+        this.hideTypingIndicator();
+        this.elements.chatStopBtn.style.display = 'none';
+
+        if (this.currentStreamingMessage) {
+            const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+            const indicator = contentDiv?.querySelector('.streaming-indicator');
+            if (indicator) indicator.remove();
+            if (this.currentStreamingContent) {
+                renderMarkdown(this.currentStreamingContent, contentDiv);
+            }
+            if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
+                this.renderSourcesInMessage(contentDiv);
+            }
+            this.currentStreamingMessage = null;
+        }
+
+        this.updateInputState();
+        this.elements.chatInput.focus();
         this.scrollToBottom();
     }
+
 
     createMessageElement(role, content) {
         const msg = document.createElement('div');
@@ -881,36 +917,45 @@ export class ChatApp {
         this.scrollToBottom();
     }
 
-    handleMessageComplete() {
-        if (!this.isWaitingForResponse) return;
+    async handleMessageComplete() {
+            if (!this.isWaitingForResponse) return;
 
-        this.hideTypingIndicator();
+            this.hideTypingIndicator();
+            this.elements.chatStopBtn.style.display = 'none';
 
-        if (this.currentStreamingMessage) {
-            const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-            const indicator = contentDiv.querySelector('.streaming-indicator');
-            if (indicator) indicator.remove();
+            if (this.currentStreamingMessage) {
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                const indicator = contentDiv.querySelector('.streaming-indicator');
+                if (indicator) indicator.remove();
 
-            renderMarkdown(this.currentStreamingContent, contentDiv);
+                renderMarkdown(this.currentStreamingContent, contentDiv);
 
-            if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
-                this.renderSourcesInMessage(contentDiv);
+                if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
+                    this.renderSourcesInMessage(contentDiv);
+                }
+
+                this.messages.push({ role: 'assistant', content: this.currentStreamingContent });
+                this.currentStreamingMessage = null;
             }
 
-            this.messages.push({ role: 'assistant', content: this.currentStreamingContent });
-            this.currentStreamingMessage = null;
+            this.currentStreamingContent = '';
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+            this.elements.chatInput.focus();
+            this.scrollToBottom();
+
+            this.loadSessions();
+            this.loadFloatingSessionId();
+
+            // Notify if window is hidden
+            try {
+                const isVisible = await this.appWindow.isVisible();
+                if (!isVisible) {
+                    const preview = (this.messages[this.messages.length - 1]?.content || '').substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
+                    await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'main');
+                }
+            } catch { /* ignore */ }
         }
-
-        this.currentStreamingContent = '';
-        this.isWaitingForResponse = false;
-        this.updateInputState();
-        this.elements.chatInput.focus();
-        this.scrollToBottom();
-
-        // Reload sessions to pick up new/updated session
-        this.loadSessions();
-        this.loadFloatingSessionId();
-    }
 
     handleMessageError(event) {
         this.hideTypingIndicator();

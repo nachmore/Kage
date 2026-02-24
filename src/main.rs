@@ -116,6 +116,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             acp_client: acp_client_arc,
             config: config_arc,
@@ -129,6 +130,7 @@ fn main() {
             available_models: available_models_arc,
             current_model_id: Arc::new(std::sync::Mutex::new(None)),
             last_selection: Arc::new(std::sync::Mutex::new(None)),
+            notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -414,6 +416,8 @@ fn main() {
             commands::save_window_position,
             commands::save_chat_window_geometry,
             commands::get_last_selection,
+            commands::set_notification_source,
+            commands::show_notification_source_window,
             commands::get_user_info,
             commands::list_sessions,
             commands::load_session,

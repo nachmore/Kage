@@ -401,3 +401,33 @@ body.dark-theme .datetime-time,
 body.dark-theme .datetime-date {
     color: #938F9B;
 }
+
+/* Stop generating button */
+.stop-generating-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px auto 4px;
+    padding: 4px 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 16px;
+    color: #b0b0b0;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.stop-generating-btn:hover {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: #ef4444;
+}
+body.light-theme .stop-generating-btn {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.12);
+    color: #666;
+}
+body.light-theme .stop-generating-btn:hover {
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
+}

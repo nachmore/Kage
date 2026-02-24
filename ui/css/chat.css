@@ -811,3 +811,15 @@ body.light-theme .session-rename-input {
 body.light-theme .sidebar-toggle-btn {
     color: #333;
 }
+
+/* Chat stop generating button */
+.chat-stop-btn {
+    position: absolute;
+    top: -36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+}
+.chat-input-area {
+    position: relative;
+}
