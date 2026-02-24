@@ -894,18 +894,15 @@ export class FloatingApp {
             } else {
                 await this.appWindow.hide();
             }
-        } else if (event.key === 'Enter' && event.shiftKey) {
-            // Shift+Enter: send directly to agent, bypassing suggestions
-            if (this.currentMatches.length > 0) {
-                event.preventDefault();
-                const message = this.elements.input.value.trim();
-                if (message) {
-                    await this.clearSuggestions();
-                    await this.sendChatMessage(message);
-                }
+        } else if (event.key === 'Enter' && event.ctrlKey) {
+            // Ctrl+Enter: send directly to agent, bypassing suggestions and input classification
+            event.preventDefault();
+            const message = this.elements.input.value.trim();
+            if (message) {
+                await this.clearSuggestions();
+                await this.sendChatMessage(message, { forceChat: true });
             }
-            // If no suggestions, default behavior (newline in textarea)
-        } else if (event.key === 'Enter' && !event.shiftKey) {
+        } else if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey) {
             event.preventDefault();
             await this.handleEnterKey();
         }
@@ -1007,7 +1004,7 @@ export class FloatingApp {
         await this.sendChatMessage(message);
     }
 
-    async sendChatMessage(message) {
+    async sendChatMessage(message, options = {}) {
         const attachments = this.attachmentManager.toContentBlocks();
         this.attachmentManager.clear();
 
@@ -1048,9 +1045,9 @@ export class FloatingApp {
         }
         
         try {
-            // If we have attachments, skip input classification and go straight to chat
+            // If forceChat, attachments present, or we already know there's no match, skip classification
             let result;
-            if (attachments) {
+            if (options.forceChat || attachments) {
                 result = 'chat';
             } else if (this._noMatchSinceLen > 0 && message.length >= this._noMatchSinceLen) {
                 result = 'chat';

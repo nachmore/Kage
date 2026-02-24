@@ -240,7 +240,7 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
     if (showSendHint) {
         const hint = document.createElement('div');
         hint.className = 'suggestions-hint';
-        hint.innerHTML = '<span class="hint-key">Shift+Enter</span> to send to agent';
+        hint.innerHTML = '<span class="hint-key">Ctrl+Enter</span> to send to agent';
         container.appendChild(hint);
     }
 
