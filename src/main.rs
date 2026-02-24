@@ -37,6 +37,17 @@ fn attach_parent_console() {
 }
 
 fn main() {
+    // Handle /capture-hotkey subcommand (helper process mode)
+    #[cfg(target_os = "windows")]
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() >= 2 && args[1] == "/capture-hotkey" {
+            let timeout: u64 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(10000);
+            os::windows::hotkey_capture::run_capture_helper(timeout);
+            return;
+        }
+    }
+
     #[cfg(all(windows, debug_assertions))]
     attach_parent_console();
 
@@ -437,6 +448,8 @@ fn main() {
             commands::update_tool_policy,
             commands::is_dev_mode,
             commands::open_devtools,
+            commands::capture_hotkey_combo,
+            commands::cancel_hotkey_capture,
             commands::open_welcome_window,
             commands::complete_first_run,
             commands::is_first_run,

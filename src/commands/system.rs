@@ -155,6 +155,60 @@ pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Temporarily unregister global hotkeys so they don't intercept during capture
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+        let _ = app.global_shortcut().unregister_all();
+
+        let result = tauri::async_runtime::spawn_blocking(|| {
+            // Use helper process to work around WebView2 blocking WH_KEYBOARD_LL
+            crate::os::windows::hotkey_capture::capture_hotkey_via_helper(10000)
+        }).await.map_err(|e| format!("Task error: {}", e))?;
+
+        // Re-register the global hotkey from config
+        let state: tauri::State<'_, AppState> = app.state();
+        let config = state.config.lock().await;
+        let hotkey_string = config.get_hotkey_string();
+        drop(config);
+        if let Some(floating) = app.get_webview_window("floating") {
+            use tauri_plugin_global_shortcut::ShortcutState;
+            let _ = app.global_shortcut().on_shortcut(
+                hotkey_string.as_str(),
+                move |_app, _shortcut, event| {
+                    if event.state != ShortcutState::Pressed { return; }
+                    crate::commands::window::toggle_floating_window(&floating);
+                },
+            );
+        }
+
+        match result {
+            Some(captured) => Ok(serde_json::json!({
+                "modifiers": captured.modifiers,
+                "key": captured.key,
+                "display": captured.display,
+            })),
+            None => Ok(serde_json::json!(null)),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("Hotkey capture not supported on this platform".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn cancel_hotkey_capture() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        crate::os::windows::hotkey_capture::cancel_capture();
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(debug_assertions)]
     if let Some(window) = app.get_webview_window("floating") {

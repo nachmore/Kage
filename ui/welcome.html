@@ -175,8 +175,6 @@
             appWindow.show().then(() => appWindow.setFocus());
 
             let currentHotkey = { modifiers: ['Alt'], key: 'Space' };
-            let isCapturing = false;
-
             function renderHotkey(hk) {
                 const parts = [...(hk.modifiers || []), hk.key];
                 const display = document.getElementById('hotkeyDisplay');
@@ -193,53 +191,35 @@
                 renderHotkey(currentHotkey);
             });
 
-            // Click to capture new hotkey
+            // Click to capture new hotkey via low-level keyboard hook
             const display = document.getElementById('hotkeyDisplay');
             const hint = document.getElementById('hotkeyHint');
+            let captureInProgress = false;
 
-            display.addEventListener('click', () => {
-                if (isCapturing) return;
-                isCapturing = true;
+            display.addEventListener('click', async () => {
+                if (captureInProgress) return;
+                captureInProgress = true;
                 display.classList.add('capturing');
-                display.innerHTML = '<span style="color:#938F9B">Press a key combo...</span>';
+                display.innerHTML = '<span style="color:#938F9B">Press any key combo...</span>';
+                hint.textContent = 'Press your desired shortcut now';
                 hint.style.display = '';
-            });
 
-            document.addEventListener('keydown', (e) => {
-                if (!isCapturing) return;
-                e.preventDefault();
-                e.stopPropagation();
-
-                // Ignore lone modifier presses — wait for a non-modifier key
-                if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
-
-                const modifiers = [];
-                if (e.ctrlKey) modifiers.push('Ctrl');
-                if (e.altKey) modifiers.push('Alt');
-                if (e.shiftKey) modifiers.push('Shift');
-                if (e.metaKey) modifiers.push('Super');
-
-                // Map key name to Tauri format
-                let key = e.key;
-                if (key === ' ') key = 'Space';
-                else if (key.length === 1) key = key.toUpperCase();
-                else if (key === 'ArrowUp') key = 'Up';
-                else if (key === 'ArrowDown') key = 'Down';
-                else if (key === 'ArrowLeft') key = 'Left';
-                else if (key === 'ArrowRight') key = 'Right';
-
-                // Need at least one modifier
-                if (modifiers.length === 0) {
-                    display.innerHTML = '<span style="color:#ef4444">Need at least one modifier (Ctrl/Alt/Shift)</span>';
-                    return;
+                try {
+                    const result = await invoke('capture_hotkey_combo');
+                    if (result) {
+                        currentHotkey = { modifiers: result.modifiers, key: result.key };
+                        renderHotkey(currentHotkey);
+                    } else {
+                        renderHotkey(currentHotkey);
+                    }
+                } catch (e) {
+                    console.error('Hotkey capture failed:', e);
+                    renderHotkey(currentHotkey);
                 }
-
-                currentHotkey = { modifiers, key };
-                isCapturing = false;
                 display.classList.remove('capturing');
                 hint.style.display = 'none';
-                renderHotkey(currentHotkey);
-            }, true);
+                captureInProgress = false;
+            });
 
             document.getElementById('getStartedBtn').addEventListener('click', async () => {
                 const launchAtStartup = document.getElementById('launchStartup').checked;
