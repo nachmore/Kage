@@ -115,6 +115,41 @@ body.dark-theme .chat-input::placeholder {
     color: #938F9B;
 }
 
+body.dark-theme .chat-toolbar-btn {
+    color: #938F9B;
+}
+body.dark-theme .chat-toolbar-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: #E5E7EB;
+}
+body.dark-theme .chat-context-indicator {
+    color: #938F9B;
+}
+body.dark-theme .chat-model-selector {
+    color: #938F9B;
+}
+body.dark-theme .chat-model-selector:hover {
+    background: rgba(255,255,255,0.08);
+    color: #E5E7EB;
+}
+body.dark-theme .chat-model-dropdown {
+    background: #28242E;
+    border-color: #4A464F;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+body.dark-theme .chat-model-dropdown-item:hover {
+    background: rgba(255,255,255,0.06);
+}
+body.dark-theme .chat-model-dropdown-item.active {
+    background: rgba(99, 102, 241, 0.15);
+}
+body.dark-theme .chat-model-dropdown-item-name {
+    color: #E5E7EB;
+}
+body.dark-theme .chat-model-dropdown-item-desc {
+    color: #938F9B;
+}
+
 body.dark-theme .chat-error {
     background: rgba(220, 38, 38, 0.15);
     border-color: rgba(220, 38, 38, 0.3);

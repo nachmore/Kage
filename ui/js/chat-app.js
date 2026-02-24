@@ -30,6 +30,8 @@ export class ChatApp {
         this.attachmentManager = new AttachmentManager();
         this.currentSuggestions = [];
         this.suggestionIndex = -1;
+        this.availableModels = [];
+        this.currentModelId = null;
 
         this.elements = {};
     }
@@ -48,6 +50,10 @@ export class ChatApp {
         this.loadSessions();
 
         await this.checkConnection();
+
+        // Load toolbar data in background
+        this.loadModels();
+        this.refreshContextUsage();
 
         console.log('[CHAT] Init - currentAcpSessionId:', this.currentAcpSessionId);
         console.log('[CHAT] Init - floatingSessionId:', this.floatingSessionId);
@@ -100,14 +106,21 @@ export class ChatApp {
             sessionSearch: document.getElementById('sessionSearch'),
             newSessionBtn: document.getElementById('newSessionBtn'),
             settingsBtn: document.getElementById('settingsBtn'),
-            floatingBtn: document.getElementById('floatingBtn'),
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
             chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
             errorContainer: document.getElementById('errorContainer'),
             chatSuggestions: document.getElementById('chatSuggestions'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
-            chatMain: document.querySelector('.chat-main')
+            chatMain: document.querySelector('.chat-main'),
+            attachFileBtn: document.getElementById('attachFileBtn'),
+            attachImageBtn: document.getElementById('attachImageBtn'),
+            fileInput: document.getElementById('fileInput'),
+            imageInput: document.getElementById('imageInput'),
+            contextPercent: document.getElementById('contextPercent'),
+            modelSelector: document.getElementById('modelSelector'),
+            modelName: document.getElementById('modelName'),
+            modelDropdown: document.getElementById('modelDropdown')
         };
     }
 
@@ -181,10 +194,6 @@ export class ChatApp {
             await this.invoke('open_settings_window');
         });
 
-        this.elements.floatingBtn.addEventListener('click', async () => {
-            await this.invoke('test_floating_window');
-        });
-
         // Paste handler for images
         this.elements.chatInput.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
 
@@ -202,6 +211,22 @@ export class ChatApp {
         // Re-render previews when attachments change
         this.attachmentManager.onChange((attachments) => {
             renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+        });
+
+        // Toolbar: attach file
+        this.elements.attachFileBtn.addEventListener('click', () => this.elements.fileInput.click());
+        this.elements.fileInput.addEventListener('change', (e) => this.handleFileAttach(e));
+
+        // Toolbar: attach image
+        this.elements.attachImageBtn.addEventListener('click', () => this.elements.imageInput.click());
+        this.elements.imageInput.addEventListener('change', (e) => this.handleImageAttach(e));
+
+        // Toolbar: model selector
+        this.elements.modelSelector.addEventListener('click', () => this.toggleModelDropdown());
+        document.addEventListener('click', (e) => {
+            if (!this.elements.modelSelector.contains(e.target) && !this.elements.modelDropdown.contains(e.target)) {
+                this.elements.modelDropdown.style.display = 'none';
+            }
         });
 
         // Image lightbox — click any message image to zoom
@@ -720,12 +745,30 @@ export class ChatApp {
     // --- Messaging ---
 
     async sendMessage() {
-        const message = this.elements.chatInput.value.trim();
+        let message = this.elements.chatInput.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
-        if ((!message && !hasAttachments) || this.isWaitingForResponse) return;
+        const hasPendingFiles = this._pendingFiles && this._pendingFiles.length > 0;
+        if ((!message && !hasAttachments && !hasPendingFiles) || this.isWaitingForResponse) return;
 
         // Clear suggestions
         this.clearSuggestions();
+
+        // Read pending file contents and prepend to message
+        if (hasPendingFiles) {
+            const fileParts = [];
+            for (const file of this._pendingFiles) {
+                try {
+                    const text = await file.text();
+                    const truncated = text.length > 100000 ? text.substring(0, 100000) + '\n\n[...truncated at 100k chars]' : text;
+                    fileParts.push(`Contents of \`${file.name}\`:\n\`\`\`\n${truncated}\n\`\`\``);
+                } catch (e) {
+                    fileParts.push(`Could not read \`${file.name}\`: ${e.message}`);
+                }
+            }
+            this._pendingFiles = [];
+            const fileBlock = fileParts.join('\n\n');
+            message = message ? fileBlock + '\n\n' + message : fileBlock;
+        }
 
         const attachments = this.attachmentManager.toContentBlocks();
         const attachmentSnapshots = hasAttachments ? [...this.attachmentManager.attachments] : null;
@@ -947,6 +990,9 @@ export class ChatApp {
 
             this.loadSessions();
             this.loadFloatingSessionId();
+
+            // Refresh context usage after response
+            this.refreshContextUsage();
 
             // Notify if window is hidden
             try {
@@ -1317,5 +1363,163 @@ export class ChatApp {
         }
         // Fallback: use file:// protocol
         return 'file://' + path.replace(/\\/g, '/');
+    }
+
+    // --- Toolbar: File & Image Attach ---
+
+    async handleFileAttach(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        for (const file of files) {
+            this.attachmentManager.addFile(file.name, file.name, file.type || 'text/plain');
+        }
+        // Store the actual File objects so we can read them at send time
+        if (!this._pendingFiles) this._pendingFiles = [];
+        for (const file of files) {
+            this._pendingFiles.push(file);
+        }
+        event.target.value = '';
+    }
+
+    async handleImageAttach(event) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+            try {
+                const base64 = await this._fileToBase64(file);
+                this.attachmentManager.addImage(base64, file.type);
+            } catch (e) {
+                console.error('Failed to read image:', file.name, e);
+            }
+        }
+        event.target.value = '';
+    }
+
+    _fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = reader.result;
+                const base64 = result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // --- Toolbar: Context Indicator ---
+
+    async refreshContextUsage() {
+        try {
+            const result = await this.invoke('execute_slash_command', {
+                command: 'context',
+                args: {}
+            });
+            const msg = result?.message || JSON.stringify(result);
+            const match = msg.match(/(\d+)%/);
+            if (match) {
+                const pct = parseInt(match[1], 10);
+                this.elements.contextPercent.textContent = pct + '%';
+                document.getElementById('contextIndicator').title = pct + '% context used';
+                this.drawContextRing(pct);
+            }
+        } catch (e) {
+            console.log('[CONTEXT] Failed to fetch context usage:', e);
+        }
+    }
+
+    drawContextRing(percent) {
+        const canvas = document.getElementById('contextRing');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const size = 16;
+        const cx = size / 2, cy = size / 2, r = 6;
+        const lineWidth = 2;
+        ctx.clearRect(0, 0, size, size);
+
+        // Background ring (gray track)
+        const isDark = document.body.classList.contains('dark-theme');
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+
+        // Filled arc
+        if (percent > 0) {
+            let color = '#22c55e'; // green
+            if (percent >= 90) color = '#ef4444'; // red
+            else if (percent >= 75) color = '#eab308'; // yellow
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (Math.PI * 2 * Math.min(percent, 100) / 100);
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, startAngle, endAngle);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+    }
+
+    // --- Toolbar: Model Selector ---
+
+    async loadModels() {
+        try {
+            const models = await this.invoke('get_available_models');
+            this.availableModels = models || [];
+            if (this.availableModels.length > 0) {
+                // Try to find the current model name from the first model or a marked current one
+                const current = this.availableModels[0];
+                this.elements.modelName.textContent = current.name || current.modelId || 'Unknown';
+                this.currentModelId = current.modelId;
+            } else {
+                this.elements.modelName.textContent = 'No models';
+            }
+        } catch (e) {
+            console.log('[MODELS] Failed to load models:', e);
+            this.elements.modelName.textContent = 'Unavailable';
+        }
+    }
+
+    toggleModelDropdown() {
+        const dd = this.elements.modelDropdown;
+        if (dd.style.display !== 'none') {
+            dd.style.display = 'none';
+            return;
+        }
+        dd.innerHTML = '';
+        if (!this.availableModels || this.availableModels.length === 0) {
+            dd.innerHTML = '<div class="chat-model-dropdown-item"><span class="chat-model-dropdown-item-name">No models available</span></div>';
+            dd.style.display = '';
+            return;
+        }
+        for (const model of this.availableModels) {
+            const item = document.createElement('div');
+            item.className = 'chat-model-dropdown-item' + (model.modelId === this.currentModelId ? ' active' : '');
+            item.innerHTML = `
+                <span class="chat-model-dropdown-item-name">${escapeHtml(model.name || model.modelId)}</span>
+                <span class="chat-model-dropdown-item-desc">${escapeHtml(model.description || '')}</span>
+            `;
+            item.addEventListener('click', () => this.selectModel(model));
+            dd.appendChild(item);
+        }
+        dd.style.display = '';
+    }
+
+    async selectModel(model) {
+        this.elements.modelDropdown.style.display = 'none';
+        this.elements.modelName.textContent = model.name || model.modelId;
+        this.currentModelId = model.modelId;
+        try {
+            await this.invoke('execute_slash_command', {
+                command: 'model',
+                args: { modelName: model.modelId }
+            });
+        } catch (e) {
+            console.error('[MODELS] Failed to switch model:', e);
+            this.showError('Failed to switch model: ' + e);
+        }
     }
 }

@@ -87,6 +87,10 @@ function initApp() {
             await app.loadSessions();
             await app.checkConnection();
 
+            // Refresh toolbar data
+            app.loadModels();
+            app.refreshContextUsage();
+
             // Auto-select current session if nothing is selected
             if (!app.activeSessionId && app.currentAcpSessionId) {
                 const exists = app.sessions.find(s => s.session_id === app.currentAcpSessionId);
