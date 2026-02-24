@@ -235,6 +235,33 @@ function initPermissionModal() {
             } catch (e) { /* assume pending if check fails */ stillPending = true; }
 
             if (stillPending) {
+                // If the floating window is hidden, send a system notification
+                // and bring the window to the foreground so the user can respond
+                const isVisible = await appWindow.isVisible();
+                if (!isVisible) {
+                    const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
+                    const toolName = event.payload.toolName || '';
+                    const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;
+                    try {
+                        const notif = window.__TAURI__?.notification;
+                        if (notif) {
+                            let granted = await notif.isPermissionGranted();
+                            if (!granted) {
+                                const perm = await notif.requestPermission();
+                                granted = perm === 'granted';
+                            }
+                            if (granted) {
+                                notif.sendNotification({
+                                    title: '🔐 Tool Permission Required',
+                                    body: body
+                                });
+                            }
+                        }
+                    } catch { /* ignore */ }
+                    // Show the floating window so the user can respond
+                    await appWindow.show();
+                    await appWindow.setFocus();
+                }
                 showPermissionModal(notification, event.payload.toolName);
             } else {
                 console.log('Permission request already handled, skipping modal');
