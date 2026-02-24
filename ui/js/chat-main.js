@@ -23,6 +23,45 @@ function initApp() {
     app = new ChatApp(invoke, appWindow, listen);
     app.init();
 
+    // Sidebar resize
+    const sidebar = document.getElementById('chatSidebar');
+    const resizeHandle = document.getElementById('sidebarResizeHandle');
+    const toggleBtn = document.getElementById('sidebarToggleBtn');
+
+    if (resizeHandle && sidebar) {
+        let isResizing = false;
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = Math.min(500, Math.max(180, e.clientX));
+            sidebar.style.width = newWidth + 'px';
+        });
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    }
+
+    // Sidebar collapse toggle
+    const toggleBtnCollapsed = document.getElementById('sidebarToggleBtnCollapsed');
+    if (toggleBtn && sidebar) {
+        const doToggle = () => {
+            sidebar.classList.toggle('collapsed');
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            if (toggleBtnCollapsed) toggleBtnCollapsed.style.display = isCollapsed ? '' : 'none';
+        };
+        toggleBtn.addEventListener('click', doToggle);
+        if (toggleBtnCollapsed) toggleBtnCollapsed.addEventListener('click', doToggle);
+    }
+
     // Save chat window geometry when it loses focus or is about to close
     async function saveChatGeometry() {
         try {

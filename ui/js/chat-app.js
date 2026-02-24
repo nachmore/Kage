@@ -96,14 +96,13 @@ export class ChatApp {
             sendBtn: document.getElementById('sendBtn'),
             messagesArea: document.getElementById('messagesArea'),
             sessionList: document.getElementById('sessionList'),
+            sessionSearch: document.getElementById('sessionSearch'),
             newSessionBtn: document.getElementById('newSessionBtn'),
             settingsBtn: document.getElementById('settingsBtn'),
             floatingBtn: document.getElementById('floatingBtn'),
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
             chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
-            editTitleBtn: document.getElementById('editTitleBtn'),
-            revealFileBtn: document.getElementById('revealFileBtn'),
             errorContainer: document.getElementById('errorContainer'),
             chatSuggestions: document.getElementById('chatSuggestions'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
@@ -163,6 +162,9 @@ export class ChatApp {
         this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
 
+        // Session search
+        this.elements.sessionSearch.addEventListener('input', () => this.renderSessionList());
+
         // Reload slash commands when input is focused (may not have been available at init)
         this.elements.chatInput.addEventListener('focus', () => {
             loadSlashCommands(this.invoke);
@@ -181,8 +183,6 @@ export class ChatApp {
 
         // Double-click header title to rename session
         this.elements.chatHeaderTitle.addEventListener('dblclick', () => this.startTitleEdit());
-        this.elements.editTitleBtn.addEventListener('click', () => this.startTitleEdit());
-        this.elements.revealFileBtn.addEventListener('click', () => this.revealSessionFile());
         this.elements.chatHeaderTitleInput.addEventListener('blur', () => this.finishTitleEdit());
         this.elements.chatHeaderTitleInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); this.finishTitleEdit(); }
@@ -322,57 +322,95 @@ export class ChatApp {
     }
 
     renderSessionList() {
-        const list = this.elements.sessionList;
+            const list = this.elements.sessionList;
+            const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
-        if (this.sessions.length === 0) {
-            list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
-            return;
-        }
+            if (this.sessions.length === 0) {
+                list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
+                return;
+            }
 
-        // Sort: default session (current/floating) first, then by updated_at descending
-        const defaultId = this.currentAcpSessionId || this.floatingSessionId;
-        const sorted = [...this.sessions].sort((a, b) => {
-            const aIsDefault = a.session_id === defaultId;
-            const bIsDefault = b.session_id === defaultId;
-            if (aIsDefault && !bIsDefault) return -1;
-            if (!aIsDefault && bIsDefault) return 1;
-            return (b.updated_at || '').localeCompare(a.updated_at || '');
-        });
+            // Sort: default session first, then by updated_at descending
+            const defaultId = this.currentAcpSessionId || this.floatingSessionId;
+            const sorted = [...this.sessions].sort((a, b) => {
+                const aIsDefault = a.session_id === defaultId;
+                const bIsDefault = b.session_id === defaultId;
+                if (aIsDefault && !bIsDefault) return -1;
+                if (!aIsDefault && bIsDefault) return 1;
+                return (b.updated_at || '').localeCompare(a.updated_at || '');
+            });
 
-        list.innerHTML = '';
-        for (const session of sorted) {
-            const item = document.createElement('div');
-            item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
-            item.dataset.sessionId = session.session_id;
+            // Filter by search query
+            const filtered = searchQuery
+                ? sorted.filter(s => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
+                : sorted;
 
-            const isFloating = session.session_id === this.floatingSessionId;
-            const isCurrent = session.session_id === this.currentAcpSessionId;
-            const title = session.title || 'New Chat';
-            const date = new Date(session.updated_at || session.created_at);
-            const dateStr = this.formatDate(date);
+            list.innerHTML = '';
 
-            let badges = '';
-            if (isCurrent || isFloating) badges += '<span class="session-current-badge">●</span>';
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
+                return;
+            }
 
-            let dateSuffix = '';
-            if (isCurrent || isFloating) dateSuffix = ' · <span class="session-default-label">default session</span>';
+            for (const session of filtered) {
+                const item = document.createElement('div');
+                item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
+                item.dataset.sessionId = session.session_id;
 
-            item.innerHTML = `
-                <div class="session-item-title">${escapeHtml(title)}${badges}</div>
-                <div class="session-item-date">${dateStr}${dateSuffix}</div>
-            `;
+                const isFloating = session.session_id === this.floatingSessionId;
+                const isCurrent = session.session_id === this.currentAcpSessionId;
+                const title = session.title || 'New Chat';
+                const date = new Date(session.updated_at || session.created_at);
+                const dateStr = this.formatDate(date);
 
-            item.addEventListener('click', () => this.selectSession(session.session_id));
-            list.appendChild(item);
+                let badges = '';
+                if (isCurrent || isFloating) badges += '<span class="session-current-badge">●</span>';
 
-            // Add separator after the default session
-            if ((isCurrent || isFloating) && list.querySelectorAll('.session-list-separator').length === 0) {
-                const sep = document.createElement('div');
-                sep.className = 'session-list-separator';
-                list.appendChild(sep);
+                let dateSuffix = '';
+                if (isCurrent || isFloating) dateSuffix = ' · <span class="session-default-label">default session</span>';
+
+                item.innerHTML = `
+                    <div class="session-item-content">
+                        <div class="session-item-title">${escapeHtml(title)}${badges}</div>
+                        <div class="session-item-date">${dateStr}${dateSuffix}</div>
+                    </div>
+                    <div class="session-item-actions">
+                        <button class="session-action-btn session-action-edit" title="Rename">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button class="session-action-btn session-action-reveal" title="Show file">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                        </button>
+                        <button class="session-action-btn session-action-delete" title="Delete">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                `;
+
+                item.querySelector('.session-action-edit').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.startInlineRename(session.session_id, item);
+                });
+                item.querySelector('.session-action-reveal').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.revealSessionFile(session.session_id);
+                });
+                item.querySelector('.session-action-delete').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteSession(session.session_id, title);
+                });
+
+                item.addEventListener('click', () => this.selectSession(session.session_id));
+                list.appendChild(item);
+
+                // Add separator after the default session
+                if ((isCurrent || isFloating) && !searchQuery && list.querySelectorAll('.session-list-separator').length === 0) {
+                    const sep = document.createElement('div');
+                    sep.className = 'session-list-separator';
+                    list.appendChild(sep);
+                }
             }
         }
-    }
 
     formatDate(date) {
         const now = new Date();
@@ -603,6 +641,39 @@ export class ChatApp {
             this.renderSessionList();
         }
     }
+
+    async deleteSession(sessionId, title) {
+        const isActive = sessionId === this.activeSessionId;
+        const isCurrent = sessionId === this.currentAcpSessionId || sessionId === this.floatingSessionId;
+
+        if (isCurrent) {
+            this.showError('Cannot delete the active session. Switch to a different session first.');
+            return;
+        }
+
+        let dir = '';
+        try { dir = await this.invoke('get_sessions_directory'); } catch { /* ignore */ }
+
+        const msg = `Delete session "${title} from ${dir || 'sessions directory'}?\n\n• ${sessionId}.json\n• ${sessionId}.jsonl\n• ${sessionId}.lock\n\nThis cannot be undone.`;
+        if (!confirm(msg)) return;
+
+        try {
+            await this.invoke('delete_session', { sessionId });
+            this.sessions = this.sessions.filter(s => s.session_id !== sessionId);
+
+            if (isActive) {
+                // Clear the display
+                this.activeSessionId = null;
+                this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Select a session to continue...</div>';
+                this.elements.chatHeaderTitle.textContent = 'Kiro Assistant';
+            }
+
+            this.renderSessionList();
+        } catch (e) {
+            this.showError('Failed to delete session: ' + e);
+        }
+    }
+
 
     // --- Messaging ---
 
@@ -1014,13 +1085,58 @@ export class ChatApp {
         }
     }
 
-    async revealSessionFile() {
-        if (!this.activeSessionId) return;
+    async revealSessionFile(sessionId) {
+        const id = sessionId || this.activeSessionId;
+        if (!id) return;
         try {
-            await this.invoke('reveal_session_file', { sessionId: this.activeSessionId });
+            await this.invoke('reveal_session_file', { sessionId: id });
         } catch (e) {
             console.error('Failed to reveal session file:', e);
         }
+    }
+
+    startInlineRename(sessionId, itemEl) {
+        const titleEl = itemEl.querySelector('.session-item-title');
+        if (!titleEl) return;
+        const currentTitle = titleEl.textContent.replace('●', '').trim();
+        const input = document.createElement('input');
+        input.className = 'session-rename-input';
+        input.value = currentTitle;
+        input.maxLength = 80;
+
+        const contentEl = itemEl.querySelector('.session-item-content');
+        contentEl.style.display = 'none';
+        itemEl.querySelector('.session-item-actions').style.display = 'none';
+        itemEl.insertBefore(input, itemEl.firstChild);
+        input.focus();
+        input.select();
+
+        const finish = async () => {
+            const newTitle = input.value.trim();
+            input.remove();
+            contentEl.style.display = '';
+            itemEl.querySelector('.session-item-actions').style.display = '';
+
+            if (newTitle && newTitle !== currentTitle) {
+                try {
+                    await this.invoke('rename_session', { sessionId, title: newTitle });
+                    const session = this.sessions.find(s => s.session_id === sessionId);
+                    if (session) session.title = newTitle;
+                    if (sessionId === this.activeSessionId) {
+                        this.elements.chatHeaderTitle.textContent = newTitle;
+                    }
+                    this.renderSessionList();
+                } catch (e) {
+                    console.error('Failed to rename:', e);
+                }
+            }
+        };
+
+        input.addEventListener('blur', finish);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            if (e.key === 'Escape') { input.value = currentTitle; input.blur(); }
+        });
     }
 
 

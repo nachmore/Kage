@@ -420,6 +420,8 @@ fn main() {
             commands::switch_acp_session,
             commands::rename_session,
             commands::reveal_session_file,
+            commands::get_sessions_directory,
+            commands::delete_session,
             commands::get_current_session_id,
             commands::get_floating_session_id,
             commands::restore_floating_session,

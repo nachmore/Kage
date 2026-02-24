@@ -338,6 +338,13 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
     })
 }
 
+/// Get the sessions directory path
+#[tauri::command]
+pub async fn get_sessions_directory() -> Result<String, String> {
+    let dir = get_sessions_dir()?;
+    Ok(dir.to_string_lossy().to_string())
+}
+
 /// Open the session's JSON file in the system file explorer
 #[tauri::command]
 pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
@@ -372,6 +379,36 @@ pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
             .map_err(|e| format!("Failed to open file manager: {}", e))?;
     }
 
+    Ok(())
+}
+
+/// Delete a session's files (.json, .jsonl, .lock)
+#[tauri::command]
+pub async fn delete_session(session_id: String) -> Result<(), String> {
+    let sessions_dir = get_sessions_dir()?;
+
+    for ext in &["json", "jsonl", "lock"] {
+        let path = sessions_dir.join(format!("{}.{}", session_id, ext));
+        if path.exists() {
+            fs::remove_file(&path).map_err(|e| format!("Failed to delete {}: {}", ext, e))?;
+        }
+    }
+
+    // Remove from title cache
+    if let Ok(cache_path) = get_title_cache_path() {
+        if cache_path.exists() {
+            if let Ok(content) = fs::read_to_string(&cache_path) {
+                if let Ok(mut cache) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(obj) = cache.as_object_mut() {
+                        obj.remove(&session_id);
+                        let _ = fs::write(&cache_path, serde_json::to_string_pretty(&cache).unwrap_or_default());
+                    }
+                }
+            }
+        }
+    }
+
+    info!("Deleted session: {}", session_id);
     Ok(())
 }
 

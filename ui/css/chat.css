@@ -24,21 +24,49 @@ body {
 /* Sidebar */
 .sidebar {
     width: 260px;
-    min-width: 260px;
+    min-width: 180px;
+    max-width: 500px;
     background: #ffffff;
     border-right: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    border-right: none;
+}
+
+.sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+}
+.sidebar-resize-handle:hover {
+    background: var(--kiro-accent);
+    opacity: 0.4;
 }
 
 .sidebar-header {
-    padding: 16px;
+    padding: 0 16px;
+    height: 53px;
     border-bottom: 1px solid #e5e7eb;
     display: flex;
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
+}
+
+.sidebar-title {
+    flex: 1;
 }
 
 .sidebar-logo {
@@ -168,7 +196,8 @@ body {
 }
 
 .chat-header {
-    padding: 12px 20px;
+    padding: 0 20px;
+    height: 53px;
     border-bottom: 1px solid #e5e7eb;
     background: #ffffff;
     display: flex;
@@ -670,4 +699,115 @@ body.light-theme .chat-header-action {
 }
 body.light-theme .chat-header-action:hover {
     background: rgba(113, 56, 204, 0.15);
+}
+
+/* Session search */
+.session-search-container {
+    padding: 0 12px 8px;
+}
+.session-search {
+    width: 100%;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.session-search:focus {
+    border-color: var(--kiro-accent);
+}
+.session-search::placeholder {
+    color: #888;
+}
+body.light-theme .session-search {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.1);
+    color: #333;
+}
+body.light-theme .session-search::placeholder {
+    color: #999;
+}
+
+/* Session item layout and action buttons */
+.session-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.session-item-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.session-item-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+    padding-right: 4px;
+}
+.session-item:hover .session-item-actions {
+    opacity: 1;
+}
+.session-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 3px;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s;
+}
+.session-action-btn.session-action-edit:hover,
+.session-action-btn.session-action-reveal:hover {
+    background: var(--kiro-accent-hover);
+}
+.session-action-btn.session-action-delete:hover {
+    background: rgba(220, 38, 38, 0.3);
+    color: #ef4444;
+}
+body.light-theme .session-action-btn {
+    color: #333;
+}
+.session-rename-input {
+    width: 100%;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--kiro-accent);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+body.light-theme .session-rename-input {
+    background: #fff;
+    color: #333;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #ffffff;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s;
+    margin-right: 8px;
+}
+.sidebar-toggle-btn:hover {
+    background: var(--kiro-accent-hover);
+}
+body.light-theme .sidebar-toggle-btn {
+    color: #333;
 }

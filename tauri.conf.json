@@ -18,7 +18,7 @@
         "label": "main",
         "fullscreen": false,
         "resizable": true,
-        "title": "Kiro Assistant - Chat Session Manager",
+        "title": "Chat Sessions - Kiro Assistant",
         "width": 800,
         "height": 600,
         "visible": false,
