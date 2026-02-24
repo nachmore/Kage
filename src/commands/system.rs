@@ -86,6 +86,75 @@ pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+    // If window exists and is valid, just focus it
+    if let Some(w) = app.get_webview_window("welcome") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    // Create fresh window (previous one was closed/destroyed)
+    let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
+        .title("Welcome to Kiro Assistant")
+        .inner_size(520.0, 480.0)
+        .resizable(false)
+        .center()
+        .visible(false) // Hidden until content loads
+        .build()
+        .map_err(|e| format!("Failed to open welcome window: {}", e))?;
+    // Set dark background to prevent white flash
+    let _ = w.set_background_color(Some(tauri::window::Color(30, 26, 36, 255)));
+    // When closed, destroy so it can be recreated
+    let w2 = w.clone();
+    w.on_window_event(move |event| {
+        if let tauri::WindowEvent::CloseRequested { .. } = event {
+            let _ = w2.destroy();
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn complete_first_run(
+    state: State<'_, AppState>,
+    launch_at_startup: bool,
+) -> Result<(), String> {
+    let mut config = state.config.lock().await;
+    config.first_run_completed = true;
+    let _ = config.save();
+
+    // Set or remove Windows startup registry entry
+    #[cfg(target_os = "windows")]
+    {
+        let exe = std::env::current_exe().unwrap_or_default();
+        let key_path = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+        let app_name = "Kiro Assistant";
+        if launch_at_startup {
+            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey_with_flags(key_path, winreg::enums::KEY_WRITE)
+            {
+                let _ = hkcu.set_value(app_name, &exe.to_string_lossy().to_string());
+            }
+        } else {
+            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey_with_flags(key_path, winreg::enums::KEY_WRITE)
+            {
+                let _ = hkcu.delete_value(app_name);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
+    let config = state.config.lock().await;
+    Ok(!config.first_run_completed)
+}
+
+#[tauri::command]
 pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(debug_assertions)]
     if let Some(window) = app.get_webview_window("floating") {

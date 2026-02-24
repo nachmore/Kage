@@ -171,6 +171,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new IntegrationSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new MathSettingsModule());
+
+    // About
+    settingsManager.registerModule(new AboutSettingsModule());
     
     // Render and load
     settingsManager.render();

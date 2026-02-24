@@ -303,3 +303,59 @@ body.light-theme .keycap-sep { color: #999; }
     color: var(--kiro-text-muted);
     white-space: nowrap;
 }
+
+/* About card */
+.about-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--kiro-border-subtle);
+    border-radius: 10px;
+    padding: 24px;
+}
+.about-logo-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.about-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+}
+.about-app-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--kiro-text-bright, #E5E7EB);
+}
+.about-version {
+    font-size: 13px;
+    color: var(--kiro-text-muted, #938F9B);
+    margin-top: 2px;
+}
+.about-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+.about-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+.about-label {
+    min-width: 80px;
+    color: var(--kiro-text-muted, #938F9B);
+}
+.about-row a {
+    color: var(--kiro-accent, #6366f1);
+    text-decoration: none;
+}
+.about-row a:hover {
+    text-decoration: underline;
+}
+.about-actions {
+    padding-top: 16px;
+    border-top: 1px solid var(--kiro-border-subtle);
+}

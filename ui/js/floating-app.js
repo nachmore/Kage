@@ -69,7 +69,6 @@ export class FloatingApp {
             responseText: document.getElementById('responseText'),
             loadingDots: document.getElementById('loadingDots'),
             expandBtn: document.getElementById('expandBtn'),
-            stopBtn: document.getElementById('stopGeneratingBtn'),
             floatingStopBtn: document.getElementById('floatingStopBtn'),
             ghostContainer: document.querySelector('.ghost-container'),
             attachmentPreviews: document.getElementById('attachmentPreviews')
@@ -80,7 +79,6 @@ export class FloatingApp {
             this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
             this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
             this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
-            this.elements.stopBtn.addEventListener('click', () => this.stopGenerating());
             this.elements.floatingStopBtn.addEventListener('click', () => this.stopGenerating());
             document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
@@ -338,7 +336,6 @@ export class FloatingApp {
     startThinking() {
         this.elements.ghostContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
-        this.elements.stopBtn.style.display = 'none'; // Show after first chunk
         // Show inline stop button in input area, hide datetime
         const dtDisplay = document.getElementById('datetimeDisplay');
         if (dtDisplay) dtDisplay.style.display = 'none';
@@ -356,7 +353,6 @@ export class FloatingApp {
         this._justStoppedGenerating = true;
         setTimeout(() => { this._justStoppedGenerating = false; }, 300);
         this.stopThinking();
-        this.elements.stopBtn.style.display = 'none';
         this.elements.floatingStopBtn.style.display = 'none';
         // Restore datetime display
         const dtDisplay = document.getElementById('datetimeDisplay');
@@ -1092,7 +1088,6 @@ export class FloatingApp {
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');
             this.elements.ghostContainer.classList.remove('thinking');
-            this.elements.stopBtn.style.display = '';
             
             // Transition compact sources to full (bottom) layout
             const compactEl = document.getElementById('toolSourcesCompact');
@@ -1123,7 +1118,6 @@ export class FloatingApp {
             if (!this.isWaitingForResponse) return;
 
             this.stopThinking();
-            this.elements.stopBtn.style.display = 'none';
             this.elements.floatingStopBtn.style.display = 'none';
             // Restore datetime display
             const dtDisplay = document.getElementById('datetimeDisplay');

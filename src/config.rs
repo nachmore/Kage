@@ -18,6 +18,8 @@ pub struct Config {
     pub tool_permissions: ToolPermissionsConfig,
     #[serde(default)]
     pub math: MathConfig,
+    #[serde(default)]
+    pub first_run_completed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,6 +279,7 @@ impl Default for Config {
             debug_mode: false,
             tool_permissions: ToolPermissionsConfig::default(),
             math: MathConfig::default(),
+            first_run_completed: false,
         }
     }
 }

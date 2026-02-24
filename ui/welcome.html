@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Kiro Assistant</title>
+    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--kiro-bg-primary, #1E1A24);
+            color: var(--kiro-text-primary, #E5E7EB);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 32px;
+            user-select: none;
+        }
+        .welcome-logo {
+            width: 72px;
+            height: 72px;
+            margin-bottom: 16px;
+        }
+        .welcome-title {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .welcome-subtitle {
+            font-size: 13px;
+            color: #938F9B;
+            margin-bottom: 28px;
+        }
+        .welcome-section {
+            width: 100%;
+            max-width: 380px;
+            margin-bottom: 20px;
+        }
+        .welcome-label {
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        .welcome-desc {
+            font-size: 12px;
+            color: #938F9B;
+            margin-bottom: 8px;
+        }
+        .welcome-hotkey-display {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .welcome-hotkey-display:hover {
+            border-color: rgba(99, 102, 241, 0.4);
+            background: rgba(255,255,255,0.08);
+        }
+        .welcome-hotkey-display.capturing {
+            border-color: var(--kiro-accent, #6366f1);
+            background: rgba(99, 102, 241, 0.08);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+        }
+        .welcome-hotkey-hint {
+            font-size: 11px;
+            color: var(--kiro-accent, #6366f1);
+            margin-top: 6px;
+        }
+        .hotkey-key {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 5px;
+            font-size: 13px;
+            min-width: 28px;
+        }
+        .welcome-checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .welcome-checkbox-row input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--kiro-accent, #6366f1);
+        }
+        .welcome-checkbox-row label {
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .welcome-actions {
+            margin-top: 12px;
+            width: 100%;
+            max-width: 380px;
+        }
+        .welcome-btn {
+            width: 100%;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .welcome-btn-primary {
+            background: var(--kiro-accent, #6366f1);
+            color: #fff;
+        }
+        .welcome-btn-primary:hover {
+            background: var(--kiro-accent-hover, #5558e6);
+            transform: translateY(-1px);
+        }
+        .welcome-hint {
+            margin-top: 16px;
+            font-size: 11px;
+            color: #6b7280;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <img class="welcome-logo" src="assets/kiro-assistant-icon.png" alt="Kiro">
+    <div class="welcome-title">Welcome to Kiro Assistant</div>
+    <div class="welcome-subtitle">Your AI-powered desktop companion</div>
+
+    <div class="welcome-section">
+        <div class="welcome-label">Global Hotkey</div>
+        <div class="welcome-desc">Press this shortcut anywhere to summon Kiro</div>
+        <div class="welcome-hotkey-display" id="hotkeyDisplay" title="Click to change">Loading...</div>
+        <div class="welcome-hotkey-hint" id="hotkeyHint" style="display:none">Press a key combination, then release...</div>
+    </div>
+
+    <div class="welcome-section">
+        <div class="welcome-checkbox-row" onclick="document.getElementById('launchStartup').click()">
+            <input type="checkbox" id="launchStartup" checked>
+            <label for="launchStartup">Launch Kiro when Windows starts</label>
+        </div>
+    </div>
+
+    <div class="welcome-actions">
+        <button class="welcome-btn welcome-btn-primary" id="getStartedBtn">Get Started</button>
+    </div>
+    <div class="welcome-hint">You can change these settings anytime in Settings → About</div>
+
+    <script>
+        function initWelcome() {
+            if (!window.__TAURI__?.core) {
+                setTimeout(initWelcome, 50);
+                return;
+            }
+            const { invoke } = window.__TAURI__.core;
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+
+            // Show window now that content is loaded
+            appWindow.show().then(() => appWindow.setFocus());
+
+            let currentHotkey = { modifiers: ['Alt'], key: 'Space' };
+            let isCapturing = false;
+
+            function renderHotkey(hk) {
+                const parts = [...(hk.modifiers || []), hk.key];
+                const display = document.getElementById('hotkeyDisplay');
+                display.innerHTML = parts.map(k =>
+                    '<span class="hotkey-key">' + k + '</span>'
+                ).join('<span style="color:#6b7280">+</span>');
+            }
+
+            // Load current hotkey
+            invoke('get_config').then(config => {
+                currentHotkey = config.hotkey;
+                renderHotkey(currentHotkey);
+            }).catch(() => {
+                renderHotkey(currentHotkey);
+            });
+
+            // Click to capture new hotkey
+            const display = document.getElementById('hotkeyDisplay');
+            const hint = document.getElementById('hotkeyHint');
+
+            display.addEventListener('click', () => {
+                if (isCapturing) return;
+                isCapturing = true;
+                display.classList.add('capturing');
+                display.innerHTML = '<span style="color:#938F9B">Press a key combo...</span>';
+                hint.style.display = '';
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (!isCapturing) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Ignore lone modifier presses — wait for a non-modifier key
+                if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+
+                const modifiers = [];
+                if (e.ctrlKey) modifiers.push('Ctrl');
+                if (e.altKey) modifiers.push('Alt');
+                if (e.shiftKey) modifiers.push('Shift');
+                if (e.metaKey) modifiers.push('Super');
+
+                // Map key name to Tauri format
+                let key = e.key;
+                if (key === ' ') key = 'Space';
+                else if (key.length === 1) key = key.toUpperCase();
+                else if (key === 'ArrowUp') key = 'Up';
+                else if (key === 'ArrowDown') key = 'Down';
+                else if (key === 'ArrowLeft') key = 'Left';
+                else if (key === 'ArrowRight') key = 'Right';
+
+                // Need at least one modifier
+                if (modifiers.length === 0) {
+                    display.innerHTML = '<span style="color:#ef4444">Need at least one modifier (Ctrl/Alt/Shift)</span>';
+                    return;
+                }
+
+                currentHotkey = { modifiers, key };
+                isCapturing = false;
+                display.classList.remove('capturing');
+                hint.style.display = 'none';
+                renderHotkey(currentHotkey);
+            }, true);
+
+            document.getElementById('getStartedBtn').addEventListener('click', async () => {
+                const launchAtStartup = document.getElementById('launchStartup').checked;
+                try {
+                    // Save hotkey if changed
+                    const config = await invoke('get_config');
+                    config.hotkey = currentHotkey;
+                    await invoke('save_config', { config });
+                    await invoke('complete_first_run', { launchAtStartup });
+                } catch (e) {
+                    console.error('Failed to complete first run:', e);
+                }
+                await appWindow.close();
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWelcome);
+        } else {
+            initWelcome();
+        }
+    </script>
+</body>
+</html>

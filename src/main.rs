@@ -1,3 +1,6 @@
+// Hide console window on Windows
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod acp_client;
 mod app_launcher;
 mod auto_steering;
@@ -21,7 +24,22 @@ use tauri::Manager;
 use tauri::Listener;
 use tokio::sync::Mutex;
 
+/// In debug builds on Windows, attach to the parent console (if any) so that
+/// logs appear when launched from a terminal. If launched from Explorer/GUI,
+/// AttachConsole fails silently and no console is shown.
+#[cfg(all(windows, debug_assertions))]
+fn attach_parent_console() {
+    extern "system" {
+        fn AttachConsole(process_id: u32) -> i32;
+    }
+    const ATTACH_PARENT_PROCESS: u32 = 0xFFFFFFFF;
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS); }
+}
+
 fn main() {
+    #[cfg(all(windows, debug_assertions))]
+    attach_parent_console();
+
     // Initialize logger first
     if let Err(e) = logger::init_logger() {
         eprintln!("Failed to initialize logger: {}", e);
@@ -384,6 +402,17 @@ fn main() {
                 });
             }
 
+            // Show welcome window on first run
+            if !config.first_run_completed {
+                info!("First run detected, showing welcome window");
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    // Small delay to let the app finish initializing
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    let _ = commands::system::open_welcome_window(app_handle).await;
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -408,6 +437,9 @@ fn main() {
             commands::update_tool_policy,
             commands::is_dev_mode,
             commands::open_devtools,
+            commands::open_welcome_window,
+            commands::complete_first_run,
+            commands::is_first_run,
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,
