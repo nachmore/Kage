@@ -21,6 +21,14 @@ const LOCAL_COMMANDS = [
         }
     },
     {
+        name: 'restart',
+        description: 'Restart Kiro Assistant',
+        icon: '🔄',
+        execute: async (invoke) => {
+            await invoke('restart_app');
+        }
+    },
+    {
         name: 'inspect',
         description: 'Open developer tools',
         icon: '🔍',

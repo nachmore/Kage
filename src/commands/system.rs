@@ -95,6 +95,49 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn restart_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    info!("Restart requested via > command");
+
+    // Collect current exe and args before we start tearing down
+    let exe = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
+    // Hide all windows for instant feedback
+    for label in &["floating", "main", "settings", "context-menu"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.hide();
+        }
+    }
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(false);
+    }
+
+    let acp_client = state.acp_client.clone();
+    let config = state.config.clone();
+
+    tauri::async_runtime::spawn(async move {
+        // Generate auto-steering and disconnect
+        if let Ok(client) = acp_client.try_lock() {
+            if let Ok(config) = config.try_lock() {
+                crate::auto_steering::generate_steering_on_quit(&client, &config);
+            }
+            client.disconnect();
+        }
+
+        // Spawn new instance with same args
+        info!("Restarting: {:?} {:?}", exe, args);
+        let _ = std::process::Command::new(&exe)
+            .args(&args)
+            .current_dir(std::env::current_dir().unwrap_or_default())
+            .spawn();
+
+        std::process::exit(0);
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
     info!("Quit requested via > command");
 

@@ -409,6 +409,7 @@ fn main() {
             commands::is_dev_mode,
             commands::open_devtools,
             commands::quit_app,
+            commands::restart_app,
             commands::read_clipboard,
             commands::show_context_menu,
             commands::set_floating_opacity,
