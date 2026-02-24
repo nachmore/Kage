@@ -21,12 +21,28 @@ class ModelSettingsModule extends SettingsModule {
                         </select>
                     </div>
                 </div>
+                <div class="setting-row">
+                    <div class="setting-label">Auto-Compact Threshold</div>
+                    <div class="setting-description">Automatically compact the conversation when context usage reaches this percentage. Set to 0 to disable.</div>
+                    <div class="setting-control" style="display:flex;align-items:center;gap:8px;">
+                        <input type="range" id="autoCompactThreshold" min="0" max="100" step="5" class="setting-range" style="flex:1">
+                        <span id="autoCompactThresholdValue" style="min-width:36px;text-align:right;font-size:13px;color:#9ca3af;">90%</span>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     async initialize() {
         await this.loadModels();
+        const slider = document.getElementById('autoCompactThreshold');
+        const label = document.getElementById('autoCompactThresholdValue');
+        if (slider && label) {
+            slider.addEventListener('input', () => {
+                const v = parseInt(slider.value, 10);
+                label.textContent = v === 0 ? 'Off' : v + '%';
+            });
+        }
     }
 
     async loadModels() {
@@ -68,6 +84,12 @@ class ModelSettingsModule extends SettingsModule {
         this._loadedDefault = config.acp?.assistant?.default_model || '';
         // Refresh models from backend every time the tab is shown
         this.loadModels();
+
+        const threshold = config.acp?.assistant?.auto_compact_threshold ?? 90;
+        const slider = document.getElementById('autoCompactThreshold');
+        const label = document.getElementById('autoCompactThresholdValue');
+        if (slider) slider.value = threshold;
+        if (label) label.textContent = threshold === 0 ? 'Off' : threshold + '%';
     }
 
     save(config) {
@@ -75,6 +97,8 @@ class ModelSettingsModule extends SettingsModule {
         if (!config.acp.assistant) config.acp.assistant = {};
         const selected = this.getSelectedModelId();
         config.acp.assistant.default_model = selected || null;
+        const slider = document.getElementById('autoCompactThreshold');
+        config.acp.assistant.auto_compact_threshold = slider ? parseInt(slider.value, 10) : 90;
     }
 
     validate() {

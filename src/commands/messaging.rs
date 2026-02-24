@@ -88,6 +88,16 @@ pub fn setup_notification_handler(
         }
 
         if method.starts_with("_kiro.dev/") {
+            // Emit metadata (context usage) to frontend
+            if method == "_kiro.dev/metadata" {
+                let _ = app_handle.emit("context_metadata", &notification);
+                return;
+            }
+            // Emit compaction status to frontend
+            if method == "_kiro.dev/compaction/status" {
+                let _ = app_handle.emit("compaction_status", &notification);
+                return;
+            }
             let _ = app_handle.emit("tool_call_update", &notification);
             return;
         }
@@ -577,7 +587,6 @@ pub async fn get_available_models(
 ) -> Result<Vec<serde_json::Value>, String> {
     let models = state.available_models.lock()
         .map_err(|e| format!("Lock error: {}", e))?;
-    info!("get_available_models called, returning {} models", models.len());
     Ok(models.iter().map(|m| serde_json::json!({
         "modelId": m.model_id,
         "name": m.name,

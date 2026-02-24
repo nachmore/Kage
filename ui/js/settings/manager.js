@@ -163,8 +163,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new HotkeySettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
     // Kiro Assistant
-    settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new AssistantSettingsModule());
+    settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     // Advanced

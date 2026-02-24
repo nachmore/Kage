@@ -295,6 +295,28 @@ export class ChatApp {
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => this.handleSessionReset(event));
 
+        // Real-time context usage from ACP metadata notifications
+        this.listen('context_metadata', (event) => {
+            const pct = event.payload?.params?.contextUsagePercentage;
+            if (pct != null) {
+                const rounded = Math.round(pct);
+                this.elements.contextPercent.textContent = rounded + '%';
+                document.getElementById('contextIndicator').title = rounded + '% context used';
+                this.drawContextRing(rounded);
+                this.maybeAutoCompact(rounded);
+            }
+        });
+
+        // Compaction status from ACP notifications (works for both auto and manual /compact)
+        this.listen('compaction_status', (event) => {
+            const status = event.payload?.params?.status?.type;
+            if (status === 'started') {
+                this.showCompactingNotice();
+            } else if (status === 'completed') {
+                this.hideCompactingNotice('Context compacted successfully');
+            }
+        });
+
         this.listen('initial_message', (event) => {
             const message = event.payload;
             if (message) {
@@ -795,10 +817,12 @@ export class ChatApp {
                     command: cmdName,
                     args: cmdArgs
                 });
-                // Show the command and result in the chat
+                // Show the command and result in the chat (suppress compact — handled by compaction_status)
                 this.addUserMessage(message);
-                const resultText = result?.message || JSON.stringify(result, null, 2);
-                this.addMessageFromHistory('assistant', resultText);
+                if (cmdName !== 'compact') {
+                    const resultText = result?.message || JSON.stringify(result, null, 2);
+                    this.addMessageFromHistory('assistant', resultText);
+                }
                 this.scrollToBottom();
                 return;
             } catch (e) {
@@ -990,9 +1014,6 @@ export class ChatApp {
 
             this.loadSessions();
             this.loadFloatingSessionId();
-
-            // Refresh context usage after response
-            this.refreshContextUsage();
 
             // Notify if window is hidden
             try {
@@ -1460,6 +1481,52 @@ export class ChatApp {
             ctx.lineWidth = lineWidth;
             ctx.lineCap = 'round';
             ctx.stroke();
+        }
+    }
+
+    // --- Auto-Compact ---
+
+    async maybeAutoCompact(percent) {
+        if (this._isCompacting) return;
+        try {
+            const config = await this.invoke('get_config');
+            const threshold = config.acp?.assistant?.auto_compact_threshold ?? 90;
+            if (threshold === 0 || percent < threshold) return;
+        } catch { return; }
+
+        this._isCompacting = true;
+        try {
+            await this.invoke('execute_slash_command', {
+                command: 'compact',
+                args: {}
+            });
+        } catch (e) {
+            console.error('[COMPACT] Auto-compact failed:', e);
+            this.hideCompactingNotice('Auto-compact failed');
+        }
+        this._isCompacting = false;
+    }
+
+    showCompactingNotice() {
+        let notice = document.getElementById('compactingNotice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.id = 'compactingNotice';
+            notice.className = 'compacting-notice';
+            this.elements.messagesArea.appendChild(notice);
+        }
+        notice.classList.remove('compacting-done');
+        notice.innerHTML = '<span class="compacting-spinner"></span> Compacting context...';
+        notice.style.display = '';
+        this.scrollToBottom();
+    }
+
+    hideCompactingNotice(message) {
+        const notice = document.getElementById('compactingNotice');
+        if (notice) {
+            notice.innerHTML = '📦 ' + message;
+            notice.classList.add('compacting-done');
+            notice.removeAttribute('id'); // Make it static so next compaction creates a new one
         }
     }
 

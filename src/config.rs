@@ -82,6 +82,7 @@ impl Default for AssistantConfig {
             user_steering_path: None,
             default_model: None,
             working_directory: None,
+            auto_compact_threshold: 90,
         }
     }
 }
@@ -113,6 +114,9 @@ pub struct AssistantConfig {
     /// Working directory for the agent — it will have access to files under this path
     #[serde(default)]
     pub working_directory: Option<String>,
+    /// Auto-compact threshold (0-100). When context usage >= this %, auto-send /compact. 0 = disabled.
+    #[serde(default = "default_auto_compact_threshold")]
+    pub auto_compact_threshold: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +192,10 @@ fn default_date_format() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_auto_compact_threshold() -> u32 {
+    90
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
