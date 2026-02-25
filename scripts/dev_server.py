@@ -2,7 +2,6 @@
 import os
 import sys
 import signal
-import socket
 import subprocess
 import platform
 
@@ -57,9 +56,17 @@ ui_dir = os.path.normpath(ui_dir)
 print(f"Serving: {ui_dir}")
 
 import http.server
-import functools
 
-handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=ui_dir)
+class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=ui_dir, **kwargs)
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+
+handler = NoCacheHandler
 
 http.server.HTTPServer.allow_reuse_address = True
 server = http.server.HTTPServer(("", PORT), handler)
