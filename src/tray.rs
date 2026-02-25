@@ -17,10 +17,11 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         println!("🔧 Dev mode enabled - adding developer menu items");
         let inspect = MenuItemBuilder::with_id("inspect", "Inspect").build(app)?;
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
+        let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &reload])
+            .items(&[&inspect, &reload, &test_banner])
             .separator()
             .item(&quit)
             .build()?
@@ -74,6 +75,10 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     if let Some(window) = app_handle_inner.get_webview_window("settings") {
                         let _ = window.eval("window.location.reload()");
                     }
+                }
+                "test-welcome-banner" => {
+                    info!("Testing welcome banner");
+                    crate::commands::system::show_welcome_banner(app_handle_inner);
                 }
                 "quit" => {
                     info!("Application quit requested");

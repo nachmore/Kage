@@ -118,20 +118,54 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn complete_first_run(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     launch_at_startup: bool,
     auto_update: bool,
 ) -> Result<(), String> {
     let mut config = state.config.lock().await;
+    let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
     if auto_update {
         config.updates.auto_check = true;
         config.updates.silent_update = true;
     }
     let _ = config.save();
+    drop(config);
 
     set_startup_enabled_impl(launch_at_startup);
+
+    // On true first run (or dev mode), show the floating window with a welcome banner
+    if is_true_first_run || state.dev_mode {
+        show_welcome_banner(&app);
+    }
+
     Ok(())
+}
+
+/// Show the floating window with a welcome banner displaying the configured hotkey.
+/// Called from first-run completion and the dev tray menu.
+pub fn show_welcome_banner(app: &tauri::AppHandle) {
+    let hotkey_str = crate::config::Config::load()
+        .map(|c| c.get_hotkey_string())
+        .unwrap_or_else(|_| "Alt+Space".to_string());
+    let keycaps: String = hotkey_str.split('+')
+        .map(|k| format!("<span class=\"keycap\">{}</span>", k))
+        .collect::<Vec<_>>()
+        .join("<span class=\"keycap-sep\">+</span>");
+    let text = format!("<b>Welcome to the Assistant!</b><br/>&nbsp;<br>Press {} anytime to summon me.", keycaps);
+
+    if let Some(floating) = app.get_webview_window("floating") {
+        let _ = floating.show();
+        let _ = floating.set_focus();
+    }
+    let _ = app.emit("show_floating_banner", serde_json::json!({
+        "icon": "👋",
+        "text": text,
+        "action_label": "",
+        "action_type": "dismiss",
+        "action_data": ""
+    }));
 }
 
 #[tauri::command]

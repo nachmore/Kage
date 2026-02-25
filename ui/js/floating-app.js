@@ -61,6 +61,12 @@ export class FloatingApp {
 
         // Check if we were just updated and show the celebration banner
         this.checkForUpdateBanner();
+
+        // Listen for banner events from the backend
+        this.listen('show_floating_banner', (event) => {
+            const { icon, text, action_label, action_type, action_data } = event.payload;
+            this.showBanner(icon, text, action_label, action_type, action_data);
+        });
         console.log('Initialization complete!');
     }
 
@@ -310,7 +316,7 @@ export class FloatingApp {
                 return;
             }
             await this.appWindow.hide();
-            this.dismissUpdateBanner();
+            this.dismissBanner();
         });
     }
 
@@ -411,32 +417,66 @@ export class FloatingApp {
         try {
             const wasUpdated = await this.invoke('was_just_updated');
             if (wasUpdated) {
-                this._showUpdateBanner = true;
-                const banner = document.getElementById('updateBanner');
-                if (banner) banner.style.display = 'flex';
+                this.showBanner('🎉', 'Kiro Assistant has been updated!', 'View changelog →', 'settings', 'updates');
             }
         } catch (e) {
             console.log('Update check failed:', e);
         }
     }
 
-    dismissUpdateBanner() {
-        if (!this._showUpdateBanner) return;
-        this._showUpdateBanner = false;
-        const banner = document.getElementById('updateBanner');
-        if (banner) banner.style.display = 'none';
-        // Clear the flag so it doesn't show again
-        this.invoke('clear_update_flag').catch(() => {});
+    /**
+     * Show a banner at the top of the content area.
+     * @param {string} icon - Emoji or text icon
+     * @param {string} html - Banner message (supports HTML for keycaps etc.)
+     * @param {string} actionLabel - Text for the action hint
+     * @param {string} actionType - 'settings', 'url', or 'dismiss'
+     * @param {string} actionData - Section name, URL, or ignored
+     */
+    showBanner(icon, html, actionLabel, actionType, actionData) {
+        this._bannerVisible = true;
+        this._bannerAction = { type: actionType, data: actionData };
+        const banner = document.getElementById('floatingBanner');
+        const iconEl = document.getElementById('bannerIcon');
+        const textEl = document.getElementById('bannerText');
+        const actionEl = document.getElementById('bannerAction');
+        const contentArea = document.getElementById('contentArea');
+        if (!banner) return;
+        if (iconEl) iconEl.textContent = icon || '';
+        if (textEl) textEl.innerHTML = html || '';
+        if (actionEl) actionEl.textContent = actionLabel || '';
+        banner.onclick = () => this.handleBannerClick();
+        banner.style.display = 'flex';
+        // Ensure the content area is visible so the banner shows
+        if (contentArea) contentArea.classList.add('visible');
+        // Resize the window to fit the banner after DOM updates
+        requestAnimationFrame(() => this.windowManager.resizeWindow());
     }
 
-    async openUpdateSettings() {
-        try {
-            await this.invoke('open_settings_window');
-            // Emit event to tell settings window to switch to updates section
-            await window.__TAURI__.event.emit('navigate_settings_section', 'updates');
-        } catch (e) {
-            console.error('Failed to open settings:', e);
+    handleBannerClick() {
+        const action = this._bannerAction;
+        this.dismissBanner();
+        if (!action) return;
+        if (action.type === 'settings') {
+            this.invoke('open_settings_window').then(() => {
+                window.__TAURI__.event.emit('navigate_settings_section', action.data || 'updates');
+            }).catch(() => {});
+        } else if (action.type === 'url') {
+            this.invoke('open_url', { url: action.data }).catch(() => {});
+        } else {
+            // 'dismiss' — reset the UI and refocus input
+            this.resetUI();
+            this.windowManager.userSetHeight = null;
+            this.windowManager.resizeWindow();
         }
+    }
+
+    dismissBanner() {
+        if (!this._bannerVisible) return;
+        this._bannerVisible = false;
+        const banner = document.getElementById('floatingBanner');
+        if (banner) banner.style.display = 'none';
+        // Clear update flag if this was an update banner
+        this.invoke('clear_update_flag').catch(() => {});
     }
 
     matchShortcut(input) {
@@ -1110,7 +1150,7 @@ export class FloatingApp {
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
                 await this.windowManager.resizeWindow();
-                this.dismissUpdateBanner();
+                this.dismissBanner();
                 await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {

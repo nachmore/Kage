@@ -29,6 +29,7 @@
     
     <!-- Styles -->
     <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <link rel="stylesheet" href="css/shared-components.css">
     <link rel="stylesheet" href="css/floating-base.css">
     <link rel="stylesheet" href="css/floating-components.css">
     <link rel="stylesheet" href="css/floating-code-blocks.css">
@@ -36,12 +37,6 @@
 </head>
 <body>
     <div class="floating-container">
-        <!-- Update celebration banner (hidden by default) -->
-        <div class="update-banner" id="updateBanner" style="display:none" onclick="window._floatingApp?.openUpdateSettings()">
-            <span class="update-banner-icon">🎉</span>
-            <span class="update-banner-text">Kiro Assistant has been updated!</span>
-            <span class="update-banner-arrow">→</span>
-        </div>
         <div class="ghost-container">
             <svg class="ghost-icon" viewBox="0 0 65 47" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M5.71599 33.2597C21.3537 50.3579 43.692 49.7224 56.8482 37.6892C64.8725 30.3497 68.8862 13.8647 55.4115 3.72686C41.9368 -6.41103 32.4042 11.2128 17.2667 8.73447C14.1417 8.22797 9.94157 9.04188 12.6668 12.7323C13.1844 13.4347 13.8741 13.9921 14.4889 14.4572C10.198 14.6069 8.69922 14.3808 6.07118 14.3457C3.69479 14.2406 2.01125 14.368 1.05082 15.569C-0.207458 17.5201 3.17874 20.5431 6.24957 23.1473C8.02071 24.8452 9.81893 27.134 10.9737 29.0437C9.58639 28.7602 9.25032 28.6837 7.17973 28.4703C3.87477 28.131 1.42511 28.5658 5.71759 33.2597H5.71599Z" fill="white"/>
@@ -58,6 +53,12 @@
                 <div class="loading-dot"></div>
             </div>
             <div class="content-area" id="contentArea">
+                <!-- Reusable banner (hidden by default, populated via events) -->
+                <div class="floating-banner" id="floatingBanner" style="display:none">
+                    <span class="floating-banner-icon" id="bannerIcon"></span>
+                    <span class="floating-banner-text" id="bannerText"></span>
+                    <span class="floating-banner-action" id="bannerAction"></span>
+                </div>
                 <button class="expand-btn" id="expandBtn" title="Open full chat">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 3 21 3 21 9"/>

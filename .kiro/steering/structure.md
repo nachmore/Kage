@@ -57,6 +57,9 @@ kiro-assistant/
 
 ### Shared Utilities
 - `ui/js/tool-utils.js` — shared `getToolIcon()`, `getToolEmoji()`, `escapeHtml()` used across floating, chat, settings, and permissions UIs. Always import from here, never duplicate.
+- `ui/css/shared-components.css` — shared component styles (keycaps, hotkey picker, etc.) used across all windows. Add reusable styles here, never duplicate into window-specific CSS files. Must be loaded in every window's HTML.
+- `ui/css/shared-kiro-tokens.css` — CSS variables (colors, spacing). Loaded in every window.
+- Never duplicate styles or code across files. If something is used in more than one window, move it to a shared file.
 
 ### OS Abstraction
 - Define cross-platform API in `src/os/module.rs`

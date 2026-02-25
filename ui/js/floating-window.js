@@ -87,6 +87,11 @@ export class WindowManager {
                     if (toolSourcesEl && toolSourcesEl.offsetHeight > 0) {
                         contentHeight += toolSourcesEl.offsetHeight + 8; // 8px gap
                     }
+                    // Account for floating banner if visible
+                    const floatingBanner = document.getElementById('floatingBanner');
+                    if (floatingBanner && floatingBanner.style.display !== 'none') {
+                        contentHeight += floatingBanner.offsetHeight + 8; // 8px margin
+                    }
                     contentHeight += 16; // content area padding bottom
                 }
 

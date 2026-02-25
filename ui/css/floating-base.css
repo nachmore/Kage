@@ -39,23 +39,24 @@ body {
     to { opacity: 1; transform: scale(1); }
 }
 
-/* Update celebration banner */
-.update-banner {
+/* Floating banner (reusable for welcome, updates, etc.) */
+.floating-banner {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 12px;
-    background: linear-gradient(135deg, #2d5a27 0%, #1a4a1a 100%);
-    border-radius: 8px 8px 0 0;
+    padding: 8px 12px;
+    margin: -4px -4px -4px -4px;
+    background: linear-gradient(135deg, #2d3a5a 0%, #1a2a4a 100%);
+    border-radius: 6px;
     cursor: pointer;
     font-size: 12px;
-    color: #c8e6c9;
+    color: #c8d6e9;
     transition: background 0.2s;
     user-select: none;
 }
-.update-banner:hover {
-    background: linear-gradient(135deg, #3a6b33 0%, #245a24 100%);
+.floating-banner:hover {
+    background: linear-gradient(135deg, #3a4b6b 0%, #243a5a 100%);
 }
-.update-banner-icon { font-size: 14px; }
-.update-banner-text { flex: 1; }
-.update-banner-arrow { opacity: 0.6; }
+.floating-banner-icon { font-size: 30px; flex-shrink: 0; }
+.floating-banner-text { flex: 1; line-height: 1.4; }
+.floating-banner-action { opacity: 0.6; font-size: 11px; flex-shrink: 0; }
