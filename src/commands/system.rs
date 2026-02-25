@@ -99,6 +99,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
         .title("Welcome to Kiro Assistant")
         .inner_size(520.0, 480.0)
         .resizable(false)
+        .decorations(false)
         .center()
         .visible(false) // Hidden until content loads
         .build()
