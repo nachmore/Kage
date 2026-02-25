@@ -85,6 +85,7 @@
     ],
     "shortDescription": "AI powered launcher",
     "longDescription": "Kiro Assistant is a cross-platform desktop AI assistant with a floating window interface, system tray integration, and custom command shortcuts.",
+    "publisher": "Oren Nachman",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
