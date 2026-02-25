@@ -357,27 +357,8 @@ pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
 
     let path_str = json_path.to_string_lossy().to_string();
 
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .args(["/select,", &path_str])
-            .spawn()
-            .map_err(|e| format!("Failed to open explorer: {}", e))?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .args(["-R", &path_str])
-            .spawn()
-            .map_err(|e| format!("Failed to open Finder: {}", e))?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(sessions_dir.to_string_lossy().to_string())
-            .spawn()
-            .map_err(|e| format!("Failed to open file manager: {}", e))?;
-    }
+    crate::os::reveal_in_file_manager(&path_str)
+        .map_err(|e| format!("Failed to reveal file: {}", e))?;
 
     Ok(())
 }

@@ -31,10 +31,22 @@ pub mod launcher;
 pub mod process;
 pub mod shell;
 pub mod user;
+pub mod clipboard;
+pub mod startup;
+pub mod hotkey;
+pub mod icon;
 
 // Re-export common functionality
 pub use cursor::get_cursor_position;
 pub use launcher::{scan_applications, launch_application};
 pub use process::{kill_process, configure_process_spawn};
-pub use shell::{open_url, open_path};
+pub use shell::{open_url, open_path, reveal_in_file_manager, open_in_editor};
 pub use user::get_user_profile;
+pub use clipboard::{read_clipboard, capture_selection};
+#[allow(unused)]
+pub use clipboard::write_clipboard;
+pub use startup::{get_startup_enabled, set_startup_enabled};
+pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
+#[allow(unused)]
+pub use hotkey::CapturedHotkey;
+pub use icon::extract_icon_base64;

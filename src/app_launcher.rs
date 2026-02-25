@@ -4,9 +4,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
-use windows_icons::get_icon_base64_by_path;
-
 use crate::os;
 
 #[derive(Debug, Clone, Serialize)]
@@ -57,14 +54,10 @@ impl AppLauncher {
             aliases.push(no_spaces);
         }
 
-        // Extract icon as base64 on Windows
-        #[cfg(target_os = "windows")]
+        // Extract icon from path using OS abstraction
         let icon_base64 = icon_path.and_then(|path| {
-            get_icon_base64_by_path(&path).ok()
+            os::extract_icon_base64(&path)
         });
-        
-        #[cfg(not(target_os = "windows"))]
-        let icon_base64: Option<String> = None;
 
         // Use pre-computed icon data if available, otherwise extract from path
         let final_icon = if icon_data.is_some() {

@@ -146,48 +146,12 @@ pub async fn set_startup_enabled(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-const STARTUP_KEY_PATH: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-#[cfg(target_os = "windows")]
-const STARTUP_APP_NAME: &str = "Kiro Assistant";
-
 fn get_startup_enabled_impl() -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-            .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_READ)
-        {
-            let val: Result<String, _> = hkcu.get_value(STARTUP_APP_NAME);
-            return val.is_ok();
-        }
-        false
-    }
-    #[cfg(not(target_os = "windows"))]
-    { false }
+    crate::os::get_startup_enabled()
 }
 
 fn set_startup_enabled_impl(enabled: bool) {
-    #[cfg(target_os = "windows")]
-    {
-        let exe = std::env::current_exe().unwrap_or_default();
-        if enabled {
-            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
-            {
-                let _ = hkcu.set_value(STARTUP_APP_NAME, &exe.to_string_lossy().to_string());
-                info!("Startup registry entry added");
-            }
-        } else {
-            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
-            {
-                let _ = hkcu.delete_value(STARTUP_APP_NAME);
-                info!("Startup registry entry removed");
-            }
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    { let _ = enabled; }
+    crate::os::set_startup_enabled(enabled);
 }
 
 #[tauri::command]
@@ -260,55 +224,43 @@ pub async fn try_register_hotkey(
 
 #[tauri::command]
 pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    #[cfg(target_os = "windows")]
-    {
-        // Temporarily unregister global hotkeys so they don't intercept during capture
-        use tauri_plugin_global_shortcut::GlobalShortcutExt;
-        let _ = app.global_shortcut().unregister_all();
+    // Temporarily unregister global hotkeys so they don't intercept during capture
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let _ = app.global_shortcut().unregister_all();
 
-        let result = tauri::async_runtime::spawn_blocking(|| {
-            // Use helper process to work around WebView2 blocking WH_KEYBOARD_LL
-            crate::os::windows::hotkey_capture::capture_hotkey_via_helper(10000)
-        }).await.map_err(|e| format!("Task error: {}", e))?;
+    let result = tauri::async_runtime::spawn_blocking(|| {
+        crate::os::capture_hotkey(10000)
+    }).await.map_err(|e| format!("Task error: {}", e))?;
 
-        // Re-register the global hotkey from config
-        let state: tauri::State<'_, AppState> = app.state();
-        let config = state.config.lock().await;
-        let hotkey_string = config.get_hotkey_string();
-        drop(config);
-        if let Some(floating) = app.get_webview_window("floating") {
-            use tauri_plugin_global_shortcut::ShortcutState;
-            let _ = app.global_shortcut().on_shortcut(
-                hotkey_string.as_str(),
-                move |_app, _shortcut, event| {
-                    if event.state != ShortcutState::Pressed { return; }
-                    crate::commands::window::toggle_floating_window(&floating);
-                },
-            );
-        }
-
-        match result {
-            Some(captured) => Ok(serde_json::json!({
-                "modifiers": captured.modifiers,
-                "key": captured.key,
-                "display": captured.display,
-            })),
-            None => Ok(serde_json::json!(null)),
-        }
+    // Re-register the global hotkey from config
+    let state: tauri::State<'_, AppState> = app.state();
+    let config = state.config.lock().await;
+    let hotkey_string = config.get_hotkey_string();
+    drop(config);
+    if let Some(floating) = app.get_webview_window("floating") {
+        use tauri_plugin_global_shortcut::ShortcutState;
+        let _ = app.global_shortcut().on_shortcut(
+            hotkey_string.as_str(),
+            move |_app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed { return; }
+                crate::commands::window::toggle_floating_window(&floating);
+            },
+        );
     }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = app;
-        Err("Hotkey capture not supported on this platform".to_string())
+
+    match result {
+        Some(captured) => Ok(serde_json::json!({
+            "modifiers": captured.modifiers,
+            "key": captured.key,
+            "display": captured.display,
+        })),
+        None => Ok(serde_json::json!(null)),
     }
 }
 
 #[tauri::command]
 pub async fn cancel_hotkey_capture() -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::hotkey_capture::cancel_capture();
-    }
+    crate::os::cancel_hotkey_capture();
     Ok(())
 }
 
@@ -401,35 +353,7 @@ pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 
 #[tauri::command]
 pub async fn read_clipboard() -> Result<String, String> {
-    use std::process::Command;
-    #[cfg(target_os = "windows")]
-    {
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", "Get-Clipboard"])
-            .output()
-            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
-        let text = String::from_utf8_lossy(&output.stdout)
-            .trim_end()
-            .to_string();
-        return Ok(text);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let output = Command::new("pbpaste")
-            .output()
-            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
-        let text = String::from_utf8_lossy(&output.stdout).to_string();
-        return Ok(text);
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let output = Command::new("xclip")
-            .args(["-selection", "clipboard", "-o"])
-            .output()
-            .map_err(|e| format!("Failed to read clipboard: {}", e))?;
-        let text = String::from_utf8_lossy(&output.stdout).to_string();
-        return Ok(text);
-    }
+    Ok(crate::os::read_clipboard().unwrap_or_default())
 }
 
 #[derive(serde::Serialize)]
@@ -569,27 +493,8 @@ pub async fn open_auto_steering_file() -> Result<String, String> {
         .to_string();
 
     // Open in default editor
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &path_str])
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&path_str)
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&path_str)
-            .spawn()
-            .map_err(|e| format!("Failed to open file: {}", e))?;
-    }
+    crate::os::open_in_editor(&path_str)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(path_str)
 }
