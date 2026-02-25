@@ -79,7 +79,7 @@ Logs are also written to a file regardless of debug mode. The location varies by
 You can combine debug mode with dev mode for full development capabilities:
 
 ```bash
-kiro-assistant.exe /debug /dev
+cargo tauri dev -- /debug /dev
 ```
 
 This enables:

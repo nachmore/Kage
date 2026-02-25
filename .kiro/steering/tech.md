@@ -25,14 +25,15 @@
 ## Common Commands
 
 ```bash
-# Development
-cargo run -- /dev          # Dev mode (inspector, reload)
-cargo run -- /debug        # Debug logging (ACP messages)
-cargo run -- /dev /debug   # Both
+# Development (uses Tauri CLI — serves ui/ from a local dev server so
+# HTML/JS/CSS changes are picked up on reload without recompiling)
+cargo tauri dev -- /dev            # Dev mode (inspector, tray reload)
+cargo tauri dev -- /debug          # Debug logging (ACP messages)
+cargo tauri dev -- /dev /debug     # Both
 
 # Building
-cargo build                # Debug build
-cargo build --release      # Release build (optimized)
+cargo build                # Debug build (assets embedded — no live reload)
+cargo build --release      # Release build (optimized, assets embedded)
 
 # Testing
 cargo test                 # All tests
@@ -46,6 +47,13 @@ cargo clippy               # Lint code
 # Frontend Dependencies
 cd ui/vendor && npm install  # Install/update JS dependencies
 ```
+
+### Dev vs Build: Frontend Assets
+- `cargo tauri dev` — frontend is served from disk via a local Python HTTP server
+  (configured in `tauri.conf.json` → `build.beforeDevCommand` / `build.devUrl`).
+  Editing HTML/JS/CSS and using "Reload UX" from the tray picks up changes instantly.
+- `cargo build` / `cargo build --release` — frontend is embedded into the binary at
+  compile time. File changes on disk have no effect until you rebuild.
 
 ## Architecture Notes
 - Compile-time platform selection via `#[cfg(target_os = "...")]`

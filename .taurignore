@@ -1,0 +1,7 @@
+# Don't restart the app when frontend files change.
+# Use "Reload UX" from the tray menu instead.
+*.html
+*.css
+*.js
+*.svg
+*.png

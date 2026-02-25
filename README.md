@@ -5,8 +5,8 @@ A cross-platform desktop AI assistant with a floating window interface. Provides
 ## Quick Start
 
 ```bash
-cargo run -- /dev          # Development mode (inspector + reload)
-cargo run -- /debug        # Debug logging (ACP protocol messages)
+cargo tauri dev -- /dev          # Development mode (inspector + live reload)
+cargo tauri dev -- /debug        # Debug logging (ACP protocol messages)
 cargo build --release      # Optimized release build
 ```
 

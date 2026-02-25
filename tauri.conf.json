@@ -3,8 +3,9 @@
   "version": "0.2.0",
   "identifier": "com.kiro.assistant",
   "build": {
-    "beforeDevCommand": "",
+    "beforeDevCommand": "python ../../scripts/dev_server.py",
     "beforeBuildCommand": "",
+    "devUrl": "http://localhost:1420",
     "frontendDist": "./ui"
   },
   "app": {
