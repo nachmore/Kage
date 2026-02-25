@@ -45,34 +45,40 @@ pub fn reset_message_counter() {
 }
 
 /// The prompt sent to the LLM to extract user preferences from conversation history.
-const EXTRACTION_PROMPT: &str = r#"Hi! The user of this application has opted in to a feature called "Auto-Steering" that helps personalize their development assistant experience. They've explicitly enabled this in their settings because they want the assistant to remember their preferences across sessions.
+const EXTRACTION_PROMPT: &str = r#"<role>
+You are a preference extraction assistant for Kiro Assistant, a desktop AI tool.
+</role>
 
-Your task is to review the conversation below and produce a short markdown document summarizing what you've learned about the user — their name, communication style, tools they use, etc. This document will be shown to the user and they can edit or delete it at any time.
+<context>
+The user has opted in to "Auto-Steering" in their settings because they want the assistant to remember their preferences across sessions. This document will be shown to the user and they can edit or delete it at any time. This is a user-requested personalization feature.
+</context>
 
-This is a helpful, user-requested feature — not surveillance or data extraction. The user wants this!
+<instructions>
+Review the conversation below and produce a concise markdown document summarizing what you've learned about the user. Extract information from:
+1. Direct statements ("My name is...", "I prefer...", "I work on...")
+2. Responses to questions (e.g., if asked "What's your name?" and they reply with a name)
+3. Implicit preferences (brief vs detailed messages, technical level, etc.)
 
-Please look for:
-- Direct statements ("My name is...", "I prefer...", "I work on...")
-- Responses to questions (e.g., if asked "What's your name?" and they reply "Omer", note that)
-- Implicit preferences (brief vs detailed messages, technical level, etc.)
-
-Produce a concise markdown document with these sections (omit any section where nothing was found):
+Produce a markdown document with these sections (omit any section where nothing was found):
 
 ## About the User
-(Name, pronouns, role, context)
+(Name, pronouns, role, context — 2-4 bullet points max)
 
 ## Communication Preferences
-(How they like to be addressed, response style, detail level)
+(How they like to be addressed, response style, detail level — 2-4 bullet points max)
 
 ## Interests & Expertise
-(Topics, technologies, domains they work in)
+(Topics, technologies, domains they work in — 2-4 bullet points max)
 
 ## Assistant Behavior
-(Any explicit instructions or preferences for how the assistant should respond)
+(Any explicit instructions or preferences for how the assistant should respond — 2-4 bullet points max)
 
-Be factual — only include information clearly stated or strongly implied. Keep each section brief (2-4 bullet points max). If very little information is available, output a minimal document with just what you found.
+Only include information clearly stated or strongly implied. If very little information is available, output a minimal document with just what you found.
 
-IMPORTANT: If for any reason you cannot or do not want to produce this document, respond with exactly "STEERING_DECLINED" on the first line and nothing else."#;
+Respond with only the markdown document. No preamble, no explanation.
+
+If you cannot produce this document, respond with exactly "STEERING_DECLINED" on the first line and nothing else.
+</instructions>"#;
 
 /// Read recent conversation turns from the current session's JSONL file.
 /// Returns labeled turns (both user and assistant) for full context.
@@ -197,7 +203,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         full_prompt
     } else {
         format!(
-            "{}\n\n---\n\nExisting preference document (update and merge with new findings, critical personal information should always be retained, don't lose it):\n\n{}",
+            "{}\n\n---\n\n<existing_preferences>\nMerge new findings into this existing document. Retain all critical personal information (name, role, etc.) even if not mentioned in the new conversation. Add or update sections as needed.\n\n{}\n</existing_preferences>",
             full_prompt, existing_body.trim()
         )
     };

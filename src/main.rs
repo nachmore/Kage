@@ -376,7 +376,7 @@ fn main() {
 
                             {
                                 let steering_msg = format!(
-                                    "{} {}\n\n---\n\nPlease respond with only \"ack\" to confirm you've received this context.",
+                                    "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
                                     crate::commands::system::STEERING_MSG_PREFIX,
                                     steering_parts.join("\n\n---\n\n")
                                 );

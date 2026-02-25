@@ -374,18 +374,23 @@ class ShortcutsSettingsModule extends SettingsModule {
         }
 
         const parts = [
-            'Write a JavaScript function body (not a full function declaration) that will be used inside `new Function("...args", <your code>)`.',
+            '<role>You are a JavaScript code generator for Kiro Assistant shortcut scripts.</role>',
+            '',
+            '<instructions>',
+            'Write a JavaScript function body that will be used inside `new Function("...args", <your code>)`.',
             'The function receives user arguments via the `args` rest parameter (an array of strings).',
             'Return null to explicitly do nothing.',
             returnSpec,
-            'Only return the code. No explanation, no markdown fences, no comments outside the code.',
+            '',
+            'Respond with only the raw code. No explanation, no markdown fences, no surrounding comments.',
+            '</instructions>',
         ];
 
         if (currentScript) {
-            parts.push('', 'Here is the current script to modify:', '```', currentScript, '```');
+            parts.push('', '<current_script>', currentScript, '</current_script>');
         }
 
-        parts.push('', 'Task: ' + userPrompt);
+        parts.push('', '<task>' + userPrompt + '</task>');
 
         const fullPrompt = parts.join('\n');
 
