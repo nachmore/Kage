@@ -477,6 +477,13 @@ export class FloatingApp {
         this._bannerVisible = false;
         const banner = document.getElementById('floatingBanner');
         if (banner) banner.style.display = 'none';
+        // If the banner was the only content, reset the UI to reclaim the space
+        const responseText = document.getElementById('responseText');
+        if (!responseText || !responseText.textContent.trim()) {
+            this.resetUI();
+            this.windowManager.userSetHeight = null;
+            this.windowManager.resizeWindow();
+        }
     }
 
     matchShortcut(input) {
