@@ -173,6 +173,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new MathSettingsModule());
 
     // About
+    settingsManager.registerModule(new UpdatesSettingsModule());
     settingsManager.registerModule(new AboutSettingsModule());
     
     // Render and load

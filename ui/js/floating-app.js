@@ -58,6 +58,9 @@ export class FloatingApp {
         });
         
         setTimeout(() => this.elements.input.focus(), 100);
+
+        // Check if we were just updated and show the celebration banner
+        this.checkForUpdateBanner();
         console.log('Initialization complete!');
     }
 
@@ -241,6 +244,8 @@ export class FloatingApp {
             try {
                 const isVisible = await this.appWindow.isVisible();
                 if (isVisible && !lastVisibilityState) {
+                    // Notify updater of activity
+                    this.invoke('touch_floating_activity').catch(() => {});
                     // Don't reset UI if permission modal is open
                     const permissionModal = document.getElementById('permissionModal');
                     if (!permissionModal || permissionModal.style.display === 'none') {
@@ -305,6 +310,7 @@ export class FloatingApp {
                 return;
             }
             await this.appWindow.hide();
+            this.dismissUpdateBanner();
         });
     }
 
@@ -399,6 +405,38 @@ export class FloatingApp {
     tryEvaluateMath(query) {
         if (!this.mathConfig.enabled) return null;
         return evaluateMath(query, this.mathConfig.precision);
+    }
+
+    async checkForUpdateBanner() {
+        try {
+            const wasUpdated = await this.invoke('was_just_updated');
+            if (wasUpdated) {
+                this._showUpdateBanner = true;
+                const banner = document.getElementById('updateBanner');
+                if (banner) banner.style.display = 'flex';
+            }
+        } catch (e) {
+            console.log('Update check failed:', e);
+        }
+    }
+
+    dismissUpdateBanner() {
+        if (!this._showUpdateBanner) return;
+        this._showUpdateBanner = false;
+        const banner = document.getElementById('updateBanner');
+        if (banner) banner.style.display = 'none';
+        // Clear the flag so it doesn't show again
+        this.invoke('clear_update_flag').catch(() => {});
+    }
+
+    async openUpdateSettings() {
+        try {
+            await this.invoke('open_settings_window');
+            // Emit event to tell settings window to switch to updates section
+            await window.__TAURI__.event.emit('navigate_settings_section', 'updates');
+        } catch (e) {
+            console.error('Failed to open settings:', e);
+        }
     }
 
     matchShortcut(input) {
@@ -1072,6 +1110,7 @@ export class FloatingApp {
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
                 await this.windowManager.resizeWindow();
+                this.dismissUpdateBanner();
                 await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {

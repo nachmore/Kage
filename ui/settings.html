@@ -4,13 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kiro Settings</title>
+    <!-- Vendored Dependencies (must load before app CSS — see floating.html) -->
+    <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
+    <script src="vendor/lib/prism.js"></script>
+    <script src="vendor/lib/prism-components/prism-javascript.min.js"></script>
+    <!-- App Styles -->
     <link rel="stylesheet" href="css/shared-kiro-tokens.css">
     <link rel="stylesheet" href="css/shared-kiro-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <link rel="stylesheet" href="css/settings-layout.css">
-    <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
-    <script src="vendor/lib/prism.js"></script>
-    <script src="vendor/lib/prism-components/prism-javascript.min.js"></script>
     <script>
         // Shared utilities — available to all settings modules
         function escapeHtml(text) {
@@ -92,6 +94,10 @@
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title">About</div>
+                <div class="sidebar-item" data-section="updates" onclick="switchSection('updates')">
+                    <span class="sidebar-item-icon">🔄</span>
+                    <span>Updates</span>
+                </div>
                 <div class="sidebar-item" data-section="about" onclick="switchSection('about')">
                     <span class="sidebar-item-icon">ℹ️</span>
                     <span>About Kiro Assistant</span>
@@ -162,8 +168,26 @@
                 }
             }
         });
+
+        // Listen for navigation requests from other windows (e.g. floating → updates)
+        (function() {
+            function waitForTauri(cb) {
+                if (window.__TAURI__ && window.__TAURI__.event) cb();
+                else setTimeout(() => waitForTauri(cb), 50);
+            }
+            waitForTauri(() => {
+                window.__TAURI__.event.listen('navigate_settings_section', (event) => {
+                    const section = event.payload;
+                    if (section && typeof switchSection === 'function') {
+                        switchSection(section);
+                    }
+                });
+            });
+        })();
     </script>
 
+    <script src="vendor/lib/marked.min.js"></script>
+    
     <!-- Load all settings modules -->
     <script src="js/settings/base.js"></script>
     <script src="js/settings/hotkey.js"></script>
@@ -177,6 +201,7 @@
     <script src="js/settings/integration.js"></script>
     <script src="js/settings/math.js"></script>
     <script src="js/settings/about.js"></script>
+    <script src="js/settings/updates.js"></script>
     <script src="js/settings/manager.js"></script>
 </body>
 </html>

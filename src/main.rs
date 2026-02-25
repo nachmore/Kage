@@ -12,6 +12,7 @@ mod process_manager;
 mod single_instance;
 mod state;
 mod tray;
+mod updater;
 
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
@@ -72,6 +73,25 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");
     let debug_mode = args.iter().any(|arg| arg == "/debug" || arg == "--debug");
+
+    // Check for session resume after update — read from last-session.txt
+    let _resume_session_id: Option<String> = args.iter()
+        .position(|arg| arg == "/resume-session" || arg == "--resume-session")
+        .and_then(|i| args.get(i + 1).cloned())
+        .or_else(|| {
+            // Also check the last-session.txt file (written by the updater before exit)
+            dirs::config_dir()
+                .map(|d| d.join("kiro-assistant").join("last-session.txt"))
+                .and_then(|p| std::fs::read_to_string(&p).ok())
+                .map(|s| {
+                    // Clean up the file after reading
+                    let _ = std::fs::remove_file(
+                        dirs::config_dir().unwrap().join("kiro-assistant").join("last-session.txt")
+                    );
+                    s.trim().to_string()
+                })
+                .filter(|s| !s.is_empty())
+        });
 
     if debug_mode {
         println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
@@ -170,6 +190,7 @@ fn main() {
             current_model_id: Arc::new(std::sync::Mutex::new(None)),
             last_selection: Arc::new(std::sync::Mutex::new(None)),
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
+            updater: Arc::new(updater::UpdaterState::new()),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -423,6 +444,16 @@ fn main() {
                 });
             }
 
+            // Start the auto-update background loop
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                updater::start_update_loop(
+                    state.updater.clone(),
+                    state.config.clone(),
+                    app.handle().clone(),
+                );
+            }
+
             // Show welcome window on first run
             if !config.first_run_completed {
                 info!("First run detected, showing welcome window");
@@ -498,7 +529,14 @@ fn main() {
             commands::get_slash_commands,
             commands::execute_slash_command,
             commands::get_slash_command_options,
-            commands::get_available_models
+            commands::get_available_models,
+            commands::check_for_update,
+            commands::fetch_changelog,
+            commands::get_update_urls,
+            commands::download_and_install_update,
+            commands::was_just_updated,
+            commands::clear_update_flag,
+            commands::touch_floating_activity
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

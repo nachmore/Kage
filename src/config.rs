@@ -20,6 +20,8 @@ pub struct Config {
     pub math: MathConfig,
     #[serde(default)]
     pub first_run_completed: bool,
+    #[serde(default)]
+    pub updates: UpdateConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +74,37 @@ impl Default for MathConfig {
             precision: 0,
             auto_copy: true,
             thousands_separator: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateConfig {
+    /// Automatically check for updates once per day
+    #[serde(default)]
+    pub auto_check: bool,
+    /// Silently download and install updates when idle
+    #[serde(default)]
+    pub silent_update: bool,
+    /// Show changelog after an update is installed
+    #[serde(default = "default_true")]
+    pub show_changelog_after_update: bool,
+    /// ISO 8601 timestamp of the last update check
+    #[serde(default)]
+    pub last_check_time: Option<String>,
+    /// Version that was last installed via auto-update (to detect fresh updates)
+    #[serde(default)]
+    pub last_updated_version: Option<String>,
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            auto_check: false,
+            silent_update: false,
+            show_changelog_after_update: true,
+            last_check_time: None,
+            last_updated_version: None,
         }
     }
 }
@@ -280,6 +313,7 @@ impl Default for Config {
             tool_permissions: ToolPermissionsConfig::default(),
             math: MathConfig::default(),
             first_run_completed: false,
+            updates: UpdateConfig::default(),
         }
     }
 }

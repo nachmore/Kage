@@ -8,6 +8,11 @@ license = "MIT"
 repository = "TBD"
 homepage = "TBD"
 
+[package.metadata.update]
+version_url = "https://example.com/kiro-assistant/latest-version.txt"
+installer_url = "https://example.com/kiro-assistant/kiro-assistant-setup.exe"
+changelog_url = "https://example.com/kiro-assistant/CHANGELOG.md"
+
 [dependencies]
 tauri = { version = "2.10", features = ["tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
@@ -24,6 +29,8 @@ chrono = "0.4"
 ctrlc = "3.4"
 whoami = "1.5"
 base64 = "0.22"
+reqwest = { version = "0.12", features = ["blocking"] }
+semver = "1.0"
 tauri-plugin-notification = "2.3.3"
 
 [target.'cfg(windows)'.dependencies]
@@ -50,6 +57,7 @@ signal-hook = "0.3"
 
 [build-dependencies]
 tauri-build = { version = "2.5", features = [] }
+toml = "0.8"
 
 [profile.release]
 opt-level = 3

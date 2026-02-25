@@ -378,3 +378,38 @@ body.light-theme .keycap-sep { color: #999; }
     padding-top: 16px;
     border-top: 1px solid var(--kiro-border-subtle);
 }
+
+/* Updates — changelog box */
+.changelog-box {
+    margin-top: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: var(--kiro-bg-elevated);
+    border: 1px solid var(--kiro-border-subtle);
+    border-radius: 6px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+}
+.changelog-box h1, .changelog-box h2, .changelog-box h3 {
+    color: var(--kiro-text-bright);
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+.changelog-box h1 { font-size: 18px; }
+.changelog-box h2 { font-size: 15px; }
+.changelog-box h3 { font-size: 13px; }
+.changelog-box ul { padding-left: 20px; margin: 8px 0; }
+.changelog-box li { margin: 4px 0; }
+.changelog-box code {
+    background: var(--kiro-bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+.changelog-box pre {
+    background: var(--kiro-bg);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+}

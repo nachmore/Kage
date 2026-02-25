@@ -30,6 +30,8 @@ pub struct AppState {
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
     /// Which window sent the last notification ('floating' or 'main')
     pub notification_source: Arc<std::sync::Mutex<String>>,
+    /// Updater state for auto-update system
+    pub updater: Arc<crate::updater::UpdaterState>,
 }
 
 #[derive(Debug, Clone)]

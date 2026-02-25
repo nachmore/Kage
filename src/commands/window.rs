@@ -90,6 +90,9 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 let _ = window.show();
                 let _ = window.set_focus();
 
+                // Record floating window activity for the updater idle check
+                state.updater.touch_activity();
+
                 let _ = app.emit("selection_captured", has_sel);
             }
         }

@@ -77,3 +77,13 @@ kiro-assistant/
 ### Frontend Dependencies
 - Managed via npm in `ui/vendor/`, browser bundles in `ui/vendor/lib/`
 - Loaded via `<script>` tags, not ES module imports
+
+### Settings Window
+- Each settings section is a JS class extending `SettingsModule` (defined in `base.js`)
+- Modules are registered in `manager.js` in sidebar order, rendered into `#settingsModules`
+- First registered module is visible by default; others are hidden via `.hidden` class
+- Sidebar items use `data-section` attribute matching the module `id`
+- All modules must implement: `render()`, `load(config)`, `save(config)`, `validate()`
+- Optional: `initialize()` (called after render), `destroy()` (cleanup)
+- Use `createCheckboxRow()`, `createControlRow()` helpers from base class for consistent layout
+- CAVEAT: When rendering markdown with `marked.parse()`, always sanitize the input first. If the source returns HTML instead of markdown, marked will pass it through raw — injecting `<style>` and `<script>` tags that corrupt the page. Check for HTML document markers (`<!`, `<html`) and wrap in a code fence before parsing.

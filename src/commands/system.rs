@@ -97,7 +97,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
     // Create fresh window (previous one was closed/destroyed)
     let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
         .title("Welcome to Kiro Assistant")
-        .inner_size(520.0, 480.0)
+        .inner_size(520.0, 540.0)
         .resizable(false)
         .decorations(false)
         .center()
@@ -120,9 +120,14 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn complete_first_run(
     state: State<'_, AppState>,
     launch_at_startup: bool,
+    auto_update: bool,
 ) -> Result<(), String> {
     let mut config = state.config.lock().await;
     config.first_run_completed = true;
+    if auto_update {
+        config.updates.auto_check = true;
+        config.updates.silent_update = true;
+    }
     let _ = config.save();
 
     set_startup_enabled_impl(launch_at_startup);
@@ -509,4 +514,73 @@ pub async fn get_auto_steering_path() -> Result<String, String> {
                 .map(|s| s.to_string())
                 .ok_or_else(|| "Invalid path encoding".to_string())
         })
+}
+
+// --- Update commands ---
+
+#[tauri::command]
+pub async fn check_for_update() -> Result<serde_json::Value, String> {
+    let result = tauri::async_runtime::spawn_blocking(crate::updater::check_for_update)
+        .await
+        .map_err(|e| format!("Task error: {}", e))?
+        .map_err(|e| format!("Check failed: {}", e))?;
+
+    Ok(serde_json::json!({
+        "current_version": crate::updater::CURRENT_VERSION,
+        "available_version": result,
+    }))
+}
+
+#[tauri::command]
+pub async fn fetch_changelog() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
+        .await
+        .map_err(|e| format!("Task error: {}", e))?
+        .map_err(|e| format!("Fetch failed: {}", e))
+}
+
+#[tauri::command]
+pub async fn get_update_urls() -> Result<serde_json::Value, String> {
+    Ok(serde_json::json!({
+        "version_url": crate::updater::VERSION_URL,
+        "installer_url": crate::updater::INSTALLER_URL,
+        "changelog_url": crate::updater::CHANGELOG_URL,
+    }))
+}
+
+#[tauri::command]
+pub async fn download_and_install_update(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let session_id = state.floating_session_id.lock()
+        .ok()
+        .and_then(|s| s.clone());
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = crate::updater::download_installer()
+            .map_err(|e| format!("Download failed: {}", e))?;
+        crate::updater::run_installer_and_exit(&path, session_id.as_deref())
+            .map_err(|e| format!("Install failed: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, String> {
+    let config = state.config.lock().await;
+    Ok(crate::updater::was_just_updated(&config))
+}
+
+#[tauri::command]
+pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), String> {
+    let mut config = state.config.lock().await;
+    crate::updater::clear_update_flag(&mut config);
+    config.save().map_err(|e| format!("Failed to save: {}", e))
+}
+
+#[tauri::command]
+pub async fn touch_floating_activity(state: State<'_, AppState>) -> Result<(), String> {
+    state.updater.touch_activity();
+    Ok(())
 }

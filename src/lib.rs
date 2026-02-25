@@ -11,3 +11,4 @@ pub mod process_manager;
 pub mod single_instance;
 pub mod state;
 pub mod tray;
+pub mod updater;
