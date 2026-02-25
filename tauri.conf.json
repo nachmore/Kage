@@ -32,7 +32,7 @@
         "resizable": false,
         "minWidth": 516,
         "minHeight": 76,
-        "title": "Kiro",
+        "title": "Kiro Assistant",
         "width": 516,
         "height": 76,
         "visible": false,
@@ -83,14 +83,15 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "shortDescription": "AI assistant with floating window interface",
+    "shortDescription": "AI powered launcher",
     "longDescription": "Kiro Assistant is a cross-platform desktop AI assistant with a floating window interface, system tray integration, and custom command shortcuts.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",
         "displayLanguageSelector": false,
         "sidebarImage": "icons/nsis-sidebar.bmp",
-        "headerImage": "icons/nsis-header.bmp"
+        "headerImage": "icons/nsis-header.bmp",
+        "installerHooks": "./src-tauri/windows/hooks.nsh"
       }
     }
   }

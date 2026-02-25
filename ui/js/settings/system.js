@@ -30,15 +30,29 @@ class SystemSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        if (config.system) {
-            const autoStart = document.getElementById('autoStart');
-            if (autoStart) autoStart.checked = config.system.auto_start;
+        // Check actual registry state, not config
+        const autoStart = document.getElementById('autoStart');
+        if (autoStart) {
+            window.__TAURI__.core.invoke('get_startup_enabled').then(enabled => {
+                autoStart.checked = enabled;
+            }).catch(() => {
+                if (config.system) autoStart.checked = config.system.auto_start;
+            });
         }
     }
 
     initialize() {
-        const sidebarIcon = document.getElementById('systemSidebarIcon');
-        if (sidebarIcon) sidebarIcon.textContent = this.icon;
+        // Toggle startup registry entry when checkbox changes
+        const autoStart = document.getElementById('autoStart');
+        if (autoStart) {
+            autoStart.addEventListener('change', async () => {
+                try {
+                    await window.__TAURI__.core.invoke('set_startup_enabled', { enabled: autoStart.checked });
+                } catch (e) {
+                    console.error('Failed to set startup:', e);
+                }
+            });
+        }
     }
 
     save(config) {

@@ -455,6 +455,8 @@ fn main() {
             commands::open_welcome_window,
             commands::complete_first_run,
             commands::is_first_run,
+            commands::get_startup_enabled,
+            commands::set_startup_enabled,
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,

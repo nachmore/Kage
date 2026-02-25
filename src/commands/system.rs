@@ -124,27 +124,7 @@ pub async fn complete_first_run(
     config.first_run_completed = true;
     let _ = config.save();
 
-    // Set or remove Windows startup registry entry
-    #[cfg(target_os = "windows")]
-    {
-        let exe = std::env::current_exe().unwrap_or_default();
-        let key_path = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-        let app_name = "Kiro Assistant";
-        if launch_at_startup {
-            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey_with_flags(key_path, winreg::enums::KEY_WRITE)
-            {
-                let _ = hkcu.set_value(app_name, &exe.to_string_lossy().to_string());
-            }
-        } else {
-            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey_with_flags(key_path, winreg::enums::KEY_WRITE)
-            {
-                let _ = hkcu.delete_value(app_name);
-            }
-        }
-    }
-
+    set_startup_enabled_impl(launch_at_startup);
     Ok(())
 }
 
@@ -152,6 +132,61 @@ pub async fn complete_first_run(
 pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
     let config = state.config.lock().await;
     Ok(!config.first_run_completed)
+}
+
+#[tauri::command]
+pub async fn get_startup_enabled() -> Result<bool, String> {
+    Ok(get_startup_enabled_impl())
+}
+
+#[tauri::command]
+pub async fn set_startup_enabled(enabled: bool) -> Result<(), String> {
+    set_startup_enabled_impl(enabled);
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+const STARTUP_KEY_PATH: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+#[cfg(target_os = "windows")]
+const STARTUP_APP_NAME: &str = "Kiro Assistant";
+
+fn get_startup_enabled_impl() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+            .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_READ)
+        {
+            let val: Result<String, _> = hkcu.get_value(STARTUP_APP_NAME);
+            return val.is_ok();
+        }
+        false
+    }
+    #[cfg(not(target_os = "windows"))]
+    { false }
+}
+
+fn set_startup_enabled_impl(enabled: bool) {
+    #[cfg(target_os = "windows")]
+    {
+        let exe = std::env::current_exe().unwrap_or_default();
+        if enabled {
+            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
+            {
+                let _ = hkcu.set_value(STARTUP_APP_NAME, &exe.to_string_lossy().to_string());
+                info!("Startup registry entry added");
+            }
+        } else {
+            if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
+            {
+                let _ = hkcu.delete_value(STARTUP_APP_NAME);
+                info!("Startup registry entry removed");
+            }
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    { let _ = enabled; }
 }
 
 #[tauri::command]

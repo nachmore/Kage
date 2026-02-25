@@ -188,6 +188,8 @@
                 if (config.hotkey) picker.setHotkey(config.hotkey);
             }).catch(() => {});
 
+            // Welcome page defaults startup to ON (saved on Get Started click)
+
             // Save on hotkey change
             picker.onChange(async (hk) => {
                 try {
