@@ -86,9 +86,6 @@ pub struct UpdateConfig {
     /// Silently download and install updates when idle
     #[serde(default)]
     pub silent_update: bool,
-    /// Show changelog after an update is installed
-    #[serde(default = "default_true")]
-    pub show_changelog_after_update: bool,
     /// ISO 8601 timestamp of the last update check
     #[serde(default)]
     pub last_check_time: Option<String>,
@@ -102,7 +99,6 @@ impl Default for UpdateConfig {
         Self {
             auto_check: false,
             silent_update: false,
-            show_changelog_after_update: true,
             last_check_time: None,
             last_updated_version: None,
         }

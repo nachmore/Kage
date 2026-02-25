@@ -37,13 +37,6 @@ class UpdatesSettingsModule extends SettingsModule {
                     false
                 )}
 
-                ${this.createCheckboxRow(
-                    'Show Changelog After Update',
-                    'Open the Updates page after an update is installed.',
-                    'updateShowChangelog',
-                    true
-                )}
-
                 <div class="setting-row">
                     <div class="setting-label">Changelog</div>
                     <div class="setting-description">Release notes and version history.</div>
@@ -133,17 +126,14 @@ class UpdatesSettingsModule extends SettingsModule {
         const u = config.updates || {};
         const autoCheck = document.getElementById('updateAutoCheck');
         const silentUpdate = document.getElementById('updateSilentUpdate');
-        const showChangelog = document.getElementById('updateShowChangelog');
         if (autoCheck) autoCheck.checked = u.auto_check || false;
         if (silentUpdate) silentUpdate.checked = u.silent_update || false;
-        if (showChangelog) showChangelog.checked = u.show_changelog_after_update !== false;
     }
 
     save(config) {
         if (!config.updates) config.updates = {};
         config.updates.auto_check = document.getElementById('updateAutoCheck')?.checked || false;
         config.updates.silent_update = document.getElementById('updateSilentUpdate')?.checked || false;
-        config.updates.show_changelog_after_update = document.getElementById('updateShowChangelog')?.checked !== false;
     }
 
     validate() { return { valid: true }; }
