@@ -9,6 +9,7 @@ mod config;
 mod logger;
 mod os;
 mod process_manager;
+mod single_instance;
 mod state;
 mod tray;
 
@@ -58,6 +59,15 @@ fn main() {
     }
 
     info!("=== Kiro Assistant Starting ===");
+
+    // Enforce single instance across all builds (debug + release)
+    let _instance_lock = match single_instance::try_acquire() {
+        Ok(lock) => lock,
+        Err(e) => {
+            error!("{}", e);
+            std::process::exit(0);
+        }
+    };
 
     let args: Vec<String> = std::env::args().collect();
     let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");

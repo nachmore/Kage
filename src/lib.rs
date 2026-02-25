@@ -8,5 +8,6 @@ pub mod commands;
 pub mod logger;
 pub mod os;
 pub mod process_manager;
+pub mod single_instance;
 pub mod state;
 pub mod tray;
