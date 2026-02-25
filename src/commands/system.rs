@@ -618,3 +618,23 @@ pub async fn touch_floating_activity(state: State<'_, AppState>) -> Result<(), S
     state.updater.touch_activity();
     Ok(())
 }
+
+/// Simulate a completed update by showing the update banner on the floating window.
+pub fn simulate_update_complete(app: &tauri::AppHandle) {
+    show_update_banner(app);
+}
+
+/// Show the floating window with an update celebration banner.
+pub fn show_update_banner(app: &tauri::AppHandle) {
+    if let Some(floating) = app.get_webview_window("floating") {
+        let _ = floating.show();
+        let _ = floating.set_focus();
+    }
+    let _ = app.emit("show_floating_banner", serde_json::json!({
+        "icon": "🎉",
+        "text": "Kiro Assistant has been updated!",
+        "action_label": "View changelog →",
+        "action_type": "settings",
+        "action_data": "updates"
+    }));
+}

@@ -418,6 +418,8 @@ export class FloatingApp {
             const wasUpdated = await this.invoke('was_just_updated');
             if (wasUpdated) {
                 this.showBanner('🎉', 'Kiro Assistant has been updated!', 'View changelog →', 'settings', 'updates');
+                // Clear the flag so it only shows once
+                this.invoke('clear_update_flag').catch(() => {});
             }
         } catch (e) {
             console.log('Update check failed:', e);
@@ -475,8 +477,6 @@ export class FloatingApp {
         this._bannerVisible = false;
         const banner = document.getElementById('floatingBanner');
         if (banner) banner.style.display = 'none';
-        // Clear update flag if this was an update banner
-        this.invoke('clear_update_flag').catch(() => {});
     }
 
     matchShortcut(input) {

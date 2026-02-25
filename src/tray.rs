@@ -18,10 +18,11 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         let inspect = MenuItemBuilder::with_id("inspect", "Inspect").build(app)?;
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
         let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
+        let test_update = MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &reload, &test_banner])
+            .items(&[&inspect, &reload, &test_banner, &test_update])
             .separator()
             .item(&quit)
             .build()?
@@ -79,6 +80,10 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 "test-welcome-banner" => {
                     info!("Testing welcome banner");
                     crate::commands::system::show_welcome_banner(app_handle_inner);
+                }
+                "test-update-banner" => {
+                    info!("Testing update banner");
+                    crate::commands::system::simulate_update_complete(app_handle_inner);
                 }
                 "quit" => {
                     info!("Application quit requested");
