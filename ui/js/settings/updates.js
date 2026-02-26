@@ -5,6 +5,7 @@
 class UpdatesSettingsModule extends SettingsModule {
     constructor() {
         super('updates', 'Updates', '🔄');
+        this._knownUpdate = null; // cached available version
     }
 
     render() {
@@ -12,20 +13,20 @@ class UpdatesSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                <div class="setting-row">
-                    <div class="setting-label">Version</div>
-                    <div class="setting-description">
-                        Current: <strong id="updateCurrentVersion">loading...</strong>
-                        &nbsp;&middot;&nbsp;
-                        Latest: <span id="updateLatestVersion">
-                            <button class="setting-button" id="checkUpdateBtn">Check Now</button>
-                        </span>
+                <div class="update-status-card" id="updateStatusCard">
+                    <div class="update-status-icon" id="updateStatusIcon">
+                        <div class="update-spinner" id="updateSpinner"></div>
                     </div>
+                    <div class="update-status-body">
+                        <div class="update-status-title" id="updateStatusTitle">Checking for updates</div>
+                        <div class="update-status-detail" id="updateStatusDetail">Version ${escapeHtml(window._kiroVersion || '...')}</div>
+                    </div>
+                    <div class="update-status-action" id="updateStatusAction"></div>
                 </div>
 
                 ${this.createCheckboxRow(
                     'Automatically Check for Updates',
-                    'Check for new versions once per day in the background.',
+                    'Periodically check for updates.',
                     'updateAutoCheck',
                     false
                 )}
@@ -49,55 +50,101 @@ class UpdatesSettingsModule extends SettingsModule {
     }
 
     async initialize() {
-        const btn = document.getElementById('checkUpdateBtn');
-        if (btn) btn.addEventListener('click', () => this.checkForUpdate());
-
+        // Cache current version for display
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
-            const el = document.getElementById('updateCurrentVersion');
-            if (el) el.textContent = 'v' + info.version;
+            window._kiroVersion = info.version;
         } catch (e) { /* ignore */ }
 
         this.loadChangelog();
     }
 
-    async checkForUpdate() {
-        const latestEl = document.getElementById('updateLatestVersion');
-        if (!latestEl) return;
-        latestEl.innerHTML = '<em>Checking...</em>';
+    /** Called each time the Updates tab is shown */
+    onShow() {
+        this.autoCheck();
+    }
 
+    async autoCheck() {
+        // If we already know about an available update, show it immediately
+        if (this._knownUpdate) {
+            this.showUpdateAvailable(this._knownUpdate);
+            return;
+        }
+        this.showChecking();
         try {
             const result = await window.__TAURI__.core.invoke('check_for_update');
             if (result.available_version) {
-                latestEl.innerHTML =
-                    'v' + escapeHtml(result.available_version) +
-                    ' <span style="color:var(--kiro-accent);font-weight:600;">(update available)</span>' +
-                    ' <button class="setting-button" id="installUpdateBtn">Install Now</button>';
-                const installBtn = document.getElementById('installUpdateBtn');
-                if (installBtn) installBtn.addEventListener('click', () => this.installUpdate());
+                this._knownUpdate = result.available_version;
+                this.showUpdateAvailable(result.available_version);
             } else {
-                latestEl.innerHTML =
-                    'v' + escapeHtml(result.current_version) + ' (up to date)' +
-                    ' <button class="setting-button" id="checkUpdateBtn">Check Again</button>';
-                const btn = document.getElementById('checkUpdateBtn');
-                if (btn) btn.addEventListener('click', () => this.checkForUpdate());
+                this.showUpToDate(result.current_version);
             }
         } catch (e) {
-            latestEl.innerHTML =
-                '<em>Check failed</em>' +
-                ' <button class="setting-button" id="checkUpdateBtn">Retry</button>';
-            const btn = document.getElementById('checkUpdateBtn');
-            if (btn) btn.addEventListener('click', () => this.checkForUpdate());
+            this.showCheckFailed(String(e));
         }
     }
 
+    showChecking() {
+        const icon = document.getElementById('updateStatusIcon');
+        const title = document.getElementById('updateStatusTitle');
+        const detail = document.getElementById('updateStatusDetail');
+        const action = document.getElementById('updateStatusAction');
+        if (icon) icon.innerHTML = '<div class="update-spinner"></div>';
+        if (title) title.textContent = 'Checking for updates...';
+        if (detail) detail.textContent = 'Version ' + (window._kiroVersion || '...');
+        if (action) action.innerHTML = '';
+    }
+
+    showUpToDate(version) {
+        const icon = document.getElementById('updateStatusIcon');
+        const title = document.getElementById('updateStatusTitle');
+        const detail = document.getElementById('updateStatusDetail');
+        const action = document.getElementById('updateStatusAction');
+        if (icon) icon.innerHTML = '<span class="update-check-icon">✓</span>';
+        if (title) title.textContent = 'Kiro Assistant is up to date';
+        if (detail) detail.textContent = 'Version ' + escapeHtml(version);
+        if (action) action.innerHTML = '<button class="setting-button" id="recheckBtn">Check again</button>';
+        document.getElementById('recheckBtn')?.addEventListener('click', () => {
+            this._knownUpdate = null;
+            this.autoCheck();
+        });
+    }
+
+    showUpdateAvailable(version) {
+        const icon = document.getElementById('updateStatusIcon');
+        const title = document.getElementById('updateStatusTitle');
+        const detail = document.getElementById('updateStatusDetail');
+        const action = document.getElementById('updateStatusAction');
+        if (icon) icon.innerHTML = '<span class="update-available-icon">⬆</span>';
+        if (title) title.textContent = 'Update available — v' + escapeHtml(version);
+        if (detail) detail.textContent = 'Current version: ' + (window._kiroVersion || '...');
+        if (action) action.innerHTML = '<button class="setting-button update-install-btn" id="installNowBtn">Install Now</button>';
+        document.getElementById('installNowBtn')?.addEventListener('click', () => this.installUpdate());
+    }
+
+    showCheckFailed(error) {
+        const icon = document.getElementById('updateStatusIcon');
+        const title = document.getElementById('updateStatusTitle');
+        const detail = document.getElementById('updateStatusDetail');
+        const action = document.getElementById('updateStatusAction');
+        if (icon) icon.innerHTML = '<span class="update-error-icon">✕</span>';
+        if (title) title.textContent = 'Update check failed';
+        if (detail) detail.textContent = error;
+        if (action) action.innerHTML = '<button class="setting-button" id="retryBtn">Retry</button>';
+        document.getElementById('retryBtn')?.addEventListener('click', () => this.autoCheck());
+    }
+
     async installUpdate() {
-        const latestEl = document.getElementById('updateLatestVersion');
-        if (latestEl) latestEl.innerHTML = '<em>Downloading and installing...</em>';
+        const icon = document.getElementById('updateStatusIcon');
+        const title = document.getElementById('updateStatusTitle');
+        const action = document.getElementById('updateStatusAction');
+        if (icon) icon.innerHTML = '<div class="update-spinner"></div>';
+        if (title) title.textContent = 'Downloading and installing...';
+        if (action) action.innerHTML = '';
         try {
             await window.__TAURI__.core.invoke('download_and_install_update');
         } catch (e) {
-            if (latestEl) latestEl.innerHTML = '<em>Install failed: ' + escapeHtml(String(e)) + '</em>';
+            this.showCheckFailed('Install failed: ' + String(e));
         }
     }
 
@@ -106,10 +153,6 @@ class UpdatesSettingsModule extends SettingsModule {
         if (!container) return;
         try {
             let markdown = await window.__TAURI__.core.invoke('fetch_changelog');
-            // Escape all HTML tags before parsing. The changelog is markdown, not
-            // HTML — this prevents injected <style>/<script> from corrupting the
-            // page. Markdown headings, lists, bold, code, and [text](url) links
-            // don't use angle brackets, so nothing is lost.
             markdown = markdown.replace(/</g, '&lt;').replace(/>/g, '&gt;');
             if (window.marked) {
                 marked.setOptions({ breaks: true, gfm: true });
@@ -128,6 +171,9 @@ class UpdatesSettingsModule extends SettingsModule {
         const silentUpdate = document.getElementById('updateSilentUpdate');
         if (autoCheck) autoCheck.checked = u.auto_check || false;
         if (silentUpdate) silentUpdate.checked = u.silent_update || false;
+
+        // Trigger auto-check when tab is loaded/shown
+        this.onShow();
     }
 
     save(config) {

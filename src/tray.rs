@@ -19,10 +19,11 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
         let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
         let test_update = MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
+        let test_update_avail = MenuItemBuilder::with_id("test-update-available", "Test Update Available").build(app)?;
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &reload, &test_banner, &test_update])
+            .items(&[&inspect, &reload, &test_banner, &test_update, &test_update_avail])
             .separator()
             .item(&quit)
             .build()?
@@ -84,6 +85,15 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 "test-update-banner" => {
                     info!("Testing update banner");
                     crate::commands::system::simulate_update_complete(app_handle_inner);
+                }
+                "test-update-available" => {
+                    use tauri::Emitter;
+                    info!("Testing update available banner");
+                    if let Some(floating) = app_handle_inner.get_webview_window("floating") {
+                        let _ = floating.show();
+                        let _ = floating.set_focus();
+                    }
+                    let _ = app_handle_inner.emit("update_available", "99.0.0");
                 }
                 "quit" => {
                     info!("Application quit requested");

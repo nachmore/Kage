@@ -553,11 +553,16 @@ pub async fn get_auto_steering_path() -> Result<String, String> {
 // --- Update commands ---
 
 #[tauri::command]
-pub async fn check_for_update() -> Result<serde_json::Value, String> {
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let result = tauri::async_runtime::spawn_blocking(crate::updater::check_for_update)
         .await
         .map_err(|e| format!("Task error: {}", e))?
         .map_err(|e| format!("Check failed: {}", e))?;
+
+    // Emit event so the floating window can show a banner too
+    if let Some(ref version) = result {
+        let _ = app.emit("update_available", version);
+    }
 
     Ok(serde_json::json!({
         "current_version": crate::updater::CURRENT_VERSION,
@@ -592,12 +597,12 @@ pub async fn download_and_install_update(
 
     tauri::async_runtime::spawn_blocking(move || {
         let path = crate::updater::download_installer()
-            .map_err(|e| format!("Download failed: {}", e))?;
+            .map_err(|e| e.to_string())?;
         crate::updater::run_installer_and_exit(&path, session_id.as_deref())
-            .map_err(|e| format!("Install failed: {}", e))
+            .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| format!("Task error: {}", e))?
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

@@ -217,13 +217,13 @@ pub fn start_update_loop(
 
     tauri::async_runtime::spawn(async move {
         // Initial delay — let the app finish starting
-        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(3600)).await; // Check hourly
-
             let cfg = config.lock().await;
             if !cfg.updates.auto_check {
+                drop(cfg);
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 continue;
             }
 
@@ -286,6 +286,9 @@ pub fn start_update_loop(
                 Ok(Err(e)) => warn!("Update check failed: {}", e),
                 Err(e) => warn!("Update check task failed: {}", e),
             }
+
+            // Wait before next check
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
         }
     });
 

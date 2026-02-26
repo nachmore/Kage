@@ -67,6 +67,18 @@ export class FloatingApp {
             const { icon, text, action_label, action_type, action_data } = event.payload;
             this.showBanner(icon, text, action_label, action_type, action_data);
         });
+
+        // Listen for update available events from the background checker
+        this.listen('update_available', (event) => {
+            const version = event.payload;
+            this.showBanner(
+                '⬆️',
+                'Kiro Assistant v' + version + ' is available!',
+                'Install now →',
+                'update_install',
+                ''
+            );
+        });
         console.log('Initialization complete!');
     }
 
@@ -464,6 +476,12 @@ export class FloatingApp {
             }).catch(() => {});
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
+        } else if (action.type === 'update_install') {
+            // Same flow as the "Install Now" button in settings
+            this.showBanner('⬇️', 'Downloading and installing update...', '', 'dismiss', '');
+            this.invoke('download_and_install_update').catch((e) => {
+                this.showBanner('❌', 'Update failed: ' + e, 'Dismiss', 'dismiss', '');
+            });
         } else {
             // 'dismiss' — reset the UI and refocus input
             this.resetUI();
