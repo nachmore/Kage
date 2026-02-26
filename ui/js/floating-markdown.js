@@ -96,6 +96,20 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
 function _doRender(markdown, targetElement, streaming) {
     _lastRenderTime.set(targetElement, Date.now());
 
+    // During streaming, preserve successfully rendered diagrams so they don't
+    // flash back to source code when innerHTML is replaced.  Key by source text.
+    const savedDiagrams = new Map(); // code text → DOM wrapper element
+    if (streaming) {
+        targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
+            const sourceEl = wrapper.querySelector('.diagram-source code');
+            if (sourceEl) {
+                savedDiagrams.set(sourceEl.textContent, wrapper);
+                // Detach from DOM so innerHTML wipe doesn't destroy it
+                wrapper.remove();
+            }
+        });
+    }
+
     marked.setOptions({ breaks: true, gfm: true });
     targetElement.innerHTML = marked.parse(markdown);
 
@@ -104,22 +118,32 @@ function _doRender(markdown, targetElement, streaming) {
         const langMatch = codeBlock.className.match(/language-(\w+)/);
         const language = langMatch ? langMatch[1] : 'text';
 
-        // Skip diagram and HTML preview rendering during streaming — they're
-        // incomplete and expensive (mermaid, graphviz WASM, iframe creation).
         if (DIAGRAM_LANGUAGES.has(language)) {
+            const code = codeBlock.textContent;
             if (streaming) {
-                wrapCodeBlock(codeBlock, pre, language);
-            } else {
-                renderDiagram(codeBlock, pre, language);
+                // Reinsert the last successful render immediately (no flash)
+                if (savedDiagrams.size > 0) {
+                    const saved = savedDiagrams.get(code) || savedDiagrams.values().next().value;
+                    const savedKey = savedDiagrams.has(code) ? code : savedDiagrams.keys().next().value;
+                    pre.parentNode.insertBefore(saved, pre);
+                    pre.remove();
+                    savedDiagrams.delete(savedKey);
+
+                    // If the code changed, attempt a background re-render
+                    if (savedKey !== code && !_diagramPending.has(_codeHash(code))) {
+                        _tryBackgroundDiagramRender(saved, code, language);
+                    }
+                    return;
+                }
+                // No previous render — first attempt
+                renderDiagram(codeBlock, pre, language, true);
+                return;
             }
+            renderDiagram(codeBlock, pre, language, false);
             return;
         }
         if (HTML_LANGUAGES.has(language)) {
-            if (streaming) {
-                wrapCodeBlock(codeBlock, pre, language);
-            } else {
-                renderHtmlPreview(codeBlock, pre);
-            }
+            renderHtmlPreview(codeBlock, pre);
             return;
         }
         if (language && language !== 'text' && Prism.languages[language]) {
@@ -133,6 +157,7 @@ function _doRender(markdown, targetElement, streaming) {
 
     // Only wire up sortable tables on the final render
     if (!streaming) {
+        _resetDiagramFailures();
         makeTablesSortable(targetElement);
     }
 }
@@ -154,16 +179,115 @@ function wrapCodeBlock(codeBlock, pre, language) {
 
 // --- Generic diagram rendering ---
 
-async function renderDiagram(codeBlock, pre, language) {
+/**
+ * Attempt a background re-render of a diagram that already has a successful render.
+ * Renders into a detached node; on success, swaps the diagram-content with a fade.
+ * On failure, silently ignores — the existing render stays.
+ */
+async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
+    const hash = _codeHash(code);
+    if (_diagramPending.has(hash)) return;
+    const failures = _diagramFailures.get(hash) || 0;
+    if (failures >= MAX_STREAMING_FAILURES) return;
+
+    _diagramPending.add(hash);
+
+    try {
+        if (language === 'mermaid') {
+            const loaded = await ensureMermaid();
+            if (!loaded) { _diagramPending.delete(hash); return; }
+
+            const renderNode = document.createElement('div');
+            renderNode.classList.add('mermaid');
+            renderNode.textContent = code;
+            renderNode.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
+            document.body.appendChild(renderNode);
+
+            try {
+                await mermaid.run({ nodes: [renderNode] });
+                renderNode.style.cssText = '';
+                // Swap into the existing wrapper's diagram-content
+                const diagramContent = existingWrapper.querySelector('.diagram-content');
+                if (diagramContent && existingWrapper.isConnected) {
+                    diagramContent.innerHTML = '';
+                    diagramContent.appendChild(renderNode);
+                    // Update the source code in the wrapper
+                    const sourceCode = existingWrapper.querySelector('.diagram-source code');
+                    if (sourceCode) sourceCode.textContent = code;
+                } else {
+                    renderNode.remove();
+                }
+            } catch {
+                renderNode.remove();
+                _diagramFailures.set(hash, failures + 1);
+            }
+        } else if (language === 'dot' || language === 'graphviz' || language === 'neato') {
+            const graphviz = await getGraphviz();
+            if (!graphviz) { _diagramPending.delete(hash); return; }
+
+            const engine = language === 'neato' ? 'neato' : 'dot';
+            try {
+                const svg = graphviz.layout(code, 'svg', engine);
+                const diagramContent = existingWrapper.querySelector('.diagram-content');
+                if (diagramContent && existingWrapper.isConnected) {
+                    diagramContent.innerHTML = svg;
+                    const svgEl = diagramContent.querySelector('svg');
+                    if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
+                    const sourceCode = existingWrapper.querySelector('.diagram-source code');
+                    if (sourceCode) sourceCode.textContent = code;
+                }
+            } catch {
+                _diagramFailures.set(hash, failures + 1);
+            }
+        }
+    } finally {
+        _diagramPending.delete(hash);
+    }
+}
+
+// Track failed render attempts per diagram source code during streaming.
+// After MAX_STREAMING_FAILURES, stop attempting until the final render.
+const MAX_STREAMING_FAILURES = 3;
+const _diagramFailures = new Map(); // code hash → failure count
+const _diagramPending = new Set();  // code hashes currently being rendered
+
+function _codeHash(code) {
+    // Simple hash for keying — use first 200 chars + length to avoid collisions
+    return code.substring(0, 200) + ':' + code.length;
+}
+
+/** Reset failure tracking (call on final render) */
+function _resetDiagramFailures() {
+    _diagramFailures.clear();
+    _diagramPending.clear();
+}
+
+async function renderDiagram(codeBlock, pre, language, streaming = false) {
     const code = codeBlock.textContent;
 
-    // Don't render incomplete diagrams during streaming
+    // Don't render incomplete diagrams — show as code block and wait for more content
     if (language === 'mermaid' && !code.trim()) return;
     if ((language === 'plantuml' || language === 'puml') && !code.includes('@enduml')) {
         wrapCodeBlock(codeBlock, pre, language); return;
     }
     if ((language === 'dot' || language === 'graphviz' || language === 'neato') && !code.includes('}')) {
         wrapCodeBlock(codeBlock, pre, language); return;
+    }
+
+    // During streaming, if this code has failed too many times, just show as code block
+    if (streaming) {
+        const hash = _codeHash(code);
+        const failures = _diagramFailures.get(hash) || 0;
+        if (failures >= MAX_STREAMING_FAILURES) {
+            wrapCodeBlock(codeBlock, pre, language);
+            return;
+        }
+        // If an async render is already in-flight for this exact code, show code block
+        // and let the in-flight render complete (it will be orphaned but harmless)
+        if (_diagramPending.has(hash)) {
+            wrapCodeBlock(codeBlock, pre, language);
+            return;
+        }
     }
 
     const labels = { mermaid:'Mermaid', plantuml:'PlantUML', puml:'PlantUML', dot:'Graphviz', graphviz:'Graphviz', neato:'Graphviz (neato)' };
@@ -190,6 +314,20 @@ async function renderDiagram(codeBlock, pre, language) {
     const diagramDiv = document.createElement('div');
     diagramDiv.className = 'diagram-content';
 
+    // During streaming, show formatted source as placeholder until async render succeeds.
+    // This prevents a flash of empty/unformatted content while mermaid/graphviz loads.
+    if (streaming) {
+        const placeholderPre = document.createElement('pre');
+        placeholderPre.style.cssText = 'margin:0;padding:16px;overflow-x:auto';
+        const placeholderCode = document.createElement('code');
+        placeholderCode.textContent = code;
+        if (Prism.languages[language]) {
+            try { placeholderCode.innerHTML = Prism.highlight(code, Prism.languages[language], language); } catch {}
+        }
+        placeholderPre.appendChild(placeholderCode);
+        diagramDiv.appendChild(placeholderPre);
+    }
+
     const sourceDiv = document.createElement('div');
     sourceDiv.className = 'diagram-source';
     const sPre = document.createElement('pre');
@@ -211,9 +349,9 @@ async function renderDiagram(codeBlock, pre, language) {
     };
 
     if (language === 'mermaid') {
-        await renderMermaidInto(diagramDiv, code);
+        await renderMermaidInto(diagramDiv, code, streaming);
     } else if (language === 'dot' || language === 'graphviz' || language === 'neato') {
-        await renderGraphvizInto(diagramDiv, code, language);
+        await renderGraphvizInto(diagramDiv, code, language, streaming);
     } else {
         renderPlantUMLInto(diagramDiv, code);
     }
@@ -221,37 +359,84 @@ async function renderDiagram(codeBlock, pre, language) {
 
 // --- Engine-specific renderers ---
 
-async function renderMermaidInto(container, code) {
+async function renderMermaidInto(container, code, streaming = false) {
+    const hash = _codeHash(code);
+    if (streaming) _diagramPending.add(hash);
+
     const loaded = await ensureMermaid();
     if (!loaded) {
-        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Failed to load Mermaid library</div>';
+        _diagramPending.delete(hash);
+        if (streaming) {
+            _diagramFailures.set(hash, MAX_STREAMING_FAILURES);
+        } else {
+            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Failed to load Mermaid library</div>';
+        }
         return;
     }
-    container.classList.add('mermaid');
-    container.textContent = code;
+
+    // Render into a detached node so the visible container isn't disrupted
+    // until we know the render succeeded.
+    const renderNode = document.createElement('div');
+    renderNode.classList.add('mermaid');
+    renderNode.textContent = code;
+    // mermaid.run needs the node in the DOM to measure it
+    renderNode.style.cssText = 'position:absolute;left:-9999px;top:-9999px';
+    document.body.appendChild(renderNode);
+
     try {
-        await mermaid.run({ nodes: [container] });
+        await mermaid.run({ nodes: [renderNode] });
+        _diagramPending.delete(hash);
+        // Success — swap into the visible container and mark wrapper as rendered
+        renderNode.style.cssText = '';
+        container.innerHTML = '';
+        container.appendChild(renderNode);
+        const wrapper = container.closest('.diagram-wrapper');
+        if (wrapper) wrapper.setAttribute('data-rendered', '');
     } catch (error) {
-        console.error('Mermaid rendering error:', error);
-        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
+        renderNode.remove();
+        _diagramPending.delete(hash);
+        if (streaming) {
+            _diagramFailures.set(hash, (_diagramFailures.get(hash) || 0) + 1);
+            // Leave the placeholder (formatted source) intact
+        } else {
+            console.error('Mermaid rendering error:', error);
+            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
+        }
     }
 }
 
-async function renderGraphvizInto(container, code, language) {
+async function renderGraphvizInto(container, code, language, streaming = false) {
+    const hash = _codeHash(code);
+    if (streaming) _diagramPending.add(hash);
     try {
         const graphviz = await getGraphviz();
         if (!graphviz) {
-            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
+            _diagramPending.delete(hash);
+            if (streaming) {
+                _diagramFailures.set(hash, MAX_STREAMING_FAILURES);
+            } else {
+                container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
+            }
             return;
         }
         const engine = language === 'neato' ? 'neato' : 'dot';
         const svg = graphviz.layout(code, 'svg', engine);
+        _diagramPending.delete(hash);
+        // Success — replace placeholder with rendered SVG
         container.innerHTML = svg;
         const svgEl = container.querySelector('svg');
         if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
+        const wrapper = container.closest('.diagram-wrapper');
+        if (wrapper) wrapper.setAttribute('data-rendered', '');
     } catch (error) {
-        console.error('Graphviz rendering error:', error);
-        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz error: ' + error.message + '</div>';
+        _diagramPending.delete(hash);
+        if (streaming) {
+            _diagramFailures.set(hash, (_diagramFailures.get(hash) || 0) + 1);
+            // Leave the placeholder (formatted source) intact
+        } else {
+            console.error('Graphviz rendering error:', error);
+            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz error: ' + error.message + '</div>';
+        }
     }
 }
 
