@@ -76,6 +76,12 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         (&["music", "audio"], dirs::audio_dir),
         (&["desktop"], dirs::desktop_dir),
         (&["home"], dirs::home_dir),
+        (&["templates", "template"], dirs::template_dir),
+        (&["public"], dirs::public_dir),
+        (&["fonts", "font"], dirs::font_dir),
+        (&["cache"], dirs::cache_dir),
+        (&["config", "configuration"], dirs::config_dir),
+        (&["data"], dirs::data_dir),
     ];
 
     // Exact match first
