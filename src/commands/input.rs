@@ -25,13 +25,18 @@ fn is_path(input: &str) -> Option<String> {
     
     // Windows paths — must start with drive letter or UNC prefix
     if cfg!(target_os = "windows") {
-        // Drive letter: C:\...
-        if trimmed.len() >= 3
+        // Drive letter: C:\ or C:/ or just C: (bare drive root)
+        if trimmed.len() >= 2
             && trimmed.as_bytes()[0].is_ascii_alphabetic()
             && trimmed.chars().nth(1) == Some(':')
-            && trimmed.chars().nth(2) == Some('\\')
         {
-            return Some(trimmed.to_string());
+            // Accept "C:", "C:\", "C:\Users\...", "C:/Users/..."
+            if trimmed.len() == 2
+                || trimmed.chars().nth(2) == Some('\\')
+                || trimmed.chars().nth(2) == Some('/')
+            {
+                return Some(trimmed.to_string());
+            }
         }
         // UNC path: \\server\share
         if trimmed.starts_with("\\\\") {
@@ -49,6 +54,42 @@ fn is_path(input: &str) -> Option<String> {
             return Some(trimmed.to_string());
         }
         // Don't match trimmed.contains('/') — that catches paths mid-sentence
+    }
+
+    None
+}
+
+/// Resolve well-known directory names to their actual paths.
+/// Supports prefix matching — "down" matches "downloads".
+/// Only matches if the input is a single word (no spaces).
+fn resolve_well_known_dir(input: &str) -> Option<String> {
+    let lower = input.to_lowercase();
+    if lower.contains(' ') || lower.is_empty() {
+        return None;
+    }
+
+    let candidates: &[(&[&str], fn() -> Option<std::path::PathBuf>)] = &[
+        (&["downloads", "download"], dirs::download_dir),
+        (&["documents", "docs"], dirs::document_dir),
+        (&["pictures", "photos"], dirs::picture_dir),
+        (&["videos", "video", "movies"], dirs::video_dir),
+        (&["music", "audio"], dirs::audio_dir),
+        (&["desktop"], dirs::desktop_dir),
+        (&["home"], dirs::home_dir),
+    ];
+
+    // Exact match first
+    for (names, resolver) in candidates {
+        if names.iter().any(|n| *n == lower.as_str()) {
+            return resolver().map(|p| p.to_string_lossy().to_string());
+        }
+    }
+
+    // Prefix match — return the first match
+    for (names, resolver) in candidates {
+        if names.iter().any(|n| n.starts_with(lower.as_str())) {
+            return resolver().map(|p| p.to_string_lossy().to_string());
+        }
     }
 
     None
@@ -76,6 +117,12 @@ pub async fn handle_floating_input(
             if is_file { "file" } else { "folder" },
             path
         ));
+    }
+
+    // Check for well-known directory names (single word only)
+    if let Some(path) = resolve_well_known_dir(trimmed_input) {
+        info!("Detected well-known directory: {} → {}", trimmed_input, path);
+        return Ok(format!("path:folder:{}", path));
     }
 
     let launcher = state.app_launcher.lock().await;
