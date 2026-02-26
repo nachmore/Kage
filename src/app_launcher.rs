@@ -21,11 +21,9 @@ pub struct AppLauncher {
 
 impl AppLauncher {
     pub fn new() -> Result<Self> {
-        let mut launcher = Self {
+        Ok(Self {
             app_registry: HashMap::new(),
-        };
-        launcher.refresh_registry()?;
-        Ok(launcher)
+        })
     }
 
     /// Refresh the application registry by scanning the system

@@ -149,7 +149,7 @@ fn main() {
         eprintln!("Failed to initialize app launcher: {}", e);
         AppLauncher::new().unwrap()
     });
-    info!("App launcher initialized");
+    info!("App launcher initialized (scan deferred to background)");
 
     let pipe_stdin_handle = acp_client.get_pipe_stdin();
     let tcp_writer_handle = acp_client.get_tcp_writer();
@@ -328,8 +328,33 @@ fn main() {
             });
 
             info!("=== Setup Complete ===");
-            
-            
+
+            // Background app registry scan (deferred from startup for speed)
+            // and periodic refresh every hour so the list stays current.
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                let launcher = state.app_launcher.clone();
+                tauri::async_runtime::spawn(async move {
+                    // Initial scan
+                    {
+                        let mut l = launcher.lock().await;
+                        if let Err(e) = l.refresh_registry() {
+                            log::error!("Background app scan failed: {}", e);
+                        }
+                    }
+                    // Periodic refresh every hour
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+                    interval.tick().await; // consume the immediate first tick
+                    loop {
+                        interval.tick().await;
+                        log::info!("Periodic app registry refresh");
+                        let mut l = launcher.lock().await;
+                        if let Err(e) = l.refresh_registry() {
+                            log::error!("Periodic app scan failed: {}", e);
+                        }
+                    }
+                });
+            }
 
             // Start default session on launch if configured
             if config.acp.assistant.start_session_on_launch {
