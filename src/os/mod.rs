@@ -42,7 +42,8 @@ pub use launcher::{scan_applications, launch_application};
 pub use process::{kill_process, configure_process_spawn};
 pub use shell::{open_url, open_path, reveal_in_file_manager, open_in_editor};
 pub use user::get_user_profile;
-pub use clipboard::{read_clipboard, capture_selection};
+#[allow(unused_imports)]
+pub use clipboard::{read_clipboard, capture_selection, begin_selection_capture, finish_selection_capture, SelectionCaptureToken};
 #[allow(unused)]
 pub use clipboard::write_clipboard;
 pub use startup::{get_startup_enabled, set_startup_enabled};

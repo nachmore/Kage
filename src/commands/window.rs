@@ -41,10 +41,6 @@ pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
     window.primary_monitor().ok().flatten()
 }
 
-/// Capture the currently selected text from the active window.
-fn capture_selection() -> Option<String> {
-    crate::os::capture_selection()
-}
 
 
 /// Toggle the floating window visibility and position it
@@ -61,7 +57,13 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
     let last_y = config.ui.last_window_y;
     drop(config);
 
-    let selection = if is_showing && capture_enabled { capture_selection() } else { None };
+    // Phase 1: send Ctrl+C while the source window is still focused (~20ms).
+    // This must happen before we show our window.
+    let capture_token = if is_showing && capture_enabled {
+        Some(crate::os::clipboard::begin_selection_capture())
+    } else {
+        None
+    };
 
     match window.is_visible() {
         Ok(is_visible) => {
@@ -78,12 +80,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 }
                 let _ = window.hide();
             } else {
-                let has_sel = selection.as_ref().map_or(false, |s| !s.is_empty());
-                if let Ok(mut sel) = state.last_selection.lock() {
-                    *sel = selection;
-                }
-
-                // Position before showing to avoid visual jump
+                // Show window immediately — don't wait for clipboard poll
                 position_floating_window(window, &start_pos, last_x, last_y);
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -91,7 +88,25 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 // Record floating window activity for the updater idle check
                 state.updater.touch_activity();
 
-                let _ = app.emit("selection_captured", has_sel);
+                // Phase 2: poll clipboard in background and deliver result via event.
+                // The Ctrl+C was already sent, so this just waits for the clipboard change.
+                if let Some(token) = capture_token {
+                    let last_selection = state.last_selection.clone();
+                    let app_handle = app.clone();
+                    std::thread::spawn(move || {
+                        let selection = crate::os::clipboard::finish_selection_capture(token);
+                        let has_sel = selection.as_ref().map_or(false, |s| !s.is_empty());
+                        if let Ok(mut sel) = last_selection.lock() {
+                            *sel = selection;
+                        }
+                        let _ = app_handle.emit("selection_captured", has_sel);
+                    });
+                } else {
+                    if let Ok(mut sel) = state.last_selection.lock() {
+                        *sel = None;
+                    }
+                    let _ = app.emit("selection_captured", false);
+                }
             }
         }
         Err(e) => {
