@@ -55,10 +55,13 @@ export class WindowManager {
                 
                 const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
 
-                // When nothing is expanded, size to fit the input area
+                // When nothing is expanded, snap back to the appropriate base height
                 if (nothingExpanded) {
-                    if (!this.userSetHeight) {
-                        const scale = window.devicePixelRatio || 1;
+                    const scale = window.devicePixelRatio || 1;
+                    if (this.userSetHeight) {
+                        // User manually set a height — restore to that
+                        await this.invoke('resize_floating_window', { height: Math.round(this.userSetHeight) });
+                    } else {
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
                         const neededHeight = Math.round((inputHeight + BODY_PADDING) * scale);
