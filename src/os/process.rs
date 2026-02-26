@@ -3,6 +3,25 @@
 use anyhow::Result;
 use std::process::Command;
 
+/// Get the process name for a PID, if it exists.
+pub fn get_process_name(pid: u32) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        crate::os::windows::process::get_process_name_impl(pid)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Unix, read /proc/{pid}/comm or use ps
+        let output = Command::new("ps")
+            .args(&["-p", &pid.to_string(), "-o", "comm="])
+            .output()
+            .ok()?;
+        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if name.is_empty() { None } else { Some(name) }
+    }
+}
+
 /// Kill a process by PID
 pub fn kill_process(pid: u32) -> bool {
     #[cfg(target_os = "windows")]

@@ -46,6 +46,7 @@ windows = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_IO",
+    "Win32_System_Threading",
     "Management_Deployment",
     "ApplicationModel",
     "ApplicationModel_Core",

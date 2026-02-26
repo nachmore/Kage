@@ -52,16 +52,35 @@ impl ProcessManager {
                 if let Ok(pid) = content.trim().parse::<u32>() {
                     info!("Found PID file with PID: {}", pid);
                     
-                    // Try to kill the process
-                    if Self::kill_process(pid) {
-                        info!("✅ Cleaned up orphaned process (PID: {})", pid);
-                    } else {
-                        info!("Process {} not running (already cleaned up)", pid);
+                    // Verify the PID still belongs to a kiro-related process
+                    // to avoid killing a recycled PID that now belongs to something else
+                    match os::process::get_process_name(pid) {
+                        Some(name) => {
+                            let name_lower = name.to_lowercase();
+                            let is_ours = name_lower.contains("kiro")
+                                || name_lower.contains("node")
+                                || name_lower.contains("npx");
+                            
+                            if is_ours {
+                                info!("PID {} is '{}' — killing orphaned process", pid, name);
+                                if Self::kill_process(pid) {
+                                    info!("✅ Cleaned up orphaned process (PID: {}, name: {})", pid, name);
+                                } else {
+                                    warn!("Failed to kill orphaned process (PID: {}, name: {})", pid, name);
+                                }
+                            } else {
+                                info!("PID {} is '{}' — not a kiro process, skipping kill (PID was recycled)", pid, name);
+                            }
+                        }
+                        None => {
+                            info!("PID {} is not running (already exited)", pid);
+                        }
                     }
                 }
                 
                 // Remove the PID file
                 let _ = fs::remove_file(&pid_file);
+                info!("PID file removed");
             }
             Err(e) => {
                 warn!("Failed to read PID file: {}", e);

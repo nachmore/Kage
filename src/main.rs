@@ -60,6 +60,7 @@ fn main() {
     }
 
     info!("=== Kiro Assistant Starting ===");
+    let startup_t0 = std::time::Instant::now();
 
     // Enforce single instance across all builds (debug + release)
     let _instance_lock = match single_instance::try_acquire() {
@@ -100,9 +101,11 @@ fn main() {
     }
 
     info!("Checking for orphaned processes...");
-    if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
-        warn!("Failed to cleanup orphaned processes: {}", e);
-    }
+    std::thread::spawn(|| {
+        if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
+            warn!("Failed to cleanup orphaned processes: {}", e);
+        }
+    });
 
     let mut config = Config::load().unwrap_or_else(|e| {
         error!("Failed to load config, using defaults: {}", e);
@@ -115,6 +118,7 @@ fn main() {
     }
 
     info!("Configuration loaded");
+    if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
 
     let acp_client = match &config.acp.mode {
         crate::config::AcpMode::Local { spawn_command } => {
@@ -150,6 +154,7 @@ fn main() {
         AppLauncher::new().unwrap()
     });
     info!("App launcher initialized (scan deferred to background)");
+    if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
 
     let pipe_stdin_handle = acp_client.get_pipe_stdin();
     let tcp_writer_handle = acp_client.get_tcp_writer();
@@ -172,6 +177,7 @@ fn main() {
     let acp_for_handler = acp_client_arc.clone();
     let models_for_handler = available_models_arc.clone();
 
+    if dev_mode { info!("⏱ Tauri builder starting at +{}ms", startup_t0.elapsed().as_millis()); }
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
