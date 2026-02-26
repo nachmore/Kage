@@ -16,13 +16,34 @@ async function getGraphviz() {
     }
 }
 
+// Lazy-load mermaid (~3.2MB) only when a mermaid diagram is first encountered
+let mermaidReady = false;
+let mermaidLoadPromise = null;
+async function ensureMermaid() {
+    if (mermaidReady) return true;
+    if (!mermaidLoadPromise) {
+        mermaidLoadPromise = new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'vendor/lib/mermaid.min.js';
+            script.onload = () => {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'default',
+                    securityLevel: 'loose',
+                    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+                });
+                mermaidReady = true;
+                resolve(true);
+            };
+            script.onerror = () => resolve(false);
+            document.head.appendChild(script);
+        });
+    }
+    return mermaidLoadPromise;
+}
+
 export function initMarkdown() {
-    mermaid.initialize({
-        startOnLoad: false,
-        theme: 'default',
-        securityLevel: 'loose',
-        flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
-    });
+    // mermaid is now lazy-loaded on first diagram encounter — nothing to do here
 }
 
 export function renderMarkdown(markdown, targetElement) {
@@ -141,6 +162,11 @@ async function renderDiagram(codeBlock, pre, language) {
 // --- Engine-specific renderers ---
 
 async function renderMermaidInto(container, code) {
+    const loaded = await ensureMermaid();
+    if (!loaded) {
+        container.innerHTML = '<div style="color:#dc2626;padding:20px;">Failed to load Mermaid library</div>';
+        return;
+    }
     container.classList.add('mermaid');
     container.textContent = code;
     try {

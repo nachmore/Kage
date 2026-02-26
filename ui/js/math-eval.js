@@ -3,7 +3,7 @@
  * Provides a thin wrapper that detects math expressions and evaluates them.
  */
 
-// mathjs is loaded as a global via script tag (UMD bundle)
+// mathjs is loaded via a deferred script tag — available by the time user types
 // Access it via window.math
 
 /**
