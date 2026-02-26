@@ -186,6 +186,9 @@ export class WindowManager {
 
         const onMouseUp = () => {
             this.isResizing = false;
+            // Set a brief grace period so the subsequent click event
+            // (mouseup → click) doesn't trigger handleOutsideClick
+            this._resizeEndedAt = Date.now();
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
         };

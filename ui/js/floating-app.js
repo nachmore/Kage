@@ -1375,6 +1375,11 @@ export class FloatingApp {
         if (permissionModal && permissionModal.style.display !== 'none') {
             return;
         }
+
+        // Don't hide if we just finished resizing or dragging — the mouseup
+        // outside the window boundary fires a click event we should ignore.
+        if (this.windowManager.isResizing || this.windowManager.isDragging) return;
+        if (this.windowManager._resizeEndedAt && Date.now() - this.windowManager._resizeEndedAt < 300) return;
         
         const container = document.querySelector('.floating-container');
         if (container && !container.contains(event.target)) {
