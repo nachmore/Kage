@@ -232,6 +232,7 @@ body.dark-theme .selection-checkbox {
     background: white;
     max-height: 300px;
     overflow-y: auto;
+    overflow-x: hidden;
     display: none;
     border-top: 1px solid #e5e7eb;
     flex-shrink: 0;
@@ -249,6 +250,7 @@ body.dark-theme .selection-checkbox {
     cursor: pointer;
     transition: background 0.1s;
     border-bottom: 1px solid #f3f4f6;
+    overflow: hidden;
 }
 
 .app-suggestion-item:last-child {
@@ -291,6 +293,9 @@ body.dark-theme .selection-checkbox {
     font-size: 14px;
     color: #333;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .app-info {
@@ -298,12 +303,16 @@ body.dark-theme .selection-checkbox {
     flex-direction: column;
     gap: 2px;
     flex: 1;
+    min-width: 0;
 }
 
 .app-description {
     font-size: 12px;
     color: #666;
     font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Context Menu (inline overlay) */
