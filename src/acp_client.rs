@@ -89,6 +89,10 @@ pub struct AcpClient {
     initialized: Arc<Mutex<bool>>,
     debug_mode: Arc<Mutex<bool>>,
     connected: Arc<Mutex<bool>>,
+    /// Epoch millis of the last message (response or notification) from the server.
+    /// Used by send_request to distinguish "server is busy streaming" from "server
+    /// is truly unresponsive" so long-running prompts don't time out prematurely.
+    last_activity: Arc<Mutex<u64>>,
 }
 
 impl AcpClient {
@@ -107,6 +111,7 @@ impl AcpClient {
             initialized: Arc::new(Mutex::new(false)),
             debug_mode: Arc::new(Mutex::new(false)),
             connected: Arc::new(Mutex::new(false)),
+            last_activity: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -263,6 +268,7 @@ impl AcpClient {
         let notification_handler = self.notification_handler.clone();
         let debug_mode = self.debug_mode.clone();
         let connected = self.connected.clone();
+        let last_activity = self.last_activity.clone();
 
         thread::spawn(move || {
             let mut reader: Box<dyn BufRead + Send> = match source {
@@ -312,6 +318,16 @@ impl AcpClient {
                         continue;
                     }
                 };
+
+                // Record activity — any valid JSON from the server means it's alive.
+                // send_request uses this to avoid timing out during long streaming responses.
+                {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    *last_activity.lock().unwrap() = now;
+                }
 
                 // Responses have an "id" field and no "method" field
                 // Notifications have a "method" field and no "id" (or id is null)
@@ -365,20 +381,45 @@ impl AcpClient {
         let rx_guard = self.response_rx.lock().unwrap();
         let rx = rx_guard.as_ref().context("No reader thread (not connected)")?;
 
-        // Use a timeout to avoid hanging forever
-        match rx.recv_timeout(Duration::from_secs(30)) {
-            Ok(response) => {
-                if debug {
-                    info!("[RECV] Response id={:?}", response.id);
+        // Instead of a single long timeout, loop with short timeouts and check
+        // whether the server is still sending data (notifications/streaming chunks).
+        // This prevents long-running prompts from timing out while actively streaming.
+        let idle_timeout = Duration::from_secs(60);
+        let poll_interval = Duration::from_secs(5);
+
+        // Record the time we sent the request as the initial "last heard from server"
+        let start_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        *self.last_activity.lock().unwrap() = start_ms;
+
+        loop {
+            match rx.recv_timeout(poll_interval) {
+                Ok(response) => {
+                    if debug {
+                        info!("[RECV] Response id={:?}", response.id);
+                    }
+                    return Ok(response);
                 }
-                Ok(response)
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                anyhow::bail!("Timeout waiting for response to {}", request.method)
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                *self.connected.lock().unwrap() = false;
-                anyhow::bail!("Connection lost while waiting for response")
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Check if the server has been active recently (streaming chunks, etc.)
+                    let last = *self.last_activity.lock().unwrap();
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+                    let idle_ms = now.saturating_sub(last);
+
+                    if idle_ms > idle_timeout.as_millis() as u64 {
+                        anyhow::bail!("Timeout waiting for response to {}", request.method);
+                    }
+                    // Server was active recently — keep waiting
+                }
+                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                    *self.connected.lock().unwrap() = false;
+                    anyhow::bail!("Connection lost while waiting for response")
+                }
             }
         }
     }
