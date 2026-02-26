@@ -286,11 +286,13 @@ fn main() {
             let hotkey_app = app.handle().clone();
             let hotkey_window = floating_window.clone();
             let hotkey_current = current_hotkey.clone();
+            let hotkey_config = app.state::<AppState>().config.clone();
             app.listen("config_updated", move |_| {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-                // Read config from file to avoid async mutex deadlock
-                let new_hotkey = match config::Config::load() {
+                // Use try_lock to avoid deadlock on the event loop thread.
+                // If the lock is held, skip — the next config_updated will catch it.
+                let new_hotkey = match hotkey_config.try_lock() {
                     Ok(config) => config.get_hotkey_string(),
                     Err(_) => return,
                 };

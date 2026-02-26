@@ -52,18 +52,16 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
     let app = window.app_handle();
     let state: tauri::State<'_, crate::state::AppState> = app.state();
 
-    // Check if we should capture selection (read from file to avoid async lock)
     let is_showing = !window.is_visible().unwrap_or(true);
-    let capture_enabled = crate::config::Config::load()
-        .map(|c| c.system.capture_selection)
-        .unwrap_or(true);
-    let selection = if is_showing && capture_enabled { capture_selection() } else { None };
 
     let config = tauri::async_runtime::block_on(state.config.lock());
+    let capture_enabled = config.system.capture_selection;
     let start_pos = config.ui.window_start_position.clone();
     let last_x = config.ui.last_window_x;
     let last_y = config.ui.last_window_y;
     drop(config);
+
+    let selection = if is_showing && capture_enabled { capture_selection() } else { None };
 
     match window.is_visible() {
         Ok(is_visible) => {

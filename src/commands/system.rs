@@ -146,9 +146,11 @@ pub async fn complete_first_run(
 /// Show the floating window with a welcome banner displaying the configured hotkey.
 /// Called from first-run completion and the dev tray menu.
 pub fn show_welcome_banner(app: &tauri::AppHandle) {
-    let hotkey_str = crate::config::Config::load()
-        .map(|c| c.get_hotkey_string())
-        .unwrap_or_else(|_| "Alt+Space".to_string());
+    let hotkey_str = app.try_state::<crate::state::AppState>()
+        .and_then(|state| {
+            state.config.try_lock().ok().map(|c| c.get_hotkey_string())
+        })
+        .unwrap_or_else(|| "Alt+Space".to_string());
     let keycaps: String = hotkey_str.split('+')
         .map(|k| format!("<span class=\"keycap\">{}</span>", k))
         .collect::<Vec<_>>()
