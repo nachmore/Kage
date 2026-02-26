@@ -88,4 +88,9 @@ http.server.HTTPServer.allow_reuse_address = True
 server = http.server.HTTPServer(("", PORT), NoCacheHandler)
 print(f"Dev server running on http://localhost:{PORT}")
 sys.stdout.flush()
-server.serve_forever()
+try:
+    server.serve_forever()
+except KeyboardInterrupt:
+    pass
+finally:
+    server.server_close()

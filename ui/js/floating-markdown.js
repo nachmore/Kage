@@ -211,9 +211,9 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
                 if (diagramContent && existingWrapper.isConnected) {
                     diagramContent.innerHTML = '';
                     diagramContent.appendChild(renderNode);
-                    // Update the source code in the wrapper
                     const sourceCode = existingWrapper.querySelector('.diagram-source code');
                     if (sourceCode) sourceCode.textContent = code;
+                    _markDiagramRendered(diagramContent);
                 } else {
                     renderNode.remove();
                 }
@@ -235,6 +235,7 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
                     if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
                     const sourceCode = existingWrapper.querySelector('.diagram-source code');
                     if (sourceCode) sourceCode.textContent = code;
+                    _markDiagramRendered(diagramContent);
                 }
             } catch {
                 _diagramFailures.set(hash, failures + 1);
@@ -260,6 +261,16 @@ function _codeHash(code) {
 function _resetDiagramFailures() {
     _diagramFailures.clear();
     _diagramPending.clear();
+}
+
+/** Mark a diagram wrapper as successfully rendered and show its save button */
+function _markDiagramRendered(container) {
+    const wrapper = container.closest('.diagram-wrapper');
+    if (wrapper) {
+        wrapper.setAttribute('data-rendered', '');
+        const saveBtn = wrapper.querySelector('.diagram-save-btn');
+        if (saveBtn) saveBtn.style.display = '';
+    }
 }
 
 async function renderDiagram(codeBlock, pre, language, streaming = false) {
@@ -313,6 +324,9 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
 
     const diagramDiv = document.createElement('div');
     diagramDiv.className = 'diagram-content';
+
+    // Add save button — needs diagramDiv reference, so we append it after creation
+    actions.appendChild(createSaveButton(diagramDiv));
 
     // During streaming, show formatted source as placeholder until async render succeeds.
     // This prevents a flash of empty/unformatted content while mermaid/graphviz loads.
@@ -390,8 +404,7 @@ async function renderMermaidInto(container, code, streaming = false) {
         renderNode.style.cssText = '';
         container.innerHTML = '';
         container.appendChild(renderNode);
-        const wrapper = container.closest('.diagram-wrapper');
-        if (wrapper) wrapper.setAttribute('data-rendered', '');
+        _markDiagramRendered(container);
     } catch (error) {
         renderNode.remove();
         _diagramPending.delete(hash);
@@ -426,8 +439,7 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
         container.innerHTML = svg;
         const svgEl = container.querySelector('svg');
         if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
-        const wrapper = container.closest('.diagram-wrapper');
-        if (wrapper) wrapper.setAttribute('data-rendered', '');
+        _markDiagramRendered(container);
     } catch (error) {
         _diagramPending.delete(hash);
         if (streaming) {
@@ -541,6 +553,81 @@ function copyCode(code, button) {
         button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
         setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
     }).catch(err => console.error('Copy failed:', err));
+}
+
+function createSaveButton(diagramContentEl) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-button diagram-save-btn';
+    btn.style.display = 'none'; // Hidden until diagram renders
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Save</span>';
+    btn.onclick = () => saveDiagramAsPng(diagramContentEl, btn);
+    return btn;
+}
+
+async function saveDiagramAsPng(diagramContentEl, button) {
+    const svgEl = diagramContentEl.querySelector('svg');
+    if (!svgEl) return;
+
+    try {
+        const clone = svgEl.cloneNode(true);
+        const rect = svgEl.getBoundingClientRect();
+        const scale = 2;
+        const w = Math.ceil(rect.width * scale);
+        const h = Math.ceil(rect.height * scale);
+        clone.setAttribute('width', w);
+        clone.setAttribute('height', h);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.style.background = 'white';
+
+        const svgData = new XMLSerializer().serializeToString(clone);
+        const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+
+        const blob = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(img, 0, 0, w, h);
+                canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
+            };
+            img.onerror = () => reject(new Error('SVG load failed'));
+            img.src = dataUrl;
+        });
+
+        // Try native save dialog (Chromium File System Access API)
+        if (window.showSaveFilePicker) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'diagram.png',
+                    types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } catch (e) {
+                if (e.name === 'AbortError') return; // User cancelled
+                throw e;
+            }
+        } else {
+            // Fallback: auto-download
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'diagram.png';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        const orig = button.innerHTML;
+        button.classList.add('copied');
+        button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Saved!</span>';
+        setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
+    } catch (err) {
+        console.error('Save diagram failed:', err);
+    }
 }
 
 function makeTablesSortable(container) {
