@@ -973,7 +973,7 @@ export class ChatApp {
         this.hideTypingIndicator();
 
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-        renderMarkdown(this.currentStreamingContent, contentDiv);
+        renderMarkdown(this.currentStreamingContent, contentDiv, true);
 
         let indicator = contentDiv.querySelector('.streaming-indicator');
         if (!indicator) {

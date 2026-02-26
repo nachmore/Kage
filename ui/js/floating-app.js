@@ -1203,8 +1203,8 @@ export class FloatingApp {
             }
         }
         
-        renderMarkdown(this.currentResponse, this.elements.responseText);
-        
+        renderMarkdown(this.currentResponse, this.elements.responseText, true);
+
         if (this.elements.responseText.lastChild) {
             let streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
             if (!streamingIndicator) {

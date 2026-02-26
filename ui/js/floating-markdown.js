@@ -46,8 +46,56 @@ export function initMarkdown() {
     // mermaid is now lazy-loaded on first diagram encounter — nothing to do here
 }
 
-export function renderMarkdown(markdown, targetElement) {
+// --- Streaming-aware debounced rendering ---
+
+const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
+const _renderTimers = new WeakMap();   // targetElement → timer id
+const _lastRenderTime = new WeakMap(); // targetElement → timestamp
+
+/**
+ * Render markdown into a target element.
+ * @param {string} markdown - raw markdown text
+ * @param {HTMLElement} targetElement - DOM element to render into
+ * @param {boolean} [streaming=false] - true while chunks are arriving; throttles
+ *   rendering and skips expensive diagram/table work until complete
+ */
+export function renderMarkdown(markdown, targetElement, streaming = false) {
     if (!markdown) { targetElement.innerHTML = ''; return; }
+
+    if (!streaming) {
+        // Final render — cancel any pending debounce and do a full render now
+        const pending = _renderTimers.get(targetElement);
+        if (pending) { clearTimeout(pending); _renderTimers.delete(targetElement); }
+        _doRender(markdown, targetElement, false);
+        return;
+    }
+
+    // Streaming: throttle renders to at most one per STREAMING_RENDER_INTERVAL
+    const now = Date.now();
+    const last = _lastRenderTime.get(targetElement) || 0;
+    const elapsed = now - last;
+
+    if (elapsed >= STREAMING_RENDER_INTERVAL) {
+        // Enough time has passed — render immediately
+        const pending = _renderTimers.get(targetElement);
+        if (pending) { clearTimeout(pending); _renderTimers.delete(targetElement); }
+        _doRender(markdown, targetElement, true);
+    } else {
+        // Schedule a render for when the interval expires (if not already scheduled)
+        if (!_renderTimers.has(targetElement)) {
+            const delay = STREAMING_RENDER_INTERVAL - elapsed;
+            const timer = setTimeout(() => {
+                _renderTimers.delete(targetElement);
+                _doRender(markdown, targetElement, true);
+            }, delay);
+            _renderTimers.set(targetElement, timer);
+        }
+    }
+}
+
+function _doRender(markdown, targetElement, streaming) {
+    _lastRenderTime.set(targetElement, Date.now());
+
     marked.setOptions({ breaks: true, gfm: true });
     targetElement.innerHTML = marked.parse(markdown);
 
@@ -56,12 +104,22 @@ export function renderMarkdown(markdown, targetElement) {
         const langMatch = codeBlock.className.match(/language-(\w+)/);
         const language = langMatch ? langMatch[1] : 'text';
 
+        // Skip diagram and HTML preview rendering during streaming — they're
+        // incomplete and expensive (mermaid, graphviz WASM, iframe creation).
         if (DIAGRAM_LANGUAGES.has(language)) {
-            renderDiagram(codeBlock, pre, language);
+            if (streaming) {
+                wrapCodeBlock(codeBlock, pre, language);
+            } else {
+                renderDiagram(codeBlock, pre, language);
+            }
             return;
         }
         if (HTML_LANGUAGES.has(language)) {
-            renderHtmlPreview(codeBlock, pre);
+            if (streaming) {
+                wrapCodeBlock(codeBlock, pre, language);
+            } else {
+                renderHtmlPreview(codeBlock, pre);
+            }
             return;
         }
         if (language && language !== 'text' && Prism.languages[language]) {
@@ -73,8 +131,10 @@ export function renderMarkdown(markdown, targetElement) {
         wrapCodeBlock(codeBlock, pre, language);
     });
 
-    // Make tables sortable by clicking column headers
-    makeTablesSortable(targetElement);
+    // Only wire up sortable tables on the final render
+    if (!streaming) {
+        makeTablesSortable(targetElement);
+    }
 }
 
 function wrapCodeBlock(codeBlock, pre, language) {
