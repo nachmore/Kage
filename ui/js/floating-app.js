@@ -377,8 +377,8 @@ export class FloatingApp {
             if (window._contextMenuOpen) {
                 return;
             }
-            // Don't hide if currently generating a response
-            if (this.isWaitingForResponse || this._justStoppedGenerating) {
+            // Don't hide if we just stopped generating (prevents accidental hide on Esc)
+            if (this._justStoppedGenerating) {
                 return;
             }
             await this.appWindow.hide();
