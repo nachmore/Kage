@@ -908,6 +908,8 @@ export class ChatApp {
         this.updateInputState();
         this.elements.chatInput.focus();
         this.scrollToBottom();
+        // Tell the agent to abort the current prompt turn
+        this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
     }
 
 

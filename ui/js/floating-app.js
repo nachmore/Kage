@@ -430,16 +430,15 @@ export class FloatingApp {
         setTimeout(() => { this._justStoppedGenerating = false; }, 300);
         this.stopThinking();
         this.elements.floatingStopBtn.style.display = 'none';
-        // Restore datetime display
         this.updateDatetimeVisibility();
-        // Remove streaming indicator
         const indicator = this.elements.responseText.querySelector('.streaming-indicator');
         if (indicator) indicator.remove();
-        // Re-render final markdown cleanly
         if (this.currentResponse) {
             renderMarkdown(this.currentResponse, this.elements.responseText);
         }
         this.windowManager.resizeWindow();
+        // Tell the agent to abort the current prompt turn
+        this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
     }
 
     async loadShortcuts() {

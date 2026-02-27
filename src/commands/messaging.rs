@@ -380,6 +380,59 @@ pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, String> {
 }
 
 #[tauri::command]
+pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), String> {
+    // Get the session ID without locking the ACP client (which may be held by send_message_streaming)
+    let session_id = {
+        let client = state.acp_client.try_lock()
+            .map_err(|_| "ACP client busy (streaming) — sending cancel directly".to_string());
+        match client {
+            Ok(c) => c.get_session_id(),
+            Err(_) => {
+                // Client is locked (streaming). Read session ID from floating_session_id instead.
+                state.floating_session_id.lock().ok().and_then(|s| s.clone())
+            }
+        }
+    };
+
+    let session_id = session_id.ok_or("No active session to cancel")?;
+    info!("Sending session/cancel for session {}", session_id);
+
+    let notification = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "session/cancel",
+        "params": { "sessionId": session_id }
+    });
+    let json = serde_json::to_string(&notification).map_err(|e| format!("Serialize: {}", e))?;
+
+    // Write directly via pipe/tcp handles — do NOT lock the ACP client,
+    // because send_message_streaming may be holding that lock.
+    {
+        use std::io::Write;
+        let stdin_arc = {
+            let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
+            guard.as_ref().map(|a| a.clone())
+        };
+        if let Some(arc) = stdin_arc {
+            let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
+            writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
+            stdin.flush().map_err(|e| format!("Flush: {}", e))?;
+        } else {
+            let guard = state.tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
+            if let Some(ref stream) = *guard {
+                let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
+                drop(guard);
+                writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
+                ws.flush().map_err(|e| format!("Flush: {}", e))?;
+            } else {
+                return Err("No write handle available".to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn open_chat_with_message(
     message: String,
     state: State<'_, AppState>,
