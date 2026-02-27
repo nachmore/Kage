@@ -569,7 +569,8 @@ fn main() {
             commands::download_and_install_update,
             commands::was_just_updated,
             commands::clear_update_flag,
-            commands::touch_floating_activity
+            commands::touch_floating_activity,
+            commands::execute_system_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

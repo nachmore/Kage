@@ -290,6 +290,16 @@ export class FloatingApp {
                 if (isVisible && !lastVisibilityState) {
                     // Notify updater of activity
                     this.invoke('touch_floating_activity').catch(() => {});
+                    // Clear any pending system command confirmations and re-trigger search
+                    if (this.currentMatches.some(m => m.type === 'system_confirm')) {
+                        const query = this.elements.input.value.trim();
+                        if (query) {
+                            this.clearSuggestions();
+                            this.performSearch(query);
+                        } else {
+                            this.clearSuggestions();
+                        }
+                    }
                     // Don't reset UI if permission modal is open
                     const permissionModal = document.getElementById('permissionModal');
                     if (!permissionModal || permissionModal.style.display === 'none') {
@@ -916,6 +926,15 @@ export class FloatingApp {
                     (p) => this.openPath(p),
                     () => this.windowManager.resizeWindow()
                 );
+            } else if (result.startsWith('system:')) {
+                // system:command_id:label:immediate|confirm
+                const parts = result.substring(7).split(':');
+                const cmdId = parts[0];
+                const cmdLabel = parts[1];
+                const needsConfirm = parts[2] === 'confirm';
+                this.currentMatches = [{ type: 'system', cmdId, cmdLabel, needsConfirm }];
+                this.selectedIndex = 0;
+                this._renderSystemCommandSuggestion(cmdId, cmdLabel, needsConfirm);
             } else if (result.startsWith('multiple:') || result.startsWith('launched:')) {
                 const jsonStr = result.substring(result.indexOf(':') + 1);
                 const apps = JSON.parse(jsonStr);
@@ -948,6 +967,79 @@ export class FloatingApp {
         this.currentMatches = [];
         this.selectedIndex = -1;
         await this.windowManager.resizeWindow();
+    }
+
+    _renderSystemCommandSuggestion(cmdId, cmdLabel, needsConfirm) {
+        const container = this.elements.appSuggestions;
+        container.innerHTML = '';
+        container.scrollTop = 0;
+
+        const item = document.createElement('div');
+        item.className = 'app-suggestion-item selected';
+
+        const canElevate = ['terminal', 'taskmanager', 'filemanager'].includes(cmdId);
+
+        if (needsConfirm) {
+            item.innerHTML = `
+                <div class="app-icon">⚠️</div>
+                <div class="app-info">
+                    <div class="app-name">${cmdLabel}</div>
+                    <div class="app-description">Press Enter to select</div>
+                </div>
+            `;
+        } else {
+            item.innerHTML = `
+                <div class="app-icon">${cmdLabel.split(' ')[0]}</div>
+                <div class="app-info">
+                    <div class="app-name">${cmdLabel.substring(cmdLabel.indexOf(' ') + 1)}</div>
+                    <div class="app-description">${canElevate ? 'Enter to run · Ctrl+Shift+Enter as Admin' : 'Press Enter to execute'}</div>
+                </div>
+            `;
+        }
+
+        item.addEventListener('click', () => this._executeSystemCommand(cmdId, needsConfirm, false));
+        container.appendChild(item);
+        container.classList.add('visible');
+        setTimeout(() => this.windowManager.resizeWindow(), 10);
+    }
+
+    async _executeSystemCommand(cmdId, needsConfirm, elevated = false) {
+        if (needsConfirm) {
+            const container = this.elements.appSuggestions;
+            container.innerHTML = '';
+            const confirmItem = document.createElement('div');
+            confirmItem.className = 'app-suggestion-item selected';
+            confirmItem.innerHTML = `
+                <div class="app-icon">⚠️</div>
+                <div class="app-info">
+                    <div class="app-name">Are you sure?${elevated ? ' (as Admin)' : ''}</div>
+                    <div class="app-description">Press Enter to confirm · Clear text to cancel</div>
+                </div>
+            `;
+            confirmItem.addEventListener('click', async () => {
+                try {
+                    await this.invoke('execute_system_command', { commandId: cmdId, elevated });
+                } catch (e) { console.error('System command failed:', e); }
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+            });
+            container.appendChild(confirmItem);
+
+            this.currentMatches = [
+                { type: 'system_confirm', cmdId, elevated }
+            ];
+            this.selectedIndex = 0;
+            this.windowManager.resizeWindow();
+            return;
+        }
+
+        try {
+            await this.invoke('execute_system_command', { commandId: cmdId, elevated });
+        } catch (e) { console.error('System command failed:', e); }
+        this.elements.input.value = '';
+        this.elements.input.style.height = 'auto';
+        this.clearSuggestions();
     }
 
     async executeCommandAction(cmd) {
@@ -1018,6 +1110,16 @@ export class FloatingApp {
                 event.preventDefault();
             } else {
                 await this.appWindow.hide();
+            }
+        } else if (event.key === 'Enter' && event.ctrlKey && event.shiftKey) {
+            // Ctrl+Shift+Enter: execute as elevated (admin) if it's a system command
+            event.preventDefault();
+            if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
+                const selected = this.currentMatches[this.selectedIndex];
+                if (selected.type === 'system') {
+                    await this._executeSystemCommand(selected.cmdId, selected.needsConfirm, true);
+                    return;
+                }
             }
         } else if (event.key === 'Enter' && event.ctrlKey) {
             // Ctrl+Enter: send directly to agent, bypassing suggestions and input classification
@@ -1106,6 +1208,18 @@ export class FloatingApp {
             } else if (selected.type === 'shortcut') {
                 const command = this.buildShortcutCommand(selected.shortcut, selected.args);
                 await this.executeShortcut(command);
+            } else if (selected.type === 'system') {
+                const elevated = event?.ctrlKey && event?.shiftKey;
+                await this._executeSystemCommand(selected.cmdId, selected.needsConfirm, elevated);
+                return;
+            } else if (selected.type === 'system_confirm') {
+                try {
+                    await this.invoke('execute_system_command', { commandId: selected.cmdId, elevated: selected.elevated || false });
+                } catch (e) { console.error('System command failed:', e); }
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+                return;
             } else if (selected.type === 'url') {
                 await this.openUrl(selected.value);
             } else if (selected.type === 'path') {
