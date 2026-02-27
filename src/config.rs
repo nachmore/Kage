@@ -28,6 +28,8 @@ pub struct Config {
     pub color_picker: ColorPickerConfig,
     #[serde(default)]
     pub dev_tools: DevToolsConfig,
+    #[serde(default)]
+    pub timer: TimerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,6 +339,32 @@ impl Default for DevToolsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Show system notification when timer completes
+    #[serde(default = "default_true")]
+    pub notify_on_complete: bool,
+    /// Play a sound when timer completes
+    #[serde(default = "default_true")]
+    pub sound_on_complete: bool,
+    /// Auto-show the floating window when timer completes
+    #[serde(default = "default_true")]
+    pub show_window_on_complete: bool,
+}
+
+impl Default for TimerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            notify_on_complete: true,
+            sound_on_complete: true,
+            show_window_on_complete: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
@@ -409,6 +437,7 @@ impl Default for Config {
             quick_actions: QuickActionsConfig::default(),
             color_picker: ColorPickerConfig::default(),
             dev_tools: DevToolsConfig::default(),
+            timer: TimerConfig::default(),
         }
     }
 }

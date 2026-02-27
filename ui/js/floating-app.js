@@ -10,6 +10,7 @@ import { sendAppNotification } from './notify.js';
 import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
 import { parseColor, renderColorSuggestion } from './floating-color.js';
 import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
+import { parseTimerCommand, startTimer, startStopwatch, pauseResumeSlot, stopSlot, addTimeToTimer, getSlotState, renderTimerSuggestion, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -463,6 +464,83 @@ export class FloatingApp {
         }
     }
 
+    _startTimerUI(durationMs) {
+        startTimer(durationMs,
+            (display, progress) => {
+                updateTimerBar('timer', display, progress, true);
+            },
+            () => this._onTimerComplete()
+        );
+        setupTimerBarControls('timer', null, () => this.windowManager.resizeWindow());
+        // Force resize after bar is in DOM
+        setTimeout(() => this.windowManager.resizeWindow(), 60);
+    }
+
+    _startStopwatchUI() {
+        startStopwatch((display) => {
+            updateTimerBar('stopwatch', display, 0, true);
+        });
+        setupTimerBarControls('stopwatch', null, () => this.windowManager.resizeWindow());
+        setTimeout(() => this.windowManager.resizeWindow(), 60);
+    }
+
+    async _onTimerComplete() {
+        updateTimerBar('timer', '0:00', 1, false);
+
+        let config = {};
+        try { config = (await this.invoke('get_config')).timer || {}; } catch {}
+
+        if (config.show_window_on_complete !== false) {
+            try {
+                const isVisible = await this.appWindow.isVisible();
+                if (!isVisible) {
+                    await this.appWindow.show();
+                    await this.appWindow.setFocus();
+                }
+            } catch {}
+        }
+
+        if (config.notify_on_complete !== false) {
+            try {
+                await sendAppNotification(this.invoke, 'Timer Complete', '⏱️ Your timer has finished!', 'floating');
+            } catch {}
+        }
+
+        if (config.sound_on_complete !== false) {
+            try {
+                const ctx = new AudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.3;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+                setTimeout(() => {
+                    const osc2 = ctx.createOscillator();
+                    const gain2 = ctx.createGain();
+                    osc2.connect(gain2);
+                    gain2.connect(ctx.destination);
+                    osc2.frequency.value = 1000;
+                    gain2.gain.value = 0.3;
+                    osc2.start();
+                    osc2.stop(ctx.currentTime + 0.3);
+                }, 350);
+            } catch {}
+        }
+
+        // Auto-hide the timer bar after 5 seconds
+        setTimeout(() => {
+            const s = getSlotState('timer');
+            if (!s.active) {
+                const bar = document.getElementById('timerBar_timer');
+                if (bar) { bar.style.display = 'none'; bar.remove(); }
+                this.windowManager.resizeWindow();
+            }
+        }, 5000);
+    }
+
     formatMathResult(display) {
         if (this.mathConfig.thousands_separator) {
             const parts = display.split('.');
@@ -829,6 +907,22 @@ export class FloatingApp {
                     this.selectedIndex = renderDevToolSuggestion(dtResult, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
                 }
                 return;
+            }
+        }
+
+        // Check for timer/stopwatch command
+        {
+            let timerEnabled = true;
+            try {
+                const config = await this.invoke('get_config');
+                timerEnabled = config.timer?.enabled !== false;
+            } catch {}
+            if (timerEnabled) {
+                const timerCmd = parseTimerCommand(query);
+                if (timerCmd) {
+                    this.selectedIndex = renderTimerSuggestion(timerCmd, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                    return;
+                }
             }
         }
 
@@ -1273,6 +1367,40 @@ export class FloatingApp {
         if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'devtool') {
             const value = this.currentMatches[0].value;
             try { await navigator.clipboard.writeText(value); } catch {}
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            return;
+        }
+
+        // Handle timer/stopwatch start
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'start_timer') {
+            const { durationMs } = this.currentMatches[0];
+            this._startTimerUI(durationMs);
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            return;
+        }
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'start_stopwatch') {
+            this._startStopwatchUI();
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            return;
+        }
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'pause_stopwatch') {
+            pauseResumeSlot('stopwatch');
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            return;
+        }
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'stop_stopwatch') {
+            stopSlot('stopwatch');
+            const bar = document.getElementById('timerBar_stopwatch');
+            if (bar) { bar.style.display = 'none'; bar.remove(); }
+            this.windowManager.resizeWindow();
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.clearSuggestions();

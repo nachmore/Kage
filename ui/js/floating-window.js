@@ -43,6 +43,9 @@ export class WindowManager {
         
         this.resizeTimeout = setTimeout(async () => {
             try {
+                // Force layout reflow before measuring
+                void document.body.offsetHeight;
+
                 const loadingDots = document.getElementById('loadingDots');
                 const contentArea = document.getElementById('contentArea');
                 const responseText = document.getElementById('responseText');
@@ -63,9 +66,15 @@ export class WindowManager {
                         await this.invoke('resize_floating_window', { height: Math.round(this.userSetHeight) });
                     } else {
                         const inputHeight = inputContainer?.offsetHeight || 0;
+                        let extraHeight = 0;
+                        document.querySelectorAll('.timer-bar').forEach(bar => {
+                            if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
+                        });
+                        const selInd = document.getElementById('selectionIndicator');
+                        if (selInd && selInd.style.display !== 'none') extraHeight += selInd.offsetHeight;
                         const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
-                        const neededHeight = Math.round((inputHeight + BODY_PADDING) * scale);
-                        // Grow beyond default if input area needs it (e.g. attachments)
+                        const neededHeight = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
+                        // Grow beyond default if input area needs it (e.g. attachments, timer)
                         const height = Math.max(baseHeight, neededHeight);
                         this.autoGrowHeight = height > baseHeight ? height : null;
                         await this.invoke('resize_floating_window', { height });
@@ -105,7 +114,16 @@ export class WindowManager {
                 }
                 
                 contentHeight += inputContainer?.offsetHeight || 0;
-                
+
+                // All persistent bars and indicators above/below input
+                document.querySelectorAll('.timer-bar').forEach(bar => {
+                    if (bar.style.display !== 'none') contentHeight += bar.offsetHeight;
+                });
+                const selectionIndicator = document.getElementById('selectionIndicator');
+                if (selectionIndicator && selectionIndicator.style.display !== 'none') {
+                    contentHeight += selectionIndicator.offsetHeight;
+                }
+
                 if (suggestionsVisible) {
                     contentHeight += appSuggestions.offsetHeight;
                 }
