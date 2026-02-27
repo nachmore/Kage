@@ -8,6 +8,7 @@ import { evaluateMath } from './math-eval.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
 import { sendAppNotification } from './notify.js';
 import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
+import { parseColor, renderColorSuggestion } from './floating-color.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -772,6 +773,41 @@ export class FloatingApp {
             return;
         }
         
+        // Check for color value
+        const color = parseColor(query);
+        if (color) {
+            // Check if color picker is enabled (default: yes)
+            let cpEnabled = true;
+            let cpFormat = 'all';
+            try {
+                const config = await this.invoke('get_config');
+                cpEnabled = config.color_picker?.enabled !== false;
+                cpFormat = config.color_picker?.copy_format || 'all';
+            } catch {}
+            if (cpEnabled) {
+                this.selectedIndex = renderColorSuggestion(
+                    color,
+                    this.elements.appSuggestions,
+                    this.currentMatches,
+                    (formats) => {
+                        const text = cpFormat === 'hex' ? formats.hex
+                            : cpFormat === 'rgb' ? formats.rgb
+                            : cpFormat === 'hsl' ? formats.hsl
+                            : `${formats.hex}\n${formats.rgb}\n${formats.hsl}`;
+                        navigator.clipboard.writeText(text);
+                        this.elements.input.value = '';
+                        this.elements.input.style.height = 'auto';
+                        this.clearSuggestions();
+                    },
+                    (newHex) => {
+                        this.elements.input.value = newHex;
+                    },
+                    () => this.windowManager.resizeWindow()
+                );
+                return;
+            }
+        }
+
         // Check for math expression
         const mathResult = this.tryEvaluateMath(query);
         if (mathResult) {
@@ -1187,6 +1223,25 @@ export class FloatingApp {
                     console.error('Failed to copy math result:', e);
                 }
             }
+            return;
+        }
+
+        // Handle color result
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'color') {
+            const { hex, rgb, hsl } = this.currentMatches[0];
+            let cpFormat = 'all';
+            try {
+                const config = await this.invoke('get_config');
+                cpFormat = config.color_picker?.copy_format || 'all';
+            } catch {}
+            const text = cpFormat === 'hex' ? hex
+                : cpFormat === 'rgb' ? rgb
+                : cpFormat === 'hsl' ? hsl
+                : `${hex}\n${rgb}\n${hsl}`;
+            try { await navigator.clipboard.writeText(text); } catch {}
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
             return;
         }
 

@@ -24,6 +24,8 @@ pub struct Config {
     pub updates: UpdateConfig,
     #[serde(default)]
     pub quick_actions: QuickActionsConfig,
+    #[serde(default)]
+    pub color_picker: ColorPickerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,6 +283,29 @@ impl Default for QuickActionsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColorPickerConfig {
+    /// Enable color detection and preview in the floating window
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Default format to copy: "hex", "rgb", "hsl", or "all"
+    #[serde(default = "default_color_format")]
+    pub copy_format: String,
+}
+
+fn default_color_format() -> String {
+    "all".to_string()
+}
+
+impl Default for ColorPickerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            copy_format: "all".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
@@ -351,6 +376,7 @@ impl Default for Config {
             first_run_completed: false,
             updates: UpdateConfig::default(),
             quick_actions: QuickActionsConfig::default(),
+            color_picker: ColorPickerConfig::default(),
         }
     }
 }
