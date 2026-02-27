@@ -348,9 +348,26 @@ pub struct TimerConfig {
     /// Play a sound when timer completes
     #[serde(default = "default_true")]
     pub sound_on_complete: bool,
+    /// Sound ID: "two-tone", "chime", "alert", "gentle", "bell", "success", or "custom"
+    #[serde(default = "default_sound_id")]
+    pub sound_id: String,
+    /// Path to custom sound file (used when sound_id is "custom")
+    #[serde(default)]
+    pub custom_sound_path: Option<String>,
+    /// How many times to repeat the sound (1-10)
+    #[serde(default = "default_sound_repeats")]
+    pub sound_repeats: u8,
     /// Auto-show the floating window when timer completes
     #[serde(default = "default_true")]
     pub show_window_on_complete: bool,
+}
+
+fn default_sound_id() -> String {
+    "two-tone".to_string()
+}
+
+fn default_sound_repeats() -> u8 {
+    3
 }
 
 impl Default for TimerConfig {
@@ -359,6 +376,9 @@ impl Default for TimerConfig {
             enabled: true,
             notify_on_complete: true,
             sound_on_complete: true,
+            sound_id: "two-tone".to_string(),
+            custom_sound_path: None,
+            sound_repeats: 3,
             show_window_on_complete: true,
         }
     }

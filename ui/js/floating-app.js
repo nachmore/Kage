@@ -11,6 +11,7 @@ import { getActionsForText, renderQuickActionChips } from './floating-quick-acti
 import { parseColor, renderColorSuggestion } from './floating-color.js';
 import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
 import { parseTimerCommand, startTimer, startStopwatch, pauseResumeSlot, stopSlot, addTimeToTimer, getSlotState, renderTimerSuggestion, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
+import { playTimerSound } from './timer-sounds.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -508,25 +509,7 @@ export class FloatingApp {
 
         if (config.sound_on_complete !== false) {
             try {
-                const ctx = new AudioContext();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.frequency.value = 800;
-                gain.gain.value = 0.3;
-                osc.start();
-                osc.stop(ctx.currentTime + 0.3);
-                setTimeout(() => {
-                    const osc2 = ctx.createOscillator();
-                    const gain2 = ctx.createGain();
-                    osc2.connect(gain2);
-                    gain2.connect(ctx.destination);
-                    osc2.frequency.value = 1000;
-                    gain2.gain.value = 0.3;
-                    osc2.start();
-                    osc2.stop(ctx.currentTime + 0.3);
-                }, 350);
+                playTimerSound(config.sound_id || 'two-tone', config.custom_sound_path || '', config.sound_repeats || 3);
             } catch {}
         }
 
