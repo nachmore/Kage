@@ -12,6 +12,7 @@ import { parseColor, renderColorSuggestion } from './floating-color.js';
 import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
 import { parseTimerCommand, startTimer, startStopwatch, pauseResumeSlot, stopSlot, addTimeToTimer, getSlotState, renderTimerSuggestion, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
 import { playTimerSound } from './timer-sounds.js';
+import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, invalidateConfigCache } from './floating-search-unified.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -48,12 +49,14 @@ export class FloatingApp {
         await this.loadShortcuts();
         await loadSlashCommands(this.invoke);
         await this.loadMathConfig();
+        await loadFrecency(this.invoke);
         
         // Listen for config updates
         this.listen('config_updated', async () => {
             console.log('Config updated, reloading shortcuts...');
             await this.loadShortcuts();
             await this.loadMathConfig();
+            invalidateConfigCache();
         });
 
         // Listen for slash commands from ACP
@@ -318,7 +321,11 @@ export class FloatingApp {
                         const query = this.elements.input.value.trim();
                         if (query) {
                             this.clearSuggestions();
-                            this.performSearch(query);
+                            // Re-trigger unified search
+                            const results = await unifiedSearch(query, this.invoke, this.shortcuts, this.mathConfig);
+                            if (results.length > 0) {
+                                this.selectedIndex = renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                            }
                         } else {
                             this.clearSuggestions();
                         }
@@ -835,158 +842,25 @@ export class FloatingApp {
             return;
         }
         
-        // Check for color value
-        const color = parseColor(query);
-        if (color) {
-            // Check if color picker is enabled (default: yes)
-            let cpEnabled = true;
-            let cpFormat = 'all';
-            try {
-                const config = await this.invoke('get_config');
-                cpEnabled = config.color_picker?.enabled !== false;
-                cpFormat = config.color_picker?.copy_format || 'all';
-            } catch {}
-            if (cpEnabled) {
-                this.selectedIndex = renderColorSuggestion(
-                    color,
+        // Debounced unified search — queries all sources in parallel
+        this.searchTimeout = setTimeout(async () => {
+            const results = await unifiedSearch(query, this.invoke, this.shortcuts, this.mathConfig);
+            if (results.length > 0) {
+                this.selectedIndex = renderUnifiedResults(
+                    results,
                     this.elements.appSuggestions,
                     this.currentMatches,
-                    (formats) => {
-                        const text = cpFormat === 'hex' ? formats.hex
-                            : cpFormat === 'rgb' ? formats.rgb
-                            : cpFormat === 'hsl' ? formats.hsl
-                            : `${formats.hex}\n${formats.rgb}\n${formats.hsl}`;
-                        navigator.clipboard.writeText(text);
-                        this.elements.input.value = '';
-                        this.elements.input.style.height = 'auto';
-                        this.clearSuggestions();
-                    },
-                    (newHex) => {
-                        this.elements.input.value = newHex;
-                    },
                     () => this.windowManager.resizeWindow()
                 );
-                return;
-            }
-        }
-
-        // Check for developer tools (uuid, base64, hash, epoch, json)
-        {
-            let dtConfig = { enabled: true, uuid: true, base64: true, hash: true, epoch: true, json_format: true };
-            try {
-                const config = await this.invoke('get_config');
-                dtConfig = config.dev_tools || dtConfig;
-            } catch {}
-            const dtResult = matchDevTool(query, dtConfig);
-            if (dtResult) {
-                if (dtResult.type === 'devtool_async') {
-                    // Async hash computation
-                    const hash = await computeHash(dtResult.algo, dtResult.text);
-                    if (hash) {
-                        const result = { type: 'devtool', label: dtResult.label, icon: dtResult.icon, value: hash, description: 'Enter to copy' };
-                        this.selectedIndex = renderDevToolSuggestion(result, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
-                    }
-                } else {
-                    this.selectedIndex = renderDevToolSuggestion(dtResult, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                // Show send hint for non-instant results
+                if (!['color', 'math', 'devtool'].includes(results[0].type)) {
+                    appendSendHint(this.elements.appSuggestions);
+                    this.windowManager.resizeWindow();
                 }
-                return;
-            }
-        }
-
-        // Check for timer/stopwatch command
-        {
-            let timerEnabled = true;
-            try {
-                const config = await this.invoke('get_config');
-                timerEnabled = config.timer?.enabled !== false;
-            } catch {}
-            if (timerEnabled) {
-                const timerCmd = parseTimerCommand(query);
-                if (timerCmd) {
-                    this.selectedIndex = renderTimerSuggestion(timerCmd, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
-                    return;
-                }
-            }
-        }
-
-        // Check for math expression
-        const mathResult = this.tryEvaluateMath(query);
-        if (mathResult) {
-            const formatted = this.formatMathResult(mathResult.display);
-            this.currentMatches = [{ type: 'math', value: formatted, raw: mathResult.result }];
-            this.selectedIndex = 0;
-            const container = this.elements.appSuggestions;
-            container.innerHTML = '';
-            container.scrollTop = 0;
-            const item = document.createElement('div');
-            item.className = 'app-suggestion-item selected';
-            item.innerHTML = `
-                <div class="app-icon">🧮</div>
-                <div class="app-info">
-                    <div class="app-name math-result-value">= ${formatted}</div>
-                    <div class="app-description">Press Enter to copy result</div>
-                </div>
-            `;
-            item.addEventListener('click', async () => {
-                await navigator.clipboard.writeText(formatted);
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
-            });
-            container.appendChild(item);
-            container.classList.add('visible');
-            setTimeout(() => this.windowManager.resizeWindow(), 10);
-            return;
-        }
-
-        // Check for > command prefix
-        if (query.startsWith('>')) {
-            this._noMatchSinceLen = 0;
-            const commands = matchCommands(query);
-            if (commands && commands.length > 0) {
-                this.currentMatches = commands.map(cmd => ({ type: 'command', ...cmd }));
-                this.selectedIndex = 0;
-                renderCommandSuggestions(
-                    commands,
-                    this.elements.appSuggestions,
-                    this.selectedIndex,
-                    (cmd) => this.executeCommandAction(cmd),
-                    () => this.windowManager.resizeWindow()
-                );
             } else {
                 this.clearSuggestions();
             }
-            return;
-        }
-
-        // Check for / slash command prefix (ACP commands)
-        if (query.startsWith('/')) {
-            this._noMatchSinceLen = 0;
-            const slashCmds = matchSlashCommands(query);
-            if (slashCmds && slashCmds.length > 0) {
-                this.currentMatches = slashCmds;
-                this.selectedIndex = 0;
-                renderCommandSuggestions(
-                    slashCmds,
-                    this.elements.appSuggestions,
-                    this.selectedIndex,
-                    (cmd) => this.executeCommandAction(cmd),
-                    () => this.windowManager.resizeWindow()
-                );
-            } else {
-                this.clearSuggestions();
-            }
-            return;
-        }
-
-        this.searchTimeout = setTimeout(async () => {
-            await this.performSearch(query);
-            // Show send hint if suggestions are visible
-            if (this.elements.appSuggestions.classList.contains('visible')) {
-                appendSendHint(this.elements.appSuggestions);
-                this.windowManager.resizeWindow();
-            }
-        }, 150);
+        }, 100);
     }
 
     async performSearch(query) {
@@ -1303,11 +1177,11 @@ export class FloatingApp {
         }
         
         // Handle math result
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'math') {
-            const mathMatch = this.currentMatches[0];
-            const formatted = mathMatch.value;
+        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'math') {
+            const selected = this.currentMatches[this.selectedIndex];
+            const formatted = selected.data?.value || selected.value || selected.label;
+            recordSelection(message, selected.id, this.invoke);
             
-            // Show result in response area
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.clearSuggestions();
@@ -1316,29 +1190,23 @@ export class FloatingApp {
             this.elements.contentArea.classList.add('visible');
             this.windowManager.resizeWindow();
             
-            // Auto-copy to clipboard
             if (this.mathConfig.auto_copy) {
-                try {
-                    await navigator.clipboard.writeText(formatted);
-                } catch (e) {
-                    console.error('Failed to copy math result:', e);
-                }
+                try { await navigator.clipboard.writeText(formatted); } catch {}
             }
             return;
         }
 
         // Handle color result
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'color') {
-            const { hex, rgb, hsl } = this.currentMatches[0];
+        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'color') {
+            const selected = this.currentMatches[this.selectedIndex];
+            recordSelection(message, selected.id, this.invoke);
+            // Copy based on config format
             let cpFormat = 'all';
-            try {
-                const config = await this.invoke('get_config');
-                cpFormat = config.color_picker?.copy_format || 'all';
-            } catch {}
-            const text = cpFormat === 'hex' ? hex
-                : cpFormat === 'rgb' ? rgb
-                : cpFormat === 'hsl' ? hsl
-                : `${hex}\n${rgb}\n${hsl}`;
+            try { cpFormat = (await this.invoke('get_config')).color_picker?.copy_format || 'all'; } catch {}
+            const { r, g, b } = selected.data;
+            const hex = '#' + [r,g,b].map(c => c.toString(16).padStart(2,'0')).join('').toUpperCase();
+            const rgb = `rgb(${r}, ${g}, ${b})`;
+            const text = cpFormat === 'hex' ? hex : cpFormat === 'rgb' ? rgb : cpFormat === 'hsl' ? selected.description : `${hex}\n${rgb}`;
             try { await navigator.clipboard.writeText(text); } catch {}
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
@@ -1347,43 +1215,29 @@ export class FloatingApp {
         }
 
         // Handle dev tool result
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'devtool') {
-            const value = this.currentMatches[0].value;
-            try { await navigator.clipboard.writeText(value); } catch {}
+        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'devtool') {
+            const selected = this.currentMatches[this.selectedIndex];
+            recordSelection(message, selected.id, this.invoke);
+            try { await navigator.clipboard.writeText(selected.data?.value || selected.label); } catch {}
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.clearSuggestions();
             return;
         }
 
-        // Handle timer/stopwatch start
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'start_timer') {
-            const { durationMs } = this.currentMatches[0];
-            this._startTimerUI(durationMs);
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'start_stopwatch') {
-            this._startStopwatchUI();
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'pause_stopwatch') {
-            pauseResumeSlot('stopwatch');
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'stop_stopwatch') {
-            stopSlot('stopwatch');
-            const bar = document.getElementById('timerBar_stopwatch');
-            if (bar) { bar.style.display = 'none'; bar.remove(); }
-            this.windowManager.resizeWindow();
+        // Handle timer/stopwatch
+        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'timer_cmd') {
+            const selected = this.currentMatches[this.selectedIndex];
+            const timerData = selected.data;
+            if (timerData.type === 'timer' && timerData.durationMs) {
+                this._startTimerUI(timerData.durationMs);
+            } else if (timerData.type === 'stopwatch') {
+                const sw = getSlotState('stopwatch');
+                if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
+                else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
+                else { this._startStopwatchUI(); }
+            }
+            // hint type — do nothing on Enter
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.clearSuggestions();
@@ -1413,36 +1267,45 @@ export class FloatingApp {
             }
         }
 
-        // Handle selected suggestion (command, slash, or otherwise)
+        // Handle selected suggestion from unified search
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
             const selected = this.currentMatches[this.selectedIndex];
+            recordSelection(message, selected.id, this.invoke);
+
             if (selected.type === 'command' || selected.type === 'slash') {
-                await this.executeCommandAction(selected);
+                await this.executeCommandAction(selected.data || selected);
                 return;
             } else if (selected.type === 'selection') {
-                await this.executeSelection(selected.command, selected.value);
+                await this.executeSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
                 return;
             } else if (selected.type === 'shortcut') {
-                const command = this.buildShortcutCommand(selected.shortcut, selected.args);
+                const sc = selected.data?.shortcut || selected.shortcut;
+                const args = selected.data?.args || selected.args;
+                const command = this.buildShortcutCommand(sc, args);
                 await this.executeShortcut(command);
+                return;
             } else if (selected.type === 'system') {
-                const elevated = event?.ctrlKey && event?.shiftKey;
-                await this._executeSystemCommand(selected.cmdId, selected.needsConfirm, elevated);
+                const d = selected.data || selected;
+                await this._executeSystemCommand(d.cmdId, d.needsConfirm, false);
                 return;
             } else if (selected.type === 'system_confirm') {
+                const d = selected.data || selected;
                 try {
-                    await this.invoke('execute_system_command', { commandId: selected.cmdId, elevated: selected.elevated || false });
+                    await this.invoke('execute_system_command', { commandId: d.cmdId, elevated: d.elevated || false });
                 } catch (e) { console.error('System command failed:', e); }
                 this.elements.input.value = '';
                 this.elements.input.style.height = 'auto';
                 this.clearSuggestions();
                 return;
             } else if (selected.type === 'url') {
-                await this.openUrl(selected.value);
+                await this.openUrl(selected.data?.value || selected.value);
+                return;
             } else if (selected.type === 'path') {
-                await this.openPath(selected.value);
-            } else {
-                await this.launchApp(selected.name);
+                await this.openPath(selected.data?.value || selected.value);
+                return;
+            } else if (selected.type === 'app') {
+                await this.launchApp(selected.data?.name || selected.label);
+                return;
             }
             return;
         }

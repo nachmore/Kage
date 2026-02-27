@@ -43,6 +43,27 @@ pub async fn save_config(
 }
 
 #[tauri::command]
+pub async fn save_frecency(data: String) -> Result<(), String> {
+    let path = dirs::config_dir()
+        .ok_or("No config dir")?
+        .join("kiro-assistant")
+        .join("search-frecency.json");
+    std::fs::write(&path, &data).map_err(|e| format!("Failed to save frecency: {}", e))
+}
+
+#[tauri::command]
+pub async fn load_frecency() -> Result<String, String> {
+    let path = dirs::config_dir()
+        .ok_or("No config dir")?
+        .join("kiro-assistant")
+        .join("search-frecency.json");
+    match std::fs::read_to_string(&path) {
+        Ok(data) => Ok(data),
+        Err(_) => Ok("{}".to_string()),
+    }
+}
+
+#[tauri::command]
 pub async fn update_tool_policy(
     tool_title: String,
     policy: String,
