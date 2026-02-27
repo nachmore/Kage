@@ -225,6 +225,7 @@ body.dark-theme .selection-checkbox {
     overflow: hidden;
     border-bottom: 1px solid var(--kiro-border, #3a3640);
     font-size: 13px;
+    flex-shrink: 0;
 }
 
 .timer-bar-progress {
