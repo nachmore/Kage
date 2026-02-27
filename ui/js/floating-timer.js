@@ -235,6 +235,10 @@ export function updateTimerBar(slotName, displayStr, progress, running) {
                 <button class="timer-btn" id="${barId}_stop" title="Stop">⏹</button>
             </div>
         `;
+        // Prevent buttons from stealing focus (which triggers window blur → hide)
+        bar.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('mousedown', e => e.preventDefault());
+        });
         const inputContainer = document.querySelector('.input-container');
         if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
     }
@@ -267,9 +271,10 @@ export function setupTimerBarControls(slotName, onStop, onResize) {
         if (stopBtn) stopBtn.onclick = () => {
             stopSlot(slotName);
             const bar = document.getElementById(barId);
-            if (bar) { bar.style.display = 'none'; bar.remove(); }
+            // Delay removal so the click event completes before the DOM changes
+            // (removing the clicked element's ancestor triggers window blur)
+            if (bar) setTimeout(() => { bar.style.display = 'none'; bar.remove(); if (onResize) onResize(); }, 50);
             if (onStop) onStop();
-            if (onResize) onResize();
         };
         if (addBtn) addBtn.onclick = () => addTimeToTimer(60000);
     }, 50);
