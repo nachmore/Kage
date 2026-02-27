@@ -86,17 +86,7 @@ function applyDateTime(ui) {
         }
     }
 
-    // Hide on any keypress (including arrows), show when window appears
-    const input = document.getElementById('promptInput');
-    if (input && !input._dtListenerAdded) {
-        input._dtListenerAdded = true;
-        input.addEventListener('keydown', () => {
-            if (container) container.style.opacity = '0';
-        });
-    }
-
-    container.style.display = '';
-    container.style.opacity = '1';
+    // Datetime visibility is managed by updateDatetimeVisibility() in floating-app.js
     update();
     if (_dateTimeInterval) clearInterval(_dateTimeInterval);
     _dateTimeInterval = setInterval(update, 1000);

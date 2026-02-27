@@ -93,8 +93,28 @@ export class FloatingApp {
             expandBtn: document.getElementById('expandBtn'),
             floatingStopBtn: document.getElementById('floatingStopBtn'),
             ghostContainer: document.querySelector('.ghost-container'),
-            attachmentPreviews: document.getElementById('attachmentPreviews')
+            attachmentPreviews: document.getElementById('attachmentPreviews'),
+            datetimeDisplay: document.getElementById('datetimeDisplay')
         };
+    }
+
+    /**
+     * Single source of truth for datetime visibility.
+     * Call this instead of directly manipulating the datetime element.
+     */
+    updateDatetimeVisibility() {
+        const dt = this.elements.datetimeDisplay;
+        if (!dt) return;
+        // Hide if: streaming, stop button visible, input has text, or quick actions visible
+        const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
+        const hasInput = this.elements.input.value.length > 0;
+        const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex';
+        if (this.isWaitingForResponse || stopVisible || hasInput || qaVisible) {
+            dt.style.display = 'none';
+        } else {
+            dt.style.display = '';
+            dt.style.opacity = '1';
+        }
     }
 
     setupEventListeners() {
@@ -180,7 +200,6 @@ export class FloatingApp {
             const indicator = document.getElementById('selectionIndicator');
             const checkbox = document.getElementById('useSelectionCheckbox');
             const quickActionsContainer = document.getElementById('quickActionsContainer');
-            const dtDisplay = document.getElementById('datetimeDisplay');
             if (hasSelection) {
                 try {
                     const raw = await this.invoke('get_last_selection');
@@ -190,7 +209,7 @@ export class FloatingApp {
                     if (indicator) indicator.style.display = '';
                     if (checkbox) checkbox.checked = true;
                     // Hide datetime to make room for quick actions
-                    if (dtDisplay) dtDisplay.style.display = 'none';
+                    this.updateDatetimeVisibility();
 
                     // Show quick action chips based on text content
                     if (quickActionsContainer) {
@@ -216,7 +235,7 @@ export class FloatingApp {
             if (indicator) indicator.style.display = 'none';
             if (quickActionsContainer) quickActionsContainer.style.display = 'none';
             // Restore datetime and resize back to normal
-            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+            this.updateDatetimeVisibility();
             this.windowManager.resizeWindow();
         });
 
@@ -334,9 +353,8 @@ export class FloatingApp {
             setTimeout(() => {
                 this.elements.input.focus();
                 this.elements.input.select();
-                // Re-show datetime on window focus
-                const dtDisplay = document.getElementById('datetimeDisplay');
-                if (dtDisplay) dtDisplay.style.opacity = '1';
+                // Re-show datetime on window focus if appropriate
+                this.updateDatetimeVisibility();
             }, 50);
         });
         
@@ -389,16 +407,14 @@ export class FloatingApp {
         if (compactEl) compactEl.remove();
         this.elements.input.focus();
         // Re-show datetime when input is cleared
-        const dtDisplay = document.getElementById('datetimeDisplay');
-        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+        this.updateDatetimeVisibility();
     }
 
     startThinking() {
         this.elements.ghostContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
         // Show inline stop button in input area, hide datetime
-        const dtDisplay = document.getElementById('datetimeDisplay');
-        if (dtDisplay) dtDisplay.style.display = 'none';
+        this.updateDatetimeVisibility();
         this.elements.floatingStopBtn.style.display = '';
     }
 
@@ -415,8 +431,7 @@ export class FloatingApp {
         this.stopThinking();
         this.elements.floatingStopBtn.style.display = 'none';
         // Restore datetime display
-        const dtDisplay = document.getElementById('datetimeDisplay');
-        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+        this.updateDatetimeVisibility();
         // Remove streaming indicator
         const indicator = this.elements.responseText.querySelector('.streaming-indicator');
         if (indicator) indicator.remove();
@@ -739,6 +754,9 @@ export class FloatingApp {
         
         // Reset tab cycle state when user types
         this._tabCycleActive = false;
+        
+        // Update datetime visibility based on input state
+        this.updateDatetimeVisibility();
         
         // Resize window to fit the growing input
         await this.windowManager.resizeWindow();
@@ -1274,6 +1292,7 @@ export class FloatingApp {
         
         await this.windowManager.resetHeightForNewMessage();
         this.startThinking();
+        this.updateDatetimeVisibility();
         this.elements.expandBtn.classList.remove('visible');
         await this.windowManager.resizeWindow();
 
@@ -1366,8 +1385,7 @@ export class FloatingApp {
             this.stopThinking();
             this.elements.floatingStopBtn.style.display = 'none';
             // Restore datetime display
-            const dtDisplay = document.getElementById('datetimeDisplay');
-            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+            this.updateDatetimeVisibility();
             const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
             if (streamingIndicator) streamingIndicator.remove();
 
@@ -1392,16 +1410,14 @@ export class FloatingApp {
         this.isWaitingForResponse = false;
         this.elements.floatingStopBtn.style.display = 'none';
         // Restore datetime display
-        const dtDisplay = document.getElementById('datetimeDisplay');
-        if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+        this.updateDatetimeVisibility();
     }
 
     handleSessionReset(event) {
             this.isWaitingForResponse = false;
             this.elements.floatingStopBtn.style.display = 'none';
             // Restore datetime display
-            const dtDisplay = document.getElementById('datetimeDisplay');
-            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+            this.updateDatetimeVisibility();
             this.showError(getSessionResetMessage(event.payload));
         }
 
