@@ -43,7 +43,7 @@ class AssistantSettingsModule extends SettingsModule {
 
                 <div class="setting-row">
                     <div class="setting-label">Translate language</div>
-                    <div class="setting-description">Default target language for the Translate action. Leave empty to let the AI decide.</div>
+                    <div class="setting-description" id="translateLanguageDesc">Default target language for the Translate action. Leave empty to use the system default.</div>
                     <div class="setting-control">
                         <input type="text" class="setting-input" id="translateLanguage" placeholder="e.g., English, Spanish, Japanese" style="max-width: 250px;">
                     </div>
@@ -137,6 +137,21 @@ class AssistantSettingsModule extends SettingsModule {
         const addBtn = document.getElementById('addCustomActionBtn');
         if (addBtn) {
             addBtn.addEventListener('click', () => this._addCustomActionRow());
+        }
+
+        // Show system default language in translate description
+        const translateDesc = document.getElementById('translateLanguageDesc');
+        if (translateDesc) {
+            try {
+                const locale = navigator.language || 'en';
+                let langName = 'English';
+                if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+                    const display = new Intl.DisplayNames(['en'], { type: 'language' });
+                    const name = display.of(locale);
+                    if (name) langName = name.charAt(0).toUpperCase() + name.slice(1);
+                }
+                translateDesc.textContent = `Default target language for the Translate action. Leave empty to use the system default (${langName}).`;
+            } catch {}
         }
     }
 
