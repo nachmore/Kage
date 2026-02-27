@@ -9,6 +9,7 @@ import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, rend
 import { sendAppNotification } from './notify.js';
 import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
 import { parseColor, renderColorSuggestion } from './floating-color.js';
+import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -808,6 +809,29 @@ export class FloatingApp {
             }
         }
 
+        // Check for developer tools (uuid, base64, hash, epoch, json)
+        {
+            let dtConfig = { enabled: true, uuid: true, base64: true, hash: true, epoch: true, json_format: true };
+            try {
+                const config = await this.invoke('get_config');
+                dtConfig = config.dev_tools || dtConfig;
+            } catch {}
+            const dtResult = matchDevTool(query, dtConfig);
+            if (dtResult) {
+                if (dtResult.type === 'devtool_async') {
+                    // Async hash computation
+                    const hash = await computeHash(dtResult.algo, dtResult.text);
+                    if (hash) {
+                        const result = { type: 'devtool', label: dtResult.label, icon: dtResult.icon, value: hash, description: 'Enter to copy' };
+                        this.selectedIndex = renderDevToolSuggestion(result, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                    }
+                } else {
+                    this.selectedIndex = renderDevToolSuggestion(dtResult, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                }
+                return;
+            }
+        }
+
         // Check for math expression
         const mathResult = this.tryEvaluateMath(query);
         if (mathResult) {
@@ -1239,6 +1263,16 @@ export class FloatingApp {
                 : cpFormat === 'hsl' ? hsl
                 : `${hex}\n${rgb}\n${hsl}`;
             try { await navigator.clipboard.writeText(text); } catch {}
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+            return;
+        }
+
+        // Handle dev tool result
+        if (this.currentMatches.length > 0 && this.currentMatches[0].type === 'devtool') {
+            const value = this.currentMatches[0].value;
+            try { await navigator.clipboard.writeText(value); } catch {}
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.clearSuggestions();

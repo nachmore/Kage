@@ -26,6 +26,8 @@ pub struct Config {
     pub quick_actions: QuickActionsConfig,
     #[serde(default)]
     pub color_picker: ColorPickerConfig,
+    #[serde(default)]
+    pub dev_tools: DevToolsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,6 +308,35 @@ impl Default for ColorPickerConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevToolsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub uuid: bool,
+    #[serde(default = "default_true")]
+    pub base64: bool,
+    #[serde(default = "default_true")]
+    pub hash: bool,
+    #[serde(default = "default_true")]
+    pub epoch: bool,
+    #[serde(default = "default_true")]
+    pub json_format: bool,
+}
+
+impl Default for DevToolsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            uuid: true,
+            base64: true,
+            hash: true,
+            epoch: true,
+            json_format: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
@@ -377,6 +408,7 @@ impl Default for Config {
             updates: UpdateConfig::default(),
             quick_actions: QuickActionsConfig::default(),
             color_picker: ColorPickerConfig::default(),
+            dev_tools: DevToolsConfig::default(),
         }
     }
 }

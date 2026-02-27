@@ -172,6 +172,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new ShortcutsSettingsModule());
     settingsManager.registerModule(new MathSettingsModule());
     settingsManager.registerModule(new ColorPickerSettingsModule());
+    settingsManager.registerModule(new DevToolsSettingsModule());
 
     // About
     settingsManager.registerModule(new UpdatesSettingsModule());
