@@ -87,10 +87,17 @@ function looksLikeMath(text) {
 function getOsLanguageName() {
     try {
         const locale = navigator.language || 'en';
-        const display = new Intl.DisplayNames([locale], { type: 'language' });
-        const name = display.of(locale);
-        // Capitalize first letter
-        return name ? name.charAt(0).toUpperCase() + name.slice(1) : 'English';
+        if (typeof Intl !== 'undefined' && Intl.DisplayNames) {
+            const display = new Intl.DisplayNames(['en'], { type: 'language' });
+            const name = display.of(locale);
+            if (name) return name.charAt(0).toUpperCase() + name.slice(1);
+        }
+        // Fallback: map common locale prefixes
+        const lang = locale.split('-')[0].toLowerCase();
+        const map = { en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese',
+            it:'Italian', ja:'Japanese', ko:'Korean', zh:'Chinese', ru:'Russian', ar:'Arabic',
+            hi:'Hindi', nl:'Dutch', sv:'Swedish', pl:'Polish', tr:'Turkish', he:'Hebrew' };
+        return map[lang] || 'English';
     } catch {
         return 'English';
     }
