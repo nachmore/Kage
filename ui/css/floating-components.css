@@ -177,6 +177,44 @@ body.dark-theme .selection-checkbox {
     color: #938F9B;
 }
 
+/* Quick Action Chips */
+.quick-actions-container {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 0 2px;
+}
+
+.quick-action-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid var(--kiro-border, #3a3640);
+    border-radius: 16px;
+    background: transparent;
+    color: var(--kiro-text-secondary, #938F9B);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.quick-action-chip:hover {
+    background: var(--kiro-surface-hover, #352F3D);
+    border-color: var(--kiro-accent, #C09CFF);
+    color: var(--kiro-text-primary, #E5E7EB);
+}
+
+.quick-action-icon {
+    font-size: 13px;
+}
+
+.quick-action-label {
+    font-size: 11px;
+    font-weight: 500;
+}
+
 .input-box {
     flex: 1;
     padding: 10px 12px;

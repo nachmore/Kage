@@ -7,6 +7,7 @@ import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '.
 import { evaluateMath } from './math-eval.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
 import { sendAppNotification } from './notify.js';
+import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -178,6 +179,8 @@ export class FloatingApp {
             const hasSelection = event.payload;
             const indicator = document.getElementById('selectionIndicator');
             const checkbox = document.getElementById('useSelectionCheckbox');
+            const quickActionsContainer = document.getElementById('quickActionsContainer');
+            const dtDisplay = document.getElementById('datetimeDisplay');
             if (hasSelection) {
                 try {
                     const raw = await this.invoke('get_last_selection');
@@ -186,12 +189,35 @@ export class FloatingApp {
                 if (this.lastSelection) {
                     if (indicator) indicator.style.display = '';
                     if (checkbox) checkbox.checked = true;
+                    // Hide datetime to make room for quick actions
+                    if (dtDisplay) dtDisplay.style.display = 'none';
+
+                    // Show quick action chips based on text content
+                    if (quickActionsContainer) {
+                        try {
+                            const config = await this.invoke('get_config');
+                            const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
+                            const actions = getActionsForText(this.lastSelection, qaConfig);
+                            renderQuickActionChips(actions, quickActionsContainer, (promptTemplate) => {
+                                const prompt = promptTemplate.replace(/\{text\}/g, this.lastSelection);
+                                this.sendChatMessage(prompt, { skipSelection: true });
+                            });
+                        } catch (e) {
+                            console.error('Quick actions error:', e);
+                            quickActionsContainer.style.display = 'none';
+                        }
+                    }
+
                     this.windowManager.resizeWindow();
                     return;
                 }
             }
             this.lastSelection = null;
             if (indicator) indicator.style.display = 'none';
+            if (quickActionsContainer) quickActionsContainer.style.display = 'none';
+            // Restore datetime and resize back to normal
+            if (dtDisplay) { dtDisplay.style.display = ''; dtDisplay.style.opacity = '1'; }
+            this.windowManager.resizeWindow();
         });
 
         document.addEventListener('kiro-clear', () => {
@@ -1108,13 +1134,15 @@ export class FloatingApp {
         this.attachmentManager.clear();
 
         // Include selected text as context if checkbox is checked
-        const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
+        const useSelection = !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
         if (useSelection && this.lastSelection && this.lastSelection.trim()) {
             message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection.trim()}\n\`\`\`\n\n${message}`;
         }
         // Hide selection indicator after use
         const indicator = document.getElementById('selectionIndicator');
         if (indicator) indicator.style.display = 'none';
+        const quickActionsContainer = document.getElementById('quickActionsContainer');
+        if (quickActionsContainer) quickActionsContainer.style.display = 'none';
         this.lastSelection = null;
 
         this.elements.input.value = '';

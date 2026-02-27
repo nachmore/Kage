@@ -22,6 +22,8 @@ pub struct Config {
     pub first_run_completed: bool,
     #[serde(default)]
     pub updates: UpdateConfig,
+    #[serde(default)]
+    pub quick_actions: QuickActionsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,6 +243,44 @@ pub struct SystemConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuickActionsConfig {
+    /// Enable quick action chips when text is selected
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Default language for the Translate action (e.g., "English", "Spanish")
+    #[serde(default)]
+    pub translate_language: Option<String>,
+    /// Custom actions (shown in addition to smart defaults)
+    #[serde(default)]
+    pub custom_actions: Vec<QuickAction>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuickAction {
+    /// Display label on the chip
+    pub label: String,
+    /// Emoji icon for the chip
+    #[serde(default)]
+    pub icon: String,
+    /// Prompt template — {text} is replaced with the selected text
+    pub prompt: String,
+    /// Optional: only show for specific content types (code, prose, error, url, json, math)
+    /// Empty means show for all types.
+    #[serde(default)]
+    pub content_types: Vec<String>,
+}
+
+impl Default for QuickActionsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            translate_language: None,
+            custom_actions: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
@@ -310,6 +350,7 @@ impl Default for Config {
             math: MathConfig::default(),
             first_run_completed: false,
             updates: UpdateConfig::default(),
+            quick_actions: QuickActionsConfig::default(),
         }
     }
 }

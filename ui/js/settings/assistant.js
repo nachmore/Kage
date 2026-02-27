@@ -31,6 +31,30 @@ class AssistantSettingsModule extends SettingsModule {
                     '<input type="text" class="setting-input" id="userSteeringPath" placeholder="">',
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
+
+                <h2 class="settings-section-header" style="margin-top: 24px;">🍟 Quick Chips</h2>
+
+                ${this.createCheckboxRow(
+                    'Show quick chips on selected text',
+                    'When you summon the assistant with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
+                    'quickActionsEnabled',
+                    true
+                )}
+
+                <div class="setting-row">
+                    <div class="setting-label">Translate language</div>
+                    <div class="setting-description">Default target language for the Translate action. Leave empty to let the AI decide.</div>
+                    <div class="setting-control">
+                        <input type="text" class="setting-input" id="translateLanguage" placeholder="e.g., English, Spanish, Japanese" style="max-width: 250px;">
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-label">Custom actions</div>
+                    <div class="setting-description">Add your own quick actions. Use <code>{text}</code> in the prompt as a placeholder for the selected text.</div>
+                    <div id="customActionsContainer" style="margin-top: 8px;"></div>
+                    <button class="setting-button" id="addCustomActionBtn" style="margin-top: 8px;">+ Add Action</button>
+                </div>
             </div>
         `;
     }
@@ -42,6 +66,14 @@ class AssistantSettingsModule extends SettingsModule {
 
         if (autoSteering) autoSteering.checked = assistant.auto_steering_enabled || false;
         if (userPath) userPath.value = assistant.user_steering_path || '';
+
+        // Quick actions
+        const qaEnabled = document.getElementById('quickActionsEnabled');
+        const qa = config.quick_actions || { enabled: true, custom_actions: [] };
+        if (qaEnabled) qaEnabled.checked = qa.enabled !== false;
+        const translateLang = document.getElementById('translateLanguage');
+        if (translateLang) translateLang.value = qa.translate_language || '';
+        this._renderCustomActions(qa.custom_actions || []);
     }
 
     save(config) {
@@ -49,6 +81,12 @@ class AssistantSettingsModule extends SettingsModule {
         if (!config.acp.assistant) config.acp.assistant = {};
         config.acp.assistant.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
         config.acp.assistant.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
+
+        // Quick actions
+        config.quick_actions = config.quick_actions || {};
+        config.quick_actions.enabled = document.getElementById('quickActionsEnabled')?.checked ?? true;
+        config.quick_actions.translate_language = document.getElementById('translateLanguage')?.value?.trim() || null;
+        config.quick_actions.custom_actions = this._collectCustomActions();
     }
 
     initialize() {
@@ -94,5 +132,56 @@ class AssistantSettingsModule extends SettingsModule {
                 }
             });
         }
+
+        // Add custom action button
+        const addBtn = document.getElementById('addCustomActionBtn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this._addCustomActionRow());
+        }
+    }
+
+    _renderCustomActions(actions) {
+        const container = document.getElementById('customActionsContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        for (const action of actions) {
+            this._addCustomActionRow(action);
+        }
+    }
+
+    _addCustomActionRow(action = null) {
+        const container = document.getElementById('customActionsContainer');
+        if (!container) return;
+
+        const row = document.createElement('div');
+        row.className = 'custom-action-row';
+        row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:6px;';
+        row.innerHTML = `
+            <input type="text" class="setting-input ca-icon" placeholder="📝" value="${action?.icon || ''}" style="width:40px;text-align:center;">
+            <input type="text" class="setting-input ca-label" placeholder="Label" value="${action?.label || ''}" style="width:100px;">
+            <input type="text" class="setting-input ca-prompt" placeholder="Prompt ({text} = selection)" value="${(action?.prompt || '').replace(/"/g, '&quot;')}" style="flex:1;">
+            <button class="setting-button ca-remove" style="padding:4px 8px;">✕</button>
+        `;
+        row.querySelector('.ca-remove').addEventListener('click', () => row.remove());
+        container.appendChild(row);
+    }
+
+    _collectCustomActions() {
+        const container = document.getElementById('customActionsContainer');
+        if (!container) return [];
+        const actions = [];
+        for (const row of container.querySelectorAll('.custom-action-row')) {
+            const label = row.querySelector('.ca-label')?.value?.trim();
+            const prompt = row.querySelector('.ca-prompt')?.value?.trim();
+            if (label && prompt) {
+                actions.push({
+                    label,
+                    icon: row.querySelector('.ca-icon')?.value?.trim() || '⚡',
+                    prompt,
+                    content_types: [],
+                });
+            }
+        }
+        return actions;
     }
 }
