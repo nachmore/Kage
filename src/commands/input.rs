@@ -113,7 +113,7 @@ fn match_system_command(input: &str) -> Option<(&'static str, &'static str, bool
     let commands: &[(&[&str], &str, &str, bool, &str)] = &[
         // Immediate
         (&["lock"], "lock", "🔒 Lock Screen", false, "all"),
-        (&["sleep"], "sleep", "😴 Sleep", false, "all"),
+        (&["sleep"], "sleep", "😴 Sleep", true, "all"),
         (&["screenshot"], "screenshot", "📸 Screenshot", false, "all"),
         (&["mute"], "mute", "🔇 Mute Audio", false, "all"),
         (&["unmute"], "unmute", "🔊 Unmute Audio", false, "all"),
