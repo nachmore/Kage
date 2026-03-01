@@ -62,16 +62,21 @@ export class WindowManager {
                 if (nothingExpanded) {
                     const scale = window.devicePixelRatio || 1;
                     if (this.userSetHeight) {
-                        // User manually set a height — restore to that
-                        await this.invoke('resize_floating_window', { height: Math.round(this.userSetHeight) });
+                        // User manually set a height — but ensure it's at least enough for content
+                        const inputHeight = inputContainer?.offsetHeight || 0;
+                        let extraHeight = 0;
+                        document.querySelectorAll('.timer-bar').forEach(bar => {
+                            if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
+                        });
+                        const minNeeded = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
+                        const height = Math.max(this.userSetHeight, minNeeded);
+                        await this.invoke('resize_floating_window', { height: Math.round(height) });
                     } else {
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         let extraHeight = 0;
                         document.querySelectorAll('.timer-bar').forEach(bar => {
                             if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
                         });
-                        const selInd = document.getElementById('selectionIndicator');
-                        if (selInd && selInd.style.display !== 'none') extraHeight += selInd.offsetHeight;
                         const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
                         const neededHeight = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
                         // Grow beyond default if input area needs it (e.g. attachments, timer)
@@ -115,14 +120,10 @@ export class WindowManager {
                 
                 contentHeight += inputContainer?.offsetHeight || 0;
 
-                // All persistent bars and indicators above/below input
+                // Timer/stopwatch bars (persistent, above input container)
                 document.querySelectorAll('.timer-bar').forEach(bar => {
                     if (bar.style.display !== 'none') contentHeight += bar.offsetHeight;
                 });
-                const selectionIndicator = document.getElementById('selectionIndicator');
-                if (selectionIndicator && selectionIndicator.style.display !== 'none') {
-                    contentHeight += selectionIndicator.offsetHeight;
-                }
 
                 if (suggestionsVisible) {
                     contentHeight += appSuggestions.offsetHeight;
@@ -194,7 +195,14 @@ export class WindowManager {
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(516 * scaleFactor);
-            const minHeight = Math.floor(DEFAULT_HEIGHT * scaleFactor);
+            // Dynamic minimum height: at least enough for input container + timer bars
+            const inputContainer = document.querySelector('.input-container');
+            const inputH = inputContainer?.offsetHeight || 44;
+            let minContentH = inputH + BODY_PADDING;
+            document.querySelectorAll('.timer-bar').forEach(bar => {
+                if (bar.style.display !== 'none') minContentH += bar.offsetHeight;
+            });
+            const minHeight = Math.max(Math.floor(DEFAULT_HEIGHT * scaleFactor), Math.floor(minContentH * scaleFactor));
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight * scaleFactor, startHeight + dy));
             this.userSetHeight = newHeight;
