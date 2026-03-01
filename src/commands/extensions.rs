@@ -12,22 +12,19 @@ use tauri::{Emitter, Manager, State};
 #[tauri::command]
 pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
     let config = state.config.lock().await;
-    let items = extensions::discover_extensions(None, &config.extension_states);
-    Ok(items)
+    Ok(extensions::discover_items("extension", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
     let config = state.config.lock().await;
-    let items = extensions::discover_themes(None, &config.extension_states);
-    Ok(items)
+    Ok(extensions::discover_items("theme", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
     let config = state.config.lock().await;
-    let items = extensions::discover_command_packs(None, &config.extension_states);
-    Ok(items)
+    Ok(extensions::discover_items("commands", None, &config.extension_states))
 }
 
 // ---------------------------------------------------------------------------

@@ -161,22 +161,20 @@ pub struct StoreCatalogDetail {
 // Directory helpers
 // ---------------------------------------------------------------------------
 
-/// Get the user extensions directory: `<config_dir>/kiro-assistant/extensions/`
-pub fn user_extensions_dir() -> Result<PathBuf> {
+/// Get a user directory under `<config_dir>/kiro-assistant/<subdir>/`
+fn user_item_dir(subdir: &str) -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-    Ok(config_dir.join("kiro-assistant").join("extensions"))
+    Ok(config_dir.join("kiro-assistant").join(subdir))
 }
 
-/// Get the user themes directory: `<config_dir>/kiro-assistant/themes/`
-pub fn user_themes_dir() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-    Ok(config_dir.join("kiro-assistant").join("themes"))
-}
-
-/// Get the user command packs directory: `<config_dir>/kiro-assistant/command-packs/`
-pub fn user_command_packs_dir() -> Result<PathBuf> {
-    let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-    Ok(config_dir.join("kiro-assistant").join("command-packs"))
+/// Map an item kind ("extension", "theme", "commands") to its user directory name.
+fn kind_to_subdir(kind: &str) -> Result<&'static str> {
+    match kind {
+        "extension" => Ok("extensions"),
+        "theme" => Ok("themes"),
+        "commands" => Ok("command-packs"),
+        other => anyhow::bail!("Unknown item type: {}", other),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -225,8 +223,10 @@ fn scan_directory(dir: &PathBuf, bundled: bool, enabled_states: &HashMap<String,
     items
 }
 
-/// Discover all installed extensions (bundled + user). User items override bundled by ID.
-pub fn discover_extensions(
+/// Discover all installed items of a given kind (bundled + user). User items override bundled by ID.
+/// `kind` is "extension", "theme", or "commands".
+pub fn discover_items(
+    kind: &str,
     bundled_dir: Option<&PathBuf>,
     enabled_states: &HashMap<String, bool>,
 ) -> Vec<InstalledItem> {
@@ -239,58 +239,12 @@ pub fn discover_extensions(
         }
     }
 
-    // User extensions override bundled
-    if let Ok(user_dir) = user_extensions_dir() {
-        for item in scan_directory(&user_dir, false, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
-        }
-    }
-
-    let mut items: Vec<InstalledItem> = by_id.into_values().collect();
-    items.sort_by(|a, b| a.manifest.name.cmp(&b.manifest.name));
-    items
-}
-
-/// Discover all installed themes (bundled + user). User items override bundled by ID.
-pub fn discover_themes(
-    bundled_dir: Option<&PathBuf>,
-    enabled_states: &HashMap<String, bool>,
-) -> Vec<InstalledItem> {
-    let mut by_id: HashMap<String, InstalledItem> = HashMap::new();
-
-    if let Some(dir) = bundled_dir {
-        for item in scan_directory(dir, true, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
-        }
-    }
-
-    if let Ok(user_dir) = user_themes_dir() {
-        for item in scan_directory(&user_dir, false, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
-        }
-    }
-
-    let mut items: Vec<InstalledItem> = by_id.into_values().collect();
-    items.sort_by(|a, b| a.manifest.name.cmp(&b.manifest.name));
-    items
-}
-
-/// Discover all installed command packs.
-pub fn discover_command_packs(
-    bundled_dir: Option<&PathBuf>,
-    enabled_states: &HashMap<String, bool>,
-) -> Vec<InstalledItem> {
-    let mut by_id: HashMap<String, InstalledItem> = HashMap::new();
-
-    if let Some(dir) = bundled_dir {
-        for item in scan_directory(dir, true, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
-        }
-    }
-
-    if let Ok(user_dir) = user_command_packs_dir() {
-        for item in scan_directory(&user_dir, false, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
+    // User items override bundled
+    if let Ok(subdir) = kind_to_subdir(kind) {
+        if let Ok(user_dir) = user_item_dir(subdir) {
+            for item in scan_directory(&user_dir, false, enabled_states) {
+                by_id.insert(item.manifest.id.clone(), item);
+            }
         }
     }
 
@@ -312,12 +266,8 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
     let manifest: ExtensionManifest =
         serde_json::from_str(&content).context("Invalid manifest.json")?;
 
-    let target_base = match manifest.kind.as_str() {
-        "extension" => user_extensions_dir()?,
-        "theme" => user_themes_dir()?,
-        "commands" => user_command_packs_dir()?,
-        other => anyhow::bail!("Unknown extension type: {}", other),
-    };
+    let subdir = kind_to_subdir(&manifest.kind)?;
+    let target_base = user_item_dir(subdir)?;
 
     let target_dir = target_base.join(&manifest.id);
 
@@ -341,12 +291,8 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
 
 /// Uninstall a user-installed item by ID and type.
 pub fn uninstall(id: &str, kind: &str) -> Result<()> {
-    let base = match kind {
-        "extension" => user_extensions_dir()?,
-        "theme" => user_themes_dir()?,
-        "commands" => user_command_packs_dir()?,
-        other => anyhow::bail!("Unknown type: {}", other),
-    };
+    let subdir = kind_to_subdir(kind)?;
+    let base = user_item_dir(subdir)?;
 
     let target = base.join(id);
     if !target.exists() {
@@ -381,7 +327,7 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 /// Returns the colors map or None if not found.
 pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&PathBuf>) -> Result<Option<serde_json::Value>> {
     // Check user themes first
-    if let Ok(user_dir) = user_themes_dir() {
+    if let Ok(user_dir) = user_item_dir("themes") {
         let theme_dir = user_dir.join(theme_id);
         if let Some(colors) = try_load_theme_variant(&theme_dir, variant)? {
             return Ok(Some(colors));
