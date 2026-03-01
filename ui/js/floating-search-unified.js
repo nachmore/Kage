@@ -269,6 +269,10 @@ export async function unifiedSearch(query, invoke, shortcuts, mathConfig) {
             const scLower = sc.shortcut?.toLowerCase() || '';
             const nameLower = sc.name?.toLowerCase() || '';
             if (scLower.startsWith(lower) || nameLower.startsWith(lower) || nameLower.includes(lower)) {
+                // Extract args: text after the shortcut trigger word
+                const triggerLen = scLower.startsWith(lower) ? sc.shortcut.length : sc.name.length;
+                const rawArgs = query.length > triggerLen ? query.substring(triggerLen).trim() : '';
+                const argsArray = rawArgs ? rawArgs.split(/\s+/) : [];
                 results.push({
                     id: 'shortcut:' + sc.name,
                     type: 'shortcut',
@@ -276,7 +280,7 @@ export async function unifiedSearch(query, invoke, shortcuts, mathConfig) {
                     description: '⚡ ' + sc.shortcut,
                     icon: '⚡',
                     score: scLower === lower || nameLower === lower ? 85 : 65,
-                    data: { shortcut: sc, args: query },
+                    data: { shortcut: sc, args: argsArray },
                 });
             }
         }
