@@ -4,15 +4,12 @@ import { WindowManager } from './floating-window.js';
 import { renderMarkdown } from './floating-markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
-import { evaluateMath } from './math-eval.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
 import { sendAppNotification } from './notify.js';
 import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
-import { parseColor, renderColorSuggestion } from './floating-color.js';
-import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
-import { parseTimerCommand, startTimer, startStopwatch, pauseResumeSlot, stopSlot, addTimeToTimer, getSlotState, renderTimerSuggestion, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
+import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
 import { playTimerSound } from './timer-sounds.js';
-import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, invalidateConfigCache, setExtensionManager } from './floating-search-unified.js';
+import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './floating-search-unified.js';
 import { ExtensionManager } from './extension-manager.js';
 
 export class FloatingApp {
@@ -55,10 +52,9 @@ export class FloatingApp {
         
         // Listen for config updates
         this.listen('config_updated', async () => {
-            console.log('Config updated, reloading shortcuts...');
+            console.log('Config updated, reloading...');
             await this.loadShortcuts();
             await this.extensionManager.onConfigUpdate();
-            invalidateConfigCache();
         });
 
         // Listen for slash commands from ACP
@@ -469,16 +465,6 @@ export class FloatingApp {
         }
     }
 
-    async loadMathConfig() {
-        // Math config now lives in extensions['math']
-        try {
-            const config = await this.invoke('get_config');
-            this._mathConfig = (config.extensions && config.extensions['math']) || { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
-        } catch (error) {
-            console.error('Failed to load math config:', error);
-        }
-    }
-
     _startTimerUI(durationMs) {
         startTimer(durationMs,
             (display, progress) => {
@@ -503,7 +489,10 @@ export class FloatingApp {
         updateTimerBar('timer', '0:00', 1, false);
 
         let config = {};
-        try { config = (await this.invoke('get_config')).timer || {}; } catch {}
+        try {
+            const fullConfig = await this.invoke('get_config');
+            config = (fullConfig.extensions && fullConfig.extensions['timer']) || {};
+        } catch {}
 
         if (config.show_window_on_complete !== false) {
             try {
@@ -536,22 +525,6 @@ export class FloatingApp {
                 this.windowManager.resizeWindow();
             }
         }, 5000);
-    }
-
-    formatMathResult(display) {
-        const mc = this._mathConfig || {};
-        if (mc.thousands_separator) {
-            const parts = display.split('.');
-            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-            return parts.join('.');
-        }
-        return display;
-    }
-
-    tryEvaluateMath(query) {
-        const mc = this._mathConfig || {};
-        if (!mc.enabled) return null;
-        return evaluateMath(query, mc.precision);
     }
 
     async checkForUpdateBanner() {
@@ -1124,7 +1097,7 @@ export class FloatingApp {
             this.elements.contentArea.classList.add('visible');
             this.windowManager.resizeWindow();
             
-            if ((this._mathConfig || {}).auto_copy) {
+            if (this.extensionManager?._configCache?.extensions?.['math']?.auto_copy !== false) {
                 try { await navigator.clipboard.writeText(formatted); } catch {}
             }
             return;

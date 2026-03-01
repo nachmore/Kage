@@ -8,7 +8,6 @@ import { matchCommands, matchSlashCommands, matchCommandsByName } from './floati
 
 // --- Frecency store ---
 
-const FRECENCY_FILE = 'search-frecency.json';
 let _frecencyData = {}; // { resultId: { count, lastUsed, prefixes: { prefix: count } } }
 let _frecencyLoaded = false;
 
@@ -73,29 +72,6 @@ export async function loadFrecency(invoke) {
         if (json) _frecencyData = JSON.parse(json);
     } catch {}
     _frecencyLoaded = true;
-}
-
-// --- Unified result type ---
-// { id: string, type: string, label: string, description: string, icon: string, score: number, data: any }
-
-// --- Config cache ---
-let _configCache = null;
-let _configCacheTime = 0;
-const CONFIG_CACHE_TTL = 5000; // 5 seconds
-
-async function getConfig(invoke) {
-    const now = Date.now();
-    if (_configCache && now - _configCacheTime < CONFIG_CACHE_TTL) return _configCache;
-    try {
-        _configCache = await invoke('get_config');
-        _configCacheTime = now;
-    } catch {}
-    return _configCache || {};
-}
-
-export function invalidateConfigCache() {
-    _configCache = null;
-    _configCacheTime = 0;
 }
 
 // --- Extension manager reference ---
