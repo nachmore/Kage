@@ -255,7 +255,9 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
             iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="app-icon" style="display:none">${r.data.emoji_icon || r.label.charAt(0).toUpperCase()}</div>`;
         } else if (r.type === 'color') {
             const hex = '#' + [r.data.r,r.data.g,r.data.b].map(c => c.toString(16).padStart(2,'0')).join('');
-            iconHtml = `<div class="app-icon" style="background:${hex};border:2px solid rgba(255,255,255,0.2)"></div>`;
+            iconHtml = `<div class="app-icon" style="position:relative;background:${hex};border:2px solid rgba(255,255,255,0.2);cursor:pointer;">` +
+                `<input type="color" value="${hex}" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;" ` +
+                `data-color-picker="true"></div>`;
         } else {
             iconHtml = `<div class="app-icon">${r.icon || r.label.charAt(0)}</div>`;
         }
@@ -272,6 +274,28 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
     }
 
     container.classList.add('visible');
+
+    // Wire up color picker inputs
+    container.querySelectorAll('input[data-color-picker]').forEach(picker => {
+        const item = picker.closest('.app-suggestion-item');
+        const swatch = picker.parentElement;
+        const nameEl = item?.querySelector('.app-name');
+        const descEl = item?.querySelector('.app-description');
+        const idx = Array.from(container.children).indexOf(item);
+
+        picker.addEventListener('input', (e) => {
+            const newHex = e.target.value;
+            swatch.style.background = newHex;
+            const nr = parseInt(newHex.slice(1,3),16), ng = parseInt(newHex.slice(3,5),16), nb = parseInt(newHex.slice(5,7),16);
+            if (nameEl) nameEl.textContent = newHex.toUpperCase();
+            // Update stored match data so Enter copies the picked color
+            if (idx >= 0 && currentMatches[idx]?.type === 'color') {
+                currentMatches[idx].data = { r: nr, g: ng, b: nb, source: 'picker' };
+                currentMatches[idx].label = newHex.toUpperCase();
+            }
+        });
+    });
+
     setTimeout(() => resizeWindow(), 10);
     return 0;
 }
