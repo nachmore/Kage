@@ -448,6 +448,10 @@ export class FloatingApp {
         if (indicator) indicator.remove();
         if (this.currentResponse) {
             renderMarkdown(this.currentResponse, this.elements.responseText);
+        } else {
+            // No response content — hide the content area entirely
+            this.elements.contentArea.classList.remove('visible');
+            this.elements.expandBtn.classList.remove('visible');
         }
         this.windowManager.resizeWindow();
         // Tell the agent to abort the current prompt turn
