@@ -273,11 +273,24 @@ export async function unifiedSearch(query, invoke, shortcuts, mathConfig) {
                 const triggerLen = scLower.startsWith(lower) ? sc.shortcut.length : sc.name.length;
                 const rawArgs = query.length > triggerLen ? query.substring(triggerLen).trim() : '';
                 const argsArray = rawArgs ? rawArgs.split(/\s+/) : [];
+
+                // Build description with param hints
+                let desc = '⚡ ' + sc.shortcut;
+                const templates = [sc.url, sc.prompt, sc.arguments, sc.script].filter(Boolean).join(' ');
+                const reqParams = new Set();
+                let m;
+                const re = /\{(\d+)\}(?!\?)/g;
+                while ((m = re.exec(templates)) !== null) reqParams.add(parseInt(m[1]));
+                if (reqParams.size > 0 && argsArray.length < Math.max(...reqParams) + 1) {
+                    const needed = Math.max(...reqParams) + 1;
+                    desc += ` · ${needed - argsArray.length} param${needed - argsArray.length > 1 ? 's' : ''} needed`;
+                }
+
                 results.push({
                     id: 'shortcut:' + sc.name,
                     type: 'shortcut',
                     label: sc.name,
-                    description: '⚡ ' + sc.shortcut,
+                    description: desc,
                     icon: '⚡',
                     score: scLower === lower || nameLower === lower ? 85 : 65,
                     data: { shortcut: sc, args: argsArray },
@@ -286,27 +299,21 @@ export async function unifiedSearch(query, invoke, shortcuts, mathConfig) {
         }
     }
 
-    // --- Rust-side search (one IPC call for URL, path, well-known dir, system cmd, apps) ---
+    // --- Rust-side search (one IPC call returning all matches as JSON array) ---
     try {
-        const rustResult = await invoke('handle_floating_input', { input: query });
-        if (rustResult.startsWith('url:')) {
-            results.push({ id: 'url:' + rustResult, type: 'url', label: 'Open in browser', description: rustResult.substring(4), icon: '🌐', score: 88, data: { value: rustResult.substring(4) } });
-        } else if (rustResult.startsWith('path:')) {
-            const pathInfo = rustResult.substring(5);
-            const colonIdx = pathInfo.indexOf(':');
-            const pathType = pathInfo.substring(0, colonIdx);
-            const path = pathInfo.substring(colonIdx + 1);
-            results.push({ id: 'path:' + path, type: 'path', label: pathType === 'file' ? 'Open File' : 'Open Folder', description: path, icon: pathType === 'file' ? '📄' : '📁', score: 87, data: { value: path, pathType } });
-        } else if (rustResult.startsWith('system:')) {
-            const parts = rustResult.substring(7).split(':');
-            results.push({ id: 'system:' + parts[0], type: 'system', label: parts[1], description: parts[2] === 'confirm' ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: 86, data: { cmdId: parts[0], cmdLabel: parts[1], needsConfirm: parts[2] === 'confirm' } });
-        } else if (rustResult.startsWith('multiple:') || rustResult.startsWith('launched:')) {
-            const apps = JSON.parse(rustResult.substring(rustResult.indexOf(':') + 1));
-            for (let i = 0; i < apps.length; i++) {
-                results.push({ id: 'app:' + apps[i].name, type: 'app', label: apps[i].name, description: '', icon: '', score: 80 - i, data: apps[i] });
+        const rustJson = await invoke('handle_floating_input', { input: query });
+        const rustResults = JSON.parse(rustJson);
+        for (const r of rustResults) {
+            if (r.type === 'url') {
+                results.push({ id: 'url:' + r.value, type: 'url', label: 'Open in browser', description: r.value, icon: '🌐', score: r.score || 88, data: { value: r.value } });
+            } else if (r.type === 'path') {
+                results.push({ id: 'path:' + r.value, type: 'path', label: r.pathType === 'file' ? 'Open File' : 'Open Folder', description: r.value, icon: r.pathType === 'file' ? '📄' : '📁', score: r.score || 87, data: { value: r.value, pathType: r.pathType } });
+            } else if (r.type === 'system') {
+                results.push({ id: 'system:' + r.cmdId, type: 'system', label: r.cmdLabel, description: r.needsConfirm ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: r.score || 86, data: { cmdId: r.cmdId, cmdLabel: r.cmdLabel, needsConfirm: r.needsConfirm } });
+            } else if (r.type === 'app') {
+                results.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
             }
         }
-        // 'chat' result = no match, don't add anything
     } catch {}
 
     return _applyFrecency(results, query);

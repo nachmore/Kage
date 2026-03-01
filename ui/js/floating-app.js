@@ -700,9 +700,16 @@ export class FloatingApp {
     }
 
     buildShortcutCommand(shortcut, args) {
+            // Validate required params before building
+            const validation = this._validateShortcutArgs(shortcut, args);
+            if (!validation.valid) {
+                return { type: 'error', message: validation.message };
+            }
+
             const actionType = shortcut.action_type || 'run_program';
 
-            // Helper: substitute {*} and {0},{1},... in a template string
+            // Helper: substitute {*}, {0},{1},... and {0?},{1?},... in a template string
+            // {N} = required param, {N?} = optional param (replaced with empty string if missing)
             const substitute = (template, encode = false) => {
                 if (!template) return '';
                 let result = template;
@@ -714,6 +721,13 @@ export class FloatingApp {
                     const all = args.join(' ');
                     result = result.replace('{*}', encode ? encodeURIComponent(all) : all);
                 } else {
+                    // Replace optional params first {N?}
+                    result = result.replace(/\{(\d+)\?\}/g, (_, idx) => {
+                        const i = parseInt(idx);
+                        const val = i < args.length ? args[i] : '';
+                        return encode ? encodeURIComponent(val) : val;
+                    });
+                    // Replace required params {N}
                     for (let i = 0; i < args.length; i++) {
                         const val = encode ? encodeURIComponent(args[i]) : args[i];
                         result = result.replace(new RegExp(`\\{${i}\\}`, 'g'), val);
@@ -770,6 +784,44 @@ export class FloatingApp {
             const processedArgs = substitute(shortcut.arguments).split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/));
             return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
         }
+
+    /**
+     * Check if a shortcut has all required parameters provided.
+     * Required: {0}, {1}, etc. Optional: {0?}, {1?}, etc.
+     * {*} and {selection} don't count as numbered params.
+     */
+    _validateShortcutArgs(shortcut, args) {
+        // Collect all templates that might contain params
+        const templates = [
+            shortcut.url, shortcut.prompt, shortcut.arguments, shortcut.script
+        ].filter(Boolean).join(' ');
+
+        // If template uses {*} or has no numbered params, no validation needed
+        if (templates.includes('{*}')) return { valid: true };
+
+        // Find all required params {N} (not {N?})
+        const requiredParams = new Set();
+        const paramRegex = /\{(\d+)\}/g;
+        let match;
+        while ((match = paramRegex.exec(templates)) !== null) {
+            // Check it's not actually {N?} by looking at the char after
+            const fullMatch = templates.substring(match.index, match.index + match[0].length + 1);
+            if (!fullMatch.endsWith('?}')) {
+                requiredParams.add(parseInt(match[1]));
+            }
+        }
+
+        if (requiredParams.size === 0) return { valid: true };
+
+        const maxRequired = Math.max(...requiredParams) + 1;
+        if (args.length >= maxRequired) return { valid: true };
+
+        const missing = maxRequired - args.length;
+        return {
+            valid: false,
+            message: `This command requires ${maxRequired} parameter${maxRequired > 1 ? 's' : ''} (${missing} missing). Usage: ${shortcut.shortcut} <${Array.from(requiredParams).map(i => 'arg' + i).join('> <')}>`
+        };
+    }
 
     async executeShortcut(command) {
             try {
@@ -861,133 +913,6 @@ export class FloatingApp {
                 this.clearSuggestions();
             }
         }, 100);
-    }
-
-    async performSearch(query) {
-        // Check for matching commands (without > prefix) to show at top
-        const cmdMatches = matchCommandsByName(query);
-
-        // If the input grew past a length where we already know there's no pattern
-        // match, skip the backend call — it will just return "chat" again.
-        if (this._noMatchSinceLen > 0 && query.length >= this._noMatchSinceLen) {
-            // Still show command matches if any
-            if (cmdMatches.length > 0) {
-                this.currentMatches = cmdMatches;
-                this.selectedIndex = 0;
-                renderCommandSuggestions(
-                    cmdMatches, this.elements.appSuggestions, this.selectedIndex,
-                    (cmd) => this.executeCommandAction(cmd),
-                    () => this.windowManager.resizeWindow(),
-                    true
-                );
-            } else {
-                this.clearSuggestions();
-            }
-            return;
-        }
-        // Input was shortened — reset and re-evaluate
-        if (query.length < this._noMatchSinceLen) {
-            this._noMatchSinceLen = 0;
-        }
-        
-        // Check for shortcut matches first
-        const shortcutMatches = this.matchShortcut(query);
-        if (shortcutMatches && shortcutMatches.length > 0) {
-            if (shortcutMatches.length === 1) {
-                // Single match - show it directly
-                const match = shortcutMatches[0];
-                const command = this.buildShortcutCommand(match.shortcut, match.args);
-                this.selectedIndex = renderShortcutSuggestion(
-                    match.shortcut,
-                    match.args,
-                    this.elements.appSuggestions,
-                    this.currentMatches,
-                    () => this.executeShortcut(command),
-                    () => this.windowManager.resizeWindow()
-                );
-            } else {
-                // Multiple matches - show all with scores
-                this.currentMatches = shortcutMatches.map(match => ({
-                    type: 'shortcut',
-                    shortcut: match.shortcut,
-                    args: match.args,
-                    score: match.score
-                }));
-                this.selectedIndex = 0;
-                renderShortcutSuggestions(
-                    shortcutMatches,
-                    this.elements.appSuggestions,
-                    this.selectedIndex,
-                    (match) => {
-                        const command = this.buildShortcutCommand(match.shortcut, match.args);
-                        this.executeShortcut(command);
-                    },
-                    () => this.windowManager.resizeWindow()
-                );
-            }
-            return;
-        }
-        
-        try {
-            const result = await this.invoke('handle_floating_input', { input: query });
-            console.log('Search result:', result);
-            
-            if (result.startsWith('url:')) {
-                const url = result.substring(4);
-                this.selectedIndex = renderUrlSuggestion(
-                    url, 
-                    this.elements.appSuggestions, 
-                    this.currentMatches,
-                    (u) => this.openUrl(u),
-                    () => this.windowManager.resizeWindow()
-                );
-            } else if (result.startsWith('path:')) {
-                const pathInfo = result.substring(5);
-                const colonIndex = pathInfo.indexOf(':');
-                const type = pathInfo.substring(0, colonIndex);
-                const path = pathInfo.substring(colonIndex + 1);
-                this.selectedIndex = renderPathSuggestion(
-                    type,
-                    path,
-                    this.elements.appSuggestions,
-                    this.currentMatches,
-                    (p) => this.openPath(p),
-                    () => this.windowManager.resizeWindow()
-                );
-            } else if (result.startsWith('system:')) {
-                // system:command_id:label:immediate|confirm
-                const parts = result.substring(7).split(':');
-                const cmdId = parts[0];
-                const cmdLabel = parts[1];
-                const needsConfirm = parts[2] === 'confirm';
-                this.currentMatches = [{ type: 'system', cmdId, cmdLabel, needsConfirm }];
-                this.selectedIndex = 0;
-                this._renderSystemCommandSuggestion(cmdId, cmdLabel, needsConfirm);
-            } else if (result.startsWith('multiple:') || result.startsWith('launched:')) {
-                const jsonStr = result.substring(result.indexOf(':') + 1);
-                const apps = JSON.parse(jsonStr);
-                if (apps.length > 0) {
-                    this.currentMatches = apps;
-                    this.selectedIndex = 0;
-                    renderSuggestions(
-                        apps,
-                        this.elements.appSuggestions,
-                        this.selectedIndex,
-                        (name) => this.launchApp(name),
-                        () => this.windowManager.resizeWindow()
-                    );
-                } else {
-                    this.clearSuggestions();
-                }
-            } else {
-                // No pattern match — remember this length so we skip future calls
-                // while the user keeps typing (input only grows).
-                this._noMatchSinceLen = query.length;
-                this.clearSuggestions();
-            }
-        } catch (error) {
-            console.error('Error searching apps:', error);
-        }
     }
 
     async clearSuggestions() {
@@ -1368,30 +1293,32 @@ export class FloatingApp {
         
         try {
             // If forceChat, attachments present, or we already know there's no match, skip classification
-            let result;
+            let rustResults = [];
             if (options.forceChat || attachments) {
-                result = 'chat';
+                rustResults = [];
             } else if (this._noMatchSinceLen > 0 && message.length >= this._noMatchSinceLen) {
-                result = 'chat';
+                rustResults = [];
             } else {
-                result = await this.invoke('handle_floating_input', { input: message });
+                try {
+                    const json = await this.invoke('handle_floating_input', { input: message });
+                    rustResults = JSON.parse(json);
+                } catch { rustResults = []; }
             }
             this._noMatchSinceLen = 0;
-            
-            if (result.startsWith('url:')) {
-                await this.openUrl(result.substring(4));
+
+            // Check if the top result is a URL, path, or app launch
+            const top = rustResults[0];
+            if (top?.type === 'url') {
+                await this.openUrl(top.value);
                 this.stopThinking();
-            } else if (result.startsWith('path:')) {
-                const pathInfo = result.substring(5);
-                const colonIndex = pathInfo.indexOf(':');
-                const path = pathInfo.substring(colonIndex + 1);
-                await this.openPath(path);
+            } else if (top?.type === 'path') {
+                await this.openPath(top.value);
                 this.stopThinking();
-            } else if (result.startsWith('launched:')) {
-                const apps = JSON.parse(result.substring(9));
-                await this.launchApp(apps[0].name);
+            } else if (top?.type === 'app') {
+                await this.launchApp(top.name);
                 this.stopThinking();
-            } else if (result === 'chat') {
+            } else {
+                // No actionable match — send to agent
                 this.currentResponse = '';
                 this.elements.responseText.textContent = this.currentResponse;
                 this.elements.contentArea.classList.add('visible');

@@ -162,52 +162,70 @@ pub async fn handle_floating_input(
     input: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    info!("Handling floating input: {}", input);
-
     let trimmed_input = input.trim();
 
+    // Collect ALL matches from all sources (no early returns)
+    let mut results: Vec<serde_json::Value> = Vec::new();
+
+    // URL
     if is_url(trimmed_input) {
-        info!("Detected URL pattern: {}", trimmed_input);
-        return Ok(format!("url:{}", trimmed_input));
+        results.push(serde_json::json!({ "type": "url", "value": trimmed_input, "score": 95 }));
     }
 
+    // Path
     if let Some(path) = is_path(trimmed_input) {
-        info!("Detected path pattern: {}", path);
         let is_file = path.contains('.') && !path.ends_with('\\') && !path.ends_with('/');
-        return Ok(format!(
-            "path:{}:{}",
-            if is_file { "file" } else { "folder" },
-            path
-        ));
+        results.push(serde_json::json!({
+            "type": "path",
+            "pathType": if is_file { "file" } else { "folder" },
+            "value": path,
+            "score": 90
+        }));
     }
 
-    // Check for well-known directory names (single word only)
+    // Well-known directory
     if let Some(path) = resolve_well_known_dir(trimmed_input) {
-        info!("Detected well-known directory: {} → {}", trimmed_input, path);
-        return Ok(format!("path:folder:{}", path));
+        results.push(serde_json::json!({
+            "type": "path",
+            "pathType": "folder",
+            "value": path,
+            "score": 87
+        }));
     }
 
-    // Check for system commands (single word, exact or prefix match)
+    // System command
     if let Some((cmd_id, cmd_label, needs_confirm)) = match_system_command(trimmed_input) {
-        info!("Detected system command: {} ({})", cmd_id, cmd_label);
-        return Ok(format!("system:{}:{}:{}", cmd_id, cmd_label, if needs_confirm { "confirm" } else { "immediate" }));
+        results.push(serde_json::json!({
+            "type": "system",
+            "cmdId": cmd_id,
+            "cmdLabel": cmd_label,
+            "needsConfirm": needs_confirm,
+            "score": 86
+        }));
     }
 
+    // App search
     let launcher = state.app_launcher.lock().await;
-    let matches = launcher.find_app(trimmed_input);
-
-    if !matches.is_empty() {
-        info!("Found {} matching application(s)", matches.len());
-        let json = serde_json::to_string(&matches).map_err(|e| e.to_string())?;
-        if matches.len() == 1 {
-            return Ok(format!("launched:{}", json));
-        } else {
-            return Ok(format!("multiple:{}", json));
-        }
+    let app_matches = launcher.find_app(trimmed_input);
+    for (i, app) in app_matches.iter().enumerate() {
+        results.push(serde_json::json!({
+            "type": "app",
+            "name": app.name,
+            "path": app.path,
+            "icon_base64": app.icon_base64,
+            "emoji_icon": app.emoji_icon,
+            "score": 80 - i
+        }));
     }
 
-    info!("No pattern match, opening chat mode");
-    Ok("chat".to_string())
+    // Sort by score descending
+    results.sort_by(|a, b| {
+        let sa = a.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
+        let sb = b.get("score").and_then(|v| v.as_i64()).unwrap_or(0);
+        sb.cmp(&sa)
+    });
+
+    Ok(serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string()))
 }
 
 #[tauri::command]
