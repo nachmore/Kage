@@ -21,6 +21,15 @@ class AppearanceSettingsModule extends SettingsModule {
                     </select>`
                 )}
 
+                <div class="setting-row" id="customThemesSection">
+                    <div class="setting-label">Custom Themes</div>
+                    <div class="setting-description">Install color themes from the store or load from a local directory.</div>
+                    <div id="installedThemesList" style="margin-top:8px;"></div>
+                    <div style="margin-top:8px;">
+                        <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">🛍️ Browse Themes in Store...</button>
+                    </div>
+                </div>
+
                 ${this.createControlRow(
                     'Floating Window Opacity',
                     'Adjust transparency of the floating window (0.3 = very transparent, 1.0 = solid).',
@@ -191,6 +200,16 @@ class AppearanceSettingsModule extends SettingsModule {
         document.getElementById('showTime')?.addEventListener('change', () => this.toggleDateTimeFormats());
         document.getElementById('showDate')?.addEventListener('change', () => this.toggleDateTimeFormats());
 
+        // Browse themes button
+        document.getElementById('browseThemesBtn')?.addEventListener('click', () => {
+            if (window.__TAURI__?.core) {
+                window.__TAURI__.core.invoke('open_store_window', { tab: 'themes' });
+            }
+        });
+
+        // Load installed themes into the select and the list
+        this.loadInstalledThemes();
+
         // Listen for system theme changes
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
         this.themeChangeHandler = (e) => {
@@ -200,6 +219,52 @@ class AppearanceSettingsModule extends SettingsModule {
             }
         };
         mediaQuery.addEventListener('change', this.themeChangeHandler);
+    }
+
+    async loadInstalledThemes() {
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+
+        try {
+            const themes = await invoke('list_themes');
+            const themeSelect = document.getElementById('theme');
+            const themeList = document.getElementById('installedThemesList');
+
+            // Add installed themes to the select dropdown
+            if (themeSelect && themes.length > 0) {
+                for (const t of themes) {
+                    if (!t.enabled) continue;
+                    const opt = document.createElement('option');
+                    opt.value = t.manifest.id;
+                    opt.textContent = `${t.manifest.icon || '🎨'} ${t.manifest.name}`;
+                    themeSelect.appendChild(opt);
+                }
+                // Re-apply current value (it may be a custom theme ID)
+                const config = await invoke('get_config');
+                if (config.ui?.theme) themeSelect.value = config.ui.theme;
+            }
+
+            // Render the installed themes list
+            if (themeList) {
+                if (themes.length === 0) {
+                    themeList.innerHTML = '<div style="font-size:12px;color:var(--kiro-text-muted);padding:4px 0;">No custom themes installed.</div>';
+                } else {
+                    let html = '';
+                    for (const t of themes) {
+                        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">
+                            <span>${t.manifest.icon || '🎨'}</span>
+                            <span style="flex:1;">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span></span>
+                            ${t.bundled ? '' : `<button class="setting-button" style="font-size:11px;padding:2px 8px;" onclick="uninstallTheme('${t.manifest.id}')">Remove</button>`}
+                        </div>`;
+                    }
+                    themeList.innerHTML = html;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load themes:', e);
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     }
 
     toggleDateTimeFormats() {

@@ -90,6 +90,15 @@ const LOCAL_COMMANDS = [
                 document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
             }
         }
+    },
+    {
+        name: 'store',
+        description: 'Browse extensions, themes, and command packs',
+        icon: '🛍️',
+        execute: async (invoke, appWindow) => {
+            await invoke('open_store_window');
+            await appWindow.hide();
+        }
     }
 ];
 

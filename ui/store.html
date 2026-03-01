@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extension Store</title>
+    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <link rel="stylesheet" href="css/shared-kiro-controls.css">
+    <link rel="stylesheet" href="css/shared-components.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: var(--kiro-font);
+            background: var(--kiro-bg);
+            color: var(--kiro-text);
+            overflow: hidden;
+        }
+        .store-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .store-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--kiro-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            -webkit-app-region: drag;
+        }
+        .store-header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--kiro-text-bright);
+        }
+        .store-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--kiro-border);
+            -webkit-app-region: no-drag;
+        }
+        .store-tab {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--kiro-text-muted);
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+        .store-tab:hover { color: var(--kiro-text); }
+        .store-tab.active {
+            color: var(--kiro-accent);
+            border-bottom-color: var(--kiro-accent);
+        }
+        .store-search {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--kiro-border-subtle);
+        }
+        .store-search input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--kiro-bg-input);
+            border: 1px solid var(--kiro-border);
+            border-radius: 6px;
+            color: var(--kiro-text);
+            font-size: 13px;
+            outline: none;
+        }
+        .store-search input:focus {
+            border-color: var(--kiro-accent);
+            box-shadow: 0 0 0 2px var(--kiro-accent-glow);
+        }
+        .store-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+        .store-section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--kiro-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .store-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .store-card {
+            background: var(--kiro-bg-elevated);
+            border: 1px solid var(--kiro-border);
+            border-radius: 8px;
+            padding: 14px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .store-card:hover {
+            border-color: var(--kiro-accent);
+            box-shadow: 0 0 0 1px var(--kiro-accent-glow);
+        }
+        .store-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .store-card-icon {
+            font-size: 24px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--kiro-bg-input);
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .store-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--kiro-text-bright);
+        }
+        .store-card-author {
+            font-size: 11px;
+            color: var(--kiro-text-muted);
+        }
+        .store-card-desc {
+            font-size: 12px;
+            color: var(--kiro-text-muted);
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        .store-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .store-card-tags {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .store-tag {
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--kiro-bg-input);
+            border-radius: 4px;
+            color: var(--kiro-text-muted);
+        }
+        .store-card-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .store-card-btn.install {
+            background: var(--kiro-accent);
+            color: white;
+        }
+        .store-card-btn.install:hover {
+            background: var(--kiro-accent-hover);
+        }
+        .store-card-btn.installed {
+            background: var(--kiro-bg-input);
+            color: var(--kiro-text-muted);
+            cursor: default;
+        }
+        .store-card-btn.uninstall {
+            background: transparent;
+            color: #e55;
+            border: 1px solid #e55;
+        }
+        .store-empty {
+            text-align: center;
+            padding: 40px;
+            color: var(--kiro-text-muted);
+        }
+        .store-empty-icon { font-size: 32px; margin-bottom: 8px; }
+        .store-settings-link {
+            padding: 12px 20px;
+            border-top: 1px solid var(--kiro-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .store-settings-link details {
+            width: 100%;
+        }
+        .store-settings-link summary {
+            font-size: 12px;
+            color: var(--kiro-text-muted);
+            cursor: pointer;
+        }
+        .store-url-input {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        .store-url-input input {
+            flex: 1;
+            padding: 6px 10px;
+            background: var(--kiro-bg-input);
+            border: 1px solid var(--kiro-border);
+            border-radius: 4px;
+            color: var(--kiro-text);
+            font-size: 12px;
+        }
+        .store-url-input button {
+            padding: 6px 12px;
+            background: var(--kiro-accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="store-container">
+        <div class="store-header">
+            <h1>🛍️ Extension Store</h1>
+        </div>
+        <div class="store-tabs">
+            <div class="store-tab active" data-tab="installed" onclick="switchTab('installed')">Installed</div>
+            <div class="store-tab" data-tab="extensions" onclick="switchTab('extensions')">Extensions</div>
+            <div class="store-tab" data-tab="themes" onclick="switchTab('themes')">Themes</div>
+            <div class="store-tab" data-tab="commands" onclick="switchTab('commands')">Quick Commands</div>
+        </div>
+        <div class="store-search">
+            <input type="text" id="storeSearch" placeholder="Search extensions, themes, and commands..." oninput="onSearch()">
+        </div>
+        <div class="store-content" id="storeContent">
+            <!-- Populated by JS -->
+        </div>
+        <div class="store-settings-link">
+            <details>
+                <summary>Advanced: Custom store URL</summary>
+                <div class="store-url-input">
+                    <input type="text" id="storeUrlInput" placeholder="https://your-store.example.com">
+                    <button onclick="saveStoreUrl()">Save</button>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <script>
+    let currentTab = 'installed';
+    let installedExtensions = [];
+    let installedThemes = [];
+    let installedPacks = [];
+
+    function waitForTauri(cb) {
+        if (window.__TAURI__?.core) cb();
+        else setTimeout(() => waitForTauri(cb), 50);
+    }
+
+    waitForTauri(async () => {
+        const invoke = window.__TAURI__.core.invoke;
+
+        // Apply theme
+        try {
+            const config = await invoke('get_config');
+            if (config.ui?.theme === 'light') document.body.classList.add('light-theme');
+            else if (config.ui?.theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('light-theme');
+            }
+            // Load store URL
+            const urlInput = document.getElementById('storeUrlInput');
+            if (urlInput && config.store_url) urlInput.value = config.store_url;
+        } catch {}
+
+        // Listen for tab navigation events from other windows
+        window.__TAURI__.event.listen('store_navigate_tab', (event) => {
+            const tab = event.payload;
+            if (tab && typeof switchTab === 'function') {
+                switchTab(tab);
+            }
+        });
+
+        // Read initial tab from URL query param (set by open_store_window)
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialTab = urlParams.get('tab');
+
+        await loadInstalled();
+        if (initialTab) {
+            switchTab(initialTab);
+        } else {
+            renderTab();
+        }
+    });
+
+    async function loadInstalled() {
+        const invoke = window.__TAURI__.core.invoke;
+        try { installedExtensions = await invoke('list_extensions'); } catch { installedExtensions = []; }
+        try { installedThemes = await invoke('list_themes'); } catch { installedThemes = []; }
+        try { installedPacks = await invoke('list_command_packs'); } catch { installedPacks = []; }
+    }
+
+    function switchTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.store-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.tab === tab);
+        });
+        renderTab();
+    }
+
+    function renderTab() {
+        const content = document.getElementById('storeContent');
+        if (currentTab === 'installed') {
+            renderInstalled(content);
+        } else {
+            renderBrowse(content, currentTab);
+        }
+    }
+
+    function renderInstalled(container) {
+        const all = [
+            ...installedExtensions.map(i => ({ ...i, _kind: 'extension' })),
+            ...installedThemes.map(i => ({ ...i, _kind: 'theme' })),
+            ...installedPacks.map(i => ({ ...i, _kind: 'commands' })),
+        ];
+
+        // Also show bundled extensions that are loaded from ui/extensions/
+        const bundledIds = ['dev-tools', 'math', 'color-picker', 'timer'];
+        const bundledManifests = [
+            { id: 'dev-tools', name: 'Developer Tools', icon: '🔧', description: 'UUID, base64, hashing, epoch, JSON formatting', version: '1.0.0', author: 'built-in' },
+            { id: 'math', name: 'Math Calculator', icon: '🧮', description: 'Inline math expressions and unit conversions', version: '1.0.0', author: 'built-in' },
+            { id: 'color-picker', name: 'Color Picker', icon: '🎨', description: 'Color detection, preview, and format conversion', version: '1.0.0', author: 'built-in' },
+            { id: 'timer', name: 'Timer & Stopwatch', icon: '⏱️', description: 'Countdown timer and stopwatch', version: '1.0.0', author: 'built-in' },
+        ];
+        // Add bundled ones that aren't already in the list
+        for (const bm of bundledManifests) {
+            if (!all.find(a => a.manifest?.id === bm.id)) {
+                all.push({ manifest: bm, bundled: true, enabled: true, _kind: 'extension' });
+            }
+        }
+
+        if (all.length === 0) {
+            container.innerHTML = '<div class="store-empty"><div class="store-empty-icon">📦</div>No extensions installed yet.<br>Browse the store to find extensions.</div>';
+            return;
+        }
+
+        let html = '<div class="store-section-title">Installed</div><div class="store-grid">';
+        for (const item of all) {
+            const m = item.manifest;
+            html += `
+                <div class="store-card">
+                    <div class="store-card-header">
+                        <div class="store-card-icon">${m.icon || '📦'}</div>
+                        <div>
+                            <div class="store-card-title">${esc(m.name)}</div>
+                            <div class="store-card-author">${esc(m.author || '')} · v${esc(m.version)}</div>
+                        </div>
+                    </div>
+                    <div class="store-card-desc">${esc(m.description || '')}</div>
+                    <div class="store-card-footer">
+                        <div class="store-card-tags">
+                            <span class="store-tag">${item._kind}</span>
+                            ${item.bundled ? '<span class="store-tag">bundled</span>' : ''}
+                        </div>
+                        ${item.bundled ? '<span class="store-card-btn installed">Built-in</span>' : `<button class="store-card-btn uninstall" onclick="uninstallItem('${m.id}','${item._kind}')">Uninstall</button>`}
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    async function renderBrowse(container, type) {
+        const invoke = window.__TAURI__.core.invoke;
+        const search = document.getElementById('storeSearch')?.value || '';
+        try {
+            const catalog = await invoke('store_get_catalog', { kind: type === 'commands' ? 'commands' : type === 'themes' ? 'theme' : 'extension', search: search || null, page: 1 });
+            if (!catalog.items || catalog.items.length === 0) {
+                container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">🔍</div>No ${type} found in the store.<br>Configure a store URL in the advanced settings below.</div>`;
+                return;
+            }
+            let html = `<div class="store-section-title">Browse ${type}</div><div class="store-grid">`;
+            for (const item of catalog.items) {
+                html += `
+                    <div class="store-card">
+                        <div class="store-card-header">
+                            <div class="store-card-icon">${item.icon || '📦'}</div>
+                            <div>
+                                <div class="store-card-title">${esc(item.name)}</div>
+                                <div class="store-card-author">${esc(item.author)} · v${esc(item.version)}</div>
+                            </div>
+                        </div>
+                        <div class="store-card-desc">${esc(item.description)}</div>
+                        <div class="store-card-footer">
+                            <div class="store-card-tags">${(item.tags||[]).map(t => `<span class="store-tag">${esc(t)}</span>`).join('')}</div>
+                            <button class="store-card-btn install" onclick="installFromStore('${item.id}')">Install</button>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">⚠️</div>Could not connect to store.<br>${esc(String(e))}</div>`;
+        }
+    }
+
+    async function installFromStore(id) {
+        const invoke = window.__TAURI__.core.invoke;
+        try {
+            await invoke('store_install', { id });
+            await loadInstalled();
+            switchTab('installed');
+        } catch (e) {
+            alert('Install failed: ' + e);
+        }
+    }
+
+    async function uninstallItem(id, kind) {
+        if (!confirm(`Uninstall "${id}"?`)) return;
+        const invoke = window.__TAURI__.core.invoke;
+        try {
+            await invoke('uninstall_extension', { id, kind });
+            await loadInstalled();
+            renderTab();
+        } catch (e) {
+            alert('Uninstall failed: ' + e);
+        }
+    }
+
+    async function saveStoreUrl() {
+        const invoke = window.__TAURI__.core.invoke;
+        const url = document.getElementById('storeUrlInput')?.value?.trim() || '';
+        try {
+            const config = await invoke('get_config');
+            config.store_url = url || null;
+            await invoke('save_config', { config });
+            alert('Store URL saved.');
+        } catch (e) {
+            alert('Failed to save: ' + e);
+        }
+    }
+
+    let searchTimeout;
+    function onSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => renderTab(), 300);
+    }
+
+    function esc(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    // Ctrl+W to close
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey && e.key === 'w') {
+            e.preventDefault();
+            window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow()?.hide();
+        }
+    });
+    </script>
+</body>
+</html>

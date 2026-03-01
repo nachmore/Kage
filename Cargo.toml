@@ -34,7 +34,8 @@ chrono = "0.4"
 ctrlc = "3.4"
 whoami = "1.5"
 base64 = "0.22"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+urlencoding = "2.1"
 semver = "1.0"
 tauri-plugin-notification = "2.3.3"
 

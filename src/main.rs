@@ -6,6 +6,7 @@ mod app_launcher;
 mod auto_steering;
 mod commands;
 mod config;
+mod extensions;
 mod logger;
 mod os;
 mod process_manager;
@@ -573,7 +574,20 @@ fn main() {
             commands::execute_system_command,
             commands::cancel_generation,
             commands::save_frecency,
-            commands::load_frecency
+            commands::load_frecency,
+            commands::list_extensions,
+            commands::list_themes,
+            commands::list_command_packs,
+            commands::get_extension_config,
+            commands::save_extension_config,
+            commands::set_extension_enabled,
+            commands::load_theme_colors,
+            commands::install_extension_from_path,
+            commands::uninstall_extension,
+            commands::open_store_window,
+            commands::store_get_catalog,
+            commands::store_get_detail,
+            commands::store_install
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

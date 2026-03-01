@@ -1,0 +1,19 @@
+{
+  "id": "color-picker",
+  "name": "Color Picker",
+  "version": "1.0.0",
+  "type": "extension",
+  "description": "Detect and preview colors (hex, rgb, hsl, named) with format conversion",
+  "icon": "🎨",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": true },
+    "copy_format": { "type": "string", "default": "all" }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js"
+  }
+}

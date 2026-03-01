@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -17,19 +18,20 @@ pub struct Config {
     #[serde(default)]
     pub tool_permissions: ToolPermissionsConfig,
     #[serde(default)]
-    pub math: MathConfig,
-    #[serde(default)]
     pub first_run_completed: bool,
     #[serde(default)]
     pub updates: UpdateConfig,
     #[serde(default)]
     pub quick_actions: QuickActionsConfig,
+    /// Extension configs keyed by extension ID. Each extension owns its own JSON object.
     #[serde(default)]
-    pub color_picker: ColorPickerConfig,
+    pub extensions: HashMap<String, serde_json::Value>,
+    /// Enable/disable state for extensions, themes, and command packs keyed by ID.
     #[serde(default)]
-    pub dev_tools: DevToolsConfig,
+    pub extension_states: HashMap<String, bool>,
+    /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
-    pub timer: TimerConfig,
+    pub store_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,28 +65,7 @@ impl Default for ToolPermissionsConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MathConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default)]
-    pub precision: u8,
-    #[serde(default = "default_true")]
-    pub auto_copy: bool,
-    #[serde(default)]
-    pub thousands_separator: bool,
-}
 
-impl Default for MathConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            precision: 0,
-            auto_copy: true,
-            thousands_separator: false,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateConfig {
@@ -286,103 +267,11 @@ impl Default for QuickActionsConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColorPickerConfig {
-    /// Enable color detection and preview in the floating window
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// Default format to copy: "hex", "rgb", "hsl", or "all"
-    #[serde(default = "default_color_format")]
-    pub copy_format: String,
-}
 
-fn default_color_format() -> String {
-    "all".to_string()
-}
 
-impl Default for ColorPickerConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            copy_format: "all".to_string(),
-        }
-    }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DevToolsConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default = "default_true")]
-    pub uuid: bool,
-    #[serde(default = "default_true")]
-    pub base64: bool,
-    #[serde(default = "default_true")]
-    pub hash: bool,
-    #[serde(default = "default_true")]
-    pub epoch: bool,
-    #[serde(default = "default_true")]
-    pub json_format: bool,
-}
 
-impl Default for DevToolsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            uuid: true,
-            base64: true,
-            hash: true,
-            epoch: true,
-            json_format: true,
-        }
-    }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TimerConfig {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    /// Show system notification when timer completes
-    #[serde(default = "default_true")]
-    pub notify_on_complete: bool,
-    /// Play a sound when timer completes
-    #[serde(default = "default_true")]
-    pub sound_on_complete: bool,
-    /// Sound ID: "two-tone", "chime", "alert", "gentle", "bell", "success", or "custom"
-    #[serde(default = "default_sound_id")]
-    pub sound_id: String,
-    /// Path to custom sound file (used when sound_id is "custom")
-    #[serde(default)]
-    pub custom_sound_path: Option<String>,
-    /// How many times to repeat the sound (1-10)
-    #[serde(default = "default_sound_repeats")]
-    pub sound_repeats: u8,
-    /// Auto-show the floating window when timer completes
-    #[serde(default = "default_true")]
-    pub show_window_on_complete: bool,
-}
-
-fn default_sound_id() -> String {
-    "two-tone".to_string()
-}
-
-fn default_sound_repeats() -> u8 {
-    3
-}
-
-impl Default for TimerConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            notify_on_complete: true,
-            sound_on_complete: true,
-            sound_id: "two-tone".to_string(),
-            custom_sound_path: None,
-            sound_repeats: 3,
-            show_window_on_complete: true,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
@@ -451,13 +340,12 @@ impl Default for Config {
             shortcuts: vec![],
             debug_mode: false,
             tool_permissions: ToolPermissionsConfig::default(),
-            math: MathConfig::default(),
             first_run_completed: false,
             updates: UpdateConfig::default(),
             quick_actions: QuickActionsConfig::default(),
-            color_picker: ColorPickerConfig::default(),
-            dev_tools: DevToolsConfig::default(),
-            timer: TimerConfig::default(),
+            extensions: HashMap::new(),
+            extension_states: HashMap::new(),
+            store_url: None,
         }
     }
 }

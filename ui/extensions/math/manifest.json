@@ -1,0 +1,21 @@
+{
+  "id": "math",
+  "name": "Math Calculator",
+  "version": "1.0.0",
+  "type": "extension",
+  "description": "Inline math expression evaluator with unit conversions",
+  "icon": "🧮",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": true },
+    "precision": { "type": "number", "default": 0 },
+    "auto_copy": { "type": "boolean", "default": true },
+    "thousands_separator": { "type": "boolean", "default": false }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js"
+  }
+}

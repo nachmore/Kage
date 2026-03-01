@@ -24,9 +24,10 @@ class ShortcutsSettingsModule extends SettingsModule {
             </div>
 
             <div class="shortcuts-actions">
-                <button class="setting-button" onclick="shortcutsModule.showAddDialog()">Add Shortcut</button>
-                <button class="setting-button" onclick="shortcutsModule.exportShortcuts()">Export to JSON</button>
-                <button class="setting-button" onclick="shortcutsModule.importShortcuts()">Import from JSON</button>
+                <button class="setting-button" onclick="shortcutsModule.showAddDialog()">+ Add</button>
+                <button class="setting-button" onclick="if(window.__TAURI__?.core)window.__TAURI__.core.invoke('open_store_window',{tab:'commands'})">🛍️ Store</button>
+                <button class="setting-button" onclick="shortcutsModule.exportShortcuts()">Export</button>
+                <button class="setting-button" onclick="shortcutsModule.importShortcuts()">Import</button>
             </div>
 
             <div class="shortcuts-list" id="shortcutsList"></div>

@@ -12,7 +12,8 @@ import { parseColor, renderColorSuggestion } from './floating-color.js';
 import { matchDevTool, computeHash, renderDevToolSuggestion } from './floating-devtools.js';
 import { parseTimerCommand, startTimer, startStopwatch, pauseResumeSlot, stopSlot, addTimeToTimer, getSlotState, renderTimerSuggestion, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
 import { playTimerSound } from './timer-sounds.js';
-import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, invalidateConfigCache } from './floating-search-unified.js';
+import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, invalidateConfigCache, setExtensionManager } from './floating-search-unified.js';
+import { ExtensionManager } from './extension-manager.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -32,7 +33,7 @@ export class FloatingApp {
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
         this.attachmentManager = new AttachmentManager();
-        this.mathConfig = { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
+        this.extensionManager = new ExtensionManager(invoke);
         this.lastSelection = null;
         
         this.elements = {};
@@ -48,14 +49,15 @@ export class FloatingApp {
         
         await this.loadShortcuts();
         await loadSlashCommands(this.invoke);
-        await this.loadMathConfig();
+        await this.extensionManager.initialize();
+        setExtensionManager(this.extensionManager);
         await loadFrecency(this.invoke);
         
         // Listen for config updates
         this.listen('config_updated', async () => {
             console.log('Config updated, reloading shortcuts...');
             await this.loadShortcuts();
-            await this.loadMathConfig();
+            await this.extensionManager.onConfigUpdate();
             invalidateConfigCache();
         });
 
@@ -322,7 +324,7 @@ export class FloatingApp {
                         if (query) {
                             this.clearSuggestions();
                             // Re-trigger unified search
-                            const results = await unifiedSearch(query, this.invoke, this.shortcuts, this.mathConfig);
+                            const results = await unifiedSearch(query, this.invoke, this.shortcuts);
                             if (results.length > 0) {
                                 this.selectedIndex = renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
                             }
@@ -464,9 +466,10 @@ export class FloatingApp {
     }
 
     async loadMathConfig() {
+        // Math config now lives in extensions['math']
         try {
             const config = await this.invoke('get_config');
-            this.mathConfig = config.math || { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
+            this._mathConfig = (config.extensions && config.extensions['math']) || { enabled: true, precision: 0, auto_copy: true, thousands_separator: false };
         } catch (error) {
             console.error('Failed to load math config:', error);
         }
@@ -532,7 +535,8 @@ export class FloatingApp {
     }
 
     formatMathResult(display) {
-        if (this.mathConfig.thousands_separator) {
+        const mc = this._mathConfig || {};
+        if (mc.thousands_separator) {
             const parts = display.split('.');
             parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
             return parts.join('.');
@@ -541,8 +545,9 @@ export class FloatingApp {
     }
 
     tryEvaluateMath(query) {
-        if (!this.mathConfig.enabled) return null;
-        return evaluateMath(query, this.mathConfig.precision);
+        const mc = this._mathConfig || {};
+        if (!mc.enabled) return null;
+        return evaluateMath(query, mc.precision);
     }
 
     async checkForUpdateBanner() {
@@ -896,7 +901,7 @@ export class FloatingApp {
         
         // Debounced unified search — queries all sources in parallel
         this.searchTimeout = setTimeout(async () => {
-            const results = await unifiedSearch(query, this.invoke, this.shortcuts, this.mathConfig);
+            const results = await unifiedSearch(query, this.invoke, this.shortcuts);
             if (results.length > 0) {
                 this.selectedIndex = renderUnifiedResults(
                     results,
@@ -1115,7 +1120,7 @@ export class FloatingApp {
             this.elements.contentArea.classList.add('visible');
             this.windowManager.resizeWindow();
             
-            if (this.mathConfig.auto_copy) {
+            if ((this._mathConfig || {}).auto_copy) {
                 try { await navigator.clipboard.writeText(formatted); } catch {}
             }
             return;
@@ -1127,7 +1132,10 @@ export class FloatingApp {
             recordSelection(message, selected.id, this.invoke);
             // Copy based on config format
             let cpFormat = 'all';
-            try { cpFormat = (await this.invoke('get_config')).color_picker?.copy_format || 'all'; } catch {}
+            try {
+                const cfg = await this.invoke('get_config');
+                cpFormat = cfg.extensions?.['color-picker']?.copy_format || 'all';
+            } catch {}
             const { r, g, b } = selected.data;
             const hex = '#' + [r,g,b].map(c => c.toString(16).padStart(2,'0')).join('').toUpperCase();
             const rgb = `rgb(${r}, ${g}, ${b})`;

@@ -1,12 +1,9 @@
 /**
  * Unified search engine for the floating window.
  * Queries all sources in parallel, merges results with frecency scoring.
+ * Extension-provided search results come from the ExtensionManager.
  */
 
-import { parseColor } from './floating-color.js';
-import { evaluateMath } from './math-eval.js';
-import { matchDevTool, computeHash } from './floating-devtools.js';
-import { parseTimerCommand } from './floating-timer.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName } from './floating-commands.js';
 
 // --- Frecency store ---
@@ -101,6 +98,16 @@ export function invalidateConfigCache() {
     _configCacheTime = 0;
 }
 
+// --- Extension manager reference ---
+let _extensionManager = null;
+
+/**
+ * Set the extension manager instance (called once from floating-main.js after init).
+ */
+export function setExtensionManager(mgr) {
+    _extensionManager = mgr;
+}
+
 // --- Unified search ---
 
 /**
@@ -108,105 +115,21 @@ export function invalidateConfigCache() {
  * @param {string} query - trimmed user input
  * @param {function} invoke - Tauri invoke function
  * @param {object} shortcuts - loaded shortcuts array
- * @param {object} mathConfig - math config
  * @returns {Promise<Array>} sorted results, highest score first
  */
-export async function unifiedSearch(query, invoke, shortcuts, mathConfig) {
+export async function unifiedSearch(query, invoke, shortcuts) {
     if (!query) return [];
 
-    const config = await getConfig(invoke);
     const results = [];
 
-    // --- JS-side instant matchers (run synchronously) ---
+    // --- Extension search providers (replaces hardcoded color/math/devtools/timer) ---
+    if (_extensionManager) {
+        const extResults = _extensionManager.matchAll(query);
+        results.push(...extResults);
 
-    // Color
-    if (config.color_picker?.enabled !== false) {
-        const color = parseColor(query);
-        if (color) {
-            const { r, g, b } = color;
-            const hex = '#' + [r,g,b].map(c => c.toString(16).padStart(2,'0')).join('');
-            results.push({
-                id: 'color:' + hex,
-                type: 'color',
-                label: hex.toUpperCase(),
-                description: 'Color preview · Enter to copy',
-                icon: '🎨',
-                score: 95,
-                data: color,
-            });
-        }
-    }
-
-    // Math / unit conversion
-    if (mathConfig?.enabled !== false) {
-        const mathResult = evaluateMath(query, mathConfig?.precision || 0);
-        if (mathResult) {
-            let display = mathResult.display;
-            if (mathConfig?.thousands_separator) {
-                const parts = display.split('.');
-                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-                display = parts.join('.');
-            }
-            results.push({
-                id: 'math',
-                type: 'math',
-                label: '= ' + display,
-                description: 'Press Enter to copy result',
-                icon: '🧮',
-                score: 93,
-                data: { value: display, raw: mathResult.result },
-            });
-        }
-    }
-
-    // Dev tools
-    if (config.dev_tools?.enabled !== false) {
-        const dt = matchDevTool(query, config.dev_tools || {});
-        if (dt) {
-            if (dt.type === 'devtool_async') {
-                // Hash — compute async but still include
-                try {
-                    const hash = await computeHash(dt.algo, dt.text);
-                    if (hash) {
-                        results.push({
-                            id: 'devtool:' + dt.algo,
-                            type: 'devtool',
-                            label: hash,
-                            description: dt.label + ' · Enter to copy',
-                            icon: dt.icon,
-                            score: 92,
-                            data: { value: hash },
-                        });
-                    }
-                } catch {}
-            } else {
-                results.push({
-                    id: 'devtool:' + dt.label,
-                    type: 'devtool',
-                    label: dt.value,
-                    description: dt.label + ' · ' + dt.description,
-                    icon: dt.icon,
-                    score: 92,
-                    data: { value: dt.value },
-                });
-            }
-        }
-    }
-
-    // Timer / stopwatch
-    if (config.timer?.enabled !== false) {
-        const timerCmd = parseTimerCommand(query);
-        if (timerCmd) {
-            results.push({
-                id: 'timer:' + timerCmd.type,
-                type: 'timer_cmd',
-                label: timerCmd.type === 'hint' ? 'Timer' : timerCmd.type === 'timer' ? 'Start Timer' : 'Stopwatch',
-                description: timerCmd.type === 'hint' ? 'timer 5m · timer 1h30m · timer 90s' : 'Press Enter',
-                icon: '⏱️',
-                score: 91,
-                data: timerCmd,
-            });
-        }
+        // Async extension results (e.g. hashing)
+        const asyncResults = await _extensionManager.matchAllAsync(query);
+        results.push(...asyncResults);
     }
 
     // > commands

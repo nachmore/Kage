@@ -10,6 +10,9 @@ fn test_shortcut_config_serialization() {
         url: None,
         working_directory: Some("/home/user".to_string()),
         arguments: Some("{*}".to_string()),
+        prompt: None,
+        script: None,
+        script_action: None,
     };
 
     let json = serde_json::to_string(&shortcut).unwrap();
@@ -32,6 +35,9 @@ fn test_shortcut_config_optional_fields() {
         url: None,
         working_directory: None,
         arguments: None,
+        prompt: None,
+        script: None,
+        script_action: None,
     };
 
     let json = serde_json::to_string(&shortcut).unwrap();
@@ -54,6 +60,9 @@ fn test_config_with_shortcuts() {
         url: None,
         working_directory: None,
         arguments: Some("{*}".to_string()),
+        prompt: None,
+        script: None,
+        script_action: None,
     });
 
     let json = serde_json::to_string_pretty(&config).unwrap();

@@ -5,6 +5,7 @@ pub mod acp_client;
 pub mod app_launcher;
 pub mod auto_steering;
 pub mod commands;
+pub mod extensions;
 pub mod logger;
 pub mod os;
 pub mod process_manager;

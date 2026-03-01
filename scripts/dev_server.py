@@ -77,11 +77,73 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def do_GET(self):
+        """Handle GET requests — serve files or mock store API."""
+        if self.path.startswith("/store/"):
+            return self._handle_store_api()
+        return super().do_GET()
+
+    def _handle_store_api(self):
+        """Mock store API for development."""
+        import json as _json
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        query = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/store/catalog":
+            kind = query.get("type", [None])[0]
+            search = query.get("search", [None])[0]
+            items = MOCK_CATALOG
+            if kind:
+                items = [i for i in items if i["type"] == kind]
+            if search:
+                s = search.lower()
+                items = [i for i in items if s in i["name"].lower() or s in i.get("description", "").lower() or any(s in t for t in i.get("tags", []))]
+            body = _json.dumps({"items": items, "total": len(items), "page": 1, "pageSize": 20})
+            self._json_response(200, body)
+            return
+
+        if path.startswith("/store/catalog/"):
+            item_id = path.split("/")[-1]
+            if item_id == "download":
+                item_id = path.split("/")[-2]
+            item = next((i for i in MOCK_CATALOG if i["id"] == item_id), None)
+            if not item:
+                self._json_response(404, '{"error":"not found"}')
+                return
+            body = _json.dumps({**item, "readme": f"# {item['name']}\n\n{item.get('description','')}", "manifest": None, "size": 1024, "updatedAt": "2026-02-15T10:00:00Z"})
+            self._json_response(200, body)
+            return
+
+        self._json_response(404, '{"error":"not found"}')
+
+    def _json_response(self, code, body):
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body.encode())
+
     def log_message(self, format, *args):
         # Only log non-200 responses to reduce noise
         if len(args) >= 2 and str(args[1]) == "200":
             return
         super().log_message(format, *args)
+
+
+# Mock store catalog data
+MOCK_CATALOG = [
+    {"id": "solarized-theme", "name": "Solarized", "type": "theme", "version": "1.0.0", "author": "community", "description": "Precision colors for machines and people", "icon": "🌅", "downloads": 2340, "rating": 4.7, "tags": ["dark", "light", "classic"]},
+    {"id": "dracula-theme", "name": "Dracula", "type": "theme", "version": "1.0.0", "author": "community", "description": "A dark theme for code editors", "icon": "🧛", "downloads": 5120, "rating": 4.8, "tags": ["dark", "popular"]},
+    {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "community", "description": "Arctic, north-bluish color palette", "icon": "❄️", "downloads": 1890, "rating": 4.6, "tags": ["dark", "blue", "minimal"]},
+    {"id": "web-dev-shortcuts", "name": "Web Dev Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Handy shortcuts for web developers — localhost, MDN, npm, caniuse", "icon": "🌐", "downloads": 890, "rating": 4.5, "tags": ["web", "developer", "shortcuts"]},
+    {"id": "git-shortcuts", "name": "Git Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Quick commands for common git operations", "icon": "🔀", "downloads": 1200, "rating": 4.4, "tags": ["git", "developer", "shortcuts"]},
+    {"id": "unit-converter", "name": "Unit Converter", "type": "extension", "version": "1.0.0", "author": "community", "description": "Convert between units — temperature, weight, distance, and more", "icon": "📏", "downloads": 670, "rating": 4.3, "tags": ["utility", "conversion"]},
+    {"id": "password-gen", "name": "Password Generator", "type": "extension", "version": "1.0.0", "author": "community", "description": "Generate secure passwords and passphrases", "icon": "🔐", "downloads": 1450, "rating": 4.6, "tags": ["security", "utility"]},
+]
 
 
 http.server.HTTPServer.allow_reuse_address = True
