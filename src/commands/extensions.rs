@@ -202,6 +202,22 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
 // Store API proxy (fetches from configured or default store URL)
 // ---------------------------------------------------------------------------
 
+/// Dev server URL used as default store in dev mode.
+const DEV_STORE_URL: &str = "http://localhost:1420";
+
+/// Resolve the store base URL: user-configured > dev default (in dev mode) > empty.
+fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
+    if let Some(ref url) = config.store_url {
+        if !url.is_empty() {
+            return url.clone();
+        }
+    }
+    if dev_mode {
+        return DEV_STORE_URL.to_string();
+    }
+    String::new()
+}
+
 #[tauri::command]
 pub async fn store_get_catalog(
     kind: Option<String>,
@@ -210,7 +226,7 @@ pub async fn store_get_catalog(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     let config = state.config.lock().await;
-    let base_url = config.store_url.clone().unwrap_or_default();
+    let base_url = resolve_store_url(&config, state.dev_mode);
     drop(config);
 
     if base_url.is_empty() {
@@ -247,7 +263,7 @@ pub async fn store_get_detail(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     let config = state.config.lock().await;
-    let base_url = config.store_url.clone().unwrap_or_default();
+    let base_url = resolve_store_url(&config, state.dev_mode);
     drop(config);
 
     if base_url.is_empty() {
@@ -272,7 +288,7 @@ pub async fn store_install(
     app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, String> {
     let config = state.config.lock().await;
-    let base_url = config.store_url.clone().unwrap_or_default();
+    let base_url = resolve_store_url(&config, state.dev_mode);
     drop(config);
 
     if base_url.is_empty() {

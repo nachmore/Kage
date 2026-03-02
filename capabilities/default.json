@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main windows",
-  "windows": ["main", "floating", "settings", "context-menu", "welcome"],
+  "windows": ["main", "floating", "settings", "context-menu", "welcome", "store"],
   "permissions": [
     "core:default",
     "core:window:default",

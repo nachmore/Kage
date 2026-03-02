@@ -1,0 +1,19 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "type": "extension",
+  "description": "A sample extension that responds to 'test' with 'Hello World'. Use this as a template for building your own extensions.",
+  "icon": "👋",
+  "author": "kiro-assistant",
+
+  "config": {
+    "greeting": { "type": "string", "default": "Hello World" },
+    "show_timestamp": { "type": "boolean", "default": false }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js"
+  }
+}

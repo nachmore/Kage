@@ -276,14 +276,6 @@
             if (urlInput && config.store_url) urlInput.value = config.store_url;
         } catch {}
 
-        // Listen for tab navigation events from other windows
-        window.__TAURI__.event.listen('store_navigate_tab', (event) => {
-            const tab = event.payload;
-            if (tab && typeof switchTab === 'function') {
-                switchTab(tab);
-            }
-        });
-
         // Read initial tab from URL query param (set by open_store_window)
         const urlParams = new URLSearchParams(window.location.search);
         const initialTab = urlParams.get('tab');

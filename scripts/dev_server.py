@@ -106,9 +106,13 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path.startswith("/store/catalog/"):
-            item_id = path.split("/")[-1]
-            if item_id == "download":
-                item_id = path.split("/")[-2]
+            parts = path.rstrip("/").split("/")
+            # /store/catalog/<id>/download
+            if len(parts) >= 5 and parts[-1] == "download":
+                item_id = parts[-2]
+                return self._handle_download(item_id)
+            # /store/catalog/<id>
+            item_id = parts[-1]
             item = next((i for i in MOCK_CATALOG if i["id"] == item_id), None)
             if not item:
                 self._json_response(404, '{"error":"not found"}')
@@ -118,6 +122,25 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         self._json_response(404, '{"error":"not found"}')
+
+    def _handle_download(self, item_id):
+        """Serve a .zip package for the given item ID."""
+        zip_path = os.path.join(ui_dir, "store-packages", f"{item_id}.zip")
+        if not os.path.isfile(zip_path):
+            self._json_response(404, '{"error":"package not found"}')
+            return
+        try:
+            with open(zip_path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", f'attachment; filename="{item_id}.zip"')
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+        except Exception as e:
+            self._json_response(500, f'{{"error":"{e}"}}')
 
     def _json_response(self, code, body):
         self.send_response(code)
@@ -136,6 +159,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
 # Mock store catalog data
 MOCK_CATALOG = [
+    {"id": "hello-world", "name": "Hello World", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Sample extension — type 'test' or 'hello' to see a greeting. Great starting template.", "icon": "👋", "downloads": 42, "rating": 5.0, "tags": ["sample", "template", "starter"]},
     {"id": "solarized-theme", "name": "Solarized", "type": "theme", "version": "1.0.0", "author": "community", "description": "Precision colors for machines and people", "icon": "🌅", "downloads": 2340, "rating": 4.7, "tags": ["dark", "light", "classic"]},
     {"id": "dracula-theme", "name": "Dracula", "type": "theme", "version": "1.0.0", "author": "community", "description": "A dark theme for code editors", "icon": "🧛", "downloads": 5120, "rating": 4.8, "tags": ["dark", "popular"]},
     {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "community", "description": "Arctic, north-bluish color palette", "icon": "❄️", "downloads": 1890, "rating": 4.6, "tags": ["dark", "blue", "minimal"]},
