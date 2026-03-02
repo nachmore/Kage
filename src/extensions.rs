@@ -320,6 +320,113 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Zip extraction (for store installs)
+// ---------------------------------------------------------------------------
+
+/// Extract a .zip archive to a target directory with Zip Slip protection.
+/// Returns the path to the extracted directory.
+pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
+    use std::io;
+
+    let file = fs::File::open(zip_path)
+        .context("Failed to open zip file")?;
+    let mut archive = zip::ZipArchive::new(file)
+        .context("Failed to read zip archive")?;
+
+    let canonical_target = target_dir.canonicalize()
+        .unwrap_or_else(|_| target_dir.clone());
+
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)
+            .context("Failed to read zip entry")?;
+
+        let entry_path = entry.enclosed_name()
+            .context("Zip entry has invalid path (possible Zip Slip attack)")?
+            .to_owned();
+
+        let out_path = target_dir.join(&entry_path);
+
+        // Zip Slip protection: ensure the resolved path is within the target directory
+        let canonical_out = if out_path.exists() {
+            out_path.canonicalize()?
+        } else {
+            // For new files, canonicalize the parent and append the filename
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent)?;
+                parent.canonicalize()?.join(out_path.file_name().unwrap_or_default())
+            } else {
+                out_path.clone()
+            }
+        };
+
+        if !canonical_out.starts_with(&canonical_target) {
+            anyhow::bail!(
+                "Zip Slip detected: entry '{}' would extract outside target directory",
+                entry_path.display()
+            );
+        }
+
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path)?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut outfile = fs::File::create(&out_path)
+                .with_context(|| format!("Failed to create file: {}", out_path.display()))?;
+            io::copy(&mut entry, &mut outfile)
+                .with_context(|| format!("Failed to write file: {}", out_path.display()))?;
+        }
+    }
+
+    info!("Extracted zip to {:?} ({} entries)", target_dir, archive.len());
+    Ok(())
+}
+
+/// Install an extension from a .zip file downloaded from the store.
+/// Extracts to a temp directory, reads the manifest, then installs to the correct location.
+pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
+    // Extract to a temp directory
+    let temp_dir = std::env::temp_dir().join(format!(
+        "kiro-ext-{}",
+        uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("tmp")
+    ));
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir)?;
+    }
+    fs::create_dir_all(&temp_dir)?;
+
+    extract_zip(zip_path, &temp_dir)?;
+
+    // The zip might contain files directly or inside a single subdirectory.
+    // Find the manifest.json — check root first, then one level deep.
+    let manifest_dir = if temp_dir.join("manifest.json").exists() {
+        temp_dir.clone()
+    } else {
+        // Check for a single subdirectory containing manifest.json
+        let mut found = None;
+        if let Ok(entries) = fs::read_dir(&temp_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && path.join("manifest.json").exists() {
+                    found = Some(path);
+                    break;
+                }
+            }
+        }
+        found.context("No manifest.json found in zip archive (checked root and one level deep)")?
+    };
+
+    // Install from the extracted directory
+    let result = install_from_directory(&manifest_dir);
+
+    // Cleanup temp directory
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    result
+}
+
+// ---------------------------------------------------------------------------
 // Theme color loading
 // ---------------------------------------------------------------------------
 

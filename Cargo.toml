@@ -36,6 +36,7 @@ whoami = "1.5"
 base64 = "0.22"
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 urlencoding = "2.1"
+zip = { version = "8.1", default-features = false, features = ["deflate"] }
 semver = "1.0"
 tauri-plugin-notification = "2.3.3"
 

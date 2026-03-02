@@ -108,8 +108,16 @@ pub async fn install_extension_from_path(
     app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, String> {
     let source = std::path::PathBuf::from(&source_path);
-    let item = extensions::install_from_directory(&source)
-        .map_err(|e| format!("Installation failed: {}", e))?;
+
+    let item = if source.extension().map(|e| e == "zip").unwrap_or(false) {
+        // Install from zip file
+        extensions::install_from_zip(&source)
+            .map_err(|e| format!("Installation failed: {}", e))?
+    } else {
+        // Install from directory
+        extensions::install_from_directory(&source)
+            .map_err(|e| format!("Installation failed: {}", e))?
+    };
 
     // Auto-enable
     let mut config = state.config.lock().await;
@@ -273,34 +281,37 @@ pub async fn store_install(
 
     let url = format!("{}/store/catalog/{}/download", base_url, id);
 
-    // Download to a temp directory
-    let temp_dir = std::env::temp_dir().join(format!("kiro-install-{}", id));
-    if temp_dir.exists() {
-        let _ = std::fs::remove_dir_all(&temp_dir);
-    }
-    std::fs::create_dir_all(&temp_dir)
-        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+    // Download the zip to a temp file
+    let zip_path = std::env::temp_dir().join(format!("kiro-download-{}.zip", id));
 
     let resp = reqwest::get(&url)
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
+
+    // Verify content type or at least that we got bytes
     let bytes = resp
         .bytes()
         .await
         .map_err(|e| format!("Failed to read download: {}", e))?;
 
-    // For now, expect the download to be a JSON manifest (simple case).
-    // In production this would be a zip/tarball.
-    // Write the bytes as manifest.json for simple single-file extensions.
-    let manifest_path = temp_dir.join("manifest.json");
-    std::fs::write(&manifest_path, &bytes)
-        .map_err(|e| format!("Failed to write manifest: {}", e))?;
+    if bytes.len() < 4 {
+        return Err("Downloaded file is too small to be a valid zip".to_string());
+    }
 
-    let item = extensions::install_from_directory(&temp_dir)
+    // Verify zip magic bytes (PK\x03\x04)
+    if &bytes[0..4] != b"PK\x03\x04" {
+        return Err("Downloaded file is not a valid zip archive".to_string());
+    }
+
+    std::fs::write(&zip_path, &bytes)
+        .map_err(|e| format!("Failed to save download: {}", e))?;
+
+    // Extract and install
+    let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| format!("Installation failed: {}", e))?;
 
-    // Cleanup temp
-    let _ = std::fs::remove_dir_all(&temp_dir);
+    // Cleanup the downloaded zip
+    let _ = std::fs::remove_file(&zip_path);
 
     // Auto-enable
     let mut config = state.config.lock().await;
