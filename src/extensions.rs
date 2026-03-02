@@ -162,13 +162,13 @@ pub struct StoreCatalogDetail {
 // ---------------------------------------------------------------------------
 
 /// Get a user directory under `<config_dir>/kiro-assistant/<subdir>/`
-fn user_item_dir(subdir: &str) -> Result<PathBuf> {
+pub fn user_item_dir(subdir: &str) -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Failed to get config directory")?;
     Ok(config_dir.join("kiro-assistant").join(subdir))
 }
 
 /// Map an item kind ("extension", "theme", "commands") to its user directory name.
-fn kind_to_subdir(kind: &str) -> Result<&'static str> {
+pub fn kind_to_subdir(kind: &str) -> Result<&'static str> {
     match kind {
         "extension" => Ok("extensions"),
         "theme" => Ok("themes"),

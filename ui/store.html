@@ -255,6 +255,7 @@
     let installedExtensions = [];
     let installedThemes = [];
     let installedPacks = [];
+    let _bundledManifests = [];
 
     function waitForTauri(cb) {
         if (window.__TAURI__?.core) cb();
@@ -263,6 +264,20 @@
 
     waitForTauri(async () => {
         const invoke = window.__TAURI__.core.invoke;
+
+        // Load bundled extension manifests
+        try {
+            const bundledResp = await fetch('extensions/bundled.json');
+            if (bundledResp.ok) {
+                const bundledList = await bundledResp.json();
+                for (const entry of bundledList) {
+                    try {
+                        const mResp = await fetch(`extensions/${entry.id}/manifest.json`);
+                        if (mResp.ok) _bundledManifests.push(await mResp.json());
+                    } catch {}
+                }
+            }
+        } catch {}
 
         // Apply theme
         try {
@@ -319,16 +334,8 @@
             ...installedPacks.map(i => ({ ...i, _kind: 'commands' })),
         ];
 
-        // Also show bundled extensions that are loaded from ui/extensions/
-        const bundledIds = ['dev-tools', 'math', 'color-picker', 'timer'];
-        const bundledManifests = [
-            { id: 'dev-tools', name: 'Developer Tools', icon: '🔧', description: 'UUID, base64, hashing, epoch, JSON formatting', version: '1.0.0', author: 'built-in' },
-            { id: 'math', name: 'Math Calculator', icon: '🧮', description: 'Inline math expressions and unit conversions', version: '1.0.0', author: 'built-in' },
-            { id: 'color-picker', name: 'Color Picker', icon: '🎨', description: 'Color detection, preview, and format conversion', version: '1.0.0', author: 'built-in' },
-            { id: 'timer', name: 'Timer & Stopwatch', icon: '⏱️', description: 'Countdown timer and stopwatch', version: '1.0.0', author: 'built-in' },
-        ];
-        // Add bundled ones that aren't already in the list
-        for (const bm of bundledManifests) {
+        // Also show bundled extensions (loaded from bundled.json at init)
+        for (const bm of _bundledManifests) {
             if (!all.find(a => a.manifest?.id === bm.id)) {
                 all.push({ manifest: bm, bundled: true, enabled: true, _kind: 'extension' });
             }

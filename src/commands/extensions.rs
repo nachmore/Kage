@@ -98,6 +98,46 @@ pub async fn load_theme_colors(
 }
 
 // ---------------------------------------------------------------------------
+// Read extension file content (for loading user-installed extension JS/CSS)
+// ---------------------------------------------------------------------------
+
+/// Read a file from a user-installed extension's directory.
+/// Returns the file content as a string. Used by the frontend to dynamically
+/// load search providers and settings modules from user-installed extensions.
+#[tauri::command]
+pub async fn read_extension_file(
+    extension_id: String,
+    kind: String,
+    file_path: String,
+) -> Result<String, String> {
+    // Validate file_path to prevent directory traversal
+    if file_path.contains("..") || file_path.contains('\\') || file_path.starts_with('/') {
+        return Err("Invalid file path".to_string());
+    }
+
+    let subdir = extensions::kind_to_subdir(&kind)
+        .map_err(|e| format!("Invalid kind: {}", e))?;
+    let base = extensions::user_item_dir(subdir)
+        .map_err(|e| format!("Failed to get directory: {}", e))?;
+    let full_path = base.join(&extension_id).join(&file_path);
+
+    // Verify the resolved path is within the extension directory
+    let canonical_base = base.join(&extension_id);
+    if full_path.exists() {
+        let canonical = full_path.canonicalize()
+            .map_err(|e| format!("Path error: {}", e))?;
+        let canonical_parent = canonical_base.canonicalize()
+            .map_err(|e| format!("Path error: {}", e))?;
+        if !canonical.starts_with(&canonical_parent) {
+            return Err("Path traversal detected".to_string());
+        }
+    }
+
+    std::fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+// ---------------------------------------------------------------------------
 // Install / Uninstall
 // ---------------------------------------------------------------------------
 

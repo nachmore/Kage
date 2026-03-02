@@ -77,7 +77,7 @@
                     <span>Agent Tools</span>
                 </div>
             </div>
-            <div class="sidebar-section">
+            <div class="sidebar-section" id="extensionsSidebarSection">
                 <div class="sidebar-section-title">Extensions</div>
                 <div class="sidebar-item" data-section="integration" onclick="switchSection('integration')">
                     <span class="sidebar-item-icon" id="integrationSidebarIcon">🔗</span>
@@ -87,23 +87,8 @@
                     <span class="sidebar-item-icon">⚡</span>
                     <span>Quick Commands</span>
                 </div>
-                <div class="sidebar-item" data-section="math" onclick="switchSection('math')">
-                    <span class="sidebar-item-icon">🧮</span>
-                    <span>Math</span>
-                </div>
-                <div class="sidebar-item" data-section="colorpicker" onclick="switchSection('colorpicker')">
-                    <span class="sidebar-item-icon">🎨</span>
-                    <span>Color Picker</span>
-                </div>
-                <div class="sidebar-item" data-section="devtools" onclick="switchSection('devtools')">
-                    <span class="sidebar-item-icon">🛠️</span>
-                    <span>Developer Tools</span>
-                </div>
-                <div class="sidebar-item" data-section="timer" onclick="switchSection('timer')">
-                    <span class="sidebar-item-icon">⏱️</span>
-                    <span>Timer</span>
-                </div>
-                <div class="sidebar-item" onclick="openStore()" style="opacity:0.8;">
+                <!-- Extension sidebar items are added dynamically by manager.js -->
+                <div class="sidebar-item" data-sidebar-store onclick="openStore()" style="opacity:0.8;">
                     <span class="sidebar-item-icon">🛍️</span>
                     <span>Browse Store...</span>
                 </div>

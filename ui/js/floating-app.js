@@ -1154,6 +1154,33 @@ export class FloatingApp {
             return;
         }
 
+        // Handle extension results generically (for any type not handled above)
+        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.extensionManager) {
+            const selected = this.currentMatches[this.selectedIndex];
+            const action = this.extensionManager.executeResult(selected);
+            if (action) {
+                recordSelection(message, selected.id, this.invoke);
+                if (action.type === 'copy' && action.value) {
+                    try { await navigator.clipboard.writeText(action.value); } catch {}
+                } else if (action.type === 'open_url' && action.value) {
+                    try { await this.invoke('open_url', { url: action.value }); } catch {}
+                } else if (action.type === 'open_path' && action.value) {
+                    try { await this.invoke('open_path', { path: action.value }); } catch {}
+                } else if (action.type === 'send_prompt' && action.value) {
+                    this.elements.input.value = action.value;
+                    // Fall through to send as prompt
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                    this.clearSuggestions();
+                    return;
+                }
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+                return;
+            }
+        }
+
         // Handle > commands
         if (message.startsWith('>')) {
             const cmdName = message.substring(1).trim();

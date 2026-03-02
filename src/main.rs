@@ -587,7 +587,8 @@ fn main() {
             commands::open_store_window,
             commands::store_get_catalog,
             commands::store_get_detail,
-            commands::store_install
+            commands::store_install,
+            commands::read_extension_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

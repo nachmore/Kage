@@ -1,0 +1,6 @@
+[
+  { "id": "dev-tools", "className": "DevToolsExtSettingsModule", "sidebarIcon": "🛠️", "sidebarLabel": "Developer Tools" },
+  { "id": "math", "className": "MathExtSettingsModule", "sidebarIcon": "🧮", "sidebarLabel": "Math" },
+  { "id": "color-picker", "className": "ColorPickerExtSettingsModule", "sidebarIcon": "🎨", "sidebarLabel": "Color Picker" },
+  { "id": "timer", "className": "TimerExtSettingsModule", "sidebarIcon": "⏱️", "sidebarLabel": "Timer" }
+]

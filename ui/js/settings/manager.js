@@ -189,31 +189,49 @@ class SettingsManager {
 // Global instance
 let settingsManager;
 
-// Extension metadata for dynamic loading
-const BUNDLED_EXTENSIONS = [
-    { id: 'math', scriptPath: 'extensions/math/settings.js', className: 'MathExtSettingsModule', sidebarIcon: '🧮', sidebarLabel: 'Math' },
-    { id: 'color-picker', scriptPath: 'extensions/color-picker/settings.js', className: 'ColorPickerExtSettingsModule', sidebarIcon: '🎨', sidebarLabel: 'Color Picker' },
-    { id: 'dev-tools', scriptPath: 'extensions/dev-tools/settings.js', className: 'DevToolsExtSettingsModule', sidebarIcon: '🛠️', sidebarLabel: 'Developer Tools' },
-    { id: 'timer', scriptPath: 'extensions/timer/settings.js', className: 'TimerExtSettingsModule', sidebarIcon: '⏱️', sidebarLabel: 'Timer' },
-];
-
 /**
- * Dynamically load a script and return a promise that resolves when loaded.
+ * Dynamically load a script tag and wait for execution.
  */
 function loadScript(src) {
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = src;
-        script.onload = () => {
-            // Small delay to ensure the script has been parsed and executed
-            setTimeout(resolve, 0);
-        };
-        script.onerror = (e) => {
-            console.error('Failed to load script:', src, e);
-            reject(e);
-        };
+        script.onload = () => setTimeout(resolve, 0);
+        script.onerror = (e) => { console.error('Failed to load script:', src, e); reject(e); };
         document.head.appendChild(script);
     });
+}
+
+/**
+ * Load a script from a string (for user-installed extensions).
+ */
+function loadScriptFromString(code) {
+    return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.textContent = code;
+        document.head.appendChild(script);
+        setTimeout(resolve, 0);
+    });
+}
+
+/**
+ * Add a sidebar item dynamically to the Extensions section.
+ */
+function addExtensionSidebarItem(id, icon, label) {
+    const section = document.getElementById('extensionsSidebarSection');
+    if (!section) return;
+    // Insert before the "Browse Store" item (last child)
+    const storeItem = section.querySelector('[data-sidebar-store]');
+    const item = document.createElement('div');
+    item.className = 'sidebar-item';
+    item.dataset.section = id;
+    item.onclick = () => switchSection(id);
+    item.innerHTML = `<span class="sidebar-item-icon">${icon}</span><span>${label}</span>`;
+    if (storeItem) {
+        section.insertBefore(item, storeItem);
+    } else {
+        section.appendChild(item);
+    }
 }
 
 /**
@@ -221,34 +239,91 @@ function loadScript(src) {
  */
 window.addEventListener('DOMContentLoaded', async () => {
     settingsManager = new SettingsManager();
+    const invoke = window.__TAURI__.core.invoke;
     
     // Register core modules (order matches sidebar)
-    // User Experience
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new HotkeySettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
-    // Kiro Assistant
     settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
-    // Core extensions (non-pluggable)
     settingsManager.registerModule(new IntegrationSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());
 
-    // Dynamically load and register extension settings modules
-    for (const ext of BUNDLED_EXTENSIONS) {
-        try {
-            await loadScript(ext.scriptPath);
-            const ModuleClass = window[ext.className];
-            if (ModuleClass) {
-                const mod = new ModuleClass();
-                mod._extensionId = ext.id; // tag it so the framework can inject the enable toggle
-                settingsManager.registerModule(mod);
+    // 1. Load bundled extension settings from bundled.json
+    try {
+        const resp = await fetch('extensions/bundled.json');
+        if (resp.ok) {
+            const bundledList = await resp.json();
+            for (const ext of bundledList) {
+                try {
+                    await loadScript(`extensions/${ext.id}/settings.js`);
+                    const ModuleClass = window[ext.className];
+                    if (ModuleClass) {
+                        const mod = new ModuleClass();
+                        mod._extensionId = ext.id;
+                        settingsManager.registerModule(mod);
+                        addExtensionSidebarItem(mod.id, ext.sidebarIcon || mod.icon, ext.sidebarLabel || mod.title);
+                    }
+                } catch (e) {
+                    console.warn(`Failed to load bundled extension settings '${ext.id}':`, e);
+                }
             }
-        } catch (e) {
-            console.warn(`Failed to load extension settings for '${ext.id}':`, e);
         }
+    } catch (e) {
+        console.warn('Failed to load bundled.json:', e);
+    }
+
+    // 2. Load user-installed extension settings from backend
+    try {
+        const userExts = await invoke('list_extensions');
+        // Get set of bundled IDs to avoid duplicates
+        const bundledIds = new Set();
+        try {
+            const resp = await fetch('extensions/bundled.json');
+            if (resp.ok) {
+                const list = await resp.json();
+                list.forEach(e => bundledIds.add(e.id));
+            }
+        } catch {}
+
+        for (const item of userExts) {
+            if (bundledIds.has(item.manifest.id)) continue; // already loaded as bundled
+            const manifest = item.manifest;
+            if (!manifest.contributes?.settingsModule) continue;
+
+            try {
+                const settingsPath = manifest.contributes.settingsModule.replace('./', '');
+                const code = await invoke('read_extension_file', {
+                    extensionId: manifest.id,
+                    kind: 'extension',
+                    filePath: settingsPath,
+                });
+                await loadScriptFromString(code);
+
+                // The settings class should register itself on window with a predictable name
+                // Convention: <PascalCaseId>ExtSettingsModule
+                const className = manifest.id
+                    .split('-')
+                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join('') + 'ExtSettingsModule';
+                const ModuleClass = window[className];
+                if (ModuleClass) {
+                    const mod = new ModuleClass();
+                    mod._extensionId = manifest.id;
+                    settingsManager.registerModule(mod);
+                    addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
+                } else {
+                    console.warn(`User extension '${manifest.id}' settings loaded but class '${className}' not found on window`);
+                }
+            } catch (e) {
+                console.warn(`Failed to load user extension settings '${manifest.id}':`, e);
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to load user extensions for settings:', e);
     }
 
     // About
