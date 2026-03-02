@@ -140,7 +140,11 @@ export class ExtensionManager {
             if (!ext.searchProvider) continue;
             if (!this._isEnabled(id)) continue;
             try {
-                results.push(...ext.searchProvider.match(query));
+                const matches = ext.searchProvider.match(query);
+                for (const m of matches) {
+                    m._extensionId = id; // stamp with owning extension
+                    results.push(m);
+                }
             } catch (e) {
                 console.warn(`Search error in '${id}':`, e);
             }
@@ -156,7 +160,12 @@ export class ExtensionManager {
             if (!this._isEnabled(id)) continue;
             promises.push(
                 ext.searchProvider.matchAsync(query)
-                    .then(m => results.push(...m))
+                    .then(matches => {
+                        for (const m of matches) {
+                            m._extensionId = id;
+                            results.push(m);
+                        }
+                    })
                     .catch(e => console.warn(`Async search error in '${id}':`, e))
             );
         }
@@ -165,23 +174,23 @@ export class ExtensionManager {
     }
 
     executeResult(result) {
-        for (const [, ext] of this.extensions) {
-            if (!ext.searchProvider) continue;
-            try {
-                const action = ext.searchProvider.execute(result);
-                if (action) return action;
-            } catch { /* not this extension */ }
+        const id = result._extensionId;
+        if (id) {
+            const ext = this.extensions.get(id);
+            if (ext?.searchProvider) {
+                try { return ext.searchProvider.execute(result); } catch {}
+            }
         }
         return null;
     }
 
     renderResult(result, element) {
-        for (const [, ext] of this.extensions) {
-            if (!ext.searchProvider?.renderResult) continue;
-            try {
-                ext.searchProvider.renderResult(result, element);
-                return true;
-            } catch { /* not this extension */ }
+        const id = result._extensionId;
+        if (id) {
+            const ext = this.extensions.get(id);
+            if (ext?.searchProvider?.renderResult) {
+                try { ext.searchProvider.renderResult(result, element); return true; } catch {}
+            }
         }
         return false;
     }
