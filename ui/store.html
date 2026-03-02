@@ -253,6 +253,7 @@
                 <div class="store-url-input">
                     <input type="text" id="storeUrlInput" placeholder="https://your-store.example.com">
                     <button onclick="saveStoreUrl()">Save</button>
+                    <span id="storeUrlStatus" style="font-size:11px;color:var(--kiro-text-muted);align-self:center;"></span>
                 </div>
             </details>
         </div>
@@ -443,13 +444,19 @@
     async function saveStoreUrl() {
         const invoke = window.__TAURI__.core.invoke;
         const url = document.getElementById('storeUrlInput')?.value?.trim() || '';
+        const status = document.getElementById('storeUrlStatus');
         try {
-            const config = await invoke('get_config');
-            config.store_url = url || null;
-            await invoke('save_config', { config });
-            alert('Store URL saved.');
+            await invoke('save_store_url', { url: url || null });
+            if (status) {
+                status.textContent = url ? '✓ Saved' : '✓ Reset to default';
+                status.style.color = 'var(--kiro-accent)';
+                setTimeout(() => { status.textContent = ''; }, 3000);
+            }
         } catch (e) {
-            alert('Failed to save: ' + e);
+            if (status) {
+                status.textContent = '✗ ' + e;
+                status.style.color = '#e55';
+            }
         }
     }
 

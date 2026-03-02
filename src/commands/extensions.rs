@@ -241,6 +241,22 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
 }
 
 // ---------------------------------------------------------------------------
+// Store URL config
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn save_store_url(
+    url: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut config = state.config.lock().await;
+    config.store_url = url.filter(|s| !s.is_empty());
+    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    info!("Store URL updated");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Store API proxy (fetches from configured or default store URL)
 // ---------------------------------------------------------------------------
 
