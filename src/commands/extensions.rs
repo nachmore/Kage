@@ -263,6 +263,9 @@ pub async fn save_store_url(
 /// Dev server URL used as default store in dev mode.
 const DEV_STORE_URL: &str = "http://localhost:1420";
 
+/// Request timeout for store API calls.
+const STORE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Resolve the store base URL: user-configured > dev default (in dev mode) > empty.
 fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
     if let Some(ref url) = config.store_url {
@@ -274,6 +277,25 @@ fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
         return DEV_STORE_URL.to_string();
     }
     String::new()
+}
+
+/// Validate a store URL: must be https, or http only for localhost (dev).
+fn validate_store_url(url: &str) -> Result<(), String> {
+    if url.starts_with("https://") {
+        return Ok(());
+    }
+    if url.starts_with("http://localhost") || url.starts_with("http://127.0.0.1") {
+        return Ok(());
+    }
+    Err(format!("Store URL must use HTTPS (got: {}). HTTP is only allowed for localhost.", url))
+}
+
+/// Build a reqwest client with timeout.
+fn store_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(STORE_REQUEST_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))
 }
 
 #[tauri::command]
@@ -297,6 +319,8 @@ pub async fn store_get_catalog(
         }));
     }
 
+    validate_store_url(&base_url)?;
+
     let mut url = format!("{}/store/catalog?page={}", base_url, page.unwrap_or(1));
     if let Some(ref k) = kind {
         url.push_str(&format!("&type={}", k));
@@ -305,7 +329,9 @@ pub async fn store_get_catalog(
         url.push_str(&format!("&search={}", urlencoding::encode(s)));
     }
 
-    let resp = reqwest::get(&url)
+    let client = store_client()?;
+    let resp = client.get(&url)
+        .send()
         .await
         .map_err(|e| format!("Store request failed: {}", e))?;
     let body = resp
@@ -328,8 +354,12 @@ pub async fn store_get_detail(
         return Err("No store URL configured".to_string());
     }
 
+    validate_store_url(&base_url)?;
+
     let url = format!("{}/store/catalog/{}", base_url, id);
-    let resp = reqwest::get(&url)
+    let client = store_client()?;
+    let resp = client.get(&url)
+        .send()
         .await
         .map_err(|e| format!("Store request failed: {}", e))?;
     let body = resp
@@ -353,12 +383,16 @@ pub async fn store_install(
         return Err("No store URL configured".to_string());
     }
 
+    validate_store_url(&base_url)?;
+
     let url = format!("{}/store/catalog/{}/download", base_url, id);
 
     // Download the zip to a temp file
     let zip_path = std::env::temp_dir().join(format!("kiro-download-{}.zip", id));
 
-    let resp = reqwest::get(&url)
+    let client = store_client()?;
+    let resp = client.get(&url)
+        .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
 
