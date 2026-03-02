@@ -73,6 +73,13 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ui_dir, **kwargs)
 
+    def handle(self):
+        """Suppress broken pipe / connection aborted errors on Windows."""
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
