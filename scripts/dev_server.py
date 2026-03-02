@@ -177,8 +177,20 @@ MOCK_CATALOG = [
 ]
 
 
-http.server.HTTPServer.allow_reuse_address = True
-server = http.server.HTTPServer(("", PORT), NoCacheHandler)
+class RobustHTTPServer(http.server.HTTPServer):
+    """HTTPServer that doesn't die on client connection errors."""
+    allow_reuse_address = True
+
+    def handle_error(self, request, client_address):
+        """Suppress connection errors — these are normal when clients disconnect."""
+        import traceback
+        exc_type = sys.exc_info()[0]
+        if exc_type in (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+            return  # Silently ignore
+        super().handle_error(request, client_address)
+
+
+server = RobustHTTPServer(("", PORT), NoCacheHandler)
 print(f"Dev server running on http://localhost:{PORT}")
 sys.stdout.flush()
 try:
