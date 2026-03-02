@@ -361,7 +361,7 @@
             html += `
                 <div class="store-card">
                     <div class="store-card-header">
-                        <div class="store-card-icon">${m.icon || '📦'}</div>
+                        <div class="store-card-icon">${esc(m.icon || '📦')}</div>
                         <div>
                             <div class="store-card-title">${esc(m.name)}</div>
                             <div class="store-card-author">${esc(m.author || '')} · v${esc(m.version)}</div>
@@ -396,7 +396,7 @@
                 html += `
                     <div class="store-card">
                         <div class="store-card-header">
-                            <div class="store-card-icon">${item.icon || '📦'}</div>
+                            <div class="store-card-icon">${esc(item.icon || '📦')}</div>
                             <div>
                                 <div class="store-card-title">${esc(item.name)}</div>
                                 <div class="store-card-author">${esc(item.author)} · v${esc(item.version)}</div>

@@ -65,8 +65,6 @@ impl Default for ToolPermissionsConfig {
     }
 }
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateConfig {
     /// Automatically check for updates once per day
@@ -266,12 +264,6 @@ impl Default for QuickActionsConfig {
         }
     }
 }
-
-
-
-
-
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {

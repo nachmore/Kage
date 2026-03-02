@@ -208,7 +208,9 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         // Navigate to requested tab — use eval_script for reliability since
         // the window is already loaded and events can race with show()
         if let Some(ref t) = tab {
-            let js = format!("if(typeof switchTab==='function')switchTab('{}')", t);
+            // Sanitize: only allow alphanumeric and hyphens to prevent JS injection
+            let safe_tab: String = t.chars().filter(|c| c.is_alphanumeric() || *c == '-').collect();
+            let js = format!("if(typeof switchTab==='function')switchTab('{}')", safe_tab);
             let _ = w.eval(&js);
         }
         return Ok(());
