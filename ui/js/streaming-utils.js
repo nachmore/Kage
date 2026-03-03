@@ -115,12 +115,24 @@ import { getToolIcon, escapeHtml } from './tool-utils.js';
  * @returns {string} HTML string
  */
 export function renderToolChipsHtml(toolUsages) {
-    return toolUsages.map(t => `
-        <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}">
+    // Deduplicate by title — show each tool once with a count badge
+    const grouped = new Map();
+    for (const t of toolUsages) {
+        const key = t.title;
+        if (grouped.has(key)) {
+            grouped.get(key).count++;
+        } else {
+            grouped.set(key, { ...t, count: 1 });
+        }
+    }
+    return Array.from(grouped.values()).map(t => {
+        const badge = t.count > 1 ? `<span class="tool-chip-count">\u00d7${t.count}</span>` : '';
+        return `
+        <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}${t.count > 1 ? ' (' + t.count + ' calls)' : ''}">
             <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
-            <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>
+            <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>${badge}
         </span>
-    `).join('');
+    `}).join('');
 }
 
 /**
@@ -147,13 +159,20 @@ export function renderSourceChipsHtml(toolSources) {
  * @returns {string} HTML string
  */
 export function renderSourceBubblesHtml(toolUsages, toolSources) {
-    const toolBubbles = toolUsages.map((t, i) => `
+    // Deduplicate tools by title
+    const grouped = new Map();
+    for (const t of toolUsages) {
+        if (!grouped.has(t.title)) grouped.set(t.title, t);
+    }
+    const uniqueTools = Array.from(grouped.values());
+
+    const toolBubbles = uniqueTools.map((t, i) => `
         <span class="source-bubble tool-bubble" title="${escapeHtml(t.title)}" style="animation-delay: ${i * 0.08}s">
             <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
         </span>
     `).join('');
 
-    const offset = toolUsages.length;
+    const offset = uniqueTools.length;
     const sourceBubbles = toolSources.map((s, i) => `
         <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
             <span class="source-icon-wrapper">

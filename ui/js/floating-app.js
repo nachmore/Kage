@@ -29,6 +29,8 @@ export class FloatingApp {
         // While the input only grows beyond this length, skip redundant backend calls.
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this.computerControlActive = false;
+        this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
         this.extensionManager = new ExtensionManager(invoke);
         this.lastSelection = null;
@@ -331,6 +333,11 @@ export class FloatingApp {
                     // Don't reset UI if permission modal is open
                     const permissionModal = document.getElementById('permissionModal');
                     if (!permissionModal || permissionModal.style.display === 'none') {
+                        // Don't reset if we're waiting for a response
+                        if (this.isWaitingForResponse) {
+                            // Just focus the input
+                            setTimeout(() => this.elements.input.focus(), 50);
+                        } else {
                         // Check if we should preserve the last response
                         try {
                             const config = await this.invoke('get_config');
@@ -349,6 +356,7 @@ export class FloatingApp {
                                 this.elements.input.focus();
                                 this.elements.input.select();
                             }, 50);
+                        }
                         }
                     }
                 }
@@ -388,6 +396,14 @@ export class FloatingApp {
             }
             // Don't hide if we just stopped generating (prevents accidental hide on Esc)
             if (this._justStoppedGenerating) {
+                return;
+            }
+            // Don't hide if computer control is active — user needs to track progress
+            if (this.computerControlActive) {
+                return;
+            }
+            // Don't hide while waiting for a response
+            if (this.isWaitingForResponse) {
                 return;
             }
             await this.appWindow.hide();
@@ -597,9 +613,10 @@ export class FloatingApp {
         this._bannerVisible = false;
         const banner = document.getElementById('floatingBanner');
         if (banner) banner.style.display = 'none';
-        // If the banner was the only content, reset the UI to reclaim the space
+        // If the banner was the only content and we're not waiting for a response,
+        // reset the UI to reclaim the space
         const responseText = document.getElementById('responseText');
-        if (!responseText || !responseText.textContent.trim()) {
+        if (!this.isWaitingForResponse && (!responseText || !responseText.textContent.trim())) {
             this.resetUI();
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
@@ -1334,6 +1351,8 @@ export class FloatingApp {
                 this.elements.contentArea.classList.add('visible');
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
+                this._promptGeneration++;
+                const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
                 this.dismissBanner();
                 await this.invoke('send_message_streaming', { message, attachments });
@@ -1352,6 +1371,9 @@ export class FloatingApp {
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');
             this.elements.ghostContainer.classList.remove('thinking');
+            // Ensure content area is visible (safety net if something else hid it)
+            this.elements.contentArea.classList.add('visible');
+            this.elements.expandBtn.classList.add('visible');
             
             // Transition compact sources to full (bottom) layout
             const compactEl = document.getElementById('toolSourcesCompact');
@@ -1381,7 +1403,13 @@ export class FloatingApp {
     async handleMessageComplete() {
             if (!this.isWaitingForResponse) return;
 
+            // Ignore stale completions (e.g., steering response arriving after user sent a message)
+            if (!this.currentResponse || this.currentResponse.trim().length === 0) {
+                return;
+            }
+
             this.stopThinking();
+            this.computerControlActive = false;
             this.elements.floatingStopBtn.style.display = 'none';
             // Restore datetime display
             this.updateDatetimeVisibility();
@@ -1407,6 +1435,7 @@ export class FloatingApp {
         
         this.showError('Error: ' + event.payload);
         this.isWaitingForResponse = false;
+        this.computerControlActive = false;
         this.elements.floatingStopBtn.style.display = 'none';
         // Restore datetime display
         this.updateDatetimeVisibility();
@@ -1422,7 +1451,19 @@ export class FloatingApp {
 
     handleToolCallUpdate(event) {
             if (!this.isWaitingForResponse) return;
-            const { updated } = processToolCallUpdate(event, this);
+            const { updated, update } = processToolCallUpdate(event, this);
+
+            // Detect computer-control tool usage and keep window visible
+            if (update?.title) {
+                const ccTools = ['screenshot', 'click', 'double_click', 'right_click',
+                    'move_mouse', 'drag', 'scroll', 'type_text', 'key_press',
+                    'key_press_confirmed', 'launch_app', 'wait', 'get_screen_size',
+                    'get_cursor_position'];
+                if (ccTools.includes(update.title)) {
+                    this.computerControlActive = true;
+                }
+            }
+
             if (updated && (this.toolSources.length > 0 || this.toolUsages.length > 0)) {
                 if (!this.currentResponse || this.currentResponse.trim().length === 0) {
                     this.renderSourcesCompact();

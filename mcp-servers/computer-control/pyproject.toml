@@ -1,0 +1,21 @@
+[project]
+name = "computer-control-mcp"
+version = "0.1.0"
+description = "MCP server for computer control — mouse, keyboard, screenshots"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "mss>=9.0.0",
+    "pynput>=1.7.6",
+    "Pillow>=10.0.0",
+]
+
+[project.scripts]
+computer-control-mcp = "computer_control.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["computer_control"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

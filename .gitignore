@@ -22,3 +22,7 @@ sample_sessions/
 # Vendor node_modules (use vendor/lib for committed files)
 ui/vendor/node_modules/
 ui/vendor/package-lock.json
+
+# Python cache
+__pycache__/
+*.pyc
