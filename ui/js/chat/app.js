@@ -9,6 +9,7 @@ import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
 import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
+import { executeResult as executeResultShared, executeShortcutCommand } from '../shared/result-executor.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -1435,54 +1436,35 @@ export class ChatApp {
         this.elements.chatSuggestions.classList.remove('visible');
     }
 
+    /** Build execution context for the shared result executor. */
+    _getExecCtx() {
+        return {
+            invoke: this.invoke,
+            appWindow: this.appWindow,
+            extensionManager: getExtensionManager(),
+            onPrompt: (text) => {
+                this.elements.chatInput.value = text;
+                this.sendMessage();
+            },
+            onDisplay: (text) => {
+                this.addMessageFromHistory('assistant', text);
+                this.scrollToBottom();
+            },
+            onCopy: async (text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+        };
+    }
+
     async executeSuggestion(cmd) {
         const query = this.elements.chatInput.value.trim();
         this.elements.chatInput.value = '';
         this.elements.chatInput.style.height = 'auto';
         this.clearSuggestions();
 
-        // Record selection for frecency
-        if (cmd.id) recordSelection(query, cmd.id, this.invoke);
+        const result = await executeResultShared(cmd, query, this._getExecCtx());
+        if (result.handled) return;
 
-        // Extension-provided results — delegate to extension
-        const extMgr = getExtensionManager();
-        if (cmd._extensionId && extMgr) {
-            const action = extMgr.executeResult(cmd);
-            if (action) {
-                if (action.type === 'copy') {
-                    try { await navigator.clipboard.writeText(action.value); } catch {}
-                } else if (action.type === 'prompt') {
-                    this.elements.chatInput.value = action.value;
-                    this.sendMessage();
-                }
-                return;
-            }
-        }
-
-        if (cmd.type === 'command') {
-            await executeCommand(cmd.data?.name || cmd.name, this.invoke, this.appWindow);
-        } else if (cmd.type === 'slash' && cmd.data?.execute) {
-            await cmd.data.execute(this.invoke, this.appWindow);
-        } else if (cmd.type === 'url') {
-            await this.invoke('open_url', { url: cmd.data.value });
-        } else if (cmd.type === 'path') {
-            await this.invoke('open_path', { path: cmd.data.value });
-        } else if (cmd.type === 'app') {
-            await this.invoke('launch_app', { name: cmd.data.name });
-        } else if (cmd.type === 'shortcut') {
-            const command = buildShortcutCommand(cmd.data.shortcut, cmd.data.args);
-            if (command.type === 'prompt') {
-                this.elements.chatInput.value = command.message;
-                this.sendMessage();
-            } else if (command.type === 'open_url') {
-                await this.invoke('open_url', { url: command.url });
-            } else if (command.type === 'text') {
-                this.addMessageFromHistory('assistant', command.message);
-                this.scrollToBottom();
-            } else if (command.type === 'run_program') {
-                await this.invoke('execute_shortcut', { path: command.path, args: command.args, workingDirectory: command.workDir || null });
-            }
-        } else if (cmd.execute) {
+        // Fallback for unhandled types
+        if (cmd.execute) {
             await cmd.execute(this.invoke, this.appWindow);
         }
     }

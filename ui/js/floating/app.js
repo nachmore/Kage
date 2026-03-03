@@ -13,6 +13,7 @@ import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, set
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
 import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
+import { executeResult as executeResultShared, executeShortcutCommand } from '../shared/result-executor.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -672,49 +673,46 @@ export class FloatingApp {
         return buildShortcutCommandFn(shortcut, args, sel);
     }
 
-    async executeShortcut(command) {
-            try {
-                if (command.type === 'error') {
-                    this.showError(command.message);
-                    return;
-                }
-                if (command.type === 'noop') {
-                    this.elements.input.value = '';
-                    this.elements.input.style.height = 'auto';
-                    this.clearSuggestions();
-                    return;
-                }
-                if (command.type === 'open_url') {
-                    await this.openUrl(command.url);
-                    this.resetUI();
-                    await this.appWindow.hide();
-                } else if (command.type === 'prompt') {
-                    // Send to agent as if the user typed it
-                    await this.sendChatMessage(command.message);
-                } else if (command.type === 'text') {
-                    // Display result in the response area
-                    this.elements.input.value = '';
-                    this.elements.input.style.height = 'auto';
-                    this.clearSuggestions();
-                    this.currentResponse = command.message;
-                    renderMarkdown(command.message, this.elements.responseText);
-                    this.elements.contentArea.classList.add('visible');
-                    this.windowManager.resizeWindow();
-                } else {
-                    // run_program
-                    await this.invoke('execute_shortcut', {
-                        path: command.path,
-                        args: command.args,
-                        workingDirectory: command.workDir || null
-                    });
-                    this.resetUI();
-                    await this.appWindow.hide();
-                }
-            } catch (error) {
-                console.error('Failed to execute shortcut:', error);
-                this.showError('Failed to execute shortcut: ' + error);
+    /** Build execution context for the shared result executor. */
+    _getExecCtx() {
+        return {
+            invoke: this.invoke,
+            appWindow: this.appWindow,
+            extensionManager: this.extensionManager,
+            selectionText: document.getElementById('useSelectionCheckbox')?.checked ? this.lastSelection || '' : '',
+            onPrompt: (text) => this.sendChatMessage(text),
+            onDisplay: (text) => {
+                this.currentResponse = text;
+                renderMarkdown(text, this.elements.responseText);
+                this.elements.contentArea.classList.add('visible');
+                this.windowManager.resizeWindow();
+            },
+            onCopy: async (text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+            onTimerStart: (ms) => this._startTimerUI(ms),
+            onStopwatch: () => {
+                const sw = getSlotState('stopwatch');
+                if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
+                else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
+                else { this._startStopwatchUI(); }
             }
+        };
+    }
+
+    async executeShortcut(command) {
+        try {
+            const result = await executeShortcutCommand(command, this._getExecCtx());
+            if (result.action === 'hide') {
+                this.resetUI();
+                await this.appWindow.hide();
+            }
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.clearSuggestions();
+        } catch (error) {
+            console.error('Failed to execute shortcut:', error);
+            this.showError('Failed to execute shortcut: ' + error);
         }
+    }
 
     async handleInputChange(event) {
         const query = this.elements.input.value.trim();
@@ -954,37 +952,13 @@ export class FloatingApp {
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.extensionManager) {
             const selected = this.currentMatches[this.selectedIndex];
             if (selected._extensionId) {
-                recordSelection(message, selected.id, this.invoke);
-                const action = this.extensionManager.executeResult(selected);
-                if (action) {
-                    if (action.type === 'copy') {
-                        try { await navigator.clipboard.writeText(action.value); } catch {}
-                    } else if (action.type === 'prompt') {
-                        await this.sendChatMessage(action.value);
-                        return;
-                    } else if (action.type === 'display') {
-                        this.currentResponse = action.value;
-                        renderMarkdown(action.value, this.elements.responseText);
-                        this.elements.contentArea.classList.add('visible');
-                        this.windowManager.resizeWindow();
-                    }
+                const result = await executeResultShared(selected, message, this._getExecCtx());
+                if (result.handled) {
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                    this.clearSuggestions();
+                    return;
                 }
-                // Special: timer/stopwatch has UI side effects
-                if (selected.type === 'timer_cmd') {
-                    const timerData = selected.data;
-                    if (timerData.type === 'timer' && timerData.durationMs) {
-                        this._startTimerUI(timerData.durationMs);
-                    } else if (timerData.type === 'stopwatch') {
-                        const sw = getSlotState('stopwatch');
-                        if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
-                        else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
-                        else { this._startStopwatchUI(); }
-                    }
-                }
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
-                return;
             }
         }
 
@@ -1014,25 +988,14 @@ export class FloatingApp {
         // Handle selected suggestion from unified search
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
             const selected = this.currentMatches[this.selectedIndex];
-            recordSelection(message, selected.id, this.invoke);
 
-            if (selected.type === 'command' || selected.type === 'slash') {
-                await this.executeCommandAction(selected.data || selected);
-                return;
-            } else if (selected.type === 'selection') {
-                await this.executeSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
-                return;
-            } else if (selected.type === 'shortcut') {
-                const sc = selected.data?.shortcut || selected.shortcut;
-                const args = selected.data?.args || selected.args;
-                const command = this.buildShortcutCommand(sc, args);
-                await this.executeShortcut(command);
-                return;
-            } else if (selected.type === 'system') {
+            // System commands need special confirmation flow
+            if (selected.type === 'system') {
                 const d = selected.data || selected;
                 await this._executeSystemCommand(d.cmdId, d.needsConfirm, false);
                 return;
-            } else if (selected.type === 'system_confirm') {
+            }
+            if (selected.type === 'system_confirm') {
                 const d = selected.data || selected;
                 try {
                     await this.invoke('execute_system_command', { commandId: d.cmdId, elevated: d.elevated || false });
@@ -1041,17 +1004,27 @@ export class FloatingApp {
                 this.elements.input.style.height = 'auto';
                 this.clearSuggestions();
                 return;
-            } else if (selected.type === 'url') {
-                await this.openUrl(selected.data?.value || selected.value);
-                return;
-            } else if (selected.type === 'path') {
-                await this.openPath(selected.data?.value || selected.value);
-                return;
-            } else if (selected.type === 'app') {
-                await this.launchApp(selected.data?.name || selected.label);
+            }
+
+            // Selection lists
+            if (selected.type === 'selection') {
+                await this.executeSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
                 return;
             }
-            return;
+
+            // All other types — use shared executor
+            const result = await executeResultShared(selected, message, this._getExecCtx());
+            if (result.handled) {
+                if (result.action === 'hide') {
+                    this.resetUI();
+                    await this.appWindow.hide();
+                } else {
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                    this.clearSuggestions();
+                }
+                return;
+            }
         }
         
         // Check if the message itself is a shortcut (without suggestion selected)
