@@ -308,77 +308,53 @@ export class FloatingApp {
     }
 
     setupVisibilityTracking() {
-        let lastVisibilityState = false;
-        
-        setInterval(async () => {
-            try {
-                const isVisible = await this.appWindow.isVisible();
-                if (isVisible && !lastVisibilityState) {
-                    // Notify updater of activity
-                    this.invoke('touch_floating_activity').catch(() => {});
-                    // Clear any pending system command confirmations and re-trigger search
-                    if (this.currentMatches.some(m => m.type === 'system_confirm')) {
-                        const query = this.elements.input.value.trim();
-                        if (query) {
-                            this.clearSuggestions();
-                            // Re-trigger unified search
-                            const results = await unifiedSearch(query, this.invoke, this.shortcuts);
-                            if (results.length > 0) {
-                                this.selectedIndex = renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
-                            }
-                        } else {
-                            this.clearSuggestions();
-                        }
+        this.appWindow.listen('tauri://focus', async () => {
+            // Notify updater of activity
+            this.invoke('touch_floating_activity').catch(() => {});
+
+            // Clear any pending system command confirmations and re-trigger search
+            if (this.currentMatches.some(m => m.type === 'system_confirm')) {
+                const query = this.elements.input.value.trim();
+                if (query) {
+                    this.clearSuggestions();
+                    const results = await unifiedSearch(query, this.invoke, this.shortcuts);
+                    if (results.length > 0) {
+                        this.selectedIndex = renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
                     }
-                    // Don't reset UI if permission modal is open
-                    const permissionModal = document.getElementById('permissionModal');
-                    if (!permissionModal || permissionModal.style.display === 'none') {
-                        // Don't reset if we're waiting for a response
-                        if (this.isWaitingForResponse) {
-                            // Just focus the input
-                            setTimeout(() => this.elements.input.focus(), 50);
+                } else {
+                    this.clearSuggestions();
+                }
+            }
+
+            // Don't reset UI if permission modal is open
+            const permissionModal = document.getElementById('permissionModal');
+            if (!permissionModal || permissionModal.style.display === 'none') {
+                if (this.isWaitingForResponse) {
+                    setTimeout(() => this.elements.input.focus(), 50);
+                } else {
+                    try {
+                        const config = await this.invoke('get_config');
+                        if (config.ui?.preserve_last_response === false) {
+                            setTimeout(() => this.resetUI(), 50);
                         } else {
-                        // Check if we should preserve the last response
-                        try {
-                            const config = await this.invoke('get_config');
-                            if (config.ui?.preserve_last_response === false) {
-                                setTimeout(() => this.resetUI(), 50);
-                            } else {
-                                // Just focus and select the input, keep the response
-                                setTimeout(() => {
-                                    this.elements.input.focus();
-                                    this.elements.input.select();
-                                }, 50);
-                            }
-                        } catch (e) {
-                            // Fallback: preserve by default
                             setTimeout(() => {
                                 this.elements.input.focus();
                                 this.elements.input.select();
                             }, 50);
                         }
-                        }
+                    } catch (e) {
+                        setTimeout(() => {
+                            this.elements.input.focus();
+                            this.elements.input.select();
+                        }, 50);
                     }
                 }
-                lastVisibilityState = isVisible;
-            } catch (error) {
-                // Ignore errors
             }
-        }, 100);
-        
-        this.appWindow.listen('tauri://focus', async () => {
-            setTimeout(() => {
-                this.elements.input.focus();
-                this.elements.input.select();
-                // Re-show datetime on window focus if appropriate
-                this.updateDatetimeVisibility();
-            }, 50);
+
+            this.updateDatetimeVisibility();
         });
         
         this.appWindow.listen('tauri://blur', async () => {
-
-            console.log("BLUR: Kiro Sandbox Active: " + window._kiroSandboxActive);
-
             // Don't hide if permission modal is open
             const permissionModal = document.getElementById('permissionModal');
             if (permissionModal && permissionModal.style.display !== 'none') {
