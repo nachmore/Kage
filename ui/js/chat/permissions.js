@@ -5,7 +5,7 @@
  * - Hides when switching to a different session
  */
 
-import { getToolEmoji, escapeHtml } from './tool-utils.js';
+import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
 
 function waitForTauri(callback) {
     if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.webviewWindow) {

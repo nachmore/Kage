@@ -1,18 +1,18 @@
 // Main application logic
-import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './floating-suggestions.js';
-import { WindowManager } from './floating-window.js';
-import { renderMarkdown } from './markdown.js';
-import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './commands.js';
-import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
-import { sendAppNotification } from './notify.js';
-import { getActionsForText, renderQuickActionChips } from './floating-quick-actions.js';
-import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './floating-timer.js';
-import { playTimerSound } from './timer-sounds.js';
-import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './floating-search-unified.js';
-import { ExtensionManager } from './extension-manager.js';
-import { SpeechController } from './speech.js';
-import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from './shortcuts.js';
+import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './suggestions.js';
+import { WindowManager } from './window.js';
+import { renderMarkdown } from '../shared/markdown.js';
+import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
+import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
+import { sendAppNotification } from '../shared/notify.js';
+import { getActionsForText, renderQuickActionChips } from './quick-actions.js';
+import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
+import { playTimerSound } from '../shared/timer-sounds.js';
+import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './search-unified.js';
+import { ExtensionManager } from '../shared/extension-manager.js';
+import { SpeechController } from '../shared/speech.js';
+import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {

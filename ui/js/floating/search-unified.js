@@ -4,7 +4,7 @@
  * Extension-provided search results come from the ExtensionManager.
  */
 
-import { matchCommands, matchSlashCommands, matchCommandsByName } from './commands.js';
+import { matchCommands, matchSlashCommands, matchCommandsByName } from '../shared/commands.js';
 
 // --- Frecency store ---
 

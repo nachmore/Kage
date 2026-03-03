@@ -1,6 +1,6 @@
 // Main entry point for expanded chat window
-import { ChatApp } from './chat-app.js';
-import { applyTheme, initThemeListener, loadAndApplyTheme } from './theme.js';
+import { ChatApp } from './app.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 
 let app = null;
 

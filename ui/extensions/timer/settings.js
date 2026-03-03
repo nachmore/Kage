@@ -107,7 +107,7 @@ class TimerExtSettingsModule extends SettingsModule {
         const customPath = document.getElementById('timerCustomSoundPath')?.value?.trim() || '';
         const repeats = parseInt(document.getElementById('timerSoundRepeats')?.value || '3');
         try {
-            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import('../../js/timer-sounds.js');
+            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import('../../js/shared/timer-sounds.js');
             if (isSoundPlaying()) { stopTimerSound(); if (btn) btn.textContent = '▶ Preview'; return; }
             if (btn) btn.textContent = '⏹ Stop';
             playTimerSound(soundId, customPath, repeats, () => { if (btn) btn.textContent = '▶ Preview'; });

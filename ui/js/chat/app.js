@@ -1,11 +1,11 @@
 // Expanded chat application logic
-import { renderMarkdown, initMarkdown } from './markdown.js';
-import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
-import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './commands.js';
-import { escapeHtml } from './tool-utils.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from './streaming-utils.js';
-import { sendAppNotification } from './notify.js';
-import { SpeechController } from './speech.js';
+import { renderMarkdown, initMarkdown } from '../shared/markdown.js';
+import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
+import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
+import { escapeHtml } from '../shared/tool-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
+import { sendAppNotification } from '../shared/notify.js';
+import { SpeechController } from '../shared/speech.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';

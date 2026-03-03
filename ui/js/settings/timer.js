@@ -146,7 +146,7 @@ class TimerSettingsModule extends SettingsModule {
         const repeats = parseInt(document.getElementById('timerSoundRepeats')?.value || '3');
 
         try {
-            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import('../timer-sounds.js');
+            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import('../shared/timer-sounds.js');
 
             if (isSoundPlaying()) {
                 stopTimerSound();

@@ -3,7 +3,7 @@
  * Handles tool permission requests from the ACP
  */
 
-import { getToolEmoji, escapeHtml } from './tool-utils.js';
+import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
 
 const { invoke } = window.__TAURI__.core;
 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();

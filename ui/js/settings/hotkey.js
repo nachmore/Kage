@@ -25,7 +25,7 @@ class HotkeySettingsModule extends SettingsModule {
             + '</div></div>';
     }
     async initialize() {
-        const { HotkeyPicker } = await import('../hotkey-picker.js');
+        const { HotkeyPicker } = await import('../shared/hotkey-picker.js');
         const invoke = window.__TAURI__.core.invoke;
         const container = document.getElementById('settingsHotkeyPicker');
         if (!container) return;

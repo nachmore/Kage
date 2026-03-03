@@ -38,11 +38,12 @@ kiro-assistant/
 │   ├── *.html            # Window HTML files (floating, index, settings, context-menu)
 │   ├── css/              # Stylesheets (shared tokens, components, themes)
 │   ├── js/               # JavaScript modules
-│   │   ├── floating-*.js # Floating window modules (app, commands, context-menu, main, markdown, permissions, suggestions, theme, window)
-│   │   ├── chat-*.js     # Chat window modules (app, main, permissions)
-│   │   ├── tool-utils.js # Shared tool icon/emoji/escapeHtml utilities
-│   │   ├── math-eval.js  # Math expression evaluator (wraps mathjs)
-│   │   ├── attachments.js # Image paste/drag-drop handling
+│   │   ├── shared/       # Shared modules (used by both floating + chat windows)
+│   │   │   ├── markdown.js, theme.js, commands.js, speech.js, shortcuts.js
+│   │   │   ├── attachments.js, streaming-utils.js, tool-utils.js, notify.js
+│   │   │   ├── extension-manager.js, math-eval.js, timer-sounds.js, hotkey-picker.js
+│   │   ├── floating/     # Floating window modules (app, main, window, suggestions, search, etc.)
+│   │   ├── chat/         # Chat window modules (app, main, permissions)
 │   │   └── settings/     # Settings modules (one per section)
 │   ├── vendor/           # NPM-managed JS dependencies (marked, mermaid, prismjs, mathjs)
 │   └── assets/           # Images and icons
@@ -56,7 +57,7 @@ kiro-assistant/
 ## Key Patterns
 
 ### Shared Utilities
-- `ui/js/tool-utils.js` — shared `getToolIcon()`, `getToolEmoji()`, `escapeHtml()` used across floating, chat, settings, and permissions UIs. Always import from here, never duplicate.
+- `ui/js/shared/tool-utils.js` — shared `getToolIcon()`, `getToolEmoji()`, `escapeHtml()` used across floating, chat, settings, and permissions UIs. Always import from here, never duplicate.
 - `ui/css/shared-components.css` — shared component styles (keycaps, hotkey picker, etc.) used across all windows. Add reusable styles here, never duplicate into window-specific CSS files. Must be loaded in every window's HTML.
 - `ui/css/shared-kiro-tokens.css` — CSS variables (colors, spacing). Loaded in every window.
 - Never duplicate styles or code across files. If something is used in more than one window, move it to a shared file.
