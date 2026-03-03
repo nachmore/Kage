@@ -32,6 +32,7 @@ async def main():
     print(f"{BOLD}{GREEN}ACP Chat{RESET}")
     print(f"{DIM}Connected to trace window on port {PORT}{RESET}")
     print(f"{DIM}Type messages below. Prefix with : to send raw JSON-RPC.{RESET}")
+    print(f"{DIM}/subagent <query> [--name <agent>] [--context <ctx>]  invoke a subagent{RESET}")
     print(f"{DIM}Ctrl+C to quit.{RESET}\n")
 
     loop = asyncio.get_running_loop()
@@ -106,6 +107,59 @@ async def main():
                 )
                 await writer.drain()
                 print(f"{DIM}Sent raw JSON-RPC{RESET}")
+                continue
+
+            # /subagent command
+            if line.startswith("/subagent"):
+                parts = line[len("/subagent"):].strip()
+                if not parts:
+                    print(f"{YELLOW}Usage: /subagent <query> [--name <agent>] [--context <ctx>]{RESET}")
+                    continue
+
+                # Parse --name and --context flags
+                import shlex
+                try:
+                    tokens = shlex.split(parts)
+                except ValueError:
+                    tokens = parts.split()
+
+                query_parts = []
+                agent_name = None
+                relevant_context = None
+                i = 0
+                while i < len(tokens):
+                    if tokens[i] == "--name" and i + 1 < len(tokens):
+                        agent_name = tokens[i + 1]
+                        i += 2
+                    elif tokens[i] == "--context" and i + 1 < len(tokens):
+                        relevant_context = tokens[i + 1]
+                        i += 2
+                    else:
+                        query_parts.append(tokens[i])
+                        i += 1
+
+                query = " ".join(query_parts)
+                if not query:
+                    print(f"{YELLOW}Usage: /subagent <query> [--name <agent>] [--context <ctx>]{RESET}")
+                    continue
+
+                msg = {"type": "subagent", "query": query}
+                if agent_name:
+                    msg["agent_name"] = agent_name
+                if relevant_context:
+                    msg["relevant_context"] = relevant_context
+
+                # Reset events for this turn
+                done_event.clear()
+                got_first_text.clear()
+
+                writer.write((json.dumps(msg) + "\n").encode())
+                await writer.drain()
+                print(f"{DIM}Invoking subagent...{RESET}")
+
+                spinner = asyncio.create_task(thinking_animation())
+                await done_event.wait()
+                spinner.cancel()
                 continue
 
             # Reset events for this turn

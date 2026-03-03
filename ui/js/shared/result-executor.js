@@ -138,3 +138,81 @@ export async function executeShortcutCommand(command, ctx) {
     }
     return { handled: false };
 }
+
+
+/**
+ * Handle Enter key press — shared flow for both floating and chat windows.
+ * Checks suggestions, then direct command/shortcut matching, then falls back to sending.
+ *
+ * @param {Object} opts
+ * @param {string} opts.message - Trimmed input text
+ * @param {Array} opts.suggestions - Current suggestion matches
+ * @param {number} opts.selectedIndex - Currently selected suggestion index
+ * @param {Array} opts.shortcuts - Loaded shortcut configs
+ * @param {Object} opts.ctx - Execution context (from _getExecCtx)
+ * @param {Function} opts.onSend - async (message) => {} — send to agent
+ * @param {Function} [opts.onSystemCommand] - async (cmdId, needsConfirm, elevated) => {} — system command handler
+ * @param {Function} [opts.onSelection] - async (command, value) => {} — selection list handler
+ * @returns {Promise<{handled: boolean, action?: string}>}
+ */
+export async function handleEnterAction(opts) {
+    const { message, suggestions, selectedIndex, shortcuts, ctx, onSend, onSystemCommand, onSelection } = opts;
+
+    // If a suggestion is selected, execute it
+    if (suggestions.length > 0 && selectedIndex >= 0) {
+        const selected = suggestions[selectedIndex];
+
+        // System commands have a special confirmation flow (floating-only)
+        if (selected.type === 'system' && onSystemCommand) {
+            const d = selected.data || selected;
+            await onSystemCommand(d.cmdId, d.needsConfirm, false);
+            return { handled: true };
+        }
+        if (selected.type === 'system_confirm' && onSystemCommand) {
+            const d = selected.data || selected;
+            await onSystemCommand(d.cmdId, false, d.elevated || false);
+            return { handled: true };
+        }
+        // Selection lists (floating-only)
+        if (selected.type === 'selection' && onSelection) {
+            await onSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
+            return { handled: true };
+        }
+
+        // Everything else — extensions, commands, shortcuts, URLs, paths, apps
+        const result = await executeResult(selected, message, ctx);
+        if (result.handled) return result;
+    }
+
+    // No suggestion selected — try direct command/shortcut matching
+    if (message.startsWith('>')) {
+        const cmdName = message.substring(1).trim();
+        const { executeCommand: execCmd } = await import('./commands.js');
+        if (await execCmd(cmdName, ctx.invoke, ctx.appWindow)) {
+            return { handled: true };
+        }
+    }
+    if (message.startsWith('/')) {
+        const { matchSlashCommands: matchSlash } = await import('./commands.js');
+        const slashCmds = matchSlash(message);
+        if (slashCmds?.length === 1) {
+            await slashCmds[0].execute(ctx.invoke, ctx.appWindow);
+            return { handled: true };
+        }
+    }
+
+    // Try shortcut matching
+    if (shortcuts?.length > 0) {
+        const { matchShortcut: matchSc } = await import('./shortcuts.js');
+        const matches = matchSc(message, shortcuts);
+        if (matches?.length > 0) {
+            const cmd = buildShortcutCommand(matches[0].shortcut, matches[0].args, ctx.selectionText || '');
+            const result = await executeShortcutCommand(cmd, ctx);
+            return result.handled ? result : { handled: false };
+        }
+    }
+
+    // Nothing matched — send to agent
+    await onSend(message);
+    return { handled: true };
+}

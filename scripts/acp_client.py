@@ -252,6 +252,34 @@ async def main() -> None:
                         await client._send_to_chat(
                             {"type": "info", "text": "[raw payload sent]"}
                         )
+                elif msg.get("type") == "subagent":
+                    # Build the invoke_subagents command payload
+                    subagent_entry: dict[str, Any] = {
+                        "query": msg["query"],
+                    }
+                    if msg.get("agent_name"):
+                        subagent_entry["agent_name"] = msg["agent_name"]
+                    if msg.get("relevant_context"):
+                        subagent_entry["relevant_context"] = msg["relevant_context"]
+
+                    payload = {
+                        "command": "invoke_subagents",
+                        "content": {
+                            "subagents": [subagent_entry],
+                        },
+                    }
+                    try:
+                        result = await conn.prompt(
+                            session_id=sid,
+                            prompt=[text_block(json.dumps(payload))],
+                        )
+                        await client._send_to_chat({"type": "done"})
+                    except Exception as exc:
+                        await client._send_to_chat(
+                            {"type": "info", "text": f"[subagent error: {exc}]"}
+                        )
+                        await client._send_to_chat({"type": "done"})
+
                 elif msg.get("type") == "prompt":
                     await conn.prompt(
                         session_id=sid,

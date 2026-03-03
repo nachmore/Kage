@@ -13,7 +13,7 @@ import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, set
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
 import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
-import { executeResult as executeResultShared, executeShortcutCommand } from '../shared/result-executor.js';
+import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -705,9 +705,7 @@ export class FloatingApp {
                 this.resetUI();
                 await this.appWindow.hide();
             }
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
+            this._clearInput();
         } catch (error) {
             console.error('Failed to execute shortcut:', error);
             this.showError('Failed to execute shortcut: ' + error);
@@ -820,9 +818,7 @@ export class FloatingApp {
                 try {
                     await this.invoke('execute_system_command', { commandId: cmdId, elevated });
                 } catch (e) { console.error('System command failed:', e); }
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
+                this._clearInput();
             });
             container.appendChild(confirmItem);
 
@@ -837,15 +833,11 @@ export class FloatingApp {
         try {
             await this.invoke('execute_system_command', { commandId: cmdId, elevated });
         } catch (e) { console.error('System command failed:', e); }
-        this.elements.input.value = '';
-        this.elements.input.style.height = 'auto';
-        this.clearSuggestions();
+        this._clearInput();
     }
 
     async executeCommandAction(cmd) {
-        this.elements.input.value = '';
-        this.elements.input.style.height = 'auto';
-        this.clearSuggestions();
+        this._clearInput();
         await cmd.execute(this.invoke, this.appWindow);
     }
 
@@ -938,106 +930,36 @@ export class FloatingApp {
     async handleEnterKey() {
         const message = this.elements.input.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
+        const hasSelection = this.currentMatches.length > 0 && this.selectedIndex >= 0;
 
-        // Allow Enter to work on selection lists even when input is empty
-        if (!message && !hasAttachments && !(this.currentMatches.length > 0 && this.selectedIndex >= 0)) return;
+        if (!message && !hasAttachments && !hasSelection) return;
         
         if (this.isWaitingForResponse) {
-            console.log('Interrupting current response with new question');
             this.stopThinking();
             this.isWaitingForResponse = false;
         }
-        
-        // Handle extension results (color, math, devtools, etc.) via extension manager
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.extensionManager) {
-            const selected = this.currentMatches[this.selectedIndex];
-            if (selected._extensionId) {
-                const result = await executeResultShared(selected, message, this._getExecCtx());
-                if (result.handled) {
-                    this.elements.input.value = '';
-                    this.elements.input.style.height = 'auto';
-                    this.clearSuggestions();
-                    return;
-                }
-            }
+
+        const result = await handleEnterAction({
+            message,
+            suggestions: this.currentMatches,
+            selectedIndex: this.selectedIndex,
+            shortcuts: this.shortcuts,
+            ctx: this._getExecCtx(),
+            onSend: (msg) => this.sendChatMessage(msg),
+            onSystemCommand: (cmdId, needsConfirm, elevated) => this._executeSystemCommand(cmdId, needsConfirm, elevated),
+            onSelection: (command, value) => this.executeSelection(command, value),
+        });
+
+        if (result.handled) {
+            if (result.action === 'hide') { this.resetUI(); await this.appWindow.hide(); }
+            else { this._clearInput(); }
         }
+    }
 
-        // Handle > commands
-        if (message.startsWith('>')) {
-            const cmdName = message.substring(1).trim();
-            if (await executeCommand(cmdName, this.invoke, this.appWindow)) {
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
-                return;
-            }
-        }
-
-        // Handle / slash commands
-        if (message.startsWith('/')) {
-            const slashCmds = matchSlashCommands(message);
-            if (slashCmds && slashCmds.length === 1) {
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
-                await slashCmds[0].execute(this.invoke, this.appWindow);
-                return;
-            }
-        }
-
-        // Handle selected suggestion from unified search
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
-            const selected = this.currentMatches[this.selectedIndex];
-
-            // System commands need special confirmation flow
-            if (selected.type === 'system') {
-                const d = selected.data || selected;
-                await this._executeSystemCommand(d.cmdId, d.needsConfirm, false);
-                return;
-            }
-            if (selected.type === 'system_confirm') {
-                const d = selected.data || selected;
-                try {
-                    await this.invoke('execute_system_command', { commandId: d.cmdId, elevated: d.elevated || false });
-                } catch (e) { console.error('System command failed:', e); }
-                this.elements.input.value = '';
-                this.elements.input.style.height = 'auto';
-                this.clearSuggestions();
-                return;
-            }
-
-            // Selection lists
-            if (selected.type === 'selection') {
-                await this.executeSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
-                return;
-            }
-
-            // All other types — use shared executor
-            const result = await executeResultShared(selected, message, this._getExecCtx());
-            if (result.handled) {
-                if (result.action === 'hide') {
-                    this.resetUI();
-                    await this.appWindow.hide();
-                } else {
-                    this.elements.input.value = '';
-                    this.elements.input.style.height = 'auto';
-                    this.clearSuggestions();
-                }
-                return;
-            }
-        }
-        
-        // Check if the message itself is a shortcut (without suggestion selected)
-        const shortcutMatches = this.matchShortcut(message);
-        if (shortcutMatches && shortcutMatches.length > 0) {
-            // Use the best match (first one, already sorted by score)
-            const bestMatch = shortcutMatches[0];
-            const command = this.buildShortcutCommand(bestMatch.shortcut, bestMatch.args);
-            await this.executeShortcut(command);
-            return;
-        }
-        
-        await this.sendChatMessage(message);
+    _clearInput() {
+        this.elements.input.value = '';
+        this.elements.input.style.height = 'auto';
+        this.clearSuggestions();
     }
 
     async sendChatMessage(message, options = {}) {

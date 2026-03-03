@@ -9,7 +9,7 @@ import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
 import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
-import { executeResult as executeResultShared, executeShortcutCommand } from '../shared/result-executor.js';
+import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -147,7 +147,7 @@ export class ChatApp {
             this.updateSuggestions();
         });
 
-        this.elements.chatInput.addEventListener('keydown', (e) => {
+        this.elements.chatInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Tab') {
                 e.preventDefault();
                 if (this.currentSuggestions.length > 0) {
@@ -180,11 +180,7 @@ export class ChatApp {
                 this.clearSuggestions();
             } else if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (this.currentSuggestions.length > 0 && this.suggestionIndex >= 0) {
-                    this.executeSuggestion(this.currentSuggestions[this.suggestionIndex]);
-                } else {
-                    this.sendMessage();
-                }
+                await this.handleEnterKey();
             }
         });
 
@@ -1466,6 +1462,36 @@ export class ChatApp {
         // Fallback for unhandled types
         if (cmd.execute) {
             await cmd.execute(this.invoke, this.appWindow);
+        }
+    }
+
+    async handleEnterKey() {
+        const message = this.elements.chatInput.value.trim();
+        const hasAttachments = this.attachmentManager.hasAttachments();
+        const hasSelection = this.currentSuggestions.length > 0 && this.suggestionIndex >= 0;
+
+        if (!message && !hasAttachments && !hasSelection) return;
+
+        if (this.isWaitingForResponse) {
+            this.stopGenerating();
+        }
+
+        const result = await handleEnterAction({
+            message,
+            suggestions: this.currentSuggestions,
+            selectedIndex: this.suggestionIndex,
+            shortcuts: this.shortcuts,
+            ctx: this._getExecCtx(),
+            onSend: (msg) => {
+                this.elements.chatInput.value = msg;
+                this.sendMessage();
+            },
+        });
+
+        if (result.handled) {
+            this.elements.chatInput.value = '';
+            this.elements.chatInput.style.height = 'auto';
+            this.clearSuggestions();
         }
     }
 
