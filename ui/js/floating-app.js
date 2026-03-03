@@ -130,12 +130,24 @@ export class FloatingApp {
             dt.style.opacity = '1';
         }
         // Position speech button: to the left of datetime when visible, or at right edge
-        if (this.elements.speechBtn && this.elements.speechBtn.style.display !== 'none') {
-            if (!dtHidden && dt.style.display !== 'none') {
-                const dtWidth = dt.offsetWidth || 60;
-                this.elements.speechBtn.style.right = (dtWidth + 18) + 'px';
+        // Hide speech button when stop button is showing (generating response)
+        if (this.elements.speechBtn) {
+            if (stopVisible) {
+                this.elements.speechBtn.style.display = 'none';
             } else {
-                this.elements.speechBtn.style.right = '10px';
+                // Re-show if config says so (updateVisibility sets the base display)
+                // Only restore if it was hidden by us, not by config
+                if (this.elements.speechBtn.dataset.configVisible === 'true') {
+                    this.elements.speechBtn.style.display = '';
+                }
+                if (this.elements.speechBtn.style.display !== 'none') {
+                    if (!dtHidden && dt.style.display !== 'none') {
+                        const dtWidth = dt.offsetWidth || 60;
+                        this.elements.speechBtn.style.right = (dtWidth + 18) + 'px';
+                    } else {
+                        this.elements.speechBtn.style.right = '10px';
+                    }
+                }
             }
         }
     }

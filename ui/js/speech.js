@@ -47,6 +47,7 @@ export class SpeechController {
             this.voiceName = config.ui?.speech_voice || '';
             if (this.elements.speechBtn) {
                 this.elements.speechBtn.style.display = show ? '' : 'none';
+                this.elements.speechBtn.dataset.configVisible = show ? 'true' : 'false';
             }
             this.onVisibilityUpdate();
         } catch (e) {
