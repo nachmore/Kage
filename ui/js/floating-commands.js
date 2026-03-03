@@ -99,6 +99,23 @@ const LOCAL_COMMANDS = [
             await invoke('open_store_window');
             await appWindow.hide();
         }
+    },
+    {
+        name: 'session-folder',
+        description: 'Open current session file in file explorer',
+        icon: '📂',
+        execute: async (invoke) => {
+            try {
+                const sessionId = await invoke('get_current_session_id');
+                if (!sessionId) {
+                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'No active session' }));
+                    return;
+                }
+                await invoke('reveal_session_file', { sessionId });
+            } catch (e) {
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+            }
+        }
     }
 ];
 
