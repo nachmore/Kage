@@ -183,7 +183,17 @@ function wrapCodeBlock(codeBlock, pre, language) {
     langLabel.className = 'code-block-language';
     langLabel.textContent = language;
     header.appendChild(langLabel);
-    header.appendChild(createCopyButton(codeBlock.textContent));
+
+    const actions = document.createElement('div');
+    actions.className = 'code-block-actions';
+    // Add Try button for JavaScript code blocks
+    const jsLangs = ['javascript', 'js', 'jsx', 'typescript', 'ts', 'tsx'];
+    if (jsLangs.includes((language || '').toLowerCase())) {
+        actions.appendChild(createTryButton(codeBlock, wrapper));
+    }
+    actions.appendChild(createCopyButton(codeBlock.textContent));
+    header.appendChild(actions);
+
     pre.parentNode.insertBefore(wrapper, pre);
     wrapper.appendChild(header);
     wrapper.appendChild(pre);
@@ -565,6 +575,159 @@ function copyCode(code, button) {
         button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
         setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
     }).catch(err => console.error('Copy failed:', err));
+}
+
+function createTryButton(codeBlock, wrapper) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-button try-button';
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
+    btn.onclick = () => {
+        const liveWrapper = btn.closest('.code-block-wrapper');
+        if (!liveWrapper) return;
+        const liveCode = liveWrapper.querySelector('code');
+        if (!liveCode) return;
+        runCodeInSandbox(liveCode.textContent, liveWrapper, btn);
+    };
+    return btn;
+}
+
+const _tryPlayIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
+const _tryStopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg><span>Stop</span>';
+
+function runCodeInSandbox(code, wrapper, button) {
+    // Flag to suppress blur-hide while sandbox iframe is being created
+    window._kiroSandboxActive = true;
+
+    // If already running, stop it
+    if (wrapper._kiroSandboxCleanup) {
+        wrapper._kiroSandboxCleanup();
+        return;
+    }
+
+    // Remove any previous output
+    const prev = wrapper.querySelector('.try-output');
+    if (prev) prev.remove();
+    const prevIframe = wrapper._kiroSandboxIframe;
+    if (prevIframe && prevIframe.parentNode) prevIframe.remove();
+
+    // Create output container
+    const output = document.createElement('div');
+    output.className = 'try-output';
+
+    const outputHeader = document.createElement('div');
+    outputHeader.className = 'try-output-header';
+    outputHeader.innerHTML = '<span>Console Output</span>';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'try-output-close';
+    closeBtn.textContent = '✕';
+    closeBtn.onclick = () => { cleanup(); output.remove(); };
+    outputHeader.appendChild(closeBtn);
+    output.appendChild(outputHeader);
+
+    const outputBody = document.createElement('pre');
+    outputBody.className = 'try-output-body';
+    output.appendChild(outputBody);
+    wrapper.appendChild(output);
+
+    // Switch button to Stop mode
+    button.innerHTML = _tryStopIcon;
+    button.classList.add('try-button-running');
+
+    // Build sandboxed iframe
+    const iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-scripts';
+    iframe.style.cssText = 'display:none;width:0;height:0;border:0;';
+    document.body.appendChild(iframe);
+    wrapper._kiroSandboxIframe = iframe;
+
+    let finished = false;
+    let timeout;
+
+    function appendLine(cls, text) {
+        const line = document.createElement('div');
+        line.className = 'try-output-line ' + cls;
+        line.textContent = text;
+        outputBody.appendChild(line);
+        outputBody.scrollTop = outputBody.scrollHeight;
+    }
+
+    function cleanup(reason) {
+        if (finished) return;
+        finished = true;
+        window._kiroSandboxActive = false;
+        clearTimeout(timeout);
+        window.removeEventListener('message', onMessage);
+        if (iframe.parentNode) iframe.remove();
+        wrapper._kiroSandboxIframe = null;
+        wrapper._kiroSandboxCleanup = null;
+        button.innerHTML = _tryPlayIcon;
+        button.classList.remove('try-button-running');
+        if (reason === 'stopped') appendLine('try-output-dim', '⏹ Stopped');
+        else if (reason === 'timeout') appendLine('try-output-warn', '⏱ Timed out (30s)');
+        if (outputBody.children.length === 0) {
+            appendLine('try-output-dim', '(no output)');
+        }
+    }
+
+    wrapper._kiroSandboxCleanup = () => cleanup('stopped');
+
+    function onMessage(e) {
+        if (e.source !== iframe.contentWindow) return;
+        const msg = e.data;
+        if (!msg || msg._kiroSandbox !== true) return;
+        if (msg.type === 'log') appendLine('', msg.args.map(String).join(' '));
+        else if (msg.type === 'warn') appendLine('try-output-warn', msg.args.map(String).join(' '));
+        else if (msg.type === 'error') appendLine('try-output-error', msg.args.map(String).join(' '));
+        else if (msg.type === 'result') {
+            if (msg.value !== undefined && msg.value !== 'undefined') {
+                appendLine('try-output-result', '→ ' + msg.value);
+            }
+        }
+        else if (msg.type === 'exception') appendLine('try-output-error', '✕ ' + msg.message);
+        else if (msg.type === 'done') cleanup();
+    }
+    window.addEventListener('message', onMessage);
+
+    // 30s hard limit for runaway code
+    timeout = setTimeout(() => {
+        if (!finished) cleanup('timeout');
+    }, 30000);
+
+    const sandboxScript = `
+        <script>
+        (function() {
+            function send(type, data) {
+                parent.postMessage(Object.assign({ _kiroSandbox: true, type: type }, data), '*');
+            }
+            window.onerror = function(msg) {
+                send('exception', { message: String(msg) });
+                send('done', {});
+                return true;
+            };
+            ['log','warn','error'].forEach(function(m) {
+                console[m] = function() {
+                    send(m, { args: Array.from(arguments).map(function(a) {
+                        try { return typeof a === 'object' ? JSON.stringify(a) : String(a); }
+                        catch(e) { return String(a); }
+                    })});
+                };
+            });
+            try {
+                var __result = (new Function(${JSON.stringify(code)}))();
+                if (__result !== undefined) {
+                    var display;
+                    try { display = typeof __result === 'object' ? JSON.stringify(__result, null, 2) : String(__result); }
+                    catch(e) { display = String(__result); }
+                    send('result', { value: display });
+                }
+            } catch(e) {
+                send('exception', { message: (e.name || 'Error') + ': ' + e.message });
+            }
+            send('done', {});
+        })();
+        <\/script>
+    `;
+    iframe.srcdoc = sandboxScript;
 }
 
 function createSaveButton(diagramContentEl) {

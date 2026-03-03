@@ -40,6 +40,60 @@
 .copy-button:hover { background: #4e4e4e; color: #fff; }
 .copy-button.copied { background: #a6e22e; color: #272822; }
 
+.code-block-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+/* Try button */
+.try-button { background: #2d4a2d; color: #a6e22e; }
+.try-button:hover { background: #3a5c3a; color: #c8ff5e; }
+.try-button-running { background: #5a2d2d; color: #f92672; }
+.try-button-running:hover { background: #6a3a3a; color: #ff5e8e; }
+
+/* Try output panel */
+.try-output {
+    border-top: 1px solid #3e3e3e;
+    background: #1a1a1a;
+}
+.try-output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    font-weight: 600;
+    background: #1e1e1e;
+    border-bottom: 1px solid #2a2a2a;
+}
+.try-output-close {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0 4px;
+    line-height: 1;
+}
+.try-output-close:hover { color: #ccc; }
+.try-output-body {
+    margin: 0;
+    padding: 8px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.try-output-line { color: #d4d4d4; white-space: pre-wrap; word-break: break-all; }
+.try-output-warn { color: #e6db74; }
+.try-output-error { color: #f92672; }
+.try-output-result { color: #a6e22e; }
+.try-output-dim { color: #666; font-style: italic; }
+
 .code-block-wrapper pre {
     margin: 0;
     padding: 16px;

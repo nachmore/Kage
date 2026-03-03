@@ -33,6 +33,20 @@ body.dark-theme .copy-button {
 body.dark-theme .copy-button:hover {
     background: #3a3a3a;
 }
+body.dark-theme .try-button {
+    background: #1a3a1a;
+}
+body.dark-theme .try-button:hover {
+    background: #2a4a2a;
+}
+body.dark-theme .try-output {
+    border-top-color: #2a2a2a;
+    background: #111;
+}
+body.dark-theme .try-output-header {
+    background: #0d0d0d;
+    border-bottom-color: #222;
+}
 
 /* Diagram dark theme (mermaid + PlantUML) */
 body.dark-theme .diagram-wrapper {

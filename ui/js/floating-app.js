@@ -376,6 +376,9 @@ export class FloatingApp {
         });
         
         this.appWindow.listen('tauri://blur', async () => {
+
+            console.log("BLUR: Kiro Sandbox Active: " + window._kiroSandboxActive);
+
             // Don't hide if permission modal is open
             const permissionModal = document.getElementById('permissionModal');
             if (permissionModal && permissionModal.style.display !== 'none') {
@@ -1581,6 +1584,8 @@ export class FloatingApp {
         
         const container = document.querySelector('.floating-container');
         if (container && !container.contains(event.target)) {
+            // Don't hide if a sandbox iframe is running (Try button)
+            if (window._kiroSandboxActive) return;
             await this.appWindow.hide();
         }
     }
