@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use log::{info, error};
+use log::{info, warn, error};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 
 /// Set up the notification handler on the ACP client.
@@ -96,6 +96,16 @@ pub fn setup_notification_handler(
             // Emit compaction status to frontend
             if method == "_kiro.dev/compaction/status" {
                 let _ = app_handle.emit("compaction_status", &notification);
+                return;
+            }
+            // Rate limit error — emit as a user-visible error
+            if method == "_kiro.dev/error/rate_limit" {
+                let message = notification.get("params")
+                    .and_then(|p| p.get("message"))
+                    .and_then(|m| m.as_str())
+                    .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
+                warn!("Rate limit hit: {}", message);
+                let _ = app_handle.emit("message_error", message);
                 return;
             }
             let _ = app_handle.emit("tool_call_update", &notification);

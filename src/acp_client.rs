@@ -754,11 +754,20 @@ impl AcpClient {
             Ok(()) => return Ok(()),
             Err(e) => {
                 let err_str = format!("{}", e);
-                if !err_str.contains("Timeout") && !err_str.contains("Connection lost") {
-                    // Not a timeout/disconnect — don't retry
+                if Self::is_recoverable_error(&err_str) {
+                    warn!("Prompt failed ({}), attempting recovery…", err_str);
+                    // If it's a panic/corruption, skip straight to fresh session
+                    if Self::is_corrupted_session(&err_str) {
+                        warn!("Session corrupted — skipping reload, creating fresh session");
+                        self.restart_connection()?;
+                        self.set_session_id(None);
+                        self.create_session(None)?;
+                        self.send_builtin_steering();
+                        return self.send_chat_streaming(content, attachments);
+                    }
+                } else {
                     return Err(e);
                 }
-                warn!("Prompt failed ({}), attempting recovery…", err_str);
             }
         }
 
@@ -792,10 +801,11 @@ impl AcpClient {
             Ok(()) => return Ok(()),
             Err(e) => {
                 let err_str = format!("{}", e);
-                if !err_str.contains("Timeout") && !err_str.contains("Connection lost") {
+                if Self::is_recoverable_error(&err_str) {
+                    warn!("Prompt failed again after session reload ({}), trying fresh session…", err_str);
+                } else {
                     return Err(e);
                 }
-                warn!("Prompt failed again after session reload ({}), trying fresh session…", err_str);
             }
         }
 
@@ -806,6 +816,29 @@ impl AcpClient {
         self.send_builtin_steering();
 
         self.send_chat_streaming(content, attachments)
+    }
+
+    /// Check if an error is recoverable (worth retrying with a fresh connection/session)
+    fn is_recoverable_error(err_str: &str) -> bool {
+        // Throttling is not recoverable by reconnecting — just surface it
+        if err_str.contains("throttled") || err_str.contains("rate limit") || err_str.contains("Rate limit") {
+            return false;
+        }
+        err_str.contains("Timeout")
+            || err_str.contains("Connection lost")
+            || err_str.contains("Internal error")
+            || err_str.contains("invalid conversation history")
+            || err_str.contains("panicked")
+    }
+
+    /// Check if the error indicates the session itself is corrupted (don't try to reload it)
+    fn is_corrupted_session(err_str: &str) -> bool {
+        // Throttling is NOT corruption — don't nuke the session for rate limits
+        if err_str.contains("throttled") || err_str.contains("rate limit") || err_str.contains("Rate limit") {
+            return false;
+        }
+        err_str.contains("invalid conversation history")
+            || err_str.contains("panicked")
     }
 }
 

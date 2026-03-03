@@ -202,7 +202,7 @@ def screenshot(
     region_left: Optional[int] = None,
     region_width: Optional[int] = None,
     region_height: Optional[int] = None,
-    max_width: int = 800,
+    max_width: int = 1280,
 ) -> list:
     """Capture a screenshot of the screen. This is your 'eyes' — call this
     to see what's currently on screen before and after performing actions.
@@ -247,6 +247,127 @@ def screenshot(
         ]
     except Exception:
         log.exception("screenshot: FAILED")
+        raise
+
+
+# ---------------------------------------------------------------------------
+# Window-specific screenshot (Windows only, graceful fallback on other OS)
+# ---------------------------------------------------------------------------
+def _find_windows(title_pattern: str) -> list:
+    """Find windows whose title contains the given pattern (case-insensitive)."""
+    if platform.system() != "Windows":
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        user32 = ctypes.windll.user32
+        results = []
+
+        def enum_callback(hwnd, _):
+            if not user32.IsWindowVisible(hwnd):
+                return True
+            length = user32.GetWindowTextLengthW(hwnd)
+            if length == 0:
+                return True
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            title = buf.value
+            if title_pattern.lower() in title.lower():
+                rect = wintypes.RECT()
+                user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                results.append({
+                    "hwnd": hwnd,
+                    "title": title,
+                    "left": rect.left,
+                    "top": rect.top,
+                    "width": rect.right - rect.left,
+                    "height": rect.bottom - rect.top,
+                })
+            return True
+
+        WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        user32.EnumWindows(WNDENUMPROC(enum_callback), 0)
+        return results
+    except Exception as e:
+        log.error("_find_windows failed: %s", e)
+        return []
+
+
+@mcp.tool()
+def list_windows(title_pattern: str = "") -> list:
+    """List visible windows, optionally filtered by title pattern.
+
+    Args:
+        title_pattern: Filter windows whose title contains this text (case-insensitive). Empty = all windows.
+
+    Returns:
+        List of {title, left, top, width, height} for each matching window.
+    """
+    windows = _find_windows(title_pattern) if title_pattern else _find_windows("")
+    # Return without hwnd (not useful to the agent)
+    result = [{"title": w["title"], "left": w["left"], "top": w["top"],
+               "width": w["width"], "height": w["height"]} for w in windows
+              if w["width"] > 50 and w["height"] > 50]  # filter tiny/hidden windows
+    log.info("list_windows: pattern=%r, found %d windows", title_pattern, len(result))
+    return result
+
+
+@mcp.tool()
+def screenshot_window(
+    title_pattern: str,
+    max_width: int = 1280,
+) -> list:
+    """Capture a screenshot of a specific window by its title.
+
+    This is more precise than a full-screen screenshot — it captures just the
+    window at higher resolution, making UI elements easier to read.
+
+    Args:
+        title_pattern: Text to match in the window title (case-insensitive). E.g. 'Word', 'Notepad'
+        max_width: Scale image down to this width (default 1280)
+
+    Returns:
+        Screenshot of the matched window, or an error if not found.
+    """
+    windows = _find_windows(title_pattern)
+    if not windows:
+        log.warning("screenshot_window: no window matching %r", title_pattern)
+        return f"No window found matching '{title_pattern}'. Use list_windows() to see available windows."
+
+    # Pick the largest matching window (most likely the main one)
+    win = max(windows, key=lambda w: w["width"] * w["height"])
+    log.info("screenshot_window: capturing '%s' at (%d,%d) %dx%d",
+             win["title"], win["left"], win["top"], win["width"], win["height"])
+
+    region = {
+        "top": win["top"],
+        "left": win["left"],
+        "width": win["width"],
+        "height": win["height"],
+    }
+
+    try:
+        jpeg_bytes, orig_w, orig_h, scaled_w, scaled_h = _capture_screenshot(
+            region=region, max_width=max_width
+        )
+        b64 = base64.b64encode(jpeg_bytes).decode("ascii")
+        scale_factor = orig_w / scaled_w if scaled_w else 1.0
+
+        info = (
+            f"Window '{win['title']}' captured. "
+            f"Window position: ({win['left']}, {win['top']}), size: {orig_w}x{orig_h}px. "
+            f"Image: {scaled_w}x{scaled_h}px (scale factor: {scale_factor:.2f}x). "
+            f"IMPORTANT: To click inside this window, multiply image coordinates by {scale_factor:.2f} "
+            f"then add the window offset ({win['left']}, {win['top']})."
+        )
+
+        return [
+            TextContent(type="text", text=info),
+            ImageContent(type="image", data=b64, mimeType="image/jpeg"),
+        ]
+    except Exception:
+        log.exception("screenshot_window: FAILED for '%s'", win["title"])
         raise
 
 
