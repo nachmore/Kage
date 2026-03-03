@@ -1,7 +1,7 @@
 // Main entry point
 import { FloatingApp } from './floating-app.js';
-import { initMarkdown } from './floating-markdown.js';
-import { applyTheme, initThemeListener, loadAndApplyTheme } from './floating-theme.js';
+import { initMarkdown } from './markdown.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './theme.js';
 
 function initApp() {
     console.log('initApp called, checking Tauri...');

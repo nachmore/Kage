@@ -1,8 +1,8 @@
 // Main application logic
 import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './floating-suggestions.js';
 import { WindowManager } from './floating-window.js';
-import { renderMarkdown } from './floating-markdown.js';
-import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './floating-commands.js';
+import { renderMarkdown } from './markdown.js';
+import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from './commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from './attachments.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from './streaming-utils.js';
 import { sendAppNotification } from './notify.js';
@@ -11,6 +11,8 @@ import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, up
 import { playTimerSound } from './timer-sounds.js';
 import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './floating-search-unified.js';
 import { ExtensionManager } from './extension-manager.js';
+import { SpeechController } from './speech.js';
+import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from './shortcuts.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -120,7 +122,7 @@ export class FloatingApp {
         const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
         const hasInput = this.elements.input.value.length > 0;
         const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex';
-        const dtHidden = this.isWaitingForResponse || stopVisible || hasInput || qaVisible || this.isSpeechListening;
+        const dtHidden = this.isWaitingForResponse || stopVisible || hasInput || qaVisible || this.speech?.isListening;
         if (dtHidden) {
             dt.style.display = 'none';
         } else {
@@ -150,10 +152,10 @@ export class FloatingApp {
                 // Escape — stop speech/TTS first, then stop generating, then hide
                 if (e.key === 'Escape') {
                     // Stop speech recognition or TTS first
-                    if (this.isSpeechListening || speechSynthesis.speaking) {
+                    if (this.speech?.isActive) {
                         e.preventDefault();
-                        this.stopSpeech();
-                        speechSynthesis.cancel();
+                        this.speech.stop();
+                        this.speech.cancelSpeech();
                         return;
                     }
                     if (this.isWaitingForResponse) {
@@ -473,176 +475,27 @@ export class FloatingApp {
     // --- Speech ---
 
     async updateSpeechButtonVisibility() {
-        try {
-            const config = await this.invoke('get_config');
-            const show = config.ui?.show_speech_button === true;
-            this.speechReadBack = config.ui?.speech_read_back === true;
-            this.speechSilenceTimeout = (config.ui?.speech_silence_timeout ?? 2.0) * 1000;
-            this.speechVoiceName = config.ui?.speech_voice || '';
-            if (this.elements.speechBtn) {
-                this.elements.speechBtn.style.display = show ? '' : 'none';
-            }
-            this.updateDatetimeVisibility();
-        } catch {}
+        await this.speech.updateVisibility();
     }
 
     setupSpeech() {
-        this.speechRecognition = null;
-        this.isSpeechListening = false;
-        this.speechReadBack = false;
-        this.speechSilenceTimeout = 2000;
-        this.speechVoiceName = '';
-        this._usedSpeechForLastMessage = false;
-        this._speechSilenceTimer = null;
-
-        if (this.elements.speechBtn) {
-            this.elements.speechBtn.addEventListener('click', () => this.toggleSpeech());
-        }
-
-        this.updateSpeechButtonVisibility();
+        this.speech = new SpeechController({
+            invoke: this.invoke,
+            elements: {
+                input: this.elements.input,
+                speechBtn: this.elements.speechBtn,
+                speechWave: this.elements.speechWave
+            },
+            onSend: (text) => this.sendChatMessage(text),
+            onVisibilityUpdate: () => this.updateDatetimeVisibility()
+        });
+        this.speech.setup();
     }
 
-    toggleSpeech() {
-        if (this.isSpeechListening) {
-            this.stopSpeech();
-        } else {
-            this.startSpeech();
-        }
-    }
-
-    startSpeech() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Speech recognition is not supported in this environment.' }));
-            return;
-        }
-
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = navigator.language || 'en-US';
-
-        let finalTranscript = '';
-
-        recognition.onresult = (event) => {
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-                if (event.results[i].isFinal) {
-                    finalTranscript += event.results[i][0].transcript;
-                } else {
-                    interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            this.elements.input.value = finalTranscript + interimTranscript;
-            this.elements.input.style.height = 'auto';
-            this.elements.input.style.height = this.elements.input.scrollHeight + 'px';
-            this.updateDatetimeVisibility();
-
-            // Reset silence timer — auto-submit after configured silence period
-            clearTimeout(this._speechSilenceTimer);
-            if (this.speechSilenceTimeout > 0 && finalTranscript.trim()) {
-                this._speechSilenceTimer = setTimeout(() => {
-                    if (this.isSpeechListening && finalTranscript.trim()) {
-                        this._usedSpeechForLastMessage = true;
-                        this.stopSpeech();
-                        this.sendChatMessage(finalTranscript.trim());
-                    }
-                }, this.speechSilenceTimeout);
-            }
-        };
-
-        recognition.onerror = (event) => {
-            console.error('Speech recognition error:', event.error);
-            if (event.error === 'not-allowed') {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Microphone access denied. Please allow microphone access in your system settings.' }));
-            }
-            this.stopSpeech();
-        };
-
-        recognition.onend = () => {
-            clearTimeout(this._speechSilenceTimer);
-            if (this.isSpeechListening) {
-                // Recognition ended naturally (browser decided silence)
-                this.isSpeechListening = false;
-                this.updateSpeechUI(false);
-                this.updateDatetimeVisibility();
-                if (finalTranscript.trim()) {
-                    this._usedSpeechForLastMessage = true;
-                    this.sendChatMessage(finalTranscript.trim());
-                }
-            } else {
-                this.updateSpeechUI(false);
-                this.updateDatetimeVisibility();
-                if (this.elements.input.value.trim()) {
-                    this._usedSpeechForLastMessage = true;
-                }
-            }
-        };
-
-        this.speechRecognition = recognition;
-        this.isSpeechListening = true;
-        this.updateSpeechUI(true);
-        this.updateDatetimeVisibility();
-
-        try {
-            recognition.start();
-        } catch (e) {
-            console.error('Failed to start speech recognition:', e);
-            this.isSpeechListening = false;
-            this.updateSpeechUI(false);
-            this.updateDatetimeVisibility();
-        }
-    }
-
-    stopSpeech() {
-        clearTimeout(this._speechSilenceTimer);
-        if (this.speechRecognition) {
-            this.isSpeechListening = false;
-            this.speechRecognition.stop();
-            this.speechRecognition = null;
-        }
-        this.updateSpeechUI(false);
-        this.updateDatetimeVisibility();
-    }
-
-    updateSpeechUI(listening) {
-        if (this.elements.speechBtn) {
-            this.elements.speechBtn.classList.toggle('listening', listening);
-            this.elements.speechBtn.title = listening ? 'Stop listening' : 'Voice input';
-        }
-        if (this.elements.speechWave) {
-            this.elements.speechWave.style.display = listening ? 'flex' : 'none';
-        }
-    }
-
-    speakResponse(text) {
-        if (!this.speechReadBack || !this._usedSpeechForLastMessage) return;
-        this._usedSpeechForLastMessage = false;
-
-        speechSynthesis.cancel();
-
-        const clean = text.replace(/```[\s\S]*?```/g, ' code block ')
-            .replace(/`([^`]+)`/g, '$1')
-            .replace(/[#*_~>\[\]()]/g, '')
-            .replace(/\n+/g, '. ')
-            .trim();
-
-        if (!clean) return;
-
-        const utterance = new SpeechSynthesisUtterance(clean);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        utterance.lang = navigator.language || 'en-US';
-
-        // Use configured voice if set
-        if (this.speechVoiceName) {
-            const voice = speechSynthesis.getVoices().find(v => v.name === this.speechVoiceName);
-            if (voice) utterance.voice = voice;
-        }
-
-        speechSynthesis.speak(utterance);
-    }
+    // Convenience accessors used by Escape handler and sendChatMessage
+    get isSpeechListening() { return this.speech?.isListening ?? false; }
+    get _usedSpeechForLastMessage() { return this.speech?.usedSpeechForLastMessage ?? false; }
+    set _usedSpeechForLastMessage(v) { if (this.speech) this.speech.usedSpeechForLastMessage = v; }
 
     async loadShortcuts() {
         try {
@@ -798,202 +651,13 @@ export class FloatingApp {
     }
 
     matchShortcut(input) {
-        const parts = input.split(/\s+/);
-        const trigger = parts[0].toLowerCase();
-        const args = parts.slice(1);
-
-        // Find all shortcuts with matching trigger
-        const matches = this.shortcuts.filter(s => s.shortcut.toLowerCase() === trigger);
-        if (matches.length === 0) return null;
-
-        // Score each match based on argument compatibility
-        const scoredMatches = matches.map(shortcut => {
-            const score = this.scoreShortcutMatch(shortcut, args);
-            return { shortcut, args, score };
-        });
-
-        // Sort by score (highest first)
-        scoredMatches.sort((a, b) => b.score - a.score);
-
-        return scoredMatches;
-    }
-
-    scoreShortcutMatch(shortcut, args) {
-        const actionType = shortcut.action_type || 'run_program';
-        const argCount = args.length;
-
-        // For open_url, check if URL has argument placeholders
-        if (actionType === 'open_url') {
-            const url = shortcut.url || '';
-            
-            // Count specific placeholders {0}, {1}, etc.
-            const placeholderCount = (url.match(/\{\d+\}/g) || []).length;
-            
-            if (placeholderCount > 0) {
-                // Has specific placeholders - prefer exact match
-                if (argCount === placeholderCount) return 100; // Perfect match
-                if (argCount > placeholderCount) return 80;    // Extra args ignored
-                return 60;                                      // Missing args
-            }
-            
-            if (url.includes('{*}')) {
-                // Wildcard - accepts any args but lower priority than exact match
-                return argCount > 0 ? 90 : 50; // Prefer if args provided, but less than exact
-            }
-            
-            // No placeholders - prefer if no args
-            return argCount === 0 ? 100 : 50;
-        }
-
-        // For run_program
-        const argTemplate = shortcut.arguments || '';
-        
-        if (!argTemplate) {
-            // No argument template - prefer if no args
-            return argCount === 0 ? 100 : 50;
-        }
-
-        // Count specific placeholders {0}, {1}, etc.
-        const placeholderCount = (argTemplate.match(/\{\d+\}/g) || []).length;
-        
-        if (placeholderCount > 0) {
-            // Has specific placeholders - prefer exact match
-            if (argCount === placeholderCount) return 100; // Perfect match
-            if (argCount > placeholderCount) return 80;    // Extra args ignored
-            return 60;                                      // Missing args
-        }
-        
-        if (argTemplate.includes('{*}')) {
-            // Wildcard - accepts any args but lower priority than exact match
-            return argCount > 0 ? 90 : 50; // Prefer if args provided, but less than exact
-        }
-
-        // Template exists but no placeholders - prefer if no args
-        return argCount === 0 ? 100 : 50;
+        return matchShortcutFn(input, this.shortcuts);
     }
 
     buildShortcutCommand(shortcut, args) {
-            // Validate required params before building
-            const validation = this._validateShortcutArgs(shortcut, args);
-            if (!validation.valid) {
-                return { type: 'error', message: validation.message };
-            }
-
-            const actionType = shortcut.action_type || 'run_program';
-
-            // Helper: substitute {*}, {0},{1},... and {0?},{1?},... in a template string
-            // {N} = required param, {N?} = optional param (replaced with empty string if missing)
-            const substitute = (template, encode = false) => {
-                if (!template) return '';
-                let result = template;
-                // {selection} — currently selected text from previous window
-                const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
-                const sel = useSelection && this.lastSelection ? this.lastSelection : '';
-                result = result.replace(/\{selection\}/g, encode ? encodeURIComponent(sel) : sel);
-                if (result.includes('{*}')) {
-                    const all = args.join(' ');
-                    result = result.replace('{*}', encode ? encodeURIComponent(all) : all);
-                } else {
-                    // Replace optional params first {N?}
-                    result = result.replace(/\{(\d+)\?\}/g, (_, idx) => {
-                        const i = parseInt(idx);
-                        const val = i < args.length ? args[i] : '';
-                        return encode ? encodeURIComponent(val) : val;
-                    });
-                    // Replace required params {N}
-                    for (let i = 0; i < args.length; i++) {
-                        const val = encode ? encodeURIComponent(args[i]) : args[i];
-                        result = result.replace(new RegExp(`\\{${i}\\}`, 'g'), val);
-                    }
-                }
-                return result;
-            };
-
-            if (actionType === 'open_url') {
-                return { type: 'open_url', url: substitute(shortcut.url || '', true) };
-            }
-
-            if (actionType === 'prompt') {
-                return { type: 'prompt', message: substitute(shortcut.prompt || '{*}') };
-            }
-
-            if (actionType === 'script') {
-                try {
-                    const fn = new Function('...args', shortcut.script || 'return args.join(" ")');
-                    const result = fn(...args);
-                    if (result === null || result === undefined) {
-                        return { type: 'noop' };
-                    }
-                    const scriptAction = shortcut.script_action || 'text';
-
-                    if (scriptAction === 'run_program') {
-                        if (!Array.isArray(result)) {
-                            return { type: 'error', message: 'Script must return an array [cmd, workDir, ...args] for Run as Command' };
-                        }
-                        return {
-                            type: 'run_program',
-                            path: result[0] || '',
-                            workDir: result[1] || null,
-                            args: result.slice(2).map(String)
-                        };
-                    }
-
-                    // All other actions expect a string
-                    if (typeof result !== 'string') {
-                        return { type: 'error', message: 'Script must return a string, got ' + typeof result };
-                    }
-                    if (scriptAction === 'open_url') return { type: 'open_url', url: result };
-                    if (scriptAction === 'prompt') return { type: 'prompt', message: result };
-                    return { type: 'text', message: result };
-                } catch (e) {
-                    return { type: 'error', message: `Script ${e.constructor?.name || 'Error'}: ${e.message}` };
-                }
-            }
-
-            // run_program (default)
-            if (!shortcut.arguments) {
-                return { type: 'run_program', path: shortcut.path, args: [], workDir: shortcut.working_directory };
-            }
-            const processedArgs = substitute(shortcut.arguments).split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/));
-            return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
-        }
-
-    /**
-     * Check if a shortcut has all required parameters provided.
-     * Required: {0}, {1}, etc. Optional: {0?}, {1?}, etc.
-     * {*} and {selection} don't count as numbered params.
-     */
-    _validateShortcutArgs(shortcut, args) {
-        // Collect all templates that might contain params
-        const templates = [
-            shortcut.url, shortcut.prompt, shortcut.arguments, shortcut.script
-        ].filter(Boolean).join(' ');
-
-        // If template uses {*} or has no numbered params, no validation needed
-        if (templates.includes('{*}')) return { valid: true };
-
-        // Find all required params {N} (not {N?})
-        const requiredParams = new Set();
-        const paramRegex = /\{(\d+)\}/g;
-        let match;
-        while ((match = paramRegex.exec(templates)) !== null) {
-            // Check it's not actually {N?} by looking at the char after
-            const fullMatch = templates.substring(match.index, match.index + match[0].length + 1);
-            if (!fullMatch.endsWith('?}')) {
-                requiredParams.add(parseInt(match[1]));
-            }
-        }
-
-        if (requiredParams.size === 0) return { valid: true };
-
-        const maxRequired = Math.max(...requiredParams) + 1;
-        if (args.length >= maxRequired) return { valid: true };
-
-        const missing = maxRequired - args.length;
-        return {
-            valid: false,
-            message: `This command requires ${maxRequired} parameter${maxRequired > 1 ? 's' : ''} (${missing} missing). Usage: ${shortcut.shortcut} <${Array.from(requiredParams).map(i => 'arg' + i).join('> <')}>`
-        };
+        const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
+        const sel = useSelection && this.lastSelection ? this.lastSelection : '';
+        return buildShortcutCommandFn(shortcut, args, sel);
     }
 
     async executeShortcut(command) {
@@ -1451,8 +1115,10 @@ export class FloatingApp {
 
     async sendChatMessage(message, options = {}) {
         // Stop any ongoing TTS and speech recognition
-        speechSynthesis.cancel();
-        if (this.isSpeechListening) this.stopSpeech();
+        if (this.speech) {
+            this.speech.cancelSpeech();
+            if (this.speech.isListening) this.speech.stop();
+        }
 
         const attachments = this.attachmentManager.toContentBlocks();
         this.attachmentManager.clear();
@@ -1599,7 +1265,7 @@ export class FloatingApp {
             this.isWaitingForResponse = false;
 
             // Read back response if speech was used
-            this.speakResponse(this.currentResponse);
+            if (this.speech) this.speech.speakResponse(this.currentResponse);
 
             // Notify if window is hidden
             try {

@@ -1,6 +1,6 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './chat-app.js';
-import { applyTheme, initThemeListener, loadAndApplyTheme } from './floating-theme.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './theme.js';
 
 let app = null;
 
@@ -18,7 +18,10 @@ function initApp() {
     loadAndApplyTheme(invoke);
 
     // Re-apply theme when config changes
-    listen('config_updated', () => loadAndApplyTheme(invoke));
+    listen('config_updated', () => {
+        loadAndApplyTheme(invoke);
+        if (app?.speech) app.speech.updateVisibility();
+    });
 
     app = new ChatApp(invoke, appWindow, listen);
     app.init();

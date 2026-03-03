@@ -1,10 +1,11 @@
 // Expanded chat application logic
-import { renderMarkdown, initMarkdown } from './floating-markdown.js';
+import { renderMarkdown, initMarkdown } from './markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from './attachments.js';
-import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './floating-commands.js';
+import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from './commands.js';
 import { escapeHtml } from './tool-utils.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from './streaming-utils.js';
 import { sendAppNotification } from './notify.js';
+import { SpeechController } from './speech.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -39,6 +40,7 @@ export class ChatApp {
     async init() {
         initMarkdown();
         this.cacheElements();
+        this.setupSpeech();
         this.setupEventListeners();
         this.setupStreamingListeners();
         await this.loadFloatingSessionId();
@@ -120,7 +122,9 @@ export class ChatApp {
             contextPercent: document.getElementById('contextPercent'),
             modelSelector: document.getElementById('modelSelector'),
             modelName: document.getElementById('modelName'),
-            modelDropdown: document.getElementById('modelDropdown')
+            modelDropdown: document.getElementById('modelDropdown'),
+            chatSpeechBtn: document.getElementById('chatSpeechBtn'),
+            chatSpeechWave: document.getElementById('chatSpeechWave')
         };
     }
 
@@ -246,11 +250,17 @@ export class ChatApp {
         });
 
         document.addEventListener('keydown', (e) => {
-            // Escape — stop generating or close lightbox
+            // Escape — stop speech/TTS, then stop generating, or close lightbox
             if (e.key === 'Escape') {
                 if (lightbox.style.display !== 'none') {
                     lightbox.style.display = 'none';
                     lightboxImg.src = '';
+                    return;
+                }
+                if (this.speech?.isActive) {
+                    e.preventDefault();
+                    this.speech.stop();
+                    this.speech.cancelSpeech();
                     return;
                 }
                 if (this.isWaitingForResponse) {
@@ -763,10 +773,35 @@ export class ChatApp {
         }
     }
 
+    // --- Speech ---
+
+    setupSpeech() {
+        this.speech = new SpeechController({
+            invoke: this.invoke,
+            elements: {
+                input: this.elements.chatInput,
+                speechBtn: this.elements.chatSpeechBtn,
+                speechWave: this.elements.chatSpeechWave
+            },
+            onSend: (text) => {
+                this.elements.chatInput.value = text;
+                this.sendMessage();
+            },
+            onVisibilityUpdate: () => {}
+        });
+        this.speech.setup();
+    }
+
 
     // --- Messaging ---
 
     async sendMessage() {
+        // Stop any ongoing TTS and speech recognition
+        if (this.speech) {
+            this.speech.cancelSpeech();
+            if (this.speech.isListening) this.speech.stop();
+        }
+
         let message = this.elements.chatInput.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
         const hasPendingFiles = this._pendingFiles && this._pendingFiles.length > 0;
@@ -1013,6 +1048,11 @@ export class ChatApp {
             this.updateInputState();
             this.elements.chatInput.focus();
             this.scrollToBottom();
+
+            // Read back response if speech was used
+            if (this.speech && this.currentStreamingContent) {
+                this.speech.speakResponse(this.messages[this.messages.length - 1]?.content || '');
+            }
 
             this.loadSessions();
             this.loadFloatingSessionId();
