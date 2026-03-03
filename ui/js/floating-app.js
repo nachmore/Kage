@@ -51,12 +51,14 @@ export class FloatingApp {
         await this.extensionManager.initialize();
         setExtensionManager(this.extensionManager);
         await loadFrecency(this.invoke);
+        this.setupSpeech();
         
         // Listen for config updates
         this.listen('config_updated', async () => {
             console.log('Config updated, reloading...');
             await this.loadShortcuts();
             await this.extensionManager.onConfigUpdate();
+            this.updateSpeechButtonVisibility();
         });
 
         // Listen for slash commands from ACP
@@ -101,7 +103,9 @@ export class FloatingApp {
             floatingStopBtn: document.getElementById('floatingStopBtn'),
             ghostContainer: document.querySelector('.ghost-container'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
-            datetimeDisplay: document.getElementById('datetimeDisplay')
+            datetimeDisplay: document.getElementById('datetimeDisplay'),
+            speechBtn: document.getElementById('speechBtn'),
+            speechWave: document.getElementById('speechWave')
         };
     }
 
@@ -112,15 +116,25 @@ export class FloatingApp {
     updateDatetimeVisibility() {
         const dt = this.elements.datetimeDisplay;
         if (!dt) return;
-        // Hide if: streaming, stop button visible, input has text, or quick actions visible
+        // Hide if: streaming, stop button visible, input has text, quick actions visible, or speech listening
         const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
         const hasInput = this.elements.input.value.length > 0;
         const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex';
-        if (this.isWaitingForResponse || stopVisible || hasInput || qaVisible) {
+        const dtHidden = this.isWaitingForResponse || stopVisible || hasInput || qaVisible || this.isSpeechListening;
+        if (dtHidden) {
             dt.style.display = 'none';
         } else {
             dt.style.display = '';
             dt.style.opacity = '1';
+        }
+        // Position speech button: to the left of datetime when visible, or at right edge
+        if (this.elements.speechBtn && this.elements.speechBtn.style.display !== 'none') {
+            if (!dtHidden && dt.style.display !== 'none') {
+                const dtWidth = dt.offsetWidth || 60;
+                this.elements.speechBtn.style.right = (dtWidth + 18) + 'px';
+            } else {
+                this.elements.speechBtn.style.right = '10px';
+            }
         }
     }
 
@@ -133,8 +147,15 @@ export class FloatingApp {
 
             // Global keyboard shortcuts
             document.addEventListener('keydown', (e) => {
-                // Escape — stop generating first, then hide
+                // Escape — stop speech/TTS first, then stop generating, then hide
                 if (e.key === 'Escape') {
+                    // Stop speech recognition or TTS first
+                    if (this.isSpeechListening || speechSynthesis.speaking) {
+                        e.preventDefault();
+                        this.stopSpeech();
+                        speechSynthesis.cancel();
+                        return;
+                    }
                     if (this.isWaitingForResponse) {
                         e.preventDefault();
                         this.stopGenerating();
@@ -447,6 +468,180 @@ export class FloatingApp {
         this.windowManager.resizeWindow();
         // Tell the agent to abort the current prompt turn
         this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
+    }
+
+    // --- Speech ---
+
+    async updateSpeechButtonVisibility() {
+        try {
+            const config = await this.invoke('get_config');
+            const show = config.ui?.show_speech_button === true;
+            this.speechReadBack = config.ui?.speech_read_back === true;
+            this.speechSilenceTimeout = (config.ui?.speech_silence_timeout ?? 2.0) * 1000;
+            this.speechVoiceName = config.ui?.speech_voice || '';
+            if (this.elements.speechBtn) {
+                this.elements.speechBtn.style.display = show ? '' : 'none';
+            }
+            this.updateDatetimeVisibility();
+        } catch {}
+    }
+
+    setupSpeech() {
+        this.speechRecognition = null;
+        this.isSpeechListening = false;
+        this.speechReadBack = false;
+        this.speechSilenceTimeout = 2000;
+        this.speechVoiceName = '';
+        this._usedSpeechForLastMessage = false;
+        this._speechSilenceTimer = null;
+
+        if (this.elements.speechBtn) {
+            this.elements.speechBtn.addEventListener('click', () => this.toggleSpeech());
+        }
+
+        this.updateSpeechButtonVisibility();
+    }
+
+    toggleSpeech() {
+        if (this.isSpeechListening) {
+            this.stopSpeech();
+        } else {
+            this.startSpeech();
+        }
+    }
+
+    startSpeech() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Speech recognition is not supported in this environment.' }));
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = navigator.language || 'en-US';
+
+        let finalTranscript = '';
+
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            this.elements.input.value = finalTranscript + interimTranscript;
+            this.elements.input.style.height = 'auto';
+            this.elements.input.style.height = this.elements.input.scrollHeight + 'px';
+            this.updateDatetimeVisibility();
+
+            // Reset silence timer — auto-submit after configured silence period
+            clearTimeout(this._speechSilenceTimer);
+            if (this.speechSilenceTimeout > 0 && finalTranscript.trim()) {
+                this._speechSilenceTimer = setTimeout(() => {
+                    if (this.isSpeechListening && finalTranscript.trim()) {
+                        this._usedSpeechForLastMessage = true;
+                        this.stopSpeech();
+                        this.sendChatMessage(finalTranscript.trim());
+                    }
+                }, this.speechSilenceTimeout);
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            if (event.error === 'not-allowed') {
+                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Microphone access denied. Please allow microphone access in your system settings.' }));
+            }
+            this.stopSpeech();
+        };
+
+        recognition.onend = () => {
+            clearTimeout(this._speechSilenceTimer);
+            if (this.isSpeechListening) {
+                // Recognition ended naturally (browser decided silence)
+                this.isSpeechListening = false;
+                this.updateSpeechUI(false);
+                this.updateDatetimeVisibility();
+                if (finalTranscript.trim()) {
+                    this._usedSpeechForLastMessage = true;
+                    this.sendChatMessage(finalTranscript.trim());
+                }
+            } else {
+                this.updateSpeechUI(false);
+                this.updateDatetimeVisibility();
+                if (this.elements.input.value.trim()) {
+                    this._usedSpeechForLastMessage = true;
+                }
+            }
+        };
+
+        this.speechRecognition = recognition;
+        this.isSpeechListening = true;
+        this.updateSpeechUI(true);
+        this.updateDatetimeVisibility();
+
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error('Failed to start speech recognition:', e);
+            this.isSpeechListening = false;
+            this.updateSpeechUI(false);
+            this.updateDatetimeVisibility();
+        }
+    }
+
+    stopSpeech() {
+        clearTimeout(this._speechSilenceTimer);
+        if (this.speechRecognition) {
+            this.isSpeechListening = false;
+            this.speechRecognition.stop();
+            this.speechRecognition = null;
+        }
+        this.updateSpeechUI(false);
+        this.updateDatetimeVisibility();
+    }
+
+    updateSpeechUI(listening) {
+        if (this.elements.speechBtn) {
+            this.elements.speechBtn.classList.toggle('listening', listening);
+            this.elements.speechBtn.title = listening ? 'Stop listening' : 'Voice input';
+        }
+        if (this.elements.speechWave) {
+            this.elements.speechWave.style.display = listening ? 'flex' : 'none';
+        }
+    }
+
+    speakResponse(text) {
+        if (!this.speechReadBack || !this._usedSpeechForLastMessage) return;
+        this._usedSpeechForLastMessage = false;
+
+        speechSynthesis.cancel();
+
+        const clean = text.replace(/```[\s\S]*?```/g, ' code block ')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/[#*_~>\[\]()]/g, '')
+            .replace(/\n+/g, '. ')
+            .trim();
+
+        if (!clean) return;
+
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        utterance.lang = navigator.language || 'en-US';
+
+        // Use configured voice if set
+        if (this.speechVoiceName) {
+            const voice = speechSynthesis.getVoices().find(v => v.name === this.speechVoiceName);
+            if (voice) utterance.voice = voice;
+        }
+
+        speechSynthesis.speak(utterance);
     }
 
     async loadShortcuts() {
@@ -1255,6 +1450,10 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message, options = {}) {
+        // Stop any ongoing TTS and speech recognition
+        speechSynthesis.cancel();
+        if (this.isSpeechListening) this.stopSpeech();
+
         const attachments = this.attachmentManager.toContentBlocks();
         this.attachmentManager.clear();
 
@@ -1398,6 +1597,9 @@ export class FloatingApp {
             renderMarkdown(this.currentResponse, this.elements.responseText);
             await this.windowManager.resizeWindow();
             this.isWaitingForResponse = false;
+
+            // Read back response if speech was used
+            this.speakResponse(this.currentResponse);
 
             // Notify if window is hidden
             try {

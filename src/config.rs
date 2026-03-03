@@ -177,6 +177,14 @@ pub struct UiConfig {
     pub show_time: bool,
     #[serde(default)]
     pub show_date: bool,
+    #[serde(default)]
+    pub show_speech_button: bool,
+    #[serde(default)]
+    pub speech_read_back: bool,
+    #[serde(default = "default_speech_silence_timeout")]
+    pub speech_silence_timeout: f32,
+    #[serde(default)]
+    pub speech_voice: Option<String>,
     #[serde(default = "default_time_format")]
     pub time_format: String,
     #[serde(default = "default_date_format")]
@@ -210,6 +218,10 @@ fn default_date_format() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_speech_silence_timeout() -> f32 {
+    2.0
 }
 
 fn default_auto_compact_threshold() -> u32 {
@@ -321,6 +333,10 @@ impl Default for Config {
                 font_size: 14,
                 show_time: false,
                 show_date: false,
+                show_speech_button: false,
+                speech_read_back: false,
+                speech_silence_timeout: 2.0,
+                speech_voice: None,
                 time_format: "HH:mm".to_string(),
                 date_format: "ddd, MMM D".to_string(),
             },

@@ -251,6 +251,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     settingsManager.registerModule(new IntegrationSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());
+    settingsManager.registerModule(new SpeechSettingsModule());
 
     // 1. Load bundled extension settings from bundled.json
     try {
