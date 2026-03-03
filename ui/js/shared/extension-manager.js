@@ -74,7 +74,7 @@ export class ExtensionManager {
 
         if (manifest.contributes?.searchProvider) {
             try {
-                const mod = await import(`../${basePath}/${manifest.contributes.searchProvider}`);
+                const mod = await import(`../../${basePath}/${manifest.contributes.searchProvider}`);
                 ext.searchProvider = new mod.default();
                 ext.searchProvider.initialize({ invoke: this.invoke, config: this._getExtensionConfig(id, manifest) });
             } catch (e) {

@@ -950,99 +950,41 @@ export class FloatingApp {
             this.isWaitingForResponse = false;
         }
         
-        // Handle math result
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'math') {
-            const selected = this.currentMatches[this.selectedIndex];
-            const formatted = selected.data?.value || selected.value || selected.label;
-            recordSelection(message, selected.id, this.invoke);
-            
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            this.currentResponse = formatted;
-            renderMarkdown(`\`= ${formatted}\``, this.elements.responseText);
-            this.elements.contentArea.classList.add('visible');
-            this.windowManager.resizeWindow();
-            
-            if (this.extensionManager?._configCache?.extensions?.['math']?.auto_copy !== false) {
-                try { await navigator.clipboard.writeText(formatted); } catch {}
-            }
-            return;
-        }
-
-        // Handle color result
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'color') {
-            const selected = this.currentMatches[this.selectedIndex];
-            recordSelection(message, selected.id, this.invoke);
-            // Copy based on config format
-            let cpFormat = 'all';
-            try {
-                const cfg = await this.invoke('get_config');
-                cpFormat = cfg.extensions?.['color-picker']?.copy_format || 'all';
-            } catch {}
-            const { r, g, b } = selected.data;
-            const hex = '#' + [r,g,b].map(c => c.toString(16).padStart(2,'0')).join('').toUpperCase();
-            const rgb = `rgb(${r}, ${g}, ${b})`;
-            const text = cpFormat === 'hex' ? hex : cpFormat === 'rgb' ? rgb : cpFormat === 'hsl' ? selected.description : `${hex}\n${rgb}`;
-            try { await navigator.clipboard.writeText(text); } catch {}
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-
-        // Handle dev tool result
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'devtool') {
-            const selected = this.currentMatches[this.selectedIndex];
-            recordSelection(message, selected.id, this.invoke);
-            try { await navigator.clipboard.writeText(selected.data?.value || selected.label); } catch {}
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-
-        // Handle timer/stopwatch
-        if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.currentMatches[this.selectedIndex].type === 'timer_cmd') {
-            const selected = this.currentMatches[this.selectedIndex];
-            const timerData = selected.data;
-            if (timerData.type === 'timer' && timerData.durationMs) {
-                this._startTimerUI(timerData.durationMs);
-            } else if (timerData.type === 'stopwatch') {
-                const sw = getSlotState('stopwatch');
-                if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
-                else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
-                else { this._startStopwatchUI(); }
-            }
-            // hint type — do nothing on Enter
-            this.elements.input.value = '';
-            this.elements.input.style.height = 'auto';
-            this.clearSuggestions();
-            return;
-        }
-
-        // Handle extension results generically (for any type not handled above)
-        const _coreTypes = new Set(['math', 'color', 'devtool', 'timer_cmd', 'command', 'slash', 'shortcut', 'system', 'url', 'path', 'app']);
+        // Handle extension results (color, math, devtools, etc.) via extension manager
         if (this.currentMatches.length > 0 && this.selectedIndex >= 0 && this.extensionManager) {
             const selected = this.currentMatches[this.selectedIndex];
-            if (!_coreTypes.has(selected.type)) {
+            if (selected._extensionId) {
+                recordSelection(message, selected.id, this.invoke);
                 const action = this.extensionManager.executeResult(selected);
                 if (action) {
-                    recordSelection(message, selected.id, this.invoke);
-                    if (action.type === 'copy' && action.value) {
+                    if (action.type === 'copy') {
                         try { await navigator.clipboard.writeText(action.value); } catch {}
-                    } else if (action.type === 'open_url' && action.value) {
-                        try { await this.invoke('open_url', { url: action.value }); } catch {}
-                    } else if (action.type === 'open_path' && action.value) {
-                        try { await this.invoke('open_path', { path: action.value }); } catch {}
-                    } else if (action.type === 'send_prompt' && action.value) {
-                        this.elements.input.value = action.value;
+                    } else if (action.type === 'prompt') {
+                        await this.sendChatMessage(action.value);
+                        return;
+                    } else if (action.type === 'display') {
+                        this.currentResponse = action.value;
+                        renderMarkdown(action.value, this.elements.responseText);
+                        this.elements.contentArea.classList.add('visible');
+                        this.windowManager.resizeWindow();
                     }
-                    this.elements.input.value = '';
-                    this.elements.input.style.height = 'auto';
-                    this.clearSuggestions();
-                    return;
                 }
+                // Special: timer/stopwatch has UI side effects
+                if (selected.type === 'timer_cmd') {
+                    const timerData = selected.data;
+                    if (timerData.type === 'timer' && timerData.durationMs) {
+                        this._startTimerUI(timerData.durationMs);
+                    } else if (timerData.type === 'stopwatch') {
+                        const sw = getSlotState('stopwatch');
+                        if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
+                        else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
+                        else { this._startStopwatchUI(); }
+                    }
+                }
+                this.elements.input.value = '';
+                this.elements.input.style.height = 'auto';
+                this.clearSuggestions();
+                return;
             }
         }
 

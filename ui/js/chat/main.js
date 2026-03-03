@@ -21,6 +21,8 @@ function initApp() {
     listen('config_updated', () => {
         loadAndApplyTheme(invoke);
         if (app?.speech) app.speech.updateVisibility();
+        if (app?.extensionManager) app.extensionManager.onConfigUpdate();
+        if (app?.loadShortcuts) app.loadShortcuts();
     });
 
     app = new ChatApp(invoke, appWindow, listen);

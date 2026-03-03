@@ -44,13 +44,33 @@ export default class ColorPickerSearchProvider {
         const formats = formatAllColors(r, g, b);
         element.innerHTML = `
             <div style="display:flex;align-items:center;gap:10px;padding:6px 0;">
-                <div style="background:${hex};border:2px solid rgba(255,255,255,0.2);border-radius:6px;width:32px;height:32px;flex-shrink:0;"></div>
+                <div style="position:relative;width:32px;height:32px;flex-shrink:0;">
+                    <div data-swatch style="background:${hex};border:2px solid rgba(255,255,255,0.2);border-radius:6px;width:100%;height:100%;"></div>
+                    <input type="color" value="${hex}" data-color-picker style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;">
+                </div>
                 <div>
-                    <div style="font-family:monospace;font-size:13px;">${formats.hex} · ${formats.rgb}</div>
-                    <div style="font-family:monospace;opacity:0.7;font-size:12px;">${formats.hsl}</div>
+                    <div style="font-family:monospace;font-size:13px;color:var(--kiro-text-primary, #d4d4d4);" data-color-label>${formats.hex} · ${formats.rgb}</div>
+                    <div style="font-family:monospace;font-size:12px;color:var(--kiro-text-muted, #9ca3af);" data-hsl-label>${formats.hsl}</div>
                 </div>
             </div>
         `;
+        const picker = element.querySelector('input[data-color-picker]');
+        const swatch = element.querySelector('[data-swatch]');
+        const label = element.querySelector('[data-color-label]');
+        const hslLabel = element.querySelector('[data-hsl-label]');
+        if (picker) {
+            picker.addEventListener('click', (e) => e.stopPropagation());
+            picker.addEventListener('input', (e) => {
+                const newHex = e.target.value;
+                if (swatch) swatch.style.background = newHex;
+                const nr = parseInt(newHex.slice(1,3),16), ng = parseInt(newHex.slice(3,5),16), nb = parseInt(newHex.slice(5,7),16);
+                result.data = { r: nr, g: ng, b: nb, source: 'picker' };
+                result.label = newHex.toUpperCase();
+                const f = formatAllColors(nr, ng, nb);
+                if (label) label.textContent = `${f.hex} · ${f.rgb}`;
+                if (hslLabel) hslLabel.textContent = f.hsl;
+            });
+        }
     }
 
     destroy() {}

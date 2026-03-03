@@ -6,6 +6,9 @@ import { escapeHtml } from '../shared/tool-utils.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
+import { ExtensionManager } from '../shared/extension-manager.js';
+import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
+import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -47,6 +50,13 @@ export class ChatApp {
         await this.loadCurrentSessionId();
         await this.loadUserInfo();
         await loadSlashCommands(this.invoke);
+        await this.loadShortcuts();
+
+        // Initialize extension manager for search
+        this.extensionManager = new ExtensionManager(this.invoke);
+        await this.extensionManager.initialize();
+        setExtensionManager(this.extensionManager);
+        await loadFrecency(this.invoke);
 
         // Load sessions in background — don't block init
         this.loadSessions();
@@ -1340,29 +1350,32 @@ export class ChatApp {
     }
 
 
-    updateSuggestions() {
+    async loadShortcuts() {
+        try {
+            const config = await this.invoke('get_config');
+            this.shortcuts = config.shortcuts || [];
+        } catch {
+            this.shortcuts = [];
+        }
+    }
+
+    async updateSuggestions() {
         const input = this.elements.chatInput.value;
         const trimmed = input.trim();
 
-        // Match > commands
-        const cmdMatches = matchCommands(trimmed);
-        if (cmdMatches && cmdMatches.length > 0) {
-            this.currentSuggestions = cmdMatches.map(c => ({ type: 'command', ...c }));
-            this.suggestionIndex = 0;
-            this.renderSuggestions();
+        if (!trimmed) {
+            this.clearSuggestions();
             return;
         }
 
-        // Match / slash commands
-        const slashMatches = matchSlashCommands(trimmed);
-        if (slashMatches && slashMatches.length > 0) {
-            this.currentSuggestions = slashMatches;
+        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts);
+        if (results.length > 0) {
+            this.currentSuggestions = results;
             this.suggestionIndex = 0;
             this.renderSuggestions();
-            return;
+        } else {
+            this.clearSuggestions();
         }
-
-        this.clearSuggestions();
     }
 
     renderSuggestions() {
@@ -1374,15 +1387,38 @@ export class ChatApp {
             return;
         }
 
+        const extMgr = getExtensionManager();
+
         this.currentSuggestions.forEach((cmd, index) => {
             const item = document.createElement('div');
             item.className = 'chat-suggestion-item' + (index === this.suggestionIndex ? ' selected' : '');
-            const prefix = cmd.type === 'slash' ? '' : '> ';
+
+            // Let extensions render their own results
+            if (cmd._extensionId && extMgr) {
+                const customEl = document.createElement('div');
+                customEl.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;';
+                if (extMgr.renderResult(cmd, customEl)) {
+                    item.appendChild(customEl);
+                    item.addEventListener('click', () => this.executeSuggestion(cmd));
+                    container.appendChild(item);
+                    return;
+                }
+            }
+
+            // Default rendering for non-extension results
+            let iconHtml;
+            if (cmd.type === 'app' && cmd.data?.icon_base64) {
+                const src = cmd.data.icon_base64.startsWith('data:') ? cmd.data.icon_base64 : 'data:image/png;base64,' + cmd.data.icon_base64;
+                iconHtml = `<img src="${src}" style="width:20px;height:20px;border-radius:4px;" onerror="this.replaceWith(document.createTextNode('${cmd.icon || cmd.label.charAt(0)}'))">`;
+            } else {
+                iconHtml = `<span class="chat-suggestion-icon">${cmd.icon || cmd.label?.charAt(0) || '?'}</span>`;
+            }
+
             item.innerHTML = `
-                <span class="chat-suggestion-icon">${cmd.icon}</span>
+                ${iconHtml}
                 <div class="chat-suggestion-info">
-                    <div class="chat-suggestion-name">${prefix}${escapeHtml(cmd.name)}</div>
-                    <div class="chat-suggestion-desc">${escapeHtml(cmd.description)}</div>
+                    <div class="chat-suggestion-name">${escapeHtml(cmd.label || cmd.name || '')}</div>
+                    ${cmd.description ? `<div class="chat-suggestion-desc">${escapeHtml(cmd.description)}</div>` : ''}
                 </div>
             `;
             item.addEventListener('click', () => this.executeSuggestion(cmd));
@@ -1400,12 +1436,52 @@ export class ChatApp {
     }
 
     async executeSuggestion(cmd) {
+        const query = this.elements.chatInput.value.trim();
         this.elements.chatInput.value = '';
         this.elements.chatInput.style.height = 'auto';
         this.clearSuggestions();
 
+        // Record selection for frecency
+        if (cmd.id) recordSelection(query, cmd.id, this.invoke);
+
+        // Extension-provided results — delegate to extension
+        const extMgr = getExtensionManager();
+        if (cmd._extensionId && extMgr) {
+            const action = extMgr.executeResult(cmd);
+            if (action) {
+                if (action.type === 'copy') {
+                    try { await navigator.clipboard.writeText(action.value); } catch {}
+                } else if (action.type === 'prompt') {
+                    this.elements.chatInput.value = action.value;
+                    this.sendMessage();
+                }
+                return;
+            }
+        }
+
         if (cmd.type === 'command') {
-            await executeCommand(cmd.name, this.invoke, this.appWindow);
+            await executeCommand(cmd.data?.name || cmd.name, this.invoke, this.appWindow);
+        } else if (cmd.type === 'slash' && cmd.data?.execute) {
+            await cmd.data.execute(this.invoke, this.appWindow);
+        } else if (cmd.type === 'url') {
+            await this.invoke('open_url', { url: cmd.data.value });
+        } else if (cmd.type === 'path') {
+            await this.invoke('open_path', { path: cmd.data.value });
+        } else if (cmd.type === 'app') {
+            await this.invoke('launch_app', { name: cmd.data.name });
+        } else if (cmd.type === 'shortcut') {
+            const command = buildShortcutCommand(cmd.data.shortcut, cmd.data.args);
+            if (command.type === 'prompt') {
+                this.elements.chatInput.value = command.message;
+                this.sendMessage();
+            } else if (command.type === 'open_url') {
+                await this.invoke('open_url', { url: command.url });
+            } else if (command.type === 'text') {
+                this.addMessageFromHistory('assistant', command.message);
+                this.scrollToBottom();
+            } else if (command.type === 'run_program') {
+                await this.invoke('execute_shortcut', { path: command.path, args: command.args, workingDirectory: command.workDir || null });
+            }
         } else if (cmd.execute) {
             await cmd.execute(this.invoke, this.appWindow);
         }
