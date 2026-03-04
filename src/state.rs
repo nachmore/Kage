@@ -32,6 +32,8 @@ pub struct AppState {
     pub notification_source: Arc<std::sync::Mutex<String>>,
     /// Updater state for auto-update system
     pub updater: Arc<crate::updater::UpdaterState>,
+    /// Cached user info (expensive to compute — involves subprocess on Windows)
+    pub user_info_cache: Arc<std::sync::Mutex<Option<crate::commands::system::UserInfo>>>,
     /// Pocket TTS server child process
     pub pocket_tts_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
     /// Pocket TTS pip install child process (for cancellation)

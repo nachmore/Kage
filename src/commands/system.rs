@@ -428,16 +428,37 @@ pub async fn read_clipboard() -> Result<String, String> {
     Ok(crate::os::read_clipboard().unwrap_or_default())
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct UserInfo {
     pub display_name: String,
     pub initials: String,
     pub avatar_path: Option<String>,
     pub avatar_base64: Option<String>,
+    pub home: Option<String>,
 }
 
 #[tauri::command]
-pub async fn get_user_info() -> Result<UserInfo, String> {
+pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, String> {
+    // Return cached user info if available
+    {
+        let cached = state.user_info_cache.lock().unwrap();
+        if let Some(ref info) = *cached {
+            return Ok(info.clone());
+        }
+    }
+
+    // Compute and cache
+    let info = compute_user_info();
+    {
+        let mut cached = state.user_info_cache.lock().unwrap();
+        *cached = Some(info.clone());
+    }
+    Ok(info)
+}
+
+/// Compute user info (expensive — spawns whoami subprocess on Windows).
+/// Called once and cached in AppState.
+pub fn compute_user_info() -> UserInfo {
     let profile = os::get_user_profile();
 
     // Build initials from display name, falling back to username
@@ -483,12 +504,13 @@ pub async fn get_user_info() -> Result<UserInfo, String> {
         Some(format!("data:{};base64,{}", mime, b64))
     });
 
-    Ok(UserInfo {
-        display_name: profile.display_name,
+    UserInfo {
+        display_name: profile.display_name.clone(),
         initials,
-        avatar_path: profile.avatar_path,
+        avatar_path: profile.avatar_path.clone(),
         avatar_base64,
-    })
+        home: dirs::home_dir().and_then(|p| p.to_str().map(|s| s.to_string())),
+    }
 }
 
 
