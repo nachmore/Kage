@@ -115,6 +115,55 @@ pub fn setup_notification_handler(
         info!("Unhandled notification: {}", method);
     });
 }
+/// Write a JSON string directly to the ACP pipe/TCP transport, bypassing the
+/// AcpClient lock. This is used for permission responses and cancellation
+/// signals that must be sent while `send_message_streaming` holds the client lock.
+///
+/// Tries pipe_stdin first; falls back to tcp_writer.
+/// Returns `Err(String)` only when used from Tauri commands (for `Result<_, String>`).
+fn write_raw_json(
+    pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
+    tcp_writer: &std::sync::Mutex<Option<std::net::TcpStream>>,
+    json: &str,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    // Try pipe first
+    let stdin_arc = {
+        let guard = pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
+        guard.as_ref().map(|a| a.clone())
+    };
+    if let Some(arc) = stdin_arc {
+        let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
+        writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
+        stdin.flush().map_err(|e| format!("Flush: {}", e))?;
+        return Ok(());
+    }
+
+    // Fall back to TCP
+    let guard = tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
+    if let Some(ref stream) = *guard {
+        let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
+        drop(guard);
+        writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
+        ws.flush().map_err(|e| format!("Flush: {}", e))?;
+        return Ok(());
+    }
+
+    Err("No write handle available".to_string())
+}
+
+/// Convenience: serialize a JSON value and write it via `write_raw_json`.
+/// Silently ignores errors (used in fire-and-forget contexts like the notification handler).
+fn write_raw_json_silent(
+    pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
+    tcp_writer: &std::sync::Mutex<Option<std::net::TcpStream>>,
+    value: &serde_json::Value,
+) {
+    if let Ok(json) = serde_json::to_string(value) {
+        let _ = write_raw_json(pipe_stdin, tcp_writer, &json);
+    }
+}
 
 fn handle_permission_notification(
     notification: &serde_json::Value,
@@ -182,29 +231,7 @@ fn handle_permission_notification(
                 "id": request_id,
                 "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
             });
-            if let Ok(json) = serde_json::to_string(&response) {
-                use std::io::Write;
-                let stdin_arc = {
-                    let guard = pipe_stdin.lock().ok();
-                    guard.and_then(|g| g.as_ref().map(|a| a.clone()))
-                };
-                if let Some(arc) = stdin_arc {
-                    if let Ok(mut stdin) = arc.lock() {
-                        let _ = write!(stdin, "{}\n", json);
-                        let _ = stdin.flush();
-                        return;
-                    }
-                }
-                if let Ok(guard) = tcp_writer.lock() {
-                    if let Some(ref stream) = *guard {
-                        if let Ok(mut ws) = stream.try_clone() {
-                            drop(guard);
-                            let _ = write!(ws, "{}\n", json);
-                            let _ = ws.flush();
-                        }
-                    }
-                }
-            }
+            write_raw_json_silent(pipe_stdin, tcp_writer, &response);
         }
     };
 
@@ -336,28 +363,7 @@ pub async fn send_permission_response(
     // Write directly via the pipe/tcp handles — do NOT lock the ACP client,
     // because send_message_streaming may be holding that lock waiting for this
     // permission response (which would deadlock).
-    {
-        use std::io::Write;
-        let stdin_arc = {
-            let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
-            guard.as_ref().map(|a| a.clone())
-        };
-        if let Some(arc) = stdin_arc {
-            let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
-            writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
-            stdin.flush().map_err(|e| format!("Flush: {}", e))?;
-        } else {
-            let guard = state.tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
-            if let Some(ref stream) = *guard {
-                let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
-                drop(guard);
-                writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
-                ws.flush().map_err(|e| format!("Flush: {}", e))?;
-            } else {
-                return Err("No write handle available".to_string());
-            }
-        }
-    }
+    write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
 
     if option_id == "allow_always" {
         let mut config = state.config.lock().await;
@@ -416,28 +422,7 @@ pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), String>
 
     // Write directly via pipe/tcp handles — do NOT lock the ACP client,
     // because send_message_streaming may be holding that lock.
-    {
-        use std::io::Write;
-        let stdin_arc = {
-            let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
-            guard.as_ref().map(|a| a.clone())
-        };
-        if let Some(arc) = stdin_arc {
-            let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
-            writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
-            stdin.flush().map_err(|e| format!("Flush: {}", e))?;
-        } else {
-            let guard = state.tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
-            if let Some(ref stream) = *guard {
-                let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
-                drop(guard);
-                writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
-                ws.flush().map_err(|e| format!("Flush: {}", e))?;
-            } else {
-                return Err("No write handle available".to_string());
-            }
-        }
-    }
+    write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
 
     Ok(())
 }
@@ -495,29 +480,9 @@ pub async fn dismiss_pending_permission(
             "id": perm.request_id,
             "result": { "outcome": { "outcome": "selected", "optionId": "reject_once" } }
         });
-        let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
 
         // Write directly via pipe/tcp handles to avoid deadlock with send_message_streaming
-        {
-            use std::io::Write;
-            let stdin_arc = {
-                let guard = state.pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
-                guard.as_ref().map(|a| a.clone())
-            };
-            if let Some(arc) = stdin_arc {
-                let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
-                let _ = writeln!(stdin, "{}", json);
-                let _ = stdin.flush();
-            } else if let Ok(guard) = state.tcp_writer.lock() {
-                if let Some(ref stream) = *guard {
-                    if let Ok(mut ws) = stream.try_clone() {
-                        drop(guard);
-                        let _ = writeln!(ws, "{}", json);
-                        let _ = ws.flush();
-                    }
-                }
-            }
-        }
+        let _ = write_raw_json_silent(&state.pipe_stdin, &state.tcp_writer, &response);
 
         if let Ok(mut guard) = state.pending_permission.lock() {
             *guard = None;
