@@ -1018,6 +1018,9 @@ body.light-theme .speech-btn:hover { background: rgba(100, 100, 255, 0.15); bord
     color: #9ca3af;
     border-top: 1px solid #f3f4f6;
     text-align: center;
+    position: sticky;
+    bottom: 0;
+    background: white;
 }
 
 .hint-key {
@@ -1034,6 +1037,7 @@ body.light-theme .speech-btn:hover { background: rgba(100, 100, 255, 0.15); bord
 body.dark-theme .suggestions-hint {
     color: #938F9B;
     border-top-color: #352F3D;
+    background: #28242E;
 }
 
 body.dark-theme .hint-key {
