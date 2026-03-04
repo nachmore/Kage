@@ -2,6 +2,7 @@
 import { FloatingApp } from './app.js';
 import { initMarkdown } from '../shared/markdown.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
+import { initLinkHandler } from '../shared/link-handler.js';
 
 function initApp() {
     console.log('initApp called, checking Tauri...');
@@ -20,6 +21,7 @@ function initApp() {
     
     initMarkdown();
     initThemeListener();
+    initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
     
     // Re-apply theme and opacity when config changes

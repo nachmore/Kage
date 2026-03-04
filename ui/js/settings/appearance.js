@@ -229,6 +229,8 @@ class AppearanceSettingsModule extends SettingsModule {
             const themes = await invoke('list_themes');
             const themeSelect = document.getElementById('theme');
             const themeList = document.getElementById('installedThemesList');
+            const config = await invoke('get_config');
+            const activeThemeId = config.ui?.theme || 'system';
 
             // Add installed themes to the select dropdown
             if (themeSelect && themes.length > 0) {
@@ -240,7 +242,6 @@ class AppearanceSettingsModule extends SettingsModule {
                     themeSelect.appendChild(opt);
                 }
                 // Re-apply current value (it may be a custom theme ID)
-                const config = await invoke('get_config');
                 if (config.ui?.theme) themeSelect.value = config.ui.theme;
             }
 
@@ -251,13 +252,32 @@ class AppearanceSettingsModule extends SettingsModule {
                 } else {
                     let html = '';
                     for (const t of themes) {
-                        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;">
-                            <span>${t.manifest.icon || '🎨'}</span>
-                            <span style="flex:1;">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span></span>
-                            ${t.bundled ? '' : `<button class="setting-button" style="font-size:11px;padding:2px 8px;" onclick="uninstallTheme('${t.manifest.id}')">Remove</button>`}
+                        const isActive = t.manifest.id === activeThemeId;
+                        const activeLabel = isActive
+                            ? '<span style="font-size:10px;color:var(--kiro-accent);font-weight:600;margin-left:4px;">ACTIVE</span>'
+                            : '';
+                        const useBtn = isActive ? '' : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="Use this theme">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>`;
+                        const removeBtn = t.bundled ? '' : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>`;
+                        html += `<div class="theme-list-item">
+                            <span class="theme-list-icon">${t.manifest.icon || '🎨'}</span>
+                            <span class="theme-list-name">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span>${activeLabel}</span>
+                            <span class="theme-list-actions">${useBtn}${removeBtn}</span>
                         </div>`;
                     }
                     themeList.innerHTML = html;
+
+                    // Wire up Use buttons
+                    themeList.querySelectorAll('.theme-use-btn').forEach(btn => {
+                        btn.addEventListener('click', () => this._useTheme(btn.dataset.themeId));
+                    });
+                    // Wire up Remove buttons
+                    themeList.querySelectorAll('.theme-remove-btn').forEach(btn => {
+                        btn.addEventListener('click', () => this._removeTheme(btn.dataset.themeId));
+                    });
                 }
             }
         } catch (e) {
@@ -265,6 +285,42 @@ class AppearanceSettingsModule extends SettingsModule {
         }
 
         function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    }
+
+    async _useTheme(themeId) {
+        const themeSelect = document.getElementById('theme');
+        if (themeSelect) {
+            themeSelect.value = themeId;
+        }
+        // Use the global saveSettings() from manager.js
+        if (typeof saveSettings === 'function') {
+            saveSettings();
+        }
+        // Refresh the list to update active state
+        this.loadInstalledThemes();
+    }
+
+    async _removeTheme(themeId) {
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+        try {
+            await invoke('uninstall_extension', { id: themeId, kind: 'theme' });
+            // If the removed theme was active, switch back to system
+            const themeSelect = document.getElementById('theme');
+            if (themeSelect && themeSelect.value === themeId) {
+                themeSelect.value = 'system';
+                if (typeof saveSettings === 'function') {
+                    saveSettings();
+                }
+            }
+            // Remove the option from the dropdown
+            const opt = themeSelect?.querySelector(`option[value="${themeId}"]`);
+            if (opt) opt.remove();
+            // Refresh the list
+            this.loadInstalledThemes();
+        } catch (e) {
+            console.warn('Failed to uninstall theme:', e);
+        }
     }
 
     toggleDateTimeFormats() {
@@ -277,10 +333,15 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     applyTheme(theme) {
+        const builtins = ['system', 'dark', 'light'];
         if (theme === 'dark') {
             document.body.classList.add('dark-theme');
         } else if (theme === 'light') {
             document.body.classList.remove('dark-theme');
+        } else if (!builtins.includes(theme)) {
+            // Custom theme — follow OS preference for dark/light class
+            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.body.classList.toggle('dark-theme', isDark);
         } else {
             // system
             const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

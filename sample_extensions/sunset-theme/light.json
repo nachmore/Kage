@@ -1,0 +1,20 @@
+{
+  "name": "Sunset Light",
+  "colors": {
+    "kiro-accent": "#D47020",
+    "kiro-accent-hover": "#B85E15",
+    "kiro-accent-active": "#9C4F10",
+    "kiro-accent-light": "#D47020",
+    "kiro-accent-glow": "rgba(212, 112, 32, 0.15)",
+    "kiro-gradient": "linear-gradient(135deg, #F4C08E 0%, #D47020 100%)",
+    "kiro-bg": "#FDF8F3",
+    "kiro-bg-elevated": "#FFFFFF",
+    "kiro-bg-input": "#FBF4EC",
+    "kiro-border": "#E8D8C8",
+    "kiro-border-subtle": "#F0E4D6",
+    "kiro-text": "#4A3828",
+    "kiro-text-bright": "#2A1A0A",
+    "kiro-text-muted": "#8A7460",
+    "kiro-section-accent": "#D47020"
+  }
+}

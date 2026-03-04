@@ -81,7 +81,7 @@ export async function executeResult(result, query, ctx) {
 
     // App launch
     if (result.type === 'app') {
-        await invoke('launch_app', { name: result.data?.name || result.label });
+        await invoke('launch_app_by_name', { appName: result.data?.name || result.label });
         return { handled: true };
     }
 

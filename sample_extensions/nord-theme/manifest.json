@@ -1,0 +1,16 @@
+{
+  "id": "nord-theme",
+  "name": "Nord",
+  "version": "1.0.0",
+  "type": "theme",
+  "description": "Arctic, north-bluish color palette inspired by the Nord theme. Clean and icy.",
+  "icon": "❄️",
+  "author": "kiro-assistant",
+
+  "contributes": {
+    "themes": {
+      "dark": "./dark.json",
+      "light": "./light.json"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Nord Dark",
+  "colors": {
+    "kiro-accent": "#88C0D0",
+    "kiro-accent-hover": "#8FBCBB",
+    "kiro-accent-active": "#5E81AC",
+    "kiro-accent-light": "#88C0D0",
+    "kiro-accent-glow": "rgba(136, 192, 208, 0.25)",
+    "kiro-gradient": "linear-gradient(135deg, #88C0D0 0%, #5E81AC 100%)",
+    "kiro-bg": "#2E3440",
+    "kiro-bg-elevated": "#3B4252",
+    "kiro-bg-input": "#434C5E",
+    "kiro-border": "#4C566A",
+    "kiro-border-subtle": "#3B4252",
+    "kiro-text": "#D8DEE9",
+    "kiro-text-bright": "#ECEFF4",
+    "kiro-text-muted": "#7B88A1",
+    "kiro-section-accent": "#A3BE8C"
+  }
+}

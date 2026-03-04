@@ -909,3 +909,216 @@ body.light-theme .speech-btn:hover { background: rgba(100, 100, 255, 0.15); bord
     position: static;
     transform: none;
 }
+
+/* ===== Suggestion List (shared across floating + chat) ===== */
+/* Base classes: .suggestion-list / .suggestion-item
+   Aliases: .app-suggestions / .app-suggestion-item (floating)
+            .chat-suggestions / .chat-suggestion-item (chat) */
+
+.suggestion-list,
+.app-suggestions,
+.chat-suggestions {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: none;
+    flex-shrink: 0;
+}
+
+.suggestion-list.visible,
+.app-suggestions.visible,
+.chat-suggestions.visible {
+    display: block;
+}
+
+.suggestion-item,
+.app-suggestion-item,
+.chat-suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    overflow: hidden;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected,
+.app-suggestion-item:hover,
+.app-suggestion-item.selected,
+.chat-suggestion-item:hover,
+.chat-suggestion-item.selected {
+    background: #f3f4f6;
+}
+
+.suggestion-icon,
+.chat-suggestion-icon {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.suggestion-icon-img,
+.app-icon-img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.suggestion-info,
+.app-info,
+.chat-suggestion-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.suggestion-name,
+.app-name,
+.chat-suggestion-name {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suggestion-desc,
+.app-description,
+.chat-suggestion-desc {
+    font-size: 12px;
+    color: #666;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Suggestions hint bar */
+.suggestions-hint {
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #9ca3af;
+    border-top: 1px solid #f3f4f6;
+    text-align: center;
+}
+
+.hint-key {
+    display: inline-block;
+    padding: 1px 5px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    font-family: monospace;
+}
+
+body.dark-theme .suggestions-hint {
+    color: #938F9B;
+    border-top-color: #352F3D;
+}
+
+body.dark-theme .hint-key {
+    background: #352F3D;
+    color: #938F9B;
+}
+
+body.dark-theme .suggestion-list,
+body.dark-theme .app-suggestions,
+body.dark-theme .chat-suggestions {
+    background: #28242E;
+    border-color: #4A464F;
+}
+
+body.dark-theme .suggestion-item:hover,
+body.dark-theme .suggestion-item.selected,
+body.dark-theme .app-suggestion-item:hover,
+body.dark-theme .app-suggestion-item.selected,
+body.dark-theme .chat-suggestion-item:hover,
+body.dark-theme .chat-suggestion-item.selected {
+    background: #352F3D;
+}
+
+body.dark-theme .suggestion-name,
+body.dark-theme .app-name,
+body.dark-theme .chat-suggestion-name {
+    color: #E5E7EB;
+}
+
+body.dark-theme .suggestion-desc,
+body.dark-theme .app-description,
+body.dark-theme .chat-suggestion-desc {
+    color: #938F9B;
+}
+
+/* ===== Stop Button (shared red pattern) ===== */
+/* Used by: .floating-stop-btn, .chat-send-btn.stop-mode, .stop-generating-btn:hover */
+
+.stop-btn-base,
+.floating-stop-btn,
+.chat-send-btn.stop-mode {
+    background: rgba(220, 38, 38, 0.12);
+    border: 1px solid rgba(220, 38, 38, 0.25);
+    color: #ef4444;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.stop-btn-base:hover,
+.floating-stop-btn:hover,
+.chat-send-btn.stop-mode:hover {
+    background: rgba(220, 38, 38, 0.22);
+    border-color: rgba(220, 38, 38, 0.4);
+}
+body.light-theme .stop-btn-base,
+body.light-theme .floating-stop-btn,
+body.light-theme .chat-send-btn.stop-mode {
+    background: rgba(220, 38, 38, 0.08);
+    border-color: rgba(220, 38, 38, 0.15);
+    color: #dc2626;
+}
+body.light-theme .stop-btn-base:hover,
+body.light-theme .floating-stop-btn:hover,
+body.light-theme .chat-send-btn.stop-mode:hover {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.3);
+}
+
+/* ===== Context Menu (inline overlay, shared) ===== */
+
+.ctx-menu {
+    position: fixed;
+    background: #2a2a2e;
+    border: 1px solid #555;
+    border-radius: 8px;
+    padding: 4px 0;
+    min-width: 150px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    z-index: 20000;
+    font-size: 13px;
+}
+
+.ctx-item {
+    padding: 7px 20px;
+    color: #ddd;
+    cursor: pointer;
+    transition: background 0.1s;
+    user-select: none;
+}
+
+.ctx-item:hover {
+    background: var(--kiro-accent);
+    color: #fff;
+}
+
+.ctx-sep {
+    height: 1px;
+    background: #444;
+    margin: 4px 0;
+}

@@ -1,11 +1,16 @@
-// Theme management — config-aware with system/dark/light support
+// Theme management — config-aware with system/dark/light support + theme extensions
 
 let currentThemeSetting = 'system';
+const BUILTIN_THEMES = ['system', 'dark', 'light'];
+
+function isCustomTheme(setting) {
+    return setting && !BUILTIN_THEMES.includes(setting);
+}
 
 function resolveTheme(setting) {
     if (setting === 'dark') return true;
     if (setting === 'light') return false;
-    // "system" — follow OS preference
+    // "system" or custom themes — follow OS preference for dark/light class
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
@@ -17,23 +22,80 @@ export function applyTheme(setting) {
     document.body.classList.toggle('dark-theme', isDark);
 }
 
+/**
+ * Clear any previously applied custom theme CSS variables.
+ */
+function clearCustomThemeColors() {
+    const root = document.documentElement;
+    // Remove all --kiro-* custom properties that were set inline
+    for (const prop of Array.from(root.style)) {
+        if (prop.startsWith('--kiro-')) {
+            root.style.removeProperty(prop);
+        }
+    }
+}
+
+/**
+ * Apply CSS variables from a theme extension's color map.
+ * @param {Object} colors - key/value map, e.g. { "kiro-accent": "#E8853D" }
+ */
+function applyCustomThemeColors(colors) {
+    if (!colors || typeof colors !== 'object') return;
+    const root = document.documentElement;
+    for (const [key, value] of Object.entries(colors)) {
+        root.style.setProperty(`--${key}`, value);
+    }
+}
+
 export function initThemeListener() {
-    // React to OS theme changes (only matters when setting is "system")
+    // React to OS theme changes (only matters when setting is "system" or custom)
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (currentThemeSetting === 'system') {
+        if (currentThemeSetting === 'system' || isCustomTheme(currentThemeSetting)) {
             applyTheme();
+            // Re-apply custom theme colors for the new variant if needed
+            if (isCustomTheme(currentThemeSetting) && _lastInvoke) {
+                applyThemeExtensionColors(_lastInvoke, currentThemeSetting);
+            }
         }
     });
+}
+
+let _lastInvoke = null;
+
+/**
+ * Load and apply CSS variables from a theme extension.
+ */
+async function applyThemeExtensionColors(invoke, themeId) {
+    try {
+        const isDark = resolveTheme(themeId);
+        const variant = isDark ? 'dark' : 'light';
+        const colors = await invoke('load_theme_colors', { themeId, variant });
+        if (colors && typeof colors === 'object') {
+            applyCustomThemeColors(colors);
+        }
+    } catch (e) {
+        console.warn(`Failed to load theme colors for '${themeId}':`, e);
+    }
 }
 
 /**
  * Load theme from config and apply. Call on init and config_updated.
  */
 export async function loadAndApplyTheme(invoke) {
+    _lastInvoke = invoke;
     try {
         const config = await invoke('get_config');
         const theme = config.ui?.theme || 'system';
+
+        // Always clear custom theme colors first
+        clearCustomThemeColors();
+
         applyTheme(theme);
+
+        // If it's a custom theme extension, load and apply its CSS variables
+        if (isCustomTheme(theme)) {
+            await applyThemeExtensionColors(invoke, theme);
+        }
 
         // Apply font size
         const fontSize = config.ui?.font_size || 14;

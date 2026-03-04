@@ -404,22 +404,14 @@ body {
     transform: none;
 }
 
+/* .chat-send-btn.stop-mode — base colors from shared-components.css */
 .chat-send-btn.stop-mode {
-    background: rgba(220, 38, 38, 0.12);
-    color: #ef4444;
-    cursor: pointer;
-}
-.chat-send-btn.stop-mode:hover {
-    background: rgba(220, 38, 38, 0.22);
     transform: none;
     box-shadow: none;
 }
-body.light-theme .chat-send-btn.stop-mode {
-    background: rgba(220, 38, 38, 0.08);
-    color: #dc2626;
-}
-body.light-theme .chat-send-btn.stop-mode:hover {
-    background: rgba(220, 38, 38, 0.15);
+.chat-send-btn.stop-mode:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 /* Chat Toolbar */
@@ -689,11 +681,9 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     max-width: 60%;
 }
 
-/* Command/suggestion dropdown above input */
+/* Command/suggestion dropdown above input — extends shared .suggestion-list */
 .chat-suggestions {
-    display: none;
     max-height: 240px;
-    overflow-y: auto;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
     background: #ffffff;
@@ -701,48 +691,18 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
 }
 
-.chat-suggestions.visible {
-    display: block;
-}
-
 .chat-suggestion-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
     padding: 10px 14px;
-    cursor: pointer;
-    transition: background 0.1s;
 }
 
-.chat-suggestion-item:hover,
-.chat-suggestion-item.selected {
-    background: #f3f4f6;
-}
-
-.chat-suggestion-icon {
-    font-size: 18px;
-    width: 28px;
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.chat-suggestion-info {
-    flex: 1;
-    min-width: 0;
-}
-
+/* Chat suggestion names are slightly smaller than floating */
 .chat-suggestion-name {
     font-size: 13px;
-    font-weight: 500;
     color: #1f2937;
 }
 
 .chat-suggestion-desc {
-    font-size: 12px;
     color: #6b7280;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* Steering message bubble */

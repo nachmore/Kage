@@ -1,0 +1,20 @@
+{
+  "name": "Sunset Dark",
+  "colors": {
+    "kiro-accent": "#E8853D",
+    "kiro-accent-hover": "#F09A56",
+    "kiro-accent-active": "#CC6F2A",
+    "kiro-accent-light": "#F4C08E",
+    "kiro-accent-glow": "rgba(232, 133, 61, 0.3)",
+    "kiro-gradient": "linear-gradient(135deg, #F4C08E 0%, #E8853D 100%)",
+    "kiro-bg": "#1A1520",
+    "kiro-bg-elevated": "#221C28",
+    "kiro-bg-input": "#2A2332",
+    "kiro-border": "#3D3348",
+    "kiro-border-subtle": "#2E2638",
+    "kiro-text": "#D9CDE0",
+    "kiro-text-bright": "#F5F0F8",
+    "kiro-text-muted": "#8A7D94",
+    "kiro-section-accent": "#E8853D"
+  }
+}

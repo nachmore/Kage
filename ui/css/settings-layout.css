@@ -472,3 +472,68 @@ body.light-theme .keycap-sep { color: #999; }
 .update-check-icon { font-size: 30px; color: #4ade80; }
 .update-available-icon { font-size: 30px; color: var(--kiro-accent); }
 .update-error-icon { font-size: 30px; color: #f87171; }
+
+/* Theme list items */
+.theme-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+.theme-list-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+.theme-list-icon {
+    flex-shrink: 0;
+    font-size: 16px;
+}
+.theme-list-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.theme-list-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+}
+.theme-list-item:hover .theme-list-actions {
+    opacity: 1;
+}
+.theme-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.theme-use-btn {
+    background: var(--kiro-accent);
+    color: #fff;
+}
+.theme-use-btn:hover {
+    background: var(--kiro-accent-hover);
+}
+.theme-remove-btn {
+    background: transparent;
+    color: var(--kiro-text-muted);
+}
+.theme-remove-btn:hover {
+    background: rgba(220, 38, 38, 0.15);
+    color: #ef4444;
+}
+body.light-theme .theme-list-item:hover {
+    background: rgba(0, 0, 0, 0.03);
+}

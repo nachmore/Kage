@@ -1,6 +1,7 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './app.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
+import { initLinkHandler } from '../shared/link-handler.js';
 
 let app = null;
 
@@ -15,6 +16,7 @@ function initApp() {
     const { listen } = window.__TAURI__.event;
 
     initThemeListener();
+    initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
 
     // Re-apply theme when config changes
