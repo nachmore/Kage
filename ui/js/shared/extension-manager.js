@@ -376,9 +376,22 @@ export class ExtensionManager {
             this._configCache = await this.invoke('get_config');
         } catch { return; }
 
-        // Re-check user-installed extensions for new ones
+        // Unload extensions that are no longer installed or were disabled
         try {
             const userExts = await this.invoke('list_extensions');
+            const installedIds = new Set(userExts.map(e => e.manifest.id));
+            const states = this._configCache?.extension_states || {};
+
+            for (const [id, ext] of this.extensions) {
+                // Keep bundled extensions
+                if (!ext.userInstalled) continue;
+                // Unload if no longer installed or disabled
+                if (!installedIds.has(id) || states[id] === false) {
+                    this._unloadExtension(id, ext);
+                }
+            }
+
+            // Load newly installed extensions
             for (const item of userExts) {
                 if (!item.enabled) continue;
                 if (this.extensions.has(item.manifest.id)) continue;
@@ -392,5 +405,20 @@ export class ExtensionManager {
         } catch (e) {
             console.warn('Failed to reload extensions:', e);
         }
+    }
+
+    /**
+     * Unload a single extension — destroy providers, remove CSS, remove from map.
+     */
+    _unloadExtension(id, ext) {
+        console.log(`ExtensionManager: unloading '${id}'`);
+        try { ext.searchProvider?.destroy?.(); } catch {}
+        try { ext.toolbarProvider?.destroy?.(); } catch {}
+        try { ext.messageFormatter?.destroy?.(); } catch {}
+
+        // Remove injected CSS
+        document.querySelectorAll(`[data-ext-css="${id}"]`).forEach(el => el.remove());
+
+        this.extensions.delete(id);
     }
 }

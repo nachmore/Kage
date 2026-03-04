@@ -65,6 +65,12 @@ export class FloatingApp {
             this.updateSpeechButtonVisibility();
         });
 
+        // Listen for extension install/uninstall
+        this.listen('extensions_changed', async () => {
+            console.log('Extensions changed, reloading...');
+            await this.extensionManager.reload();
+        });
+
         // Listen for slash commands from ACP
         this.listen('slash_commands_available', async () => {
             console.log('Slash commands updated, reloading...');

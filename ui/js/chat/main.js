@@ -32,6 +32,14 @@ function initApp() {
         if (app?.loadShortcuts) app.loadShortcuts();
     });
 
+    // Listen for extension install/uninstall
+    listen('extensions_changed', async () => {
+        if (app?.extensionManager) {
+            await app.extensionManager.reload();
+            app.renderExtensionToolbarButtons();
+        }
+    });
+
     app = new ChatApp(invoke, appWindow, listen);
     app.init().then(() => {
         setMarkdownExtManager(app.extensionManager);
