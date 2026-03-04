@@ -8,6 +8,8 @@
  *   this.speech.setup();
  */
 
+import { TtsStreamer } from './tts-streamer.js';
+
 export class SpeechController {
     /**
      * @param {Object} opts
@@ -15,12 +17,14 @@ export class SpeechController {
      * @param {Object} opts.elements - { input, speechBtn, speechWave } DOM refs
      * @param {Function} opts.onSend - called with (text) to send a message
      * @param {Function} [opts.onVisibilityUpdate] - called when speech state changes (for datetime etc.)
+     * @param {HTMLElement} [opts.barContainer] - Element to insert TTS playback bar before
      */
-    constructor({ invoke, elements, onSend, onVisibilityUpdate }) {
+    constructor({ invoke, elements, onSend, onVisibilityUpdate, barContainer }) {
         this.invoke = invoke;
         this.elements = elements;
         this.onSend = onSend;
         this.onVisibilityUpdate = onVisibilityUpdate || (() => {});
+        this.barContainer = barContainer || null;
 
         this.recognition = null;
         this.isListening = false;
@@ -34,6 +38,8 @@ export class SpeechController {
         this.pocketTtsPort = 9877;
         this.pocketTtsVoice = 'alba';
         this._pocketTtsAudio = null;
+        this._ttsStreamer = null;
+        this._streamedThisResponse = false;
     }
 
     setup() {
@@ -188,6 +194,12 @@ export class SpeechController {
         if (!this.readBack || !this.usedSpeechForLastMessage) return;
         this.usedSpeechForLastMessage = false;
 
+        // If streaming already handled TTS, skip
+        if (this._streamedThisResponse) {
+            this._streamedThisResponse = false;
+            return;
+        }
+
         speechSynthesis.cancel();
 
         const clean = text.replace(/```[\s\S]*?```/g, ' code block ')
@@ -198,60 +210,50 @@ export class SpeechController {
 
         if (!clean) return;
 
-        // Check if Pocket TTS is enabled
+        // For non-streaming (batch) responses, use Pocket TTS if enabled
         if (this.pocketTtsEnabled && this.pocketTtsPort) {
-            this._speakWithPocketTts(clean);
+            const streamer = new TtsStreamer({
+                port: this.pocketTtsPort,
+                voice: this.pocketTtsVoice,
+                barContainer: this.barContainer,
+                onBarChange: this.onVisibilityUpdate,
+            });
+            streamer.finishText(text);
             return;
         }
 
-        const utterance = new SpeechSynthesisUtterance(clean);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        utterance.lang = navigator.language || 'en-US';
-
-        if (this.voiceName) {
-            const voice = speechSynthesis.getVoices().find(v => v.name === this.voiceName);
-            if (voice) utterance.voice = voice;
-        }
-
-        speechSynthesis.speak(utterance);
+        this._speakWithBrowser(clean);
     }
 
-    /** Speak text using the Pocket TTS server. */
-    async _speakWithPocketTts(text) {
-        try {
-            const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/tts`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: text,
-                    voice: this.pocketTtsVoice || 'alba',
-                }),
+    /**
+     * Feed accumulated streaming text. Call on every streaming chunk.
+     * Starts TTS generation for complete sentences as they arrive.
+     */
+    feedStreamingText(accumulatedText) {
+        if (!this.readBack || !this.usedSpeechForLastMessage) return;
+        if (!this.pocketTtsEnabled || !this.pocketTtsPort) return;
+
+        // Create streamer on first call
+        if (!this._ttsStreamer) {
+            this._ttsStreamer = new TtsStreamer({
+                port: this.pocketTtsPort,
+                voice: this.pocketTtsVoice,
+                barContainer: this.barContainer,
+                onBarChange: this.onVisibilityUpdate,
             });
+        }
 
-            if (!resp.ok) {
-                console.warn('[Speech] Pocket TTS failed, falling back to browser TTS');
-                this._speakWithBrowser(text);
-                return;
-            }
+        this._ttsStreamer.feedText(accumulatedText);
+    }
 
-            const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            this._pocketTtsAudio = new Audio(url);
-            this._pocketTtsAudio.onended = () => {
-                URL.revokeObjectURL(url);
-                this._pocketTtsAudio = null;
-            };
-            this._pocketTtsAudio.onerror = () => {
-                URL.revokeObjectURL(url);
-                this._pocketTtsAudio = null;
-                console.warn('[Speech] Pocket TTS audio playback failed');
-            };
-            this._pocketTtsAudio.play();
-        } catch (e) {
-            console.warn('[Speech] Pocket TTS error, falling back to browser TTS:', e);
-            this._speakWithBrowser(text);
+    /**
+     * Called when streaming is complete. Sends the final sentence chunk.
+     */
+    finishStreamingText(finalText) {
+        if (this._ttsStreamer) {
+            this._ttsStreamer.finishText(finalText);
+            this._ttsStreamer = null;
+            this._streamedThisResponse = true; // flag so speakResponse skips
         }
     }
 
@@ -278,10 +280,16 @@ export class SpeechController {
             this._pocketTtsAudio.pause();
             this._pocketTtsAudio = null;
         }
+        if (this._ttsStreamer) {
+            this._ttsStreamer.stop();
+            this._ttsStreamer = null;
+        }
     }
 
     /** Returns true if speech or TTS is active (for Escape key handling). */
     get isActive() {
-        return this.isListening || speechSynthesis.speaking || (this._pocketTtsAudio && !this._pocketTtsAudio.paused);
+        return this.isListening || speechSynthesis.speaking
+            || (this._pocketTtsAudio && !this._pocketTtsAudio.paused)
+            || (this._ttsStreamer && this._ttsStreamer.isActive);
     }
 }

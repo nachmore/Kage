@@ -97,6 +97,18 @@ class PocketTtsSettingsModule extends SettingsModule {
                         '<input type="number" class="setting-input" id="pocketTtsPort" min="1024" max="65535" value="9877" style="width:100px;">'
                     )}
 
+                    ${this.createControlRow(
+                        'Temperature',
+                        'Controls voice expressiveness. Lower = more consistent and robotic, higher = more varied and expressive.',
+                        '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsTemp" min="0.3" max="1.0" step="0.1" value="0.7"><span class="range-value" id="pocketTtsTempValue">0.7</span></div>'
+                    )}
+
+                    ${this.createControlRow(
+                        'EOS Threshold',
+                        'End-of-sequence detection sensitivity. Lower values make the model less likely to stop speaking early. Default: -4.0.',
+                        '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsEos" min="-8.0" max="-1.0" step="0.5" value="-4.0"><span class="range-value" id="pocketTtsEosValue">-4.0</span></div>'
+                    )}
+
                     <!-- Test -->
                     <div class="setting-row">
                         <div class="setting-label">Test</div>
@@ -105,11 +117,25 @@ class PocketTtsSettingsModule extends SettingsModule {
                             <button class="setting-button" id="pocketTtsTestBtn" onclick="pocketTtsTest()">
                                 🔊 Test Voice
                             </button>
-                            <button class="setting-button" id="pocketTtsStopTestBtn" onclick="pocketTtsStopTest()" style="display:none;">
-                                ⏹ Stop
-                            </button>
+                            <span id="pocketTtsTestSpinner" style="display:none;font-size:12px;">⏳ Generating...</span>
                             <span id="pocketTtsTestStatus" style="font-size:12px;"></span>
                         </div>
+                    </div>
+
+                    <!-- HF Voice URLs -->
+                    <div class="setting-row">
+                        <div class="setting-label">Add Voice from URL</div>
+                        <div class="setting-description">
+                            Paste a HuggingFace voice URL (e.g. <code>hf://kyutai/tts-voices/alba-mackenna/casual.wav</code>) or any HTTP URL to a .wav file.
+                            The voice will be downloaded, cached as safetensors for fast loading, and added to the voice list.
+                            <a href="https://huggingface.co/kyutai/tts-voices" target="_blank" style="color:var(--kiro-accent);">Browse voices</a>
+                        </div>
+                        <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
+                            <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="hf://kyutai/tts-voices/..." style="flex:1;">
+                            <input type="text" class="setting-input" id="pocketTtsVoiceName" placeholder="Name" style="width:100px;">
+                            <button class="setting-button" id="pocketTtsAddVoiceBtn" onclick="pocketTtsAddVoice()">Add</button>
+                        </div>
+                        <div id="pocketTtsAddVoiceStatus" style="font-size:12px;margin-top:4px;"></div>
                     </div>
 
                     <!-- Voice management -->
@@ -135,10 +161,22 @@ class PocketTtsSettingsModule extends SettingsModule {
         const autoStart = document.getElementById('pocketTtsAutoStart');
         const voice = document.getElementById('pocketTtsVoice');
         const port = document.getElementById('pocketTtsPort');
+        const temp = document.getElementById('pocketTtsTemp');
+        const tempValue = document.getElementById('pocketTtsTempValue');
+        const eos = document.getElementById('pocketTtsEos');
+        const eosValue = document.getElementById('pocketTtsEosValue');
 
         if (enabled) enabled.checked = ptts.enabled === true;
         if (autoStart) autoStart.checked = ptts.auto_start === true;
         if (port) port.value = ptts.port || 9877;
+        if (temp) {
+            temp.value = ptts.temp ?? 0.7;
+            if (tempValue) tempValue.textContent = (ptts.temp ?? 0.7).toFixed(1);
+        }
+        if (eos) {
+            eos.value = ptts.eos_threshold ?? -4.0;
+            if (eosValue) eosValue.textContent = (ptts.eos_threshold ?? -4.0).toFixed(1);
+        }
         this._savedVoice = ptts.voice || 'alba';
 
         // Refresh status and populate voices
@@ -151,6 +189,8 @@ class PocketTtsSettingsModule extends SettingsModule {
         config.pocket_tts.auto_start = document.getElementById('pocketTtsAutoStart')?.checked ?? false;
         config.pocket_tts.voice = document.getElementById('pocketTtsVoice')?.value || 'alba';
         config.pocket_tts.port = parseInt(document.getElementById('pocketTtsPort')?.value || '9877', 10);
+        config.pocket_tts.temp = parseFloat(document.getElementById('pocketTtsTemp')?.value || '0.7');
+        config.pocket_tts.eos_threshold = parseFloat(document.getElementById('pocketTtsEos')?.value || '-4.0');
         // Preserve python_path and installed from existing config
         if (this._status) {
             config.pocket_tts.python_path = this._status.python_path || null;
@@ -168,6 +208,17 @@ class PocketTtsSettingsModule extends SettingsModule {
 
     initialize() {
         this.refreshStatus();
+        // Wire up range slider labels
+        const temp = document.getElementById('pocketTtsTemp');
+        const tempValue = document.getElementById('pocketTtsTempValue');
+        if (temp && tempValue) {
+            temp.addEventListener('input', () => { tempValue.textContent = parseFloat(temp.value).toFixed(1); });
+        }
+        const eos = document.getElementById('pocketTtsEos');
+        const eosValue = document.getElementById('pocketTtsEosValue');
+        if (eos && eosValue) {
+            eos.addEventListener('input', () => { eosValue.textContent = parseFloat(eos.value).toFixed(1); });
+        }
     }
 
     destroy() {
@@ -439,11 +490,24 @@ let _pocketTtsTestAudio = null;
 
 async function pocketTtsTest() {
     const invoke = window.__TAURI__.core.invoke;
+    const btn = document.getElementById('pocketTtsTestBtn');
+    const spinner = document.getElementById('pocketTtsTestSpinner');
     const status = document.getElementById('pocketTtsTestStatus');
-    const stopBtn = document.getElementById('pocketTtsStopTestBtn');
 
-    if (status) status.textContent = 'Generating...';
-    if (stopBtn) stopBtn.style.display = '';
+    // If already playing, stop
+    if (_pocketTtsTestAudio) {
+        _pocketTtsTestAudio.pause();
+        _pocketTtsTestAudio = null;
+        if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; }
+        if (spinner) spinner.style.display = 'none';
+        if (status) status.textContent = 'Stopped';
+        return;
+    }
+
+    // Hide button, show spinner
+    if (btn) btn.style.display = 'none';
+    if (spinner) spinner.style.display = '';
+    if (status) status.textContent = '';
 
     try {
         const config = await invoke('get_config');
@@ -456,6 +520,7 @@ async function pocketTtsTest() {
             body: JSON.stringify({
                 text: 'Hello! I am your Kiro assistant, using Pocket TTS for high quality speech.',
                 voice: voice,
+                stream: false,
             }),
         });
 
@@ -467,28 +532,104 @@ async function pocketTtsTest() {
         const blob = await resp.blob();
         const url = URL.createObjectURL(blob);
         _pocketTtsTestAudio = new Audio(url);
+
         _pocketTtsTestAudio.onended = () => {
-            if (status) status.textContent = '✅ Done';
-            if (stopBtn) stopBtn.style.display = 'none';
             URL.revokeObjectURL(url);
+            _pocketTtsTestAudio = null;
+            if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; }
+            if (spinner) spinner.style.display = 'none';
+            if (status) status.textContent = '✅ Done';
         };
-        _pocketTtsTestAudio.play();
+        _pocketTtsTestAudio.onerror = () => {
+            URL.revokeObjectURL(url);
+            _pocketTtsTestAudio = null;
+            if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; }
+            if (spinner) spinner.style.display = 'none';
+            if (status) status.textContent = '❌ Playback error';
+        };
+
+        // Show stop button, hide spinner
+        if (spinner) spinner.style.display = 'none';
+        if (btn) { btn.textContent = '⏹ Stop'; btn.style.display = ''; }
         if (status) status.textContent = '🔊 Playing...';
+        _pocketTtsTestAudio.play();
     } catch (e) {
+        _pocketTtsTestAudio = null;
+        if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; }
+        if (spinner) spinner.style.display = 'none';
         if (status) status.textContent = '❌ ' + e.message;
-        if (stopBtn) stopBtn.style.display = 'none';
     }
 }
 
-function pocketTtsStopTest() {
-    if (_pocketTtsTestAudio) {
-        _pocketTtsTestAudio.pause();
-        _pocketTtsTestAudio = null;
+async function pocketTtsAddVoice() {
+    const invoke = window.__TAURI__.core.invoke;
+    const urlInput = document.getElementById('pocketTtsVoiceUrl');
+    const nameInput = document.getElementById('pocketTtsVoiceName');
+    const btn = document.getElementById('pocketTtsAddVoiceBtn');
+    const status = document.getElementById('pocketTtsAddVoiceStatus');
+
+    const voiceUrl = urlInput?.value.trim() || '';
+    let voiceName = nameInput?.value.trim() || '';
+
+    if (!voiceUrl) {
+        if (status) status.textContent = '⚠️ Paste a voice URL first';
+        return;
     }
-    const status = document.getElementById('pocketTtsTestStatus');
-    const stopBtn = document.getElementById('pocketTtsStopTestBtn');
-    if (status) status.textContent = 'Stopped';
-    if (stopBtn) stopBtn.style.display = 'none';
+
+    // Auto-generate name from URL if not provided
+    if (!voiceName) {
+        // Extract a name from the URL path
+        const parts = voiceUrl.replace(/\/$/, '').split('/');
+        const lastPart = parts[parts.length - 1] || 'custom';
+        voiceName = lastPart.replace(/\.(wav|mp3|safetensors)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+    if (status) status.textContent = '⏳ Downloading and processing voice...';
+
+    try {
+        const config = await invoke('get_config');
+        const port = config.pocket_tts?.port || 9877;
+
+        // Use the server's load-voice endpoint with the URL as the voice name
+        // The server will download it, cache it, and make it available
+        const resp = await fetch(`http://127.0.0.1:${port}/load-voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice: voiceUrl }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: 'Failed' }));
+            throw new Error(err.error || 'Failed to load voice');
+        }
+
+        // Now export it with the friendly name
+        const exportResp = await fetch(`http://127.0.0.1:${port}/export-voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wav_path: voiceUrl, output_name: voiceName }),
+        });
+
+        if (exportResp.ok) {
+            if (status) status.textContent = `✅ Voice "${voiceName}" added and cached`;
+        } else {
+            if (status) status.textContent = `✅ Voice loaded (export may have failed — it will still work but load slower next time)`;
+        }
+
+        // Clear inputs
+        if (urlInput) urlInput.value = '';
+        if (nameInput) nameInput.value = '';
+
+        // Refresh voice list
+        const mod = settingsManager.modules.find(m => m.id === 'pocket-tts');
+        if (mod) mod.populateVoices();
+
+    } catch (e) {
+        if (status) status.textContent = '❌ ' + e.message;
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    }
 }
 
 async function pocketTtsOpenVoicesDir() {

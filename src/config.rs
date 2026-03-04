@@ -332,6 +332,12 @@ pub struct PocketTtsConfig {
     /// Auto-start the TTS server when the app launches
     #[serde(default)]
     pub auto_start: bool,
+    /// Sampling temperature (0.3=consistent, 0.7=default, 1.0=expressive)
+    #[serde(default = "default_pocket_tts_temp")]
+    pub temp: f32,
+    /// End-of-sequence threshold (default: -4.0, lower = less likely to stop early)
+    #[serde(default = "default_pocket_tts_eos_threshold")]
+    pub eos_threshold: f32,
 }
 
 fn default_pocket_tts_voice() -> String {
@@ -340,6 +346,14 @@ fn default_pocket_tts_voice() -> String {
 
 fn default_pocket_tts_port() -> u16 {
     9877
+}
+
+fn default_pocket_tts_temp() -> f32 {
+    0.7
+}
+
+fn default_pocket_tts_eos_threshold() -> f32 {
+    -4.0
 }
 
 impl Default for PocketTtsConfig {
@@ -351,6 +365,8 @@ impl Default for PocketTtsConfig {
             python_path: None,
             installed: false,
             auto_start: false,
+            temp: 0.7,
+            eos_threshold: -4.0,
         }
     }
 }

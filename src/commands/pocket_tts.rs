@@ -287,6 +287,8 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
     let config = state.config.lock().await;
     let port = config.pocket_tts.port;
     let voice = config.pocket_tts.voice.clone();
+    let temp = config.pocket_tts.temp;
+    let eos_threshold = config.pocket_tts.eos_threshold;
     let python = config
         .pocket_tts
         .python_path
@@ -309,14 +311,16 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
     }
 
     info!(
-        "Starting pocket-tts server on port {} with voice '{}'",
-        port, voice
+        "Starting pocket-tts server on port {} with voice '{}' temp={} eos={}",
+        port, voice, temp, eos_threshold
     );
 
     let mut cmd = Command::new(&python);
     cmd.arg(script_path.to_str().unwrap_or(""))
         .args(["--port", &port.to_string()])
         .args(["--voice", &voice])
+        .args(["--temp", &temp.to_string()])
+        .args(["--eos-threshold", &eos_threshold.to_string()])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     configure_no_window(&mut cmd);

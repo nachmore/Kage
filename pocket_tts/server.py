@@ -74,9 +74,14 @@ def load_model():
         from pocket_tts import TTSModel
         print("[pocket-tts] Loading model...", flush=True)
         t0 = time.time()
-        model = TTSModel.load_model()
+        # temp and eos_threshold can be tuned:
+        #   temp: 0.5 = more consistent, 0.7 = default, 0.9 = more expressive
+        #   eos_threshold: -4.0 default, lower = less likely to stop early
+        temp = float(os.environ.get("POCKET_TTS_TEMP", "0.7"))
+        eos_threshold = float(os.environ.get("POCKET_TTS_EOS_THRESHOLD", "-4.0"))
+        model = TTSModel.load_model(temp=temp, eos_threshold=eos_threshold)
         elapsed = time.time() - t0
-        print(f"[pocket-tts] Model loaded in {elapsed:.1f}s", flush=True)
+        print(f"[pocket-tts] Model loaded in {elapsed:.1f}s (temp={temp}, eos={eos_threshold})", flush=True)
         return True
     except ImportError:
         print("[pocket-tts] ERROR: pocket-tts not installed. Run: pip install pocket-tts", flush=True)
@@ -90,7 +95,9 @@ def _auto_export_safetensors(voice_name, state):
     """Auto-export a voice state to safetensors for fast loading next time."""
     try:
         from pocket_tts import export_model_state
-        cache_path = os.path.join(get_cache_dir(), f"{voice_name}.safetensors")
+        # Use a filesystem-safe name for the cache key
+        safe_name = voice_name.replace("/", "_").replace(":", "_").replace("?", "_")
+        cache_path = os.path.join(get_cache_dir(), f"{safe_name}.safetensors")
         if not os.path.isfile(cache_path):
             export_model_state(state, cache_path)
             print(f"[pocket-tts] Auto-exported '{voice_name}' to safetensors for fast loading", flush=True)
@@ -140,7 +147,13 @@ def get_voice_state(voice_name):
                 state = model.get_state_for_audio_prompt(wav_path)
                 needs_export = True
 
-        # 4. Built-in voice
+        # 4. HuggingFace or HTTP URL
+        if state is None and (voice_name.startswith("hf://") or voice_name.startswith("http")):
+            print(f"[pocket-tts] Loading voice from URL: {voice_name}", flush=True)
+            state = model.get_state_for_audio_prompt(voice_name)
+            needs_export = True
+
+        # 5. Built-in voice
         if state is None and voice_name in BUILTIN_VOICES:
             print(f"[pocket-tts] Loading built-in voice: {voice_name}", flush=True)
             state = model.get_state_for_audio_prompt(voice_name)
@@ -267,7 +280,7 @@ class TTSHandler(BaseHTTPRequestHandler):
 
 
     def _handle_tts(self):
-        """Generate speech and return complete WAV audio."""
+        """Generate speech and stream audio chunks back as they're generated."""
         if model is None:
             self._json_response(503, {"error": "Model not loaded"})
             return
@@ -280,6 +293,8 @@ class TTSHandler(BaseHTTPRequestHandler):
 
         text = body.get("text", "").strip()
         voice = body.get("voice", "alba")
+        # Allow caller to request non-streaming (for test script compatibility)
+        stream = body.get("stream", True)
 
         if not text:
             self._json_response(400, {"error": "No text provided"})
@@ -301,33 +316,69 @@ class TTSHandler(BaseHTTPRequestHandler):
             import torch
             import numpy as np
 
-            audio = model.generate_audio(voice_state, text)
+            if stream and hasattr(model, 'generate_audio_stream'):
+                # Streaming mode: send chunks as they're generated
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("X-Sample-Rate", str(SAMPLE_RATE))
+                self.send_header("X-Channels", "1")
+                self.send_header("X-Bits-Per-Sample", "16")
+                self.send_header("Transfer-Encoding", "chunked")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
 
-            if cancel_flag.is_set():
-                self._json_response(499, {"error": "Cancelled"})
-                return
+                for chunk in model.generate_audio_stream(voice_state, text, frames_after_eos=2):
+                    if cancel_flag.is_set():
+                        break
 
-            if isinstance(audio, torch.Tensor):
-                audio_np = audio.numpy()
+                    if isinstance(chunk, torch.Tensor):
+                        chunk_np = chunk.numpy()
+                    else:
+                        chunk_np = np.array(chunk)
+
+                    chunk_np = np.clip(chunk_np, -1.0, 1.0)
+                    pcm = (chunk_np * 32767).astype(np.int16)
+                    pcm_bytes = pcm.tobytes()
+
+                    # Write chunked transfer encoding frame
+                    chunk_header = f"{len(pcm_bytes):X}\r\n".encode()
+                    self.wfile.write(chunk_header)
+                    self.wfile.write(pcm_bytes)
+                    self.wfile.write(b"\r\n")
+                    self.wfile.flush()
+
+                # Write final zero-length chunk to signal end
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
             else:
-                audio_np = np.array(audio)
+                # Non-streaming fallback: generate full audio, return as WAV
+                audio = model.generate_audio(voice_state, text, frames_after_eos=2)
 
-            audio_np = np.clip(audio_np, -1.0, 1.0)
-            pcm = (audio_np * 32767).astype(np.int16)
-            pcm_bytes = pcm.tobytes()
+                if cancel_flag.is_set():
+                    self._json_response(499, {"error": "Cancelled"})
+                    return
 
-            # Build complete WAV with correct sizes
-            header = wav_header(SAMPLE_RATE, data_size=len(pcm_bytes))
-            wav_data = header + pcm_bytes
+                if isinstance(audio, torch.Tensor):
+                    audio_np = audio.numpy()
+                else:
+                    audio_np = np.array(audio)
 
-            self.send_response(200)
-            self.send_header("Content-Type", "audio/wav")
-            self.send_header("Content-Length", str(len(wav_data)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(wav_data)
-            self.wfile.flush()
+                audio_np = np.clip(audio_np, -1.0, 1.0)
+                pcm = (audio_np * 32767).astype(np.int16)
+                pcm_bytes = pcm.tobytes()
+
+                header = wav_header(SAMPLE_RATE, data_size=len(pcm_bytes))
+                wav_data = header + pcm_bytes
+
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(len(wav_data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(wav_data)
+                self.wfile.flush()
 
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
@@ -395,7 +446,15 @@ def main():
     parser.add_argument("--port", type=int, default=9877, help="Port to listen on")
     parser.add_argument("--voice", type=str, default="alba", help="Default voice to pre-load")
     parser.add_argument("--no-preload", action="store_true", help="Don't pre-load model at startup")
+    parser.add_argument("--temp", type=float, default=None, help="Sampling temperature (0.5=consistent, 0.7=default, 0.9=expressive)")
+    parser.add_argument("--eos-threshold", type=float, default=None, help="End-of-sequence threshold (default: -4.0)")
     args = parser.parse_args()
+
+    # Pass temp/eos via env vars so load_model() picks them up
+    if args.temp is not None:
+        os.environ["POCKET_TTS_TEMP"] = str(args.temp)
+    if args.eos_threshold is not None:
+        os.environ["POCKET_TTS_EOS_THRESHOLD"] = str(args.eos_threshold)
 
     data_dir = get_data_dir()
     print(f"[pocket-tts] Data directory: {data_dir}", flush=True)

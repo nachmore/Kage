@@ -86,7 +86,7 @@ def test_load_voice(port, voice):
 def test_tts(port, voice, text, output_file=None):
     print(f"── POST /tts  voice={voice}  text={repr(text[:60])}{'...' if len(text) > 60 else ''}")
     t0 = time.time()
-    code, data = req(port, "POST", "/tts", {"text": text, "voice": voice})
+    code, data = req(port, "POST", "/tts", {"text": text, "voice": voice, "stream": False})
     elapsed = time.time() - t0
 
     if code != 200:

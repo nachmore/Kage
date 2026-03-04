@@ -507,7 +507,8 @@ export class FloatingApp {
                 speechWave: this.elements.speechWave
             },
             onSend: (text) => this.sendChatMessage(text),
-            onVisibilityUpdate: () => this.updateDatetimeVisibility()
+            onVisibilityUpdate: () => this.updateDatetimeVisibility(),
+            barContainer: document.querySelector('.input-container'),
         });
         this.speech.setup();
     }
@@ -1087,6 +1088,9 @@ export class FloatingApp {
         
         renderMarkdown(this.currentResponse, this.elements.responseText, true);
 
+        // Feed streaming text to TTS for sentence-chunked playback
+        if (this.speech) this.speech.feedStreamingText(this.currentResponse);
+
         if (this.elements.responseText.lastChild) {
             let streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
             if (!streamingIndicator) {
@@ -1121,7 +1125,10 @@ export class FloatingApp {
             this.isWaitingForResponse = false;
 
             // Read back response if speech was used
-            if (this.speech) this.speech.speakResponse(this.currentResponse);
+            if (this.speech) {
+                this.speech.finishStreamingText(this.currentResponse);
+                this.speech.speakResponse(this.currentResponse);
+            }
 
             // Notify if window is hidden
             try {

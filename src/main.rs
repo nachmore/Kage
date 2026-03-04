@@ -350,6 +350,8 @@ fn main() {
                     let config = config_arc.lock().await;
                     let port = config.pocket_tts.port;
                     let voice = config.pocket_tts.voice.clone();
+                    let temp = config.pocket_tts.temp;
+                    let eos_threshold = config.pocket_tts.eos_threshold;
                     let python = config.pocket_tts.python_path.clone()
                         .unwrap_or_else(|| "python".to_string());
                     drop(config);
@@ -364,6 +366,8 @@ fn main() {
                     cmd.arg(script_path.to_str().unwrap_or(""))
                         .args(["--port", &port.to_string()])
                         .args(["--voice", &voice])
+                        .args(["--temp", &temp.to_string()])
+                        .args(["--eos-threshold", &eos_threshold.to_string()])
                         .stdout(std::process::Stdio::piped())
                         .stderr(std::process::Stdio::piped());
                     commands::pocket_tts::configure_no_window(&mut cmd);

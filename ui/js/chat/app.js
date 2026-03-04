@@ -794,7 +794,8 @@ export class ChatApp {
                 this.elements.chatInput.value = text;
                 this.sendMessage();
             },
-            onVisibilityUpdate: () => {}
+            onVisibilityUpdate: () => {},
+            barContainer: document.querySelector('.chat-input-container') || document.querySelector('.chat-input'),
         });
         this.speech.setup();
     }
@@ -1019,6 +1020,9 @@ export class ChatApp {
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
         renderMarkdown(this.currentStreamingContent, contentDiv, true);
 
+        // Feed streaming text to TTS for sentence-chunked playback
+        if (this.speech) this.speech.feedStreamingText(this.currentStreamingContent);
+
         let indicator = contentDiv.querySelector('.streaming-indicator');
         if (!indicator) {
             indicator = document.createElement('span');
@@ -1050,6 +1054,7 @@ export class ChatApp {
                 this.currentStreamingMessage = null;
             }
 
+            const finalContent = this.messages[this.messages.length - 1]?.content || '';
             this.currentStreamingContent = '';
             this.isWaitingForResponse = false;
             this.updateInputState();
@@ -1057,8 +1062,9 @@ export class ChatApp {
             this.scrollToBottom();
 
             // Read back response if speech was used
-            if (this.speech && this.currentStreamingContent) {
-                this.speech.speakResponse(this.messages[this.messages.length - 1]?.content || '');
+            if (this.speech && finalContent) {
+                this.speech.finishStreamingText(finalContent);
+                this.speech.speakResponse(finalContent);
             }
 
             this.loadSessions();
