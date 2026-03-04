@@ -950,7 +950,7 @@ body.light-theme .speech-btn:hover { background: rgba(100, 100, 255, 0.15); bord
     gap: 12px;
     padding: 10px 14px;
     cursor: pointer;
-    transition: background 0.1s;
+    transition: background 0.1s, opacity 0.15s ease, transform 0.15s ease;
     overflow: hidden;
 }
 
