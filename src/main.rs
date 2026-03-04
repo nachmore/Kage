@@ -199,6 +199,7 @@ fn main() {
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
             updater: Arc::new(updater::UpdaterState::new()),
             user_info_cache: Arc::new(std::sync::Mutex::new(None)),
+            session_cache: Arc::new(std::sync::Mutex::new(None)),
             pocket_tts_process: Arc::new(std::sync::Mutex::new(None)),
             pocket_tts_install_process: Arc::new(std::sync::Mutex::new(None)),
         })

@@ -26,6 +26,8 @@ export class ChatApp {
         this.isWaitingForResponse = false;
         this.isConnected = false;
         this.sessions = [];
+        this._sessionsFullyLoaded = false;
+        this._loadingMore = false;
         this.activeSessionId = null;
         this.floatingSessionId = null;
         this.currentAcpSessionId = null;
@@ -193,8 +195,23 @@ export class ChatApp {
         });
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
 
-        // Session search
-        this.elements.sessionSearch.addEventListener('input', () => this.renderSessionList());
+        // Session search — load all sessions when user starts searching
+        this.elements.sessionSearch.addEventListener('input', () => {
+            const query = (this.elements.sessionSearch?.value || '').trim();
+            if (query && !this._sessionsFullyLoaded) {
+                this.loadSessions(true);
+            } else {
+                this.renderSessionList();
+            }
+        });
+
+        // Lazy-load more sessions on scroll
+        this.elements.sessionList?.addEventListener('scroll', () => {
+            const el = this.elements.sessionList;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+                this.loadMoreSessions();
+            }
+        });
 
         // Reload slash commands when input is focused (may not have been available at init)
         this.elements.chatInput.addEventListener('focus', () => {
@@ -415,15 +432,36 @@ export class ChatApp {
         }
     }
 
-    async loadSessions() {
+    async loadSessions(loadAll = false) {
         try {
-            const sessions = await this.invoke('list_sessions');
-            this.sessions = sessions;
+            const params = loadAll ? { force: true } : { limit: 50, offset: 0 };
+            const sessions = await this.invoke('list_sessions', params);
+            if (loadAll || !this._sessionsFullyLoaded) {
+                this.sessions = sessions;
+                this._sessionsFullyLoaded = loadAll || sessions.length < 50;
+            }
             this.renderSessionList();
         } catch (error) {
             console.error('Failed to load sessions:', error);
             this.sessions = [];
             this.renderSessionList();
+        }
+    }
+
+    async loadMoreSessions() {
+        if (this._sessionsFullyLoaded || this._loadingMore) return;
+        this._loadingMore = true;
+        try {
+            const more = await this.invoke('list_sessions', { limit: 50, offset: this.sessions.length });
+            if (more.length > 0) {
+                this.sessions = this.sessions.concat(more);
+                this.renderSessionList();
+            }
+            if (more.length < 50) this._sessionsFullyLoaded = true;
+        } catch (e) {
+            console.error('Failed to load more sessions:', e);
+        } finally {
+            this._loadingMore = false;
         }
     }
 

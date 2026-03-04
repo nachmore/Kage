@@ -34,6 +34,8 @@ pub struct AppState {
     pub updater: Arc<crate::updater::UpdaterState>,
     /// Cached user info (expensive to compute — involves subprocess on Windows)
     pub user_info_cache: Arc<std::sync::Mutex<Option<crate::commands::system::UserInfo>>>,
+    /// Cached session list (avoids re-scanning directory on every call)
+    pub session_cache: Arc<std::sync::Mutex<Option<crate::commands::sessions::SessionCache>>>,
     /// Pocket TTS server child process
     pub pocket_tts_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
     /// Pocket TTS pip install child process (for cancellation)

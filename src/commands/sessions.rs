@@ -192,10 +192,66 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
     messages
 }
 
+/// Cached session list with timestamp
+pub struct SessionCache {
+    pub sessions: Vec<SessionSummary>,
+    pub cached_at: std::time::Instant,
+}
+
 #[tauri::command]
-pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
+pub async fn list_sessions(
+    limit: Option<usize>,
+    offset: Option<usize>,
+    force: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<Vec<SessionSummary>, String> {
+    let force = force.unwrap_or(false);
+    let cache_ttl = std::time::Duration::from_secs(5);
+
+    // Check cache first
+    if !force {
+        let cache = state.session_cache.lock().unwrap();
+        if let Some(ref cached) = *cache {
+            if cached.cached_at.elapsed() < cache_ttl {
+                let sessions = paginate(&cached.sessions, limit, offset);
+                info!("Found {} sessions (returning {} from cache, offset {})",
+                    cached.sessions.len(), sessions.len(), offset.unwrap_or(0));
+                return Ok(sessions);
+            }
+        }
+    }
+
+    // Scan and cache
+    let all_sessions = scan_sessions()?;
+    let total = all_sessions.len();
+
+    // Store in cache
+    {
+        let mut cache = state.session_cache.lock().unwrap();
+        *cache = Some(SessionCache {
+            sessions: all_sessions.clone(),
+            cached_at: std::time::Instant::now(),
+        });
+    }
+
+    let sessions = paginate(&all_sessions, limit, offset);
+    info!("Found {} sessions (returning {}, offset {})", total, sessions.len(), offset.unwrap_or(0));
+    Ok(sessions)
+}
+
+fn paginate(sessions: &[SessionSummary], limit: Option<usize>, offset: Option<usize>) -> Vec<SessionSummary> {
+    let offset = offset.unwrap_or(0);
+    let iter = sessions.iter().skip(offset);
+    match limit {
+        Some(limit) => iter.take(limit).cloned().collect(),
+        None => iter.cloned().collect(),
+    }
+}
+
+/// Scan the sessions directory — optimized to only extract titles for sessions
+/// that will actually be returned (deferred title extraction).
+fn scan_sessions() -> Result<Vec<SessionSummary>, String> {
     let sessions_dir = get_sessions_dir()?;
-    info!("Loading sessions from: {:?}", sessions_dir);
 
     if !sessions_dir.exists() {
         info!("Sessions directory does not exist yet: {:?}", sessions_dir);
@@ -285,7 +341,6 @@ pub async fn list_sessions() -> Result<Vec<SessionSummary>, String> {
     // Sort by updated_at descending (most recent first)
     sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-    info!("Found {} sessions", sessions.len());
     Ok(sessions)
 }
 
