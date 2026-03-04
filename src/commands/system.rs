@@ -12,6 +12,60 @@ pub const STEERING_MSG_PREFIX: &str = "[KIRO_STEERING_IGNORE]";
 /// Built-in steering document embedded at compile time.
 pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
 
+/// Assemble the full steering content from builtin + user + auto sources.
+/// Returns the joined parts (without the STEERING_MSG_PREFIX wrapper).
+/// Callers are responsible for adding the prefix and any instructions.
+pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
+    let assistant = &config.acp.assistant;
+    let mut parts: Vec<String> = Vec::new();
+
+    // Built-in steering (always first)
+    parts.push(BUILTIN_STEERING.to_string());
+
+    // User-written steering doc
+    if let Some(ref path) = assistant.user_steering_path {
+        if !path.is_empty() {
+            match fs::read_to_string(path) {
+                Ok(content) if !content.trim().is_empty() => {
+                    info!("Loaded user steering doc from: {}", path);
+                    parts.push(content);
+                }
+                Ok(_) => {}
+                Err(e) => error!("Failed to read user steering doc {}: {}", path, e),
+            }
+        }
+    }
+
+    // Auto-generated steering doc
+    if assistant.auto_steering_enabled {
+        match Config::get_auto_steering_path() {
+            Ok(auto_path) => {
+                if auto_path.exists() {
+                    match fs::read_to_string(&auto_path) {
+                        Ok(content) if !content.trim().is_empty() => {
+                            parts.push(content);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Err(e) => error!("Failed to get auto steering path: {}", e),
+        }
+    }
+
+    parts
+}
+
+/// Format assembled steering parts into a complete steering message
+/// with the prefix and ack instruction.
+pub fn format_steering_message(parts: &[String]) -> String {
+    format!(
+        "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
+        STEERING_MSG_PREFIX,
+        parts.join("\n\n---\n\n")
+    )
+}
+
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
     let config = state.config.lock().unwrap();
@@ -520,47 +574,8 @@ pub fn compute_user_info() -> UserInfo {
 #[tauri::command]
 pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, String> {
     let config = state.config.lock().unwrap();
-    let assistant = &config.acp.assistant;
-
-    let mut parts: Vec<String> = Vec::new();
-
-    // Built-in steering document (always included first)
-    parts.push(BUILTIN_STEERING.to_string());
-
-    // User-written steering doc takes precedence (loaded first)
-    if let Some(ref path) = assistant.user_steering_path {
-        if !path.is_empty() {
-            match fs::read_to_string(path) {
-                Ok(content) if !content.trim().is_empty() => {
-                    info!("Loaded user steering doc from: {}", path);
-                    parts.push(content);
-                }
-                Ok(_) => info!("User steering doc is empty: {}", path),
-                Err(e) => error!("Failed to read user steering doc {}: {}", path, e),
-            }
-        }
-    }
-
-    // Auto-generated steering doc
-    if assistant.auto_steering_enabled {
-        match Config::get_auto_steering_path() {
-            Ok(auto_path) => {
-                if auto_path.exists() {
-                    match fs::read_to_string(&auto_path) {
-                        Ok(content) if !content.trim().is_empty() => {
-                            info!("Loaded auto steering doc from: {:?}", auto_path);
-                            parts.push(content);
-                        }
-                        Ok(_) => info!("Auto steering doc is empty"),
-                        Err(e) => error!("Failed to read auto steering doc: {}", e),
-                    }
-                }
-            }
-            Err(e) => error!("Failed to get auto steering path: {}", e),
-        }
-    }
-
-    Ok(Some(format!("{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>", STEERING_MSG_PREFIX, parts.join("\n\n---\n\n"))))
+    let parts = assemble_steering_parts(&config);
+    Ok(Some(format_steering_message(&parts)))
 }
 
 /// Open the auto-generated steering document in the default editor.

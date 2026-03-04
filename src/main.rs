@@ -487,45 +487,14 @@ fn main() {
                             }
 
                             // Send steering content as the first hidden message
-                            let steering_parts = {
+                            let steering_msg = {
                                 let cfg = config_arc.lock().unwrap();
-                                let assistant = &cfg.acp.assistant;
-                                let mut parts: Vec<String> = Vec::new();
-
-                                // Built-in steering (always first)
-                                parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
-
-                                // User steering (precedence)
-                                if let Some(ref path) = assistant.user_steering_path {
-                                    if !path.is_empty() {
-                                        if let Ok(content) = std::fs::read_to_string(path) {
-                                            if !content.trim().is_empty() {
-                                                parts.push(content);
-                                            }
-                                        }
-                                    }
-                                }
-                                // Auto steering
-                                if assistant.auto_steering_enabled {
-                                    if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
-                                        if auto_path.exists() {
-                                            if let Ok(content) = std::fs::read_to_string(&auto_path) {
-                                                if !content.trim().is_empty() {
-                                                    parts.push(content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                parts
+                                crate::commands::system::format_steering_message(
+                                    &crate::commands::system::assemble_steering_parts(&cfg)
+                                )
                             };
 
                             {
-                                let steering_msg = format!(
-                                    "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
-                                    crate::commands::system::STEERING_MSG_PREFIX,
-                                    steering_parts.join("\n\n---\n\n")
-                                );
                                 info!("Sending steering message ({} chars)", steering_msg.len());
                                 if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
                                     error!("Failed to send steering message: {}", e);

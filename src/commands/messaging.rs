@@ -552,43 +552,15 @@ pub async fn get_slash_command_options(
 pub async fn send_steering_message(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    let config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
-    let assistant = &config.acp.assistant;
-
-    let mut parts: Vec<String> = Vec::new();
-
-    // Built-in steering document (always included first)
-    parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
-
-    if let Some(ref path) = assistant.user_steering_path {
-        if !path.is_empty() {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                if !content.trim().is_empty() {
-                    parts.push(content);
-                }
-            }
-        }
-    }
-
-    if assistant.auto_steering_enabled {
-        if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
-            if auto_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&auto_path) {
-                    if !content.trim().is_empty() {
-                        parts.push(content);
-                    }
-                }
-            }
-        }
-    }
-
-    drop(config);
-
-    let steering_msg = format!(
-        "{} {}",
-        crate::commands::system::STEERING_MSG_PREFIX,
-        parts.join("\n\n---\n\n")
-    );
+    let steering_msg = {
+        let config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
+        let parts = crate::commands::system::assemble_steering_parts(&config);
+        format!(
+            "{} {}",
+            crate::commands::system::STEERING_MSG_PREFIX,
+            parts.join("\n\n---\n\n")
+        )
+    };
 
     let client = state.acp_client.clone();
     async_runtime::spawn_blocking(move || {
