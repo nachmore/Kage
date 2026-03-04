@@ -100,6 +100,11 @@ export class WindowManager {
                 if (contentVisible) {
                     // Measure response text + any tool/source pills inside content area
                     contentHeight += responseText.scrollHeight + 16; // 16px content area padding top
+                    // Floating response action buttons (copy, speak)
+                    const floatingActions = document.getElementById('floatingResponseActions');
+                    if (floatingActions && floatingActions.style.display !== 'none') {
+                        contentHeight += floatingActions.offsetHeight;
+                    }
                     const toolSourcesEl = document.getElementById('toolSources');
                     if (toolSourcesEl && toolSourcesEl.offsetHeight > 0) {
                         contentHeight += toolSourcesEl.offsetHeight + 8; // 8px gap
@@ -116,6 +121,12 @@ export class WindowManager {
                 const compactSources = document.getElementById('toolSourcesCompact');
                 if (compactSources && compactSources.offsetHeight > 0) {
                     contentHeight += compactSources.offsetHeight;
+                }
+
+                // Response quick action chips
+                const responseActions = document.getElementById('responseActionsContainer');
+                if (responseActions && responseActions.style.display !== 'none') {
+                    contentHeight += responseActions.offsetHeight;
                 }
                 
                 contentHeight += inputContainer?.offsetHeight || 0;

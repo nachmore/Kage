@@ -435,3 +435,24 @@ body.dark-theme .datetime-date {
     top: 50%;
     transform: translateY(-50%);
 }
+
+
+/* Floating response action buttons (copy, speak) */
+.floating-response-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+}
+
+.floating-response-actions:hover {
+    opacity: 1;
+}
+
+/* Response quick actions — needs padding to clear the gradient bar */
+#responseActionsContainer {
+    padding-left: 12px;
+    padding-right: 12px;
+}

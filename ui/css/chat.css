@@ -960,22 +960,7 @@ body.light-theme .sidebar-toggle-btn {
     opacity: 1;
 }
 
-.msg-action-btn {
-    background: none;
-    border: none;
-    color: var(--kiro-text-muted, #9ca3af);
-    cursor: pointer;
-    padding: 3px 6px;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    transition: color 0.15s, background 0.15s;
-}
-
-.msg-action-btn:hover {
-    color: var(--kiro-text, #cccccc);
-    background: rgba(255,255,255,0.08);
-}
+/* msg-action-btn styles moved to shared-components.css */
 
 .msg-timestamp {
     font-size: 10px;

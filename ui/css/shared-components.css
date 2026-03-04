@@ -1260,3 +1260,22 @@ body.light-theme .json-number { color: #098658; }
 body.light-theme .json-bool { color: #0000ff; }
 body.light-theme .json-null { color: #0000ff; }
 body.light-theme .json-children { border-left-color: #e5e5e5; }
+
+
+/* Message action buttons (shared across floating + chat) */
+.msg-action-btn {
+    background: none;
+    border: none;
+    color: var(--kiro-text-muted, #9ca3af);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s, background 0.15s;
+}
+
+.msg-action-btn:hover {
+    color: var(--kiro-text, #cccccc);
+    background: rgba(255,255,255,0.08);
+}
