@@ -862,7 +862,13 @@ function runCodeInSandbox(code, wrapper, button) {
                 };
             });
             try {
-                var __result = (new Function(${JSON.stringify(code)}))();
+                var __code = ${JSON.stringify(code)};
+                // If the code is a single expression (no semicolons except trailing,
+                // no control flow), wrap it in a return so the result is captured.
+                var __trimmed = __code.trim().replace(/;\\s*$/, '');
+                var __result;
+                try { __result = (new Function('return (' + __trimmed + ')'))(); }
+                catch(e) { __result = (new Function(__code))(); }
                 if (__result !== undefined) {
                     var display;
                     try { display = typeof __result === 'object' ? JSON.stringify(__result, null, 2) : String(__result); }
