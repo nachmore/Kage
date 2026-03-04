@@ -4,6 +4,8 @@
  * epoch/date conversion, JSON formatting.
  */
 
+import { escapeHtml } from '../shared/tool-utils.js';
+
 /**
  * Try to match a dev tool command. Returns { type, label, icon, value } or null.
  * @param {string} input - trimmed user input
@@ -176,8 +178,4 @@ export function renderDevToolSuggestion(result, container, currentMatches, resiz
     container.classList.add('visible');
     setTimeout(() => resizeWindow(), 10);
     return 0;
-}
-
-function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

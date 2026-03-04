@@ -6,10 +6,7 @@ export { unifiedSearch, recordSelection, loadFrecency, setExtensionManager, getE
 
 // --- Floating-specific suggestion renderer ---
 
-function _escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
+import { escapeHtml } from '../shared/tool-utils.js';
 import { getExtensionManager } from '../shared/search-engine.js';
 
 /**
@@ -50,8 +47,8 @@ function _renderItem(r, index, extMgr) {
     item.innerHTML = `
         ${iconHtml}
         <div class="app-info">
-            <div class="app-name">${_escapeHtml(r.label)}</div>
-            ${r.description ? `<div class="app-description">${_escapeHtml(r.description)}</div>` : ''}
+            <div class="app-name">${escapeHtml(r.label)}</div>
+            ${r.description ? `<div class="app-description">${escapeHtml(r.description)}</div>` : ''}
         </div>
     `;
     return item;
