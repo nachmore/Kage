@@ -46,6 +46,17 @@ export function initMarkdown() {
     // mermaid is now lazy-loaded on first diagram encounter — nothing to do here
 }
 
+// Extension manager reference for message formatter hooks
+let _extensionManager = null;
+
+/**
+ * Set the extension manager so message formatters can run after rendering.
+ * @param {ExtensionManager} em
+ */
+export function setExtensionManager(em) {
+    _extensionManager = em;
+}
+
 // --- Streaming-aware debounced rendering ---
 
 const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
@@ -172,6 +183,11 @@ function _doRender(markdown, targetElement, streaming) {
 
     // Deduplicate taskplan blocks — keep only the last one (most up-to-date)
     _deduplicateTaskPlans(targetElement);
+
+    // Run extension message formatters
+    if (_extensionManager) {
+        _extensionManager.formatMessage(targetElement, { streaming });
+    }
 }
 
 function wrapCodeBlock(codeBlock, pre, language) {

@@ -83,6 +83,8 @@ Supported types: `"boolean"`, `"string"`, `"number"`.
 | `css` | Array of CSS file paths to load. |
 | `widgets` | Array of widget contributions (see Widget Slots below). |
 | `themes` | For theme type only — `{ "dark": "./dark.json", "light": "./light.json" }`. |
+| `toolbarButtons` | Path to an ES module that default-exports a toolbar button provider. |
+| `messageFormatters` | Path to an ES module that default-exports a message formatter. |
 
 ## Search Provider API
 
@@ -264,6 +266,132 @@ export default class MyWidget {
     unmount() { }                    // Called on disable/unload
 }
 ```
+
+## Toolbar Button Provider API
+
+A toolbar button provider adds buttons to the chat window toolbar. It's an ES module that default-exports a class:
+
+```js
+export default class MyToolbarProvider {
+    /**
+     * Called once when the extension loads.
+     * @param {object} context - { invoke, config }
+     */
+    initialize(context) {
+        this.config = context.config;
+    }
+
+    /**
+     * Called when the extension's config changes.
+     * @param {object} config - Updated config object
+     */
+    onConfigUpdate(config) {
+        this.config = config;
+    }
+
+    /**
+     * Return an array of button definitions.
+     * Called once after initialization and after config updates.
+     * @returns {ButtonDef[]}
+     */
+    getButtons() {
+        return [
+            {
+                id: 'my-action',
+                icon: '🔧',           // Emoji or SVG string (e.g. '<svg ...>...</svg>')
+                tooltip: 'My Action',
+                onClick: (context) => {
+                    // context: { invoke, getInput(), setInput(v), getMessages() }
+                    const input = context.getInput();
+                    context.setInput('Modified: ' + input);
+                }
+            }
+        ];
+    }
+
+    /**
+     * Called when the extension is unloaded.
+     */
+    destroy() { }
+}
+```
+
+### ButtonDef Shape
+
+```js
+{
+    id: string,           // Unique button ID within the extension
+    icon: string,         // Emoji character or SVG markup string
+    tooltip: string,      // Hover tooltip text
+    onClick: function,    // Called with { invoke, getInput, setInput, getMessages }
+}
+```
+
+### onClick Context
+
+| Property | Description |
+|----------|-------------|
+| `invoke` | Tauri invoke function for IPC |
+| `getInput()` | Returns the current chat input text |
+| `setInput(value)` | Sets the chat input text |
+| `getMessages()` | Returns the array of messages in the current session |
+
+## Message Formatter API
+
+A message formatter post-processes rendered message content. It runs after markdown rendering and can modify the DOM to add custom formatting, annotations, or interactive elements.
+
+```js
+export default class MyMessageFormatter {
+    /**
+     * Called once when the extension loads.
+     * @param {object} context - { invoke, config }
+     */
+    initialize(context) {
+        this.config = context.config;
+    }
+
+    /**
+     * Called when the extension's config changes.
+     * @param {object} config - Updated config object
+     */
+    onConfigUpdate(config) {
+        this.config = config;
+    }
+
+    /**
+     * Post-process a rendered message container.
+     * Called after markdown rendering is complete.
+     * @param {HTMLElement} container - The rendered message content element
+     * @param {object} context - { streaming: boolean }
+     */
+    format(container, context) {
+        // Example: wrap all JSON code blocks in a collapsible tree viewer
+        if (context.streaming) return; // Skip during streaming for performance
+
+        container.querySelectorAll('code.language-json').forEach(block => {
+            // Add custom formatting...
+        });
+    }
+
+    /**
+     * Called when the extension is unloaded.
+     */
+    destroy() { }
+}
+```
+
+### Format Context
+
+| Property | Description |
+|----------|-------------|
+| `streaming` | `true` while the response is still streaming in (be lightweight!) |
+
+### Best Practices
+
+- During streaming (`context.streaming === true`), keep formatting lightweight — the method is called frequently
+- Use `querySelectorAll` to find specific elements rather than modifying `innerHTML`
+- Add CSS classes from your extension's stylesheet rather than inline styles
+- Don't remove existing content — add to it (wrap, annotate, append)
 
 ## Theme Format
 

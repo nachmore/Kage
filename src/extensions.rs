@@ -58,6 +58,10 @@ pub struct ExtensionContributes {
     pub widgets: Option<Vec<WidgetContribution>>,
     #[serde(default)]
     pub themes: Option<ThemeContributes>,
+    #[serde(default)]
+    pub toolbar_buttons: Option<String>,
+    #[serde(default)]
+    pub message_formatters: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

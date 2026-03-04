@@ -174,6 +174,7 @@ MOCK_CATALOG = [
     {"id": "web-dev-shortcuts", "name": "Web Dev Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Handy shortcuts for web developers — localhost, MDN, npm, caniuse", "icon": "🌐", "downloads": 890, "rating": 4.5, "tags": ["web", "developer", "shortcuts"]},
     {"id": "git-shortcuts", "name": "Git Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Quick commands for common git operations", "icon": "🔀", "downloads": 1200, "rating": 4.4, "tags": ["git", "developer", "shortcuts"]},
     {"id": "unit-converter", "name": "Unit Converter", "type": "extension", "version": "1.0.0", "author": "community", "description": "Convert between units — temperature, weight, distance, and more", "icon": "📏", "downloads": 670, "rating": 4.3, "tags": ["utility", "conversion"]},
+    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows domain, favicon, and path.", "icon": "🔗", "downloads": 1560, "rating": 4.7, "tags": ["utility", "formatting", "links"]},
     {"id": "password-gen", "name": "Password Generator", "type": "extension", "version": "1.0.0", "author": "community", "description": "Generate secure passwords and passphrases", "icon": "🔐", "downloads": 1450, "rating": 4.6, "tags": ["security", "utility"]},
 ]
 

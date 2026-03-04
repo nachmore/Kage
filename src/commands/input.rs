@@ -537,3 +537,177 @@ fn get_system_command_args(cmd: &str) -> Vec<&'static str> {
         _ => vec![],
     }
 }
+
+/// Fetch metadata (title, description, favicon) from a URL for link previews.
+#[tauri::command]
+pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, String> {
+
+    // Validate URL
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("Invalid URL".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .redirect(reqwest::redirect::Policy::limited(3))
+        .user_agent("Mozilla/5.0 (compatible; KiroAssistant/1.0)")
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let resp = client.get(&url).send().await
+        .map_err(|e| format!("Fetch error: {}", e))?;
+
+    let final_url = resp.url().to_string();
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("HTTP {}", status));
+    }
+
+    // Only process HTML responses
+    let content_type = resp.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if !content_type.contains("text/html") {
+        return Ok(serde_json::json!({
+            "url": final_url,
+            "title": null,
+            "description": null,
+            "favicon": null,
+        }));
+    }
+
+    // Read only the first 32KB to extract meta tags (don't download entire pages)
+    let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+    let html = String::from_utf8_lossy(&bytes[..bytes.len().min(32768)]);
+
+    let title = extract_meta(&html, "og:title")
+        .or_else(|| extract_meta(&html, "twitter:title"))
+        .or_else(|| extract_tag_content(&html, "title"));
+
+    let description = extract_meta(&html, "og:description")
+        .or_else(|| extract_meta(&html, "description"))
+        .or_else(|| extract_meta(&html, "twitter:description"));
+
+    // Extract favicon: og:image, then <link rel="icon">, then /favicon.ico fallback
+    let image = extract_meta(&html, "og:image");
+    let favicon = image.or_else(|| extract_link_icon(&html, &final_url));
+
+    Ok(serde_json::json!({
+        "url": final_url,
+        "title": title,
+        "description": description,
+        "favicon": favicon,
+    }))
+}
+
+/// Extract content from <meta property="X" content="..."> or <meta name="X" content="...">
+fn extract_meta(html: &str, name: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    // Try property= first (Open Graph), then name= (standard meta)
+    for attr in &["property", "name"] {
+        let needle = format!("{}=\"{}\"", attr, name);
+        if let Some(pos) = lower.find(&needle) {
+            // Find content= in the same <meta> tag
+            let tag_start = lower[..pos].rfind('<').unwrap_or(0);
+            let tag_end = lower[pos..].find('>').map(|i| pos + i).unwrap_or(lower.len());
+            let tag = &html[tag_start..tag_end];
+            if let Some(content) = extract_attr(tag, "content") {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract text content from <tag>...</tag>
+fn extract_tag_content(html: &str, tag: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let open = format!("<{}", tag);
+    let close = format!("</{}>", tag);
+    if let Some(start) = lower.find(&open) {
+        if let Some(gt) = lower[start..].find('>') {
+            let content_start = start + gt + 1;
+            if let Some(end) = lower[content_start..].find(&close) {
+                let text = html[content_start..content_start + end].trim();
+                if !text.is_empty() {
+                    return Some(html_decode(text));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract <link rel="icon" href="..."> or <link rel="shortcut icon" href="...">
+fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    for pattern in &["rel=\"icon\"", "rel=\"shortcut icon\""] {
+        if let Some(pos) = lower.find(pattern) {
+            let tag_start = lower[..pos].rfind('<').unwrap_or(0);
+            let tag_end = lower[pos..].find('>').map(|i| pos + i).unwrap_or(lower.len());
+            let tag = &html[tag_start..tag_end];
+            if let Some(href) = extract_attr(tag, "href") {
+                return Some(resolve_url(href.trim(), base_url));
+            }
+        }
+    }
+    // Fallback: /favicon.ico
+    if let Ok(parsed) = url::Url::parse(base_url) {
+        return Some(format!("{}://{}/favicon.ico", parsed.scheme(), parsed.host_str().unwrap_or("")));
+    }
+    None
+}
+
+/// Extract an attribute value from an HTML tag string
+fn extract_attr(tag: &str, attr: &str) -> Option<String> {
+    let lower = tag.to_lowercase();
+    let needle = format!("{}=", attr);
+    if let Some(pos) = lower.find(&needle) {
+        let after = &tag[pos + needle.len()..];
+        let after = after.trim_start();
+        if after.starts_with('"') {
+            let content = &after[1..];
+            if let Some(end) = content.find('"') {
+                return Some(content[..end].to_string());
+            }
+        } else if after.starts_with('\'') {
+            let content = &after[1..];
+            if let Some(end) = content.find('\'') {
+                return Some(content[..end].to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Resolve a potentially relative URL against a base URL
+fn resolve_url(href: &str, base: &str) -> String {
+    if href.starts_with("http://") || href.starts_with("https://") || href.starts_with("data:") {
+        return href.to_string();
+    }
+    if href.starts_with("//") {
+        return format!("https:{}", href);
+    }
+    if let Ok(base_url) = url::Url::parse(base) {
+        if let Ok(resolved) = base_url.join(href) {
+            return resolved.to_string();
+        }
+    }
+    href.to_string()
+}
+
+/// Basic HTML entity decoding
+fn html_decode(s: &str) -> String {
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+}

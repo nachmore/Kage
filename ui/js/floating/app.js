@@ -61,6 +61,7 @@ export class FloatingApp {
             console.log('Config updated, reloading...');
             await this.loadShortcuts();
             await this.extensionManager.onConfigUpdate();
+            await this.extensionManager.reload();
             this.updateSpeechButtonVisibility();
         });
 

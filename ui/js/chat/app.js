@@ -1715,4 +1715,41 @@ export class ChatApp {
             this.showError('Failed to switch model: ' + e);
         }
     }
+
+    /**
+     * Render extension-contributed toolbar buttons into the chat toolbar.
+     */
+    renderExtensionToolbarButtons() {
+        if (!this.extensionManager) return;
+        const buttons = this.extensionManager.getToolbarButtons();
+        if (buttons.length === 0) return;
+
+        const toolbarLeft = document.querySelector('.chat-toolbar-left');
+        if (!toolbarLeft) return;
+
+        // Remove any previously rendered extension buttons
+        toolbarLeft.querySelectorAll('.ext-toolbar-btn').forEach(el => el.remove());
+
+        for (const btn of buttons) {
+            const el = document.createElement('button');
+            el.className = 'chat-toolbar-btn ext-toolbar-btn';
+            el.title = btn.tooltip || btn.id;
+            el.innerHTML = typeof btn.icon === 'string' && btn.icon.startsWith('<')
+                ? btn.icon  // SVG string
+                : `<span style="font-size:16px;">${btn.icon || '🔧'}</span>`;
+            el.addEventListener('click', () => {
+                try {
+                    btn.onClick?.({
+                        invoke: this.invoke,
+                        getInput: () => this.elements.chatInput?.value || '',
+                        setInput: (v) => { if (this.elements.chatInput) this.elements.chatInput.value = v; },
+                        getMessages: () => this.messages || [],
+                    });
+                } catch (e) {
+                    console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
+                }
+            });
+            toolbarLeft.appendChild(el);
+        }
+    }
 }

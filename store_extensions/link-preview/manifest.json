@@ -1,0 +1,20 @@
+{
+  "id": "link-preview",
+  "name": "Link Preview",
+  "version": "1.0.0",
+  "type": "extension",
+  "description": "Adds inline preview cards for URLs in AI responses — shows domain, favicon, and path.",
+  "icon": "🔗",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": true },
+    "max_previews": { "type": "number", "default": 5 }
+  },
+
+  "contributes": {
+    "messageFormatters": "./formatter.js",
+    "settingsModule": "./settings.js",
+    "css": ["./styles.css"]
+  }
+}

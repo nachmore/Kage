@@ -512,6 +512,7 @@ fn main() {
             commands::handle_floating_input,
             commands::launch_app_by_name,
             commands::open_url,
+            commands::fetch_link_metadata,
             commands::open_path,
             commands::execute_shortcut,
             commands::test_floating_window,

@@ -2,6 +2,7 @@
 import { ChatApp } from './app.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
+import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 
 let app = null;
 
@@ -20,15 +21,23 @@ function initApp() {
     loadAndApplyTheme(invoke);
 
     // Re-apply theme when config changes
-    listen('config_updated', () => {
+    listen('config_updated', async () => {
         loadAndApplyTheme(invoke);
         if (app?.speech) app.speech.updateVisibility();
-        if (app?.extensionManager) app.extensionManager.onConfigUpdate();
+        if (app?.extensionManager) {
+            await app.extensionManager.onConfigUpdate();
+            await app.extensionManager.reload();
+            app.renderExtensionToolbarButtons();
+        }
         if (app?.loadShortcuts) app.loadShortcuts();
     });
 
     app = new ChatApp(invoke, appWindow, listen);
-    app.init();
+    app.init().then(() => {
+        setMarkdownExtManager(app.extensionManager);
+        // Render extension toolbar buttons
+        app.renderExtensionToolbarButtons();
+    });
 
     // Sidebar resize
     const sidebar = document.getElementById('chatSidebar');

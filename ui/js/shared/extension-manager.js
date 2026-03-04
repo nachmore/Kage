@@ -72,17 +72,58 @@ export class ExtensionManager {
 
         const ext = { manifest, basePath, searchProvider: null, userInstalled: false };
 
+        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest) };
+
         if (manifest.contributes?.searchProvider) {
             try {
                 const mod = await import(`../../${basePath}/${manifest.contributes.searchProvider}`);
                 ext.searchProvider = new mod.default();
-                ext.searchProvider.initialize({ invoke: this.invoke, config: this._getExtensionConfig(id, manifest) });
+                ext.searchProvider.initialize(context);
             } catch (e) {
                 console.warn(`Failed to load search provider for '${id}':`, e);
             }
         }
 
+        // Load toolbar buttons
+        if (manifest.contributes?.toolbarButtons) {
+            try {
+                const mod = await import(`../../${basePath}/${manifest.contributes.toolbarButtons}`);
+                ext.toolbarProvider = new mod.default();
+                ext.toolbarProvider.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load toolbar buttons for '${id}':`, e);
+            }
+        }
+
+        // Load message formatters
+        if (manifest.contributes?.messageFormatters) {
+            try {
+                const mod = await import(`../../${basePath}/${manifest.contributes.messageFormatters}`);
+                ext.messageFormatter = new mod.default();
+                ext.messageFormatter.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load message formatters for '${id}':`, e);
+            }
+        }
+
+        // Load CSS
+        this._loadBundledCss(id, basePath, manifest);
+
         this.extensions.set(id, ext);
+    }
+
+    _loadBundledCss(id, basePath, manifest) {
+        const cssFiles = manifest.contributes?.css;
+        if (!Array.isArray(cssFiles) || cssFiles.length === 0) return;
+        for (const cssPath of cssFiles) {
+            const fullPath = `${basePath}/${cssPath.replace('./', '')}`;
+            if (document.querySelector(`link[data-ext-css="${id}"]`)) continue;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = fullPath;
+            link.dataset.extCss = id;
+            document.head.appendChild(link);
+        }
     }
 
     async _loadUserExtension(item) {
@@ -94,6 +135,8 @@ export class ExtensionManager {
 
         const ext = { manifest, basePath: null, searchProvider: null, userInstalled: true };
 
+        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest) };
+
         // Load search provider via read_extension_file
         if (manifest.contributes?.searchProvider) {
             try {
@@ -102,19 +145,78 @@ export class ExtensionManager {
                     kind: 'extension',
                     filePath: manifest.contributes.searchProvider.replace('./', ''),
                 });
-                // Create a blob URL and dynamically import it
                 const blob = new Blob([jsCode], { type: 'application/javascript' });
                 const blobUrl = URL.createObjectURL(blob);
                 const mod = await import(blobUrl);
                 URL.revokeObjectURL(blobUrl);
                 ext.searchProvider = new mod.default();
-                ext.searchProvider.initialize({ invoke: this.invoke, config: this._getExtensionConfig(id, manifest) });
+                ext.searchProvider.initialize(context);
             } catch (e) {
                 console.warn(`Failed to load search provider for user extension '${id}':`, e);
             }
         }
 
+        // Load toolbar buttons
+        if (manifest.contributes?.toolbarButtons) {
+            try {
+                const jsCode = await this.invoke('read_extension_file', {
+                    extensionId: id, kind: 'extension',
+                    filePath: manifest.contributes.toolbarButtons.replace('./', ''),
+                });
+                const blob = new Blob([jsCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                const mod = await import(blobUrl);
+                URL.revokeObjectURL(blobUrl);
+                ext.toolbarProvider = new mod.default();
+                ext.toolbarProvider.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load toolbar buttons for user extension '${id}':`, e);
+            }
+        }
+
+        // Load message formatters
+        if (manifest.contributes?.messageFormatters) {
+            try {
+                const jsCode = await this.invoke('read_extension_file', {
+                    extensionId: id, kind: 'extension',
+                    filePath: manifest.contributes.messageFormatters.replace('./', ''),
+                });
+                const blob = new Blob([jsCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                const mod = await import(blobUrl);
+                URL.revokeObjectURL(blobUrl);
+                ext.messageFormatter = new mod.default();
+                ext.messageFormatter.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load message formatters for user extension '${id}':`, e);
+            }
+        }
+
+        // Load CSS
+        await this._loadUserCss(id, manifest);
+
         this.extensions.set(id, ext);
+    }
+
+    async _loadUserCss(id, manifest) {
+        const cssFiles = manifest.contributes?.css;
+        if (!Array.isArray(cssFiles) || cssFiles.length === 0) return;
+        for (const cssPath of cssFiles) {
+            if (document.querySelector(`style[data-ext-css="${id}"]`)) continue;
+            try {
+                const cssCode = await this.invoke('read_extension_file', {
+                    extensionId: id, kind: 'extension',
+                    filePath: cssPath.replace('./', ''),
+                });
+                const style = document.createElement('style');
+                style.dataset.extCss = id;
+                style.textContent = cssCode;
+                document.head.appendChild(style);
+                console.log(`ExtensionManager: loaded CSS for '${id}' (${cssCode.length} bytes)`);
+            } catch (e) {
+                console.warn(`Failed to load CSS for '${id}':`, e);
+            }
+        }
     }
 
     _getExtensionConfig(id, manifest) {
@@ -200,16 +302,95 @@ export class ExtensionManager {
             this._configCache = await this.invoke('get_config');
         } catch { return; }
         for (const [id, ext] of this.extensions) {
-            if (!ext.searchProvider?.onConfigUpdate) continue;
+            const config = this._getExtensionConfig(id, ext.manifest);
+            if (ext.searchProvider?.onConfigUpdate) {
+                try { ext.searchProvider.onConfigUpdate(config); } catch (e) {
+                    console.warn(`Config update error in '${id}':`, e);
+                }
+            }
+            if (ext.toolbarProvider?.onConfigUpdate) {
+                try { ext.toolbarProvider.onConfigUpdate(config); } catch (e) {
+                    console.warn(`Toolbar config update error in '${id}':`, e);
+                }
+            }
+            if (ext.messageFormatter?.onConfigUpdate) {
+                try { ext.messageFormatter.onConfigUpdate(config); } catch (e) {
+                    console.warn(`Formatter config update error in '${id}':`, e);
+                }
+            }
+        }
+    }
+
+    /**
+     * Get all toolbar button definitions from loaded extensions.
+     * @returns {Array<{id, icon, tooltip, onClick, extensionId}>}
+     */
+    getToolbarButtons() {
+        const buttons = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.toolbarProvider) continue;
+            if (!this._isEnabled(id)) continue;
             try {
-                ext.searchProvider.onConfigUpdate(this._getExtensionConfig(id, ext.manifest));
+                const defs = ext.toolbarProvider.getButtons();
+                if (Array.isArray(defs)) {
+                    for (const btn of defs) {
+                        buttons.push({ ...btn, extensionId: id });
+                    }
+                }
             } catch (e) {
-                console.warn(`Config update error in '${id}':`, e);
+                console.warn(`getButtons error in '${id}':`, e);
+            }
+        }
+        return buttons;
+    }
+
+    /**
+     * Run all message formatters on a rendered message container.
+     * Called after markdown rendering is complete.
+     * @param {HTMLElement} container - The rendered message content element
+     * @param {object} context - { role: 'user'|'assistant', streaming: boolean }
+     */
+    formatMessage(container, context) {
+        for (const [id, ext] of this.extensions) {
+            if (!ext.messageFormatter) continue;
+            if (!this._isEnabled(id)) continue;
+            try {
+                console.log(`[ExtMgr] Running formatter '${id}' (streaming=${context.streaming})`);
+                ext.messageFormatter.format(container, context);
+            } catch (e) {
+                console.warn(`Message formatter error in '${id}':`, e);
             }
         }
     }
 
     getLoadedExtensions() {
         return Array.from(this.extensions.values()).map(ext => ext.manifest);
+    }
+
+    /**
+     * Reload extensions — discovers newly installed extensions without restarting.
+     * Existing extensions are kept; only new ones are loaded.
+     */
+    async reload() {
+        try {
+            this._configCache = await this.invoke('get_config');
+        } catch { return; }
+
+        // Re-check user-installed extensions for new ones
+        try {
+            const userExts = await this.invoke('list_extensions');
+            for (const item of userExts) {
+                if (!item.enabled) continue;
+                if (this.extensions.has(item.manifest.id)) continue;
+                try {
+                    await this._loadUserExtension(item);
+                    console.log(`ExtensionManager: hot-loaded '${item.manifest.id}'`);
+                } catch (e) {
+                    console.warn(`Failed to hot-load extension '${item.manifest.id}':`, e);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to reload extensions:', e);
+        }
     }
 }

@@ -1,6 +1,6 @@
 // Main entry point
 import { FloatingApp } from './app.js';
-import { initMarkdown } from '../shared/markdown.js';
+import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 
@@ -31,7 +31,9 @@ function initApp() {
     
     const app = new FloatingApp(invoke, appWindow, listen);
     window._floatingApp = app; // Expose for permission modal resize
-    app.init();
+    app.init().then(() => {
+        setMarkdownExtManager(app.extensionManager);
+    });
 }
 
 console.log('Script loaded, document.readyState:', document.readyState);
