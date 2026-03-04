@@ -29,6 +29,9 @@ pub struct Config {
     /// Enable/disable state for extensions, themes, and command packs keyed by ID.
     #[serde(default)]
     pub extension_states: HashMap<String, bool>,
+    /// Pocket TTS configuration (local neural TTS via kyutai-labs/pocket-tts)
+    #[serde(default)]
+    pub pocket_tts: PocketTtsConfig,
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
@@ -309,6 +312,49 @@ fn default_action_type() -> String {
     "run_program".to_string()
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PocketTtsConfig {
+    /// Enable pocket-tts as the TTS engine (instead of browser speechSynthesis)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Voice to use (built-in: alba, marius, javert, jean, fantine, cosette, eponine, azelma)
+    #[serde(default = "default_pocket_tts_voice")]
+    pub voice: String,
+    /// Port for the pocket-tts HTTP server
+    #[serde(default = "default_pocket_tts_port")]
+    pub port: u16,
+    /// Path to Python executable (auto-detected if empty)
+    #[serde(default)]
+    pub python_path: Option<String>,
+    /// Whether pocket-tts pip package is installed
+    #[serde(default)]
+    pub installed: bool,
+    /// Auto-start the TTS server when the app launches
+    #[serde(default)]
+    pub auto_start: bool,
+}
+
+fn default_pocket_tts_voice() -> String {
+    "alba".to_string()
+}
+
+fn default_pocket_tts_port() -> u16 {
+    9877
+}
+
+impl Default for PocketTtsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            voice: "alba".to_string(),
+            port: 9877,
+            python_path: None,
+            installed: false,
+            auto_start: false,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -359,6 +405,7 @@ impl Default for Config {
             quick_actions: QuickActionsConfig::default(),
             extensions: HashMap::new(),
             extension_states: HashMap::new(),
+            pocket_tts: PocketTtsConfig::default(),
             store_url: None,
             auto_update_extensions: false,
             last_extension_update_check: None,

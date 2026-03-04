@@ -396,6 +396,16 @@ pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
         let _ = tray.set_visible(false);
     }
 
+    // Kill pocket-tts server if running
+    {
+        let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+        if let Some(mut child) = tts_proc.take() {
+            info!("Stopping pocket-tts server on quit");
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+
     // Generate auto-steering document in background, then exit
     let acp_client = state.acp_client.clone();
     let config = state.config.clone();

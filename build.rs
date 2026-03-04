@@ -4,6 +4,7 @@ fn main() {
     println!("cargo:rerun-if-changed=capabilities/");
     println!("cargo:rerun-if-changed=icons/");
     println!("cargo:rerun-if-changed=src/builtin_steering.md");
+    println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
 
     // Expose update URLs from [package.metadata.update] as compile-time env vars.

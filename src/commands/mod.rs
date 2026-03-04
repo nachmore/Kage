@@ -1,6 +1,7 @@
 pub mod extensions;
 pub mod input;
 pub mod messaging;
+pub mod pocket_tts;
 pub mod sessions;
 pub mod system;
 pub mod window;
@@ -9,6 +10,7 @@ pub mod window;
 pub use extensions::*;
 pub use input::*;
 pub use messaging::*;
+pub use pocket_tts::*;
 pub use sessions::*;
 pub use system::*;
 pub use window::*;

@@ -32,6 +32,10 @@ pub struct AppState {
     pub notification_source: Arc<std::sync::Mutex<String>>,
     /// Updater state for auto-update system
     pub updater: Arc<crate::updater::UpdaterState>,
+    /// Pocket TTS server child process
+    pub pocket_tts_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
+    /// Pocket TTS pip install child process (for cancellation)
+    pub pocket_tts_install_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
 }
 
 #[derive(Debug, Clone)]

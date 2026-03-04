@@ -198,6 +198,8 @@ fn main() {
             last_selection: Arc::new(std::sync::Mutex::new(None)),
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
             updater: Arc::new(updater::UpdaterState::new()),
+            pocket_tts_process: Arc::new(std::sync::Mutex::new(None)),
+            pocket_tts_install_process: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -337,6 +339,47 @@ fn main() {
             });
 
             info!("=== Setup Complete ===");
+
+            // Auto-start Pocket TTS server if configured
+            if config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed {
+                info!("Pocket TTS auto-start enabled, spawning server in background");
+                let state: tauri::State<'_, AppState> = app.state();
+                let config_arc = state.config.clone();
+                let tts_proc = state.pocket_tts_process.clone();
+                tauri::async_runtime::spawn(async move {
+                    let config = config_arc.lock().await;
+                    let port = config.pocket_tts.port;
+                    let voice = config.pocket_tts.voice.clone();
+                    let python = config.pocket_tts.python_path.clone()
+                        .unwrap_or_else(|| "python".to_string());
+                    drop(config);
+
+                    let script_path = commands::pocket_tts::get_server_script_path();
+                    if !script_path.exists() {
+                        warn!("Pocket TTS server script not found, skipping auto-start");
+                        return;
+                    }
+
+                    let mut cmd = std::process::Command::new(&python);
+                    cmd.arg(script_path.to_str().unwrap_or(""))
+                        .args(["--port", &port.to_string()])
+                        .args(["--voice", &voice])
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped());
+                    commands::pocket_tts::configure_no_window(&mut cmd);
+
+                    match cmd.spawn() {
+                        Ok(child) => {
+                            info!("Pocket TTS server auto-started (PID: {})", child.id());
+                            let mut proc = tts_proc.lock().unwrap();
+                            *proc = Some(child);
+                        }
+                        Err(e) => {
+                            warn!("Failed to auto-start Pocket TTS server: {}", e);
+                        }
+                    }
+                });
+            }
 
             // Background app registry scan (deferred from startup for speed)
             // and periodic refresh every hour so the list stays current.
@@ -591,7 +634,14 @@ fn main() {
             commands::store_install,
             commands::check_extension_updates,
             commands::read_extension_file,
-            commands::save_store_url
+            commands::save_store_url,
+            commands::pocket_tts_status,
+            commands::pocket_tts_install,
+            commands::pocket_tts_cancel_install,
+            commands::pocket_tts_start,
+            commands::pocket_tts_stop,
+            commands::pocket_tts_voices,
+            commands::pocket_tts_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

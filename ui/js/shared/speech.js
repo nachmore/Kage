@@ -29,6 +29,11 @@ export class SpeechController {
         this.voiceName = '';
         this.usedSpeechForLastMessage = false;
         this._silenceTimer = null;
+        // Pocket TTS state
+        this.pocketTtsEnabled = false;
+        this.pocketTtsPort = 9877;
+        this.pocketTtsVoice = 'alba';
+        this._pocketTtsAudio = null;
     }
 
     setup() {
@@ -45,6 +50,10 @@ export class SpeechController {
             this.readBack = config.ui?.speech_read_back === true;
             this.silenceTimeout = (config.ui?.speech_silence_timeout ?? 2.0) * 1000;
             this.voiceName = config.ui?.speech_voice || '';
+            // Pocket TTS config
+            this.pocketTtsEnabled = config.pocket_tts?.enabled === true;
+            this.pocketTtsPort = config.pocket_tts?.port || 9877;
+            this.pocketTtsVoice = config.pocket_tts?.voice || 'alba';
             if (this.elements.speechBtn) {
                 this.elements.speechBtn.style.display = show ? '' : 'none';
                 this.elements.speechBtn.dataset.configVisible = show ? 'true' : 'false';
@@ -189,7 +198,66 @@ export class SpeechController {
 
         if (!clean) return;
 
+        // Check if Pocket TTS is enabled
+        if (this.pocketTtsEnabled && this.pocketTtsPort) {
+            this._speakWithPocketTts(clean);
+            return;
+        }
+
         const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        utterance.lang = navigator.language || 'en-US';
+
+        if (this.voiceName) {
+            const voice = speechSynthesis.getVoices().find(v => v.name === this.voiceName);
+            if (voice) utterance.voice = voice;
+        }
+
+        speechSynthesis.speak(utterance);
+    }
+
+    /** Speak text using the Pocket TTS server. */
+    async _speakWithPocketTts(text) {
+        try {
+            const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/tts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    voice: this.pocketTtsVoice || 'alba',
+                }),
+            });
+
+            if (!resp.ok) {
+                console.warn('[Speech] Pocket TTS failed, falling back to browser TTS');
+                this._speakWithBrowser(text);
+                return;
+            }
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            this._pocketTtsAudio = new Audio(url);
+            this._pocketTtsAudio.onended = () => {
+                URL.revokeObjectURL(url);
+                this._pocketTtsAudio = null;
+            };
+            this._pocketTtsAudio.onerror = () => {
+                URL.revokeObjectURL(url);
+                this._pocketTtsAudio = null;
+                console.warn('[Speech] Pocket TTS audio playback failed');
+            };
+            this._pocketTtsAudio.play();
+        } catch (e) {
+            console.warn('[Speech] Pocket TTS error, falling back to browser TTS:', e);
+            this._speakWithBrowser(text);
+        }
+    }
+
+    /** Fallback: speak with browser speechSynthesis. */
+    _speakWithBrowser(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
@@ -206,10 +274,14 @@ export class SpeechController {
     /** Cancel any ongoing TTS playback. */
     cancelSpeech() {
         speechSynthesis.cancel();
+        if (this._pocketTtsAudio) {
+            this._pocketTtsAudio.pause();
+            this._pocketTtsAudio = null;
+        }
     }
 
     /** Returns true if speech or TTS is active (for Escape key handling). */
     get isActive() {
-        return this.isListening || speechSynthesis.speaking;
+        return this.isListening || speechSynthesis.speaking || (this._pocketTtsAudio && !this._pocketTtsAudio.paused);
     }
 }
