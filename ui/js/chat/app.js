@@ -14,6 +14,19 @@ import { executeResult as executeResultShared, executeShortcutCommand, handleEnt
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
 
+/** Build metadata object for a message from session turn data. */
+function _buildMsgMeta(messageId, timestamps, durations, role) {
+    if (!messageId) return null;
+    const endTs = timestamps[messageId];
+    if (!endTs) return null;
+    const dur = durations[messageId] || 0;
+    if (role === 'user' && dur > 0) {
+        const endDate = new Date(endTs);
+        return { timestamp: new Date(endDate.getTime() - dur * 1000).toISOString() };
+    }
+    return { timestamp: endTs, durationSecs: role === 'assistant' ? dur : null };
+}
+
 export class ChatApp {
     constructor(invoke, appWindow, listen) {
         this.invoke = invoke;
@@ -39,6 +52,8 @@ export class ChatApp {
         this.suggestionIndex = -1;
         this.availableModels = [];
         this.currentModelId = null;
+        this._showSpeakBtn = false;
+        this._showTranslateBtn = false;
 
         this.elements = {};
     }
@@ -52,6 +67,7 @@ export class ChatApp {
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
         await this.loadUserInfo();
+        await this.loadActionButtonConfig();
         await loadSlashCommands(this.invoke);
         await this.loadShortcuts();
 
@@ -425,11 +441,59 @@ export class ChatApp {
     async loadUserInfo() {
         try {
             this.userInfo = await this.invoke('get_user_info');
-            console.log('[USER] User info loaded:', JSON.stringify(this.userInfo));
         } catch (e) {
             console.error('[USER] Failed to get user info:', e);
             this.userInfo = null;
         }
+    }
+
+    async loadActionButtonConfig() {
+        try {
+            const config = await this.invoke('get_config');
+            this._showSpeakBtn = config.ui?.show_speech_button === true || config.pocket_tts?.enabled === true;
+            this._showTranslateBtn = !!(config.quick_actions?.translate_language);
+            this._translateLang = config.quick_actions?.translate_language || 'English';
+        } catch (e) {
+            console.warn('[CHAT] Failed to load action button config:', e);
+        }
+    }
+
+    // ── Suggestion Chips ──
+
+    showSuggestionChips() {
+        this.hideSuggestionChips();
+        const area = this.elements.messagesArea;
+        if (!area) return;
+
+        const chips = document.createElement('div');
+        chips.id = 'chatSuggestionChips';
+        chips.className = 'chat-suggestion-chips';
+
+        const suggestions = [
+            { label: '📝 Summarize this conversation', prompt: 'Please summarize our conversation so far in a few bullet points.' },
+            { label: '🔄 Continue', prompt: 'Please continue.' },
+            { label: '💡 Explain further', prompt: 'Can you explain that in more detail?' },
+            { label: '🔧 Fix issues', prompt: 'Are there any issues with what we discussed? If so, please fix them.' },
+        ];
+
+        for (const s of suggestions) {
+            const chip = document.createElement('button');
+            chip.className = 'chat-chip';
+            chip.textContent = s.label;
+            chip.onclick = () => {
+                this.elements.chatInput.value = s.prompt;
+                this.sendMessage();
+            };
+            chips.appendChild(chip);
+        }
+
+        area.appendChild(chips);
+        this.scrollToBottom();
+    }
+
+    hideSuggestionChips() {
+        const existing = document.getElementById('chatSuggestionChips');
+        if (existing) existing.remove();
     }
 
     async loadSessions(loadAll = false) {
@@ -628,6 +692,8 @@ export class ChatApp {
         this.elements.messagesArea.innerHTML = '';
         this.toolSources = [];
         this.toolUsages = [];
+        const timestamps = sessionData.message_timestamps || {};
+        const durations = sessionData.message_durations || {};
 
         if (!sessionData.messages || sessionData.messages.length === 0) {
             this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
@@ -687,7 +753,7 @@ export class ChatApp {
                         type: 'image',
                         previewUrl: url
                     }));
-                    this.addMessageFromHistory('user', text, snapshots.length > 0 ? snapshots : null);
+                    this.addMessageFromHistory('user', text, snapshots.length > 0 ? snapshots : null, _buildMsgMeta(msg.message_id, timestamps, durations, 'user'));
                 }
             } else if (msg.kind === 'AssistantMessage') {
                 isFirstMessage = false;
@@ -720,7 +786,7 @@ export class ChatApp {
                     }
                 }
                 if (textParts.length > 0) {
-                    this.addMessageFromHistory('assistant', textParts.join('\n\n'));
+                    this.addMessageFromHistory('assistant', textParts.join('\n\n'), null, _buildMsgMeta(msg.message_id, timestamps, durations, 'assistant'));
                 }
             }
             // ToolResults are skipped in the display — they're intermediate
@@ -733,9 +799,14 @@ export class ChatApp {
         }
 
         this.scrollToBottom();
+
+        // Show suggestion chips if there are messages
+        if (this.messages.length > 0) {
+            this.showSuggestionChips();
+        }
     }
 
-    addMessageFromHistory(role, text, imageSnapshots) {
+    addMessageFromHistory(role, text, imageSnapshots, meta) {
         const msgEl = this.createMessageElement(role, '');
         const contentDiv = msgEl.querySelector('.message-content');
         if (role === 'assistant') {
@@ -743,12 +814,33 @@ export class ChatApp {
         } else {
             if (text) contentDiv.textContent = text;
         }
-        // Append image previews if present
         if (imageSnapshots && imageSnapshots.length > 0) {
             contentDiv.insertAdjacentHTML('beforeend', attachmentPreviewHtml(imageSnapshots));
         }
+        // Set timestamp and duration from session metadata
+        if (meta) {
+            const ts = msgEl.querySelector('.msg-timestamp');
+            if (ts && meta.timestamp) {
+                const date = new Date(meta.timestamp);
+                if (!isNaN(date)) {
+                    let label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    if (role === 'assistant' && meta.durationSecs) {
+                        label += ` (${this._formatDuration(meta.durationSecs)})`;
+                    }
+                    ts.textContent = label;
+                }
+            }
+        }
         this.elements.messagesArea.appendChild(msgEl);
         this.messages.push({ role, content: text });
+    }
+
+    _formatDuration(totalSecs) {
+        const secs = Math.round(totalSecs);
+        if (secs < 60) return `${secs}s`;
+        const mins = Math.floor(secs / 60);
+        const rem = secs % 60;
+        return rem > 0 ? `${mins}m${rem}s` : `${mins}m`;
     }
 
     async createNewSession() {
@@ -855,6 +947,7 @@ export class ChatApp {
 
         // Clear suggestions
         this.clearSuggestions();
+        this.hideSuggestionChips();
 
         // Read pending file contents and prepend to message
         if (hasPendingFiles) {
@@ -943,6 +1036,10 @@ export class ChatApp {
         this.messages.push({ role: 'user', content: text });
         const msgEl = this.createMessageElement('user', text);
 
+        // Set timestamp
+        const ts = msgEl.querySelector('.msg-timestamp');
+        if (ts) ts.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         // Append attachment previews to the message bubble
         if (attachmentSnapshots && attachmentSnapshots.length > 0) {
             const contentDiv = msgEl.querySelector('.message-content');
@@ -960,6 +1057,7 @@ export class ChatApp {
             this.toolSources = [];
             this.toolUsages = [];
             this.isWaitingForResponse = true;
+            this._streamStartTime = Date.now();
             this.updateInputState();
             this.showTypingIndicator();
 
@@ -1007,18 +1105,11 @@ export class ChatApp {
                 <path d="M57.2707 21.2344C55.138 21.4048 54.614 18.8819 54.493 17.3624C54.3831 15.991 54.5407 14.8825 54.9517 14.153C55.3116 13.5127 55.8739 13.1575 56.6177 13.097C57.3631 13.0381 58.0273 13.2993 58.5274 13.8807C59.0976 14.5433 59.456 15.6056 59.5643 16.9547C59.7682 19.5031 58.9113 21.1022 57.2707 21.2328V21.2344Z" fill="black"/>
             </svg>`;
         } else {
-            // User avatar: profile picture > initials > fallback
             if (this.userInfo?.avatar_base64) {
-                console.log('[USER] Using base64 avatar, length:', this.userInfo.avatar_base64.length);
                 const img = document.createElement('img');
                 img.src = this.userInfo.avatar_base64;
                 img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
-                img.onload = () => console.log('[USER] Avatar image loaded successfully');
-                img.onerror = (e) => {
-                    console.error('[USER] Avatar image failed to load:', e);
-                    avatar.textContent = this.userInfo?.initials || '?';
-                    img.remove();
-                };
+                img.onerror = () => { avatar.textContent = this.userInfo?.initials || '?'; img.remove(); };
                 avatar.appendChild(img);
             } else {
                 avatar.textContent = this.userInfo?.initials || '?';
@@ -1030,17 +1121,66 @@ export class ChatApp {
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
 
-        const header = document.createElement('div');
-        header.className = 'message-header';
-        header.textContent = role === 'user' ? (this.userInfo?.display_name || 'You') : 'Kiro';
-
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
         contentDiv.dir = 'auto';
         if (content) contentDiv.textContent = content;
 
-        bubble.appendChild(header);
         bubble.appendChild(contentDiv);
+
+        // Timestamp for user messages
+        if (role === 'user') {
+            const tsEl = document.createElement('div');
+            tsEl.className = 'message-actions user-actions';
+            tsEl.innerHTML = '<span class="msg-timestamp"></span>';
+            bubble.appendChild(tsEl);
+        }
+
+        // Action bar for assistant messages
+        if (role === 'assistant') {
+            const actions = document.createElement('div');
+            actions.className = 'message-actions';
+            actions.innerHTML = `
+                <button class="msg-action-btn" data-action="copy" title="Copy">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+                <button class="msg-action-btn" data-action="speak" title="Read aloud" style="display:${this._showSpeakBtn ? '' : 'none'}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </button>
+                <button class="msg-action-btn" data-action="translate" title="Translate" style="display:${this._showTranslateBtn ? '' : 'none'}">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
+                </button>
+                <span class="msg-timestamp"></span>
+            `;
+            // Wire up action buttons
+            actions.querySelector('[data-action="copy"]').onclick = () => {
+                const text = contentDiv.textContent || '';
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = actions.querySelector('[data-action="copy"]');
+                    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => { btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }, 1500);
+                });
+            };
+            actions.querySelector('[data-action="speak"]').onclick = () => {
+                if (this.speech) {
+                    const text = contentDiv.textContent || '';
+                    this.speech.usedSpeechForLastMessage = true;
+                    this.speech.speakResponse(text);
+                }
+            };
+            actions.querySelector('[data-action="translate"]').onclick = async () => {
+                const text = contentDiv.textContent || '';
+                if (!text.trim()) return;
+                try {
+                    const config = await this.invoke('get_config');
+                    const lang = config.quick_actions?.translate_language || 'English';
+                    this.elements.chatInput.value = `Translate the following to ${lang}:\n\n${text.substring(0, 500)}`;
+                    this.elements.chatInput.focus();
+                } catch (e) { console.warn('Translate failed:', e); }
+            };
+            bubble.appendChild(actions);
+        }
+
         msg.appendChild(avatar);
         msg.appendChild(bubble);
 
@@ -1107,6 +1247,23 @@ export class ChatApp {
 
             this.loadSessions();
             this.loadFloatingSessionId();
+
+            // Set timestamp on the message actions bar
+            if (this.elements.messagesArea.lastElementChild) {
+                const msgEl = this.elements.messagesArea.querySelector('.message.assistant:last-of-type');
+                const ts = msgEl?.querySelector('.msg-timestamp');
+                if (ts) {
+                    let label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    if (this._streamStartTime) {
+                        const durSecs = (Date.now() - this._streamStartTime) / 1000;
+                        label += ` (${this._formatDuration(durSecs)})`;
+                    }
+                    ts.textContent = label;
+                }
+            }
+
+            // Show suggestion chips
+            this.showSuggestionChips();
 
             // Notify if window is hidden
             try {

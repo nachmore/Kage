@@ -38,6 +38,12 @@ pub struct SessionData {
     pub created_at: String,
     pub updated_at: String,
     pub messages: Vec<SessionMessage>,
+    /// Map of message_id → ISO timestamp (extracted from turn metadata)
+    #[serde(default)]
+    pub message_timestamps: HashMap<String, String>,
+    /// Map of message_id → turn duration in seconds
+    #[serde(default)]
+    pub message_durations: HashMap<String, f64>,
 }
 
 /// Get the sessions directory: [home]/.kiro/sessions/cli
@@ -385,11 +391,47 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
         vec![]
     };
 
+    // Extract message timestamps and durations from turn metadata
+    let mut message_timestamps: HashMap<String, String> = HashMap::new();
+    let mut message_durations: HashMap<String, f64> = HashMap::new();
+    if let Some(state) = metadata.get("session_state") {
+        if let Some(conv) = state.get("conversation_metadata") {
+            if let Some(turns) = conv.get("user_turn_metadatas").and_then(|t| t.as_array()) {
+                for turn in turns {
+                    let end_ts = turn.get("end_timestamp")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("");
+                    if end_ts.is_empty() { continue; }
+
+                    // Extract turn duration
+                    let duration_secs = turn.get("turn_duration").map(|d| {
+                        let secs = d.get("secs").and_then(|s| s.as_f64()).unwrap_or(0.0);
+                        let nanos = d.get("nanos").and_then(|n| n.as_f64()).unwrap_or(0.0);
+                        secs + nanos / 1_000_000_000.0
+                    });
+
+                    if let Some(ids) = turn.get("message_ids").and_then(|m| m.as_array()) {
+                        for id in ids {
+                            if let Some(id_str) = id.as_str() {
+                                message_timestamps.insert(id_str.to_string(), end_ts.to_string());
+                                if let Some(dur) = duration_secs {
+                                    message_durations.insert(id_str.to_string(), dur);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(SessionData {
         session_id,
         created_at,
         updated_at,
         messages,
+        message_timestamps,
+        message_durations,
     })
 }
 
