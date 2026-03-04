@@ -190,6 +190,9 @@ pub struct UiConfig {
     pub show_speech_button: bool,
     #[serde(default)]
     pub speech_read_back: bool,
+    /// Show quick action chips on agent responses (translate, summarize, etc.)
+    #[serde(default = "default_true")]
+    pub show_response_actions: bool,
     #[serde(default = "default_speech_silence_timeout")]
     pub speech_silence_timeout: f32,
     #[serde(default)]
@@ -403,6 +406,7 @@ impl Default for Config {
                 show_date: false,
                 show_speech_button: false,
                 speech_read_back: false,
+                show_response_actions: true,
                 speech_silence_timeout: 2.0,
                 speech_voice: None,
                 time_format: "HH:mm".to_string(),

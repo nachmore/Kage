@@ -8,7 +8,6 @@ export default class LinkPreviewFormatter {
     initialize(context) {
         this.config = context.config;
         this.invoke = context.invoke;
-        console.log('[LinkPreview] Formatter initialized, enabled:', this.config?.enabled);
     }
 
     onConfigUpdate(config) {

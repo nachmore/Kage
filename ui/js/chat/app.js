@@ -10,6 +10,7 @@ import { ExtensionManager } from '../shared/extension-manager.js';
 import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
 import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
+import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -460,35 +461,41 @@ export class ChatApp {
 
     // ── Suggestion Chips ──
 
-    showSuggestionChips() {
+    async showSuggestionChips() {
         this.hideSuggestionChips();
         const area = this.elements.messagesArea;
-        if (!area) return;
+        if (!area || this.messages.length === 0) return;
 
-        const chips = document.createElement('div');
-        chips.id = 'chatSuggestionChips';
-        chips.className = 'chat-suggestion-chips';
+        // Get the last assistant message content for context-aware actions
+        const lastMsg = [...this.messages].reverse().find(m => m.role === 'assistant');
+        const responseText = lastMsg?.content || '';
 
-        const suggestions = [
-            { label: '📝 Summarize this conversation', prompt: 'Please summarize our conversation so far in a few bullet points.' },
-            { label: '🔄 Continue', prompt: 'Please continue.' },
-            { label: '💡 Explain further', prompt: 'Can you explain that in more detail?' },
-            { label: '🔧 Fix issues', prompt: 'Are there any issues with what we discussed? If so, please fix them.' },
-        ];
+        try {
+            const config = await this.invoke('get_config');
+            if (!config.ui?.show_response_actions) return;
+            const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
+            const actions = getActionsForText(responseText || 'general text', qaConfig);
+            if (actions.length === 0) return;
 
-        for (const s of suggestions) {
-            const chip = document.createElement('button');
-            chip.className = 'chat-chip';
-            chip.textContent = s.label;
-            chip.onclick = () => {
-                this.elements.chatInput.value = s.prompt;
-                this.sendMessage();
-            };
-            chips.appendChild(chip);
-        }
+            const chips = document.createElement('div');
+            chips.id = 'chatSuggestionChips';
+            chips.className = 'chat-suggestion-chips';
 
-        area.appendChild(chips);
-        this.scrollToBottom();
+            for (const action of actions) {
+                const chip = document.createElement('button');
+                chip.className = 'chat-chip';
+                chip.textContent = `${action.icon || '⚡'} ${action.label}`;
+                chip.onclick = () => {
+                    const prompt = action.prompt.replace(/\{text\}/g, responseText);
+                    this.elements.chatInput.value = prompt;
+                    this.sendMessage();
+                };
+                chips.appendChild(chip);
+            }
+
+            area.appendChild(chips);
+            this.scrollToBottom();
+        } catch (e) { console.warn('Suggestion chips error:', e); }
     }
 
     hideSuggestionChips() {

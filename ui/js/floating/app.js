@@ -6,7 +6,7 @@ import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashComman
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
-import { getActionsForText, renderQuickActionChips } from './quick-actions.js';
+import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
 import { playTimerSound } from '../shared/timer-sounds.js';
 import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './search-unified.js';
@@ -1124,6 +1124,9 @@ export class FloatingApp {
             await this.windowManager.resizeWindow();
             this.isWaitingForResponse = false;
 
+            // Show quick action chips on the response
+            this._showResponseActions(this.currentResponse);
+
             // Read back response if speech was used
             if (this.speech) {
                 this.speech.finishStreamingText(this.currentResponse);
@@ -1139,6 +1142,25 @@ export class FloatingApp {
                 }
             } catch { /* ignore */ }
         }
+
+    async _showResponseActions(responseText) {
+        if (!responseText?.trim()) return;
+        try {
+            const config = await this.invoke('get_config');
+            if (!config.ui?.show_response_actions) return;
+            const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
+            const actions = getActionsForText(responseText, qaConfig);
+            if (actions.length === 0) return;
+            const container = document.getElementById('quickActionsContainer');
+            if (container) {
+                renderQuickActionChips(actions, container, (promptTemplate) => {
+                    const prompt = promptTemplate.replace(/\{text\}/g, responseText);
+                    this.sendChatMessage(prompt, { skipSelection: true });
+                });
+                await this.windowManager.resizeWindow();
+            }
+        } catch (e) { console.warn('Response actions error:', e); }
+    }
 
     async handleMessageError(event) {
         if (!this.isWaitingForResponse) return;

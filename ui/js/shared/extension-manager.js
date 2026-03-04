@@ -212,7 +212,7 @@ export class ExtensionManager {
                 style.dataset.extCss = id;
                 style.textContent = cssCode;
                 document.head.appendChild(style);
-                console.log(`ExtensionManager: loaded CSS for '${id}' (${cssCode.length} bytes)`);
+                console.log(`ExtensionManager: loaded CSS for '${id}'`);
             } catch (e) {
                 console.warn(`Failed to load CSS for '${id}':`, e);
             }
@@ -355,7 +355,6 @@ export class ExtensionManager {
             if (!ext.messageFormatter) continue;
             if (!this._isEnabled(id)) continue;
             try {
-                console.log(`[ExtMgr] Running formatter '${id}' (streaming=${context.streaming})`);
                 ext.messageFormatter.format(container, context);
             } catch (e) {
                 console.warn(`Message formatter error in '${id}':`, e);

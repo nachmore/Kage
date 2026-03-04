@@ -32,12 +32,19 @@ class AssistantSettingsModule extends SettingsModule {
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
 
-                <h2 class="settings-section-header" style="margin-top: 24px;">🍟 Quick Chips</h2>
+                <h2 class="settings-section-header" style="margin-top: 24px;">⚡ Quick Actions</h2>
 
                 ${this.createCheckboxRow(
-                    'Show quick chips on selected text',
+                    'Show quick actions on selected text',
                     'When you summon the assistant with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
                     'quickActionsEnabled',
+                    true
+                )}
+
+                ${this.createCheckboxRow(
+                    'Show quick actions on responses',
+                    'Show context-aware action chips after agent responses in both the floating and chat windows.',
+                    'showResponseActions',
                     true
                 )}
 
@@ -71,6 +78,8 @@ class AssistantSettingsModule extends SettingsModule {
         const qaEnabled = document.getElementById('quickActionsEnabled');
         const qa = config.quick_actions || { enabled: true, custom_actions: [] };
         if (qaEnabled) qaEnabled.checked = qa.enabled !== false;
+        const showResponseActions = document.getElementById('showResponseActions');
+        if (showResponseActions) showResponseActions.checked = config.ui?.show_response_actions !== false;
         const translateLang = document.getElementById('translateLanguage');
         if (translateLang) translateLang.value = qa.translate_language || '';
         this._renderCustomActions(qa.custom_actions || []);
@@ -87,6 +96,9 @@ class AssistantSettingsModule extends SettingsModule {
         config.quick_actions.enabled = document.getElementById('quickActionsEnabled')?.checked ?? true;
         config.quick_actions.translate_language = document.getElementById('translateLanguage')?.value?.trim() || null;
         config.quick_actions.custom_actions = this._collectCustomActions();
+        // Response actions (stored in ui config)
+        config.ui = config.ui || {};
+        config.ui.show_response_actions = document.getElementById('showResponseActions')?.checked ?? true;
     }
 
     initialize() {
