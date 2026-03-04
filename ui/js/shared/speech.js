@@ -8,7 +8,7 @@
  *   this.speech.setup();
  */
 
-import { TtsStreamer } from './tts-streamer.js';
+import { TtsStreamer, TtsPlaybackBar } from './tts-streamer.js';
 
 export class SpeechController {
     /**
@@ -257,7 +257,7 @@ export class SpeechController {
         }
     }
 
-    /** Fallback: speak with browser speechSynthesis. */
+    /** Fallback: speak with browser speechSynthesis, with playback bar. */
     _speakWithBrowser(text) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
@@ -270,12 +270,33 @@ export class SpeechController {
             if (voice) utterance.voice = voice;
         }
 
+        // Show playback bar
+        if (this.barContainer) {
+            this._browserBar = new TtsPlaybackBar(this.barContainer, this.onVisibilityUpdate, {
+                onPause: () => {
+                    if (speechSynthesis.paused) { speechSynthesis.resume(); this._browserBar.setPauseIcon(false); this._browserBar.setStatus('Speaking...'); }
+                    else { speechSynthesis.pause(); this._browserBar.setPauseIcon(true); this._browserBar.setStatus('Paused'); }
+                },
+                onStop: () => { speechSynthesis.cancel(); },
+            });
+            this._browserBar.show();
+            this._browserBar.setStatus('Speaking...');
+        }
+
+        utterance.onend = () => {
+            if (this._browserBar) { this._browserBar.hideAfterDelay(); this._browserBar = null; }
+        };
+        utterance.onerror = () => {
+            if (this._browserBar) { this._browserBar.hide(); this._browserBar = null; }
+        };
+
         speechSynthesis.speak(utterance);
     }
 
     /** Cancel any ongoing TTS playback. */
     cancelSpeech() {
         speechSynthesis.cancel();
+        if (this._browserBar) { this._browserBar.hide(); this._browserBar = null; }
         if (this._pocketTtsAudio) {
             this._pocketTtsAudio.pause();
             this._pocketTtsAudio = null;
@@ -290,6 +311,7 @@ export class SpeechController {
     get isActive() {
         return this.isListening || speechSynthesis.speaking
             || (this._pocketTtsAudio && !this._pocketTtsAudio.paused)
-            || (this._ttsStreamer && this._ttsStreamer.isActive);
+            || (this._ttsStreamer && this._ttsStreamer.isActive)
+            || (this._browserBar && this._browserBar.visible);
     }
 }
