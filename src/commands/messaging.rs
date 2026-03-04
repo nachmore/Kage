@@ -1,3 +1,4 @@
+use crate::error::{AppError, ErrorKind};
 use crate::state::AppState;
 use log::{info, warn, error};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
@@ -120,37 +121,36 @@ pub fn setup_notification_handler(
 /// signals that must be sent while `send_message_streaming` holds the client lock.
 ///
 /// Tries pipe_stdin first; falls back to tcp_writer.
-/// Returns `Err(String)` only when used from Tauri commands (for `Result<_, String>`).
 fn write_raw_json(
     pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
     tcp_writer: &std::sync::Mutex<Option<std::net::TcpStream>>,
     json: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use std::io::Write;
 
     // Try pipe first
-    let stdin_arc = {
-        let guard = pipe_stdin.lock().map_err(|e| format!("Lock: {}", e))?;
+    let stdin_arc: Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>> = {
+        let guard = pipe_stdin.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         guard.as_ref().map(|a| a.clone())
     };
     if let Some(arc) = stdin_arc {
-        let mut stdin = arc.lock().map_err(|e| format!("Lock stdin: {}", e))?;
-        writeln!(stdin, "{}", json).map_err(|e| format!("Write: {}", e))?;
-        stdin.flush().map_err(|e| format!("Flush: {}", e))?;
+        let mut stdin = arc.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+        writeln!(stdin, "{}", json).map_err(|e| AppError::connection_lost(format!("Write: {}", e)))?;
+        stdin.flush().map_err(|e| AppError::connection_lost(format!("Flush: {}", e)))?;
         return Ok(());
     }
 
     // Fall back to TCP
-    let guard = tcp_writer.lock().map_err(|e| format!("Lock: {}", e))?;
+    let guard = tcp_writer.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
     if let Some(ref stream) = *guard {
-        let mut ws = stream.try_clone().map_err(|e| format!("Clone: {}", e))?;
+        let mut ws: std::net::TcpStream = stream.try_clone().map_err(|e| AppError::connection_lost(format!("Clone: {}", e)))?;
         drop(guard);
-        writeln!(ws, "{}", json).map_err(|e| format!("Write: {}", e))?;
-        ws.flush().map_err(|e| format!("Flush: {}", e))?;
+        writeln!(ws, "{}", json).map_err(|e| AppError::connection_lost(format!("Write: {}", e)))?;
+        ws.flush().map_err(|e| AppError::connection_lost(format!("Flush: {}", e)))?;
         return Ok(());
     }
 
-    Err("No write handle available".to_string())
+    Err(AppError::connection_lost("No write handle available"))
 }
 
 /// Convenience: serialize a JSON value and write it via `write_raw_json`.
@@ -350,7 +350,7 @@ pub async fn send_permission_response(
     option_id: String,
     tool_title: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
     let response = serde_json::json!({
@@ -358,19 +358,16 @@ pub async fn send_permission_response(
         "id": request_id,
         "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
     });
-    let json = serde_json::to_string(&response).map_err(|e| format!("Serialize: {}", e))?;
+    let json = serde_json::to_string(&response).map_err(|e| AppError::new(ErrorKind::SerializeError, format!("{}", e)))?;
 
-    // Write directly via the pipe/tcp handles — do NOT lock the ACP client,
-    // because send_message_streaming may be holding that lock waiting for this
-    // permission response (which would deadlock).
     write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
 
     if option_id == "allow_always" {
-        let mut config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
+        let mut config = state.config.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
             tool.policy = "allow".to_string();
         }
-        config.save().map_err(|e| format!("Save: {}", e))?;
+        config.save().map_err(|e| AppError::internal(format!("Save: {}", e)))?;
     }
 
     if let Ok(mut pending) = state.pending_permission.lock() {
@@ -381,36 +378,32 @@ pub async fn send_permission_response(
 }
 
 #[tauri::command]
-pub async fn check_connection(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn check_connection(state: State<'_, AppState>) -> Result<bool, AppError> {
     let client = state.acp_client.lock().await;
     Ok(client.is_connected())
 }
 
 #[tauri::command]
-pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, AppError> {
     let client = state.acp_client.lock().await;
-    match client.connect() {
-        Ok(_) => Ok(true),
-        Err(e) => Err(format!("Failed to reconnect: {}", e)),
-    }
+    client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
+    Ok(true)
 }
 
 #[tauri::command]
-pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), String> {
-    // Get the session ID without locking the ACP client (which may be held by send_message_streaming)
+pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppError> {
     let session_id = {
         let client = state.acp_client.try_lock()
             .map_err(|_| "ACP client busy (streaming) — sending cancel directly".to_string());
         match client {
             Ok(c) => c.get_session_id(),
             Err(_) => {
-                // Client is locked (streaming). Read session ID from floating_session_id instead.
                 state.floating_session_id.lock().ok().and_then(|s| s.clone())
             }
         }
     };
 
-    let session_id = session_id.ok_or("No active session to cancel")?;
+    let session_id = session_id.ok_or_else(|| AppError::internal("No active session to cancel"))?;
     info!("Sending session/cancel for session {}", session_id);
 
     let notification = serde_json::json!({
@@ -418,10 +411,9 @@ pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), String>
         "method": "session/cancel",
         "params": { "sessionId": session_id }
     });
-    let json = serde_json::to_string(&notification).map_err(|e| format!("Serialize: {}", e))?;
+    let json = serde_json::to_string(&notification)
+        .map_err(|e| AppError::new(ErrorKind::SerializeError, format!("{}", e)))?;
 
-    // Write directly via pipe/tcp handles — do NOT lock the ACP client,
-    // because send_message_streaming may be holding that lock.
     write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
 
     Ok(())
@@ -468,9 +460,9 @@ pub async fn open_chat_with_message(
 pub async fn dismiss_pending_permission(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let pending = {
-        let guard = state.pending_permission.lock().map_err(|e| format!("Lock: {}", e))?;
+        let guard = state.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         guard.clone()
     };
 
@@ -497,8 +489,8 @@ pub async fn dismiss_pending_permission(
 }
 
 #[tauri::command]
-pub async fn has_pending_permission(state: State<'_, AppState>) -> Result<bool, String> {
-    let guard = state.pending_permission.lock().map_err(|e| format!("Lock: {}", e))?;
+pub async fn has_pending_permission(state: State<'_, AppState>) -> Result<bool, AppError> {
+    let guard = state.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
     Ok(guard.is_some())
 }
 
