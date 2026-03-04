@@ -1,5 +1,16 @@
 /* Shared component styles: response text, streaming, loading, permissions, tool sources */
 
+/* Global link colors — uses tokens so all windows get consistent link styling */
+a {
+    color: var(--kiro-link);
+}
+a:visited {
+    color: var(--kiro-link-visited);
+}
+a:hover {
+    color: var(--kiro-link-hover);
+}
+
 /* Sortable table headers */
 .response-text th[data-sort-dir],
 .message-content th[data-sort-dir] {

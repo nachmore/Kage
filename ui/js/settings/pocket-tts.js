@@ -16,7 +16,7 @@ class PocketTtsSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 <p style="font-size:12px;color:var(--kiro-text-muted);margin:0 0 16px;line-height:1.5;">
                     High-quality local text-to-speech powered by
-                    <a href="https://github.com/kyutai-labs/pocket-tts" target="_blank" style="color:var(--kiro-accent);">Pocket TTS</a>
+                    <a href="https://github.com/kyutai-labs/pocket-tts" target="_blank">Pocket TTS</a>
                     from Kyutai Labs. Runs on CPU, ~100M parameters, low latency.
                 </p>
 
@@ -128,7 +128,7 @@ class PocketTtsSettingsModule extends SettingsModule {
                         <div class="setting-description">
                             Paste a HuggingFace voice URL (e.g. <code>hf://kyutai/tts-voices/alba-mackenna/casual.wav</code>) or any HTTP URL to a .wav file.
                             The voice will be downloaded, cached as safetensors for fast loading, and added to the voice list.
-                            <a href="https://huggingface.co/kyutai/tts-voices" target="_blank" style="color:var(--kiro-accent);">Browse voices</a>
+                            <a href="https://huggingface.co/kyutai/tts-voices" target="_blank">Browse voices</a>
                         </div>
                         <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                             <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="hf://kyutai/tts-voices/..." style="flex:1;">
@@ -144,7 +144,7 @@ class PocketTtsSettingsModule extends SettingsModule {
                         <div class="setting-description">
                             Place <code>.wav</code> files in the voices directory for voice cloning.
                             Short, clean audio samples (5-20s) work best.
-                            <a href="https://huggingface.co/kyutai/tts-voices" target="_blank" style="color:var(--kiro-accent);">Browse community voices</a>
+                            <a href="https://huggingface.co/kyutai/tts-voices" target="_blank">Browse community voices</a>
                         </div>
                         <div class="setting-control">
                             <button class="setting-button" onclick="pocketTtsOpenVoicesDir()">Open Voices Folder</button>
@@ -259,7 +259,7 @@ class PocketTtsSettingsModule extends SettingsModule {
         if (!s.python_found) {
             // Python not found
             if (pythonStatus) {
-                pythonStatus.innerHTML = '❌ Python 3 not found. <a href="https://www.python.org/downloads/" target="_blank" style="color:var(--kiro-accent);">Download Python</a>';
+                pythonStatus.innerHTML = '❌ Python 3 not found. <a href="https://www.python.org/downloads/" target="_blank">Download Python</a>';
             }
             this.setStatusBanner('❌ Python 3.10+ required — install Python first', 'error');
             if (step2) step2.style.display = 'none';

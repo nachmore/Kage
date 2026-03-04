@@ -26,6 +26,11 @@
     /* Semantic */
     --kiro-section-accent: #00b7c3;
 
+    /* Links */
+    --kiro-link: #7cacf8;
+    --kiro-link-visited: #b4a0e8;
+    --kiro-link-hover: #a3c6ff;
+
     /* Font stack */
     --kiro-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
@@ -42,4 +47,7 @@ body.light-theme {
     --kiro-text-muted: #777777;
     --kiro-accent-light: #7138CC;
     --kiro-accent-glow: rgba(113, 56, 204, 0.15);
+    --kiro-link: #4a6fa5;
+    --kiro-link-visited: #6b5b8a;
+    --kiro-link-hover: #2d5a9e;
 }

@@ -80,7 +80,7 @@ body.dark-theme .messages-area {
     background: #211D25;
 }
 
-/* Link colors handled by shared-theme-dark.css (body.dark-theme a) */
+/* Link colors handled globally via --kiro-link tokens */
 
 body.dark-theme .message.assistant .message-content {
     background: #28242E;
