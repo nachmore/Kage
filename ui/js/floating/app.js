@@ -129,7 +129,8 @@ export class FloatingApp {
         // Hide if: streaming, stop button visible, input has text, quick actions visible, or speech listening
         const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
         const hasInput = this.elements.input.value.length > 0;
-        const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex';
+        const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex'
+            || document.getElementById('responseActionsContainer')?.style.display === 'flex';
         const dtHidden = this.isWaitingForResponse || stopVisible || hasInput || qaVisible || this.speech?.isListening;
         if (dtHidden) {
             dt.style.display = 'none';
@@ -443,6 +444,8 @@ export class FloatingApp {
         this.toolUsages = [];
         this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
+        const responseActions = document.getElementById('responseActionsContainer');
+        if (responseActions) responseActions.style.display = 'none';
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
         this.currentResponse = '';
@@ -990,6 +993,8 @@ export class FloatingApp {
         if (indicator) indicator.style.display = 'none';
         const quickActionsContainer = document.getElementById('quickActionsContainer');
         if (quickActionsContainer) quickActionsContainer.style.display = 'none';
+        const responseActionsContainer = document.getElementById('responseActionsContainer');
+        if (responseActionsContainer) responseActionsContainer.style.display = 'none';
         this.lastSelection = null;
 
         this.elements.input.value = '';
@@ -1144,22 +1149,25 @@ export class FloatingApp {
         }
 
     async _showResponseActions(responseText) {
+        console.log('[QA] _showResponseActions called, text length:', responseText?.length);
         if (!responseText?.trim()) return;
         try {
             const config = await this.invoke('get_config');
             if (!config.ui?.show_response_actions) return;
             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
             const actions = getActionsForText(responseText, qaConfig);
+            console.log('[QA] Actions found:', actions.length);
             if (actions.length === 0) return;
-            const container = document.getElementById('quickActionsContainer');
+            const container = document.getElementById('responseActionsContainer');
             if (container) {
                 renderQuickActionChips(actions, container, (promptTemplate) => {
                     const prompt = promptTemplate.replace(/\{text\}/g, responseText);
+                    container.style.display = 'none';
                     this.sendChatMessage(prompt, { skipSelection: true });
                 });
                 await this.windowManager.resizeWindow();
             }
-        } catch (e) { console.warn('Response actions error:', e); }
+        } catch (e) { console.warn('[QA] Response actions error:', e); }
     }
 
     async handleMessageError(event) {

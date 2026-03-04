@@ -32,19 +32,19 @@ class AssistantSettingsModule extends SettingsModule {
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
 
-                <h2 class="settings-section-header" style="margin-top: 24px;">⚡ Quick Actions</h2>
+                <h2 class="settings-section-header" style="margin-top: 24px;">🍟 Quick Actions</h2>
+
+                ${this.createCheckboxRow(
+                    'Show quick actions on responses',
+                    'Show context-aware action chips after agent responses.',
+                    'showResponseActions',
+                    true
+                )}
 
                 ${this.createCheckboxRow(
                     'Show quick actions on selected text',
                     'When you summon the assistant with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
                     'quickActionsEnabled',
-                    true
-                )}
-
-                ${this.createCheckboxRow(
-                    'Show quick actions on responses',
-                    'Show context-aware action chips after agent responses in both the floating and chat windows.',
-                    'showResponseActions',
                     true
                 )}
 
