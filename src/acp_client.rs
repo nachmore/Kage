@@ -608,7 +608,7 @@ impl AcpClient {
     /// Send a chat message with optional attachments.
     /// `content` is the text message.
     /// `attachments` is an optional list of content blocks (images, resource_links) to include.
-    pub fn send_chat_streaming(&self, content: String, attachments: Option<Vec<serde_json::Value>>) -> Result<()> {
+    pub fn send_chat_streaming(&self, content: &str, attachments: Option<&[serde_json::Value]>) -> Result<()> {
         let debug = *self.debug_mode.lock().unwrap();
 
         // Reset the streaming accumulator for the new message
@@ -644,7 +644,7 @@ impl AcpClient {
         // Append any attachments (images, resource_links)
         if let Some(att) = attachments {
             for block in att {
-                prompt.push(block);
+                prompt.push(block.clone());
             }
         }
 
@@ -749,8 +749,10 @@ impl AcpClient {
         content: String,
         attachments: Option<Vec<serde_json::Value>>,
     ) -> Result<()> {
+        let att_ref = attachments.as_deref();
+
         // --- Attempt 1: normal send ---
-        match self.send_chat_streaming(content.clone(), attachments.clone()) {
+        match self.send_chat_streaming(&content, att_ref) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 let err_str = format!("{}", e);
@@ -763,7 +765,7 @@ impl AcpClient {
                         self.set_session_id(None);
                         self.create_session(None)?;
                         self.send_builtin_steering();
-                        return self.send_chat_streaming(content, attachments);
+                        return self.send_chat_streaming(&content, att_ref);
                     }
                 } else {
                     return Err(e);
@@ -797,7 +799,7 @@ impl AcpClient {
             self.send_builtin_steering();
         }
 
-        match self.send_chat_streaming(content.clone(), attachments.clone()) {
+        match self.send_chat_streaming(&content, att_ref) {
             Ok(()) => return Ok(()),
             Err(e) => {
                 let err_str = format!("{}", e);
@@ -815,7 +817,7 @@ impl AcpClient {
         self.create_session(None)?;
         self.send_builtin_steering();
 
-        self.send_chat_streaming(content, attachments)
+        self.send_chat_streaming(&content, att_ref)
     }
 
     /// Check if an error is recoverable (worth retrying with a fresh connection/session)

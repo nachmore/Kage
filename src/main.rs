@@ -526,7 +526,7 @@ fn main() {
                                     steering_parts.join("\n\n---\n\n")
                                 );
                                 info!("Sending steering message ({} chars)", steering_msg.len());
-                                if let Err(e) = client.send_chat_streaming(steering_msg, None) {
+                                if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
                                     error!("Failed to send steering message: {}", e);
                                 }
                             }

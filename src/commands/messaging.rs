@@ -602,7 +602,7 @@ pub async fn send_steering_message(
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
         if client.is_connected() {
-            let _ = client.send_chat_streaming(steering_msg, None);
+            let _ = client.send_chat_streaming(&steering_msg, None);
         }
     });
 

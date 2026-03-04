@@ -620,7 +620,7 @@ pub async fn switch_acp_session(
                     crate::commands::system::STEERING_MSG_PREFIX,
                     steering_parts.join("\n\n---\n\n")
                 );
-                let _ = client_guard.send_chat_streaming(steering_msg, None);
+                let _ = client_guard.send_chat_streaming(&steering_msg, None);
             }
 
             Ok(new_session_id)
