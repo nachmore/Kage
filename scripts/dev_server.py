@@ -167,7 +167,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 # Mock store catalog data
 MOCK_CATALOG = [
     {"id": "hello-world", "name": "Hello World", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Sample extension — type 'test' or 'hello' to see a greeting. Great starting template.", "icon": "👋", "tags": ["sample", "template", "starter"]},
-    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows title, description, and favicon.", "icon": "🔗", "tags": ["utility", "formatting", "links"]},
+    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.1", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows title, description, and favicon.", "icon": "🔗", "tags": ["utility", "formatting", "links"]},
     {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "tags": ["dark", "light", "blue", "minimal"]},
     {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
 ]

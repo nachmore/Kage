@@ -2,7 +2,7 @@
 
 use crate::extensions;
 use crate::state::AppState;
-use log::{error, info};
+use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
 
 // ---------------------------------------------------------------------------
@@ -385,9 +385,118 @@ pub async fn store_install(
 
     validate_store_url(&base_url)?;
 
-    let url = format!("{}/store/catalog/{}/download", base_url, id);
+    store_install_inner(&base_url, &id, &state, &app).await
+}
 
-    // Download the zip to a temp file
+/// Check for updates to installed extensions and optionally auto-install them.
+/// Returns { updated: N, checked: N }
+#[tauri::command]
+pub async fn check_extension_updates(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<serde_json::Value, String> {
+    let config = state.config.lock().await;
+    let base_url = resolve_store_url(&config, state.dev_mode);
+    drop(config);
+
+    if base_url.is_empty() {
+        return Ok(serde_json::json!({ "updated": 0, "checked": 0 }));
+    }
+
+    validate_store_url(&base_url)?;
+
+    // Gather all installed items
+    let mut installed: Vec<(String, String, String)> = Vec::new(); // (id, version, kind)
+    let config = state.config.lock().await;
+    let states = config.extension_states.clone();
+    drop(config);
+
+    for kind in &["extension", "theme", "commands"] {
+        let items = extensions::discover_items(kind, None, &states);
+        for item in items {
+            if item.bundled { continue; }
+            installed.push((
+                item.manifest.id.clone(),
+                item.manifest.version.clone(),
+                kind.to_string(),
+            ));
+        }
+    }
+
+    if installed.is_empty() {
+        return Ok(serde_json::json!({ "updated": 0, "checked": 0 }));
+    }
+
+    // Fetch the full catalog (no type filter) to get all available versions
+    let url = format!("{}/store/catalog?page=1", base_url);
+    let client = store_client()?;
+    let resp = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Store request failed: {}", e))?;
+    let catalog: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Invalid store response: {}", e))?;
+
+    let catalog_items = catalog.get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut updated = 0u32;
+    let checked = installed.len() as u32;
+
+    for (id, local_version, _kind) in &installed {
+        // Find this item in the catalog
+        let catalog_item = catalog_items.iter().find(|ci| {
+            ci.get("id").and_then(|v| v.as_str()) == Some(id.as_str())
+        });
+
+        if let Some(ci) = catalog_item {
+            let remote_version = ci.get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or("0.0.0");
+
+            // Compare versions using semver
+            let local_sv = semver::Version::parse(local_version).ok();
+            let remote_sv = semver::Version::parse(remote_version).ok();
+
+            if let (Some(local), Some(remote)) = (local_sv, remote_sv) {
+                if remote > local {
+                    info!("Extension '{}' has update: {} -> {}", id, local_version, remote_version);
+                    // Install the update (store_install handles download + extract)
+                    match store_install_inner(&base_url, id, &state, &app).await {
+                        Ok(_) => {
+                            updated += 1;
+                            info!("Updated extension '{}' to {}", id, remote_version);
+                        }
+                        Err(e) => {
+                            warn!("Failed to update '{}': {}", id, e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Update the last check timestamp
+    let mut config = state.config.lock().await;
+    config.last_extension_update_check = Some(chrono::Utc::now().to_rfc3339());
+    let _ = config.save();
+    drop(config);
+
+    Ok(serde_json::json!({ "updated": updated, "checked": checked }))
+}
+
+/// Inner install logic reused by both store_install and check_extension_updates.
+async fn store_install_inner(
+    base_url: &str,
+    id: &str,
+    state: &State<'_, AppState>,
+    app: &tauri::AppHandle,
+) -> Result<extensions::InstalledItem, String> {
+    let url = format!("{}/store/catalog/{}/download", base_url, id);
     let zip_path = std::env::temp_dir().join(format!("kiro-download-{}.zip", id));
 
     let client = store_client()?;
@@ -395,33 +504,21 @@ pub async fn store_install(
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
-
-    // Verify content type or at least that we got bytes
-    let bytes = resp
-        .bytes()
-        .await
+    let bytes = resp.bytes().await
         .map_err(|e| format!("Failed to read download: {}", e))?;
 
-    if bytes.len() < 4 {
-        return Err("Downloaded file is too small to be a valid zip".to_string());
-    }
-
-    // Verify zip magic bytes (PK\x03\x04)
-    if &bytes[0..4] != b"PK\x03\x04" {
-        return Err("Downloaded file is not a valid zip archive".to_string());
+    if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
+        return Err("Invalid zip archive".to_string());
     }
 
     std::fs::write(&zip_path, &bytes)
         .map_err(|e| format!("Failed to save download: {}", e))?;
 
-    // Extract and install
     let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| format!("Installation failed: {}", e))?;
 
-    // Cleanup the downloaded zip
     let _ = std::fs::remove_file(&zip_path);
 
-    // Auto-enable
     let mut config = state.config.lock().await;
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();

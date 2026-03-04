@@ -194,6 +194,14 @@
         .store-card-btn.uninstall:hover {
             background: rgba(238, 85, 85, 0.1);
         }
+        .store-card-btn.update {
+            background: var(--kiro-accent);
+            color: white;
+            font-size: 11px;
+        }
+        .store-card-btn.update:hover {
+            background: var(--kiro-accent-hover);
+        }
         .store-card-actions {
             display: flex;
             gap: 6px;
@@ -213,39 +221,6 @@
             animation: store-spin 0.6s linear infinite;
         }
         @keyframes store-spin { to { transform: rotate(360deg); } }
-        .store-settings-link {
-            padding: 12px 20px;
-            border-top: 1px solid var(--kiro-border);
-        }
-        .store-settings-link details { width: 100%; }
-        .store-settings-link summary {
-            font-size: 12px;
-            color: var(--kiro-text-muted);
-            cursor: pointer;
-        }
-        .store-url-input {
-            margin-top: 8px;
-            display: flex;
-            gap: 8px;
-        }
-        .store-url-input input {
-            flex: 1;
-            padding: 6px 10px;
-            background: var(--kiro-bg-input);
-            border: 1px solid var(--kiro-border);
-            border-radius: 4px;
-            color: var(--kiro-text);
-            font-size: 12px;
-        }
-        .store-url-input button {
-            padding: 6px 12px;
-            background: var(--kiro-accent);
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 12px;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
@@ -263,22 +238,12 @@
             <button class="store-filter-btn" id="installedFilter" onclick="toggleInstalledFilter()">Installed only</button>
         </div>
         <div class="store-content" id="storeContent"></div>
-        <div class="store-settings-link">
-            <details>
-                <summary>Advanced: Custom store URL</summary>
-                <div class="store-url-input">
-                    <input type="text" id="storeUrlInput" placeholder="https://your-store.example.com">
-                    <button onclick="saveStoreUrl()">Save</button>
-                    <span id="storeUrlStatus" style="font-size:11px;color:var(--kiro-text-muted);align-self:center;"></span>
-                </div>
-            </details>
-        </div>
     </div>
 
     <script>
     let currentTab = 'extensions';
     let showInstalledOnly = false;
-    let installedIds = new Set();
+    let installedMap = new Map(); // id → { version, kind }
     let _bundledIds = new Set();
 
     function waitForTauri(cb) {
@@ -305,8 +270,6 @@
             else if (config.ui?.theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
                 document.body.classList.add('light-theme');
             }
-            const urlInput = document.getElementById('storeUrlInput');
-            if (urlInput && config.store_url) urlInput.value = config.store_url;
         } catch {}
 
         // Initial tab from URL param
@@ -314,6 +277,15 @@
         const initialTab = urlParams.get('tab');
 
         await refreshInstalled();
+
+        // Auto-update check on store open
+        try {
+            const config = await invoke('get_config');
+            if (config.auto_update_extensions) {
+                autoUpdateCheck();
+            }
+        } catch {}
+
         if (initialTab && ['extensions', 'themes', 'commands'].includes(initialTab)) {
             switchTab(initialTab);
         } else {
@@ -323,21 +295,47 @@
 
     async function refreshInstalled() {
         const invoke = window.__TAURI__.core.invoke;
-        installedIds = new Set();
+        installedMap = new Map();
         try {
             const exts = await invoke('list_extensions');
-            exts.forEach(e => installedIds.add(e.manifest.id));
+            exts.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'extension' }));
         } catch {}
         try {
             const themes = await invoke('list_themes');
-            themes.forEach(e => installedIds.add(e.manifest.id));
+            themes.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'theme' }));
         } catch {}
         try {
             const packs = await invoke('list_command_packs');
-            packs.forEach(e => installedIds.add(e.manifest.id));
+            packs.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'commands' }));
         } catch {}
-        // Bundled extensions count as installed
-        _bundledIds.forEach(id => installedIds.add(id));
+        _bundledIds.forEach(id => {
+            if (!installedMap.has(id)) installedMap.set(id, { version: '0.0.0', kind: 'extension' });
+        });
+    }
+
+    function hasUpdate(itemId, remoteVersion) {
+        const local = installedMap.get(itemId);
+        if (!local) return false;
+        try {
+            const lv = local.version.split('.').map(Number);
+            const rv = remoteVersion.split('.').map(Number);
+            for (let i = 0; i < 3; i++) {
+                if ((rv[i] || 0) > (lv[i] || 0)) return true;
+                if ((rv[i] || 0) < (lv[i] || 0)) return false;
+            }
+        } catch {}
+        return false;
+    }
+
+    async function autoUpdateCheck() {
+        const invoke = window.__TAURI__.core.invoke;
+        try {
+            const result = await invoke('check_extension_updates');
+            if (result.updated > 0) {
+                await refreshInstalled();
+                renderTab();
+            }
+        } catch {}
     }
 
     function switchTab(tab) {
@@ -370,7 +368,7 @@
             let items = catalog.items || [];
 
             if (showInstalledOnly) {
-                items = items.filter(i => installedIds.has(i.id));
+                items = items.filter(i => installedMap.has(i.id));
             }
 
             if (items.length === 0) {
@@ -383,12 +381,19 @@
 
             let html = '<div class="store-grid">';
             for (const item of items) {
-                const isInstalled = installedIds.has(item.id);
+                const isInstalled = installedMap.has(item.id);
                 const isBundled = _bundledIds.has(item.id);
+                const updateAvailable = isInstalled && hasUpdate(item.id, item.version);
 
                 let actionHtml;
                 if (isBundled) {
                     actionHtml = '<span class="store-card-btn installed">Built-in</span>';
+                } else if (updateAvailable) {
+                    const localVer = installedMap.get(item.id)?.version || '';
+                    actionHtml = `<div class="store-card-actions">
+                        <button class="store-card-btn update" onclick="event.stopPropagation();updateItem('${item.id}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>
+                        <button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${item.id}','${kind}')">Uninstall</button>
+                    </div>`;
                 } else if (isInstalled) {
                     actionHtml = `<button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${item.id}','${kind}')">Uninstall</button>`;
                 } else {
@@ -430,6 +435,17 @@
         }
     }
 
+    async function updateItem(id) {
+        const invoke = window.__TAURI__.core.invoke;
+        try {
+            await invoke('store_install', { id });
+            await refreshInstalled();
+            renderTab();
+        } catch (e) {
+            alert('Update failed: ' + e);
+        }
+    }
+
     async function uninstallItem(id, kind) {
         if (!confirm(`Uninstall "${id}"?`)) return;
         const invoke = window.__TAURI__.core.invoke;
@@ -439,25 +455,6 @@
             renderTab();
         } catch (e) {
             alert('Uninstall failed: ' + e);
-        }
-    }
-
-    async function saveStoreUrl() {
-        const invoke = window.__TAURI__.core.invoke;
-        const url = document.getElementById('storeUrlInput')?.value?.trim() || '';
-        const status = document.getElementById('storeUrlStatus');
-        try {
-            await invoke('save_store_url', { url: url || null });
-            if (status) {
-                status.textContent = url ? '✓ Saved' : '✓ Reset to default';
-                status.style.color = 'var(--kiro-accent)';
-                setTimeout(() => { status.textContent = ''; }, 3000);
-            }
-        } catch (e) {
-            if (status) {
-                status.textContent = '✗ ' + e;
-                status.style.color = '#e55';
-            }
         }
     }
 

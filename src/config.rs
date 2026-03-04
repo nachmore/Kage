@@ -32,6 +32,12 @@ pub struct Config {
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
+    /// Automatically update installed extensions from the store
+    #[serde(default)]
+    pub auto_update_extensions: bool,
+    /// ISO 8601 timestamp of the last extension update check
+    #[serde(default)]
+    pub last_extension_update_check: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -354,6 +360,8 @@ impl Default for Config {
             extensions: HashMap::new(),
             extension_states: HashMap::new(),
             store_url: None,
+            auto_update_extensions: false,
+            last_extension_update_check: None,
         }
     }
 }

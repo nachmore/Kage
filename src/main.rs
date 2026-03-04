@@ -589,6 +589,7 @@ fn main() {
             commands::store_get_catalog,
             commands::store_get_detail,
             commands::store_install,
+            commands::check_extension_updates,
             commands::read_extension_file,
             commands::save_store_url
         ])
