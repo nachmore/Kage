@@ -172,8 +172,11 @@ class UpdatesSettingsModule extends SettingsModule {
         if (autoCheck) autoCheck.checked = u.auto_check || false;
         if (silentUpdate) silentUpdate.checked = u.silent_update || false;
 
-        // Trigger auto-check when tab is loaded/shown
-        this.onShow();
+        // Only auto-check when the Updates tab is actually visible
+        const section = document.querySelector('[data-section-content="updates"]');
+        if (section && !section.classList.contains('hidden')) {
+            this.onShow();
+        }
     }
 
     save(config) {

@@ -219,25 +219,35 @@ pub fn start_update_loop(
         // Initial delay — let the app finish starting
         tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
+        let mut first_check = true;
+
         loop {
             let cfg = config.lock().await;
             if !cfg.updates.auto_check {
+                drop(cfg);
+                first_check = false;
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+                continue;
+            }
+
+            // Always check on first iteration (startup), then once per day after that
+            let should_check = if first_check {
+                true
+            } else {
+                cfg.updates.last_check_time.as_ref().map_or(true, |t| {
+                    chrono::DateTime::parse_from_rfc3339(t)
+                        .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
+                        .unwrap_or(true)
+                })
+            };
+
+            if !should_check {
                 drop(cfg);
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 continue;
             }
 
-            // Only check once per day
-            let should_check = cfg.updates.last_check_time.as_ref().map_or(true, |t| {
-                chrono::DateTime::parse_from_rfc3339(t)
-                    .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
-                    .unwrap_or(true)
-            });
-
-            if !should_check {
-                continue;
-            }
-
+            first_check = false;
             let silent_update = cfg.updates.silent_update;
             drop(cfg);
 
