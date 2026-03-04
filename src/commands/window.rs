@@ -50,7 +50,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
 
     let is_showing = !window.is_visible().unwrap_or(true);
 
-    let config = tauri::async_runtime::block_on(state.config.lock());
+    let config = state.config.lock().unwrap();
     let capture_enabled = config.system.capture_selection;
     let start_pos = config.ui.window_start_position.clone();
     let last_x = config.ui.last_window_x;
@@ -72,7 +72,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 if start_pos == "remember" {
                     if let Ok(pos) = window.outer_position() {
                         let state: tauri::State<'_, crate::state::AppState> = app.state();
-                        let mut config = tauri::async_runtime::block_on(state.config.lock());
+                        let mut config = state.config.lock().unwrap();
                         config.ui.last_window_x = Some(pos.x);
                         config.ui.last_window_y = Some(pos.y);
                         let _ = config.save();
@@ -245,7 +245,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
 
     if let Some(window) = app.get_webview_window("main") {
         let state: tauri::State<'_, crate::state::AppState> = app.state();
-        let config = state.config.lock().await;
+        let config = state.config.lock().unwrap();
         let saved_w = config.ui.chat_window_width;
         let saved_h = config.ui.chat_window_height;
         let saved_x = config.ui.chat_window_x;
@@ -422,7 +422,7 @@ pub async fn save_window_position(
     x: i32,
     y: i32,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
     config.save().map_err(|e| format!("Failed to save window position: {}", e))?;
@@ -437,7 +437,7 @@ pub async fn save_chat_window_geometry(
     x: i32,
     y: i32,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.ui.chat_window_width = width;
     config.ui.chat_window_height = height;
     config.ui.chat_window_x = Some(x);

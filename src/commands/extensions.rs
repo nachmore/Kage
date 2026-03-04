@@ -11,19 +11,19 @@ use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("extension", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("theme", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("commands", None, &config.extension_states))
 }
 
@@ -36,7 +36,7 @@ pub async fn get_extension_config(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(config.extensions.get(&id).cloned().unwrap_or(serde_json::json!({})))
 }
 
@@ -47,7 +47,7 @@ pub async fn save_extension_config(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.extensions.insert(id.clone(), value);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Saved extension config for '{}'", id);
@@ -68,7 +68,7 @@ pub async fn set_extension_enabled(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.extension_states.insert(id.clone(), enabled);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
@@ -160,7 +160,7 @@ pub async fn install_extension_from_path(
     };
 
     // Auto-enable
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
@@ -182,7 +182,7 @@ pub async fn uninstall_extension(
         .map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.extension_states.remove(&id);
     config.extensions.remove(&id);
     let _ = config.save();
@@ -249,7 +249,7 @@ pub async fn save_store_url(
     url: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.store_url = url.filter(|s| !s.is_empty());
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Store URL updated");
@@ -305,9 +305,10 @@ pub async fn store_get_catalog(
     page: Option<u32>,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let config = state.config.lock().await;
-    let base_url = resolve_store_url(&config, state.dev_mode);
-    drop(config);
+    let base_url = {
+        let config = state.config.lock().unwrap();
+        resolve_store_url(&config, state.dev_mode)
+    };
 
     if base_url.is_empty() {
         // No store configured — return empty catalog
@@ -346,9 +347,10 @@ pub async fn store_get_detail(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
-    let config = state.config.lock().await;
-    let base_url = resolve_store_url(&config, state.dev_mode);
-    drop(config);
+    let base_url = {
+        let config = state.config.lock().unwrap();
+        resolve_store_url(&config, state.dev_mode)
+    };
 
     if base_url.is_empty() {
         return Err("No store URL configured".to_string());
@@ -375,9 +377,10 @@ pub async fn store_install(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, String> {
-    let config = state.config.lock().await;
-    let base_url = resolve_store_url(&config, state.dev_mode);
-    drop(config);
+    let base_url = {
+        let config = state.config.lock().unwrap();
+        resolve_store_url(&config, state.dev_mode)
+    };
 
     if base_url.is_empty() {
         return Err("No store URL configured".to_string());
@@ -395,9 +398,10 @@ pub async fn check_extension_updates(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
-    let config = state.config.lock().await;
-    let base_url = resolve_store_url(&config, state.dev_mode);
-    drop(config);
+    let base_url = {
+        let config = state.config.lock().unwrap();
+        resolve_store_url(&config, state.dev_mode)
+    };
 
     if base_url.is_empty() {
         return Ok(serde_json::json!({ "updated": 0, "checked": 0 }));
@@ -407,9 +411,10 @@ pub async fn check_extension_updates(
 
     // Gather all installed items
     let mut installed: Vec<(String, String, String)> = Vec::new(); // (id, version, kind)
-    let config = state.config.lock().await;
-    let states = config.extension_states.clone();
-    drop(config);
+    let states = {
+        let config = state.config.lock().unwrap();
+        config.extension_states.clone()
+    };
 
     for kind in &["extension", "theme", "commands"] {
         let items = extensions::discover_items(kind, None, &states);
@@ -481,7 +486,7 @@ pub async fn check_extension_updates(
     }
 
     // Update the last check timestamp
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.last_extension_update_check = Some(chrono::Utc::now().to_rfc3339());
     let _ = config.save();
     drop(config);
@@ -519,7 +524,7 @@ async fn store_install_inner(
 
     let _ = std::fs::remove_file(&zip_path);
 
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);

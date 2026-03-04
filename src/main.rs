@@ -166,7 +166,7 @@ fn main() {
     let dev_mode_for_setup = dev_mode;
 
     let acp_client_arc = Arc::new(Mutex::new(acp_client));
-    let config_arc = Arc::new(Mutex::new(config));
+    let config_arc = Arc::new(std::sync::Mutex::new(config));
     let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
     let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
     let available_models_arc = Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
@@ -349,14 +349,17 @@ fn main() {
                 let config_arc = state.config.clone();
                 let tts_proc = state.pocket_tts_process.clone();
                 tauri::async_runtime::spawn(async move {
-                    let config = config_arc.lock().await;
-                    let port = config.pocket_tts.port;
-                    let voice = config.pocket_tts.voice.clone();
-                    let temp = config.pocket_tts.temp;
-                    let eos_threshold = config.pocket_tts.eos_threshold;
-                    let python = config.pocket_tts.python_path.clone()
-                        .unwrap_or_else(|| "python".to_string());
-                    drop(config);
+                    let (port, voice, temp, eos_threshold, python) = {
+                        let config = config_arc.lock().unwrap();
+                        (
+                            config.pocket_tts.port,
+                            config.pocket_tts.voice.clone(),
+                            config.pocket_tts.temp,
+                            config.pocket_tts.eos_threshold,
+                            config.pocket_tts.python_path.clone()
+                                .unwrap_or_else(|| "python".to_string()),
+                        )
+                    };
 
                     let script_path = commands::pocket_tts::get_server_script_path();
                     if !script_path.exists() {
@@ -432,7 +435,7 @@ fn main() {
                     }
                     info!("Creating default session on launch...");
                     let cwd = {
-                        let cfg = config_arc.lock().await;
+                        let cfg = config_arc.lock().unwrap();
                         cfg.acp.assistant.working_directory.clone()
                     };
                     match client.create_session(cwd) {
@@ -458,21 +461,24 @@ fn main() {
 
                             // Apply default model BEFORE steering (fast round-trip, don't block on LLM)
                             {
-                                let cfg = config_arc.lock().await;
-                                if let Some(ref default_model) = cfg.acp.assistant.default_model {
-                                    if !default_model.is_empty() {
-                                        info!("Applying default model: {}", default_model);
+                                let default_model = {
+                                    let cfg = config_arc.lock().unwrap();
+                                    cfg.acp.assistant.default_model.clone()
+                                };
+                                if let Some(ref model) = default_model {
+                                    if !model.is_empty() {
+                                        info!("Applying default model: {}", model);
                                         let request = crate::acp_client::AcpRequest {
                                             jsonrpc: "2.0".to_string(),
                                             id: serde_json::json!(4),
                                             method: "_kiro.dev/commands/execute".to_string(),
                                             params: serde_json::json!({
                                                 "sessionId": session_id,
-                                                "command": { "command": "model", "args": { "modelName": default_model } }
+                                                "command": { "command": "model", "args": { "modelName": model } }
                                             }),
                                         };
                                         match client.send_request(&request) {
-                                            Ok(_) => info!("Default model applied: {}", default_model),
+                                            Ok(_) => info!("Default model applied: {}", model),
                                             Err(e) => error!("Failed to apply default model: {}", e),
                                         }
                                     }
@@ -480,36 +486,38 @@ fn main() {
                             }
 
                             // Send steering content as the first hidden message
-                            let cfg = config_arc.lock().await;
-                            let assistant = &cfg.acp.assistant;
-                            let mut steering_parts: Vec<String> = Vec::new();
+                            let steering_parts = {
+                                let cfg = config_arc.lock().unwrap();
+                                let assistant = &cfg.acp.assistant;
+                                let mut parts: Vec<String> = Vec::new();
 
-                            // Built-in steering (always first)
-                            steering_parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
+                                // Built-in steering (always first)
+                                parts.push(crate::commands::system::BUILTIN_STEERING.to_string());
 
-                            // User steering (precedence)
-                            if let Some(ref path) = assistant.user_steering_path {
-                                if !path.is_empty() {
-                                    if let Ok(content) = std::fs::read_to_string(path) {
-                                        if !content.trim().is_empty() {
-                                            steering_parts.push(content);
-                                        }
-                                    }
-                                }
-                            }
-                            // Auto steering
-                            if assistant.auto_steering_enabled {
-                                if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
-                                    if auto_path.exists() {
-                                        if let Ok(content) = std::fs::read_to_string(&auto_path) {
+                                // User steering (precedence)
+                                if let Some(ref path) = assistant.user_steering_path {
+                                    if !path.is_empty() {
+                                        if let Ok(content) = std::fs::read_to_string(path) {
                                             if !content.trim().is_empty() {
-                                                steering_parts.push(content);
+                                                parts.push(content);
                                             }
                                         }
                                     }
                                 }
-                            }
-                            drop(cfg);
+                                // Auto steering
+                                if assistant.auto_steering_enabled {
+                                    if let Ok(auto_path) = crate::config::Config::get_auto_steering_path() {
+                                        if auto_path.exists() {
+                                            if let Ok(content) = std::fs::read_to_string(&auto_path) {
+                                                if !content.trim().is_empty() {
+                                                    parts.push(content);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                parts
+                            };
 
                             {
                                 let steering_msg = format!(

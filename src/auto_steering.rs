@@ -282,7 +282,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 /// Called from the message completion handler.
 pub fn maybe_generate_steering(
     client: Arc<tokio::sync::Mutex<AcpClient>>,
-    config: Arc<tokio::sync::Mutex<Config>>,
+    config: Arc<std::sync::Mutex<Config>>,
 ) {
     if !tick_message_counter() {
         return;
@@ -290,11 +290,12 @@ pub fn maybe_generate_steering(
 
     // Spawn a background task so we don't block the message flow
     tauri::async_runtime::spawn(async move {
-        let config = config.lock().await;
-        if !config.acp.assistant.auto_steering_enabled {
-            return;
+        {
+            let config = config.lock().unwrap();
+            if !config.acp.assistant.auto_steering_enabled {
+                return;
+            }
         }
-        drop(config);
 
         let client = client.lock().await;
         if !client.is_connected() {

@@ -117,14 +117,11 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 
 #[tauri::command]
 pub async fn pocket_tts_status(state: State<'_, AppState>) -> Result<PocketTtsStatus, String> {
-    let config = state.config.lock().await;
-    let port = config.pocket_tts.port;
-
-    let python_path = config
-        .pocket_tts
-        .python_path
-        .clone()
-        .or_else(|| find_python());
+    let (port, python_path) = {
+        let config = state.config.lock().unwrap();
+        let pp = config.pocket_tts.python_path.clone().or_else(|| find_python());
+        (config.pocket_tts.port, pp)
+    };
 
     let python_found = python_path.is_some();
     let installed = if let Some(ref py) = python_path {
@@ -149,7 +146,7 @@ pub async fn pocket_tts_install(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     let python = config
         .pocket_tts
         .python_path
@@ -284,18 +281,18 @@ pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<Str
 
 #[tauri::command]
 pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, String> {
-    let config = state.config.lock().await;
-    let port = config.pocket_tts.port;
-    let voice = config.pocket_tts.voice.clone();
-    let temp = config.pocket_tts.temp;
-    let eos_threshold = config.pocket_tts.eos_threshold;
-    let python = config
-        .pocket_tts
-        .python_path
-        .clone()
-        .or_else(|| find_python())
-        .ok_or_else(|| "Python 3 not found".to_string())?;
-    drop(config);
+    let (port, voice, temp, eos_threshold, python) = {
+        let config = state.config.lock().unwrap();
+        (
+            config.pocket_tts.port,
+            config.pocket_tts.voice.clone(),
+            config.pocket_tts.temp,
+            config.pocket_tts.eos_threshold,
+            config.pocket_tts.python_path.clone()
+                .or_else(|| find_python())
+                .ok_or_else(|| "Python 3 not found".to_string())?,
+        )
+    };
 
     // Check if already running
     if check_server_running(port).await {
@@ -403,9 +400,10 @@ pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, Strin
 
 #[tauri::command]
 pub async fn pocket_tts_voices(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let config = state.config.lock().await;
-    let port = config.pocket_tts.port;
-    drop(config);
+    let port = {
+        let config = state.config.lock().unwrap();
+        config.pocket_tts.port
+    };
 
     let url = format!("http://127.0.0.1:{}/voices", port);
     match reqwest::get(&url).await {
@@ -439,9 +437,10 @@ pub async fn pocket_tts_test(
     _text: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let config = state.config.lock().await;
-    let port = config.pocket_tts.port;
-    drop(config);
+    let port = {
+        let config = state.config.lock().unwrap();
+        config.pocket_tts.port
+    };
 
     // Just verify the server can handle a request — actual audio playback
     // happens in the frontend via fetch to the TTS server

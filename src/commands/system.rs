@@ -1,4 +1,4 @@
-﻿use crate::config::Config;
+use crate::config::Config;
 use crate::os;
 use crate::state::AppState;
 use log::{error, info};
@@ -14,7 +14,7 @@ pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(config.clone())
 }
 
@@ -30,7 +30,7 @@ pub async fn save_config(
         format!("Failed to save configuration: {}", e)
     })?;
 
-    let mut state_config = state.config.lock().await;
+    let mut state_config = state.config.lock().unwrap();
     *state_config = config.clone();
 
     info!("Configuration saved successfully");
@@ -70,7 +70,7 @@ pub async fn update_tool_policy(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     info!("Updating tool policy: {} -> {}", tool_title, policy);
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     if let Some(tool) = config
         .tool_permissions
         .tools
@@ -90,7 +90,7 @@ pub async fn remove_tool_permission(
     tool_title: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     config
         .tool_permissions
         .tools
@@ -144,7 +144,7 @@ pub async fn complete_first_run(
     launch_at_startup: bool,
     auto_update: bool,
 ) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
     if auto_update {
@@ -193,7 +193,7 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(!config.first_run_completed)
 }
 
@@ -267,7 +267,7 @@ pub async fn try_register_hotkey(
             info!("❌ Hotkey registration failed: {}", msg);
             // Try to re-register the old hotkey from config
             let state: tauri::State<'_, AppState> = app.state();
-            let config = state.config.lock().await;
+            let config = state.config.lock().unwrap();
             let old_hotkey = config.get_hotkey_string();
             drop(config);
             if let Some(floating) = app.get_webview_window("floating") {
@@ -296,7 +296,7 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
 
     // Re-register the global hotkey from config
     let state: tauri::State<'_, AppState> = app.state();
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     let hotkey_string = config.get_hotkey_string();
     drop(config);
     if let Some(floating) = app.get_webview_window("floating") {
@@ -519,7 +519,7 @@ pub fn compute_user_info() -> UserInfo {
 /// Returns None if no steering content is available.
 #[tauri::command]
 pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     let assistant = &config.acp.assistant;
 
     let mut parts: Vec<String> = Vec::new();
@@ -662,13 +662,13 @@ pub async fn download_and_install_update(
 
 #[tauri::command]
 pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().unwrap();
     Ok(crate::updater::was_just_updated(&config))
 }
 
 #[tauri::command]
 pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), String> {
-    let mut config = state.config.lock().await;
+    let mut config = state.config.lock().unwrap();
     crate::updater::clear_update_flag(&mut config);
     config.save().map_err(|e| format!("Failed to save: {}", e))
 }

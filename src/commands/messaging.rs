@@ -8,7 +8,7 @@ use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 pub fn setup_notification_handler(
     client: &crate::acp_client::AcpClient,
     app: &tauri::AppHandle,
-    state_config: std::sync::Arc<tokio::sync::Mutex<crate::config::Config>>,
+    state_config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pipe_stdin: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
     tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
@@ -168,7 +168,7 @@ fn write_raw_json_silent(
 fn handle_permission_notification(
     notification: &serde_json::Value,
     app_handle: &tauri::AppHandle,
-    config: &std::sync::Arc<tokio::sync::Mutex<crate::config::Config>>,
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pipe_stdin: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
     tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
@@ -200,7 +200,7 @@ fn handle_permission_notification(
     };
 
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let mut config_guard = async_runtime::block_on(config.lock());
+    let mut config_guard = config.lock().unwrap();
 
     let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
     if let Some(tool) = existing {
@@ -366,7 +366,7 @@ pub async fn send_permission_response(
     write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
 
     if option_id == "allow_always" {
-        let mut config = state.config.lock().await;
+        let mut config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
         if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
             tool.policy = "allow".to_string();
         }
@@ -560,7 +560,7 @@ pub async fn get_slash_command_options(
 pub async fn send_steering_message(
     state: State<'_, AppState>,
 ) -> Result<bool, String> {
-    let config = state.config.lock().await;
+    let config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
     let assistant = &config.acp.assistant;
 
     let mut parts: Vec<String> = Vec::new();

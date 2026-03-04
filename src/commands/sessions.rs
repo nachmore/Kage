@@ -552,7 +552,7 @@ pub async fn switch_acp_session(
         None => {
             info!("Creating new session");
             let cwd = {
-                let cfg = state.config.lock().await;
+                let cfg = state.config.lock().unwrap();
                 cfg.acp.assistant.working_directory.clone()
             };
             let (new_session_id, models_json) = client_guard
@@ -569,7 +569,7 @@ pub async fn switch_acp_session(
             }
 
             // Apply default model if configured
-            let cfg = state.config.lock().await;
+            let cfg = state.config.lock().unwrap();
             if let Some(ref default_model) = cfg.acp.assistant.default_model {
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);

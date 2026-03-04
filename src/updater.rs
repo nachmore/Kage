@@ -209,7 +209,7 @@ pub fn run_installer_and_exit(installer_path: &str, session_id: Option<&str>) ->
 /// but only actually hits the network once per day.
 pub fn start_update_loop(
     updater_state: Arc<UpdaterState>,
-    config: Arc<tokio::sync::Mutex<Config>>,
+    config: Arc<std::sync::Mutex<Config>>,
     app_handle: tauri::AppHandle,
 ) {
     let updater_for_idle = updater_state.clone();
@@ -222,34 +222,36 @@ pub fn start_update_loop(
         let mut first_check = true;
 
         loop {
-            let cfg = config.lock().await;
-            if !cfg.updates.auto_check {
-                drop(cfg);
+            let (auto_check, should_check, silent_update) = {
+                let cfg = config.lock().unwrap();
+                let auto = cfg.updates.auto_check;
+                let should = if !auto {
+                    false
+                } else if first_check {
+                    true
+                } else {
+                    cfg.updates.last_check_time.as_ref().map_or(true, |t| {
+                        chrono::DateTime::parse_from_rfc3339(t)
+                            .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
+                            .unwrap_or(true)
+                    })
+                };
+                let silent = cfg.updates.silent_update;
+                (auto, should, silent)
+            };
+
+            if !auto_check {
                 first_check = false;
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 continue;
             }
 
-            // Always check on first iteration (startup), then once per day after that
-            let should_check = if first_check {
-                true
-            } else {
-                cfg.updates.last_check_time.as_ref().map_or(true, |t| {
-                    chrono::DateTime::parse_from_rfc3339(t)
-                        .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
-                        .unwrap_or(true)
-                })
-            };
-
             if !should_check {
-                drop(cfg);
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 continue;
             }
 
             first_check = false;
-            let silent_update = cfg.updates.silent_update;
-            drop(cfg);
 
             // Check for update (blocking HTTP in spawn_blocking)
             let update_result = tauri::async_runtime::spawn_blocking(check_for_update).await;
@@ -315,14 +317,13 @@ pub fn start_update_loop(
                 continue;
             }
 
-            let cfg = config_for_idle.lock().await;
-            if !cfg.updates.silent_update {
+            let silent = {
+                let cfg = config_for_idle.lock().unwrap();
+                cfg.updates.silent_update
+            };
+            if !silent {
                 continue;
             }
-
-            // Get the current session ID for resume
-            let session_id = None::<String>; // Will be populated from floating_session_id
-            drop(cfg);
 
             if let Ok(path) = updater_for_idle.installer_path.lock() {
                 if let Some(ref installer) = *path {
@@ -336,7 +337,7 @@ pub fn start_update_loop(
                         let _ = cfg.save();
                     }
 
-                    if let Err(e) = run_installer_and_exit(installer, session_id.as_deref()) {
+                    if let Err(e) = run_installer_and_exit(installer, None) {
                         error!("Failed to run installer: {}", e);
                         updater_for_idle.update_ready.store(false, Ordering::SeqCst);
                     }

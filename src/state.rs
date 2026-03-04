@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 pub struct AppState {
     pub acp_client: Arc<Mutex<AcpClient>>,
-    pub config: Arc<Mutex<Config>>,
+    pub config: Arc<std::sync::Mutex<Config>>,
     pub app_launcher: Arc<Mutex<AppLauncher>>,
     #[allow(dead_code)]
     pub pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
