@@ -53,12 +53,15 @@
             color: var(--kiro-accent);
             border-bottom-color: var(--kiro-accent);
         }
-        .store-search {
-            padding: 12px 20px;
+        .store-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
             border-bottom: 1px solid var(--kiro-border-subtle);
         }
-        .store-search input {
-            width: 100%;
+        .store-toolbar input {
+            flex: 1;
             padding: 8px 12px;
             background: var(--kiro-bg-input);
             border: 1px solid var(--kiro-border);
@@ -67,35 +70,46 @@
             font-size: 13px;
             outline: none;
         }
-        .store-search input:focus {
+        .store-toolbar input:focus {
             border-color: var(--kiro-accent);
             box-shadow: 0 0 0 2px var(--kiro-accent-glow);
+        }
+        .store-filter-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: 6px;
+            border: 1px solid var(--kiro-border);
+            background: transparent;
+            color: var(--kiro-text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .store-filter-btn:hover {
+            border-color: var(--kiro-accent);
+            color: var(--kiro-text);
+        }
+        .store-filter-btn.active {
+            background: var(--kiro-accent);
+            border-color: var(--kiro-accent);
+            color: white;
         }
         .store-content {
             flex: 1;
             overflow-y: auto;
             padding: 16px 20px;
         }
-        .store-section-title {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--kiro-text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 12px;
-        }
         .store-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
             gap: 12px;
-            margin-bottom: 24px;
         }
         .store-card {
             background: var(--kiro-bg-elevated);
             border: 1px solid var(--kiro-border);
             border-radius: 8px;
             padding: 14px;
-            cursor: pointer;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
         .store-card:hover {
@@ -175,6 +189,15 @@
             background: transparent;
             color: #e55;
             border: 1px solid #e55;
+            font-size: 11px;
+        }
+        .store-card-btn.uninstall:hover {
+            background: rgba(238, 85, 85, 0.1);
+        }
+        .store-card-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
         }
         .store-empty {
             text-align: center;
@@ -193,13 +216,8 @@
         .store-settings-link {
             padding: 12px 20px;
             border-top: 1px solid var(--kiro-border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
         }
-        .store-settings-link details {
-            width: 100%;
-        }
+        .store-settings-link details { width: 100%; }
         .store-settings-link summary {
             font-size: 12px;
             color: var(--kiro-text-muted);
@@ -236,17 +254,15 @@
             <h1>🛍️ Extension Store</h1>
         </div>
         <div class="store-tabs">
-            <div class="store-tab active" data-tab="installed" onclick="switchTab('installed')">Installed</div>
-            <div class="store-tab" data-tab="extensions" onclick="switchTab('extensions')">Extensions</div>
+            <div class="store-tab active" data-tab="extensions" onclick="switchTab('extensions')">Extensions</div>
             <div class="store-tab" data-tab="themes" onclick="switchTab('themes')">Themes</div>
             <div class="store-tab" data-tab="commands" onclick="switchTab('commands')">Quick Commands</div>
         </div>
-        <div class="store-search">
-            <input type="text" id="storeSearch" placeholder="Search extensions, themes, and commands..." oninput="onSearch()">
+        <div class="store-toolbar">
+            <input type="text" id="storeSearch" placeholder="Search..." oninput="onSearch()">
+            <button class="store-filter-btn" id="installedFilter" onclick="toggleInstalledFilter()">Installed only</button>
         </div>
-        <div class="store-content" id="storeContent">
-            <!-- Populated by JS -->
-        </div>
+        <div class="store-content" id="storeContent"></div>
         <div class="store-settings-link">
             <details>
                 <summary>Advanced: Custom store URL</summary>
@@ -260,11 +276,10 @@
     </div>
 
     <script>
-    let currentTab = 'installed';
-    let installedExtensions = [];
-    let installedThemes = [];
-    let installedPacks = [];
-    let _bundledManifests = [];
+    let currentTab = 'extensions';
+    let showInstalledOnly = false;
+    let installedIds = new Set();
+    let _bundledIds = new Set();
 
     function waitForTauri(cb) {
         if (window.__TAURI__?.core) cb();
@@ -274,17 +289,12 @@
     waitForTauri(async () => {
         const invoke = window.__TAURI__.core.invoke;
 
-        // Load bundled extension manifests
+        // Load bundled extension IDs
         try {
-            const bundledResp = await fetch('extensions/bundled.json');
-            if (bundledResp.ok) {
-                const bundledList = await bundledResp.json();
-                for (const entry of bundledList) {
-                    try {
-                        const mResp = await fetch(`extensions/${entry.id}/manifest.json`);
-                        if (mResp.ok) _bundledManifests.push(await mResp.json());
-                    } catch {}
-                }
+            const resp = await fetch('extensions/bundled.json');
+            if (resp.ok) {
+                const list = await resp.json();
+                for (const e of list) _bundledIds.add(e.id);
             }
         } catch {}
 
@@ -295,28 +305,39 @@
             else if (config.ui?.theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
                 document.body.classList.add('light-theme');
             }
-            // Load store URL
             const urlInput = document.getElementById('storeUrlInput');
             if (urlInput && config.store_url) urlInput.value = config.store_url;
         } catch {}
 
-        // Read initial tab from URL query param (set by open_store_window)
+        // Initial tab from URL param
         const urlParams = new URLSearchParams(window.location.search);
         const initialTab = urlParams.get('tab');
 
-        await loadInstalled();
-        if (initialTab) {
+        await refreshInstalled();
+        if (initialTab && ['extensions', 'themes', 'commands'].includes(initialTab)) {
             switchTab(initialTab);
         } else {
             renderTab();
         }
     });
 
-    async function loadInstalled() {
+    async function refreshInstalled() {
         const invoke = window.__TAURI__.core.invoke;
-        try { installedExtensions = await invoke('list_extensions'); } catch { installedExtensions = []; }
-        try { installedThemes = await invoke('list_themes'); } catch { installedThemes = []; }
-        try { installedPacks = await invoke('list_command_packs'); } catch { installedPacks = []; }
+        installedIds = new Set();
+        try {
+            const exts = await invoke('list_extensions');
+            exts.forEach(e => installedIds.add(e.manifest.id));
+        } catch {}
+        try {
+            const themes = await invoke('list_themes');
+            themes.forEach(e => installedIds.add(e.manifest.id));
+        } catch {}
+        try {
+            const packs = await invoke('list_command_packs');
+            packs.forEach(e => installedIds.add(e.manifest.id));
+        } catch {}
+        // Bundled extensions count as installed
+        _bundledIds.forEach(id => installedIds.add(id));
     }
 
     function switchTab(tab) {
@@ -327,86 +348,66 @@
         renderTab();
     }
 
-    function renderTab() {
-        const content = document.getElementById('storeContent');
-        if (currentTab === 'installed') {
-            renderInstalled(content);
-        } else {
-            content.innerHTML = '<div class="store-empty"><div class="store-loading-spinner"></div>Loading...</div>';
-            renderBrowse(content, currentTab);
-        }
+    function toggleInstalledFilter() {
+        showInstalledOnly = !showInstalledOnly;
+        document.getElementById('installedFilter').classList.toggle('active', showInstalledOnly);
+        renderTab();
     }
 
-    function renderInstalled(container) {
-        const all = [
-            ...installedExtensions.map(i => ({ ...i, _kind: 'extension' })),
-            ...installedThemes.map(i => ({ ...i, _kind: 'theme' })),
-            ...installedPacks.map(i => ({ ...i, _kind: 'commands' })),
-        ];
-
-        // Also show bundled extensions (loaded from bundled.json at init)
-        for (const bm of _bundledManifests) {
-            if (!all.find(a => a.manifest?.id === bm.id)) {
-                all.push({ manifest: bm, bundled: true, enabled: true, _kind: 'extension' });
-            }
-        }
-
-        if (all.length === 0) {
-            container.innerHTML = '<div class="store-empty"><div class="store-empty-icon">📦</div>No extensions installed yet.<br>Browse the store to find extensions.</div>';
-            return;
-        }
-
-        let html = '<div class="store-section-title">Installed</div><div class="store-grid">';
-        for (const item of all) {
-            const m = item.manifest;
-            html += `
-                <div class="store-card">
-                    <div class="store-card-header">
-                        <div class="store-card-icon">${esc(m.icon || '📦')}</div>
-                        <div>
-                            <div class="store-card-title">${esc(m.name)}</div>
-                            <div class="store-card-author">${esc(m.author || '')} · v${esc(m.version)}</div>
-                        </div>
-                    </div>
-                    <div class="store-card-desc">${esc(m.description || '')}</div>
-                    <div class="store-card-footer">
-                        <div class="store-card-tags">
-                            <span class="store-tag">${item._kind}</span>
-                            ${item.bundled ? '<span class="store-tag">bundled</span>' : ''}
-                        </div>
-                        ${item.bundled ? '<span class="store-card-btn installed">Built-in</span>' : `<button class="store-card-btn uninstall" onclick="uninstallItem('${m.id}','${item._kind}')">Uninstall</button>`}
-                    </div>
-                </div>
-            `;
-        }
-        html += '</div>';
-        container.innerHTML = html;
+    function renderTab() {
+        const content = document.getElementById('storeContent');
+        content.innerHTML = '<div class="store-empty"><div class="store-loading-spinner"></div>Loading...</div>';
+        renderBrowse(content, currentTab);
     }
 
     async function renderBrowse(container, type) {
         const invoke = window.__TAURI__.core.invoke;
         const search = document.getElementById('storeSearch')?.value || '';
+        const kind = type === 'commands' ? 'commands' : type === 'themes' ? 'theme' : 'extension';
+
         try {
-            const catalog = await invoke('store_get_catalog', { kind: type === 'commands' ? 'commands' : type === 'themes' ? 'theme' : 'extension', search: search || null, page: 1 });
-            if (!catalog.items || catalog.items.length === 0) {
-                container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">🔍</div>No ${type} found in the store.<br>Configure a store URL in the advanced settings below.</div>`;
+            const catalog = await invoke('store_get_catalog', { kind, search: search || null, page: 1 });
+            let items = catalog.items || [];
+
+            if (showInstalledOnly) {
+                items = items.filter(i => installedIds.has(i.id));
+            }
+
+            if (items.length === 0) {
+                const msg = showInstalledOnly
+                    ? `No installed ${type} found.`
+                    : `No ${type} found in the store.`;
+                container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">🔍</div>${msg}</div>`;
                 return;
             }
-            let html = `<div class="store-section-title">Browse ${type}</div><div class="store-grid">`;
-            for (const item of catalog.items) {
+
+            let html = '<div class="store-grid">';
+            for (const item of items) {
+                const isInstalled = installedIds.has(item.id);
+                const isBundled = _bundledIds.has(item.id);
+
+                let actionHtml;
+                if (isBundled) {
+                    actionHtml = '<span class="store-card-btn installed">Built-in</span>';
+                } else if (isInstalled) {
+                    actionHtml = `<button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${item.id}','${kind}')">Uninstall</button>`;
+                } else {
+                    actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();installFromStore('${item.id}')">Install</button>`;
+                }
+
                 html += `
                     <div class="store-card">
                         <div class="store-card-header">
                             <div class="store-card-icon">${esc(item.icon || '📦')}</div>
                             <div>
                                 <div class="store-card-title">${esc(item.name)}</div>
-                                <div class="store-card-author">${esc(item.author)} · v${esc(item.version)}</div>
+                                <div class="store-card-author">${esc(item.author || '')} · v${esc(item.version)}</div>
                             </div>
                         </div>
-                        <div class="store-card-desc">${esc(item.description)}</div>
+                        <div class="store-card-desc">${esc(item.description || '')}</div>
                         <div class="store-card-footer">
                             <div class="store-card-tags">${(item.tags||[]).map(t => `<span class="store-tag">${esc(t)}</span>`).join('')}</div>
-                            <button class="store-card-btn install" onclick="installFromStore('${item.id}')">Install</button>
+                            ${actionHtml}
                         </div>
                     </div>
                 `;
@@ -422,8 +423,8 @@
         const invoke = window.__TAURI__.core.invoke;
         try {
             await invoke('store_install', { id });
-            await loadInstalled();
-            switchTab('installed');
+            await refreshInstalled();
+            renderTab();
         } catch (e) {
             alert('Install failed: ' + e);
         }
@@ -434,7 +435,7 @@
         const invoke = window.__TAURI__.core.invoke;
         try {
             await invoke('uninstall_extension', { id, kind });
-            await loadInstalled();
+            await refreshInstalled();
             renderTab();
         } catch (e) {
             alert('Uninstall failed: ' + e);
@@ -472,7 +473,6 @@
         return d.innerHTML;
     }
 
-    // Ctrl+W to close
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'w') {
             e.preventDefault();

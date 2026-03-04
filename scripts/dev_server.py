@@ -166,16 +166,10 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
 # Mock store catalog data
 MOCK_CATALOG = [
-    {"id": "hello-world", "name": "Hello World", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Sample extension — type 'test' or 'hello' to see a greeting. Great starting template.", "icon": "👋", "downloads": 42, "rating": 5.0, "tags": ["sample", "template", "starter"]},
-    {"id": "solarized-theme", "name": "Solarized", "type": "theme", "version": "1.0.0", "author": "community", "description": "Precision colors for machines and people", "icon": "🌅", "downloads": 2340, "rating": 4.7, "tags": ["dark", "light", "classic"]},
-    {"id": "dracula-theme", "name": "Dracula", "type": "theme", "version": "1.0.0", "author": "community", "description": "A dark theme for code editors", "icon": "🧛", "downloads": 5120, "rating": 4.8, "tags": ["dark", "popular"]},
-    {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "downloads": 1890, "rating": 4.6, "tags": ["dark", "light", "blue", "minimal"]},
-    {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "downloads": 720, "rating": 4.5, "tags": ["dark", "light", "warm", "orange"]},
-    {"id": "web-dev-shortcuts", "name": "Web Dev Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Handy shortcuts for web developers — localhost, MDN, npm, caniuse", "icon": "🌐", "downloads": 890, "rating": 4.5, "tags": ["web", "developer", "shortcuts"]},
-    {"id": "git-shortcuts", "name": "Git Shortcuts", "type": "commands", "version": "1.0.0", "author": "community", "description": "Quick commands for common git operations", "icon": "🔀", "downloads": 1200, "rating": 4.4, "tags": ["git", "developer", "shortcuts"]},
-    {"id": "unit-converter", "name": "Unit Converter", "type": "extension", "version": "1.0.0", "author": "community", "description": "Convert between units — temperature, weight, distance, and more", "icon": "📏", "downloads": 670, "rating": 4.3, "tags": ["utility", "conversion"]},
-    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows domain, favicon, and path.", "icon": "🔗", "downloads": 1560, "rating": 4.7, "tags": ["utility", "formatting", "links"]},
-    {"id": "password-gen", "name": "Password Generator", "type": "extension", "version": "1.0.0", "author": "community", "description": "Generate secure passwords and passphrases", "icon": "🔐", "downloads": 1450, "rating": 4.6, "tags": ["security", "utility"]},
+    {"id": "hello-world", "name": "Hello World", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Sample extension — type 'test' or 'hello' to see a greeting. Great starting template.", "icon": "👋", "tags": ["sample", "template", "starter"]},
+    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows title, description, and favicon.", "icon": "🔗", "tags": ["utility", "formatting", "links"]},
+    {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "tags": ["dark", "light", "blue", "minimal"]},
+    {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
 ]
 
 
