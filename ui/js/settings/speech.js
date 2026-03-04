@@ -62,7 +62,7 @@ class SpeechSettingsModule extends SettingsModule {
 
                     <!-- Status + Setup (collapsible) -->
                     <div id="pocketTtsSetupSection">
-                        <div id="pocketTtsStatusBanner" class="setting-row" style="padding:10px 12px;border-radius:8px;background:var(--kiro-bg-secondary);margin-bottom:8px;cursor:pointer;" onclick="togglePocketTtsSetup()">
+                        <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kiro-bg-secondary);margin-bottom:8px;cursor:pointer;" onclick="togglePocketTtsSetup()">
                             <span id="pocketTtsStatusText" style="font-size:12px;">Checking...</span>
                             <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kiro-text-muted);">▼ Setup</span>
                         </div>

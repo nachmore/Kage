@@ -431,6 +431,11 @@ export class FloatingApp {
             }
             await this.appWindow.hide();
             this.dismissBanner();
+            // Hide response quick actions — if user didn't use them, they're stale
+            const responseActions = document.getElementById('responseActionsContainer');
+            if (responseActions) responseActions.style.display = 'none';
+            const floatingActions = document.getElementById('floatingResponseActions');
+            if (floatingActions) floatingActions.style.display = 'none';
         });
     }
 

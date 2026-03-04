@@ -1279,3 +1279,13 @@ body.light-theme .json-children { border-left-color: #e5e5e5; }
     color: var(--kiro-text, #cccccc);
     background: rgba(255,255,255,0.08);
 }
+
+
+/* TTS bar settings button — subtler than playback controls */
+.tts-settings-btn {
+    opacity: 0.4;
+    transition: opacity 0.15s;
+}
+.tts-settings-btn:hover {
+    opacity: 1;
+}
