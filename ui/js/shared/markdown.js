@@ -2,6 +2,7 @@
 
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
+const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 
 let graphvizInstance = null;
 async function getGraphviz() {
@@ -164,6 +165,10 @@ function _doRender(markdown, targetElement, streaming) {
         }
         if (HTML_LANGUAGES.has(language)) {
             renderHtmlPreview(codeBlock, pre);
+            return;
+        }
+        if (JSON_LANGUAGES.has(language)) {
+            renderJsonTree(codeBlock, pre, language);
             return;
         }
         if (language && language !== 'text' && Prism.languages[language]) {
@@ -572,6 +577,134 @@ function renderHtmlPreview(codeBlock, pre) {
         toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
         previewDiv.style.display = showing ? 'none' : '';
     };
+}
+
+// --- JSON Tree Renderer ---
+
+function renderJsonTree(codeBlock, pre, language) {
+    const code = codeBlock.textContent;
+    let parsed;
+    try {
+        parsed = JSON.parse(code);
+    } catch {
+        // Not valid JSON — fall back to regular code block
+        wrapCodeBlock(codeBlock, pre, language);
+        return;
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper json-tree-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = 'JSON';
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    const treeDiv = document.createElement('div');
+    treeDiv.className = 'json-tree-content';
+    treeDiv.appendChild(_buildJsonNode(parsed, true));
+
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    sPre.style.margin = '0';
+    const sCode = document.createElement('code');
+    sCode.textContent = JSON.stringify(parsed, null, 2);
+    if (Prism.languages.json) {
+        try { sCode.innerHTML = Prism.highlight(JSON.stringify(parsed, null, 2), Prism.languages.json, 'json'); } catch {}
+    }
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(treeDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Tree' : 'Source';
+        treeDiv.style.display = showing ? 'none' : '';
+    };
+}
+
+function _buildJsonNode(value, expanded = false) {
+    if (value === null) return _jsonLeaf('null', 'json-null');
+    if (typeof value === 'boolean') return _jsonLeaf(String(value), 'json-bool');
+    if (typeof value === 'number') return _jsonLeaf(String(value), 'json-number');
+    if (typeof value === 'string') return _jsonLeaf(`"${_escJsonStr(value)}"`, 'json-string');
+
+    const isArray = Array.isArray(value);
+    const entries = isArray ? value.map((v, i) => [String(i), v]) : Object.entries(value);
+
+    const node = document.createElement('div');
+    node.className = 'json-node';
+
+    const toggle = document.createElement('span');
+    toggle.className = 'json-toggle' + (expanded ? ' open' : '');
+    toggle.textContent = expanded ? '▼' : '▶';
+
+    const bracket = document.createElement('span');
+    bracket.className = 'json-bracket';
+    bracket.textContent = isArray ? `[${entries.length}]` : `{${entries.length}}`;
+
+    const header = document.createElement('div');
+    header.className = 'json-node-header';
+    header.appendChild(toggle);
+    header.appendChild(bracket);
+    node.appendChild(header);
+
+    const children = document.createElement('div');
+    children.className = 'json-children';
+    children.style.display = expanded ? '' : 'none';
+
+    for (const [key, val] of entries) {
+        const row = document.createElement('div');
+        row.className = 'json-entry';
+        const keyEl = document.createElement('span');
+        keyEl.className = isArray ? 'json-index' : 'json-key';
+        keyEl.textContent = isArray ? `${key}: ` : `"${key}": `;
+        row.appendChild(keyEl);
+
+        const childNode = _buildJsonNode(val, false);
+        row.appendChild(childNode);
+        children.appendChild(row);
+    }
+
+    node.appendChild(children);
+
+    header.onclick = (e) => {
+        e.stopPropagation();
+        const open = children.style.display !== 'none';
+        children.style.display = open ? 'none' : '';
+        toggle.textContent = open ? '▶' : '▼';
+        toggle.classList.toggle('open', !open);
+    };
+
+    return node;
+}
+
+function _jsonLeaf(text, className) {
+    const el = document.createElement('span');
+    el.className = className;
+    el.textContent = text;
+    return el;
+}
+
+function _escJsonStr(s) {
+    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
 }
 
 // --- Shared utilities ---

@@ -1183,3 +1183,80 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     gap: 4px;
     margin-left: auto;
 }
+
+
+/* JSON Tree Viewer */
+.json-tree-content {
+    padding: 12px 16px;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+.json-node-header {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+}
+
+.json-node-header:hover {
+    opacity: 0.8;
+}
+
+.json-toggle {
+    font-size: 10px;
+    width: 14px;
+    text-align: center;
+    color: var(--kiro-text-muted, #888);
+    transition: transform 0.15s;
+}
+
+.json-bracket {
+    color: var(--kiro-text-muted, #888);
+    font-size: 12px;
+}
+
+.json-children {
+    padding-left: 20px;
+    border-left: 1px solid var(--kiro-border-subtle, #2b2b2b);
+    margin-left: 6px;
+}
+
+.json-entry {
+    padding: 1px 0;
+}
+
+.json-key {
+    color: #9cdcfe;
+}
+
+.json-index {
+    color: var(--kiro-text-muted, #888);
+}
+
+.json-string {
+    color: #ce9178;
+}
+
+.json-number {
+    color: #b5cea8;
+}
+
+.json-bool {
+    color: #569cd6;
+}
+
+.json-null {
+    color: #569cd6;
+    font-style: italic;
+}
+
+body.light-theme .json-key { color: #0451a5; }
+body.light-theme .json-string { color: #a31515; }
+body.light-theme .json-number { color: #098658; }
+body.light-theme .json-bool { color: #0000ff; }
+body.light-theme .json-null { color: #0000ff; }
+body.light-theme .json-children { border-left-color: #e5e5e5; }
