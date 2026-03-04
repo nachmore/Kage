@@ -456,6 +456,29 @@ fn main() {
                                 }
                             }
 
+                            // Apply default model BEFORE steering (fast round-trip, don't block on LLM)
+                            {
+                                let cfg = config_arc.lock().await;
+                                if let Some(ref default_model) = cfg.acp.assistant.default_model {
+                                    if !default_model.is_empty() {
+                                        info!("Applying default model: {}", default_model);
+                                        let request = crate::acp_client::AcpRequest {
+                                            jsonrpc: "2.0".to_string(),
+                                            id: serde_json::json!(4),
+                                            method: "_kiro.dev/commands/execute".to_string(),
+                                            params: serde_json::json!({
+                                                "sessionId": session_id,
+                                                "command": { "command": "model", "args": { "modelName": default_model } }
+                                            }),
+                                        };
+                                        match client.send_request(&request) {
+                                            Ok(_) => info!("Default model applied: {}", default_model),
+                                            Err(e) => error!("Failed to apply default model: {}", e),
+                                        }
+                                    }
+                                }
+                            }
+
                             // Send steering content as the first hidden message
                             let cfg = config_arc.lock().await;
                             let assistant = &cfg.acp.assistant;
@@ -500,27 +523,6 @@ fn main() {
                                 }
                             }
 
-                            // Apply default model if configured
-                            let cfg = config_arc.lock().await;
-                            if let Some(ref default_model) = cfg.acp.assistant.default_model {
-                                if !default_model.is_empty() {
-                                    info!("Applying default model: {}", default_model);
-                                    let request = crate::acp_client::AcpRequest {
-                                        jsonrpc: "2.0".to_string(),
-                                        id: serde_json::json!(4),
-                                        method: "_kiro.dev/commands/execute".to_string(),
-                                        params: serde_json::json!({
-                                            "sessionId": session_id,
-                                            "command": { "command": "model", "args": { "modelName": default_model } }
-                                        }),
-                                    };
-                                    match client.send_request(&request) {
-                                        Ok(_) => info!("Default model applied: {}", default_model),
-                                        Err(e) => error!("Failed to apply default model: {}", e),
-                                    }
-                                }
-                            }
-                            drop(cfg);
                         }
                         Err(e) => error!("Failed to create default session on launch: {}", e),
                     }
