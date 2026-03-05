@@ -322,4 +322,66 @@ impl AcpClient {
         err_str.contains("invalid conversation history")
             || err_str.contains("panicked")
     }
+
+    // --- Sub-agent invocation ---
+
+    /// Invoke a sub-agent with a specific task query.
+    /// The sub-agent runs in a fresh context and returns its result
+    /// through the normal streaming notification handler.
+    pub fn invoke_subagent(&self, query: &str) -> Result<()> {
+        let session_id = {
+            let guard = self.session_id.lock().unwrap();
+            if let Some(ref id) = *guard {
+                id.clone()
+            } else {
+                drop(guard);
+                let (id, _) = self.create_session(None)?;
+                self.send_builtin_steering();
+                id
+            }
+        };
+
+        info!("Invoking sub-agent with query: {}", &query[..query.len().min(100)]);
+
+        // Reset the streaming accumulator for this sub-agent's response
+        *self.streaming_accumulator.lock().unwrap() = String::new();
+
+        let command = serde_json::json!({
+            "command": "invoke_subagents",
+            "content": {
+                "subagents": [{
+                    "query": query
+                }]
+            }
+        });
+
+        let request = AcpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(2),
+            method: "session/prompt".to_string(),
+            params: serde_json::json!({
+                "sessionId": session_id,
+                "prompt": [{
+                    "type": "text",
+                    "text": serde_json::to_string(&command).unwrap_or_default()
+                }]
+            }),
+        };
+
+        let response = self.send_request(&request)?;
+
+        if let Some(error) = response.error {
+            let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
+            if detail.is_empty() {
+                anyhow::bail!("Sub-agent error: {}", error.message);
+            } else {
+                anyhow::bail!("Sub-agent error: {} — {}", error.message, detail);
+            }
+        }
+
+        // Get the accumulated response from the sub-agent
+        let result = self.streaming_accumulator.lock().unwrap().clone();
+        info!("Sub-agent completed ({} chars)", result.len());
+        Ok(())
+    }
 }

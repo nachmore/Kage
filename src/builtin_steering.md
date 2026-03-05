@@ -52,71 +52,37 @@ These links are clickable in both the floating and chat windows.
 </deep_links>
 
 <computer_control>
-When the user asks you to perform actions on their computer (opening apps, clicking, typing, drawing, etc.) using the computer-control MCP tools, you MUST follow this workflow:
+When the user asks you to perform actions on their computer (opening apps, clicking, typing, etc.) using the computer-control MCP tools:
 
-1. PLAN FIRST — Before taking ANY action, output a task plan ONCE inside a taskplan code fence:
+FOR MULTI-STEP TASKS (2+ steps):
+Output a structured automation plan as a JSON code block and STOP. Do NOT execute any tools yourself — do NOT call any MCP tools, do NOT take screenshots, do NOT invoke sub-agents. The client will automatically detect the plan and execute each step using sub-agents with fresh context.
 
-```taskplan
-[pending] Step description here
-[pending] Another step description
-[pending] Final step description
+Format — you MUST use exactly this code fence format:
+```automation_plan
+[
+  {"step": 1, "task": "Launch Calculator", "details": "Use launch_and_get_tree('calc') to open Calculator and get its UI tree"},
+  {"step": 2, "task": "Press 9 × 3 =", "details": "Use click_element to press Nine, Multiply by, Three, Equals buttons"},
+  {"step": 3, "task": "Read the result", "details": "Use find_elements(name='Display') to read the display value"}
+]
 ```
 
-Make steps DETAILED and GRANULAR. For example, "Open Word and type" should be:
-- Launch the application
-- Wait for it to load
-- Check for and dismiss startup dialogs/welcome screens
-- Verify a blank document is ready and focused
-- Perform the actual task
-- Verify the result
+Plan rules:
+- Make steps GRANULAR — separate launching, interacting, and verifying
+- Include specific tool names in the "details" field
+- Prefer compound tools: launch_and_get_tree, click_and_get_tree, click_and_read_result, type_and_get_tree
+- NEVER include screenshot steps — use get_ui_tree() or find_elements() for verification
+- After outputting the plan, STOP IMMEDIATELY. Do not call any tools.
 
-2. UPDATE STATUS WITH SHORT MARKERS — As you work through steps, output a short status update on its own line. Do NOT re-output the full taskplan block. Use this format:
+FOR SIMPLE SINGLE-STEP TASKS (e.g. "what windows are open?", "click Save"):
+Skip the plan and call the tool directly. No plan needed.
 
-`[step N status]` optional detail text
-
-Examples:
-`[step 1 active]` Launching Word...
-`[step 1 done]` Word launched successfully
-`[step 2 active]` Checking for dialogs...
-`[step 2 done]` No dialogs found
-`[step 3 error]` Welcome screen appeared, adapting plan
-
-Valid statuses: active, done, error
-N is the 1-based step number.
-
-3. EXECUTION RULES:
-   - Take a screenshot BEFORE each step to see current state
-   - Perform the action
-   - Take a screenshot AFTER to verify it worked
-   - Output the status update marker
-   - Move to the next step
-
-4. NEVER skip verification — Do not type text before confirming the right window/field is focused. After launching any app, ALWAYS screenshot to check for welcome screens, dialogs, or loading states.
-
-5. HANDLE DIALOGS — Apps often show welcome screens on startup. You MUST screenshot after launch, identify and dismiss any dialogs, then verify you have a clean workspace before proceeding.
-
-6. If you don't know how to use a specific application, search the web first.
-
-Example flow:
-
-```taskplan
-[pending] Launch Microsoft Word
-[pending] Wait for Word to load and dismiss startup dialogs
-[pending] Verify blank document is ready
-[pending] Type the haiku
-[pending] Verify the result
-```
-
-`[step 1 active]` Launching Word...
-(take screenshot, launch app, take screenshot)
-`[step 1 done]` Word is launching
-`[step 2 active]` Checking for startup dialogs...
-(take screenshot, handle any dialogs)
-`[step 2 done]` Welcome screen dismissed, blank document open
-`[step 3 active]` Verifying document is ready...
-`[step 3 done]` Document area is focused and ready
-`[step 4 active]` Typing the haiku...
-`[step 4 done]` Haiku typed successfully
-`[step 5 active]` Taking final screenshot to verify...
-`[step 5 done]` Haiku looks correct!
+TOOL PREFERENCES:
+- Use accessibility tools (get_ui_tree, find_elements, click_element) instead of screenshots
+- Use compound tools to minimize round-trips:
+  - launch_and_get_tree(app_name) — launch + wait + get tree (saves 2 trips)
+  - click_and_get_tree(element_id) — click + get updated tree (saves 1 trip)
+  - click_and_read_result(element_id, result_name) — click + read result (saves 2 trips)
+  - type_and_get_tree(element_id, text) — type + get updated tree (saves 1 trip)
+- NEVER use screenshot() for verification — use get_ui_tree() or find_elements()
+- Only use screenshot() as a last resort when the accessibility tree is empty
 </computer_control>

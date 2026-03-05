@@ -1,10 +1,10 @@
 // Main application logic
 import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './suggestions.js';
 import { WindowManager } from './window.js';
-import { renderMarkdown } from '../shared/markdown.js';
+import { renderMarkdown, createTaskPlanElement } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -1095,6 +1095,31 @@ export class FloatingApp {
                 }
             }
         }
+
+        // Detect complete automation plan during streaming and execute immediately
+        if (!this._automationPlanStarted) {
+            const completePlan = detectAutomationPlan(this.currentResponse);
+            if (completePlan) {
+                this._automationPlanStarted = true;
+                this._executeAutomationPlan(completePlan);
+                return;
+            }
+
+            // Show tasks incrementally as they stream in
+            const partialPlan = detectAutomationPlanIncremental(this.currentResponse);
+            if (partialPlan) {
+                this._automationPlan = partialPlan;
+                this._automationStatuses = {};
+                this._automationResults = {};
+                for (const s of partialPlan) this._automationStatuses[s.step] = 'pending';
+                this._renderAutomationPlan();
+                this.windowManager.resizeWindow();
+                return;
+            }
+        }
+
+        // If automation plan is running, don't overwrite the plan UI
+        if (this._automationPlanStarted) return;
         
         renderMarkdown(this.currentResponse, this.elements.responseText, true);
 
@@ -1122,6 +1147,9 @@ export class FloatingApp {
                 return;
             }
 
+            // If automation plan is running, don't overwrite the plan UI
+            if (this._automationPlanStarted) return;
+
             this.stopThinking();
             this.computerControlActive = false;
             this.elements.floatingStopBtn.style.display = 'none';
@@ -1129,6 +1157,14 @@ export class FloatingApp {
             this.updateDatetimeVisibility();
             const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
             if (streamingIndicator) streamingIndicator.remove();
+
+            // Check for automation plan in the response (fallback if not caught during streaming)
+            const plan = detectAutomationPlan(this.currentResponse);
+            if (plan && !this._automationPlanStarted) {
+                this._automationPlanStarted = true;
+                this._executeAutomationPlan(plan);
+                return;
+            }
 
             renderMarkdown(this.currentResponse, this.elements.responseText);
             await this.windowManager.resizeWindow();
@@ -1155,6 +1191,76 @@ export class FloatingApp {
                 }
             } catch { /* ignore */ }
         }
+
+    async _executeAutomationPlan(plan) {
+        // Render the plan as a task list immediately
+        this._automationPlan = plan;
+        this._automationStatuses = {};
+        this._automationResults = {};
+        for (const s of plan) this._automationStatuses[s.step] = 'pending';
+        this._renderAutomationPlan();
+        await this.windowManager.resizeWindow();
+
+        // Listen for step progress events
+        const stepStartUnlisten = await this.listen('automation_step_start', (event) => {
+            const { step } = event.payload;
+            this._automationStatuses[step] = 'running';
+            this._renderAutomationPlan();
+            this.windowManager.resizeWindow();
+        });
+
+        const stepCompleteUnlisten = await this.listen('automation_step_complete', (event) => {
+            const { step, success, result } = event.payload;
+            this._automationStatuses[step] = success ? 'done' : 'failed';
+            if (result) this._automationResults[step] = result.substring(0, 200);
+            this._renderAutomationPlan();
+            this.windowManager.resizeWindow();
+        });
+
+        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+            stepStartUnlisten();
+            stepCompleteUnlisten();
+            planCompleteUnlisten();
+            this._automationPlanStarted = false;
+            this.isWaitingForResponse = false;
+            this.elements.floatingStopBtn.style.display = 'none';
+            this.stopThinking();
+            this.computerControlActive = false;
+            this.updateDatetimeVisibility();
+            this._showFloatingResponseActions();
+            await this.windowManager.resizeWindow();
+            // Plan UI stays visible — don't overwrite it
+        });
+
+        // Execute the plan
+        try {
+            await this.invoke('execute_automation_plan', {
+                planJson: JSON.stringify(plan)
+            });
+        } catch (e) {
+            console.error('Automation plan execution failed:', e);
+            this.showError('Automation failed: ' + e);
+            stepStartUnlisten();
+            stepCompleteUnlisten();
+            planCompleteUnlisten();
+            this._automationPlanStarted = false;
+            this.isWaitingForResponse = false;
+        }
+    }
+
+    _renderAutomationPlan() {
+        if (!this._automationPlan) return;
+        const tasks = automationPlanToTasks(
+            this._automationPlan,
+            this._automationStatuses || {},
+            this._automationResults || {}
+        );
+        const wrapper = createTaskPlanElement(tasks);
+        this.elements.responseText.innerHTML = '';
+        this.elements.responseText.appendChild(wrapper);
+        this.elements.contentArea.classList.add('visible');
+        this.elements.expandBtn.classList.add('visible');
+    }
 
     _showFloatingResponseActions() {
         const bar = document.getElementById('floatingResponseActions');

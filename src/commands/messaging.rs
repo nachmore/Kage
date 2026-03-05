@@ -585,3 +585,122 @@ pub async fn get_available_models(
         "description": m.description,
     })).collect())
 }
+
+/// Execute an automation plan step by step using sub-agents.
+/// Each step is executed in a fresh sub-agent context, keeping the main
+/// session clean and avoiding context window bloat.
+///
+/// The plan is a JSON array of steps, each with "step", "task", and "details" fields.
+/// Progress events are emitted to the frontend as each step completes.
+#[tauri::command]
+pub async fn execute_automation_plan(
+    plan_json: String,
+    state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<(), String> {
+    info!("Executing automation plan");
+
+    // Parse the plan
+    let plan: Vec<serde_json::Value> = serde_json::from_str(&plan_json)
+        .map_err(|e| format!("Invalid plan JSON: {}", e))?;
+
+    if plan.is_empty() {
+        return Err("Empty plan".to_string());
+    }
+
+    let total_steps = plan.len();
+    info!("Plan has {} steps", total_steps);
+
+    // Emit plan start event
+    let _ = window.emit("automation_plan_start", serde_json::json!({
+        "totalSteps": total_steps,
+        "plan": plan,
+    }));
+
+    let client = state.acp_client.clone();
+
+    async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+
+        if !client.is_connected() {
+            if let Err(e) = client.connect() {
+                let _ = window.emit("automation_plan_error", format!("Unable to connect: {}", e));
+                return;
+            }
+        }
+
+        for (i, step) in plan.iter().enumerate() {
+            let step_num = i + 1;
+            let task = step.get("task").and_then(|t| t.as_str()).unwrap_or("Unknown task");
+            let details = step.get("details").and_then(|d| d.as_str()).unwrap_or("");
+
+            info!("Executing step {}/{}: {}", step_num, total_steps, task);
+
+            // Emit step start event
+            let _ = window.emit("automation_step_start", serde_json::json!({
+                "step": step_num,
+                "totalSteps": total_steps,
+                "task": task,
+                "details": details,
+            }));
+
+            // Build the sub-agent query with full context
+            let query = format!(
+                "You are a UI automation sub-agent. Execute this specific task:\n\n\
+                 Task: {}\n\
+                 Details: {}\n\n\
+                 RULES:\n\
+                 1. FIRST: Call get_app_steering(task='{}', details='{}') for app-specific tips.\n\
+                 2. Use computer-control MCP tools (prefer compound tools like \
+                 launch_and_get_tree, click_and_get_tree, click_and_read_result).\n\
+                 3. NEVER use screenshot() — use get_ui_tree() or find_elements() instead.\n\
+                 4. You MUST call at least one tool. Do NOT claim success without tool evidence.\n\
+                 5. Report the ACTUAL tool output. If a tool returns an error, report the error.\n\
+                 6. Do NOT fabricate or hallucinate results. Only report what tools actually returned.\n\
+                 7. If the task fails, say FAILED and explain why with the actual error message.\n\
+                 8. Be concise — just report what happened.",
+                task, details, task, details
+            );
+
+            // Invoke the sub-agent
+            match client.invoke_subagent(&query) {
+                Ok(()) => {
+                    let result = client.streaming_accumulator.lock().unwrap().clone();
+                    info!("Step {}/{} completed: {} chars", step_num, total_steps, result.len());
+
+                    let _ = window.emit("automation_step_complete", serde_json::json!({
+                        "step": step_num,
+                        "totalSteps": total_steps,
+                        "task": task,
+                        "result": result,
+                        "success": true,
+                    }));
+                }
+                Err(e) => {
+                    let error_msg = format!("{}", e);
+                    warn!("Step {}/{} failed: {}", step_num, total_steps, error_msg);
+
+                    let _ = window.emit("automation_step_complete", serde_json::json!({
+                        "step": step_num,
+                        "totalSteps": total_steps,
+                        "task": task,
+                        "result": error_msg,
+                        "success": false,
+                    }));
+
+                    // Don't stop on failure — report and continue
+                    // The user can see which steps failed
+                }
+            }
+        }
+
+        // Emit plan complete event
+        let _ = window.emit("automation_plan_complete", serde_json::json!({
+            "totalSteps": total_steps,
+        }));
+
+        let _ = window.emit("message_complete", ());
+    });
+
+    Ok(())
+}

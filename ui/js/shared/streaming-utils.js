@@ -198,3 +198,78 @@ export function getSessionResetMessage(data) {
     }
     return 'Session was reset due to an error.';
 }
+
+
+/**
+ * Detect an automation plan in the LLM response text.
+ * Looks for a ```automation_plan JSON code block.
+ * @param {string} text - The response text to scan
+ * @returns {Array|null} Parsed plan array, or null if not found
+ */
+export function detectAutomationPlan(text) {
+    if (!text) return null;
+    // Match complete ```automation_plan ... ``` blocks
+    const regex = /```automation_plan\s*\n([\s\S]*?)```/;
+    const match = text.match(regex);
+    if (!match) return null;
+    try {
+        const parsed = JSON.parse(match[1].trim());
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].task) {
+            return parsed;
+        }
+    } catch { /* invalid JSON */ }
+    return null;
+}
+
+/**
+ * Incrementally parse automation plan steps from a streaming response.
+ * Extracts individual step objects as they appear, even before the JSON array is complete.
+ * @param {string} text - The streaming response text
+ * @returns {Array|null} Array of parsed steps so far, or null if no plan block detected
+ */
+export function detectAutomationPlanIncremental(text) {
+    if (!text || !text.includes('```automation_plan')) return null;
+
+    // Extract everything after the code fence opener
+    const fenceStart = text.indexOf('```automation_plan');
+    if (fenceStart === -1) return null;
+    const afterFence = text.substring(fenceStart + '```automation_plan'.length);
+
+    // Try to find individual step objects using regex
+    const stepRegex = /\{\s*"step"\s*:\s*(\d+)\s*,\s*"task"\s*:\s*"([^"]*)"(?:\s*,\s*"details"\s*:\s*"([^"]*)")?\s*\}/g;
+    const steps = [];
+    let match;
+    while ((match = stepRegex.exec(afterFence)) !== null) {
+        steps.push({
+            step: parseInt(match[1]),
+            task: match[2],
+            details: match[3] || ''
+        });
+    }
+
+    return steps.length > 0 ? steps : null;
+}
+
+/**
+ * Convert an automation plan + statuses into the taskplan format
+ * used by createTaskPlanElement.
+ * @param {Array} plan - Array of { step, task, details }
+ * @param {Object} stepStatuses - Map of step number to status ('pending'|'running'|'done'|'failed')
+ * @param {Object} stepResults - Map of step number to result text
+ * @returns {Array<{status: string, description: string, detail: string}>}
+ */
+export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {}) {
+    return plan.map(s => {
+        const rawStatus = stepStatuses[s.step] || 'pending';
+        // Map our statuses to taskplan statuses
+        const statusMap = { pending: 'pending', running: 'active', done: 'done', failed: 'error' };
+        const status = statusMap[rawStatus] || 'pending';
+        const result = stepResults[s.step] || '';
+        // Combine details and result for the detail field
+        let detail = s.details || '';
+        if (result) {
+            detail = result.substring(0, 300);
+        }
+        return { status, description: s.task, detail };
+    });
+}

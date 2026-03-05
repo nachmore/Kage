@@ -628,6 +628,7 @@ fn main() {
             commands::pocket_tts_stop,
             commands::pocket_tts_voices,
             commands::pocket_tts_test,
+            commands::execute_automation_plan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

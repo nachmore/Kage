@@ -108,6 +108,22 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
 function _doRender(markdown, targetElement, streaming) {
     _lastRenderTime.set(targetElement, Date.now());
 
+    // During streaming, if we detect an incomplete automation_plan block,
+    // don't render it as raw code — the app's handleMessageChunk will render
+    // the task list incrementally. Just show nothing for the plan portion.
+    if (streaming && markdown.includes('```automation_plan')) {
+        const completeBlock = /```automation_plan\s*\n[\s\S]*?\n```/.test(markdown);
+        if (!completeBlock) {
+            // Block is still being streamed — strip it and render any text before it
+            const beforeBlock = markdown.split('```automation_plan')[0].trim();
+            if (beforeBlock) {
+                targetElement.innerHTML = marked.parse(beforeBlock, { breaks: true });
+            }
+            // Don't render anything for the incomplete block — the app handles it
+            return;
+        }
+    }
+
     // Deduplicate taskplan blocks at the source level — keep only the last one.
     // The agent re-outputs the full taskplan block each time it updates status,
     // so we strip all but the final occurrence to avoid showing stale versions.
@@ -162,6 +178,24 @@ function _doRender(markdown, targetElement, streaming) {
         if (language === 'taskplan') {
             renderTaskPlan(codeBlock, pre);
             return;
+        }
+        if (language === 'automation_plan') {
+            // Render as a pending task list during streaming
+            try {
+                const plan = JSON.parse(codeBlock.textContent.trim());
+                if (Array.isArray(plan) && plan.length > 0 && plan[0].task) {
+                    const tasks = plan.map(s => ({
+                        status: 'pending',
+                        description: s.task,
+                        detail: s.details || ''
+                    }));
+                    const wrapper = createTaskPlanElement(tasks);
+                    wrapper.dataset.automationPlan = 'true';
+                    pre.parentNode.insertBefore(wrapper, pre);
+                    pre.remove();
+                    return;
+                }
+            } catch { /* fall through to default rendering */ }
         }
         if (HTML_LANGUAGES.has(language)) {
             renderHtmlPreview(codeBlock, pre);

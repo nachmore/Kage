@@ -1,6 +1,30 @@
-# Computer Control MCP Server
+# Computer Control MCP Server v2 — Accessibility-First
 
-An MCP server that gives an AI agent the ability to control your computer — move the mouse, click, type, press key combos, take screenshots, and launch apps.
+An MCP server that gives an AI agent structured access to desktop UI elements
+through OS accessibility APIs, with mouse/keyboard/screenshot fallback.
+
+## How it works
+
+Instead of taking screenshots and guessing pixel coordinates, the agent reads
+a structured tree of UI elements (buttons, menus, text fields, etc.) and
+interacts with them directly through the OS accessibility API.
+
+```
+Agent: get_ui_tree()
+→ [window] "Notepad" {e1}
+    [menubar] {e2}
+      [menuitem] "File" {e3} actions=[invoke]
+    [edit] "Text Editor" {e4} value="" actions=[set_value]
+
+Agent: click_element("e3")
+→ Invoked [menuitem] 'File'
+
+Agent: get_ui_tree()
+→ [menu] "File" {e10}
+    [menuitem] "New" {e11} actions=[invoke]
+    [menuitem] "Open..." {e12} actions=[invoke]
+    [menuitem] "Save" {e13} actions=[invoke]
+```
 
 ## Setup
 
@@ -8,15 +32,18 @@ An MCP server that gives an AI agent the ability to control your computer — mo
 - Python 3.10+
 - `uv` (recommended) or `pip`
 
-### Install dependencies
+### Install
 ```bash
 cd mcp-servers/computer-control
 uv pip install -e .
 ```
 
-### Add to MCP config
+This installs `uiautomation` on Windows automatically. macOS and Linux
+providers are stubbed out (contributions welcome).
 
-Add this to your `~/.kiro/settings/mcp.json` (or workspace `.kiro/settings/mcp.json`):
+### MCP config
+
+Add to `~/.kiro/settings/mcp.json`:
 
 ```json
 {
@@ -32,48 +59,51 @@ Add this to your `~/.kiro/settings/mcp.json` (or workspace `.kiro/settings/mcp.j
 }
 ```
 
-Or if installed via pip/uv:
-```json
-{
-  "mcpServers": {
-    "computer-control": {
-      "command": "computer-control-mcp",
-      "disabled": false,
-      "autoApprove": []
-    }
-  }
-}
-```
+## Tools
 
-## Available Tools
+### Primary (accessibility-based)
 
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture full screen or a region (returns image) |
-| `get_screen_size` | Get primary monitor resolution |
-| `move_mouse` | Move cursor to absolute position |
-| `click` | Click at position (left/right/middle, single/double) |
-| `double_click` | Double-click at position |
-| `right_click` | Right-click at position |
-| `drag` | Click and drag between two points |
-| `scroll` | Scroll up/down |
-| `type_text` | Type a string of text |
-| `key_press` | Press key combos (e.g. `ctrl+s`) |
-| `key_press_confirmed` | Execute dangerous key combos after confirmation |
-| `launch_app` | Launch an application by name |
+| `get_ui_tree` | Get structured element tree for a window |
+| `find_elements` | Search for elements by name, role, or automation ID |
+| `get_focused_element` | Get the currently focused element |
+| `list_windows` | List all visible top-level windows |
+| `click_element` | Click/invoke an element by ID |
+| `set_value` | Set text/value on an element by ID |
+| `toggle_element` | Toggle a checkbox/switch by ID |
+| `select_element` | Select a list/tab item by ID |
+| `expand_element` | Expand a menu/tree node by ID |
+| `collapse_element` | Collapse a menu/tree node by ID |
+| `scroll_element` | Scroll within a container by ID |
+| `get_element_text` | Read text content from an element |
+
+### Fallback (coordinate/pixel-based)
+
+| Tool | Description |
+|------|-------------|
+| `screenshot` | Capture screen (use when tree is insufficient) |
+| `click` | Click at screen coordinates |
+| `type_text` | Type text via keyboard |
+| `key_press` | Press key combinations |
+| `key_press_confirmed` | Execute dangerous key combos |
+| `launch_app` | Start an application |
+| `drag` | Click and drag between points |
+| `scroll` | Scroll at coordinates |
+| `move_mouse` | Move cursor |
 | `wait` | Pause between actions |
-| `get_cursor_position` | Get current cursor position |
+| `get_cursor_position` | Get cursor position |
+| `get_screen_size` | Get monitor resolution |
 
-## Safety
+## Platform support
 
-Dangerous key combinations (like `alt+f4`, `ctrl+alt+delete`, `win+l`) are blocked by `key_press` and require the agent to explicitly call `key_press_confirmed` with `confirm=True`. This gives the tool permission system a chance to intervene.
+| Platform | Provider | Status |
+|----------|----------|--------|
+| Windows | UI Automation (IUIAutomation via comtypes) | ✅ Implemented |
+| macOS | Accessibility API (AXUIElement via pyobjc) | 🔲 Stub |
+| Linux | AT-SPI2 (D-Bus via pyatspi2) | 🔲 Stub |
 
-## How the agent uses it
+## Architecture
 
-1. User asks: "open paint and draw a circle"
-2. Agent calls `launch_app("mspaint")`
-3. Agent calls `wait(1000)` to let Paint open
-4. Agent calls `screenshot()` to see the current state
-5. Agent identifies the canvas area from the screenshot
-6. Agent uses `click`, `drag`, etc. to draw
-7. Agent calls `screenshot()` again to verify the result
+See [docs/COMPUTER_CONTROL_V2.md](../../docs/COMPUTER_CONTROL_V2.md) for the
+full design document.

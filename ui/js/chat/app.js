@@ -1,9 +1,9 @@
 // Expanded chat application logic
-import { renderMarkdown, initMarkdown } from '../shared/markdown.js';
+import { renderMarkdown, initMarkdown, createTaskPlanElement } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml } from '../shared/tool-utils.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -1202,6 +1202,36 @@ export class ChatApp {
         this.currentStreamingContent = event.payload;
         this.hideTypingIndicator();
 
+        // Detect complete automation plan during streaming and execute immediately
+        if (!this._automationPlanStarted) {
+            const completePlan = detectAutomationPlan(this.currentStreamingContent);
+            if (completePlan) {
+                this._automationPlanStarted = true;
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                this._executeAutomationPlan(completePlan, contentDiv);
+                return;
+            }
+
+            // Show tasks incrementally as they stream in
+            const partialPlan = detectAutomationPlanIncremental(this.currentStreamingContent);
+            if (partialPlan) {
+                this._automationPlan = partialPlan;
+                this._automationStatuses = {};
+                this._automationResults = {};
+                for (const s of partialPlan) this._automationStatuses[s.step] = 'pending';
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                const tasks = automationPlanToTasks(partialPlan, this._automationStatuses, {});
+                const wrapper = createTaskPlanElement(tasks);
+                contentDiv.innerHTML = '';
+                contentDiv.appendChild(wrapper);
+                this.scrollToBottom();
+                return;
+            }
+        }
+
+        // If automation plan is running, don't overwrite the plan UI
+        if (this._automationPlanStarted) return;
+
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
         renderMarkdown(this.currentStreamingContent, contentDiv, true);
 
@@ -1222,12 +1252,23 @@ export class ChatApp {
     async handleMessageComplete() {
             if (!this.isWaitingForResponse) return;
 
+            // If automation plan is running, don't overwrite the plan UI
+            if (this._automationPlanStarted) return;
+
             this.hideTypingIndicator();
 
             if (this.currentStreamingMessage) {
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
                 const indicator = contentDiv.querySelector('.streaming-indicator');
                 if (indicator) indicator.remove();
+
+                // Check for automation plan in the response (fallback if not caught during streaming)
+                const plan = detectAutomationPlan(this.currentStreamingContent);
+                if (plan && !this._automationPlanStarted) {
+                    this._automationPlanStarted = true;
+                    this._executeAutomationPlan(plan, contentDiv);
+                    return;
+                }
 
                 renderMarkdown(this.currentStreamingContent, contentDiv);
 
@@ -1344,6 +1385,75 @@ export class ChatApp {
             }
             sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
         }
+
+    async _executeAutomationPlan(plan, contentDiv) {
+        // Render the plan as a task list in the message
+        this._automationPlan = plan;
+        this._automationStatuses = {};
+        this._automationResults = {};
+        this._automationContentDiv = contentDiv;
+        for (const s of plan) this._automationStatuses[s.step] = 'pending';
+        this._renderAutomationPlanChat();
+        this.scrollToBottom();
+
+        // Listen for step progress events
+        const stepStartUnlisten = await this.listen('automation_step_start', (event) => {
+            const { step } = event.payload;
+            this._automationStatuses[step] = 'running';
+            this._renderAutomationPlanChat();
+            this.scrollToBottom();
+        });
+
+        const stepCompleteUnlisten = await this.listen('automation_step_complete', (event) => {
+            const { step, success, result } = event.payload;
+            this._automationStatuses[step] = success ? 'done' : 'failed';
+            if (result) this._automationResults[step] = result.substring(0, 200);
+            this._renderAutomationPlanChat();
+            this.scrollToBottom();
+        });
+
+        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+            stepStartUnlisten();
+            stepCompleteUnlisten();
+            planCompleteUnlisten();
+            this._automationPlanStarted = false;
+            this.messages.push({ role: 'assistant', content: '[Automation plan completed]' });
+            this.currentStreamingMessage = null;
+            this.currentStreamingContent = '';
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+            this.elements.chatInput.focus();
+            this.scrollToBottom();
+            this.loadSessions();
+            // Plan UI stays visible — don't overwrite it
+        });
+
+        // Execute the plan
+        try {
+            await this.invoke('execute_automation_plan', {
+                planJson: JSON.stringify(plan)
+            });
+        } catch (e) {
+            console.error('Automation plan execution failed:', e);
+            stepStartUnlisten();
+            stepCompleteUnlisten();
+            planCompleteUnlisten();
+            this.isWaitingForResponse = false;
+            this.updateInputState();
+        }
+    }
+
+    _renderAutomationPlanChat() {
+        if (!this._automationPlan || !this._automationContentDiv) return;
+        const tasks = automationPlanToTasks(
+            this._automationPlan,
+            this._automationStatuses || {},
+            this._automationResults || {}
+        );
+        const wrapper = createTaskPlanElement(tasks);
+        this._automationContentDiv.innerHTML = '';
+        this._automationContentDiv.appendChild(wrapper);
+    }
 
     // --- UI Helpers ---
 
