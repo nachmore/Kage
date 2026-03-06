@@ -462,7 +462,7 @@ pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
 
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
-pub async fn delete_session(session_id: String) -> Result<(), String> {
+pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
     let sessions_dir = get_sessions_dir()?;
 
     for ext in &["json", "jsonl", "lock"] {
@@ -484,6 +484,12 @@ pub async fn delete_session(session_id: String) -> Result<(), String> {
                 }
             }
         }
+    }
+
+    // Invalidate session list cache
+    {
+        let mut cache = state.session_cache.lock().unwrap();
+        *cache = None;
     }
 
     info!("Deleted session: {}", session_id);
@@ -600,6 +606,12 @@ pub async fn switch_acp_session(
                 let _ = client_guard.send_chat_streaming(&steering_msg, None);
             }
 
+            // Invalidate session list cache (new session was created)
+            {
+                let mut cache = state.session_cache.lock().unwrap();
+                *cache = None;
+            }
+
             Ok(new_session_id)
         }
     }
@@ -659,6 +671,7 @@ pub async fn restore_floating_session(
 pub async fn rename_session(
     session_id: String,
     title: String,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
     let title = title.trim().to_string();
     if title.is_empty() {
@@ -667,9 +680,15 @@ pub async fn rename_session(
 
     info!("Renaming session {} to: {}", session_id, title);
 
-    let mut cache = load_title_cache();
-    cache.insert(session_id, title);
-    save_title_cache(&cache);
+    let mut title_cache = load_title_cache();
+    title_cache.insert(session_id, title);
+    save_title_cache(&title_cache);
+
+    // Invalidate session list cache
+    {
+        let mut session_cache = state.session_cache.lock().unwrap();
+        *session_cache = None;
+    }
 
     Ok(())
 }
