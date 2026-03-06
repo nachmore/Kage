@@ -434,12 +434,13 @@ fn main() {
                 let state: tauri::State<'_, AppState> = app.state();
                 let launcher = state.app_launcher.clone();
                 tauri::async_runtime::spawn(async move {
-                    // Initial scan
-                    {
-                        let mut l = launcher.lock().await;
-                        if let Err(e) = l.refresh_registry() {
-                            log::error!("Background app scan failed: {}", e);
+                    // Initial scan — do the heavy work outside the lock
+                    match tauri::async_runtime::spawn_blocking(AppLauncher::build_registry).await {
+                        Ok(Ok(registry)) => {
+                            launcher.lock().await.apply_registry(registry);
                         }
+                        Ok(Err(e)) => log::error!("Background app scan failed: {}", e),
+                        Err(e) => log::error!("Background app scan task failed: {}", e),
                     }
                     // Periodic refresh every hour
                     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
@@ -447,9 +448,13 @@ fn main() {
                     loop {
                         interval.tick().await;
                         log::info!("Periodic app registry refresh");
-                        let mut l = launcher.lock().await;
-                        if let Err(e) = l.refresh_registry() {
-                            log::error!("Periodic app scan failed: {}", e);
+                        // Scan outside the lock so find_app calls aren't blocked
+                        match tauri::async_runtime::spawn_blocking(AppLauncher::build_registry).await {
+                            Ok(Ok(registry)) => {
+                                launcher.lock().await.apply_registry(registry);
+                            }
+                            Ok(Err(e)) => log::error!("Periodic app scan failed: {}", e),
+                            Err(e) => log::error!("Periodic app scan task failed: {}", e),
                         }
                     }
                 });
@@ -551,6 +556,8 @@ fn main() {
                     state.updater.clone(),
                     state.config.clone(),
                     app.handle().clone(),
+                    state.floating_session_id.clone(),
+                    state.acp_client.clone(),
                 );
             }
 

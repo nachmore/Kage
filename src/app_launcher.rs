@@ -26,53 +26,53 @@ impl AppLauncher {
         })
     }
 
-    /// Refresh the application registry by scanning the system
-    pub fn refresh_registry(&mut self) -> Result<()> {
-        info!("Refreshing application registry");
-        self.app_registry.clear();
-
-        // Use OS abstraction layer to scan applications
+    /// Build a new application registry by scanning the system.
+    /// This is the expensive part (registry reads, icon extraction, etc.)
+    /// and does not require `&self`, so it can run without holding the lock.
+    pub fn build_registry() -> Result<HashMap<String, Application>> {
+        info!("Scanning application registry");
+        let mut registry = HashMap::new();
         let apps = os::scan_applications()?;
-        
+
         for app_info in apps {
-            self.add_application(app_info.name, app_info.path, app_info.icon_path, app_info.emoji_icon, app_info.icon_data);
+            let normalized_name = app_info.name.to_lowercase();
+
+            let mut aliases = vec![normalized_name.clone()];
+            let no_spaces = normalized_name.replace(" ", "");
+            if no_spaces != normalized_name {
+                aliases.push(no_spaces);
+            }
+
+            let icon_base64 = app_info.icon_path.and_then(|path| os::extract_icon_base64(&path));
+            let final_icon = if app_info.icon_data.is_some() { app_info.icon_data } else { icon_base64 };
+
+            let app = Application {
+                name: app_info.name,
+                path: app_info.path,
+                aliases,
+                icon_base64: final_icon,
+                emoji_icon: app_info.emoji_icon,
+            };
+            registry.insert(normalized_name, app);
         }
 
-        info!("Application registry refreshed: {} apps found", self.app_registry.len());
-        Ok(())
+        info!("Application scan complete: {} apps found", registry.len());
+        Ok(registry)
     }
 
-    fn add_application(&mut self, name: String, path: PathBuf, icon_path: Option<String>, emoji_icon: Option<String>, icon_data: Option<String>) {
-        let normalized_name = name.to_lowercase();
-        
-        // Generate aliases (lowercase, without spaces, etc.)
-        let mut aliases = vec![normalized_name.clone()];
-        let no_spaces = normalized_name.replace(" ", "");
-        if no_spaces != normalized_name {
-            aliases.push(no_spaces);
-        }
+    /// Replace the current registry with a pre-built one.
+    /// This is cheap — just a pointer swap.
+    pub fn apply_registry(&mut self, registry: HashMap<String, Application>) {
+        self.app_registry = registry;
+    }
 
-        // Extract icon from path using OS abstraction
-        let icon_base64 = icon_path.and_then(|path| {
-            os::extract_icon_base64(&path)
-        });
-
-        // Use pre-computed icon data if available, otherwise extract from path
-        let final_icon = if icon_data.is_some() {
-            icon_data
-        } else {
-            icon_base64
-        };
-
-        let app = Application {
-            name: name.clone(),
-            path,
-            aliases,
-            icon_base64: final_icon,
-            emoji_icon,
-        };
-
-        self.app_registry.insert(normalized_name, app);
+    /// Refresh the application registry by scanning the system.
+    /// Convenience method that combines build + apply (holds `&mut self` for the full duration).
+    #[allow(dead_code)]
+    pub fn refresh_registry(&mut self) -> Result<()> {
+        let registry = Self::build_registry()?;
+        self.apply_registry(registry);
+        Ok(())
     }
 
     /// Find applications matching the query using fuzzy matching

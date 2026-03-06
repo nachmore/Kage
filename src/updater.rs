@@ -211,9 +211,13 @@ pub fn start_update_loop(
     updater_state: Arc<UpdaterState>,
     config: Arc<std::sync::Mutex<Config>>,
     app_handle: tauri::AppHandle,
+    floating_session_id: Arc<std::sync::Mutex<Option<String>>>,
+    acp_client: Arc<tokio::sync::Mutex<crate::acp_client::AcpClient>>,
 ) {
     let updater_for_idle = updater_state.clone();
     let config_for_idle = config.clone();
+    let floating_session_for_idle = floating_session_id;
+    let acp_client_for_idle = acp_client;
 
     tauri::async_runtime::spawn(async move {
         // Initial delay — let the app finish starting
@@ -337,7 +341,19 @@ pub fn start_update_loop(
                         let _ = cfg.save();
                     }
 
-                    if let Err(e) = run_installer_and_exit(installer, None) {
+                    // Resolve session ID: prefer floating session, fall back to ACP client's current session
+                    let session_id = floating_session_for_idle
+                        .lock()
+                        .ok()
+                        .and_then(|s| s.clone())
+                        .or_else(|| {
+                            acp_client_for_idle
+                                .try_lock()
+                                .ok()
+                                .and_then(|c| c.get_session_id())
+                        });
+
+                    if let Err(e) = run_installer_and_exit(installer, session_id.as_deref()) {
                         error!("Failed to run installer: {}", e);
                         updater_for_idle.update_ready.store(false, Ordering::SeqCst);
                     }
