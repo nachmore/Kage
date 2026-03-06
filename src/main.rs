@@ -665,7 +665,7 @@ fn main() {
             commands::check_extension_updates,
             commands::read_extension_file,
             commands::save_store_url,
-            commands::pocket_tts_status,
+            commands::pocket_tts_check_install,
             commands::pocket_tts_install,
             commands::pocket_tts_cancel_install,
             commands::pocket_tts_start,

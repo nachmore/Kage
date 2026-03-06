@@ -297,14 +297,25 @@ export class SpeechController {
     async _warmUpServer() {
         console.log('[Speech] _warmUpServer starting...');
         try {
-            // Check if already running via status endpoint
-            const status = await this.invoke('pocket_tts_status');
-            console.log('[Speech] Server status:', JSON.stringify(status));
-            if (status?.server_running) {
-                this._ttsServerReady = true;
-                this._onServerReady();
-                return;
-            }
+            // Fast check: hit the HTTP /status endpoint directly (instant if server is up,
+            // fails fast if not). Avoids the slow Tauri pocket_tts_check_install call which spawns
+            // a Python subprocess to check installation status — irrelevant here.
+            try {
+                const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    console.log('[Speech] Server /status fast check:', JSON.stringify(data));
+                    if (data.model_loaded) {
+                        if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
+                            console.log(`[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`);
+                            this.pocketTtsVoice = data.voices_loaded[0];
+                        }
+                        this._ttsServerReady = true;
+                        this._onServerReady();
+                        return;
+                    }
+                }
+            } catch { /* server not running — fall through to start it */ }
 
             // Start the server (fire-and-forget — this blocks in Rust until ready)
             console.log('[Speech] Starting Pocket TTS server...');
@@ -319,7 +330,7 @@ export class SpeechController {
                 if (this._warmupBar) { this._warmupBar.setStatus('Failed to start'); setTimeout(() => { if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; } }, 2000); }
             });
         } catch (e) {
-            console.warn('[Speech] Failed to check Pocket TTS status:', e);
+            console.warn('[Speech] Failed during warmup:', e);
             this._ttsState = 'idle';
             if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
         }
@@ -394,15 +405,21 @@ export class SpeechController {
         if (this._ttsState === 'warming') return; // Already starting
         if (this._ttsServerReady) return; // Already running
         try {
-            const status = await this.invoke('pocket_tts_status');
-            if (status?.server_running) { this._ttsServerReady = true; return; }
+            // Fast HTTP check instead of slow Tauri invoke (avoids Python subprocess)
+            const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data.model_loaded) { this._ttsServerReady = true; return; }
+            }
+        } catch { /* server not running */ }
 
+        try {
             console.log('[Speech] Pocket TTS server not running, starting on demand...');
             this.invoke('pocket_tts_start').then(() => {
                 setTimeout(() => { this._ttsServerReady = true; }, 1500);
             }).catch(e => console.warn('[Speech] Failed to start Pocket TTS:', e));
         } catch (e) {
-            console.warn('[Speech] Failed to check Pocket TTS status:', e);
+            console.warn('[Speech] Failed to start Pocket TTS:', e);
         }
     }
 

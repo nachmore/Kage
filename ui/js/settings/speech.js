@@ -306,7 +306,7 @@ class SpeechSettingsModule extends SettingsModule {
     async _refreshPocketStatus() {
         const invoke = window.__TAURI__.core.invoke;
         try {
-            this._pocketStatus = await invoke('pocket_tts_status');
+            this._pocketStatus = await invoke('pocket_tts_check_install');
             this._updatePocketUI();
             this._populatePocketVoices();
         } catch (e) {

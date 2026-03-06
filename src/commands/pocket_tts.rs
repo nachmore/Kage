@@ -116,7 +116,7 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 
 
 #[tauri::command]
-pub async fn pocket_tts_status(state: State<'_, AppState>) -> Result<PocketTtsStatus, String> {
+pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<PocketTtsStatus, String> {
     let (port, python_path) = {
         let config = state.config.lock().unwrap();
         let pp = config.pocket_tts.python_path.clone().or_else(|| find_python());
