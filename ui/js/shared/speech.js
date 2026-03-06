@@ -8,7 +8,7 @@
  *   this.speech.setup();
  */
 
-import { TtsStreamer, TtsPlaybackBar } from './tts-streamer.js';
+import { TtsStreamer, TtsPlaybackBar, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
 
 export class SpeechController {
     /**
@@ -66,6 +66,10 @@ export class SpeechController {
             this.pocketTtsPort = config.pocket_tts?.port || 9877;
             this.pocketTtsVoice = config.pocket_tts?.voice || 'alba';
             console.log('[Speech] Config loaded — pocketTtsEnabled:', this.pocketTtsEnabled, 'port:', this.pocketTtsPort, 'readBack:', this.readBack);
+            // Preload emoji name data if any TTS path is active
+            if (this.pocketTtsEnabled || this.readBack) {
+                preloadEmojiNames();
+            }
             if (this.elements.speechBtn) {
                 this.elements.speechBtn.style.display = show ? '' : 'none';
                 this.elements.speechBtn.dataset.configVisible = show ? 'true' : 'false';
@@ -229,7 +233,7 @@ export class SpeechController {
         console.log('[Speech] Using browser TTS path');
         // Browser TTS — cancel and restart
         this.cancelSpeech();
-        this._speakWithBrowser(clean);
+        this._speakWithBrowser(cleanForTts(clean));
     }
 
     /**

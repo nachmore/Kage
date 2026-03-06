@@ -7,8 +7,98 @@
  *   import { TtsStreamer, TtsPlaybackBar } from './tts-streamer.js';
  */
 
+// Lazy-loaded emoji name map — only fetched when TTS actually needs it
+let _emojiNames = null;
+let _emojiNamesLoading = false;
+
+/** Trigger lazy load of emoji names. Call early (e.g. on TTS warmup) so data
+ *  is ready by the time text needs cleaning. Non-blocking. */
+export function preloadEmojiNames() {
+    if (_emojiNames || _emojiNamesLoading) return;
+    _emojiNamesLoading = true;
+    import('../../vendor/lib/emoji-names.js').then(mod => {
+        _emojiNames = mod.emojiNames;
+    }).catch(() => {
+        _emojiNames = {}; // Fallback: emojis will just be stripped
+    });
+}
+
 // Sentence boundary regex
 const SENTENCE_RE = /(?<=[.!?])\s+(?=[A-Z\u00C0-\u024F"])/;
+
+// ─── TTS Text Preprocessing ───
+
+/** Common symbols that TTS engines mispronounce or skip */
+const SYMBOL_MAP = {
+    '→': ' then ',
+    '←': ' back to ',
+    '↔': ' between ',
+    '⇒': ' therefore ',
+    '⇐': ' implied by ',
+    '≥': ' greater than or equal to ',
+    '≤': ' less than or equal to ',
+    '≠': ' not equal to ',
+    '≈': ' approximately ',
+    '±': ' plus or minus ',
+    '×': ' times ',
+    '÷': ' divided by ',
+    '•': ', ',
+    '·': ', ',
+    '…': '...',
+    '—': ', ',
+    '–': ' to ',
+    '©': ' copyright ',
+    '®': ' registered ',
+    '™': ' trademark ',
+    '°': ' degrees ',
+    '✓': ' check ',
+    '✗': ' cross ',
+    '✔': ' check ',
+    '✘': ' cross ',
+    '★': ' star ',
+    '☆': ' star ',
+    '❤': ' heart ',
+    '∞': ' infinity ',
+};
+
+/**
+ * Clean text for TTS consumption:
+ * - Replace common symbols with spoken equivalents
+ * - Convert emojis to their spoken names (e.g. 👋 → "waving hand")
+ * - Clean up leftover whitespace
+ */
+export function cleanForTts(text) {
+    // Replace known symbols
+    for (const [sym, spoken] of Object.entries(SYMBOL_MAP)) {
+        text = text.replaceAll(sym, spoken);
+    }
+    // Replace emoji sequences with their spoken names, wrapped in commas for a natural pause.
+    // Consecutive emojis are grouped (e.g. 🤣🤣🤣 → ", rolling on the floor laughing x3,")
+    const emojiUnit = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
+    // Match one or more consecutive emoji (possibly separated by whitespace)
+    const emojiGroup = new RegExp(`(${emojiUnit.source})(\\s*(${emojiUnit.source}))*`, 'gu');
+    text = text.replace(emojiGroup, (match) => {
+        // Split the group into individual emoji
+        const singles = [...match.matchAll(emojiUnit)].map(m => m[0]);
+        // Count consecutive duplicates and build spoken parts
+        const parts = [];
+        let i = 0;
+        while (i < singles.length) {
+            const emoji = singles[i];
+            let count = 1;
+            while (i + count < singles.length && singles[i + count] === emoji) count++;
+            const name = _emojiNames?.[emoji];
+            if (name) {
+                parts.push(count > 1 ? `${name} times ${count}` : name);
+            }
+            i += count;
+        }
+        return parts.length ? `, ${parts.join(', ')}, ` : '';
+    });
+    // Collapse multiple spaces/commas from removals
+    text = text.replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
+    return text;
+}
 
 function splitSentences(text) {
     const clean = text
@@ -18,7 +108,10 @@ function splitSentences(text) {
         .replace(/\n+/g, '. ')
         .trim();
     if (!clean) return [];
-    const parts = clean.split(SENTENCE_RE).filter(s => s.trim().length > 0);
+    // Apply TTS-specific symbol/emoji cleanup
+    const ttsReady = cleanForTts(clean);
+    if (!ttsReady) return [];
+    const parts = ttsReady.split(SENTENCE_RE).filter(s => s.trim().length > 0);
     const merged = [];
     for (const part of parts) {
         if (merged.length > 0 && part.trim().length < 20) {
