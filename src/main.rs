@@ -109,6 +109,43 @@ fn main() {
         }
     });
 
+    // On Windows, create a Job Object that auto-kills all child processes
+    // when this process exits (even on crash). This prevents orphaned
+    // TTS servers, ACP CLI processes, etc.
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::System::JobObjects::*;
+        use windows::Win32::System::Threading::GetCurrentProcess;
+        use windows::core::PCWSTR;
+
+        unsafe {
+            match CreateJobObjectW(None, PCWSTR::null()) {
+                Ok(job) => {
+                    let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+                    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                    let set_ok = SetInformationJobObject(
+                        job,
+                        JobObjectExtendedLimitInformation,
+                        &info as *const _ as *const _,
+                        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                    );
+                    if set_ok.is_ok() {
+                        let current = GetCurrentProcess();
+                        match AssignProcessToJobObject(job, current) {
+                            Ok(_) => info!("✅ Job Object created — child processes will be killed on exit"),
+                            Err(e) => warn!("Failed to assign process to Job Object: {}", e),
+                        }
+                    } else {
+                        warn!("Failed to configure Job Object");
+                    }
+                    // Don't close the job handle — it needs to stay alive
+                    let _ = job;
+                }
+                Err(e) => warn!("Failed to create Job Object: {}", e),
+            }
+        }
+    }
+
     let mut config = Config::load().unwrap_or_else(|e| {
         error!("Failed to load config, using defaults: {}", e);
         eprintln!("Failed to load config, using defaults: {}", e);

@@ -1170,6 +1170,8 @@ export class ChatApp {
             };
             actions.querySelector('[data-action="speak"]').onclick = () => {
                 if (this.speech) {
+                    // Stop any existing speech before starting new one
+                    this.speech.cancelSpeech();
                     const text = contentDiv.textContent || '';
                     this.speech.usedSpeechForLastMessage = true;
                     this.speech.speakResponse(text);

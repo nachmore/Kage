@@ -98,7 +98,7 @@ class SpeechSettingsModule extends SettingsModule {
 
                         ${this.createCheckboxRow(
                             'Auto-Start Server',
-                            'Start the Pocket TTS server automatically when Kiro launches.',
+                            'Pre-start the Pocket TTS server when Kiro launches for faster first speech. If off, the server starts automatically on first use (with a brief delay).',
                             'pocketTtsAutoStart',
                             false
                         )}

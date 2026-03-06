@@ -35,9 +35,16 @@ voice_states = {}  # voice_name -> cached voice state
 current_generation = threading.Event()  # set = generation in progress
 cancel_flag = threading.Event()
 data_dir = None  # resolved at startup
+DEBUG = False  # set via --debug flag
 
 BUILTIN_VOICES = ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma"]
 SAMPLE_RATE = 24000  # pocket-tts default
+
+
+def dbg(msg):
+    """Print debug message if DEBUG is enabled."""
+    if DEBUG:
+        print(f"[pocket-tts DEBUG] {msg}", flush=True)
 
 
 def get_data_dir():
@@ -246,6 +253,7 @@ class TTSHandler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(length))
 
     def do_OPTIONS(self):
+        dbg(f"OPTIONS {self.path} from {self.client_address}")
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -253,6 +261,7 @@ class TTSHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        dbg(f"GET {self.path} from {self.client_address}")
         if self.path == "/status":
             self._json_response(200, {
                 "status": "ok",
@@ -266,28 +275,42 @@ class TTSHandler(BaseHTTPRequestHandler):
             self._json_response(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path == "/tts":
-            self._handle_tts()
-        elif self.path == "/stop":
-            cancel_flag.set()
-            self._json_response(200, {"status": "cancelled"})
-        elif self.path == "/export-voice":
-            self._handle_export_voice()
-        elif self.path == "/load-voice":
-            self._handle_load_voice()
-        else:
-            self._json_response(404, {"error": "not found"})
+        dbg(f"POST {self.path} from {self.client_address}")
+        try:
+            if self.path == "/tts":
+                self._handle_tts()
+            elif self.path == "/stop":
+                cancel_flag.set()
+                self._json_response(200, {"status": "cancelled"})
+            elif self.path == "/export-voice":
+                self._handle_export_voice()
+            elif self.path == "/load-voice":
+                self._handle_load_voice()
+            else:
+                self._json_response(404, {"error": "not found"})
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            pass
+        except Exception as e:
+            print(f"[pocket-tts] Unhandled POST error on {self.path}: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
+            try:
+                self._json_response(500, {"error": str(e)})
+            except Exception:
+                pass
 
 
     def _handle_tts(self):
         """Generate speech and stream audio chunks back as they're generated."""
         if model is None:
+            dbg("TTS request rejected — model not loaded")
             self._json_response(503, {"error": "Model not loaded"})
             return
 
         try:
             body = self._read_json_body()
         except Exception as e:
+            dbg(f"TTS request — invalid JSON: {e}")
             self._json_response(400, {"error": f"Invalid JSON: {e}"})
             return
 
@@ -296,11 +319,14 @@ class TTSHandler(BaseHTTPRequestHandler):
         # Allow caller to request non-streaming (for test script compatibility)
         stream = body.get("stream", True)
 
+        dbg(f"TTS request — text='{text[:50]}...' voice={voice} stream={stream}")
+
         if not text:
             self._json_response(400, {"error": "No text provided"})
             return
 
         if not model_lock.acquire(timeout=0.1):
+            dbg("TTS request rejected — generation already in progress")
             self._json_response(429, {"error": "Generation already in progress"})
             return
 
@@ -310,26 +336,30 @@ class TTSHandler(BaseHTTPRequestHandler):
         try:
             voice_state = get_voice_state(voice)
             if voice_state is None:
+                dbg(f"TTS — voice '{voice}' not available")
                 self._json_response(400, {"error": f"Voice '{voice}' not available"})
                 return
 
+            dbg(f"TTS — voice '{voice}' loaded, starting generation")
             import torch
             import numpy as np
 
             if stream and hasattr(model, 'generate_audio_stream'):
                 # Streaming mode: send chunks as they're generated
+                # Don't use Transfer-Encoding: chunked — write raw PCM directly.
+                # Some webview fetch implementations don't decode chunked encoding.
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("X-Sample-Rate", str(SAMPLE_RATE))
                 self.send_header("X-Channels", "1")
                 self.send_header("X-Bits-Per-Sample", "16")
-                self.send_header("Transfer-Encoding", "chunked")
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
 
                 for chunk in model.generate_audio_stream(voice_state, text, frames_after_eos=2):
                     if cancel_flag.is_set():
+                        dbg("TTS — cancelled via cancel_flag")
                         break
 
                     if isinstance(chunk, torch.Tensor):
@@ -341,16 +371,13 @@ class TTSHandler(BaseHTTPRequestHandler):
                     pcm = (chunk_np * 32767).astype(np.int16)
                     pcm_bytes = pcm.tobytes()
 
-                    # Write chunked transfer encoding frame
-                    chunk_header = f"{len(pcm_bytes):X}\r\n".encode()
-                    self.wfile.write(chunk_header)
-                    self.wfile.write(pcm_bytes)
-                    self.wfile.write(b"\r\n")
-                    self.wfile.flush()
-
-                # Write final zero-length chunk to signal end
-                self.wfile.write(b"0\r\n\r\n")
-                self.wfile.flush()
+                    try:
+                        self.wfile.write(pcm_bytes)
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError):
+                        dbg("TTS — client disconnected, cancelling generation")
+                        cancel_flag.set()
+                        break
             else:
                 # Non-streaming fallback: generate full audio, return as WAV
                 audio = model.generate_audio(voice_state, text, frames_after_eos=2)
@@ -396,12 +423,17 @@ class TTSHandler(BaseHTTPRequestHandler):
             if not voice:
                 self._json_response(400, {"error": "No voice specified"})
                 return
+            print(f"[pocket-tts] Loading voice on demand: {voice}", flush=True)
             state = get_voice_state(voice)
             if state is None:
                 self._json_response(400, {"error": f"Failed to load voice '{voice}'"})
             else:
+                print(f"[pocket-tts] Voice '{voice}' loaded successfully", flush=True)
                 self._json_response(200, {"status": "loaded", "voice": voice})
         except Exception as e:
+            print(f"[pocket-tts] Error loading voice: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             self._json_response(500, {"error": str(e)})
 
     def _handle_export_voice(self):
@@ -442,13 +474,22 @@ class ThreadedHTTPServer(HTTPServer):
 def main():
     global data_dir
 
+    # Note: UTF-8 encoding for stdout/stderr is set via PYTHONIOENCODING env var
+    # in the Rust launcher to avoid cp1252 encoding crashes on Windows.
+
     parser = argparse.ArgumentParser(description="Pocket TTS server for Kiro Assistant")
     parser.add_argument("--port", type=int, default=9877, help="Port to listen on")
     parser.add_argument("--voice", type=str, default="alba", help="Default voice to pre-load")
     parser.add_argument("--no-preload", action="store_true", help="Don't pre-load model at startup")
     parser.add_argument("--temp", type=float, default=None, help="Sampling temperature (0.5=consistent, 0.7=default, 0.9=expressive)")
     parser.add_argument("--eos-threshold", type=float, default=None, help="End-of-sequence threshold (default: -4.0)")
+    parser.add_argument("--debug", action="store_true", help="Enable verbose debug logging")
     args = parser.parse_args()
+
+    global DEBUG
+    DEBUG = args.debug
+    if DEBUG:
+        print("[pocket-tts] DEBUG MODE ENABLED", flush=True)
 
     # Pass temp/eos via env vars so load_model() picks them up
     if args.temp is not None:

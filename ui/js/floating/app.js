@@ -1291,6 +1291,8 @@ export class FloatingApp {
         if (speakBtn) {
             speakBtn.onclick = () => {
                 if (this.speech && this.currentResponse) {
+                    // Stop any existing speech before starting new one
+                    this.speech.cancelSpeech();
                     this.speech.usedSpeechForLastMessage = true;
                     this.speech.speakResponse(this.currentResponse);
                 }

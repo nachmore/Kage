@@ -134,6 +134,7 @@ export class TtsStreamer {
         this._pendingFetches = 0;
         this._totalChunks = 0;
         this._playedChunks = 0;
+        this._abortControllers = [];
 
         this._bar = new TtsPlaybackBar(barContainer, onBarChange, {
             onPause: () => this.togglePause(),
@@ -169,29 +170,44 @@ export class TtsStreamer {
         this._updateBarStatus();
 
         try {
+            const controller = new AbortController();
+            this._abortControllers.push(controller);
             const resp = await fetch(`http://127.0.0.1:${this.port}/tts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text: sentence, voice: this.voice, stream: true }),
+                signal: controller.signal,
             });
             if (this._stopped) return;
-            if (!resp.ok) { console.warn('[TtsStreamer] TTS failed:', resp.status); return; }
+            if (!resp.ok) {
+                let errorMsg = `TTS server error (${resp.status})`;
+                try { const body = await resp.json(); errorMsg = body.error || errorMsg; } catch {}
+                console.warn('[TtsStreamer] TTS failed:', resp.status, errorMsg);
+                this._bar.setStatus(`Error: ${errorMsg}`);
+                setTimeout(() => this._bar.hideAfterDelay(3000), 0);
+                return;
+            }
 
             const contentType = resp.headers.get('Content-Type') || '';
             if (contentType.includes('octet-stream')) {
                 const sampleRate = parseInt(resp.headers.get('X-Sample-Rate') || '24000', 10);
+                console.log(`[TtsStreamer] Streaming response, sampleRate=${sampleRate}, contentType=${contentType}`);
                 const chunks = [];
                 const reader = resp.body.getReader();
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done || this._stopped) break;
                     chunks.push(value);
+                    console.log(`[TtsStreamer] Received chunk: ${value.byteLength} bytes`);
                 }
                 if (this._stopped) return;
                 const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+                console.log(`[TtsStreamer] Total PCM: ${totalLen} bytes (${chunks.length} chunks)`);
                 const pcm = new Uint8Array(totalLen);
                 let offset = 0;
                 for (const chunk of chunks) { pcm.set(new Uint8Array(chunk.buffer || chunk), offset); offset += chunk.byteLength; }
+                // Debug: check first few bytes to see if it looks like PCM or chunked framing
+                console.log(`[TtsStreamer] First 20 bytes: ${Array.from(pcm.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
                 const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
                 this._audioQueue.push({ url, sentence });
             } else {
@@ -202,6 +218,8 @@ export class TtsStreamer {
             if (!this._isPlaying && !this._isPaused) this._playNext();
         } catch (e) {
             console.warn('[TtsStreamer] TTS fetch error:', e);
+            this._bar.setStatus('Voice server connection failed');
+            setTimeout(() => this._bar.hideAfterDelay(3000), 0);
         } finally {
             this._pendingFetches--;
         }
@@ -232,6 +250,11 @@ export class TtsStreamer {
         if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio = null; }
         for (const c of this._audioQueue) URL.revokeObjectURL(c.url);
         this._audioQueue = [];
+        // Abort all in-flight fetch requests
+        for (const ac of this._abortControllers) { try { ac.abort(); } catch {} }
+        this._abortControllers = [];
+        // Tell the server to cancel any ongoing generation
+        fetch(`http://127.0.0.1:${this.port}/stop`, { method: 'POST' }).catch(() => {});
         this._bar.hide();
     }
 

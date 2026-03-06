@@ -318,13 +318,38 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
         .args(["--voice", &voice])
         .args(["--temp", &temp.to_string()])
         .args(["--eos-threshold", &eos_threshold.to_string()])
+        .env("PYTHONIOENCODING", "utf-8:replace")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    // Pass --debug when the assistant is in dev mode
+    if state.dev_mode {
+        cmd.arg("--debug");
+    }
+
     configure_no_window(&mut cmd);
 
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to start server: {}", e))?;
+
+    // Read stderr in a background thread so errors are visible
+    let stderr = child.stderr.take();
+    if let Some(stderr) = stderr {
+        std::thread::spawn(move || {
+            let reader = std::io::BufReader::new(stderr);
+            for line_result in reader.lines() {
+                match line_result {
+                    Ok(line) => {
+                        if !line.trim().is_empty() {
+                            warn!("[pocket-tts stderr] {}", line);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
 
     // Wait for the POCKET_TTS_READY signal (up to 60s for model loading)
     let stdout = child.stdout.take();

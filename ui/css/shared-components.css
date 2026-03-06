@@ -1184,6 +1184,25 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     margin-left: auto;
 }
 
+.tts-bar-controls button {
+    background: transparent;
+    border: 1px solid var(--kiro-border, #3a3640);
+    color: var(--kiro-text-secondary, #938F9B);
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tts-bar-controls button:hover {
+    background: var(--kiro-surface-hover, #352F3D);
+    color: var(--kiro-text-primary, #E5E7EB);
+}
+
 
 /* JSON Tree Viewer */
 .json-tree-content {

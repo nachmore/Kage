@@ -40,6 +40,11 @@ export class SpeechController {
         this._pocketTtsAudio = null;
         this._ttsStreamer = null;
         this._streamedThisResponse = false;
+        // TTS state machine: 'idle' | 'warming' | 'speaking'
+        this._ttsState = 'idle';
+        this._ttsServerReady = false;
+        this._ttsPendingText = null;
+        this._warmupBar = null;
     }
 
     setup() {
@@ -60,6 +65,7 @@ export class SpeechController {
             this.pocketTtsEnabled = config.pocket_tts?.enabled === true;
             this.pocketTtsPort = config.pocket_tts?.port || 9877;
             this.pocketTtsVoice = config.pocket_tts?.voice || 'alba';
+            console.log('[Speech] Config loaded — pocketTtsEnabled:', this.pocketTtsEnabled, 'port:', this.pocketTtsPort, 'readBack:', this.readBack);
             if (this.elements.speechBtn) {
                 this.elements.speechBtn.style.display = show ? '' : 'none';
                 this.elements.speechBtn.dataset.configVisible = show ? 'true' : 'false';
@@ -191,16 +197,19 @@ export class SpeechController {
 
     /** Call after a response completes to read it back if speech was used. */
     speakResponse(text) {
-        if (!this.readBack || !this.usedSpeechForLastMessage) return;
+        console.log('[Speech] speakResponse called, readBack:', this.readBack, 'usedSpeech:', this.usedSpeechForLastMessage, 'pocketTtsEnabled:', this.pocketTtsEnabled, 'pocketTtsPort:', this.pocketTtsPort);
+        if (!this.readBack || !this.usedSpeechForLastMessage) {
+            console.log('[Speech] speakResponse early return — readBack or usedSpeech is false');
+            return;
+        }
         this.usedSpeechForLastMessage = false;
 
         // If streaming already handled TTS, skip
         if (this._streamedThisResponse) {
             this._streamedThisResponse = false;
+            console.log('[Speech] speakResponse skipped — streaming already handled');
             return;
         }
-
-        speechSynthesis.cancel();
 
         const clean = text.replace(/```[\s\S]*?```/g, ' code block ')
             .replace(/`([^`]+)`/g, '$1')
@@ -208,21 +217,193 @@ export class SpeechController {
             .replace(/\n+/g, '. ')
             .trim();
 
-        if (!clean) return;
+        if (!clean) { console.log('[Speech] speakResponse — no clean text'); return; }
 
-        // For non-streaming (batch) responses, use Pocket TTS if enabled
+        // For Pocket TTS — use the queue system (handles warmup, dedup, replacement)
         if (this.pocketTtsEnabled && this.pocketTtsPort) {
-            const streamer = new TtsStreamer({
-                port: this.pocketTtsPort,
-                voice: this.pocketTtsVoice,
-                barContainer: this.barContainer,
-                onBarChange: this.onVisibilityUpdate,
-            });
-            streamer.finishText(text);
+            console.log('[Speech] Using Pocket TTS path, state:', this._ttsState, 'serverReady:', this._ttsServerReady);
+            this._queuePocketTts(text);
             return;
         }
 
+        console.log('[Speech] Using browser TTS path');
+        // Browser TTS — cancel and restart
+        this.cancelSpeech();
         this._speakWithBrowser(clean);
+    }
+
+    /**
+     * Queue a Pocket TTS request. Handles server warmup, deduplication, and replacement.
+     * All UI updates are immediate — Rust calls are fire-and-forget.
+     * NEVER removes/recreates bars — reuses or replaces in place.
+     */
+    _queuePocketTts(text) {
+        console.log('[Speech] _queuePocketTts, state:', this._ttsState, 'serverReady:', this._ttsServerReady);
+        // If warming up, just replace the pending text (latest click wins, no UI change)
+        if (this._ttsState === 'warming') {
+            console.log('[Speech] Already warming — replacing pending text');
+            this._ttsPendingText = text;
+            return;
+        }
+
+        // If already speaking, stop the current generation (aborts fetch + calls /stop)
+        if (this._ttsState === 'speaking' && this._ttsStreamer) {
+            console.log('[Speech] Already speaking — stopping current, will restart');
+            this._ttsStreamer.stop();
+            this._ttsStreamer = null;
+        }
+
+        // Server is known ready — speak immediately
+        if (this._ttsServerReady) {
+            // Small delay if we just stopped a generation, to let server release the lock
+            if (this._ttsState === 'speaking') {
+                setTimeout(() => this._startPocketTtsSpeech(text), 200);
+            } else {
+                this._startPocketTtsSpeech(text);
+            }
+            return;
+        }
+
+        // Server status unknown — show warmup bar immediately (frontend only)
+        this._ttsState = 'warming';
+        this._ttsPendingText = text;
+        this._showWarmupBar();
+
+        // Fire-and-forget: check status then start if needed
+        this._warmUpServer();
+    }
+
+    /** Show the warmup bar immediately — pure frontend, no Rust calls */
+    _showWarmupBar() {
+        // Clean up any existing bars first
+        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+        if (this._ttsStreamer) { this._ttsStreamer.stop(); this._ttsStreamer = null; }
+
+        if (this.barContainer) {
+            this._warmupBar = new TtsPlaybackBar(this.barContainer, this.onVisibilityUpdate, {
+                onPause: () => {},
+                onStop: () => {
+                    this._ttsState = 'idle';
+                    this._ttsPendingText = null;
+                    if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+                },
+            });
+            this._warmupBar.show();
+            this._warmupBar.setStatus('Starting voice server...');
+        }
+    }
+
+    /** Fire-and-forget server warmup — runs async, updates state when done */
+    async _warmUpServer() {
+        console.log('[Speech] _warmUpServer starting...');
+        try {
+            // Check if already running via status endpoint
+            const status = await this.invoke('pocket_tts_status');
+            console.log('[Speech] Server status:', JSON.stringify(status));
+            if (status?.server_running) {
+                this._ttsServerReady = true;
+                this._onServerReady();
+                return;
+            }
+
+            // Start the server (fire-and-forget — this blocks in Rust until ready)
+            console.log('[Speech] Starting Pocket TTS server...');
+            if (this._warmupBar) this._warmupBar.setStatus('Loading voice model...');
+            this.invoke('pocket_tts_start').then((result) => {
+                console.log('[Speech] pocket_tts_start returned:', result);
+                // Server is ready — poll the /status endpoint to confirm
+                this._pollServerReady();
+            }).catch(e => {
+                console.warn('[Speech] Failed to start Pocket TTS:', e);
+                this._ttsState = 'idle';
+                if (this._warmupBar) { this._warmupBar.setStatus('Failed to start'); setTimeout(() => { if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; } }, 2000); }
+            });
+        } catch (e) {
+            console.warn('[Speech] Failed to check Pocket TTS status:', e);
+            this._ttsState = 'idle';
+            if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+        }
+    }
+
+    /** Poll the TTS server's /status endpoint until it reports model_loaded */
+    async _pollServerReady(attempts = 0) {
+        if (this._ttsState !== 'warming') return; // Cancelled
+        if (attempts > 30) { // Give up after ~30 seconds
+            console.warn('[Speech] TTS server did not become ready after 30 attempts');
+            this._ttsState = 'idle';
+            if (this._warmupBar) { this._warmupBar.setStatus('Server timeout'); setTimeout(() => { if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; } }, 2000); }
+            return;
+        }
+
+        try {
+            const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
+            if (resp.ok) {
+                const data = await resp.json();
+                console.log('[Speech] Server /status poll:', JSON.stringify(data));
+                if (data.model_loaded) {
+                    // Use a voice that's already loaded if our configured voice isn't available
+                    if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
+                        console.log(`[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`);
+                        this.pocketTtsVoice = data.voices_loaded[0];
+                    }
+                    this._ttsServerReady = true;
+                    this._onServerReady();
+                    return;
+                }
+            }
+        } catch { /* server not ready yet */ }
+
+        // Retry in 1 second
+        if (this._warmupBar) this._warmupBar.setStatus(`Loading voice model... (${attempts + 1}s)`);
+        setTimeout(() => this._pollServerReady(attempts + 1), 1000);
+    }
+
+    /** Called when server is confirmed ready — speak the pending text */
+    _onServerReady() {
+        // Hide warmup bar
+        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+
+        // Speak the pending text (latest click wins)
+        const text = this._ttsPendingText;
+        this._ttsPendingText = null;
+        this._ttsState = 'idle';
+
+        if (text) {
+            this._startPocketTtsSpeech(text);
+        }
+    }
+
+    /** Actually start Pocket TTS speech — server is known to be running */
+    _startPocketTtsSpeech(text) {
+        this._ttsState = 'speaking';
+        this._ttsStreamer = new TtsStreamer({
+            port: this.pocketTtsPort,
+            voice: this.pocketTtsVoice,
+            barContainer: this.barContainer,
+            onBarChange: this.onVisibilityUpdate,
+        });
+        this._ttsStreamer.finishText(text);
+    }
+
+    /**
+     * Ensure the Pocket TTS server is running, starting it on demand if needed.
+     * Non-blocking — used by streaming path.
+     */
+    async _ensurePocketTtsRunning() {
+        if (!this.invoke) return;
+        if (this._ttsState === 'warming') return; // Already starting
+        if (this._ttsServerReady) return; // Already running
+        try {
+            const status = await this.invoke('pocket_tts_status');
+            if (status?.server_running) { this._ttsServerReady = true; return; }
+
+            console.log('[Speech] Pocket TTS server not running, starting on demand...');
+            this.invoke('pocket_tts_start').then(() => {
+                setTimeout(() => { this._ttsServerReady = true; }, 1500);
+            }).catch(e => console.warn('[Speech] Failed to start Pocket TTS:', e));
+        } catch (e) {
+            console.warn('[Speech] Failed to check Pocket TTS status:', e);
+        }
     }
 
     /**
@@ -233,8 +414,10 @@ export class SpeechController {
         if (!this.readBack || !this.usedSpeechForLastMessage) return;
         if (!this.pocketTtsEnabled || !this.pocketTtsPort) return;
 
-        // Create streamer on first call
+        // Create streamer on first call, ensuring server is running
         if (!this._ttsStreamer) {
+            // Start server on demand if needed (fire and forget — streamer will retry)
+            this._ensurePocketTtsRunning().catch(() => {});
             this._ttsStreamer = new TtsStreamer({
                 port: this.pocketTtsPort,
                 voice: this.pocketTtsVoice,
@@ -296,6 +479,9 @@ export class SpeechController {
     /** Cancel any ongoing TTS playback. */
     cancelSpeech() {
         speechSynthesis.cancel();
+        this._ttsState = 'idle';
+        this._ttsPendingText = null;
+        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
         if (this._browserBar) { this._browserBar.hide(); this._browserBar = null; }
         if (this._pocketTtsAudio) {
             this._pocketTtsAudio.pause();
