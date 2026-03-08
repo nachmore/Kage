@@ -1,5 +1,12 @@
 // App suggestions and search functionality
 
+function shortcutIconHtml(shortcut) {
+    if (shortcut.icon && shortcut.icon.startsWith('data:')) {
+        return `<img src="${shortcut.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
+    }
+    return `<div class="app-icon">${shortcut.icon || '⚡'}</div>`;
+}
+
 export function renderShortcutSuggestion(shortcut, args, appSuggestions, currentMatches, executeShortcut, resizeWindow) {
     appSuggestions.innerHTML = '';
     appSuggestions.scrollTop = 0;
@@ -10,7 +17,7 @@ export function renderShortcutSuggestion(shortcut, args, appSuggestions, current
     item.className = 'app-suggestion-item selected';
     
     item.innerHTML = `
-        <div class="app-icon">⚡</div>
+        ${shortcutIconHtml(shortcut)}
         <div class="app-name">${shortcut.name}</div>
     `;
     item.addEventListener('click', async () => await executeShortcut());
@@ -38,7 +45,7 @@ export function renderShortcutSuggestions(matches, appSuggestions, selectedIndex
         const actionIcon = actionType === 'open_url' ? '🌐' : '▶️';
         
         item.innerHTML = `
-            <div class="app-icon">⚡</div>
+            ${shortcutIconHtml(match.shortcut)}
             <div class="app-info">
                 <div class="app-name">${match.shortcut.name}</div>
                 <div class="app-description">${actionIcon} ${match.shortcut.shortcut}</div>

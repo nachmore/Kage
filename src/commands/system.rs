@@ -549,6 +549,46 @@ pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history:
     Ok(crate::os::get_clipboard_history())
 }
 
+/// Fetch a website's favicon and return it as a base64 data URI.
+#[tauri::command]
+pub async fn fetch_favicon(url: String) -> Result<String, String> {
+    let domain = url::Url::parse(&url.replace(|c: char| c == '{' || c == '}', ""))
+        .or_else(|_| url::Url::parse(&format!("https://{}", url.replace(|c: char| c == '{' || c == '}', ""))))
+        .map_err(|e| format!("Invalid URL: {}", e))?
+        .host_str()
+        .unwrap_or("")
+        .to_string();
+
+    if domain.is_empty() {
+        return Err("Could not extract domain from URL".to_string());
+    }
+
+    let favicon_url = format!("https://www.google.com/s2/favicons?domain={}&sz=64", domain);
+    info!("Fetching favicon for {}: {}", domain, favicon_url);
+
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
+        reqwest::blocking::get(&favicon_url)
+            .and_then(|r| r.bytes())
+            .map_err(|e| format!("Fetch failed: {}", e))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
+    // Detect content type from magic bytes
+    let content_type = if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]) {
+        "image/png"
+    } else if bytes.starts_with(&[0xFF, 0xD8]) {
+        "image/jpeg"
+    } else if bytes.starts_with(&[0x00, 0x00, 0x01, 0x00]) {
+        "image/x-icon"
+    } else {
+        "image/png" // default
+    };
+
+    Ok(format!("data:{};base64,{}", content_type, b64))
+}
+
 /// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
 #[tauri::command]
 pub async fn paste_clipboard_item(text: String) -> Result<(), String> {

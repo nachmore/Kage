@@ -49,6 +49,17 @@ class ShortcutsSettingsModule extends SettingsModule {
                             <input type="text" id="shortcutTrigger" class="setting-input" placeholder="e.g., code">
                         </div>
                         <div class="dialog-field">
+                            <label>Icon (optional)</label>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <div id="shortcutIconPreview" class="shortcut-icon-preview">⚡</div>
+                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="⚡" maxlength="4" oninput="shortcutsModule.onIconInput()">
+                                <button class="setting-button" onclick="document.getElementById('shortcutIconFile').click()">📁 Image</button>
+                                <button class="setting-button" id="shortcutFaviconBtn" style="display:none" onclick="shortcutsModule.fetchFavicon()">🌐 Use Favicon</button>
+                                <button class="setting-button" id="shortcutIconClear" style="display:none" onclick="shortcutsModule.clearIcon()">✕</button>
+                                <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none" onchange="shortcutsModule.onIconFileSelected(event)">
+                            </div>
+                        </div>
+                        <div class="dialog-field">
                             <label>Action Type</label>
                             <select id="shortcutActionType" class="setting-select" onchange="shortcutsModule.onActionTypeChange()">
                                 <option value="run_program">▶️ Run Program</option>
@@ -170,6 +181,8 @@ class ShortcutsSettingsModule extends SettingsModule {
                 .dialog-field label { display: block; font-size: 13px; color: var(--kiro-text); margin-bottom: 6px; font-weight: 500; }
                 .shortcut-dialog-footer { padding: 16px 20px; border-top: 1px solid var(--kiro-border-subtle); display: flex; justify-content: flex-end; gap: 12px; }
                 .shortcuts-empty { padding: 40px; text-align: center; color: var(--kiro-text-muted); font-size: 13px; }
+                .shortcut-icon-preview { width: 32px; height: 32px; border-radius: 6px; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
+                .shortcut-icon-preview img { width: 100%; height: 100%; object-fit: cover; }
                 .script-editor { font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 12px; line-height: 1.5; resize: vertical; min-height: 120px; }
                 .script-editor-container {
                     display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr; gap: 0;
@@ -266,12 +279,24 @@ class ShortcutsSettingsModule extends SettingsModule {
                 if (s.arguments) details += `<div><strong>Args:</strong> ${escapeHtml(s.arguments)}</div>`;
             }
 
+            let iconHtml;
+            if (s.icon && s.icon.startsWith('data:')) {
+                iconHtml = `<img src="${s.icon}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;margin-right:8px;">`;
+            } else if (s.icon) {
+                iconHtml = `<span style="font-size:18px;margin-right:8px;">${s.icon}</span>`;
+            } else {
+                iconHtml = `<span style="font-size:18px;margin-right:8px;">⚡</span>`;
+            }
+
             return `
                 <div class="shortcut-item">
-                    <div class="shortcut-info">
-                        <div class="shortcut-name">${escapeHtml(s.name)}</div>
-                        <div class="shortcut-trigger">${escapeHtml(s.shortcut)}</div>
-                        <div class="shortcut-details">${details}</div>
+                    <div class="shortcut-info" style="display:flex;align-items:flex-start;">
+                        <div style="padding-top:2px;">${iconHtml}</div>
+                        <div>
+                            <div class="shortcut-name">${escapeHtml(s.name)}</div>
+                            <div class="shortcut-trigger">${escapeHtml(s.shortcut)}</div>
+                            <div class="shortcut-details">${details}</div>
+                        </div>
                     </div>
                     <div class="shortcut-actions">
                         <button class="shortcut-action-btn" onclick="shortcutsModule.editShortcut(${index})">Edit</button>
@@ -298,6 +323,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         document.getElementById('scriptAiStatus').textContent = '';
         document.getElementById('scriptAiUndo').style.display = 'none';
         this._previousScript = null;
+        this._setIconPreview('');
         this.onActionTypeChange();
         document.getElementById('shortcutDialog').style.display = 'flex';
     }
@@ -320,6 +346,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         document.getElementById('scriptAiStatus').textContent = '';
         document.getElementById('scriptAiUndo').style.display = 'none';
         this._previousScript = null;
+        this._setIconPreview(s.icon || '');
         this.onActionTypeChange();
         document.getElementById('shortcutDialog').style.display = 'flex';
         if ((s.action_type || 'run_program') === 'script') this.updateHighlight();
@@ -331,7 +358,86 @@ class ShortcutsSettingsModule extends SettingsModule {
         document.getElementById('openUrlFields').style.display = at === 'open_url' ? 'block' : 'none';
         document.getElementById('promptFields').style.display = at === 'prompt' ? 'block' : 'none';
         document.getElementById('scriptFields').style.display = at === 'script' ? 'block' : 'none';
+        // Show "Use Favicon" button only for URL shortcuts
+        const faviconBtn = document.getElementById('shortcutFaviconBtn');
+        if (faviconBtn) faviconBtn.style.display = at === 'open_url' ? '' : 'none';
         if (at === 'script') this.updateHighlight();
+    }
+
+    /** Set the icon preview and hidden state */
+    _setIconPreview(icon) {
+        this._currentIcon = icon || '';
+        const preview = document.getElementById('shortcutIconPreview');
+        const emojiInput = document.getElementById('shortcutIconEmoji');
+        const clearBtn = document.getElementById('shortcutIconClear');
+        if (!preview) return;
+
+        if (icon && icon.startsWith('data:')) {
+            // Base64 image
+            preview.innerHTML = `<img src="${icon}">`;
+            if (emojiInput) emojiInput.value = '';
+            if (clearBtn) clearBtn.style.display = '';
+        } else if (icon) {
+            // Emoji
+            preview.textContent = icon;
+            if (emojiInput) emojiInput.value = icon;
+            if (clearBtn) clearBtn.style.display = '';
+        } else {
+            preview.textContent = '⚡';
+            if (emojiInput) emojiInput.value = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+        }
+    }
+
+    /** Handle emoji input */
+    onIconInput() {
+        const val = document.getElementById('shortcutIconEmoji')?.value || '';
+        this._setIconPreview(val);
+    }
+
+    /** Handle image file selection */
+    onIconFileSelected(event) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        // Limit to 64KB
+        if (file.size > 65536) {
+            alert('Icon image must be under 64KB');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this._setIconPreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+        // Reset file input so the same file can be re-selected
+        event.target.value = '';
+    }
+
+    /** Fetch favicon from the URL field via backend (avoids CORS) */
+    async fetchFavicon() {
+        const urlInput = document.getElementById('shortcutUrl');
+        const url = urlInput?.value?.trim();
+        if (!url) { alert('Enter a URL first'); return; }
+
+        const btn = document.getElementById('shortcutFaviconBtn');
+        const origText = btn?.textContent;
+        if (btn) btn.textContent = '⏳ Fetching...';
+
+        try {
+            const invoke = window.__TAURI__.core.invoke;
+            const dataUri = await invoke('fetch_favicon', { url });
+            this._setIconPreview(dataUri);
+        } catch (e) {
+            console.warn('Favicon fetch failed:', e);
+            alert('Could not fetch favicon for this URL');
+        } finally {
+            if (btn) btn.textContent = origText;
+        }
+    }
+
+    /** Clear the custom icon */
+    clearIcon() {
+        this._setIconPreview('');
     }
 
     updateHighlight() {
@@ -472,6 +578,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         if (!name || !trigger) { alert('Name and Trigger Word are required.'); return; }
 
         const shortcut = { name, shortcut: trigger, action_type: actionType };
+        if (this._currentIcon) shortcut.icon = this._currentIcon;
 
         if (actionType === 'open_url') {
             const url = document.getElementById('shortcutUrl').value.trim();

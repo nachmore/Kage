@@ -163,7 +163,7 @@ export async function unifiedSearch(query, invoke, shortcuts) {
                     type: 'shortcut',
                     label: sc.name,
                     description: desc,
-                    icon: '⚡',
+                    icon: sc.icon || '⚡',
                     score: scLower === lower || nameLower === lower ? 85 : 65,
                     data: { shortcut: sc, args: argsArray },
                 });

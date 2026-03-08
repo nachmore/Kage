@@ -40,6 +40,8 @@ function _renderItem(r, index, extMgr) {
     if (r.type === 'app' && r.data?.icon_base64) {
         const src = r.data.icon_base64.startsWith('data:') ? r.data.icon_base64 : 'data:image/png;base64,' + r.data.icon_base64;
         iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="app-icon" style="display:none">${r.data.emoji_icon || r.label.charAt(0).toUpperCase()}</div>`;
+    } else if (r.icon && r.icon.startsWith('data:')) {
+        iconHtml = `<img src="${r.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
     } else {
         iconHtml = `<div class="app-icon">${r.icon || r.label.charAt(0)}</div>`;
     }

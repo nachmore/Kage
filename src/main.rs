@@ -664,6 +664,7 @@ fn main() {
             commands::read_clipboard,
             commands::get_clipboard_history,
             commands::paste_clipboard_item,
+            commands::fetch_favicon,
             commands::show_context_menu,
             commands::set_floating_opacity,
             commands::apply_chat_window_size,

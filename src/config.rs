@@ -299,6 +299,8 @@ pub struct ShortcutConfig {
     #[serde(default = "default_action_type")]
     pub action_type: String, // "run_program", "open_url", "prompt", "text", "script"
     #[serde(default)]
+    pub icon: Option<String>, // Emoji or base64 data URI (png/jpg)
+    #[serde(default)]
     pub path: Option<String>, // For run_program
     #[serde(default)]
     pub url: Option<String>, // For open_url

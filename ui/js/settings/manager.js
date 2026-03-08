@@ -220,18 +220,12 @@ function loadScriptFromString(code) {
 function addExtensionSidebarItem(id, icon, label) {
     const section = document.getElementById('extensionsSidebarSection');
     if (!section) return;
-    // Insert before the "Browse Store" item (last child)
-    const storeItem = section.querySelector('[data-sidebar-store]');
     const item = document.createElement('div');
     item.className = 'sidebar-item';
     item.dataset.section = id;
     item.onclick = () => switchSection(id);
     item.innerHTML = `<span class="sidebar-item-icon">${icon}</span><span>${label}</span>`;
-    if (storeItem) {
-        section.insertBefore(item, storeItem);
-    } else {
-        section.appendChild(item);
-    }
+    section.appendChild(item);
 }
 
 /**
