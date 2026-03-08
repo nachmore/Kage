@@ -139,7 +139,11 @@ export async function unifiedSearch(query, invoke, shortcuts) {
                 });
             }
         }
-        return _applyFrecency(results, query);
+        // Don't return early for >find or >cb — let them fall through to file search / clipboard
+        const lowerQuery = query.toLowerCase().trim();
+        if (!lowerQuery.startsWith('>find ') && !lowerQuery.startsWith('>cb') && !lowerQuery.startsWith('>clipboard')) {
+            return _applyFrecency(results, query);
+        }
     }
 
     // / slash commands
@@ -274,7 +278,7 @@ export async function unifiedSearch(query, invoke, shortcuts) {
 
     // File search — triggered by "find " prefix, queries with file extensions, or wildcard patterns
     const trimmedQuery = query.trim();
-    const findPrefix = trimmedQuery.toLowerCase().startsWith('find ') || trimmedQuery.toLowerCase().startsWith('>find ');
+    const findPrefix = trimmedQuery.toLowerCase().startsWith('>find ');
     const hasExtension = /\.\w{1,6}$/.test(trimmedQuery) && !trimmedQuery.includes(' ');
     const hasWildcard = trimmedQuery.includes('*') || trimmedQuery.includes('?');
     if (findPrefix || hasExtension || hasWildcard) {
