@@ -229,6 +229,13 @@ class ShortcutsSettingsModule extends SettingsModule {
     initialize() {
         this.renderShortcutsList();
         window.shortcutsModule = this;
+        this._escHandler = (e) => {
+            if (e.key === 'Escape' && document.getElementById('shortcutDialog')?.style.display === 'flex') {
+                e.stopPropagation();
+                this.closeDialog();
+            }
+        };
+        document.addEventListener('keydown', this._escHandler, true);
     }
 
     load(config) {
@@ -650,5 +657,8 @@ class ShortcutsSettingsModule extends SettingsModule {
         input.click();
     }
 
-    destroy() { delete window.shortcutsModule; }
+    destroy() {
+        if (this._escHandler) document.removeEventListener('keydown', this._escHandler, true);
+        delete window.shortcutsModule;
+    }
 }
