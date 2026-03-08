@@ -606,6 +606,39 @@ pub async fn read_clipboard() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, String> {
+    let dirs: Vec<(&str, &[&str], Option<std::path::PathBuf>)> = vec![
+        ("cache", &["—"], dirs::cache_dir()),
+        ("config", &["configuration"], dirs::config_dir()),
+        ("data", &["—"], dirs::data_dir()),
+        ("desktop", &["—"], dirs::desktop_dir()),
+        ("documents", &["docs"], dirs::document_dir()),
+        ("downloads", &["download"], dirs::download_dir()),
+        ("fonts", &["font"], {
+            #[cfg(target_os = "windows")]
+            { std::env::var("WINDIR").ok().map(|w| std::path::PathBuf::from(w).join("Fonts")) }
+            #[cfg(not(target_os = "windows"))]
+            { dirs::font_dir() }
+        }),
+        ("home", &["user"], dirs::home_dir()),
+        ("music", &["audio"], dirs::audio_dir()),
+        ("pictures", &["photos"], dirs::picture_dir()),
+        ("public", &["—"], dirs::public_dir()),
+        ("screenshots", &["screenshot"], dirs::picture_dir().map(|p| p.join("Screenshots"))),
+        ("templates", &["template"], dirs::template_dir()),
+        ("temp", &["tmp"], Some(std::env::temp_dir())),
+        ("videos", &["video", "movies"], dirs::video_dir()),
+    ];
+    Ok(dirs.into_iter().map(|(keyword, aliases, path)| {
+        serde_json::json!({
+            "keyword": keyword,
+            "aliases": aliases.join(", "),
+            "path": path.map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+        })
+    }).collect())
+}
+
+#[tauri::command]
 pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, String> {
     Ok(crate::os::get_clipboard_history())
 }

@@ -75,14 +75,29 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         (&["videos", "video", "movies"], dirs::video_dir),
         (&["music", "audio"], dirs::audio_dir),
         (&["desktop"], dirs::desktop_dir),
-        (&["home"], dirs::home_dir),
+        (&["home", "user"], dirs::home_dir),
         (&["templates", "template"], dirs::template_dir),
+        (&["temp", "tmp"], || -> Option<std::path::PathBuf> { Some(std::env::temp_dir()) }),
         (&["public"], dirs::public_dir),
+        (&["screenshots", "screenshot"], || -> Option<std::path::PathBuf> {
+            dirs::picture_dir().map(|p| p.join("Screenshots"))
+        }),
         (&["fonts", "font"], dirs::font_dir),
         (&["cache"], dirs::cache_dir),
         (&["config", "configuration"], dirs::config_dir),
         (&["data"], dirs::data_dir),
     ];
+
+    // On Windows, override "fonts"/"font" to use the system Fonts directory
+    #[cfg(target_os = "windows")]
+    {
+        let font_names = ["fonts", "font"];
+        if font_names.iter().any(|n| *n == lower.as_str()) || font_names.iter().any(|n| n.starts_with(lower.as_str())) {
+            if let Ok(windir) = std::env::var("WINDIR") {
+                return Some(format!("{}\\Fonts", windir));
+            }
+        }
+    }
 
     // Exact match first
     for (names, resolver) in candidates {

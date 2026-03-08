@@ -662,6 +662,7 @@ fn main() {
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,
+            commands::resolve_directories,
             commands::get_clipboard_history,
             commands::paste_clipboard_item,
             commands::fetch_favicon,

@@ -15,6 +15,8 @@ import { getExtensionManager } from '../shared/search-engine.js';
 function _resultKey(r) {
     if (r.type === 'app') return `app:${r.data?.name || r.label}`;
     if (r.type === 'shortcut') return `sc:${r.label}`;
+    if (r.type === 'path') return `path:${r.data?.value || r.description || r.label}`;
+    if (r.type === 'url') return `url:${r.data?.value || r.description || r.label}`;
     if (r._extensionId) return `ext:${r._extensionId}:${r.label}`;
     return `${r.type || 'other'}:${r.label}`;
 }
