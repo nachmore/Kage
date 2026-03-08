@@ -21,6 +21,29 @@ function _relativeTime(isoString) {
     } catch { return ''; }
 }
 
+function _fileIcon(ext) {
+    const icons = {
+        pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
+        txt: '📄', md: '📄', csv: '📄', json: '📄', xml: '📄', yaml: '📄', yml: '📄',
+        js: '📜', ts: '📜', py: '📜', rs: '📜', java: '📜', cpp: '📜', c: '📜', h: '📜',
+        html: '🌐', css: '🎨', svg: '🎨',
+        png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', bmp: '🖼️', ico: '🖼️', webp: '🖼️',
+        mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵', m4a: '🎵',
+        mp4: '🎬', avi: '🎬', mkv: '🎬', mov: '🎬', wmv: '🎬',
+        zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
+        exe: '⚙️', msi: '⚙️', bat: '⚙️', cmd: '⚙️', ps1: '⚙️',
+    };
+    return icons[ext] || '📄';
+}
+
+function _formatSize(bytes) {
+    if (!bytes || bytes === 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+}
+
 // --- Frecency store ---
 
 let _frecencyData = {};
@@ -248,6 +271,40 @@ export async function unifiedSearch(query, invoke, shortcuts) {
             }
         }
     } catch {}
+
+    // File search — triggered by "find " prefix, queries with file extensions, or wildcard patterns
+    const trimmedQuery = query.trim();
+    const findPrefix = trimmedQuery.toLowerCase().startsWith('find ') || trimmedQuery.toLowerCase().startsWith('>find ');
+    const hasExtension = /\.\w{1,6}$/.test(trimmedQuery) && !trimmedQuery.includes(' ');
+    const hasWildcard = trimmedQuery.includes('*') || trimmedQuery.includes('?');
+    if (findPrefix || hasExtension || hasWildcard) {
+        const fileQuery = findPrefix
+            ? trimmedQuery.replace(/^>?find\s+/i, '').trim()
+            : trimmedQuery;
+        if (fileQuery.length >= 2) {
+            try {
+                const fileResults = await invoke('search_files', { query: fileQuery, maxResults: 8 });
+                for (const f of fileResults) {
+                    const ext = f.name.includes('.') ? f.name.split('.').pop().toLowerCase() : '';
+                    const icon = f.is_folder ? '📁' : _fileIcon(ext);
+                    const sizeStr = f.is_folder ? '' : _formatSize(f.size);
+                    const timeStr = f.modified ? _relativeTime(f.modified) : '';
+                    const desc = [f.path, sizeStr, timeStr].filter(Boolean).join(' · ');
+                    results.push({
+                        id: 'file:' + f.path,
+                        type: 'file',
+                        label: f.name,
+                        description: desc,
+                        icon,
+                        score: findPrefix ? 90 : 70,
+                        data: { path: f.path, is_folder: f.is_folder },
+                    });
+                }
+            } catch (e) {
+                console.warn('[Search] File search failed:', e);
+            }
+        }
+    }
 
     return _applyFrecency(results, query);
 }

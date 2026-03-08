@@ -945,16 +945,18 @@ export class FloatingApp {
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
         } else if (event.key === 'ArrowDown') {
-            if (this.currentMatches.length > 0) {
+            const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
+            if (itemCount > 0) {
                 event.preventDefault();
-                this.selectedIndex = (this.selectedIndex + 1) % this.currentMatches.length;
+                this.selectedIndex = (this.selectedIndex + 1) % itemCount;
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
             // When no suggestions, let the default behavior handle cursor movement in textarea
         } else if (event.key === 'ArrowUp') {
-            if (this.currentMatches.length > 0) {
+            const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
+            if (itemCount > 0) {
                 event.preventDefault();
-                this.selectedIndex = this.selectedIndex <= 0 ? this.currentMatches.length - 1 : this.selectedIndex - 1;
+                this.selectedIndex = this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
             // When no suggestions, let the default behavior handle cursor movement in textarea

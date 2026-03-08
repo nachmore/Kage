@@ -116,6 +116,29 @@ const LOCAL_COMMANDS = [
                 document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
             }
         }
+    },
+    {
+        name: 'find',
+        description: 'Search files by name (e.g. >find report or >find *.docx)',
+        icon: '🔎',
+        execute: async () => {
+            // No-op — file search is handled by the search engine when it sees ">find " prefix.
+            // This entry exists so >find shows up in the command suggestions.
+        }
+    },
+    {
+        name: 'clipboard',
+        description: 'Browse clipboard history',
+        icon: '📋',
+        aliases: ['cb'],
+        execute: async () => {
+            // Trigger clipboard mode by setting the input
+            const input = document.querySelector('#floatingInput, #chatInput');
+            if (input) {
+                input.value = '>cb ';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
     }
 ];
 
@@ -155,7 +178,9 @@ export function matchCommands(input) {
 
     const query = trimmed.substring(1).trim().toLowerCase();
     if (query.length === 0) return [...LOCAL_COMMANDS];
-    return LOCAL_COMMANDS.filter(cmd => cmd.name.startsWith(query));
+    return LOCAL_COMMANDS.filter(cmd =>
+        cmd.name.startsWith(query) || cmd.aliases?.some(a => a.startsWith(query))
+    );
 }
 
 /**
@@ -166,7 +191,7 @@ export function matchCommandsByName(query) {
     const q = query.trim().toLowerCase();
     if (q.length === 0) return [];
     return LOCAL_COMMANDS
-        .filter(cmd => cmd.name.startsWith(q))
+        .filter(cmd => cmd.name.startsWith(q) || cmd.aliases?.some(a => a.startsWith(q)))
         .map(cmd => ({ type: 'command', ...cmd }));
 }
 

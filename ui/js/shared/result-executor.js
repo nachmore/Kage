@@ -85,6 +85,15 @@ export async function executeResult(result, query, ctx) {
         return { handled: true };
     }
 
+    // File search result — open the file or folder
+    if (result.type === 'file') {
+        const filePath = result.data?.path || result.description;
+        if (filePath) {
+            await invoke('open_path', { path: filePath });
+            return { handled: true, action: 'hide' };
+        }
+    }
+
     // System command
     if (result.type === 'system') {
         const d = result.data || result;

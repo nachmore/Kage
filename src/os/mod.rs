@@ -33,6 +33,7 @@ pub mod shell;
 pub mod user;
 pub mod clipboard;
 pub mod clipboard_history;
+pub mod file_search;
 pub mod startup;
 pub mod hotkey;
 pub mod icon;
@@ -60,6 +61,7 @@ pub fn simulate_paste() {
 }
 
 pub use clipboard_history::get_clipboard_history;
+pub use file_search::search_files;
 pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
 #[allow(unused)]
 pub use hotkey::CapturedHotkey;

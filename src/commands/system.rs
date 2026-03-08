@@ -643,6 +643,18 @@ pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history:
     Ok(crate::os::get_clipboard_history())
 }
 
+/// Search for files using the OS-native search index.
+#[tauri::command]
+pub async fn search_files(query: String, max_results: Option<usize>) -> Result<Vec<crate::os::file_search::FileSearchResult>, String> {
+    let max = max_results.unwrap_or(10);
+    let q = query.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::os::search_files(&q, max)
+    })
+    .await
+    .map_err(|e| format!("Search task failed: {}", e))
+}
+
 /// Fetch a website's favicon and return it as a base64 data URI.
 #[tauri::command]
 pub async fn fetch_favicon(url: String) -> Result<String, String> {
