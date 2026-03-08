@@ -32,6 +32,9 @@ pub struct Config {
     /// Pocket TTS configuration (local neural TTS via kyutai-labs/pocket-tts)
     #[serde(default)]
     pub pocket_tts: PocketTtsConfig,
+    /// Optional hotkey for clipboard history (e.g. Alt+Shift+V)
+    #[serde(default)]
+    pub clipboard_hotkey: Option<HotkeyConfig>,
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
@@ -426,6 +429,7 @@ impl Default for Config {
             extensions: HashMap::new(),
             extension_states: HashMap::new(),
             pocket_tts: PocketTtsConfig::default(),
+            clipboard_hotkey: None,
             store_url: None,
             auto_update_extensions: false,
             last_extension_update_check: None,
@@ -480,6 +484,14 @@ impl Config {
         let mut parts = self.hotkey.modifiers.clone();
         parts.push(self.hotkey.key.clone());
         parts.join("+")
+    }
+
+    pub fn get_clipboard_hotkey_string(&self) -> Option<String> {
+        self.clipboard_hotkey.as_ref().map(|hk| {
+            let mut parts = hk.modifiers.clone();
+            parts.push(hk.key.clone());
+            parts.join("+")
+        })
     }
 
     /// Get the path to the auto-generated steering document

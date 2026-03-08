@@ -32,6 +32,7 @@ pub mod process;
 pub mod shell;
 pub mod user;
 pub mod clipboard;
+pub mod clipboard_history;
 pub mod startup;
 pub mod hotkey;
 pub mod icon;
@@ -47,6 +48,18 @@ pub use clipboard::{read_clipboard, capture_selection, begin_selection_capture, 
 #[allow(unused)]
 pub use clipboard::write_clipboard;
 pub use startup::{get_startup_enabled, set_startup_enabled};
+
+/// Simulate Ctrl+V paste keystroke to the foreground window.
+#[allow(unused)]
+pub fn simulate_paste() {
+    #[cfg(target_os = "windows")]
+    { crate::os::windows::clipboard::simulate_paste_impl(); }
+
+    #[cfg(not(target_os = "windows"))]
+    { /* TODO: implement for macOS/Linux */ }
+}
+
+pub use clipboard_history::get_clipboard_history;
 pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
 #[allow(unused)]
 pub use hotkey::CapturedHotkey;

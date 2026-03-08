@@ -54,9 +54,11 @@ windows = { version = "0.59", features = [
     "Win32_System_JobObjects",
     "Win32_Security",
     "Win32_Security_Authorization",
+    "Win32_System_Com",
     "Management_Deployment",
     "ApplicationModel",
     "ApplicationModel_Core",
+    "ApplicationModel_DataTransfer",
     "Foundation",
     "Foundation_Collections",
 ] }

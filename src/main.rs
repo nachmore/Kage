@@ -26,6 +26,7 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::Manager;
 use tauri::Listener;
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
 /// In debug builds on Windows, attach to the parent console (if any) so that
@@ -324,31 +325,61 @@ fn main() {
 
             info!("Active hotkey: {}", active_hotkey);
 
-            // Hot-reload hotkey when config changes
+            // Register clipboard history hotkey if configured
+            if let Some(cb_hotkey) = config.get_clipboard_hotkey_string() {
+                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+                let cb_window = floating_window.clone();
+                let cb_app_handle = app.handle().clone();
+                match app.global_shortcut().on_shortcut(
+                    cb_hotkey.as_str(),
+                    move |_app, _shortcut, event| {
+                        if event.state != ShortcutState::Pressed { return; }
+                        info!("Clipboard hotkey triggered");
+                        toggle_floating_window(&cb_window);
+                        // Delay event so the window has time to show and the JS listener is ready
+                        let handle = cb_app_handle.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_millis(150));
+                            let _ = handle.emit("clipboard_history_mode", ());
+                        });
+                    },
+                ) {
+                    Ok(_) => info!("✅ Registered clipboard hotkey: {}", cb_hotkey),
+                    Err(e) => warn!("❌ Failed to register clipboard hotkey {}: {}", cb_hotkey, e),
+                }
+            }
+
+            // Hot-reload hotkeys when config changes
             let current_hotkey = Arc::new(std::sync::Mutex::new(active_hotkey));
+            let current_cb_hotkey: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(
+                config.get_clipboard_hotkey_string()
+            ));
             let hotkey_app = app.handle().clone();
             let hotkey_window = floating_window.clone();
             let hotkey_current = current_hotkey.clone();
+            let hotkey_cb_current = current_cb_hotkey.clone();
             let hotkey_config = app.state::<AppState>().config.clone();
             app.listen("config_updated", move |_| {
                 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
-                // Use try_lock to avoid deadlock on the event loop thread.
-                // If the lock is held, skip — the next config_updated will catch it.
-                let new_hotkey = match hotkey_config.try_lock() {
-                    Ok(config) => config.get_hotkey_string(),
+                let (new_hotkey, new_cb_hotkey) = match hotkey_config.try_lock() {
+                    Ok(config) => (config.get_hotkey_string(), config.get_clipboard_hotkey_string()),
                     Err(_) => return,
                 };
 
                 let mut current = hotkey_current.lock().unwrap();
-                if *current == new_hotkey { return; }
+                let mut current_cb = hotkey_cb_current.lock().unwrap();
+                let main_changed = *current != new_hotkey;
+                let cb_changed = *current_cb != new_cb_hotkey;
+                if !main_changed && !cb_changed { return; }
 
-                info!("Hotkey changed: {} → {}", *current, new_hotkey);
+                info!("Hotkeys changed — main: {} → {}, clipboard: {:?} → {:?}",
+                    *current, new_hotkey, *current_cb, new_cb_hotkey);
 
-                // Unregister all existing shortcuts
+                // Unregister all and re-register both
                 let _ = hotkey_app.global_shortcut().unregister_all();
 
-                // Register the new one
+                // Register the main hotkey
                 let window_clone = hotkey_window.clone();
                 match hotkey_app.global_shortcut().on_shortcut(
                     new_hotkey.as_str(),
@@ -359,12 +390,11 @@ fn main() {
                     },
                 ) {
                     Ok(_) => {
-                        info!("✅ Hot-reloaded hotkey: {}", new_hotkey);
+                        info!("✅ Registered main hotkey: {}", new_hotkey);
                         *current = new_hotkey;
                     }
                     Err(e) => {
-                        error!("❌ Failed to register new hotkey {}: {}", new_hotkey, e);
-                        // Try to re-register the old one
+                        error!("❌ Failed to register main hotkey {}: {}", new_hotkey, e);
                         let old = current.clone();
                         let window_clone2 = hotkey_window.clone();
                         let _ = hotkey_app.global_shortcut().on_shortcut(
@@ -376,6 +406,29 @@ fn main() {
                         );
                     }
                 }
+
+                // Register clipboard hotkey if configured
+                if let Some(ref cb_hk) = new_cb_hotkey {
+                    let cb_win = hotkey_window.clone();
+                    let cb_handle = hotkey_app.clone();
+                    match hotkey_app.global_shortcut().on_shortcut(
+                        cb_hk.as_str(),
+                        move |_app, _shortcut, event| {
+                            if event.state != ShortcutState::Pressed { return; }
+                            info!("Clipboard hotkey triggered");
+                            toggle_floating_window(&cb_win);
+                            let handle = cb_handle.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_millis(150));
+                                let _ = handle.emit("clipboard_history_mode", ());
+                            });
+                        },
+                    ) {
+                        Ok(_) => info!("✅ Registered clipboard hotkey: {}", cb_hk),
+                        Err(e) => warn!("❌ Failed to register clipboard hotkey {}: {}", cb_hk, e),
+                    }
+                }
+                *current_cb = new_cb_hotkey;
             });
 
             info!("=== Setup Complete ===");
@@ -609,6 +662,8 @@ fn main() {
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,
+            commands::get_clipboard_history,
+            commands::paste_clipboard_item,
             commands::show_context_menu,
             commands::set_floating_opacity,
             commands::apply_chat_window_size,

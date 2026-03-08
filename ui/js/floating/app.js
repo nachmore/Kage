@@ -13,6 +13,7 @@ import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, set
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
 import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
+import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 
 export class FloatingApp {
@@ -75,6 +76,13 @@ export class FloatingApp {
         this.listen('slash_commands_available', async () => {
             console.log('Slash commands updated, reloading...');
             await loadSlashCommands(this.invoke);
+        });
+
+        // Listen for clipboard history hotkey
+        this.listen('clipboard_history_mode', async () => {
+            console.log('Clipboard history mode activated via hotkey');
+            this.elements.input.value = '>cb ';
+            this._enterClipboardMode();
         });
         
         setTimeout(() => this.elements.input.focus(), 100);
@@ -383,13 +391,13 @@ export class FloatingApp {
                         } else {
                             setTimeout(() => {
                                 this.elements.input.focus();
-                                this.elements.input.select();
+                                if (!this._clipboardMode) this.elements.input.select();
                             }, 50);
                         }
                     } catch (e) {
                         setTimeout(() => {
                             this.elements.input.focus();
-                            this.elements.input.select();
+                            if (!this._clipboardMode) this.elements.input.select();
                         }, 50);
                     }
                 }
@@ -757,6 +765,18 @@ export class FloatingApp {
         
         // Debounced unified search — queries all sources in parallel
         this.searchTimeout = setTimeout(async () => {
+            // Check for clipboard history trigger
+            if (isClipboardTrigger(query)) {
+                const filter = getClipboardFilter(query);
+                if (!this._clipboardMode) {
+                    await this._enterClipboardMode(filter);
+                } else {
+                    await this._updateClipboardFilter(filter);
+                }
+                return;
+            }
+            this._clipboardMode = false;
+
             const results = await unifiedSearch(query, this.invoke, this.shortcuts);
             if (results.length > 0) {
                 this.selectedIndex = renderUnifiedResults(
@@ -780,7 +800,34 @@ export class FloatingApp {
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
+        this._clipboardMode = false;
         await this.windowManager.resizeWindow();
+    }
+
+    /** Enter clipboard history mode — fetch and display history */
+    async _enterClipboardMode(filter = '') {
+        this._clipboardMode = true;
+        const entries = await fetchClipboardHistory(this.invoke);
+        const filtered = filterClipboardHistory(entries, filter);
+        this._clipboardEntries = entries; // Cache for filtering
+        this.selectedIndex = renderClipboardHistory(
+            filtered,
+            this.elements.appSuggestions,
+            this.currentMatches,
+            () => this.windowManager.resizeWindow()
+        );
+    }
+
+    /** Update clipboard history filter (called on input change in clipboard mode) */
+    async _updateClipboardFilter(filter) {
+        if (!this._clipboardEntries) return;
+        const filtered = filterClipboardHistory(this._clipboardEntries, filter);
+        this.selectedIndex = renderClipboardHistory(
+            filtered,
+            this.elements.appSuggestions,
+            this.currentMatches,
+            () => this.windowManager.resizeWindow()
+        );
     }
 
     _renderSystemCommandSuggestion(cmdId, cmdLabel, needsConfirm) {
@@ -911,6 +958,13 @@ export class FloatingApp {
             }
             // When no suggestions, let the default behavior handle cursor movement in textarea
         } else if (event.key === 'Escape') {
+            if (this._clipboardMode) {
+                event.preventDefault();
+                this._clipboardMode = false;
+                this._clipboardEntries = null;
+                this._clearInput();
+                return;
+            }
             if (this.isWaitingForResponse) {
                 event.preventDefault();
                 this.stopGenerating();
@@ -947,6 +1001,24 @@ export class FloatingApp {
         const message = this.elements.input.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
         const hasSelection = this.currentMatches.length > 0 && this.selectedIndex >= 0;
+
+        // Clipboard history mode — paste selected item into the previously focused app
+        if (this._clipboardMode && hasSelection) {
+            const selected = this.currentMatches[this.selectedIndex];
+            if (selected.type === 'clipboard' && selected.data?.text) {
+                this._clearInput();
+                await this.appWindow.hide();
+                // Small delay to let the previous window regain focus
+                await new Promise(r => setTimeout(r, 150));
+                try {
+                    await this.invoke('paste_clipboard_item', { text: selected.data.text });
+                    console.log('[Clipboard] Pasted to active app:', selected.data.text.slice(0, 50));
+                } catch (e) {
+                    console.warn('[Clipboard] Failed to paste:', e);
+                }
+                return;
+            }
+        }
 
         if (!message && !hasAttachments && !hasSelection) return;
         

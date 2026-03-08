@@ -314,6 +314,50 @@ pub async fn try_register_hotkey(
     ) {
         Ok(_) => {
             info!("✅ Hotkey registered: {}", hotkey_str);
+
+            // Re-register the other hotkey (main or clipboard) so it isn't lost.
+            // The config_updated event will do a full re-register later, but we
+            // need both working immediately after the test.
+            let state: tauri::State<'_, AppState> = app.state();
+            let config = state.config.lock().unwrap();
+            let main_hk = config.get_hotkey_string();
+            let cb_hk = config.get_clipboard_hotkey_string();
+            drop(config);
+
+            // Re-register main hotkey if it's different from the one we just tested
+            if main_hk != hotkey_str {
+                if let Some(floating) = app.get_webview_window("floating") {
+                    let _ = app.global_shortcut().on_shortcut(
+                        main_hk.as_str(),
+                        move |_app, _shortcut, event| {
+                            if event.state != ShortcutState::Pressed { return; }
+                            crate::commands::window::toggle_floating_window(&floating);
+                        },
+                    );
+                }
+            }
+
+            // Re-register clipboard hotkey if it exists and is different
+            if let Some(ref cb) = cb_hk {
+                if *cb != hotkey_str {
+                    if let Some(floating) = app.get_webview_window("floating") {
+                        let app_handle = app.clone();
+                        let _ = app.global_shortcut().on_shortcut(
+                            cb.as_str(),
+                            move |_app, _shortcut, event| {
+                                if event.state != ShortcutState::Pressed { return; }
+                                crate::commands::window::toggle_floating_window(&floating);
+                                let handle = app_handle.clone();
+                                std::thread::spawn(move || {
+                                    std::thread::sleep(std::time::Duration::from_millis(150));
+                                    let _ = handle.emit("clipboard_history_mode", ());
+                                });
+                            },
+                        );
+                    }
+                }
+            }
+
             Ok(true)
         }
         Err(e) => {
@@ -323,6 +367,7 @@ pub async fn try_register_hotkey(
             let state: tauri::State<'_, AppState> = app.state();
             let config = state.config.lock().unwrap();
             let old_hotkey = config.get_hotkey_string();
+            let old_cb = config.get_clipboard_hotkey_string();
             drop(config);
             if let Some(floating) = app.get_webview_window("floating") {
                 let _ = app.global_shortcut().on_shortcut(
@@ -332,6 +377,23 @@ pub async fn try_register_hotkey(
                         crate::commands::window::toggle_floating_window(&floating);
                     },
                 );
+            }
+            if let Some(ref cb) = old_cb {
+                if let Some(floating) = app.get_webview_window("floating") {
+                    let app_handle = app.clone();
+                    let _ = app.global_shortcut().on_shortcut(
+                        cb.as_str(),
+                        move |_app, _shortcut, event| {
+                            if event.state != ShortcutState::Pressed { return; }
+                            crate::commands::window::toggle_floating_window(&floating);
+                            let handle = app_handle.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_millis(150));
+                                let _ = handle.emit("clipboard_history_mode", ());
+                            });
+                        },
+                    );
+                }
             }
             Err(msg)
         }
@@ -480,6 +542,21 @@ pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Resu
 #[tauri::command]
 pub async fn read_clipboard() -> Result<String, String> {
     Ok(crate::os::read_clipboard().unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, String> {
+    Ok(crate::os::get_clipboard_history())
+}
+
+/// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
+#[tauri::command]
+pub async fn paste_clipboard_item(text: String) -> Result<(), String> {
+    crate::os::write_clipboard(&text);
+    // Small delay to ensure clipboard is updated before paste
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    crate::os::simulate_paste();
+    Ok(())
 }
 
 #[derive(serde::Serialize, Clone)]

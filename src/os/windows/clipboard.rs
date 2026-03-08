@@ -198,3 +198,34 @@ fn wait_for_clipboard_change(seq_before: u32, timeout_ms: u32) -> bool {
     }
     false
 }
+
+/// Simulate Ctrl+V paste keystroke to the foreground window.
+pub fn simulate_paste_impl() {
+    let size = std::mem::size_of::<WinInput>() as i32;
+    // Ctrl down (scan 0x1D), V down (scan 0x2F), V up, Ctrl up
+    let paste_keys = [
+        WinInput {
+            input_type: INPUT_KEYBOARD,
+            ki: KbdInput { vk: 0, scan: 0x1D, flags: KEYEVENTF_SCANCODE, time: 0, extra: 0 },
+            _pad: [0u8; 8],
+        },
+        WinInput {
+            input_type: INPUT_KEYBOARD,
+            ki: KbdInput { vk: 0, scan: 0x2F, flags: KEYEVENTF_SCANCODE, time: 0, extra: 0 },
+            _pad: [0u8; 8],
+        },
+        WinInput {
+            input_type: INPUT_KEYBOARD,
+            ki: KbdInput { vk: 0, scan: 0x2F, flags: KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, time: 0, extra: 0 },
+            _pad: [0u8; 8],
+        },
+        WinInput {
+            input_type: INPUT_KEYBOARD,
+            ki: KbdInput { vk: 0, scan: 0x1D, flags: KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, time: 0, extra: 0 },
+            _pad: [0u8; 8],
+        },
+    ];
+    unsafe {
+        SendInput(4, paste_keys.as_ptr(), size);
+    }
+}
