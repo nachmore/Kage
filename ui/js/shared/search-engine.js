@@ -5,6 +5,22 @@
 
 import { matchCommands, matchSlashCommands, matchCommandsByName } from './commands.js';
 
+// --- Helpers ---
+
+function _relativeTime(isoString) {
+    try {
+        const d = new Date(isoString);
+        const diffMin = Math.floor((Date.now() - d) / 60000);
+        if (diffMin < 1) return 'just now';
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h ago`;
+        const diffDay = Math.floor(diffHr / 24);
+        if (diffDay < 7) return `${diffDay}d ago`;
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch { return ''; }
+}
+
 // --- Frecency store ---
 
 let _frecencyData = {};
@@ -137,12 +153,30 @@ export async function unifiedSearch(query, invoke, shortcuts) {
     }
 
     // Shortcuts
+    // TODO: The shortcut history integration has a few brittle spots that should be cleaned up:
+    // 1. The caller passes rawQuery (untrimmed) so we can detect trailing spaces — this is a
+    //    workaround for handleInputChange trimming the query. Consider accepting an explicit
+    //    `trailingSpace` boolean instead of relying on whitespace in the query string.
+    // 2. History entries compete on score (84) with other result types. A cleaner approach
+    //    would be to group history results under their parent shortcut as a sub-list, so they
+    //    don't get displaced by unrelated results with higher frecency boosts.
+    // 3. The result cap was bumped from 7→12 to accommodate history entries. This should be
+    //    dynamic — e.g. 7 base + N history entries — rather than a fixed increase.
     if (shortcuts && shortcuts.length > 0) {
         const lower = query.toLowerCase();
+        const parts = query.split(/\s+/);
+        const triggerWord = parts[0].toLowerCase();
+        const hasSpace = query.includes(' ');
+        const partialArgs = hasSpace ? parts.slice(1).join(' ').toLowerCase() : '';
+
         for (const sc of shortcuts) {
             const scLower = sc.shortcut?.toLowerCase() || '';
             const nameLower = sc.name?.toLowerCase() || '';
-            if (scLower.startsWith(lower) || nameLower.startsWith(lower) || nameLower.includes(lower)) {
+            // Match by: trigger starts with query, name starts with query, name contains query,
+            // OR exact trigger match when user has typed trigger + space (for history)
+            const triggerMatch = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
+            const nameMatch = nameLower.startsWith(lower) || nameLower.includes(lower);
+            if (triggerMatch || nameMatch) {
                 const triggerLen = scLower.startsWith(lower) ? sc.shortcut.length : sc.name.length;
                 const rawArgs = query.length > triggerLen ? query.substring(triggerLen).trim() : '';
                 const argsArray = rawArgs ? rawArgs.split(/\s+/) : [];
@@ -167,6 +201,29 @@ export async function unifiedSearch(query, invoke, shortcuts) {
                     score: scLower === lower || nameLower === lower ? 85 : 65,
                     data: { shortcut: sc, args: argsArray },
                 });
+
+                // Show history when trigger is exact match + space typed (user wants to pick from history)
+                if (scLower === triggerWord && hasSpace) {
+                    try {
+                        const history = await invoke('get_shortcut_history', { trigger: sc.shortcut });
+                        for (const entry of history) {
+                            const histArgs = entry.args || '';
+                            // Filter by partial args if user is typing
+                            if (partialArgs && !histArgs.toLowerCase().includes(partialArgs)) continue;
+                            // Don't duplicate the current exact args
+                            if (rawArgs && histArgs === rawArgs) continue;
+                            results.push({
+                                id: 'shortcut-history:' + sc.name + ':' + histArgs,
+                                type: 'shortcut',
+                                label: sc.name + ' ' + histArgs,
+                                description: '🕐 ' + (entry.at ? _relativeTime(entry.at) : ''),
+                                icon: sc.icon || '⚡',
+                                score: 84,
+                                data: { shortcut: sc, args: histArgs.split(/\s+/) },
+                            });
+                        }
+                    } catch { /* history unavailable */ }
+                }
             }
         }
     }
@@ -196,5 +253,5 @@ function _applyFrecency(results, query) {
         r.score += getFrecencyBoost(query, r.id);
     }
     results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 7);
+    return results.slice(0, 12);
 }

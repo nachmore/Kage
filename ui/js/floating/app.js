@@ -737,7 +737,8 @@ export class FloatingApp {
     }
 
     async handleInputChange(event) {
-        const query = this.elements.input.value.trim();
+        const rawQuery = this.elements.input.value;
+        const query = rawQuery.trim();
         
         this.elements.input.style.height = 'auto';
         this.elements.input.style.height = Math.min(this.elements.input.scrollHeight, 100) + 'px';
@@ -777,7 +778,7 @@ export class FloatingApp {
             }
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(query, this.invoke, this.shortcuts);
+            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts);
             if (results.length > 0) {
                 this.selectedIndex = renderUnifiedResults(
                     results,

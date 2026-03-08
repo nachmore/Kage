@@ -97,7 +97,15 @@ export async function executeResult(result, query, ctx) {
         const sc = result.data?.shortcut || result.shortcut;
         const args = result.data?.args || result.args;
         const command = buildShortcutCommand(sc, args, ctx.selectionText || '');
-        return await executeShortcutCommand(command, ctx);
+        const execResult = await executeShortcutCommand(command, ctx);
+        // Record usage for history (fire-and-forget)
+        if (execResult.handled && args?.length > 0 && sc?.shortcut && ctx.invoke) {
+            ctx.invoke('record_shortcut_usage', {
+                trigger: sc.shortcut,
+                args: args.join(' '),
+            }).catch(() => {});
+        }
+        return execResult;
     }
 
     return { handled: false };
@@ -208,6 +216,13 @@ export async function handleEnterAction(opts) {
         if (matches?.length > 0) {
             const cmd = buildShortcutCommand(matches[0].shortcut, matches[0].args, ctx.selectionText || '');
             const result = await executeShortcutCommand(cmd, ctx);
+            // Record usage for history
+            if (result.handled && matches[0].args?.length > 0 && ctx.invoke) {
+                ctx.invoke('record_shortcut_usage', {
+                    trigger: matches[0].shortcut.shortcut,
+                    args: matches[0].args.join(' '),
+                }).catch(() => {});
+            }
             return result.handled ? result : { handled: false };
         }
     }

@@ -117,6 +117,67 @@ pub async fn load_frecency() -> Result<String, String> {
     }
 }
 
+const MAX_SHORTCUT_HISTORY: usize = 20;
+
+fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
+    Ok(dirs::config_dir()
+        .ok_or("No config dir")?
+        .join("kiro-assistant")
+        .join("shortcut-history.json"))
+}
+
+/// Record a shortcut execution with arguments for history recall.
+#[tauri::command]
+pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), String> {
+    let args = args.trim().to_string();
+    if args.is_empty() { return Ok(()); }
+
+    let path = shortcut_history_path()?;
+    let mut history: serde_json::Map<String, serde_json::Value> = if path.exists() {
+        fs::read_to_string(&path).ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    let entry = serde_json::json!({
+        "args": args,
+        "at": chrono::Utc::now().to_rfc3339()
+    });
+
+    let entries = history.entry(trigger).or_insert_with(|| serde_json::json!([]));
+    if let Some(arr) = entries.as_array_mut() {
+        // Remove duplicate if same args already exist
+        arr.retain(|e| e.get("args").and_then(|a| a.as_str()) != Some(entry["args"].as_str().unwrap_or("")));
+        // Prepend new entry
+        arr.insert(0, entry);
+        // Cap at MAX_SHORTCUT_HISTORY
+        arr.truncate(MAX_SHORTCUT_HISTORY);
+    }
+
+    let dir = path.parent().unwrap();
+    let _ = fs::create_dir_all(dir);
+    fs::write(&path, serde_json::to_string_pretty(&history).unwrap_or_default())
+        .map_err(|e| format!("Failed to save shortcut history: {}", e))
+}
+
+/// Get history entries for a specific shortcut trigger.
+#[tauri::command]
+pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Value>, String> {
+    let path = shortcut_history_path()?;
+    if !path.exists() { return Ok(vec![]); }
+
+    let history: serde_json::Map<String, serde_json::Value> = fs::read_to_string(&path).ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+
+    Ok(history.get(&trigger)
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default())
+}
+
 #[tauri::command]
 pub async fn update_tool_policy(
     tool_title: String,
