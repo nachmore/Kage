@@ -255,8 +255,10 @@ window.addEventListener('DOMContentLoaded', async () => {
             const bundledList = await resp.json();
             for (const ext of bundledList) {
                 try {
+                    console.log(`[Settings] Loading bundled extension: ${ext.id} (class: ${ext.className})`);
                     await loadScript(`extensions/${ext.id}/settings.js`);
                     const ModuleClass = window[ext.className];
+                    console.log(`[Settings] ${ext.id}: window.${ext.className} =`, ModuleClass ? 'found' : 'NOT FOUND');
                     if (ModuleClass) {
                         const mod = new ModuleClass();
                         mod._extensionId = ext.id;

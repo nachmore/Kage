@@ -669,6 +669,7 @@ fn main() {
             commands::record_shortcut_usage,
             commands::get_shortcut_history,
             commands::search_files,
+            commands::get_calendar_events,
             commands::show_context_menu,
             commands::set_floating_opacity,
             commands::apply_chat_window_size,

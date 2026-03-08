@@ -237,6 +237,8 @@ export class ExtensionManager {
     }
 
     matchAll(query) {
+        // > prefix is reserved for built-in commands — never sent to extensions
+        if (query.trim().startsWith('>')) return [];
         const results = [];
         for (const [id, ext] of this.extensions) {
             if (!ext.searchProvider) continue;
@@ -255,6 +257,8 @@ export class ExtensionManager {
     }
 
     async matchAllAsync(query) {
+        // > prefix is reserved for built-in commands — never sent to extensions
+        if (query.trim().startsWith('>')) return [];
         const results = [];
         const promises = [];
         for (const [id, ext] of this.extensions) {

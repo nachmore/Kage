@@ -132,7 +132,6 @@ const LOCAL_COMMANDS = [
         icon: '📋',
         aliases: ['cb'],
         execute: async () => {
-            // Trigger clipboard mode by setting the input
             const input = document.querySelector('#floatingInput, #chatInput');
             if (input) {
                 input.value = '>cb ';

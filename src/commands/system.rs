@@ -655,6 +655,17 @@ pub async fn search_files(query: String, max_results: Option<usize>) -> Result<V
     .map_err(|e| format!("Search task failed: {}", e))
 }
 
+/// Get upcoming calendar events.
+#[tauri::command]
+pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::calendar::CalendarEvent>, String> {
+    let h = hours.unwrap_or(24).min(72);
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::os::get_upcoming_events(h)
+    })
+    .await
+    .map_err(|e| format!("Calendar task failed: {}", e))
+}
+
 /// Fetch a website's favicon and return it as a base64 data URI.
 #[tauri::command]
 pub async fn fetch_favicon(url: String) -> Result<String, String> {

@@ -1,0 +1,20 @@
+{
+  "id": "calendar",
+  "name": "Calendar",
+  "version": "1.0.0",
+  "type": "extension",
+  "description": "Show upcoming meetings with join button overlay",
+  "icon": "📅",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": false },
+    "show_overlay": { "type": "boolean", "default": true },
+    "lookahead_hours": { "type": "number", "default": 8 }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js"
+  }
+}
