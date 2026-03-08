@@ -148,6 +148,20 @@ class ShortcutsSettingsModule extends SettingsModule {
                             </div>
                         </div>
                     </div>
+                    <div class="shortcut-test-section">
+                        <div class="shortcut-test-header" onclick="shortcutsModule.toggleTestSection()">
+                            <span id="shortcutTestToggle">▶</span> Test
+                        </div>
+                        <div id="shortcutTestBody" style="display:none;">
+                            <div class="dialog-field" style="margin-bottom:8px;">
+                                <div style="display:flex;gap:8px;">
+                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="Enter test arguments..." style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();shortcutsModule.runTest()}">
+                                    <button class="setting-button" onclick="shortcutsModule.runTest()">▶ Run</button>
+                                </div>
+                            </div>
+                            <pre id="shortcutTestOutput" class="shortcut-test-output" style="display:none;"></pre>
+                        </div>
+                    </div>
                     <div class="shortcut-dialog-footer">
                         <button class="setting-button" onclick="shortcutsModule.closeDialog()">Cancel</button>
                         <button class="setting-button" onclick="shortcutsModule.saveShortcut()">Save</button>
@@ -180,6 +194,13 @@ class ShortcutsSettingsModule extends SettingsModule {
                 .dialog-field:last-child { margin-bottom: 0; }
                 .dialog-field label { display: block; font-size: 13px; color: var(--kiro-text); margin-bottom: 6px; font-weight: 500; }
                 .shortcut-dialog-footer { padding: 16px 20px; border-top: 1px solid var(--kiro-border-subtle); display: flex; justify-content: flex-end; gap: 12px; }
+                .shortcut-test-section { border-top: 1px solid var(--kiro-border-subtle); }
+                .shortcut-test-header { padding: 10px 20px; font-size: 12px; color: var(--kiro-text-muted); cursor: pointer; user-select: none; }
+                .shortcut-test-header:hover { color: var(--kiro-text); background: var(--kiro-bg-input); }
+                #shortcutTestBody { padding: 0 20px 12px; }
+                .shortcut-test-output { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; line-height: 1.5; padding: 8px 12px; border-radius: 4px; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); color: var(--kiro-text); white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; margin: 0; }
+                .shortcut-test-output.test-error { color: #e74c3c; border-color: #e74c3c40; }
+                .shortcut-test-output.test-success { border-color: var(--kiro-accent); }
                 .shortcuts-empty { padding: 40px; text-align: center; color: var(--kiro-text-muted); font-size: 13px; }
                 .shortcut-icon-preview { width: 32px; height: 32px; border-radius: 6px; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
                 .shortcut-icon-preview img { width: 100%; height: 100%; object-fit: cover; }
@@ -332,6 +353,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         this._previousScript = null;
         this._setIconPreview('');
         this.onActionTypeChange();
+        this._resetTestSection();
         document.getElementById('shortcutDialog').style.display = 'flex';
     }
 
@@ -355,6 +377,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         this._previousScript = null;
         this._setIconPreview(s.icon || '');
         this.onActionTypeChange();
+        this._resetTestSection();
         document.getElementById('shortcutDialog').style.display = 'flex';
         if ((s.action_type || 'run_program') === 'script') this.updateHighlight();
     }
@@ -445,6 +468,88 @@ class ShortcutsSettingsModule extends SettingsModule {
     /** Clear the custom icon */
     clearIcon() {
         this._setIconPreview('');
+    }
+
+    toggleTestSection() {
+        const body = document.getElementById('shortcutTestBody');
+        const toggle = document.getElementById('shortcutTestToggle');
+        if (!body) return;
+        const show = body.style.display === 'none';
+        body.style.display = show ? '' : 'none';
+        if (toggle) toggle.textContent = show ? '▼' : '▶';
+    }
+
+    _resetTestSection() {
+        const args = document.getElementById('shortcutTestArgs');
+        const output = document.getElementById('shortcutTestOutput');
+        const body = document.getElementById('shortcutTestBody');
+        const toggle = document.getElementById('shortcutTestToggle');
+        if (args) args.value = '';
+        if (output) { output.style.display = 'none'; output.textContent = ''; output.className = 'shortcut-test-output'; }
+        if (body) body.style.display = 'none';
+        if (toggle) toggle.textContent = '▶';
+    }
+
+    /** Build a temporary shortcut from the current dialog fields and dry-run it */
+    runTest() {
+        const output = document.getElementById('shortcutTestOutput');
+        if (!output) return;
+
+        const actionType = document.getElementById('shortcutActionType').value;
+        const testInput = document.getElementById('shortcutTestArgs')?.value || '';
+        const args = testInput.trim() ? testInput.trim().split(/\s+/) : [];
+
+        // Build a temporary shortcut object from dialog fields
+        const sc = {
+            name: document.getElementById('shortcutName').value || 'test',
+            shortcut: document.getElementById('shortcutTrigger').value || 'test',
+            action_type: actionType,
+            path: document.getElementById('shortcutPath').value || '',
+            url: document.getElementById('shortcutUrl').value || '',
+            prompt: document.getElementById('shortcutPrompt').value || '',
+            script: document.getElementById('shortcutScript').value || '',
+            script_action: document.getElementById('shortcutScriptAction').value || 'text',
+            arguments: document.getElementById('shortcutArgs').value || '',
+            working_directory: document.getElementById('shortcutWorkDir').value || '',
+        };
+
+        try {
+            // Import buildShortcutCommand dynamically to avoid circular deps
+            import('../shared/shortcuts.js').then(({ buildShortcutCommand }) => {
+                const cmd = buildShortcutCommand(sc, args, '');
+                output.style.display = 'block';
+                output.className = 'shortcut-test-output';
+
+                if (cmd.type === 'error') {
+                    output.textContent = '✗ ' + cmd.message;
+                    output.classList.add('test-error');
+                    return;
+                }
+
+                output.classList.add('test-success');
+                let text = '';
+                if (cmd.type === 'open_url') {
+                    text = '🌐 URL: ' + cmd.url;
+                } else if (cmd.type === 'prompt') {
+                    text = '💬 Prompt: ' + cmd.message;
+                } else if (cmd.type === 'text') {
+                    text = '📝 Output: ' + cmd.message;
+                } else if (cmd.type === 'run_program') {
+                    text = '▶️ Run: ' + cmd.path;
+                    if (cmd.args?.length) text += '\n   Args: ' + cmd.args.join(' ');
+                    if (cmd.workDir) text += '\n   Dir: ' + cmd.workDir;
+                } else if (cmd.type === 'noop') {
+                    text = '(no output — script returned null/undefined)';
+                } else {
+                    text = JSON.stringify(cmd, null, 2);
+                }
+                output.textContent = text;
+            });
+        } catch (e) {
+            output.style.display = 'block';
+            output.className = 'shortcut-test-output test-error';
+            output.textContent = '✗ ' + e.message;
+        }
     }
 
     updateHighlight() {

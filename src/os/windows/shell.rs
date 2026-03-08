@@ -4,10 +4,16 @@ use anyhow::{Context, Result};
 use std::process::Command;
 
 pub fn open_url_impl(url: &str) -> Result<()> {
-    Command::new("cmd")
-        .args(&["/C", "start", url])
-        .spawn()
-        .context("Failed to open URL")?;
+    use windows::core::HSTRING;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    log::info!("[open_url] Opening: {}", url);
+    let url_w = HSTRING::from(url);
+    let op = HSTRING::from("open");
+    unsafe {
+        ShellExecuteW(None, &op, &url_w, None, None, SW_SHOWNORMAL);
+    }
     Ok(())
 }
 

@@ -177,8 +177,12 @@ export async function unifiedSearch(query, invoke, shortcuts) {
             const triggerMatch = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
             const nameMatch = nameLower.startsWith(lower) || nameLower.includes(lower);
             if (triggerMatch || nameMatch) {
-                const triggerLen = scLower.startsWith(lower) ? sc.shortcut.length : sc.name.length;
-                const rawArgs = query.length > triggerLen ? query.substring(triggerLen).trim() : '';
+                // When matched by exact trigger + space, use the trigger length for arg extraction.
+                // Name-based matches with spaces in the query are unreliable for arg extraction,
+                // so only extract args when the trigger actually matched.
+                const matchedByTrigger = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
+                const triggerLen = matchedByTrigger ? sc.shortcut.length : sc.name.length;
+                const rawArgs = matchedByTrigger ? (query.length > triggerLen ? query.substring(triggerLen).trim() : '') : '';
                 const argsArray = rawArgs ? rawArgs.split(/\s+/) : [];
 
                 let desc = '⚡ ' + sc.shortcut;
