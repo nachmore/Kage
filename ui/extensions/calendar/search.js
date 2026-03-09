@@ -53,7 +53,6 @@ export default class CalendarSearchProvider {
         if (!isCalQuery && !isRefresh) return [];
 
         if (isRefresh) {
-            // Show the option — actual refresh happens on execute
             return [{
                 type: 'calendar_refresh',
                 label: 'Refresh calendar',
@@ -63,6 +62,15 @@ export default class CalendarSearchProvider {
                 data: { action: 'refresh' },
                 _extensionId: 'calendar',
             }];
+        }
+
+        // Check for date-specific query: "cal 2026-03-15", "cal tomorrow", "cal next monday", etc.
+        const dateArg = q.replace(/^(cal|calendar|meetings)\s*/i, '').trim();
+        if (dateArg) {
+            const resolved = this._resolveDate(dateArg);
+            if (resolved) {
+                return this._fetchEventsForDate(resolved);
+            }
         }
 
         const events = await this._fetchEvents();
@@ -268,6 +276,80 @@ export default class CalendarSearchProvider {
             console.warn('[Calendar] Failed to fetch events:', e);
         }
         return this._events;
+    }
+
+    /**
+     * Resolve a natural language date string to YYYY-MM-DD.
+     * Supports: "today", "tomorrow", "yesterday", "YYYY-MM-DD",
+     * "monday"–"sunday", "next monday"–"next sunday".
+     */
+    _resolveDate(input) {
+        const s = input.toLowerCase().trim();
+        const now = new Date();
+        const fmt = (d) => d.toISOString().slice(0, 10);
+
+        if (s === 'today') return fmt(now);
+        if (s === 'tomorrow') {
+            const d = new Date(now); d.setDate(d.getDate() + 1); return fmt(d);
+        }
+        if (s === 'yesterday') {
+            const d = new Date(now); d.setDate(d.getDate() - 1); return fmt(d);
+        }
+        // ISO date
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+        // Day names: "monday", "next tuesday", etc.
+        const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const isNext = s.startsWith('next ');
+        const dayName = isNext ? s.substring(5) : s;
+        const dayIdx = days.indexOf(dayName);
+        if (dayIdx !== -1) {
+            const today = now.getDay();
+            let diff = dayIdx - today;
+            if (diff <= 0 || isNext) diff += 7;
+            if (isNext && diff <= 7) diff += 0; // "next monday" = the coming one
+            const d = new Date(now); d.setDate(d.getDate() + diff);
+            return fmt(d);
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch events for a specific date and return as search results.
+     */
+    async _fetchEventsForDate(dateStr) {
+        try {
+            const events = await this._invoke('get_calendar_events_for_date', { date: dateStr });
+            const label = this._formatDateLabel(dateStr);
+            if (!events || events.length === 0) {
+                return [{
+                    type: 'calendar_event',
+                    label: `No meetings on ${label}`,
+                    description: dateStr,
+                    icon: '📅',
+                    score: 85,
+                    data: null,
+                    _extensionId: 'calendar',
+                }];
+            }
+            return events.slice(0, 10).map(e => this._eventToResult(e));
+        } catch (e) {
+            console.warn('[Calendar] Failed to fetch events for date:', e);
+            return [];
+        }
+    }
+
+    /**
+     * Format a YYYY-MM-DD date as a friendly label.
+     */
+    _formatDateLabel(dateStr) {
+        try {
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+        } catch {
+            return dateStr;
+        }
     }
 
     _eventToResult(event) {

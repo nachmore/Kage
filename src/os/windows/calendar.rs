@@ -150,3 +150,105 @@ struct RawOutlookEvent {
     #[serde(default)]
     body: String,
 }
+
+pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
+    let date = date.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let results = get_events_for_date_via_outlook(&date);
+        let _ = tx.send(results);
+    });
+    rx.recv().unwrap_or_default()
+}
+
+fn get_events_for_date_via_outlook(date: &str) -> Vec<CalendarEvent> {
+    // Query Outlook for all events on a specific date (midnight to midnight)
+    let ps_script = format!(
+        r#"
+try {{
+    $ol = New-Object -COM Outlook.Application
+    $ns = $ol.GetNamespace("MAPI")
+    $cal = $ns.GetDefaultFolder(9)
+    $start = [DateTime]::Parse("{date}")
+    $end = $start.AddDays(1)
+    $filter = "[Start] >= '" + $start.ToString("g") + "' AND [Start] < '" + $end.ToString("g") + "'"
+    $items = $cal.Items
+    $items.Sort("[Start]")
+    $items.IncludeRecurrences = $true
+    $restricted = $items.Restrict($filter)
+    $results = @()
+    foreach ($item in $restricted) {{
+        if ($results.Count -ge 50) {{ break }}
+        $body = ""
+        try {{ $body = [string]$item.Body }} catch {{}}
+        $results += [PSCustomObject]@{{
+            id = [string]$item.EntryID
+            subject = [string]$item.Subject
+            location = [string]$item.Location
+            organizer = [string]$item.Organizer
+            start_time = $item.Start.ToUniversalTime().ToString("o")
+            duration_minutes = [int]$item.Duration
+            all_day = [bool]$item.AllDayEvent
+            body = $body
+        }}
+    }}
+    $results | ConvertTo-Json -Compress
+}} catch {{
+    Write-Error $_.Exception.Message
+}}
+"#,
+        date = date,
+    );
+
+    let mut cmd = Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    {{
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }}
+
+    let output = match cmd.output() {
+        Ok(o) => o,
+        Err(e) => {
+            warn!("[calendar] Failed to run PowerShell for date query: {}", e);
+            return vec![];
+        }
+    };
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.trim().is_empty() {
+        warn!("[calendar] PowerShell stderr (date query): {}", stderr.trim());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.trim().is_empty() {
+        info!("[calendar] No events for date {}", date);
+        return vec![];
+    }
+
+    let raw: Vec<RawOutlookEvent> = if stdout.trim().starts_with('[') {
+        serde_json::from_str(&stdout).unwrap_or_default()
+    } else {
+        serde_json::from_str::<RawOutlookEvent>(&stdout)
+            .map(|e| vec![e])
+            .unwrap_or_default()
+    };
+
+    info!("[calendar] Parsed {} events for date {}", raw.len(), date);
+
+    raw.into_iter().map(|r| {
+        let online_url = crate::os::calendar::extract_meeting_url(&r.location, &r.body);
+        CalendarEvent {
+            id: r.id,
+            subject: r.subject,
+            location: r.location,
+            organizer: r.organizer,
+            start_time: r.start_time,
+            duration_minutes: r.duration_minutes,
+            all_day: r.all_day,
+            online_url,
+        }
+    }).collect()
+}

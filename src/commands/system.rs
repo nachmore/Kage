@@ -22,6 +22,14 @@ pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
     // Built-in steering (always first)
     parts.push(BUILTIN_STEERING.to_string());
 
+    // Current date and time — so the LLM knows the actual date for relative queries
+    let now = chrono::Local::now();
+    parts.push(format!(
+        "<current_datetime>\nCurrent date and time: {}\nTimezone: {}\n</current_datetime>",
+        now.format("%A, %B %e, %Y %I:%M %p"),
+        now.format("%Z"),
+    ));
+
     // User-written steering doc
     if let Some(ref path) = assistant.user_steering_path {
         if !path.is_empty() {
@@ -664,6 +672,20 @@ pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::ca
     })
     .await
     .map_err(|e| format!("Calendar task failed: {}", e))
+}
+
+/// Get calendar events for a specific date (YYYY-MM-DD).
+#[tauri::command]
+pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os::calendar::CalendarEvent>, String> {
+    // Basic validation
+    if date.len() != 10 || date.chars().filter(|c| *c == '-').count() != 2 {
+        return Err("Invalid date format. Use YYYY-MM-DD.".to_string());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::os::get_events_for_date(&date)
+    })
+    .await
+    .map_err(|e| format!("Calendar date query failed: {}", e))
 }
 
 /// Fetch a website's favicon and return it as a base64 data URI.

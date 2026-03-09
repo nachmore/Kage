@@ -64,6 +64,7 @@ pub fn simulate_paste() {
 pub use clipboard_history::get_clipboard_history;
 pub use file_search::search_files;
 pub use calendar::get_upcoming_events;
+pub use calendar::get_events_for_date;
 pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
 #[allow(unused)]
 pub use hotkey::CapturedHotkey;
