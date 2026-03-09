@@ -336,7 +336,7 @@ fn main() {
                     move |_app, _shortcut, event| {
                         if event.state != ShortcutState::Pressed { return; }
                         info!("Clipboard hotkey triggered");
-                        toggle_floating_window(&cb_window);
+                        commands::window::show_floating_at_mouse(&cb_window);
                         // Delay event so the window has time to show and the JS listener is ready
                         let handle = cb_app_handle.clone();
                         std::thread::spawn(move || {
@@ -417,7 +417,7 @@ fn main() {
                         move |_app, _shortcut, event| {
                             if event.state != ShortcutState::Pressed { return; }
                             info!("Clipboard hotkey triggered");
-                            toggle_floating_window(&cb_win);
+                            commands::window::show_floating_at_mouse(&cb_win);
                             let handle = cb_handle.clone();
                             std::thread::spawn(move || {
                                 std::thread::sleep(std::time::Duration::from_millis(150));

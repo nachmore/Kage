@@ -373,6 +373,11 @@ export class FloatingApp {
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
+            // Restore any overlays hidden by clipboard mode
+            if (!this._clipboardMode) {
+                this._restoreOverlaysAfterClipboard();
+            }
+
             // Clear any pending system command confirmations and re-trigger search
             if (this.currentMatches.some(m => m.type === 'system_confirm')) {
                 const query = this.elements.input.value.trim();
@@ -790,6 +795,7 @@ export class FloatingApp {
                 }
                 return;
             }
+            if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
             const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts);
@@ -817,6 +823,7 @@ export class FloatingApp {
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
+        if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
         this._clipboardMode = false;
         await this.windowManager.resizeWindow();
     }
@@ -824,6 +831,7 @@ export class FloatingApp {
     /** Enter clipboard history mode — fetch and display history */
     async _enterClipboardMode(filter = '') {
         this._clipboardMode = true;
+        this._hideOverlaysForClipboard();
         const entries = await fetchClipboardHistory(this.invoke);
         const filtered = filterClipboardHistory(entries, filter);
         this._clipboardEntries = entries; // Cache for filtering
@@ -833,6 +841,20 @@ export class FloatingApp {
             this.currentMatches,
             () => this.windowManager.resizeWindow()
         );
+    }
+
+    /**
+     * Hide banners, calendar overlay, and timer bars while clipboard mode is active.
+     */
+    _hideOverlaysForClipboard() {
+        document.body.classList.add('clipboard-mode');
+    }
+
+    /**
+     * Restore overlays that were hidden for clipboard mode.
+     */
+    _restoreOverlaysAfterClipboard() {
+        document.body.classList.remove('clipboard-mode');
     }
 
     /** Update clipboard history filter (called on input change in clipboard mode) */
@@ -979,6 +1001,7 @@ export class FloatingApp {
         } else if (event.key === 'Escape') {
             if (this._clipboardMode) {
                 event.preventDefault();
+                this._restoreOverlaysAfterClipboard();
                 this._clipboardMode = false;
                 this._clipboardEntries = null;
                 this._clearInput();

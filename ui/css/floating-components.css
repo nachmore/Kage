@@ -219,6 +219,12 @@ body.dark-theme .selection-checkbox {
     font-weight: 500;
 }
 
+/* Clipboard mode — hide overlays to keep the clipboard list clean */
+body.clipboard-mode .timer-bar,
+body.clipboard-mode .floating-banner {
+    display: none !important;
+}
+
 /* Timer Bar */
 .timer-bar {
     display: none;

@@ -43,6 +43,32 @@ pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
 
 
 
+/// Position the floating window at the mouse cursor, regardless of user config.
+/// Show the floating window at the mouse cursor without selection capture.
+/// Used by the clipboard hotkey — we don't want to send Ctrl+C when the user
+/// just wants to browse their clipboard history.
+pub fn show_floating_at_mouse(window: &WebviewWindow) {
+    let app = window.app_handle();
+    let state: tauri::State<'_, crate::state::AppState> = app.state();
+
+    // If already visible, hide it (toggle behavior)
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+        return;
+    }
+
+    position_floating_window(window, "mouse", None, None);
+    let _ = window.show();
+    let _ = window.set_focus();
+    state.updater.touch_activity();
+
+    // Clear selection — clipboard mode doesn't use it
+    if let Ok(mut sel) = state.last_selection.lock() {
+        *sel = None;
+    }
+    let _ = app.emit("selection_captured", false);
+}
+
 /// Toggle the floating window visibility and position it
 pub fn toggle_floating_window(window: &WebviewWindow) {
     let app = window.app_handle();
