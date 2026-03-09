@@ -27,6 +27,7 @@ export class FloatingApp {
         this.currentMatches = [];
         this.selectedIndex = -1;
         this.searchTimeout = null;
+        this._searchGeneration = 0;
         this.currentResponse = '';
         this.isWaitingForResponse = false;
         this.shortcuts = [];
@@ -773,6 +774,11 @@ export class FloatingApp {
         }
         
         // Debounced unified search — queries all sources in parallel
+        // Use a longer debounce for file search patterns to avoid unnecessary disk queries
+        const looksLikeFileSearch = /\.\w{0,6}$/.test(query) || query.includes('*') || query.includes('?') || query.toLowerCase().startsWith('>find ');
+        const debounceMs = looksLikeFileSearch ? 250 : 100;
+        this._searchGeneration++;
+        const gen = this._searchGeneration;
         this.searchTimeout = setTimeout(async () => {
             // Check for clipboard history trigger
             if (isClipboardTrigger(query)) {
@@ -787,6 +793,8 @@ export class FloatingApp {
             this._clipboardMode = false;
 
             const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts);
+            // Discard stale results — a newer search was started while this one was in-flight
+            if (gen !== this._searchGeneration) return;
             if (results.length > 0) {
                 this.selectedIndex = renderUnifiedResults(
                     results,
@@ -802,7 +810,7 @@ export class FloatingApp {
             } else {
                 this.clearSuggestions();
             }
-        }, 100);
+        }, debounceMs);
     }
 
     async clearSuggestions() {
