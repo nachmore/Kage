@@ -488,7 +488,8 @@ export class ExtensionManager {
     }
 
     /**
-     * Execute an extension tool call. Returns { result, error } with a 5s timeout.
+     * Execute an extension tool call. Returns { result, error } with a timeout.
+     * Default timeout is 5s, but tools can declare a longer timeout via getToolTimeout().
      * @param {string} extensionId
      * @param {string} toolName
      * @param {object} params
@@ -503,11 +504,15 @@ export class ExtensionManager {
             return { error: `Extension '${extensionId}' is disabled` };
         }
 
-        const TIMEOUT_MS = 5000;
+        // Allow tool providers to declare custom timeouts per tool
+        let timeoutMs = 5000;
+        if (typeof ext.toolProvider.getToolTimeout === 'function') {
+            timeoutMs = ext.toolProvider.getToolTimeout(toolName) || timeoutMs;
+        }
         try {
             const resultPromise = ext.toolProvider.execute(toolName, params);
             const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Extension tool timed out (5s)')), TIMEOUT_MS)
+                setTimeout(() => reject(new Error(`Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`)), timeoutMs)
             );
             return await Promise.race([resultPromise, timeoutPromise]);
         } catch (e) {

@@ -1509,6 +1509,16 @@ export class ChatApp {
             }
             this.renderSourcesInMessage(contentDiv);
         }
+
+        // Show any text before the fence, but hide the fence itself
+        if (contentDiv) {
+            const beforeFence = (this.currentStreamingContent || '').split('```extension_tool_call')[0].trim();
+            if (beforeFence) {
+                renderMarkdown(beforeFence, contentDiv, true);
+            } else {
+                contentDiv.innerHTML = '<span class="streaming-indicator">...</span>';
+            }
+        }
     }
 
     /**

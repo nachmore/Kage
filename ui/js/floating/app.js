@@ -1397,6 +1397,8 @@ export class FloatingApp {
 
     /**
      * Render a loading indicator while an extension tool call is being streamed or executed.
+     * Clears the response area so the incomplete fence isn't shown as a code block,
+     * and keeps the thinking dots visible.
      */
     _renderExtensionToolIndicator(info) {
         // Only add to tool usages if we have the full extension/tool name
@@ -1406,6 +1408,15 @@ export class FloatingApp {
                 this.toolUsages.push({ toolCallId: `ext-${info.extension}-${info.tool}`, title: toolTitle, kind: 'extension' });
             }
             this.renderSources();
+        }
+
+        // Show any text before the fence, but hide the fence itself
+        const beforeFence = this.currentResponse.split('```extension_tool_call')[0].trim();
+        if (beforeFence) {
+            renderMarkdown(beforeFence, this.elements.responseText, true);
+        } else {
+            // Nothing before the fence — keep the response area clean so thinking dots show
+            this.elements.responseText.innerHTML = '';
         }
     }
 

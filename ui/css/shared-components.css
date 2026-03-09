@@ -1353,3 +1353,57 @@ body.light-theme .json-children { border-left-color: #e5e5e5; }
     opacity: 1;
 }
 
+
+/* Folder Plan Review (folder-tools extension) */
+.folder-plan-review {
+    padding: 8px 0;
+}
+
+.folder-plan-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--kiro-text-primary, #E5E7EB);
+    margin-bottom: 4px;
+}
+
+.folder-plan-root {
+    font-size: 11px;
+    color: var(--kiro-text-muted, #9ca3af);
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    margin-bottom: 8px;
+    word-break: break-all;
+}
+
+.folder-plan-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.folder-plan-item {
+    font-size: 13px;
+    color: #E5E7EB;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    margin-bottom: 2px;
+    word-break: break-all;
+}
+
+body.light-theme .folder-plan-item {
+    color: #1f2937;
+    background: rgba(0,0,0,0.05);
+}
+
+.folder-plan-cancel-btn {
+    background: transparent !important;
+    border: 1px solid var(--kiro-border, #3a3640) !important;
+    color: var(--kiro-text-secondary, #938F9B) !important;
+}
+
+.folder-plan-cancel-btn:hover {
+    background: var(--kiro-surface-hover, #352F3D) !important;
+    color: var(--kiro-text-primary, #E5E7EB) !important;
+}

@@ -223,6 +223,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             acp_client: acp_client_arc,
             config: config_arc,
@@ -740,6 +741,10 @@ fn main() {
             commands::extension_tool_response,
             commands::send_extension_tool_steering,
             commands::check_extension_tool_permission,
+            commands::pick_folder,
+            commands::scan_folder,
+            commands::execute_folder_plan,
+            commands::get_common_folders,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

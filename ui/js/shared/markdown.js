@@ -124,6 +124,20 @@ function _doRender(markdown, targetElement, streaming) {
         }
     }
 
+    // Strip extension_tool_call fences from rendered output — they are handled
+    // programmatically by the app and should never appear as visible code blocks.
+    // Handle both complete and incomplete (still streaming) fences.
+    if (markdown.includes('```extension_tool_call')) {
+        // Strip complete fences
+        markdown = markdown.replace(/```extension_tool_call\s*\n[\s\S]*?\n```/g, '');
+        // Strip incomplete fence (still being streamed or tool executing)
+        const incompleteIdx = markdown.indexOf('```extension_tool_call');
+        if (incompleteIdx !== -1) {
+            markdown = markdown.substring(0, incompleteIdx);
+        }
+        markdown = markdown.trim();
+    }
+
     // Deduplicate taskplan blocks at the source level — keep only the last one.
     // The agent re-outputs the full taskplan block each time it updates status,
     // so we strip all but the final occurrence to avoid showing stale versions.
