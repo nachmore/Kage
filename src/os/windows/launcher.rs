@@ -326,18 +326,23 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
 }
 
 pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+
     let path_str = path.to_str().unwrap_or("");
     if path_str.starts_with("shell:AppsFolder\\") || (path_str.contains(':') && !path_str.contains('\\')) {
         // UWP app (shell:AppsFolder\AUMID) or URI protocol (ms-settings:, calculator:, etc.)
         info!("Launching: {}", path_str);
         Command::new("cmd")
             .args(&["/C", "start", "", path_str])
+            .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
             .spawn()
             .context("Failed to launch")?;
     } else {
         info!("Launching Windows application at {:?}", path);
         Command::new("cmd")
             .args(&["/C", "start", "", path_str])
+            .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
             .spawn()
             .context("Failed to launch application")?;
     }

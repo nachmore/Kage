@@ -123,7 +123,8 @@ fn main() {
             match CreateJobObjectW(None, PCWSTR::null()) {
                 Ok(job) => {
                     let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-                    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                        | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
                     let set_ok = SetInformationJobObject(
                         job,
                         JobObjectExtendedLimitInformation,

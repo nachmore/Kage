@@ -352,6 +352,13 @@ pub async fn execute_shortcut(
         command.current_dir(work_dir);
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+        command.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+    }
+
     command
         .spawn()
         .map_err(|e| format!("Failed to execute shortcut: {}", e))?;
@@ -377,9 +384,15 @@ pub async fn execute_system_command(
     let result = if elevated {
         spawn_elevated(&command_id)
     } else {
-        std::process::Command::new(get_system_command_program(&command_id))
-            .args(get_system_command_args(&command_id))
-            .spawn()
+        let mut cmd = std::process::Command::new(get_system_command_program(&command_id));
+        cmd.args(get_system_command_args(&command_id));
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+            cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+        }
+        cmd.spawn()
     };
 
     match result {
