@@ -447,10 +447,6 @@ export class FloatingApp {
             if (this.computerControlActive) {
                 return;
             }
-            // Don't hide if an automation plan is being reviewed or executed
-            if (this._automationPlanStarted || this._pendingPlanRevision) {
-                return;
-            }
             // Don't hide while waiting for a response
             if (this.isWaitingForResponse) {
                 return;
