@@ -502,6 +502,20 @@ export class FloatingApp {
 
     stopGenerating() {
         if (!this.isWaitingForResponse) return;
+
+        // If an automation plan is running, stop it gracefully
+        if (this._automationPlanStarted && this._automationStatuses) {
+            for (const [step, status] of Object.entries(this._automationStatuses)) {
+                if (status === 'running') {
+                    this._automationStatuses[step] = 'stopped';
+                }
+            }
+            this._renderAutomationPlan();
+            if (this._automationCleanup) this._automationCleanup();
+            this._automationPlanStarted = false;
+            this.computerControlActive = false;
+        }
+
         this.isWaitingForResponse = false;
         this._justStoppedGenerating = true;
         setTimeout(() => { this._justStoppedGenerating = false; }, 300);
@@ -510,15 +524,18 @@ export class FloatingApp {
         this.updateDatetimeVisibility();
         const indicator = this.elements.responseText.querySelector('.streaming-indicator');
         if (indicator) indicator.remove();
-        if (this.currentResponse) {
-            renderMarkdown(this.currentResponse, this.elements.responseText);
-        } else {
-            // No response content — hide the content area entirely
-            this.elements.contentArea.classList.remove('visible');
-            this.elements.expandBtn.classList.remove('visible');
+
+        // Don't overwrite the plan UI with markdown
+        if (!this._automationPlan) {
+            if (this.currentResponse) {
+                renderMarkdown(this.currentResponse, this.elements.responseText);
+            } else {
+                this.elements.contentArea.classList.remove('visible');
+                this.elements.expandBtn.classList.remove('visible');
+            }
         }
+
         this.windowManager.resizeWindow();
-        // Tell the agent to abort the current prompt turn
         this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
     }
 
@@ -1542,6 +1559,13 @@ export class FloatingApp {
         this._renderAutomationPlan();
         await this.windowManager.resizeWindow();
 
+        // Show stop button
+        this.elements.floatingStopBtn.style.display = '';
+        this.updateDatetimeVisibility();
+
+        // Store cleanup so stopGenerating can tear down the plan
+        this._automationCleanup = null;
+
         // Listen for step progress events
         const stepStartUnlisten = await this.listen('automation_step_start', (event) => {
             const { step } = event.payload;
@@ -1558,10 +1582,16 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         });
 
-        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+        const cleanup = () => {
             stepStartUnlisten();
             stepCompleteUnlisten();
             planCompleteUnlisten();
+            this._automationCleanup = null;
+        };
+        this._automationCleanup = cleanup;
+
+        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+            cleanup();
             this._automationPlanStarted = false;
             this.isWaitingForResponse = false;
             this.elements.floatingStopBtn.style.display = 'none';
@@ -1570,7 +1600,6 @@ export class FloatingApp {
             this.updateDatetimeVisibility();
             this._showFloatingResponseActions();
             await this.windowManager.resizeWindow();
-            // Plan UI stays visible — don't overwrite it
         });
 
         // Execute the plan
@@ -1581,9 +1610,7 @@ export class FloatingApp {
         } catch (e) {
             console.error('Automation plan execution failed:', e);
             this.showError('Automation failed: ' + e);
-            stepStartUnlisten();
-            stepCompleteUnlisten();
-            planCompleteUnlisten();
+            cleanup();
             this._automationPlanStarted = false;
             this.isWaitingForResponse = false;
         }

@@ -392,6 +392,9 @@ pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, AppError>
 
 #[tauri::command]
 pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppError> {
+    // Signal automation plan loop to stop
+    state.automation_plan_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+
     let session_id = {
         let client = state.acp_client.try_lock()
             .map_err(|_| "ACP client busy (streaming) — sending cancel directly".to_string());
@@ -618,6 +621,10 @@ pub async fn execute_automation_plan(
     }));
 
     let client = state.acp_client.clone();
+    let cancelled = state.automation_plan_cancelled.clone();
+
+    // Reset cancellation flag at the start
+    cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
 
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
@@ -630,6 +637,12 @@ pub async fn execute_automation_plan(
         }
 
         for (i, step) in plan.iter().enumerate() {
+            // Check cancellation before starting each step
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                info!("Automation plan cancelled by user at step {}", i + 1);
+                break;
+            }
+
             let step_num = i + 1;
             let task = step.get("task").and_then(|t| t.as_str()).unwrap_or("Unknown task");
             let details = step.get("details").and_then(|d| d.as_str()).unwrap_or("");

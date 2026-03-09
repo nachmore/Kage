@@ -273,15 +273,16 @@ export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {})
     return plan.map(s => {
         const rawStatus = stepStatuses[s.step] || 'pending';
         // Map our statuses to taskplan statuses
-        const statusMap = { pending: 'pending', running: 'active', done: 'done', failed: 'error' };
+        const statusMap = { pending: 'pending', running: 'active', done: 'done', failed: 'error', stopped: 'stopped' };
         const status = statusMap[rawStatus] || 'pending';
         const result = stepResults[s.step] || '';
+        const cancelled = rawStatus === 'stopped';
         // Combine details and result for the detail field
         let detail = s.details || '';
-        if (result) {
+        if (result && !cancelled) {
             detail = result.substring(0, 300);
         }
-        return { status, description: s.task, detail };
+        return { status, description: s.task, detail, cancelled };
     });
 }
 

@@ -1200,6 +1200,7 @@ export function createTaskPlanElement(tasks) {
             </div>
             <div class="taskplan-content">
                 <div class="taskplan-title">${isCollapsible ? '<span class="taskplan-chevron">›</span> ' : ''}${_escapeTaskText(task.description)}</div>
+                ${task.cancelled ? '<div class="taskplan-cancelled">Cancelled by user</div>' : ''}
                 ${task.detail ? `<div class="taskplan-detail">${_escapeTaskText(task.detail)}</div>` : ''}
             </div>
         `;
@@ -1225,6 +1226,8 @@ function _taskIcon(status) {
             return '<div class="taskplan-spinner"></div>';
         case 'error':
             return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        case 'stopped':
+            return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>';
         default:
             return '<div class="taskplan-dot"></div>';
     }

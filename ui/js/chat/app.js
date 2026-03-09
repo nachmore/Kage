@@ -1121,10 +1121,23 @@ export class ChatApp {
 
     stopGenerating() {
         if (!this.isWaitingForResponse) return;
+
+        // If an automation plan is running, stop it gracefully
+        if (this._automationPlanStarted && this._automationStatuses) {
+            for (const [step, status] of Object.entries(this._automationStatuses)) {
+                if (status === 'running') {
+                    this._automationStatuses[step] = 'stopped';
+                }
+            }
+            this._renderAutomationPlanChat();
+            if (this._automationCleanup) this._automationCleanup();
+            this._automationPlanStarted = false;
+        }
+
         this.isWaitingForResponse = false;
         this.hideTypingIndicator();
 
-        if (this.currentStreamingMessage) {
+        if (this.currentStreamingMessage && !this._automationPlan) {
             const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
             const indicator = contentDiv?.querySelector('.streaming-indicator');
             if (indicator) indicator.remove();
@@ -1140,7 +1153,6 @@ export class ChatApp {
         this.updateInputState();
         this.elements.chatInput.focus();
         this.scrollToBottom();
-        // Tell the agent to abort the current prompt turn
         this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
     }
 
@@ -1632,6 +1644,8 @@ export class ChatApp {
         this._renderAutomationPlanChat();
         this.scrollToBottom();
 
+        this._automationCleanup = null;
+
         // Listen for step progress events
         const stepStartUnlisten = await this.listen('automation_step_start', (event) => {
             const { step } = event.payload;
@@ -1648,10 +1662,16 @@ export class ChatApp {
             this.scrollToBottom();
         });
 
-        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+        const cleanup = () => {
             stepStartUnlisten();
             stepCompleteUnlisten();
             planCompleteUnlisten();
+            this._automationCleanup = null;
+        };
+        this._automationCleanup = cleanup;
+
+        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
+            cleanup();
             this._automationPlanStarted = false;
             this.messages.push({ role: 'assistant', content: '[Automation plan completed]' });
             this.currentStreamingMessage = null;
@@ -1661,7 +1681,6 @@ export class ChatApp {
             this.elements.chatInput.focus();
             this.scrollToBottom();
             this.loadSessions();
-            // Plan UI stays visible — don't overwrite it
         });
 
         // Execute the plan
@@ -1671,9 +1690,8 @@ export class ChatApp {
             });
         } catch (e) {
             console.error('Automation plan execution failed:', e);
-            stepStartUnlisten();
-            stepCompleteUnlisten();
-            planCompleteUnlisten();
+            cleanup();
+            this._automationPlanStarted = false;
             this.isWaitingForResponse = false;
             this.updateInputState();
         }

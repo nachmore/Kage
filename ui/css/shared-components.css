@@ -813,6 +813,19 @@ ul:has(> .task-list-item) {
 .taskplan-error .taskplan-title {
     color: #dc3c3c;
 }
+.taskplan-stopped .taskplan-icon {
+    background: rgba(220, 60, 60, 0.15);
+    color: #e57373;
+}
+.taskplan-stopped .taskplan-title {
+    color: #e57373;
+}
+.taskplan-cancelled {
+    font-size: 11px;
+    color: #e57373;
+    margin-top: 2px;
+    font-weight: 500;
+}
 /* Pending dot */
 .taskplan-dot {
     width: 8px;

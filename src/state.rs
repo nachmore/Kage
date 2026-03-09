@@ -2,6 +2,7 @@ use crate::acp_client::AcpClient;
 use crate::app_launcher::AppLauncher;
 use crate::config::Config;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tokio::sync::Mutex;
 
 pub struct AppState {
@@ -40,6 +41,8 @@ pub struct AppState {
     pub pocket_tts_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
     /// Pocket TTS pip install child process (for cancellation)
     pub pocket_tts_install_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
+    /// Cancellation flag for automation plan execution
+    pub automation_plan_cancelled: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone)]
