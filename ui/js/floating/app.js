@@ -447,6 +447,10 @@ export class FloatingApp {
             if (this.computerControlActive) {
                 return;
             }
+            // Don't hide if an automation plan is being reviewed or executed
+            if (this._automationPlanStarted || this._pendingPlanRevision) {
+                return;
+            }
             // Don't hide while waiting for a response
             if (this.isWaitingForResponse) {
                 return;
@@ -1099,6 +1103,31 @@ export class FloatingApp {
             if (this.speech.isListening) this.speech.stop();
         }
 
+        // If a plan is pending review, send the message as a revision request
+        if (this._pendingPlanRevision) {
+            this._pendingPlanRevision = null;
+            this._automationPlanStarted = false;
+            // Reset UI for the new response
+            this.elements.input.value = '';
+            this.elements.input.style.height = 'auto';
+            this.currentResponse = '';
+            this.elements.responseText.textContent = '';
+            this.elements.contentArea.classList.add('visible');
+            this.isWaitingForResponse = true;
+            this._extensionToolCallHandled = false;
+            this._extensionToolExecuting = false;
+            this._promptGeneration++;
+            this.startThinking();
+            this.updateDatetimeVisibility();
+            await this.windowManager.resizeWindow();
+            try {
+                await this.invoke('send_message_streaming', { message, attachments: null });
+            } catch (e) {
+                this.showError('Error: ' + e);
+            }
+            return;
+        }
+
         const attachments = this.attachmentManager.toContentBlocks();
         this.attachmentManager.clear();
 
@@ -1212,12 +1241,12 @@ export class FloatingApp {
             }
         }
 
-        // Detect complete automation plan during streaming and execute immediately
+        // Detect complete automation plan during streaming — show for review
         if (!this._automationPlanStarted) {
             const completePlan = detectAutomationPlan(this.currentResponse);
             if (completePlan) {
                 this._automationPlanStarted = true;
-                this._executeAutomationPlan(completePlan);
+                this._showPlanForReview(completePlan);
                 return;
             }
 
@@ -1309,7 +1338,7 @@ export class FloatingApp {
             const plan = detectAutomationPlan(this.currentResponse);
             if (plan && !this._automationPlanStarted) {
                 this._automationPlanStarted = true;
-                this._executeAutomationPlan(plan);
+                this._showPlanForReview(plan);
                 return;
             }
 
@@ -1459,6 +1488,53 @@ export class FloatingApp {
         }
 
         this._extensionToolExecuting = false;
+    }
+
+    /**
+     * Show an automation plan for user review before execution.
+     * Renders the task list with Run/Edit action buttons.
+     */
+    _showPlanForReview(plan) {
+        this._automationPlan = plan;
+        this._automationStatuses = {};
+        this._automationResults = {};
+        for (const s of plan) this._automationStatuses[s.step] = 'pending';
+        this._renderAutomationPlan();
+
+        // Add review action bar below the plan
+        const actionsBar = document.createElement('div');
+        actionsBar.className = 'taskplan-review-actions';
+        actionsBar.innerHTML = `
+            <button class="taskplan-review-btn taskplan-run-btn" id="planRunBtn">▶ Run</button>
+            <span class="taskplan-review-hint">or type to revise the plan</span>
+        `;
+        this.elements.responseText.appendChild(actionsBar);
+
+        // Stop thinking state — plan is ready for review
+        this.stopThinking();
+        this.elements.floatingStopBtn.style.display = 'none';
+        this.updateDatetimeVisibility();
+        this.isWaitingForResponse = false;
+        this.windowManager.resizeWindow();
+
+        // Run button handler
+        const runBtn = document.getElementById('planRunBtn');
+        if (runBtn) {
+            runBtn.addEventListener('mousedown', (e) => e.preventDefault());
+            runBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent handleOutsideClick from hiding the window
+                actionsBar.remove();
+                this._pendingPlanRevision = null;
+                this.isWaitingForResponse = true;
+                this._executeAutomationPlan(plan);
+            });
+        }
+
+        // Focus input so user can type to revise
+        this.elements.input.focus();
+
+        // Override the next send to handle plan revision
+        this._pendingPlanRevision = plan;
     }
 
     async _executeAutomationPlan(plan) {

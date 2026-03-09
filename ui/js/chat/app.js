@@ -961,6 +961,41 @@ export class ChatApp {
         const hasPendingFiles = this._pendingFiles && this._pendingFiles.length > 0;
         if ((!message && !hasAttachments && !hasPendingFiles) || this.isWaitingForResponse) return;
 
+        // If a plan is pending review, send the message as a revision request
+        if (this._pendingPlanRevision && message) {
+            this._pendingPlanRevision = null;
+            this._automationPlanStarted = false;
+            this.elements.chatInput.value = '';
+            this.elements.chatInput.style.height = 'auto';
+            this.clearSuggestions();
+
+            // Add user message to chat
+            const userMsg = this.createMessageElement('user', message);
+            this.elements.messagesArea.appendChild(userMsg);
+            this.messages.push({ role: 'user', content: message });
+
+            // Set up for new streaming response
+            this.currentStreamingContent = '';
+            this.toolSources = [];
+            this.toolUsages = [];
+            this.isWaitingForResponse = true;
+            this._extensionToolCallHandled = false;
+            this._extensionToolExecuting = false;
+            this._streamStartTime = Date.now();
+            this.updateInputState();
+            this.showTypingIndicator();
+            this.currentStreamingMessage = this.createMessageElement('assistant', '');
+            this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+            this.scrollToBottom();
+
+            try {
+                await this.invoke('send_message_streaming', { message, attachments: null });
+            } catch (e) {
+                this.handleMessageError({ payload: 'Error: ' + e });
+            }
+            return;
+        }
+
         // Clear suggestions
         this.clearSuggestions();
         this.hideSuggestionChips();
@@ -1221,7 +1256,7 @@ export class ChatApp {
             if (completePlan) {
                 this._automationPlanStarted = true;
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                this._executeAutomationPlan(completePlan, contentDiv);
+                this._showPlanForReviewChat(completePlan, contentDiv);
                 return;
             }
 
@@ -1308,7 +1343,7 @@ export class ChatApp {
                 const plan = detectAutomationPlan(this.currentStreamingContent);
                 if (plan && !this._automationPlanStarted) {
                     this._automationPlanStarted = true;
-                    this._executeAutomationPlan(plan, contentDiv);
+                    this._showPlanForReviewChat(plan, contentDiv);
                     return;
                 }
 
@@ -1545,6 +1580,46 @@ export class ChatApp {
         }
 
         this._extensionToolExecuting = false;
+    }
+
+    /**
+     * Show an automation plan for user review in the chat window.
+     */
+    _showPlanForReviewChat(plan, contentDiv) {
+        this._automationPlan = plan;
+        this._automationStatuses = {};
+        this._automationResults = {};
+        this._automationContentDiv = contentDiv;
+        for (const s of plan) this._automationStatuses[s.step] = 'pending';
+        this._renderAutomationPlanChat();
+
+        // Add review action bar
+        const actionsBar = document.createElement('div');
+        actionsBar.className = 'taskplan-review-actions';
+        actionsBar.innerHTML = `
+            <button class="taskplan-review-btn taskplan-run-btn" id="planRunBtn">▶ Run</button>
+            <span class="taskplan-review-hint">or type to revise the plan</span>
+        `;
+        contentDiv.appendChild(actionsBar);
+
+        // Stop waiting state — plan is ready for review
+        this.hideTypingIndicator();
+        this.isWaitingForResponse = false;
+        this.updateInputState();
+        this.elements.chatInput.focus();
+        this.scrollToBottom();
+
+        // Run button handler
+        document.getElementById('planRunBtn')?.addEventListener('click', () => {
+            actionsBar.remove();
+            this.isWaitingForResponse = true;
+            this.updateInputState();
+            this._executeAutomationPlan(plan, contentDiv);
+        });
+
+        // Flag for revision handling
+        this._pendingPlanRevision = plan;
+        this._pendingPlanContentDiv = contentDiv;
     }
 
     async _executeAutomationPlan(plan, contentDiv) {

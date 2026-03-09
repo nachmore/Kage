@@ -861,6 +861,35 @@ body.light-theme .taskplan-done .taskplan-icon {
     background: var(--kiro-accent, #7c6fe0);
 }
 
+/* Task plan review actions (shown before execution) */
+.taskplan-review-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding: 8px 0 2px 34px; /* align with task content (icon width + gap) */
+}
+.taskplan-review-btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+}
+.taskplan-run-btn {
+    background: var(--kiro-accent, #C09CFF);
+    color: #000;
+}
+.taskplan-run-btn:hover {
+    filter: brightness(1.1);
+}
+.taskplan-review-hint {
+    font-size: 12px;
+    color: var(--kiro-text-secondary, rgba(255,255,255,0.4));
+}
+
 /* --- Speech (shared across floating + chat) --- */
 .speech-btn,
 .chat-toolbar-btn.speech-listening {
