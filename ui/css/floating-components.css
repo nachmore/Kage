@@ -110,6 +110,10 @@
     overflow-x: hidden;
     min-width: 0;
 }
+.response-text.rtl {
+    direction: rtl;
+    text-align: right;
+}
 
 .response-text .code-block-wrapper,
 .response-text .diagram-wrapper {
@@ -296,6 +300,17 @@ body.dark-theme .selection-checkbox {
     color: #9ca3af;
 }
 
+/* RTL support — flip input container when first character is RTL */
+.input-container.rtl {
+    flex-direction: row-reverse;
+}
+.input-container.rtl .input-box {
+    text-align: right;
+}
+.input-container.rtl .datetime-display {
+    text-align: left;
+}
+
 .expand-btn {
     position: absolute;
     top: 6px;
@@ -434,6 +449,20 @@ body.dark-theme .datetime-date {
     right: 44px;
     top: 50%;
     transform: translateY(-50%);
+}
+
+/* RTL: flip speech button and wave to the left side */
+.input-container.rtl .speech-btn {
+    right: auto;
+    left: 10px;
+}
+.input-container.rtl .speech-wave {
+    right: auto;
+    left: 44px;
+}
+.input-container.rtl .floating-stop-btn {
+    right: auto;
+    left: 10px;
 }
 
 

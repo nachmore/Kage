@@ -11,6 +11,7 @@ import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getE
 import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
+import { setupRtlDetection } from '../shared/rtl.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
@@ -129,6 +130,11 @@ export class ChatApp {
         }
 
         this.elements.chatInput.focus();
+
+        // RTL detection — flip input and message layout when first char is RTL
+        const chatInputWrapper = this.elements.chatInput?.closest('.chat-input-wrapper');
+        setupRtlDetection(this.elements.chatInput, chatInputWrapper, this.elements.messagesArea);
+
         console.log('Chat app initialized');
     }
 

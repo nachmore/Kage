@@ -15,6 +15,7 @@ import { SpeechController } from '../shared/speech.js';
 import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
 import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
+import { setupRtlDetection } from '../shared/rtl.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -49,6 +50,10 @@ export class FloatingApp {
         this.setupVisibilityTracking();
         this.windowManager.setupDragging(this.elements.ghostContainer);
         this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
+
+        // RTL detection — flip input container layout when first char is RTL
+        const inputContainer = this.elements.input?.closest('.input-container');
+        setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
         
         await this.loadShortcuts();
         await loadSlashCommands(this.invoke);

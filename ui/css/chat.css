@@ -372,6 +372,18 @@ body {
 .chat-input:focus { outline: none; }
 .chat-input::placeholder { color: #9ca3af; }
 
+/* RTL support — flip chat input and messages when first character is RTL */
+.chat-input-wrapper.rtl {
+    flex-direction: row-reverse;
+}
+.chat-input-wrapper.rtl .chat-input {
+    text-align: right;
+}
+.messages-area.rtl .message-content {
+    direction: rtl;
+    text-align: right;
+}
+
 .chat-send-btn {
     padding: 0;
     border: none;
