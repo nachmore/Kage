@@ -106,6 +106,17 @@ export class ExtensionManager {
             }
         }
 
+        // Load tool provider
+        if (manifest.contributes?.toolProvider) {
+            try {
+                const mod = await import(`../../${basePath}/${manifest.contributes.toolProvider}`);
+                ext.toolProvider = new mod.default();
+                ext.toolProvider.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load tool provider for '${id}':`, e);
+            }
+        }
+
         // Load CSS
         this._loadBundledCss(id, basePath, manifest);
 
@@ -189,6 +200,24 @@ export class ExtensionManager {
                 ext.messageFormatter.initialize?.(context);
             } catch (e) {
                 console.warn(`Failed to load message formatters for user extension '${id}':`, e);
+            }
+        }
+
+        // Load tool provider
+        if (manifest.contributes?.toolProvider) {
+            try {
+                const jsCode = await this.invoke('read_extension_file', {
+                    extensionId: id, kind: 'extension',
+                    filePath: manifest.contributes.toolProvider.replace('./', ''),
+                });
+                const blob = new Blob([jsCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                const mod = await import(blobUrl);
+                URL.revokeObjectURL(blobUrl);
+                ext.toolProvider = new mod.default();
+                ext.toolProvider.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load tool provider for user extension '${id}':`, e);
             }
         }
 
@@ -322,6 +351,11 @@ export class ExtensionManager {
                     console.warn(`Formatter config update error in '${id}':`, e);
                 }
             }
+            if (ext.toolProvider?.onConfigUpdate) {
+                try { ext.toolProvider.onConfigUpdate(config); } catch (e) {
+                    console.warn(`Tool provider config update error in '${id}':`, e);
+                }
+            }
         }
     }
 
@@ -418,10 +452,103 @@ export class ExtensionManager {
         try { ext.searchProvider?.destroy?.(); } catch {}
         try { ext.toolbarProvider?.destroy?.(); } catch {}
         try { ext.messageFormatter?.destroy?.(); } catch {}
+        try { ext.toolProvider?.destroy?.(); } catch {}
 
         // Remove injected CSS
         document.querySelectorAll(`[data-ext-css="${id}"]`).forEach(el => el.remove());
 
         this.extensions.delete(id);
+    }
+
+    /**
+     * Collect tool definitions from all enabled extensions with tool providers.
+     * Returns an array of { extensionId, extensionName, extensionIcon, tools[] }
+     * where each tool has { name, description, parameters }.
+     */
+    getToolDefinitions() {
+        const result = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.toolProvider) continue;
+            if (!this._isEnabled(id)) continue;
+            try {
+                const tools = ext.toolProvider.getTools();
+                if (Array.isArray(tools) && tools.length > 0) {
+                    result.push({
+                        extensionId: id,
+                        extensionName: ext.manifest.name || id,
+                        extensionIcon: ext.manifest.icon || '🧩',
+                        tools,
+                    });
+                }
+            } catch (e) {
+                console.warn(`getTools error in '${id}':`, e);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Execute an extension tool call. Returns { result, error } with a 5s timeout.
+     * @param {string} extensionId
+     * @param {string} toolName
+     * @param {object} params
+     * @returns {Promise<{result?: any, error?: string}>}
+     */
+    async executeExtensionTool(extensionId, toolName, params = {}) {
+        const ext = this.extensions.get(extensionId);
+        if (!ext?.toolProvider) {
+            return { error: `Extension '${extensionId}' not found or has no tool provider` };
+        }
+        if (!this._isEnabled(extensionId)) {
+            return { error: `Extension '${extensionId}' is disabled` };
+        }
+
+        const TIMEOUT_MS = 5000;
+        try {
+            const resultPromise = ext.toolProvider.execute(toolName, params);
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Extension tool timed out (5s)')), TIMEOUT_MS)
+            );
+            return await Promise.race([resultPromise, timeoutPromise]);
+        } catch (e) {
+            return { error: e.message || String(e) };
+        }
+    }
+
+    /**
+     * Build the steering text block describing available extension tools.
+     * This is injected into the agent's system prompt so it knows what tools exist.
+     */
+    buildToolSteeringBlock() {
+        const defs = this.getToolDefinitions();
+        if (defs.length === 0) return '';
+
+        let block = '<extension_tools>\n';
+        block += 'You have access to local extension tools that run instantly on the user\'s machine.\n';
+        block += 'To call one, emit a JSON block with this exact format:\n\n';
+        block += '```extension_tool_call\n';
+        block += '{"extension": "<extension_id>", "tool": "<tool_name>", "params": {<parameters>}}\n';
+        block += '```\n\n';
+        block += 'IMPORTANT: After emitting the tool call block, STOP generating and wait for the result.\n';
+        block += 'The result will be provided as a follow-up message. Then continue your response.\n';
+        block += 'Only call ONE tool at a time. Do not call multiple tools in a single message.\n\n';
+        block += 'Available extension tools:\n\n';
+
+        for (const def of defs) {
+            block += `Extension: ${def.extensionId} (${def.extensionIcon} ${def.extensionName})\n`;
+            for (const tool of def.tools) {
+                block += `  - ${tool.name}: ${tool.description}\n`;
+                if (tool.parameters && Object.keys(tool.parameters).length > 0) {
+                    const paramDescs = Object.entries(tool.parameters)
+                        .map(([k, v]) => `${k} (${v.type}${v.default !== undefined ? ', default: ' + v.default : ''})${v.description ? ' — ' + v.description : ''}`)
+                        .join('; ');
+                    block += `    Parameters: ${paramDescs}\n`;
+                }
+            }
+            block += '\n';
+        }
+
+        block += '</extension_tools>';
+        return block;
     }
 }

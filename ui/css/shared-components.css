@@ -394,6 +394,8 @@ body.dark-theme .message-content th:hover {
     cursor: default;
 }
 
+/* Extension tool call chips — reuse standard .tool-chip styles via toolUsages */
+
 
 /* ===== Attachment Previews ===== */
 

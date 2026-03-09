@@ -9,6 +9,7 @@ const { invoke } = window.__TAURI__.core;
 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
 let currentPermissionRequest = null;
+let _extensionToolCallback = null;
 
 /**
  * Show permission modal
@@ -126,9 +127,23 @@ async function handlePermissionResponse(optionId, policyOverride) {
     console.log('Handling permission response:', optionId, policyOverride || '');
     
     try {
-        console.log('Sending permission response to backend...');
-        // Use the resolved tool name for policy tracking, fall back to action title
         const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
+
+        // Extension tool requests use a callback instead of ACP response
+        if (_extensionToolCallback) {
+            const allowed = optionId === 'allow_once' || optionId === 'allow_always';
+            const updatePolicy = policyOverride || (optionId === 'allow_always' ? 'allow' : null);
+            if (updatePolicy) {
+                await invoke('update_tool_policy', { toolTitle: policyTitle, policy: updatePolicy });
+            }
+            const cb = _extensionToolCallback;
+            _extensionToolCallback = null;
+            await hidePermissionModal();
+            cb(allowed);
+            return;
+        }
+
+        console.log('Sending permission response to backend...');
         await invoke('send_permission_response', {
             requestId: currentPermissionRequest.id,
             optionId: optionId,
@@ -304,5 +319,25 @@ if (document.readyState === 'loading') {
 // Export for use in other modules
 window.PermissionModal = {
     show: showPermissionModal,
-    hide: hidePermissionModal
+    hide: hidePermissionModal,
+    /**
+     * Show the permission modal for an extension tool call.
+     * Returns a promise that resolves to true (allowed) or false (denied).
+     */
+    showForExtensionTool(extensionId, toolName, icon) {
+        return new Promise((resolve) => {
+            const toolTitle = `ext:${extensionId}/${toolName}`;
+            const notification = {
+                id: null,
+                params: {
+                    toolCall: {
+                        title: `${icon} ${extensionId}/${toolName}`,
+                    },
+                    options: [],
+                },
+            };
+            _extensionToolCallback = resolve;
+            showPermissionModal(notification, toolTitle);
+        });
+    }
 };

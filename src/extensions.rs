@@ -62,7 +62,10 @@ pub struct ExtensionContributes {
     pub toolbar_buttons: Option<String>,
     #[serde(default)]
     pub message_formatters: Option<String>,
+    #[serde(default)]
+    pub tool_provider: Option<String>,
 }
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetContribution {

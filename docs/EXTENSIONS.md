@@ -85,6 +85,7 @@ Supported types: `"boolean"`, `"string"`, `"number"`.
 | `themes` | For theme type only — `{ "dark": "./dark.json", "light": "./light.json" }`. |
 | `toolbarButtons` | Path to an ES module that default-exports a toolbar button provider. |
 | `messageFormatters` | Path to an ES module that default-exports a message formatter. |
+| `toolProvider` | Path to an ES module that default-exports a tool provider (exposes tools to the LLM). |
 
 ## Search Provider API
 
@@ -392,6 +393,93 @@ export default class MyMessageFormatter {
 - Use `querySelectorAll` to find specific elements rather than modifying `innerHTML`
 - Add CSS classes from your extension's stylesheet rather than inline styles
 - Don't remove existing content — add to it (wrap, annotate, append)
+
+## Tool Provider API
+
+A tool provider exposes extension functionality to the LLM agent. When the agent needs data from an extension (e.g. calendar appointments), it calls the tool locally — no cloud round-trip needed.
+
+```js
+export default class MyToolProvider {
+    /**
+     * Called once when the extension loads.
+     * @param {object} context - { invoke, config }
+     */
+    initialize(context) {
+        this.invoke = context.invoke;
+        this.config = context.config;
+    }
+
+    onConfigUpdate(config) {
+        this.config = config;
+    }
+
+    /**
+     * Return tool definitions the LLM can call.
+     * Called once on load and after config changes.
+     * @returns {ToolDef[]}
+     */
+    getTools() {
+        return [
+            {
+                name: 'list_items',
+                description: 'List items from this extension',
+                parameters: {
+                    limit: { type: 'number', description: 'Max items', default: 10 }
+                }
+            }
+        ];
+    }
+
+    /**
+     * Execute a tool call. Must return { result } or { error }.
+     * Has a 5-second timeout — keep operations fast.
+     * @param {string} toolName
+     * @param {object} params
+     * @returns {Promise<{result?: any, error?: string}>}
+     */
+    async execute(toolName, params) {
+        return { result: { items: [] } };
+    }
+
+    destroy() {}
+}
+```
+
+### How It Works
+
+1. Extension loads → `getTools()` definitions are collected
+2. Tool definitions are sent to the agent as a steering message
+3. Agent emits a `` ```extension_tool_call``` `` fenced block when it wants to call a tool
+4. Frontend detects the fence, executes the tool via `execute()`, sends result back to agent
+5. Agent continues its response with the tool result data
+
+### Manifest
+
+Add `toolProvider` to `contributes`:
+
+```json
+{
+  "contributes": {
+    "toolProvider": "./tools.js"
+  }
+}
+```
+
+### ToolDef Shape
+
+```js
+{
+    name: string,           // Tool name (used in the call)
+    description: string,    // What the tool does (shown to the LLM)
+    parameters: {           // Parameter definitions
+        paramName: {
+            type: string,       // 'string', 'number', 'boolean'
+            description: string, // Shown to the LLM
+            default: any        // Optional default value
+        }
+    }
+}
+```
 
 ## Theme Format
 

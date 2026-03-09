@@ -4,7 +4,7 @@ import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -56,6 +56,9 @@ export class FloatingApp {
         setExtensionManager(this.extensionManager);
         await loadFrecency(this.invoke);
         this.setupSpeech();
+
+        // Send extension tool definitions to the agent as steering
+        this._sendExtensionToolSteering();
         
         // Listen for config updates
         this.listen('config_updated', async () => {
@@ -1137,6 +1140,8 @@ export class FloatingApp {
                 this.elements.contentArea.classList.add('visible');
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
+                this._extensionToolCallHandled = false;
+                this._extensionToolExecuting = false;
                 this._promptGeneration++;
                 const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
@@ -1195,6 +1200,34 @@ export class FloatingApp {
 
         // If automation plan is running, don't overwrite the plan UI
         if (this._automationPlanStarted) return;
+
+        // Detect extension tool calls in streaming text
+        if (!this._extensionToolCallHandled) {
+            const toolCall = detectExtensionToolCall(this.currentResponse);
+            if (toolCall) {
+                this._extensionToolCallHandled = true;
+                this._handleExtensionToolCall(toolCall);
+                return;
+            }
+
+            // Show loading indicator while fence is being streamed
+            const partial = detectExtensionToolCallIncremental(this.currentResponse);
+            if (partial) {
+                this._renderExtensionToolIndicator(partial);
+                this.windowManager.resizeWindow();
+                return;
+            }
+        } else if (!this._extensionToolExecuting) {
+            // Tool call was handled and execution finished — if the new accumulated
+            // text no longer contains the fence, the accumulator was reset for the
+            // follow-up response. Clear the flag so rendering proceeds normally.
+            if (!this.currentResponse.includes('```extension_tool_call')) {
+                this._extensionToolCallHandled = false;
+            }
+        }
+
+        // If extension tool is executing, don't overwrite the indicator
+        if (this._extensionToolExecuting) return;
         
         renderMarkdown(this.currentResponse, this.elements.responseText, true);
 
@@ -1224,6 +1257,9 @@ export class FloatingApp {
 
             // If automation plan is running, don't overwrite the plan UI
             if (this._automationPlanStarted) return;
+
+            // If extension tool is executing, the response will come as a follow-up
+            if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
 
             this.stopThinking();
             this.computerControlActive = false;
@@ -1266,6 +1302,128 @@ export class FloatingApp {
                 }
             } catch { /* ignore */ }
         }
+
+    /**
+     * Send extension tool definitions to the agent as a steering message.
+     * Called after extensions are loaded and after config updates.
+     */
+    async _sendExtensionToolSteering() {
+        const block = this.extensionManager.buildToolSteeringBlock();
+        if (!block) return;
+        try {
+            await this.invoke('send_extension_tool_steering', { toolSteering: block });
+        } catch (e) {
+            console.warn('Failed to send extension tool steering:', e);
+        }
+    }
+
+    /**
+     * Render a loading indicator while an extension tool call is being streamed or executed.
+     */
+    _renderExtensionToolIndicator(info) {
+        // Only add to tool usages if we have the full extension/tool name
+        if (info.extension && info.tool) {
+            const toolTitle = `ext:${info.extension}/${info.tool}`;
+            if (!this.toolUsages.find(t => t.title === toolTitle)) {
+                this.toolUsages.push({ toolCallId: `ext-${info.extension}-${info.tool}`, title: toolTitle, kind: 'extension' });
+            }
+            this.renderSources();
+        }
+    }
+
+    /**
+     * Get the icon for an extension by ID.
+     */
+    _getExtensionIcon(extensionId) {
+        if (!extensionId || !this.extensionManager) return '🧩';
+        const defs = this.extensionManager.getToolDefinitions();
+        const def = defs.find(d => d.extensionId === extensionId);
+        return def?.extensionIcon || '🧩';
+    }
+
+    /**
+     * Handle a detected extension tool call: check permissions, execute, send result back.
+     */
+    async _handleExtensionToolCall(toolCall) {
+        const { extension, tool, params } = toolCall;
+        const icon = this._getExtensionIcon(extension);
+        const toolTitle = `ext:${extension}/${tool}`;
+
+        console.log(`Extension tool call: ${extension}/${tool}`, params);
+
+        // Track as a standard tool usage
+        if (!this.toolUsages.find(t => t.title === toolTitle)) {
+            this.toolUsages.push({ toolCallId: `ext-${extension}-${tool}`, title: toolTitle, kind: 'extension' });
+        }
+        this.renderSources();
+
+        // Check permission policy
+        let policy;
+        try {
+            policy = await this.invoke('check_extension_tool_permission', {
+                extensionId: extension,
+                toolName: tool,
+            });
+        } catch (e) {
+            console.error('Failed to check extension tool permission:', e);
+            policy = 'ask';
+        }
+
+        if (policy === 'deny') {
+            this._extensionToolExecuting = false;
+            this._extensionToolCallHandled = false;
+            try {
+                await this.invoke('extension_tool_response', {
+                    extensionId: extension,
+                    toolName: tool,
+                    resultJson: JSON.stringify('Permission denied by user policy'),
+                    success: false,
+                });
+            } catch (e) {
+                console.error('Failed to send denial:', e);
+            }
+            return;
+        }
+
+        if (policy === 'ask') {
+            const allowed = await window.PermissionModal.showForExtensionTool(extension, tool, icon);
+            if (!allowed) {
+                this._extensionToolExecuting = false;
+                this._extensionToolCallHandled = false;
+                try {
+                    await this.invoke('extension_tool_response', {
+                        extensionId: extension,
+                        toolName: tool,
+                        resultJson: JSON.stringify('Permission denied by user'),
+                        success: false,
+                    });
+                } catch (e) {
+                    console.error('Failed to send denial:', e);
+                }
+                return;
+            }
+        }
+
+        // Execute the tool
+        this._extensionToolExecuting = true;
+
+        const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
+        const success = !result.error;
+        const resultJson = JSON.stringify(success ? result.result : result.error);
+
+        try {
+            await this.invoke('extension_tool_response', {
+                extensionId: extension,
+                toolName: tool,
+                resultJson,
+                success,
+            });
+        } catch (e) {
+            console.error('Failed to send extension tool response:', e);
+        }
+
+        this._extensionToolExecuting = false;
+    }
 
     async _executeAutomationPlan(plan) {
         // Render the plan as a task list immediately

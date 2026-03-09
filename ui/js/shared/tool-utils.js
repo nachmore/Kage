@@ -12,6 +12,7 @@ export function getToolIcon(kind) {
     if (k === 'read') return '📖';
     if (k === 'shell' || k === 'terminal') return '💻';
     if (k === 'fetch' || k === 'web') return '🌐';
+    if (k === 'extension') return '🧩';
     return '🔧';
 }
 
@@ -20,6 +21,8 @@ export function getToolIcon(kind) {
  */
 export function getToolEmoji(name) {
     const lower = (name || '').toLowerCase();
+    // Extension tools — use the extension's icon if available
+    if (lower.startsWith('ext:')) return '🧩';
     if (lower.includes('search')) return '🔍';
     if (lower.includes('fetch') || lower.includes('web')) return '🌐';
     if (lower.includes('read')) return '📖';

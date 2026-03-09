@@ -22,6 +22,7 @@
         }
         function getToolEmoji(name) {
             const lower = (name || '').toLowerCase();
+            if (lower.startsWith('ext:')) return '🧩';
             if (lower.includes('search')) return '🔍';
             if (lower.includes('fetch') || lower.includes('web')) return '🌐';
             if (lower.includes('read')) return '📖';

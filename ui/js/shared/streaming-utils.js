@@ -126,11 +126,22 @@ export function renderToolChipsHtml(toolUsages) {
         }
     }
     return Array.from(grouped.values()).map(t => {
+        const isExt = t.title.startsWith('ext:');
+        let displayName, tooltip;
+        if (isExt) {
+            const parts = t.title.substring(4); // remove "ext:"
+            const extId = parts.split('/')[0];
+            displayName = extId.charAt(0).toUpperCase() + extId.slice(1);
+            tooltip = `Extension: ${parts}`;
+        } else {
+            displayName = t.title;
+            tooltip = `Tool: ${t.title}`;
+        }
         const badge = t.count > 1 ? `<span class="tool-chip-count">\u00d7${t.count}</span>` : '';
         return `
-        <span class="source-chip tool-chip" title="Tool: ${escapeHtml(t.title)}${t.count > 1 ? ' (' + t.count + ' calls)' : ''}">
+        <span class="source-chip tool-chip" title="${escapeHtml(tooltip)}${t.count > 1 ? ' (' + t.count + ' calls)' : ''}">
             <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
-            <span class="source-domain">Tool: ${escapeHtml(t.title)}</span>${badge}
+            <span class="source-domain">${escapeHtml(displayName)}</span>${badge}
         </span>
     `}).join('');
 }
@@ -272,4 +283,88 @@ export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {})
         }
         return { status, description: s.task, detail };
     });
+}
+
+/**
+ * Detect a complete ```extension_tool_call``` fence in streaming text.
+ * Returns the parsed call object or null if not found/incomplete.
+ * @param {string} text - Accumulated streaming text
+ * @returns {{ extension: string, tool: string, params: object }|null}
+ */
+export function detectExtensionToolCall(text) {
+    if (!text || !text.includes('```extension_tool_call')) return null;
+
+    const fenceStart = text.indexOf('```extension_tool_call');
+    const afterOpener = text.substring(fenceStart + '```extension_tool_call'.length);
+
+    // Need the closing fence to consider it complete
+    const closingIdx = afterOpener.indexOf('```');
+    if (closingIdx === -1) return null;
+
+    const jsonStr = afterOpener.substring(0, closingIdx).trim();
+    try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.extension && parsed.tool) {
+            return {
+                extension: parsed.extension,
+                tool: parsed.tool,
+                params: parsed.params || {},
+            };
+        }
+    } catch {
+        // JSON not valid yet or malformed
+    }
+    return null;
+}
+
+/**
+ * Detect an in-progress (incomplete) extension tool call fence.
+ * Used to show the loading indicator while the fence is being streamed.
+ * @param {string} text
+ * @returns {{ extension?: string, tool?: string, inProgress: boolean }}
+ */
+export function detectExtensionToolCallIncremental(text) {
+    if (!text || !text.includes('```extension_tool_call')) return null;
+
+    const fenceStart = text.indexOf('```extension_tool_call');
+    const afterOpener = text.substring(fenceStart + '```extension_tool_call'.length);
+
+    // If we have a closing fence, it's complete — not "incremental" anymore
+    const closingIdx = afterOpener.indexOf('```');
+    if (closingIdx !== -1) return null;
+
+    // Try to extract partial JSON for the indicator
+    const jsonStr = afterOpener.trim();
+    let extension, tool;
+    try {
+        // Try parsing even if incomplete — might have enough
+        const partial = JSON.parse(jsonStr);
+        extension = partial.extension;
+        tool = partial.tool;
+    } catch {
+        // Try regex extraction for partial JSON
+        const extMatch = jsonStr.match(/"extension"\s*:\s*"([^"]*)"/);
+        const toolMatch = jsonStr.match(/"tool"\s*:\s*"([^"]*)"/);
+        if (extMatch) extension = extMatch[1];
+        if (toolMatch) tool = toolMatch[1];
+    }
+
+    return { extension, tool, inProgress: true };
+}
+
+/**
+ * Render an extension tool call chip (loading indicator or completed).
+ * @param {object} info - { extension, tool, icon, status: 'loading'|'done'|'error' }
+ * @returns {string} HTML string
+ */
+export function renderExtensionToolChipHtml(info) {
+    const icon = info.icon || '🧩';
+    const toolLabel = info.tool ? `${info.extension}/${info.tool}` : info.extension || 'extension';
+    const statusIcon = info.status === 'loading' ? '⏳' : info.status === 'error' ? '❌' : '✅';
+    return `
+        <span class="source-chip tool-chip ext-tool-chip ext-tool-${info.status || 'loading'}" title="Extension tool: ${escapeHtml(toolLabel)}">
+            <span class="tool-chip-icon">${icon}</span>
+            <span class="source-domain">${statusIcon} ${escapeHtml(toolLabel)}</span>
+        </span>
+    `;
 }

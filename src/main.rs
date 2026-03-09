@@ -734,6 +734,9 @@ fn main() {
             commands::pocket_tts_voices,
             commands::pocket_tts_test,
             commands::execute_automation_plan,
+            commands::extension_tool_response,
+            commands::send_extension_tool_steering,
+            commands::check_extension_tool_permission,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

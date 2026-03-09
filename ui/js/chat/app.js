@@ -3,7 +3,7 @@ import { renderMarkdown, initMarkdown, createTaskPlanElement } from '../shared/m
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml } from '../shared/tool-utils.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -77,6 +77,9 @@ export class ChatApp {
         await this.extensionManager.initialize();
         setExtensionManager(this.extensionManager);
         await loadFrecency(this.invoke);
+
+        // Send extension tool definitions to the agent as steering
+        this._sendExtensionToolSteering();
 
         // Load sessions in background — don't block init
         this.loadSessions();
@@ -1064,6 +1067,8 @@ export class ChatApp {
             this.toolSources = [];
             this.toolUsages = [];
             this.isWaitingForResponse = true;
+            this._extensionToolCallHandled = false;
+            this._extensionToolExecuting = false;
             this._streamStartTime = Date.now();
             this.updateInputState();
             this.showTypingIndicator();
@@ -1234,6 +1239,32 @@ export class ChatApp {
         // If automation plan is running, don't overwrite the plan UI
         if (this._automationPlanStarted) return;
 
+        // Detect extension tool calls in streaming text
+        if (!this._extensionToolCallHandled) {
+            const toolCall = detectExtensionToolCall(this.currentStreamingContent);
+            if (toolCall) {
+                this._extensionToolCallHandled = true;
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                this._handleExtensionToolCall(toolCall, contentDiv);
+                return;
+            }
+
+            const partial = detectExtensionToolCallIncremental(this.currentStreamingContent);
+            if (partial) {
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                this._renderExtensionToolIndicator(partial, contentDiv);
+                this.scrollToBottom();
+                return;
+            }
+        } else if (!this._extensionToolExecuting) {
+            if (!this.currentStreamingContent.includes('```extension_tool_call')) {
+                this._extensionToolCallHandled = false;
+            }
+        }
+
+        // If extension tool is executing, don't overwrite the indicator
+        if (this._extensionToolExecuting) return;
+
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
         renderMarkdown(this.currentStreamingContent, contentDiv, true);
 
@@ -1256,6 +1287,9 @@ export class ChatApp {
 
             // If automation plan is running, don't overwrite the plan UI
             if (this._automationPlanStarted) return;
+
+            // If extension tool is executing, the response will come as a follow-up
+            if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
 
             this.hideTypingIndicator();
 
@@ -1387,6 +1421,125 @@ export class ChatApp {
             }
             sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
         }
+
+    /**
+     * Get the icon for an extension by ID.
+     */
+    _getExtensionIcon(extensionId) {
+        if (!extensionId || !this.extensionManager) return '🧩';
+        const defs = this.extensionManager.getToolDefinitions();
+        const def = defs.find(d => d.extensionId === extensionId);
+        return def?.extensionIcon || '🧩';
+    }
+
+    /**
+     * Send extension tool definitions to the agent as a steering message.
+     */
+    async _sendExtensionToolSteering() {
+        const block = this.extensionManager.buildToolSteeringBlock();
+        if (!block) return;
+        try {
+            await this.invoke('send_extension_tool_steering', { toolSteering: block });
+        } catch (e) {
+            console.warn('Failed to send extension tool steering:', e);
+        }
+    }
+
+    /**
+     * Render a loading indicator for an extension tool call.
+     */
+    _renderExtensionToolIndicator(info, contentDiv) {
+        if (info.extension && info.tool) {
+            const toolTitle = `ext:${info.extension}/${info.tool}`;
+            if (!this.toolUsages.find(t => t.title === toolTitle)) {
+                this.toolUsages.push({ toolCallId: `ext-${info.extension}-${info.tool}`, title: toolTitle, kind: 'extension' });
+            }
+            this.renderSourcesInMessage(contentDiv);
+        }
+    }
+
+    /**
+     * Handle a detected extension tool call in the chat window.
+     */
+    async _handleExtensionToolCall(toolCall, contentDiv) {
+        const { extension, tool, params } = toolCall;
+        const icon = this._getExtensionIcon(extension);
+        const toolTitle = `ext:${extension}/${tool}`;
+
+        console.log(`Extension tool call: ${extension}/${tool}`, params);
+
+        // Track as a standard tool usage
+        if (!this.toolUsages.find(t => t.title === toolTitle)) {
+            this.toolUsages.push({ toolCallId: `ext-${extension}-${tool}`, title: toolTitle, kind: 'extension' });
+        }
+        this.renderSourcesInMessage(contentDiv);
+
+        // Check permission policy
+        let policy;
+        try {
+            policy = await this.invoke('check_extension_tool_permission', {
+                extensionId: extension,
+                toolName: tool,
+            });
+        } catch (e) {
+            console.error('Failed to check extension tool permission:', e);
+            policy = 'ask';
+        }
+
+        if (policy === 'deny') {
+            this._extensionToolExecuting = false;
+            this._extensionToolCallHandled = false;
+            try {
+                await this.invoke('extension_tool_response', {
+                    extensionId: extension,
+                    toolName: tool,
+                    resultJson: JSON.stringify('Permission denied by user policy'),
+                    success: false,
+                });
+            } catch (e) {
+                console.error('Failed to send denial:', e);
+            }
+            return;
+        }
+
+        if (policy === 'ask') {
+            const allowed = await window.ChatPermissions.showForExtensionTool(extension, tool, icon);
+            if (!allowed) {
+                this._extensionToolExecuting = false;
+                this._extensionToolCallHandled = false;
+                try {
+                    await this.invoke('extension_tool_response', {
+                        extensionId: extension,
+                        toolName: tool,
+                        resultJson: JSON.stringify('Permission denied by user'),
+                        success: false,
+                    });
+                } catch (e) {
+                    console.error('Failed to send denial:', e);
+                }
+                return;
+            }
+        }
+
+        this._extensionToolExecuting = true;
+
+        const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
+        const success = !result.error;
+        const resultJson = JSON.stringify(success ? result.result : result.error);
+
+        try {
+            await this.invoke('extension_tool_response', {
+                extensionId: extension,
+                toolName: tool,
+                resultJson,
+                success,
+            });
+        } catch (e) {
+            console.error('Failed to send extension tool response:', e);
+        }
+
+        this._extensionToolExecuting = false;
+    }
 
     async _executeAutomationPlan(plan, contentDiv) {
         // Render the plan as a task list in the message

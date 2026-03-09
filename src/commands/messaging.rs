@@ -704,3 +704,136 @@ pub async fn execute_automation_plan(
 
     Ok(())
 }
+
+/// Receive the result of a local extension tool call from the webview,
+/// and send it back to the ACP agent as a follow-up message so the LLM
+/// can continue its response with the data.
+#[tauri::command]
+pub async fn extension_tool_response(
+    extension_id: String,
+    tool_name: String,
+    result_json: String,
+    success: bool,
+    state: State<'_, AppState>,
+    window: WebviewWindow,
+) -> Result<(), String> {
+    info!(
+        "Extension tool response: ext={}, tool={}, success={}, len={}",
+        extension_id, tool_name, success, result_json.len()
+    );
+
+    let client = state.acp_client.clone();
+
+    async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+
+        if !client.is_connected() {
+            let _ = window.emit("message_error", "Not connected to agent".to_string());
+            return;
+        }
+
+        // Build a message that the LLM will see as the tool result
+        let content = if success {
+            format!(
+                "[Extension tool result: {}/{}]\n{}",
+                extension_id, tool_name, result_json
+            )
+        } else {
+            format!(
+                "[Extension tool error: {}/{}]\n{}",
+                extension_id, tool_name, result_json
+            )
+        };
+
+        // Send as a follow-up user message so the agent continues
+        if let Err(e) = client.send_chat_streaming(&content, None) {
+            let _ = window.emit("message_error", format!("Failed to send tool result: {}", e));
+        }
+    });
+
+    Ok(())
+}
+
+/// Send extension tool definitions to the agent as a hidden steering message.
+/// Called by the frontend after extensions are loaded, so the agent knows
+/// which local extension tools are available.
+#[tauri::command]
+pub async fn send_extension_tool_steering(
+    tool_steering: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if tool_steering.trim().is_empty() {
+        return Ok(());
+    }
+
+    info!("Sending extension tool steering ({} chars)", tool_steering.len());
+
+    let client = state.acp_client.clone();
+
+    async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+        if !client.is_connected() {
+            return;
+        }
+
+        let msg = format!(
+            "{} {}\n\n---\n\n<instructions>Respond with only \"ack\" to confirm receipt. Do not summarize or comment on the content above.</instructions>",
+            crate::commands::system::STEERING_MSG_PREFIX,
+            tool_steering
+        );
+
+        match client.send_chat_streaming(&msg, None) {
+            Ok(_) => info!("Extension tool steering sent"),
+            Err(e) => warn!("Failed to send extension tool steering: {}", e),
+        }
+    });
+
+    Ok(())
+}
+
+/// Check the permission policy for an extension tool call.
+/// Registers the tool in the config if not seen before (defaults to "ask").
+/// Returns the policy: "allow", "deny", or "ask".
+#[tauri::command]
+pub async fn check_extension_tool_permission(
+    extension_id: String,
+    tool_name: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let tool_title = format!("ext:{}/{}", extension_id, tool_name);
+    let mut config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
+
+    // Check trust_all first
+    if config.tool_permissions.trust_all {
+        // Still register the tool so it shows up in settings
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        if !config.tool_permissions.tools.iter().any(|t| t.title == tool_title) {
+            config.tool_permissions.tools.push(crate::config::ToolPolicy {
+                title: tool_title,
+                policy: "allow".to_string(),
+                last_seen: timestamp,
+            });
+            let _ = config.save();
+        }
+        return Ok("allow".to_string());
+    }
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    let existing = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
+
+    if let Some(tool) = existing {
+        tool.last_seen = timestamp;
+        let policy = tool.policy.clone();
+        let _ = config.save();
+        Ok(policy)
+    } else {
+        // First time seeing this tool — register with "ask" policy
+        config.tool_permissions.tools.push(crate::config::ToolPolicy {
+            title: tool_title,
+            policy: "ask".to_string(),
+            last_seen: timestamp,
+        });
+        let _ = config.save();
+        Ok("ask".to_string())
+    }
+}

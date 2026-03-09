@@ -110,11 +110,13 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         const toolsHtml = this.tools.map((tool, index) => {
             const icon = getToolEmoji(tool.title);
             const lastSeen = tool.last_seen ? new Date(tool.last_seen).toLocaleDateString() : '';
+            const isExtension = tool.title.startsWith('ext:');
+            const badge = isExtension ? '<span class="agent-tool-badge ext-badge">Extension</span>' : '<span class="agent-tool-badge mcp-badge">MCP</span>';
             return `
                 <div class="agent-tool-item">
                     <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
-                        <div class="agent-tool-name">${escapeHtml(tool.title)}</div>
+                        <div class="agent-tool-name">${escapeHtml(tool.title)} ${badge}</div>
                         <div class="agent-tool-meta">Last seen: ${lastSeen}</div>
                     </div>
                     <select class="agent-tool-select" data-index="${index}" onchange="updateToolPolicy(${index}, this.value)">
@@ -217,6 +219,26 @@ toolPermStyle.textContent = `
         font-size: 13px;
         color: #cccccc;
         font-weight: 500;
+    }
+
+    .agent-tool-badge {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 3px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+    .ext-badge {
+        background: rgba(156, 39, 176, 0.2);
+        color: #ce93d8;
+        border: 1px solid rgba(156, 39, 176, 0.3);
+    }
+    .mcp-badge {
+        background: rgba(33, 150, 243, 0.15);
+        color: #64b5f6;
+        border: 1px solid rgba(33, 150, 243, 0.25);
     }
 
     .agent-tool-meta {
