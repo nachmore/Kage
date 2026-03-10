@@ -374,6 +374,8 @@ export class ChatApp {
                 this.showCompactingNotice();
             } else if (status === 'completed') {
                 this.hideCompactingNotice('Context compacted successfully');
+                // Re-send extension tool steering — compaction may have dropped it
+                this._sendExtensionToolSteering();
             }
         });
 
@@ -1548,16 +1550,23 @@ export class ChatApp {
         }
         this.renderSourcesInMessage(contentDiv);
 
-        // Check permission policy
-        let policy;
-        try {
-            policy = await this.invoke('check_extension_tool_permission', {
-                extensionId: extension,
-                toolName: tool,
-            });
-        } catch (e) {
-            console.error('Failed to check extension tool permission:', e);
-            policy = 'ask';
+        // Check permission policy — skip if the tool has built-in confirmation UI
+        const toolDefs = this.extensionManager.getToolDefinitions();
+        const extDef = toolDefs.find(d => d.extensionId === extension);
+        const toolDef = extDef?.tools?.find(t => t.name === tool);
+        const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;
+
+        let policy = hasBuiltInConfirmation ? 'allow' : undefined;
+        if (!policy) {
+            try {
+                policy = await this.invoke('check_extension_tool_permission', {
+                    extensionId: extension,
+                    toolName: tool,
+                });
+            } catch (e) {
+                console.error('Failed to check extension tool permission:', e);
+                policy = 'ask';
+            }
         }
 
         if (policy === 'deny') {

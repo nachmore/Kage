@@ -272,6 +272,8 @@ export class FloatingApp {
             } else if (status === 'completed') {
                 this._compacting = false;
                 this._hideCompactionIndicator();
+                // Re-send extension tool steering — compaction may have dropped it
+                this._sendExtensionToolSteering();
             }
         });
 
@@ -462,6 +464,10 @@ export class FloatingApp {
             }
             // Don't hide while waiting for a response
             if (this.isWaitingForResponse) {
+                return;
+            }
+            // Don't hide while an extension tool is being processed
+            if (this._extensionToolExecuting || this._extensionToolCallHandled) {
                 return;
             }
             await this.appWindow.hide();
@@ -1480,16 +1486,23 @@ export class FloatingApp {
         }
         this.renderSources();
 
-        // Check permission policy
-        let policy;
-        try {
-            policy = await this.invoke('check_extension_tool_permission', {
-                extensionId: extension,
-                toolName: tool,
-            });
-        } catch (e) {
-            console.error('Failed to check extension tool permission:', e);
-            policy = 'ask';
+        // Check permission policy — skip if the tool has built-in confirmation UI
+        const toolDefs = this.extensionManager.getToolDefinitions();
+        const extDef = toolDefs.find(d => d.extensionId === extension);
+        const toolDef = extDef?.tools?.find(t => t.name === tool);
+        const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;
+
+        let policy = hasBuiltInConfirmation ? 'allow' : undefined;
+        if (!policy) {
+            try {
+                policy = await this.invoke('check_extension_tool_permission', {
+                    extensionId: extension,
+                    toolName: tool,
+                });
+            } catch (e) {
+                console.error('Failed to check extension tool permission:', e);
+                policy = 'ask';
+            }
         }
 
         if (policy === 'deny') {
@@ -1930,6 +1943,10 @@ export class FloatingApp {
         // Don't hide if the permission modal is open
         const permissionModal = document.getElementById('permissionModal');
         if (permissionModal && permissionModal.style.display !== 'none') {
+            return;
+        }
+        // Don't hide if an extension tool is being processed
+        if (this._extensionToolExecuting || this._extensionToolCallHandled) {
             return;
         }
 

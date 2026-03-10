@@ -1,7 +1,7 @@
 /**
  * Folder Tools — Tool Provider
  *
- * Exposes pick_folder, scan_folder, and execute_folder_plan to the LLM agent.
+ * Exposes pick_folder, scan_folder, and submit_folder_plan to the LLM agent.
  * The agent can use these to organize folders, find duplicates, sort files, etc.
  */
 export default class FolderToolProvider {
@@ -21,7 +21,7 @@ export default class FolderToolProvider {
         switch (toolName) {
             case 'pick_folder': return 120000;      // 2 minutes — user interaction
             case 'scan_folder': return 60000;        // 1 minute — large directory I/O
-            case 'execute_folder_plan': return 300000; // 5 minutes — includes user review time
+            case 'submit_folder_plan': return 300000; // 5 minutes — includes user review time
             default: return 5000;
         }
     }
@@ -72,13 +72,14 @@ export default class FolderToolProvider {
                 },
             },
             {
-                name: 'execute_folder_plan',
+                name: 'submit_folder_plan',
                 description:
-                    'Execute a folder organization plan. Takes a list of operations (move, rename, delete) ' +
-                    'and applies them to the folder. The user will be shown the plan and must approve before ' +
-                    'execution proceeds. Moves are atomic per-file. Deletes are safe — files are ' +
+                    'Propose a folder organization plan for user review. Takes a list of operations (move, rename, delete) ' +
+                    'and presents them to the user for approval before anything is changed. ' +
+                    'Moves are atomic per-file. Deletes are safe — files are ' +
                     'moved to a _kiro_trash subfolder, not permanently removed. Returns a result with success/failure ' +
-                    'counts and a rollback manifest.',
+                    'counts and a rollback manifest after the user approves.',
+                hasBuiltInConfirmation: true, // skip permission dialog — plan review UI is the approval gate
                 parameters: {
                     root: {
                         type: 'string',
@@ -107,7 +108,7 @@ export default class FolderToolProvider {
                 return this._getCommonFolders();
             case 'scan_folder':
                 return this._scanFolder(params);
-            case 'execute_folder_plan':
+            case 'submit_folder_plan':
                 return this._executePlan(params);
             default:
                 return { error: `Unknown tool: ${toolName}` };
