@@ -212,7 +212,7 @@ export default class CalendarSearchProvider {
         bar.innerHTML = `
             <span class="timer-bar-icon">📅</span>
             <span class="timer-bar-time" style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                <strong>${timeLabel}</strong> ${this._escapeHtml(event.subject)}${concurrentHtml}
+                <strong>[${timeLabel}]</strong> ${this._escapeHtml(event.subject)}${concurrentHtml}
             </span>
             <div class="timer-bar-controls">
                 ${joinHtml}
