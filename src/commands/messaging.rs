@@ -784,6 +784,9 @@ pub async fn extension_tool_response(
         if let Err(e) = client.send_chat_streaming(&content, None) {
             let _ = window.emit("message_error", format!("Failed to send tool result: {}", e));
         }
+
+        // Emit message_complete so the frontend knows the follow-up response is done
+        let _ = window.emit("message_complete", ());
     });
 
     Ok(())

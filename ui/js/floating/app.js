@@ -272,6 +272,10 @@ export class FloatingApp {
             } else if (status === 'completed') {
                 this._compacting = false;
                 this._hideCompactionIndicator();
+                // Ensure stop button is hidden after compaction — it may have been
+                // left visible if handleMessageComplete was skipped during tool execution.
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
             }
         });
 
@@ -1406,8 +1410,10 @@ export class FloatingApp {
                 this._renderSuggestedActions(suggested.actions);
             }
 
-            // Show quick action chips on the response
-            this._showResponseActions(this.currentResponse);
+            // Show quick action chips — but skip if agent already provided suggested actions
+            if (!suggested || suggested.actions.length === 0) {
+                this._showResponseActions(this.currentResponse);
+            }
 
             // Read back response if speech was used
             if (this.speech) {
@@ -1569,12 +1575,13 @@ export class FloatingApp {
         }
 
         this._extensionToolExecuting = false;
-        // Reset the handled flag so the next message_complete is processed normally.
-        // Also hide the stop button — the follow-up response's handleMessageComplete
-        // may have already fired while the tool was executing and been skipped.
+        // Reset state for the follow-up response. Clear currentResponse so the old
+        // extension_tool_call fence doesn't get re-detected when chunks arrive.
+        this.currentResponse = '';
         this._extensionToolCallHandled = false;
 
         // Show thinking dots while waiting for the agent's follow-up response
+        this.isWaitingForResponse = true;
         this.startThinking();
         this.updateDatetimeVisibility();
     }

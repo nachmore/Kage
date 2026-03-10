@@ -50,8 +50,10 @@ export default class FolderToolProvider {
             {
                 name: 'scan_folder',
                 description:
-                    'Scan a folder recursively and return a manifest of all files and directories ' +
-                    'including names, sizes, dates, extensions, and content hashes for duplicate detection. ' +
+                    'Scan a folder recursively and return a compact manifest of all files and directories. ' +
+                    'Each entry has: path (relative), size (bytes), modified (YYYY-MM-DDTHH:MM), ' +
+                    'is_dir (only present if true), hash (content hash for duplicate detection, files only). ' +
+                    'File name and extension can be inferred from the path. ' +
                     'Also returns pre-computed duplicate groups (files with identical content). ' +
                     'Use this after obtaining a folder path to understand its contents before proposing an organization plan.',
                 parameters: {

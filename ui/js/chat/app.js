@@ -1620,8 +1620,11 @@ export class ChatApp {
         }
 
         this._extensionToolExecuting = false;
-        // Reset the handled flag so the next message_complete is processed normally.
+        // Reset state for the follow-up response. Clear currentResponse so the old
+        // extension_tool_call fence doesn't get re-detected when chunks arrive.
+        this.currentResponse = '';
         this._extensionToolCallHandled = false;
+        this.isWaitingForResponse = true;
         // Show typing indicator while waiting for the agent's follow-up response
         this.showTypingIndicator();
     }

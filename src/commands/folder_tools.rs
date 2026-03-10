@@ -7,17 +7,14 @@ use tauri_plugin_dialog::DialogExt;
 /// Metadata for a single file entry returned by scan_folder.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
-    /// Relative path from the scanned root
+    /// Relative path from the scanned root (forward slashes)
     pub path: String,
-    /// File name only
-    pub name: String,
-    /// Extension (lowercase, without dot), empty string if none
-    pub extension: String,
     /// Size in bytes
     pub size: u64,
-    /// Last modified as ISO 8601 string
+    /// Last modified as compact timestamp (YYYY-MM-DDTHH:MM)
     pub modified: String,
     /// Whether this is a directory
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub is_dir: bool,
     /// Fast content hash (hex) for duplicate detection — only for files ≤ 50 MB
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,6 +298,11 @@ fn walk_dir(
             continue;
         }
 
+        // Skip our own trash directory to avoid scanning/nesting it
+        if file_name == "_kiro_trash" {
+            continue;
+        }
+
         let metadata = match std::fs::metadata(&path) {
             Ok(m) => m,
             Err(_) => continue,
@@ -315,17 +317,9 @@ fn walk_dir(
             .ok()
             .map(|t| {
                 let dt: chrono::DateTime<chrono::Local> = t.into();
-                dt.to_rfc3339()
+                dt.format("%Y-%m-%dT%H:%M").to_string()
             })
             .unwrap_or_default();
-
-        let extension = if is_dir {
-            String::new()
-        } else {
-            path.extension()
-                .map(|e| e.to_string_lossy().to_lowercase())
-                .unwrap_or_default()
-        };
 
         // Compute hash for non-directory files within size limit
         let hash = if !is_dir && compute_hashes && size > 0 && size <= MAX_HASH_SIZE {
@@ -343,8 +337,6 @@ fn walk_dir(
 
         state.entries.push(FileEntry {
             path: relative_str,
-            name: file_name,
-            extension,
             size,
             modified,
             is_dir,
@@ -493,6 +485,13 @@ fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutionRes
                     continue;
                 }
 
+                // Don't re-trash files that are already in the trash
+                if op.from.starts_with("_kiro_trash/") || op.from.starts_with("_kiro_trash\\") {
+                    errors.push(format!("'{}': already in trash, skipping", op.from));
+                    failed += 1;
+                    continue;
+                }
+
                 // Safety: move to a _kiro_trash subfolder instead of actual delete
                 let trash_dir = root.join("_kiro_trash");
                 if let Err(e) = std::fs::create_dir_all(&trash_dir) {
@@ -501,10 +500,25 @@ fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutionRes
                     continue;
                 }
 
-                let trash_dest = trash_dir.join(&op.from);
-                if let Some(parent) = trash_dest.parent() {
-                    let _ = std::fs::create_dir_all(parent);
-                }
+                // Use just the filename to avoid nesting paths inside trash
+                let file_name = Path::new(&op.from).file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| op.from.clone());
+                let trash_dest = trash_dir.join(&file_name);
+
+                // If a file with the same name already exists in trash, add a suffix
+                let trash_dest = if trash_dest.exists() {
+                    let stem = Path::new(&file_name).file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| file_name.clone());
+                    let ext = Path::new(&file_name).extension()
+                        .map(|e| format!(".{}", e.to_string_lossy()))
+                        .unwrap_or_default();
+                    let ts = chrono::Local::now().format("%Y%m%d%H%M%S");
+                    trash_dir.join(format!("{}_{}{}", stem, ts, ext))
+                } else {
+                    trash_dest
+                };
 
                 match std::fs::rename(&from_abs, &trash_dest) {
                     Ok(_) => {

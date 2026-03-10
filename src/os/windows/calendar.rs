@@ -149,9 +149,6 @@ try {{
         return vec![];
     }
 
-    // Log raw output so we can see exactly what PowerShell returned
-    info!("[calendar] Raw stdout ({}, {} bytes): {}", label, stdout.len(), stdout);
-
     // Sanitize JSON: PowerShell's ConvertTo-Json and manual string building can
     // produce invalid JSON when calendar bodies contain unescaped quotes (including
     // Unicode smart quotes \u201C \u201D that get treated as string delimiters).
