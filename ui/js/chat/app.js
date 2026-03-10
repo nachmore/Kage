@@ -3,7 +3,7 @@ import { renderMarkdown, initMarkdown, createTaskPlanElement } from '../shared/m
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml } from '../shared/tool-utils.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -1344,6 +1344,17 @@ export class ChatApp {
             // If extension tool is executing, the response will come as a follow-up
             if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
 
+            // Check for extension tool call in the completed response (fallback if not caught during streaming)
+            if (!this._extensionToolCallHandled) {
+                const toolCall = detectExtensionToolCall(this.currentStreamingContent);
+                if (toolCall) {
+                    this._extensionToolCallHandled = true;
+                    const contentDiv = this.currentStreamingMessage?.querySelector('.message-content');
+                    this._handleExtensionToolCall(toolCall, contentDiv);
+                    return;
+                }
+            }
+
             this.hideTypingIndicator();
 
             if (this.currentStreamingMessage) {
@@ -1602,6 +1613,9 @@ export class ChatApp {
         }
 
         this._extensionToolExecuting = false;
+        // Reset the handled flag so the next message_complete is processed normally.
+        this._extensionToolCallHandled = false;
+        this.hideTypingIndicator();
     }
 
     /**

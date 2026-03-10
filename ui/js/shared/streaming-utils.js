@@ -369,3 +369,25 @@ export function renderExtensionToolChipHtml(info) {
         </span>
     `;
 }
+
+/**
+ * Detect and extract a ```suggested_actions``` block from response text.
+ * Returns { actions: Array<{label, prompt}>, cleanText: string } or null.
+ */
+export function extractSuggestedActions(text) {
+    if (!text || !text.includes('```suggested_actions')) return null;
+
+    const regex = /```suggested_actions\s*\n([\s\S]*?)```/;
+    const match = text.match(regex);
+    if (!match) return null;
+
+    try {
+        const parsed = JSON.parse(match[1].trim());
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].label) {
+            // Strip the block from the visible text
+            const cleanText = text.replace(regex, '').trim();
+            return { actions: parsed, cleanText };
+        }
+    } catch { /* invalid JSON */ }
+    return null;
+}

@@ -4,7 +4,7 @@ import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -1339,6 +1339,16 @@ export class FloatingApp {
             // If extension tool is executing, the response will come as a follow-up
             if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
 
+            // Check for extension tool call in the completed response (fallback if not caught during streaming)
+            if (!this._extensionToolCallHandled) {
+                const toolCall = detectExtensionToolCall(this.currentResponse);
+                if (toolCall) {
+                    this._extensionToolCallHandled = true;
+                    this._handleExtensionToolCall(toolCall);
+                    return;
+                }
+            }
+
             this.stopThinking();
             this.computerControlActive = false;
             this.elements.floatingStopBtn.style.display = 'none';
@@ -1361,6 +1371,12 @@ export class FloatingApp {
 
             // Show response action buttons (copy, speak)
             this._showFloatingResponseActions();
+
+            // Check for agent-suggested actions (hidden fence at end of response)
+            const suggested = extractSuggestedActions(this.currentResponse);
+            if (suggested && suggested.actions.length > 0) {
+                this._renderSuggestedActions(suggested.actions);
+            }
 
             // Show quick action chips on the response
             this._showResponseActions(this.currentResponse);
@@ -1496,6 +1512,12 @@ export class FloatingApp {
         // Execute the tool
         this._extensionToolExecuting = true;
 
+        // Hide stop button while tool is executing — the tool may show its own UI
+        // (e.g. folder plan confirmation with Run/Cancel buttons)
+        this.stopThinking();
+        this.elements.floatingStopBtn.style.display = 'none';
+        this.updateDatetimeVisibility();
+
         const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
         const success = !result.error;
         const resultJson = JSON.stringify(success ? result.result : result.error);
@@ -1512,6 +1534,13 @@ export class FloatingApp {
         }
 
         this._extensionToolExecuting = false;
+        // Reset the handled flag so the next message_complete is processed normally.
+        // Also hide the stop button — the follow-up response's handleMessageComplete
+        // may have already fired while the tool was executing and been skipped.
+        this._extensionToolCallHandled = false;
+        this.stopThinking();
+        this.elements.floatingStopBtn.style.display = 'none';
+        this.updateDatetimeVisibility();
     }
 
     /**
@@ -1699,6 +1728,29 @@ export class FloatingApp {
                 await this.windowManager.resizeWindow();
             }
         } catch (e) { console.warn('[QA] Response actions error:', e); }
+    }
+
+    /**
+     * Render agent-suggested action chips below the response.
+     * These come from a hidden ```suggested_actions``` fence in the agent's response.
+     */
+    _renderSuggestedActions(actions) {
+        const container = document.getElementById('responseActionsContainer');
+        if (!container) return;
+        container.innerHTML = '';
+        container.style.display = 'flex';
+        for (const action of actions) {
+            const chip = document.createElement('button');
+            chip.className = 'quick-action-chip';
+            chip.title = action.prompt;
+            chip.innerHTML = `<span class="quick-action-label">${action.label}</span>`;
+            chip.addEventListener('click', () => {
+                container.style.display = 'none';
+                this.sendChatMessage(action.prompt, { skipSelection: true });
+            });
+            container.appendChild(chip);
+        }
+        this.windowManager.resizeWindow();
     }
 
     async handleMessageError(event) {

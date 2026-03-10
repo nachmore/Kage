@@ -17,6 +17,7 @@ export function classifyText(text) {
     if (looksLikeJson(text)) types.push('json');
     if (looksLikeUrl(text)) types.push('url');
     if (looksLikeMath(text)) types.push('math');
+    if (looksLikeFolderPlan(text)) types.push('folder_plan');
     if (types.length === 0) types.push('prose');
     return types;
 }
@@ -78,6 +79,15 @@ function looksLikeMath(text) {
     return true;
 }
 
+function looksLikeFolderPlan(text) {
+    // Detect folder organization responses — mentions of folders/files being organized,
+    // plan proposals, or results of folder operations
+    const lower = text.toLowerCase();
+    const hasOrgKeywords = /\b(organiz|folder|directory|move|moved|sorted|duplicat|clean|tidier)\b/i.test(text);
+    const hasPlanIndicators = /\b(plan|operations?|completed|here'?s what|would you like|want me to)\b/i.test(text);
+    return hasOrgKeywords && hasPlanIndicators;
+}
+
 // --- Built-in actions per content type ---
 
 /**
@@ -125,6 +135,10 @@ const BUILTIN_ACTIONS = [
     // Number
     { label: 'Convert units', icon: '📏', prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}', contentTypes: ['number'] },
     { label: 'Explain number', icon: '🔢', prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}', contentTypes: ['number'] },
+    // Folder organization
+    { label: 'Looks good, do it', icon: '▶️', prompt: 'Go ahead and execute the plan as proposed.', contentTypes: ['folder_plan'] },
+    { label: 'More details', icon: '🔍', prompt: 'Can you give me more details about what each operation will do and why?', contentTypes: ['folder_plan'] },
+    { label: 'Undo changes', icon: '↩️', prompt: 'Please undo/rollback the folder changes that were just made.', contentTypes: ['folder_plan'] },
 ];
 
 // --- Chip rendering ---

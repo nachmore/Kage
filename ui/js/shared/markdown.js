@@ -138,6 +138,17 @@ function _doRender(markdown, targetElement, streaming) {
         markdown = markdown.trim();
     }
 
+    // Strip suggested_actions fences — rendered as clickable chips by the app, not as text.
+    if (markdown.includes('```suggested_actions')) {
+        markdown = markdown.replace(/```suggested_actions\s*\n[\s\S]*?\n```/g, '');
+        // Also strip incomplete fence during streaming
+        const incompleteIdx = markdown.indexOf('```suggested_actions');
+        if (incompleteIdx !== -1) {
+            markdown = markdown.substring(0, incompleteIdx);
+        }
+        markdown = markdown.trim();
+    }
+
     // Deduplicate taskplan blocks at the source level — keep only the last one.
     // The agent re-outputs the full taskplan block each time it updates status,
     // so we strip all but the final occurrence to avoid showing stale versions.

@@ -558,7 +558,24 @@ export class ExtensionManager {
             block += '\n';
         }
 
-        block += '</extension_tools>';
+        block += '</extension_tools>\n\n';
+
+        // Suggested actions format — agent can emit clickable action hints
+        block += '<suggested_actions_format>\n';
+        block += 'When your response presents options or asks the user what to do next, ';
+        block += 'you can emit a hidden actions block at the END of your response. ';
+        block += 'The frontend will strip this from the visible text and render the actions as clickable buttons.\n\n';
+        block += '```suggested_actions\n';
+        block += '[{"label": "Short button text", "prompt": "The message to send when clicked"}]\n';
+        block += '```\n\n';
+        block += 'Rules:\n';
+        block += '- Place this block at the very end of your response, after all visible text.\n';
+        block += '- Keep labels short (2-5 words). Use an emoji prefix if appropriate.\n';
+        block += '- The prompt is what gets sent as the user\'s next message when they click.\n';
+        block += '- Include 2-4 actions max. Always include one that proceeds with the proposed plan.\n';
+        block += '- Only use this when you are asking the user to choose between options.\n';
+        block += '</suggested_actions_format>';
+
         return block;
     }
 }
