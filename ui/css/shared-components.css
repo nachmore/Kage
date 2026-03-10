@@ -1407,3 +1407,25 @@ body.light-theme .folder-plan-item {
     background: var(--kiro-surface-hover, #352F3D) !important;
     color: var(--kiro-text-primary, #E5E7EB) !important;
 }
+
+/* Folder Plan spinner (shown during execution) */
+.folder-plan-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: var(--kiro-accent, #C09CFF);
+    border-radius: 50%;
+    animation: folder-plan-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+}
+
+@keyframes folder-plan-spin {
+    to { transform: rotate(360deg); }
+}
+
+body.light-theme .folder-plan-spinner {
+    border-color: rgba(0,0,0,0.1);
+    border-top-color: var(--kiro-accent, #7c3aed);
+}

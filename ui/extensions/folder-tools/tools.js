@@ -252,8 +252,10 @@ export default class FolderToolProvider {
                 e.stopPropagation();
                 cleanup();
                 actions.remove();
-                // Update header to show "running"
-                header.textContent = `📁 Executing plan...`;
+                // Update header to show "running" with spinner
+                header.innerHTML = `📁 Executing plan... <span class="folder-plan-spinner"></span>`;
+                // Dim the list items to indicate they're being processed
+                list.style.opacity = '0.5';
                 resolve(true);
             };
 

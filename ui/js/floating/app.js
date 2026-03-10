@@ -1365,6 +1365,11 @@ export class FloatingApp {
                 return;
             }
 
+            // Wait a tick to ensure all pending message_chunk events have been processed
+            // before doing the final render. The message_complete event can arrive
+            // before the last few chunk events are dispatched.
+            await new Promise(r => setTimeout(r, 50));
+
             renderMarkdown(this.currentResponse, this.elements.responseText);
             await this.windowManager.resizeWindow();
             this.isWaitingForResponse = false;
@@ -1538,8 +1543,9 @@ export class FloatingApp {
         // Also hide the stop button — the follow-up response's handleMessageComplete
         // may have already fired while the tool was executing and been skipped.
         this._extensionToolCallHandled = false;
-        this.stopThinking();
-        this.elements.floatingStopBtn.style.display = 'none';
+
+        // Show thinking dots while waiting for the agent's follow-up response
+        this.startThinking();
         this.updateDatetimeVisibility();
     }
 

@@ -1615,7 +1615,8 @@ export class ChatApp {
         this._extensionToolExecuting = false;
         // Reset the handled flag so the next message_complete is processed normally.
         this._extensionToolCallHandled = false;
-        this.hideTypingIndicator();
+        // Show typing indicator while waiting for the agent's follow-up response
+        this.showTypingIndicator();
     }
 
     /**
