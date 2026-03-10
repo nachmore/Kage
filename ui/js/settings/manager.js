@@ -331,6 +331,85 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Render and load
     settingsManager.render();
     await settingsManager.load();
+
+    // Listen for extension install/uninstall — hot-load new settings modules
+    const { listen } = window.__TAURI__.event;
+    listen('extensions_changed', async () => {
+        console.log('[Settings] extensions_changed — checking for new modules');
+        try {
+            const userExts = await invoke('list_extensions');
+            const registeredIds = new Set(settingsManager.modules.filter(m => m._extensionId).map(m => m._extensionId));
+            // Get bundled IDs
+            const bundledIds = new Set();
+            try {
+                const resp = await fetch('extensions/bundled.json');
+                if (resp.ok) {
+                    const list = await resp.json();
+                    list.forEach(e => bundledIds.add(e.id));
+                }
+            } catch {}
+
+            let added = false;
+            for (const item of userExts) {
+                if (bundledIds.has(item.manifest.id)) continue;
+                if (registeredIds.has(item.manifest.id)) continue;
+                const manifest = item.manifest;
+                if (!manifest.contributes?.settingsModule) continue;
+
+                try {
+                    const settingsPath = manifest.contributes.settingsModule.replace('./', '');
+                    const code = await invoke('read_extension_file', {
+                        extensionId: manifest.id,
+                        kind: 'extension',
+                        filePath: settingsPath,
+                    });
+                    await loadScriptFromString(code);
+
+                    const className = manifest.id
+                        .split('-')
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join('') + 'ExtSettingsModule';
+                    const ModuleClass = window[className];
+                    if (ModuleClass) {
+                        // Insert before the About/Updates modules (last two)
+                        const mod = new ModuleClass();
+                        mod._extensionId = manifest.id;
+                        const insertIdx = Math.max(0, settingsManager.modules.length - 2);
+                        settingsManager.modules.splice(insertIdx, 0, mod);
+                        addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
+                        added = true;
+                        console.log(`[Settings] Hot-loaded extension settings: ${manifest.id}`);
+                    }
+                } catch (e) {
+                    console.warn(`[Settings] Failed to hot-load extension settings '${manifest.id}':`, e);
+                }
+            }
+
+            // Also remove modules for uninstalled extensions
+            const installedIds = new Set(userExts.map(e => e.manifest.id));
+            const toRemove = settingsManager.modules.filter(m =>
+                m._extensionId && !bundledIds.has(m._extensionId) && !installedIds.has(m._extensionId)
+            );
+            for (const mod of toRemove) {
+                const idx = settingsManager.modules.indexOf(mod);
+                if (idx !== -1) {
+                    settingsManager.modules.splice(idx, 1);
+                    // Remove sidebar item
+                    const sidebarItem = document.querySelector(`.sidebar-item[data-section="${mod.id}"]`);
+                    if (sidebarItem) sidebarItem.remove();
+                    added = true; // need re-render
+                    console.log(`[Settings] Removed uninstalled extension settings: ${mod._extensionId}`);
+                }
+            }
+
+            if (added) {
+                settingsManager.render();
+                await settingsManager.load();
+            }
+        } catch (e) {
+            console.warn('[Settings] Failed to reload extensions:', e);
+        }
+    });
 });
 
 /**
