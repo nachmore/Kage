@@ -1,10 +1,11 @@
 /**
  * Todos search provider.
- * - "todos" or "todo" → show full list with filters
- * - "todo buy milk" → quick-add a new todo
- * - "todos #work" → filter by category
- * - "todos /done" → show completed
- * - "todos /overdue" → show overdue
+ * - "todo" → show summary + active items
+ * - "todo+ buy milk" → quick-add a new todo
+ * - "todo-" → select a todo to delete
+ * - "todo #work" → filter by category
+ * - "todo /done" → show completed
+ * - "todo /overdue" → show overdue
  */
 
 const STORAGE_KEY = 'kiro-todos';
@@ -165,57 +166,151 @@ export default class TodosSearchProvider {
         this._load(); // refresh from storage
         const lower = query.trim().toLowerCase();
 
-        // "todos" or "todo" alone → show list
-        if (lower === 'todos' || lower === 'todo') {
-            return this._buildTodoList(null);
+        // "todo" alone → summary as first item + a few recent todos below
+        if (lower === 'todo') {
+            const stats = this.getStats();
+            const pct = stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0;
+            const results = [{
+                id: 'todo:summary',
+                type: 'todo_action',
+                label: `📋 Todos ${stats.complete}/${stats.total} ${this._renderProgressText(pct)}`,
+                description: 'Press Enter for full summary · todo+ to add · todo- to remove',
+                icon: '✅',
+                score: 100,
+                data: { action: 'summary' },
+            }];
+
+            // Show a few active/overdue items below the summary
+            const active = this.todos.filter(t => t.status !== 'complete');
+            const sorted = this._sortTodos(active);
+            for (const todo of sorted.slice(0, 5)) {
+                const statusIcon = this._isOverdue(todo) ? '🔴'
+                    : todo.status === 'in-progress' ? '🔵' : '⬜';
+                const parts = [
+                    todo.category ? `#${todo.category}` : '',
+                    this._formatDateDisplay(todo.dueDate),
+                ].filter(Boolean).join(' · ');
+                results.push({
+                    id: `todo:${todo.id}`,
+                    type: 'todo_item',
+                    label: `${statusIcon} ${todo.text}`,
+                    description: parts || 'Enter: cycle status',
+                    icon: statusIcon,
+                    score: 90,
+                    data: { action: 'cycle', todoId: todo.id },
+                });
+            }
+            return results;
         }
 
-        // "todos #category" → filter by category
-        const catMatch = lower.match(/^todos?\s+#(\S+)$/);
+        // "todo+" alone → hint
+        if (lower === 'todo+') {
+            return [{
+                id: 'todo:add-hint',
+                type: 'todo_header',
+                label: '➕ Type a task to add',
+                description: 'e.g. todo+ buy milk #shopping @high due:friday',
+                icon: '✅',
+                score: 100,
+                data: { action: 'none' },
+            }];
+        }
+
+        // "todo+ buy milk" → quick add
+        const addMatch = query.trim().match(/^todo\+\s+(.+)$/i);
+        if (addMatch) {
+            return this._buildQuickAdd(addMatch[1]);
+        }
+
+        // "todo-" alone → hint or full delete list
+        if (lower === 'todo-') {
+            if (this.todos.length === 0) {
+                return [{
+                    id: 'todo:del-empty',
+                    type: 'todo_header',
+                    label: '🗑️ No todos to remove',
+                    description: 'Use todo+ to add tasks first',
+                    icon: '✅',
+                    score: 100,
+                    data: { action: 'none' },
+                }];
+            }
+            return this._buildDeleteList(null);
+        }
+
+        // "todo- <search>" → filtered delete list, no header
+        if (lower.startsWith('todo- ')) {
+            const term = lower.replace(/^todo-\s+/, '');
+            const filterFn = t => t.text.toLowerCase().includes(term) || (t.category || '').toLowerCase().includes(term);
+            const results = this._buildDeleteList(filterFn, { showHeader: false });
+            if (results.length === 0) {
+                return [{
+                    id: 'todo:del-none',
+                    type: 'todo_header',
+                    label: `🗑️ No todos matching "${term}"`,
+                    description: 'Try a different search',
+                    icon: '✅',
+                    score: 100,
+                    data: { action: 'none' },
+                }];
+            }
+            return results;
+        }
+
+        // "todo #category" → filter by category
+        const catMatch = lower.match(/^todo\s+#(\S+)$/);
         if (catMatch) {
             return this._buildTodoList(t =>
                 (t.category || '').toLowerCase() === catMatch[1]
             );
         }
 
-        // "todos /done" → show completed
-        if (lower === 'todos /done' || lower === 'todo /done') {
+        // "todo /done" → show completed
+        if (lower === 'todo /done') {
             return this._buildTodoList(t => t.status === 'complete');
         }
 
-        // "todos /overdue" → show overdue
-        if (lower === 'todos /overdue' || lower === 'todo /overdue') {
+        // "todo /overdue" → show overdue
+        if (lower === 'todo /overdue') {
             return this._buildTodoList(t => this._isOverdue(t));
         }
 
-        // "todos /active" → show non-complete
-        if (lower === 'todos /active' || lower === 'todo /active') {
+        // "todo /active" → show non-complete
+        if (lower === 'todo /active') {
             return this._buildTodoList(t => t.status !== 'complete');
         }
 
-        // "todos /high" etc → filter by priority
-        const prioMatch = lower.match(/^todos?\s+\/(high|medium|low)$/);
+        // "todo /high" etc → filter by priority
+        const prioMatch = lower.match(/^todo\s+\/(high|medium|low)$/);
         if (prioMatch) {
             return this._buildTodoList(t => t.priority === prioMatch[1]);
         }
 
-        // "todos <search>" → search within todos
-        const searchMatch = lower.match(/^todos?\s+(.+)$/);
+        // "todo <search>" → search within todos, no summary
+        const searchMatch = lower.match(/^todo\s+(.+)$/);
         if (searchMatch) {
             const term = searchMatch[1];
-            // If it doesn't look like a filter command, search by text
             if (!term.startsWith('#') && !term.startsWith('/')) {
+                const filtered = this.todos.filter(t =>
+                    t.text.toLowerCase().includes(term) ||
+                    (t.category || '').toLowerCase().includes(term)
+                );
+                if (filtered.length === 0) {
+                    return [{
+                        id: 'todo:no-match',
+                        type: 'todo_header',
+                        label: `No todos matching "${term}"`,
+                        description: `Use todo+ ${term} to create one`,
+                        icon: '📋',
+                        score: 100,
+                        data: { action: 'none' },
+                    }];
+                }
                 return this._buildTodoList(t =>
                     t.text.toLowerCase().includes(term) ||
                     (t.category || '').toLowerCase().includes(term)
                 );
             }
-        }
-
-        // "todo! buy milk" → quick add
-        const addMatch = query.trim().match(/^todo!\s+(.+)$/i);
-        if (addMatch) {
-            return this._buildQuickAdd(addMatch[1]);
         }
 
         return [];
@@ -295,7 +390,7 @@ export default class TodosSearchProvider {
             description: [
                 stats.overdue > 0 ? `🔴 ${stats.overdue} overdue` : '',
                 stats.inProgress > 0 ? `🔵 ${stats.inProgress} in progress` : '',
-                'Type todo! <task> to add',
+                'Type todo+ <task> to add · todo- to remove',
             ].filter(Boolean).join(' · '),
             icon: '✅',
             score: 100,
@@ -322,7 +417,7 @@ export default class TodosSearchProvider {
                 id: `todo:${todo.id}`,
                 type: 'todo_item',
                 label: `${statusIcon} ${todo.text}`,
-                description: parts || 'Enter: cycle status · Del: remove',
+                description: parts || 'Enter: cycle status',
                 icon: statusIcon,
                 score: 90 - sorted.indexOf(todo),
                 data: { action: 'cycle', todoId: todo.id },
@@ -364,6 +459,85 @@ export default class TodosSearchProvider {
 
     // --- Execution ---
 
+    _buildDeleteList(filterFn, { showHeader = true } = {}) {
+        let filtered = filterFn ? this.todos.filter(filterFn) : this.todos;
+        const sorted = this._sortTodos(filtered);
+        const results = [];
+
+        if (showHeader) {
+            results.push({
+                id: 'todo:delete-header',
+                type: 'todo_header',
+                label: '🗑️ Select a todo to remove',
+                description: 'Type todo- <search> to filter',
+                icon: '✅',
+                score: 100,
+                data: { action: 'none' },
+            });
+        }
+
+        for (const todo of sorted.slice(0, 20)) {
+            const statusIcon = todo.status === 'complete' ? '✅'
+                : todo.status === 'in-progress' ? '🔵' : '⬜';
+            results.push({
+                id: `todo:del:${todo.id}`,
+                type: 'todo_item',
+                label: `🗑️ ${statusIcon} ${todo.text}`,
+                description: 'Press Enter to delete',
+                icon: '✅',
+                score: 90 - sorted.indexOf(todo),
+                data: { action: 'delete', todoId: todo.id },
+            });
+        }
+
+        return results;
+    }
+
+    _buildSummaryText() {
+        this._load();
+        const stats = this.getStats();
+        const lines = [];
+
+        const pct = stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0;
+        lines.push(`📋 **Todos** — ${stats.complete}/${stats.total} done (${pct}%)`);
+
+        if (stats.total === 0) {
+            lines.push('\nNo tasks yet. Use `todo+ <task>` to add one.');
+            return { type: 'display', value: lines.join('\n') };
+        }
+
+        // Overdue
+        const overdue = this.todos.filter(t => t.status !== 'complete' && this._isOverdue(t));
+        if (overdue.length > 0) {
+            lines.push('\n🔴 **Overdue:**');
+            for (const t of overdue) lines.push(`- ${t.text}${t.dueDate ? ` *(due ${this._formatDateDisplay(t.dueDate)})*` : ''}`);
+        }
+
+        // In progress
+        const active = this.todos.filter(t => t.status === 'in-progress');
+        if (active.length > 0) {
+            lines.push('\n🔵 **In Progress:**');
+            for (const t of active) lines.push(`- ${t.text}`);
+        }
+
+        // Pending (not overdue)
+        const pending = this.todos.filter(t => t.status === 'pending' && !this._isOverdue(t));
+        if (pending.length > 0) {
+            lines.push(`\n⬜ **Pending** (${pending.length}):`);
+            for (const t of pending.slice(0, 10)) {
+                const due = t.dueDate ? ` *(${this._formatDateDisplay(t.dueDate)})*` : '';
+                lines.push(`- ${t.text}${due}`);
+            }
+            if (pending.length > 10) lines.push(`- *...and ${pending.length - 10} more*`);
+        }
+
+        if (stats.complete > 0) {
+            lines.push(`\n✅ ${stats.complete} completed`);
+        }
+
+        return { type: 'display', value: lines.join('\n') };
+    }
+
     execute(result) {
         const data = result.data;
         if (!data) return null;
@@ -377,6 +551,8 @@ export default class TodosSearchProvider {
                 return this._deleteTodo(data.todoId);
             case 'clear_completed':
                 return this._clearCompleted();
+            case 'summary':
+                return this._buildSummaryText();
             case 'none':
             default:
                 return null;

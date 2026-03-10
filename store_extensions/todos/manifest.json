@@ -1,9 +1,9 @@
 {
   "id": "todos",
   "name": "Todos",
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "extension",
-  "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todos' to view your list or 'todo <task>' to quick-add.",
+  "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo-' to remove.",
   "icon": "✅",
   "author": "kiro-assistant",
 
