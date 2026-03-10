@@ -1401,6 +1401,8 @@ export class FloatingApp {
             // Check for agent-suggested actions (hidden fence at end of response)
             const suggested = extractSuggestedActions(this.currentResponse);
             if (suggested && suggested.actions.length > 0) {
+                // Re-render without the suggested_actions fence
+                renderMarkdown(suggested.cleanText, this.elements.responseText);
                 this._renderSuggestedActions(suggested.actions);
             }
 
@@ -1754,11 +1756,21 @@ export class FloatingApp {
             if (actions.length === 0) return;
             const container = document.getElementById('responseActionsContainer');
             if (container) {
-                renderQuickActionChips(actions, container, (promptTemplate) => {
-                    const prompt = promptTemplate.replace(/\{text\}/g, responseText);
-                    container.style.display = 'none';
-                    this.sendChatMessage(prompt, { skipSelection: true });
-                });
+                // Append quick-action chips without clearing agent-suggested actions
+                const hasSuggested = container.children.length > 0;
+                for (const action of actions) {
+                    const chip = document.createElement('button');
+                    chip.className = 'quick-action-chip';
+                    chip.title = action.label;
+                    chip.innerHTML = `<span class="quick-action-icon">${action.icon || '⚡'}</span><span class="quick-action-label">${action.label}</span>`;
+                    chip.addEventListener('click', () => {
+                        const prompt = action.prompt.replace(/\{text\}/g, responseText);
+                        container.style.display = 'none';
+                        this.sendChatMessage(prompt, { skipSelection: true });
+                    });
+                    container.appendChild(chip);
+                }
+                container.style.display = 'flex';
                 await this.windowManager.resizeWindow();
             }
         } catch (e) { console.warn('[QA] Response actions error:', e); }
