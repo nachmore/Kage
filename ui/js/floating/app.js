@@ -1347,6 +1347,10 @@ export class FloatingApp {
     async handleMessageComplete() {
             if (!this.isWaitingForResponse) return;
 
+            // Always hide stop button when a prompt completes — the agent is done generating
+            this.elements.floatingStopBtn.style.display = 'none';
+            this.updateDatetimeVisibility();
+
             // Ignore stale completions (e.g., steering response arriving after user sent a message)
             if (!this.currentResponse || this.currentResponse.trim().length === 0) {
                 return;
