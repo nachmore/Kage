@@ -43,6 +43,8 @@ pub struct AppState {
     pub pocket_tts_install_process: Arc<std::sync::Mutex<Option<std::process::Child>>>,
     /// Cancellation flag for automation plan execution
     pub automation_plan_cancelled: Arc<AtomicBool>,
+    /// Hash of the last sent extension tool steering (to avoid sending duplicates)
+    pub last_tool_steering_hash: Arc<std::sync::Mutex<u64>>,
 }
 
 #[derive(Debug, Clone)]

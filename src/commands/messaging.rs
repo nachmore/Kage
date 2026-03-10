@@ -801,6 +801,22 @@ pub async fn send_extension_tool_steering(
         return Ok(());
     }
 
+    // Deduplicate: skip if the steering content hasn't changed since last send
+    let hash = {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        tool_steering.hash(&mut hasher);
+        hasher.finish()
+    };
+    {
+        let mut last = state.last_tool_steering_hash.lock().unwrap();
+        if *last == hash {
+            return Ok(());
+        }
+        *last = hash;
+    }
+
     info!("Sending extension tool steering ({} chars)", tool_steering.len());
 
     let client = state.acp_client.clone();

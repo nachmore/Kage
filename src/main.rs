@@ -244,6 +244,7 @@ fn main() {
             pocket_tts_process: Arc::new(std::sync::Mutex::new(None)),
             pocket_tts_install_process: Arc::new(std::sync::Mutex::new(None)),
             automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

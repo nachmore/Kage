@@ -374,8 +374,6 @@ export class ChatApp {
                 this.showCompactingNotice();
             } else if (status === 'completed') {
                 this.hideCompactingNotice('Context compacted successfully');
-                // Re-send extension tool steering — compaction may have dropped it
-                this._sendExtensionToolSteering();
             }
         });
 

@@ -272,8 +272,6 @@ export class FloatingApp {
             } else if (status === 'completed') {
                 this._compacting = false;
                 this._hideCompactionIndicator();
-                // Re-send extension tool steering — compaction may have dropped it
-                this._sendExtensionToolSteering();
             }
         });
 
