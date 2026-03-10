@@ -1,0 +1,24 @@
+{
+  "id": "todos",
+  "name": "Todos",
+  "version": "0.1.0",
+  "type": "extension",
+  "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todos' to view your list or 'todo <task>' to quick-add.",
+  "icon": "✅",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": true },
+    "default_category": { "type": "string", "default": "" },
+    "show_completed": { "type": "boolean", "default": true },
+    "confirm_delete": { "type": "boolean", "default": true },
+    "sort_by": { "type": "string", "default": "created" }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js",
+    "toolbarButtons": "./toolbar.js",
+    "css": ["./styles.css"]
+  }
+}
