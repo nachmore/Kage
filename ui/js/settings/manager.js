@@ -215,17 +215,35 @@ function loadScriptFromString(code) {
 }
 
 /**
- * Add a sidebar item dynamically to the Extensions section.
+ * Add a sidebar item dynamically to the Extensions section, in alphabetical order.
+ * Static items (store, integration, shortcuts) stay at the top.
  */
 function addExtensionSidebarItem(id, icon, label) {
     const section = document.getElementById('extensionsSidebarSection');
     if (!section) return;
+    // Don't add duplicates
+    if (section.querySelector(`.sidebar-item[data-section="${id}"]`)) return;
+
     const item = document.createElement('div');
     item.className = 'sidebar-item';
     item.dataset.section = id;
+    item.dataset.extSidebar = 'true'; // mark as dynamic extension item
     item.onclick = () => switchSection(id);
     item.innerHTML = `<span class="sidebar-item-icon">${icon}</span><span>${label}</span>`;
-    section.appendChild(item);
+
+    // Insert alphabetically among other dynamic extension items
+    const extItems = [...section.querySelectorAll('.sidebar-item[data-ext-sidebar="true"]')];
+    const lowerLabel = label.toLowerCase();
+    const insertBefore = extItems.find(el => {
+        const elLabel = el.querySelector('span:last-child')?.textContent?.toLowerCase() || '';
+        return elLabel > lowerLabel;
+    });
+
+    if (insertBefore) {
+        section.insertBefore(item, insertBefore);
+    } else {
+        section.appendChild(item);
+    }
 }
 
 /**
