@@ -40,6 +40,7 @@ export class FloatingApp {
         this.attachmentManager = new AttachmentManager();
         this.extensionManager = new ExtensionManager(invoke);
         this.lastSelection = null;
+        this._compacting = false;
         
         this.elements = {};
     }
@@ -261,6 +262,18 @@ export class FloatingApp {
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => this.handleSessionReset(event));
         this.toolSources = [];
+
+        // Track compaction state — queue outgoing messages while compacting
+        this.listen('compaction_status', (event) => {
+            const status = event.payload?.params?.status?.type;
+            if (status === 'started') {
+                this._compacting = true;
+                this._showCompactionIndicator();
+            } else if (status === 'completed') {
+                this._compacting = false;
+                this._hideCompactionIndicator();
+            }
+        });
 
         // Listen for selection captured from previous window
         this.listen('selection_captured', async (event) => {
@@ -1757,6 +1770,23 @@ export class FloatingApp {
             container.appendChild(chip);
         }
         this.windowManager.resizeWindow();
+    }
+
+    _showCompactionIndicator() {
+        // Show a subtle notice that context is being compacted
+        let notice = document.getElementById('compactionNotice');
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.id = 'compactionNotice';
+            notice.className = 'compaction-notice';
+            notice.innerHTML = '<span class="folder-plan-spinner"></span> Compacting context...';
+            this.elements.responseText?.appendChild(notice);
+        }
+    }
+
+    _hideCompactionIndicator() {
+        const notice = document.getElementById('compactionNotice');
+        if (notice) notice.remove();
     }
 
     async handleMessageError(event) {

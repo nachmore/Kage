@@ -164,6 +164,9 @@ impl AcpClient {
     // --- Chat streaming ---
 
     pub fn send_chat_streaming(&self, content: &str, attachments: Option<&[serde_json::Value]>) -> Result<()> {
+        // Wait for any in-progress compaction to finish before sending
+        self.wait_for_compaction();
+
         let debug = *self.transport.debug_mode.lock().unwrap();
 
         *self.streaming_accumulator.lock().unwrap() = String::new();

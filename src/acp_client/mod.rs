@@ -26,6 +26,8 @@ pub struct AcpClient {
     initialized: Arc<Mutex<bool>>,
     /// Accumulated streaming text (reset per message)
     pub streaming_accumulator: Arc<Mutex<String>>,
+    /// True while the server is compacting context — outgoing prompts should wait
+    pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
 }
 
 impl AcpClient {
@@ -35,6 +37,7 @@ impl AcpClient {
             session_id: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulator: Arc::new(Mutex::new(String::new())),
+            compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
         }
     }
 
@@ -108,4 +111,38 @@ impl AcpClient {
     }
 
     // Session and protocol methods are in session.rs
+
+    // --- Compaction gating ---
+
+    /// Mark compaction as started — outgoing prompts will block until it completes.
+    #[allow(dead_code)]
+    pub fn set_compacting(&self, active: bool) {
+        let (lock, cvar) = &*self.compacting;
+        let mut compacting = lock.lock().unwrap();
+        *compacting = active;
+        if !active {
+            // Wake any threads waiting for compaction to finish
+            cvar.notify_all();
+        }
+    }
+
+    /// Block the current thread until compaction is finished (with a timeout).
+    /// Returns true if we waited, false if compaction wasn't active.
+    pub fn wait_for_compaction(&self) -> bool {
+        let (lock, cvar) = &*self.compacting;
+        let compacting = lock.lock().unwrap();
+        if !*compacting {
+            return false;
+        }
+        info!("Waiting for compaction to finish before sending prompt...");
+        // Wait up to 60 seconds for compaction to complete
+        let timeout = std::time::Duration::from_secs(60);
+        let result = cvar.wait_timeout_while(compacting, timeout, |c| *c).unwrap();
+        if result.1.timed_out() {
+            log::warn!("Compaction wait timed out after 60s — sending anyway");
+        } else {
+            info!("Compaction finished, proceeding with prompt");
+        }
+        true
+    }
 }

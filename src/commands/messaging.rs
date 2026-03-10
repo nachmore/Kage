@@ -24,6 +24,7 @@ pub fn setup_notification_handler(
     let pending_perm = pending_permission;
     let _models = available_models;
     let accumulated = client.streaming_accumulator.clone();
+    let compacting = client.compacting.clone();
 
     // Map toolCallId → first tool name (e.g. "write") from the initial tool_call update.
     // The permission request arrives later with a descriptive title (e.g. "Creating hello.txt")
@@ -96,6 +97,27 @@ pub fn setup_notification_handler(
             }
             // Emit compaction status to frontend
             if method == "_kiro.dev/compaction/status" {
+                // Gate outgoing prompts while compaction is in progress
+                if let Some(status) = notification.get("params")
+                    .and_then(|p| p.get("status"))
+                    .and_then(|s| s.get("type"))
+                    .and_then(|t| t.as_str())
+                {
+                    let (lock, cvar) = &*compacting;
+                    let mut is_compacting = lock.lock().unwrap();
+                    match status {
+                        "started" => {
+                            info!("Compaction started — gating outgoing prompts");
+                            *is_compacting = true;
+                        }
+                        "completed" => {
+                            info!("Compaction completed — releasing prompt gate");
+                            *is_compacting = false;
+                            cvar.notify_all();
+                        }
+                        _ => {}
+                    }
+                }
                 let _ = app_handle.emit("compaction_status", &notification);
                 return;
             }

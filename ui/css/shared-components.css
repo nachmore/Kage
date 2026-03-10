@@ -1429,3 +1429,13 @@ body.light-theme .folder-plan-spinner {
     border-color: rgba(0,0,0,0.1);
     border-top-color: var(--kiro-accent, #7c3aed);
 }
+
+/* Compaction notice */
+.compaction-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--kiro-text-secondary, #938F9B);
+    padding: 8px 0;
+}
