@@ -13,11 +13,12 @@ import { getExtensionManager } from '../shared/search-engine.js';
  * Build a unique key for a result so we can diff the list.
  */
 function _resultKey(r) {
+    // Prefer stable ID for diffing (extensions provide unique IDs)
+    if (r.id) return r.id;
     if (r.type === 'app') return `app:${r.data?.name || r.label}`;
     if (r.type === 'shortcut') return `sc:${r.label}`;
     if (r.type === 'path') return `path:${r.data?.value || r.description || r.label}`;
     if (r.type === 'url') return `url:${r.data?.value || r.description || r.label}`;
-    if (r._extensionId) return `ext:${r._extensionId}:${r.label}`;
     return `${r.type || 'other'}:${r.label}`;
 }
 
@@ -66,14 +67,9 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
     currentMatches.length = 0;
 
     if (!results.length) {
-        // Fade out existing items then hide
-        const items = container.querySelectorAll('.app-suggestion-item');
-        if (items.length > 0) {
-            items.forEach(el => { el.style.opacity = '0'; el.style.transform = 'translateY(-4px)'; });
-            setTimeout(() => { container.innerHTML = ''; container.classList.remove('visible'); resizeWindow(); }, 120);
-        } else {
-            container.classList.remove('visible');
-        }
+        container.innerHTML = '';
+        container.classList.remove('visible');
+        resizeWindow();
         return -1;
     }
 
@@ -95,8 +91,16 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
 
         let item = existingByKey.get(key);
         if (item) {
-            // Reuse — just update selection state
+            // Reuse existing DOM node — update content if it's an extension item
             existingByKey.delete(key);
+            if (r._extensionId && extMgr) {
+                const customEl = document.createElement('div');
+                customEl.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;';
+                if (extMgr.renderResult(r, customEl)) {
+                    item.innerHTML = '';
+                    item.appendChild(customEl);
+                }
+            }
         } else {
             // New item — create and animate in
             item = _renderItem(r, i, extMgr);
@@ -113,18 +117,9 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
         newItems.push(item);
     }
 
-    // Remove items that are no longer in results (fade out)
-    const removals = [];
+    // Remove items that are no longer in results
     for (const [, el] of existingByKey) {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(-4px)';
-        removals.push(el);
-    }
-    if (removals.length > 0) {
-        setTimeout(() => {
-            removals.forEach(el => el.remove());
-            resizeWindow();
-        }, 120);
+        el.remove();
     }
 
     // Reorder: append items in the correct order
