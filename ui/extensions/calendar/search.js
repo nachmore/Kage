@@ -168,6 +168,8 @@ export default class CalendarSearchProvider {
         // - If there's an in-progress event, show it UNLESS the next future
         //   event starts within 10 minutes (then switch to the upcoming one).
         const inProgress = upcoming.filter(e => new Date(e.start_time) <= now);
+        // Prefer in-progress events with join links (more actionable)
+        inProgress.sort((a, b) => (b.online_url ? 1 : 0) - (a.online_url ? 1 : 0));
         const future = upcoming.filter(e => new Date(e.start_time) > now);
 
         let next;
