@@ -164,12 +164,26 @@ export default class CalendarSearchProvider {
             return;
         }
 
-        // Show the soonest event, with a count of concurrent/overlapping meetings
-        const next = upcoming[0];
+        // Decide which event to show:
+        // - If there's an in-progress event, show it UNLESS the next future
+        //   event starts within 10 minutes (then switch to the upcoming one).
+        const inProgress = upcoming.filter(e => new Date(e.start_time) <= now);
+        const future = upcoming.filter(e => new Date(e.start_time) > now);
+
+        let next;
+        if (inProgress.length > 0 && future.length > 0) {
+            const minsUntilNext = (new Date(future[0].start_time) - now) / 60000;
+            next = minsUntilNext <= 10 ? future[0] : inProgress[0];
+        } else if (inProgress.length > 0) {
+            next = inProgress[0];
+        } else {
+            next = upcoming[0];
+        }
+
         const nextStart = new Date(next.start_time);
         const concurrent = upcoming.filter(e => {
             const s = new Date(e.start_time);
-            return Math.abs(s - nextStart) < 15 * 60000; // within 15 min of each other
+            return Math.abs(s - nextStart) < 15 * 60000;
         }).length;
 
         this._showOverlay(next, concurrent);

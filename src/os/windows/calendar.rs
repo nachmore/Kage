@@ -67,7 +67,7 @@ try {{
     $ns = $ol.GetNamespace("MAPI")
     $cal = $ns.GetDefaultFolder(9) # olFolderCalendar
     {time_range}
-    $filter = "[Start] >= '" + $start.ToString("g") + "' AND [Start] < '" + $end.ToString("g") + "'"
+    $filter = "[End] >= '" + $start.ToString("g") + "' AND [Start] < '" + $end.ToString("g") + "'"
     $items = $cal.Items
     $items.Sort("[Start]")
     $items.IncludeRecurrences = $true

@@ -46,7 +46,7 @@ try {
         Write-Host "  To:   $end" -ForegroundColor DarkGray
     }
 
-    $filter = "[Start] >= '" + $start.ToString("g") + "' AND [Start] < '" + $end.ToString("g") + "'"
+    $filter = "[End] >= '" + $start.ToString("g") + "' AND [Start] < '" + $end.ToString("g") + "'"
     Write-Host "  Filter: $filter" -ForegroundColor DarkGray
     Write-Host ""
 
