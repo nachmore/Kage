@@ -32,12 +32,16 @@ pub fn setup_notification_handler(
     let tool_names: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
+    // Throttle config saves for last_seen updates — at most once per 60s
+    let last_config_save: std::sync::Arc<std::sync::Mutex<std::time::Instant>> =
+        std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(60)));
+
     client.set_notification_handler(move |notification: serde_json::Value| {
         let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
 
         if method == "session/request_permission" {
             handle_permission_notification(
-                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm, &tool_names,
+                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm, &tool_names, &last_config_save,
             );
             return;
         }
@@ -195,6 +199,7 @@ fn handle_permission_notification(
     tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
     tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    last_config_save: &std::sync::Arc<std::sync::Mutex<std::time::Instant>>,
 ) {
     // The permission request has a descriptive title (e.g. "Creating hello.txt")
     // but we want the actual tool name (e.g. "write") from the first tool_call update.
@@ -226,15 +231,23 @@ fn handle_permission_notification(
 
     let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
     if let Some(tool) = existing {
+        // Update last_seen in memory — throttle disk writes to at most once per 60s
         tool.last_seen = timestamp;
+        let mut last_save = last_config_save.lock().unwrap();
+        if last_save.elapsed() >= std::time::Duration::from_secs(60) {
+            let _ = config_guard.save();
+            *last_save = std::time::Instant::now();
+        }
     } else {
         config_guard.tool_permissions.tools.push(crate::config::ToolPolicy {
             title: tool_title.to_string(),
             policy: "ask".to_string(),
             last_seen: timestamp,
         });
+        // New tool discovered — save immediately
+        let _ = config_guard.save();
+        *last_config_save.lock().unwrap() = std::time::Instant::now();
     }
-    let _ = config_guard.save();
 
     let policy = if config_guard.tool_permissions.trust_all {
         "allow".to_string()
