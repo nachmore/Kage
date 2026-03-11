@@ -83,6 +83,9 @@ If you cannot produce this document, respond with exactly "STEERING_DECLINED" on
 /// Read recent conversation turns from the current session's JSONL file.
 /// Returns labeled turns (both user and assistant) for full context.
 fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<String>> {
+    use std::io::{BufRead, BufReader};
+    use std::collections::VecDeque;
+
     let home = dirs::home_dir().context("Failed to get home directory")?;
     let jsonl_path = home
         .join(".kiro")
@@ -94,17 +97,23 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
         return Ok(vec![]);
     }
 
-    let content = fs::read_to_string(&jsonl_path).context("Failed to read session JSONL")?;
+    let file = fs::File::open(&jsonl_path).context("Failed to open session JSONL")?;
+    let reader = BufReader::new(file);
 
-    let mut turns = Vec::new();
+    // Ring buffer: keep only the most recent max_turns entries as we stream
+    let mut turns = VecDeque::with_capacity(max_turns + 1);
 
-    for line in content.lines() {
-        let line = line.trim();
+    for line_result in reader.lines() {
+        let line = match line_result {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        let line = line.trim().to_string();
         if line.is_empty() {
             continue;
         }
 
-        let val: serde_json::Value = match serde_json::from_str(line) {
+        let val: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => continue,
         };
@@ -145,18 +154,14 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
         }
 
         if !text_parts.is_empty() {
-            turns.push(format!("{}: {}", role, text_parts.join("\n")));
+            if turns.len() == max_turns {
+                turns.pop_front();
+            }
+            turns.push_back(format!("{}: {}", role, text_parts.join("\n")));
         }
     }
 
-    // Return only the most recent turns
-    let start = if turns.len() > max_turns {
-        turns.len() - max_turns
-    } else {
-        0
-    };
-
-    Ok(turns[start..].to_vec())
+    Ok(turns.into_iter().collect())
 }
 
 /// Generate the auto-steering document by sending conversation excerpts to the LLM.
