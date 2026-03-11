@@ -170,7 +170,7 @@ MOCK_CATALOG = [
     {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.1", "author": "kiro-assistant", "description": "Inline preview cards for URLs in AI responses — shows title, description, and favicon.", "icon": "🔗", "tags": ["utility", "formatting", "links"]},
     {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "tags": ["dark", "light", "blue", "minimal"]},
     {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
-    {"id": "todos", "name": "Todos", "type": "extension", "version": "0.7.1", "author": "kiro-assistant", "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+' to add, 'todo-' to remove.", "icon": "✅", "tags": ["productivity", "tasks", "todo", "organizer"]},
+    {"id": "todos", "name": "Todos", "type": "extension", "version": "0.7.2", "author": "kiro-assistant", "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+' to add, 'todo-' to remove.", "icon": "✅", "tags": ["productivity", "tasks", "todo", "organizer"]},
 ]
 
 

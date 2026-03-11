@@ -79,7 +79,7 @@ class TodosExtSettingsModule extends SettingsModule {
         };
     }
 
-    validate() { return true; }
+    validate() { return { valid: true }; }
 
     _export() {
         try {

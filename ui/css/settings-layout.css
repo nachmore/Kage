@@ -160,15 +160,12 @@ body {
 
 /* Status Message */
 .status-message {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    padding: 12px 20px;
+    padding: 10px 16px;
     border-radius: 6px;
     font-size: 13px;
     display: none;
-    z-index: 1000;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    text-align: center;
+    margin: 0 20px;
 }
 .status-message.success { background: #1e8449; color: #ffffff; }
 .status-message.error { background: #c0392b; color: #ffffff; }

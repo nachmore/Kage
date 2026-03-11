@@ -121,8 +121,12 @@ class SettingsManager {
             // Validate all modules
             for (const module of this.modules) {
                 const validation = module.validate();
+                if (!validation || typeof validation !== 'object' || !('valid' in validation)) {
+                    this.showStatus(`[${module.title}] validate() must return { valid: true/false, error?: string }`, 'error');
+                    return false;
+                }
                 if (!validation.valid) {
-                    this.showStatus(validation.error, 'error');
+                    this.showStatus(`[${module.title}] ${validation.error || 'Validation failed'}`, 'error');
                     return false;
                 }
             }
@@ -147,7 +151,10 @@ class SettingsManager {
             this.showStatus('Settings saved! All changes apply immediately.', 'success');
             return true;
         } catch (error) {
-            this.showStatus('Failed to save settings: ' + error, 'error');
+            console.error('[Settings] Save failed:', error);
+            const msg = typeof error === 'string' ? error 
+                : error?.message || error?.toString() || JSON.stringify(error) || 'Unknown error';
+            this.showStatus('Failed to save: ' + msg, 'error');
             return false;
         }
     }
@@ -329,6 +336,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                 if (ModuleClass) {
                     const mod = new ModuleClass();
                     mod._extensionId = manifest.id;
+                    mod._extensionVersion = manifest.version;
                     settingsManager.registerModule(mod);
                     addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
                 } else {
@@ -356,7 +364,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.log('[Settings] extensions_changed — checking for new modules');
         try {
             const userExts = await invoke('list_extensions');
-            const registeredIds = new Set(settingsManager.modules.filter(m => m._extensionId).map(m => m._extensionId));
             // Get bundled IDs
             const bundledIds = new Set();
             try {
@@ -370,9 +377,21 @@ window.addEventListener('DOMContentLoaded', async () => {
             let added = false;
             for (const item of userExts) {
                 if (bundledIds.has(item.manifest.id)) continue;
-                if (registeredIds.has(item.manifest.id)) continue;
                 const manifest = item.manifest;
                 if (!manifest.contributes?.settingsModule) continue;
+
+                // Check if already registered — if version changed, tear down and reload
+                const existingMod = settingsManager.modules.find(m => m._extensionId === manifest.id);
+                if (existingMod) {
+                    if (existingMod._extensionVersion === manifest.version) continue;
+                    // Version changed — remove old module
+                    console.log(`[Settings] Updating extension settings '${manifest.id}' from ${existingMod._extensionVersion} to ${manifest.version}`);
+                    const idx = settingsManager.modules.indexOf(existingMod);
+                    if (idx !== -1) settingsManager.modules.splice(idx, 1);
+                    const sidebarItem = document.querySelector(`.sidebar-item[data-section="${existingMod.id}"]`);
+                    if (sidebarItem) sidebarItem.remove();
+                    try { existingMod.destroy?.(); } catch {}
+                }
 
                 try {
                     const settingsPath = manifest.contributes.settingsModule.replace('./', '');
@@ -389,14 +408,14 @@ window.addEventListener('DOMContentLoaded', async () => {
                         .join('') + 'ExtSettingsModule';
                     const ModuleClass = window[className];
                     if (ModuleClass) {
-                        // Insert before the About/Updates modules (last two)
                         const mod = new ModuleClass();
                         mod._extensionId = manifest.id;
+                        mod._extensionVersion = manifest.version;
                         const insertIdx = Math.max(0, settingsManager.modules.length - 2);
                         settingsManager.modules.splice(insertIdx, 0, mod);
                         addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
                         added = true;
-                        console.log(`[Settings] Hot-loaded extension settings: ${manifest.id}`);
+                        console.log(`[Settings] Hot-loaded extension settings: ${manifest.id} v${manifest.version}`);
                     }
                 } catch (e) {
                     console.warn(`[Settings] Failed to hot-load extension settings '${manifest.id}':`, e);

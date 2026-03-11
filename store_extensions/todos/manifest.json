@@ -1,7 +1,7 @@
 {
   "id": "todos",
   "name": "Todos",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "type": "extension",
   "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo-' to remove.",
   "icon": "✅",
