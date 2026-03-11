@@ -202,12 +202,24 @@ function _doRender(markdown, targetElement, streaming) {
             // Process code blocks in the newly frozen content
             _processCodeBlocks(frozenDiv, true, savedDiagrams);
 
-            // Build tail container
+            // Build tail container — preserve any diagrams from the previous tail
+            const tailSavedDiagrams = new Map();
+            const prevTail = targetElement.querySelector('.markdown-tail');
+            if (prevTail) {
+                prevTail.querySelectorAll('.diagram-wrapper').forEach((wrapper) => {
+                    const sourceEl = wrapper.querySelector('.diagram-source code');
+                    if (sourceEl) {
+                        tailSavedDiagrams.set(sourceEl.textContent, wrapper);
+                        wrapper.remove();
+                    }
+                });
+            }
+
             const tailDiv = document.createElement('div');
             tailDiv.className = 'markdown-tail';
             if (tailMd.trim()) {
                 tailDiv.innerHTML = marked.parse(tailMd);
-                _processCodeBlocks(tailDiv, true, new Map());
+                _processCodeBlocks(tailDiv, true, tailSavedDiagrams);
             }
 
             targetElement.innerHTML = '';
@@ -253,11 +265,30 @@ function _doRender(markdown, targetElement, streaming) {
                 }
             }
 
-            // Re-render only the tail
+            // Re-render only the tail — preserve any rendered diagrams first
+            const tailSavedDiagrams = new Map();
+            tailDiv.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
+                const sourceEl = wrapper.querySelector('.diagram-source code');
+                if (sourceEl) {
+                    tailSavedDiagrams.set(sourceEl.textContent, wrapper);
+                    wrapper.remove();
+                }
+            });
+            // Also save diagram wrappers that haven't fully rendered yet but have
+            // a visible diagram-content (e.g. placeholder or partial render) — this
+            // prevents the flash-to-code-block cycle during streaming.
+            tailDiv.querySelectorAll('.diagram-wrapper:not([data-rendered])').forEach((wrapper) => {
+                const sourceEl = wrapper.querySelector('.diagram-source code');
+                if (sourceEl) {
+                    tailSavedDiagrams.set(sourceEl.textContent, wrapper);
+                    wrapper.remove();
+                }
+            });
+
             if (tailMd.trim()) {
                 marked.setOptions({ breaks: true, gfm: true });
                 tailDiv.innerHTML = marked.parse(tailMd);
-                _processCodeBlocks(tailDiv, true, new Map());
+                _processCodeBlocks(tailDiv, true, tailSavedDiagrams);
             } else {
                 tailDiv.innerHTML = '';
             }
