@@ -128,23 +128,34 @@ fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
 
 /// Parse the JSONL file into a list of SessionMessages
 fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
+    use std::io::{BufRead, BufReader};
+
     let mut messages = Vec::new();
 
-    let content = match fs::read_to_string(jsonl_path) {
-        Ok(c) => c,
+    let file = match fs::File::open(jsonl_path) {
+        Ok(f) => f,
         Err(e) => {
-            error!("Failed to read JSONL {:?}: {}", jsonl_path, e);
+            error!("Failed to open JSONL {:?}: {}", jsonl_path, e);
             return messages;
         }
     };
 
-    for line in content.lines() {
-        let line = line.trim();
+    let reader = BufReader::new(file);
+
+    for line_result in reader.lines() {
+        let line = match line_result {
+            Ok(l) => l,
+            Err(e) => {
+                error!("Failed to read JSONL line: {}", e);
+                continue;
+            }
+        };
+        let line = line.trim().to_string();
         if line.is_empty() {
             continue;
         }
 
-        let val: serde_json::Value = match serde_json::from_str(line) {
+        let val: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed to parse JSONL line: {}", e);
