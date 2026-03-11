@@ -785,12 +785,63 @@ export class ChatApp {
             return;
         }
 
-        // Walk through the JSONL messages in order
-        let isFirstMessage = true;
+        // Phase 1: parse messages into lightweight render instructions (no DOM work)
+        const renderQueue = this._buildRenderQueue(sessionData.messages, timestamps, durations);
+
+        if (renderQueue.length === 0) {
+            this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
+            return;
+        }
+
+        // Phase 2: render in batches to avoid blocking the main thread
+        const BATCH_SIZE = 10;
+        let idx = 0;
+        // Cancel any previous in-flight batch render
+        if (this._displaySessionRafId) {
+            cancelAnimationFrame(this._displaySessionRafId);
+            this._displaySessionRafId = null;
+        }
+
+        const renderBatch = () => {
+            const end = Math.min(idx + BATCH_SIZE, renderQueue.length);
+            for (; idx < end; idx++) {
+                this._renderQueueItem(renderQueue[idx]);
+            }
+            if (idx < renderQueue.length) {
+                this._displaySessionRafId = requestAnimationFrame(renderBatch);
+            } else {
+                this._displaySessionRafId = null;
+                // All messages rendered — finalize
+                const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+                if (session) {
+                    this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
+                }
+                this.scrollToBottom();
+                if (this.messages.length > 0) {
+                    this.showSuggestionChips();
+                }
+            }
+        };
+
+        // Update header title immediately (don't wait for batches)
+        const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+        if (session) {
+            this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
+        }
+
+        renderBatch();
+    }
+
+    /**
+     * Parse session messages into a lightweight render queue.
+     * No DOM work — just data extraction.
+     */
+    _buildRenderQueue(messages, timestamps, durations) {
+        const queue = [];
         let skipNextAssistant = false;
-        for (const msg of sessionData.messages) {
+
+        for (const msg of messages) {
             if (msg.kind === 'Prompt') {
-                // Collect text and images from content blocks
                 let textParts = [];
                 let imageDataUrls = [];
                 let isSteering = false;
@@ -801,69 +852,43 @@ export class ChatApp {
                             textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                             continue;
                         }
-                        isFirstMessage = false;
                         textParts.push(item.data);
                     } else if (item.kind === 'image') {
-                        isFirstMessage = false;
                         const dataUrl = sessionImageToDataUrl(item);
                         if (dataUrl) imageDataUrls.push(dataUrl);
                     }
                 }
 
                 if (isSteering) {
-                    // Show as collapsed steering bubble
                     skipNextAssistant = true;
-                    const steeringEl = document.createElement('div');
-                    steeringEl.className = 'steering-message collapsed';
-                    steeringEl.innerHTML = `
-                        <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                            <span class="steering-icon">🛞</span>
-                            <span class="steering-label">Steering context sent</span>
-                            <span class="steering-toggle">▶</span>
-                        </div>
-                        <div class="steering-body">
-                            <div class="steering-content"></div>
-                        </div>
-                    `;
-                    const contentEl = steeringEl.querySelector('.steering-content');
-                    renderMarkdown(textParts.join('\n\n'), contentEl);
-                    this.elements.messagesArea.appendChild(steeringEl);
+                    queue.push({ type: 'steering', text: textParts.join('\n\n') });
                     continue;
                 }
 
-                // Render user message with text and images
                 if (textParts.length > 0 || imageDataUrls.length > 0) {
                     const text = textParts.join('\n');
-                    const snapshots = imageDataUrls.map(url => ({
-                        type: 'image',
-                        previewUrl: url
-                    }));
-                    this.addMessageFromHistory('user', text, snapshots.length > 0 ? snapshots : null, _buildMsgMeta(msg.message_id, timestamps, durations, 'user'));
+                    const snapshots = imageDataUrls.length > 0 ? imageDataUrls.map(url => ({ type: 'image', previewUrl: url })) : null;
+                    queue.push({
+                        type: 'user',
+                        text,
+                        snapshots,
+                        meta: _buildMsgMeta(msg.message_id, timestamps, durations, 'user'),
+                    });
                 }
             } else if (msg.kind === 'AssistantMessage') {
-                isFirstMessage = false;
-                // Collapse the ack response into the steering bubble
                 if (skipNextAssistant) {
                     skipNextAssistant = false;
-                    // Find the last steering bubble and append the ack
-                    const lastSteering = this.elements.messagesArea.querySelector('.steering-message:last-of-type');
-                    if (lastSteering) {
-                        const ackText = [];
-                        for (const item of msg.content) {
-                            if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
-                                ackText.push(item.data.trim());
-                            }
+                    const ackText = [];
+                    for (const item of msg.content) {
+                        if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
+                            ackText.push(item.data.trim());
                         }
-                        if (ackText.length > 0) {
-                            const ackEl = document.createElement('div');
-                            ackEl.className = 'steering-ack';
-                            ackEl.textContent = '↩ ' + ackText.join(' ');
-                            lastSteering.querySelector('.steering-body').appendChild(ackEl);
-                        }
+                    }
+                    if (ackText.length > 0) {
+                        queue.push({ type: 'steering_ack', text: ackText.join(' ') });
                     }
                     continue;
                 }
-                // Assistant message — extract text content, skip tool use entries
                 const textParts = [];
                 for (const item of msg.content) {
                     if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
@@ -871,23 +896,56 @@ export class ChatApp {
                     }
                 }
                 if (textParts.length > 0) {
-                    this.addMessageFromHistory('assistant', textParts.join('\n\n'), null, _buildMsgMeta(msg.message_id, timestamps, durations, 'assistant'));
+                    queue.push({
+                        type: 'assistant',
+                        text: textParts.join('\n\n'),
+                        meta: _buildMsgMeta(msg.message_id, timestamps, durations, 'assistant'),
+                    });
                 }
             }
-            // ToolResults are skipped in the display — they're intermediate
         }
+        return queue;
+    }
 
-        // Update header title
-        const session = this.sessions.find(s => s.session_id === this.activeSessionId);
-        if (session) {
-            this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
-        }
-
-        this.scrollToBottom();
-
-        // Show suggestion chips if there are messages
-        if (this.messages.length > 0) {
-            this.showSuggestionChips();
+    /**
+     * Render a single item from the render queue into the DOM.
+     */
+    _renderQueueItem(item) {
+        switch (item.type) {
+            case 'steering': {
+                const steeringEl = document.createElement('div');
+                steeringEl.className = 'steering-message collapsed';
+                steeringEl.innerHTML = `
+                    <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
+                        <span class="steering-icon">🛞</span>
+                        <span class="steering-label">Steering context sent</span>
+                        <span class="steering-toggle">▶</span>
+                    </div>
+                    <div class="steering-body">
+                        <div class="steering-content"></div>
+                    </div>
+                `;
+                const contentEl = steeringEl.querySelector('.steering-content');
+                renderMarkdown(item.text, contentEl);
+                this.elements.messagesArea.appendChild(steeringEl);
+                break;
+            }
+            case 'steering_ack': {
+                const lastSteering = this.elements.messagesArea.querySelector('.steering-message:last-of-type');
+                if (lastSteering) {
+                    const ackEl = document.createElement('div');
+                    ackEl.className = 'steering-ack';
+                    ackEl.textContent = '↩ ' + item.text;
+                    lastSteering.querySelector('.steering-body').appendChild(ackEl);
+                }
+                break;
+            }
+            case 'user':
+                this.addMessageFromHistory('user', item.text, item.snapshots, item.meta);
+                break;
+            case 'assistant':
+                this.addMessageFromHistory('assistant', item.text, null, item.meta);
+                break;
         }
     }
 
