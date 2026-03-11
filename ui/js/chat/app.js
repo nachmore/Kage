@@ -569,71 +569,138 @@ export class ChatApp {
                 ? sorted.filter(s => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
                 : sorted;
 
-            list.innerHTML = '';
-
             if (filtered.length === 0) {
                 list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
                 return;
             }
 
-            for (const session of filtered) {
-                const item = document.createElement('div');
-                item.className = 'session-item' + (session.session_id === this.activeSessionId ? ' active' : '');
-                item.dataset.sessionId = session.session_id;
+            // Build map of existing DOM items by session_id for diffing
+            const existingById = new Map();
+            list.querySelectorAll('.session-item[data-session-id]').forEach(el => {
+                existingById.set(el.dataset.sessionId, el);
+            });
 
+            // Build the desired ordered list of session_ids + separator positions
+            const desiredIds = [];
+            for (const session of filtered) {
+                desiredIds.push(session.session_id);
+                const isDefault = session.session_id === this.currentAcpSessionId || session.session_id === this.floatingSessionId;
+                if (isDefault && !searchQuery) {
+                    desiredIds.push('__separator__');
+                }
+            }
+
+            // Remove items no longer in the filtered list
+            const desiredSet = new Set(filtered.map(s => s.session_id));
+            for (const [id, el] of existingById) {
+                if (!desiredSet.has(id)) el.remove();
+            }
+            // Remove stale empty-state messages and separators (will re-add separator if needed)
+            list.querySelectorAll('.session-list-empty, .session-list-separator').forEach(el => el.remove());
+
+            // Create or update each item, then ensure correct DOM order
+            let insertionIndex = 0;
+            for (const key of desiredIds) {
+                if (key === '__separator__') {
+                    // Insert separator if not already at this position
+                    const current = list.children[insertionIndex];
+                    if (!current || !current.classList.contains('session-list-separator')) {
+                        const sep = document.createElement('div');
+                        sep.className = 'session-list-separator';
+                        if (current) list.insertBefore(sep, current);
+                        else list.appendChild(sep);
+                    }
+                    insertionIndex++;
+                    continue;
+                }
+
+                const session = filtered.find(s => s.session_id === key);
                 const isFloating = session.session_id === this.floatingSessionId;
                 const isCurrent = session.session_id === this.currentAcpSessionId;
+                const isActive = session.session_id === this.activeSessionId;
                 const title = session.title || 'New Chat';
                 const date = new Date(session.updated_at || session.created_at);
                 const dateStr = this.formatDate(date);
 
-                let badges = '';
-                if (isCurrent || isFloating) badges += '<span class="session-current-badge">●</span>';
+                let item = existingById.get(key);
+                if (item) {
+                    // Reuse existing DOM node — update only what changed
+                    item.classList.toggle('active', isActive);
 
-                let dateSuffix = '';
-                if (isCurrent || isFloating) dateSuffix = ' · <span class="session-default-label">default session</span>';
+                    const titleEl = item.querySelector('.session-item-title');
+                    const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
+                    const newTitleHtml = `${escapeHtml(title)}${badges}`;
+                    if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
 
-                item.innerHTML = `
-                    <div class="session-item-content">
-                        <div class="session-item-title">${escapeHtml(title)}${badges}</div>
-                        <div class="session-item-date">${dateStr}${dateSuffix}</div>
-                    </div>
-                    <div class="session-item-actions">
-                        <button class="session-action-btn session-action-edit" title="Rename">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                        </button>
-                        <button class="session-action-btn session-action-reveal" title="Show file">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
-                        </button>
-                        <button class="session-action-btn session-action-delete" title="Delete">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                        </button>
-                    </div>
-                `;
-
-                item.querySelector('.session-action-edit').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.startInlineRename(session.session_id, item);
-                });
-                item.querySelector('.session-action-reveal').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.revealSessionFile(session.session_id);
-                });
-                item.querySelector('.session-action-delete').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteSession(session.session_id, title);
-                });
-
-                item.addEventListener('click', () => this.selectSession(session.session_id));
-                list.appendChild(item);
-
-                // Add separator after the default session
-                if ((isCurrent || isFloating) && !searchQuery && list.querySelectorAll('.session-list-separator').length === 0) {
-                    const sep = document.createElement('div');
-                    sep.className = 'session-list-separator';
-                    list.appendChild(sep);
+                    const dateEl = item.querySelector('.session-item-date');
+                    const dateSuffix = (isCurrent || isFloating) ? ' · <span class="session-default-label">default session</span>' : '';
+                    const newDateHtml = `${dateStr}${dateSuffix}`;
+                    if (dateEl && dateEl.innerHTML !== newDateHtml) dateEl.innerHTML = newDateHtml;
+                } else {
+                    // Create new item
+                    item = this._createSessionItem(session, { isFloating, isCurrent, isActive, title, dateStr });
+                    existingById.set(key, item);
                 }
+
+                // Ensure correct position in DOM
+                if (list.children[insertionIndex] !== item) {
+                    if (insertionIndex < list.children.length) {
+                        list.insertBefore(item, list.children[insertionIndex]);
+                    } else {
+                        list.appendChild(item);
+                    }
+                }
+                insertionIndex++;
             }
+
+            // Remove any trailing stale children
+            while (list.children.length > insertionIndex) {
+                list.lastChild.remove();
+            }
+        }
+
+    /** Create a new session-item DOM element with event listeners. */
+    _createSessionItem(session, { isFloating, isCurrent, isActive, title, dateStr }) {
+            const item = document.createElement('div');
+            item.className = 'session-item' + (isActive ? ' active' : '');
+            item.dataset.sessionId = session.session_id;
+
+            const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
+            const dateSuffix = (isCurrent || isFloating) ? ' · <span class="session-default-label">default session</span>' : '';
+
+            item.innerHTML = `
+                <div class="session-item-content">
+                    <div class="session-item-title">${escapeHtml(title)}${badges}</div>
+                    <div class="session-item-date">${dateStr}${dateSuffix}</div>
+                </div>
+                <div class="session-item-actions">
+                    <button class="session-action-btn session-action-edit" title="Rename">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
+                    <button class="session-action-btn session-action-reveal" title="Show file">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                    </button>
+                    <button class="session-action-btn session-action-delete" title="Delete">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    </button>
+                </div>
+            `;
+
+            item.querySelector('.session-action-edit').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startInlineRename(session.session_id, item);
+            });
+            item.querySelector('.session-action-reveal').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.revealSessionFile(session.session_id);
+            });
+            item.querySelector('.session-action-delete').addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteSession(session.session_id, title);
+            });
+
+            item.addEventListener('click', () => this.selectSession(session.session_id));
+            return item;
         }
 
     formatDate(date) {
