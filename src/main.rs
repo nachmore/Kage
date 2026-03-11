@@ -748,6 +748,8 @@ fn main() {
             commands::execute_folder_plan,
             commands::get_common_folders,
             commands::notify_frontend_ready,
+            commands::list_open_windows,
+            commands::focus_open_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

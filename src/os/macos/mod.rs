@@ -9,3 +9,4 @@ pub mod clipboard;
 pub mod startup;
 pub mod hotkey;
 pub mod icon;
+pub mod window_list;

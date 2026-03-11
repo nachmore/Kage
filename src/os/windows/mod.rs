@@ -12,3 +12,4 @@ pub mod file_search;
 pub mod calendar;
 pub mod startup;
 pub mod icon;
+pub mod window_list;

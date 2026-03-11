@@ -219,9 +219,9 @@ pub async fn handle_floating_input(
         }));
     }
 
-    // App search
+    // App search — use original input (preserving spaces) so "w " doesn't match "word"
     let launcher = state.app_launcher.lock().await;
-    let app_matches = launcher.find_app(trimmed_input);
+    let app_matches = launcher.find_app(&input);
     for (i, app) in app_matches.iter().enumerate() {
         results.push(serde_json::json!({
             "type": "app",

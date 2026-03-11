@@ -38,6 +38,7 @@ pub mod calendar;
 pub mod startup;
 pub mod hotkey;
 pub mod icon;
+pub mod window_list;
 
 // Re-export common functionality
 pub use cursor::get_cursor_position;
@@ -69,3 +70,4 @@ pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
 #[allow(unused)]
 pub use hotkey::CapturedHotkey;
 pub use icon::extract_icon_base64;
+pub use window_list::{list_windows, focus_window};

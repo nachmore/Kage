@@ -969,3 +969,22 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
         "action_data": "updates"
     }));
 }
+
+// --- Window Walker ---
+
+#[tauri::command]
+pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInfo>, String> {
+    Ok(crate::os::list_windows())
+}
+
+#[tauri::command]
+pub async fn focus_open_window(
+    handle: u64,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Hide the floating window before focusing the target
+    if let Some(floating) = app.get_webview_window("floating") {
+        let _ = floating.hide();
+    }
+    crate::os::focus_window(handle)
+}
