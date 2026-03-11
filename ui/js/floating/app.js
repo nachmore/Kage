@@ -491,8 +491,7 @@ export class FloatingApp {
         this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
         const responseActions = document.getElementById('responseActionsContainer');
-        if (responseActions) responseActions.style.display = 'none';
-        const floatingActions = document.getElementById('floatingResponseActions');
+        if (responseActions) { responseActions.innerHTML = ''; responseActions.style.display = 'none'; }
         if (floatingActions) floatingActions.style.display = 'none';
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
@@ -1763,8 +1762,7 @@ export class FloatingApp {
             if (actions.length === 0) return;
             const container = document.getElementById('responseActionsContainer');
             if (container) {
-                // Append quick-action chips without clearing agent-suggested actions
-                const hasSuggested = container.children.length > 0;
+                container.innerHTML = '';
                 for (const action of actions) {
                     const chip = document.createElement('button');
                     chip.className = 'quick-action-chip';
