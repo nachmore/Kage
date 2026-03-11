@@ -60,10 +60,16 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
 }
 
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
-    // Activate the application by PID using osascript
+    // Activate the application by PID and restore if minimized
     let script = format!(
         r#"tell application "System Events"
             set targetProc to first process whose unix id is {}
+            -- Restore minimized windows
+            repeat with win in (every window of targetProc)
+                if miniaturized of win then
+                    set miniaturized of win to false
+                end if
+            end repeat
             set frontmost of targetProc to true
         end tell"#,
         handle

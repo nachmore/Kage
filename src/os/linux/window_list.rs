@@ -105,7 +105,7 @@ fn get_process_name_linux(pid: u32) -> String {
 }
 
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
-    // Try wmctrl first
+    // Try wmctrl first — -ia activates and restores minimized windows
     let result = Command::new("wmctrl")
         .args(["-ia", &format!("0x{:x}", handle)])
         .status();
@@ -115,9 +115,9 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
         _ => {}
     }
 
-    // Fallback to xdotool
+    // Fallback to xdotool — windowactivate restores minimized windows
     let result = Command::new("xdotool")
-        .args(["windowactivate", &handle.to_string()])
+        .args(["windowactivate", "--sync", &handle.to_string()])
         .status();
 
     match result {
