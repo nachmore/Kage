@@ -29,15 +29,15 @@ fn find_monitor_at_position(window: &WebviewWindow, x: i32, y: i32) -> Option<ta
 /// Get the active monitor (where cursor is) or fall back to primary
 pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
     if let Some((cursor_x, cursor_y)) = get_cursor_position() {
-        println!("     Cursor position: ({}, {})", cursor_x, cursor_y);
+        info!("Cursor position: ({}, {})", cursor_x, cursor_y);
 
         if let Some(monitor) = find_monitor_at_position(window, cursor_x, cursor_y) {
-            println!("     Found active monitor at cursor position");
+            info!("Found active monitor at cursor position");
             return Some(monitor);
         }
     }
 
-    println!("     Falling back to primary monitor");
+    info!("Falling back to primary monitor");
     window.primary_monitor().ok().flatten()
 }
 

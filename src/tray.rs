@@ -14,7 +14,6 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
 
     let menu = if dev_mode {
         info!("Dev mode enabled - adding developer menu items");
-        println!("🔧 Dev mode enabled - adding developer menu items");
         let inspect = MenuItemBuilder::with_id("inspect", "Inspect").build(app)?;
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
         let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
