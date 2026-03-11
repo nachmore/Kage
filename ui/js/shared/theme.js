@@ -112,7 +112,8 @@ export async function loadAndApplyTheme(invoke) {
     }
 }
 
-let _dateTimeInterval = null;
+let _dateTimeTimer = null;
+let _dateTimeUi = null; // cached UI config for resume
 
 function applyDateTime(ui) {
     const container = document.getElementById('datetimeDisplay');
@@ -120,17 +121,20 @@ function applyDateTime(ui) {
     const dateEl = document.getElementById('datetimeDate');
     if (!container) return;
 
+    _dateTimeUi = ui;
+
     const showTime = ui?.show_time === true;
     const showDate = ui?.show_date === true;
 
     if (!showTime && !showDate) {
         container.style.display = 'none';
-        if (_dateTimeInterval) { clearInterval(_dateTimeInterval); _dateTimeInterval = null; }
+        _stopDateTimeTimer();
         return;
     }
 
     const timeFormat = ui?.time_format || 'HH:mm';
     const dateFormat = ui?.date_format || 'ddd, MMM D';
+    const needsSeconds = timeFormat.includes('ss');
 
     function update() {
         const now = new Date();
@@ -148,11 +152,43 @@ function applyDateTime(ui) {
         }
     }
 
-    // Datetime visibility is managed by updateDatetimeVisibility() in floating-app.js
+    function scheduleNext() {
+        const now = new Date();
+        let delayMs;
+        if (needsSeconds) {
+            delayMs = 1000 - now.getMilliseconds();
+        } else {
+            delayMs = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+        }
+        if (delayMs < 100) delayMs += needsSeconds ? 1000 : 60000;
+        _dateTimeTimer = setTimeout(() => {
+            update();
+            scheduleNext();
+        }, delayMs);
+    }
+
+    _stopDateTimeTimer();
     update();
-    if (_dateTimeInterval) clearInterval(_dateTimeInterval);
-    _dateTimeInterval = setInterval(update, 1000);
+    // Only schedule updates if the page is visible
+    if (!document.hidden) {
+        scheduleNext();
+    }
 }
+
+function _stopDateTimeTimer() {
+    if (_dateTimeTimer) { clearTimeout(_dateTimeTimer); _dateTimeTimer = null; }
+}
+
+// Pause timer when window is hidden, resume when shown
+document.addEventListener('visibilitychange', () => {
+    if (!_dateTimeUi) return;
+    if (document.hidden) {
+        _stopDateTimeTimer();
+    } else {
+        // Re-apply to update the display immediately and restart the timer
+        applyDateTime(_dateTimeUi);
+    }
+});
 
 function formatDateTime(date, fmt) {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
