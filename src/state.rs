@@ -45,6 +45,8 @@ pub struct AppState {
     pub automation_plan_cancelled: Arc<AtomicBool>,
     /// Hash of the last sent extension tool steering (to avoid sending duplicates)
     pub last_tool_steering_hash: Arc<std::sync::Mutex<u64>>,
+    /// Whether the floating window frontend has finished initializing
+    pub frontend_ready: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone)]

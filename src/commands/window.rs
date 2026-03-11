@@ -51,6 +51,12 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
     let app = window.app_handle();
     let state: tauri::State<'_, crate::state::AppState> = app.state();
 
+    // Don't show if frontend hasn't finished initializing yet
+    if !state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
+        info!("Ignoring show_floating_at_mouse — frontend not ready");
+        return;
+    }
+
     // If already visible, hide it (toggle behavior)
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
@@ -73,6 +79,12 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
 pub fn toggle_floating_window(window: &WebviewWindow) {
     let app = window.app_handle();
     let state: tauri::State<'_, crate::state::AppState> = app.state();
+
+    // Don't show if frontend hasn't finished initializing yet
+    if !state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
+        info!("Ignoring hotkey — frontend not ready");
+        return;
+    }
 
     let is_showing = !window.is_visible().unwrap_or(true);
 
@@ -512,4 +524,12 @@ pub async fn show_notification_source_window(
         }
     }
     Ok(())
+}
+/// Called by the floating window frontend once initialization is complete.
+/// Until this is called, hotkey presses are silently ignored to prevent
+/// showing a half-initialized window.
+#[tauri::command]
+pub fn notify_frontend_ready(state: tauri::State<'_, crate::state::AppState>) {
+    info!("Frontend signaled ready");
+    state.frontend_ready.store(true, std::sync::atomic::Ordering::Release);
 }

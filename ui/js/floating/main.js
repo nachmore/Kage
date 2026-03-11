@@ -33,6 +33,10 @@ function initApp() {
     window._floatingApp = app; // Expose for permission modal resize
     app.init().then(() => {
         setMarkdownExtManager(app.extensionManager);
+        // Signal the backend that the frontend is fully initialized.
+        // Until this fires, hotkey presses are silently ignored to prevent
+        // showing a half-initialized window (wrong theme, dead input).
+        invoke('notify_frontend_ready').catch(() => {});
     });
 }
 

@@ -245,6 +245,7 @@ fn main() {
             pocket_tts_install_process: Arc::new(std::sync::Mutex::new(None)),
             automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+            frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -746,6 +747,7 @@ fn main() {
             commands::scan_folder,
             commands::execute_folder_plan,
             commands::get_common_folders,
+            commands::notify_frontend_ready,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
