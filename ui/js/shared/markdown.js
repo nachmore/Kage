@@ -177,11 +177,14 @@ function _doRender(markdown, targetElement, streaming) {
         const tailMd = splitIdx > 0 ? markdown.substring(splitIdx) : markdown;
         const prevFrozenLen = _frozenLength.get(targetElement) || 0;
 
-        // If the prefix grew, render and cache the new frozen prefix
-        if (prefixMd.length > prevFrozenLen) {
+        // Detect if the prefix shrank or disappeared — need a full rebuild
+        const prefixShrunk = prevFrozenLen > 0 && prefixMd.length < prevFrozenLen;
+
+        // If the prefix grew (or shrank — rebuild), render and cache the new frozen prefix
+        if (prefixMd.length > prevFrozenLen || prefixShrunk) {
             // Preserve rendered diagrams from the frozen section before re-rendering
             const savedDiagrams = new Map();
-            targetElement.querySelectorAll('.markdown-frozen .diagram-wrapper[data-rendered]').forEach((wrapper) => {
+            targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
                 const sourceEl = wrapper.querySelector('.diagram-source code');
                 if (sourceEl) {
                     savedDiagrams.set(sourceEl.textContent, wrapper);
@@ -190,17 +193,19 @@ function _doRender(markdown, targetElement, streaming) {
             });
 
             marked.setOptions({ breaks: true, gfm: true });
-            const frozenRendered = marked.parse(prefixMd);
+            const frozenRendered = prefixMd ? marked.parse(prefixMd) : '';
             _frozenHtml.set(targetElement, frozenRendered);
             _frozenLength.set(targetElement, prefixMd.length);
 
-            // Build frozen container
-            const frozenDiv = document.createElement('div');
-            frozenDiv.className = 'markdown-frozen';
-            frozenDiv.innerHTML = frozenRendered;
+            // Build frozen container (only if there's a prefix)
+            const frozenDiv = prefixMd ? document.createElement('div') : null;
+            if (frozenDiv) {
+                frozenDiv.className = 'markdown-frozen';
+                frozenDiv.innerHTML = frozenRendered;
 
-            // Process code blocks in the newly frozen content
-            _processCodeBlocks(frozenDiv, true, savedDiagrams);
+                // Process code blocks in the newly frozen content
+                _processCodeBlocks(frozenDiv, true, savedDiagrams);
+            }
 
             // Build tail container — preserve any diagrams from the previous tail
             const tailSavedDiagrams = new Map();
@@ -223,7 +228,7 @@ function _doRender(markdown, targetElement, streaming) {
             }
 
             targetElement.innerHTML = '';
-            targetElement.appendChild(frozenDiv);
+            if (frozenDiv) targetElement.appendChild(frozenDiv);
             targetElement.appendChild(tailDiv);
         } else {
             // Prefix unchanged — only re-render the tail
