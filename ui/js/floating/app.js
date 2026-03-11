@@ -504,6 +504,7 @@ export class FloatingApp {
         this.elements.contentArea.classList.remove('visible');
         const responseActions = document.getElementById('responseActionsContainer');
         if (responseActions) { responseActions.innerHTML = ''; responseActions.style.display = 'none'; }
+        const floatingActions = document.getElementById('floatingResponseActions');
         if (floatingActions) floatingActions.style.display = 'none';
         this.stopThinking();
         this.elements.expandBtn.classList.remove('visible');
