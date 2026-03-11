@@ -64,6 +64,13 @@ const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
 const _renderTimers = new WeakMap();   // targetElement → timer id
 const _lastRenderTime = new WeakMap(); // targetElement → timestamp
 
+// --- Incremental rendering state (per target element) ---
+// During streaming, we split markdown into a "frozen prefix" (complete blocks
+// that won't change) and an "active tail" (the last incomplete block).
+// Only the tail is re-parsed on each chunk, turning O(n²) into ~O(n).
+const _frozenHtml = new WeakMap();     // targetElement → rendered HTML string for frozen prefix
+const _frozenLength = new WeakMap();   // targetElement → char count of frozen markdown prefix
+
 /**
  * Render markdown into a target element.
  * @param {string} markdown - raw markdown text
@@ -72,12 +79,19 @@ const _lastRenderTime = new WeakMap(); // targetElement → timestamp
  *   rendering and skips expensive diagram/table work until complete
  */
 export function renderMarkdown(markdown, targetElement, streaming = false) {
-    if (!markdown) { targetElement.innerHTML = ''; return; }
+    if (!markdown) {
+        targetElement.innerHTML = '';
+        _frozenHtml.delete(targetElement);
+        _frozenLength.delete(targetElement);
+        return;
+    }
 
     if (!streaming) {
-        // Final render — cancel any pending debounce and do a full render now
+        // Final render — cancel any pending debounce, clear incremental state, do full render
         const pending = _renderTimers.get(targetElement);
         if (pending) { clearTimeout(pending); _renderTimers.delete(targetElement); }
+        _frozenHtml.delete(targetElement);
+        _frozenLength.delete(targetElement);
         _doRender(markdown, targetElement, false);
         return;
     }
@@ -154,24 +168,177 @@ function _doRender(markdown, targetElement, streaming) {
     // so we strip all but the final occurrence to avoid showing stale versions.
     markdown = _keepLastTaskPlan(markdown);
 
+    // --- Incremental streaming render ---
+    // Split into frozen prefix (complete blocks) and active tail (last block).
+    // Only re-parse the tail; reuse cached HTML for the prefix.
+    if (streaming) {
+        const splitIdx = _findStableSplitPoint(markdown);
+        const prefixMd = splitIdx > 0 ? markdown.substring(0, splitIdx) : '';
+        const tailMd = splitIdx > 0 ? markdown.substring(splitIdx) : markdown;
+        const prevFrozenLen = _frozenLength.get(targetElement) || 0;
+
+        // If the prefix grew, render and cache the new frozen prefix
+        if (prefixMd.length > prevFrozenLen) {
+            // Preserve rendered diagrams from the frozen section before re-rendering
+            const savedDiagrams = new Map();
+            targetElement.querySelectorAll('.markdown-frozen .diagram-wrapper[data-rendered]').forEach((wrapper) => {
+                const sourceEl = wrapper.querySelector('.diagram-source code');
+                if (sourceEl) {
+                    savedDiagrams.set(sourceEl.textContent, wrapper);
+                    wrapper.remove();
+                }
+            });
+
+            marked.setOptions({ breaks: true, gfm: true });
+            const frozenRendered = marked.parse(prefixMd);
+            _frozenHtml.set(targetElement, frozenRendered);
+            _frozenLength.set(targetElement, prefixMd.length);
+
+            // Build frozen container
+            const frozenDiv = document.createElement('div');
+            frozenDiv.className = 'markdown-frozen';
+            frozenDiv.innerHTML = frozenRendered;
+
+            // Process code blocks in the newly frozen content
+            _processCodeBlocks(frozenDiv, true, savedDiagrams);
+
+            // Build tail container
+            const tailDiv = document.createElement('div');
+            tailDiv.className = 'markdown-tail';
+            if (tailMd.trim()) {
+                tailDiv.innerHTML = marked.parse(tailMd);
+                _processCodeBlocks(tailDiv, true, new Map());
+            }
+
+            targetElement.innerHTML = '';
+            targetElement.appendChild(frozenDiv);
+            targetElement.appendChild(tailDiv);
+        } else {
+            // Prefix unchanged — only re-render the tail
+            let tailDiv = targetElement.querySelector('.markdown-tail');
+            if (!tailDiv) {
+                // First render or structure mismatch — do a full incremental setup
+                const savedDiagrams = new Map();
+                targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
+                    const sourceEl = wrapper.querySelector('.diagram-source code');
+                    if (sourceEl) {
+                        savedDiagrams.set(sourceEl.textContent, wrapper);
+                        wrapper.remove();
+                    }
+                });
+
+                marked.setOptions({ breaks: true, gfm: true });
+
+                if (prefixMd) {
+                    const frozenRendered = _frozenHtml.get(targetElement) || marked.parse(prefixMd);
+                    _frozenHtml.set(targetElement, frozenRendered);
+                    _frozenLength.set(targetElement, prefixMd.length);
+
+                    const frozenDiv = document.createElement('div');
+                    frozenDiv.className = 'markdown-frozen';
+                    frozenDiv.innerHTML = frozenRendered;
+                    _processCodeBlocks(frozenDiv, true, savedDiagrams);
+
+                    tailDiv = document.createElement('div');
+                    tailDiv.className = 'markdown-tail';
+
+                    targetElement.innerHTML = '';
+                    targetElement.appendChild(frozenDiv);
+                    targetElement.appendChild(tailDiv);
+                } else {
+                    tailDiv = document.createElement('div');
+                    tailDiv.className = 'markdown-tail';
+                    targetElement.innerHTML = '';
+                    targetElement.appendChild(tailDiv);
+                }
+            }
+
+            // Re-render only the tail
+            if (tailMd.trim()) {
+                marked.setOptions({ breaks: true, gfm: true });
+                tailDiv.innerHTML = marked.parse(tailMd);
+                _processCodeBlocks(tailDiv, true, new Map());
+            } else {
+                tailDiv.innerHTML = '';
+            }
+        }
+
+        // Deduplicate taskplan blocks
+        _deduplicateTaskPlans(targetElement);
+
+        // Run extension message formatters
+        if (_extensionManager) {
+            _extensionManager.formatMessage(targetElement, { streaming });
+        }
+        return;
+    }
+
+    // --- Full (non-streaming) render ---
     // During streaming, preserve successfully rendered diagrams so they don't
     // flash back to source code when innerHTML is replaced.  Key by source text.
     const savedDiagrams = new Map(); // code text → DOM wrapper element
-    if (streaming) {
-        targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
-            const sourceEl = wrapper.querySelector('.diagram-source code');
-            if (sourceEl) {
-                savedDiagrams.set(sourceEl.textContent, wrapper);
-                // Detach from DOM so innerHTML wipe doesn't destroy it
-                wrapper.remove();
-            }
-        });
-    }
 
     marked.setOptions({ breaks: true, gfm: true });
     targetElement.innerHTML = marked.parse(markdown);
 
-    targetElement.querySelectorAll('pre code').forEach((codeBlock) => {
+    _processCodeBlocks(targetElement, false, savedDiagrams);
+
+    // Only wire up sortable tables on the final render
+    _resetDiagramFailures();
+    makeTablesSortable(targetElement);
+
+    // Deduplicate taskplan blocks — keep only the last one (most up-to-date)
+    _deduplicateTaskPlans(targetElement);
+
+    // Run extension message formatters
+    if (_extensionManager) {
+        _extensionManager.formatMessage(targetElement, { streaming });
+    }
+}
+
+/**
+ * Find the last safe split point in markdown where we can freeze the prefix.
+ * A safe split is a double-newline (\n\n) that is NOT inside a code fence.
+ * Returns the index right after the \n\n, or 0 if no safe split found.
+ */
+function _findStableSplitPoint(markdown) {
+    let inFence = false;
+    let lastSafeSplit = 0;
+
+    // Scan for code fences and double-newlines
+    let i = 0;
+    while (i < markdown.length) {
+        // Check for code fence (``` at start of line)
+        if ((i === 0 || markdown[i - 1] === '\n') && markdown[i] === '`' && markdown[i + 1] === '`' && markdown[i + 2] === '`') {
+            inFence = !inFence;
+            i += 3;
+            // Skip to end of line
+            while (i < markdown.length && markdown[i] !== '\n') i++;
+            continue;
+        }
+
+        // Check for double-newline outside of fences
+        if (!inFence && markdown[i] === '\n' && markdown[i + 1] === '\n') {
+            lastSafeSplit = i + 2;
+            i += 2;
+            continue;
+        }
+
+        i++;
+    }
+
+    // Don't freeze if the split is too close to the end — not worth it
+    if (markdown.length - lastSafeSplit < 50) return 0;
+
+    return lastSafeSplit;
+}
+
+/**
+ * Process code blocks in a container: syntax highlighting, diagrams, etc.
+ * Extracted from _doRender so it can be called on frozen and tail sections independently.
+ */
+function _processCodeBlocks(container, streaming, savedDiagrams) {
+    container.querySelectorAll('pre code').forEach((codeBlock) => {
         const pre = codeBlock.parentElement;
         const langMatch = codeBlock.className.match(/language-(\w+)/);
         const language = langMatch ? langMatch[1] : 'text';
@@ -238,20 +405,6 @@ function _doRender(markdown, targetElement, streaming) {
         }
         wrapCodeBlock(codeBlock, pre, language);
     });
-
-    // Only wire up sortable tables on the final render
-    if (!streaming) {
-        _resetDiagramFailures();
-        makeTablesSortable(targetElement);
-    }
-
-    // Deduplicate taskplan blocks — keep only the last one (most up-to-date)
-    _deduplicateTaskPlans(targetElement);
-
-    // Run extension message formatters
-    if (_extensionManager) {
-        _extensionManager.formatMessage(targetElement, { streaming });
-    }
 }
 
 function wrapCodeBlock(codeBlock, pre, language) {
