@@ -144,7 +144,12 @@ export class WindowManager {
                 const physicalHeight = Math.round((contentHeight + BODY_PADDING) * scale);
 
                 const maxHeight = await this.getMaxHeight();
-                let height = Math.max(Math.round(DEFAULT_HEIGHT * scale), Math.min(maxHeight, physicalHeight));
+                // Auto-grow cap: use the default max, but if the user manually resized
+                // larger, fill up to their set height (don't shrink their window)
+                const autoMaxHeight = this.userSetHeight
+                    ? Math.max(maxHeight, this.userSetHeight)
+                    : maxHeight;
+                let height = Math.max(Math.round(DEFAULT_HEIGHT * scale), Math.min(autoMaxHeight, physicalHeight));
                 
                 if (physicalHeight > DEFAULT_HEIGHT * scale && !this.userSetHeight) {
                     this.autoGrowHeight = height;
@@ -200,8 +205,21 @@ export class WindowManager {
         let scaleFactor = 1;
 
         const onMouseMove = async (e) => {
-            const maxWidth = Math.floor(window.screen.availWidth * 0.8);
-            const maxHeight = await this.getMaxHeight();
+            const maxWidth = Math.floor(window.screen.availWidth * 0.95);
+            // No max height cap for manual resize — let user go full screen if they want
+            let maxHeight;
+            try {
+                const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+                const monitor = await appWindow.currentMonitor();
+                if (monitor && monitor.size) {
+                    const sf = monitor.scaleFactor || 1;
+                    maxHeight = monitor.size.height; // full monitor height in physical pixels
+                } else {
+                    maxHeight = window.screen.availHeight * scaleFactor;
+                }
+            } catch {
+                maxHeight = window.screen.availHeight * scaleFactor;
+            }
             // Mouse deltas are in logical pixels, convert to physical
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
@@ -215,7 +233,7 @@ export class WindowManager {
             });
             const minHeight = Math.max(Math.floor(DEFAULT_HEIGHT * scaleFactor), Math.floor(minContentH * scaleFactor));
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
-            const newHeight = Math.max(minHeight, Math.min(maxHeight * scaleFactor, startHeight + dy));
+            const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
             try {
                 await this.invoke('resize_floating_window', { width: Math.round(newWidth), height: Math.round(newHeight) });
