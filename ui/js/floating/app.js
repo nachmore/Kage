@@ -35,6 +35,7 @@ export class FloatingApp {
         // While the input only grows beyond this length, skip redundant backend calls.
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         this.computerControlActive = false;
         this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
@@ -500,6 +501,7 @@ export class FloatingApp {
         this.selectedIndex = -1;
         this._noMatchSinceLen = 0;
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
         const responseActions = document.getElementById('responseActionsContainer');
@@ -1199,6 +1201,7 @@ export class FloatingApp {
         this.elements.contentArea.classList.remove('visible');
         this.toolSources = [];
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         const sourcesEl2 = document.getElementById('toolSources');
         if (sourcesEl2) sourcesEl2.remove();
         const compactEl2 = document.getElementById('toolSourcesCompact');
@@ -1466,8 +1469,11 @@ export class FloatingApp {
         // Only add to tool usages if we have the full extension/tool name
         if (info.extension && info.tool) {
             const toolTitle = `ext:${info.extension}/${info.tool}`;
-            if (!this.toolUsages.find(t => t.title === toolTitle)) {
-                this.toolUsages.push({ toolCallId: `ext-${info.extension}-${info.tool}`, title: toolTitle, kind: 'extension' });
+            const toolCallId = `ext-${info.extension}-${info.tool}`;
+            if (!this._toolCallIds) this._toolCallIds = new Set();
+            if (!this._toolCallIds.has(toolCallId)) {
+                this._toolCallIds.add(toolCallId);
+                this.toolUsages.push({ toolCallId, title: toolTitle, kind: 'extension' });
             }
             this.renderSources();
         }
@@ -1503,8 +1509,11 @@ export class FloatingApp {
         console.log(`Extension tool call: ${extension}/${tool}`, params);
 
         // Track as a standard tool usage
-        if (!this.toolUsages.find(t => t.title === toolTitle)) {
-            this.toolUsages.push({ toolCallId: `ext-${extension}-${tool}`, title: toolTitle, kind: 'extension' });
+        const extToolCallId = `ext-${extension}-${tool}`;
+        if (!this._toolCallIds) this._toolCallIds = new Set();
+        if (!this._toolCallIds.has(extToolCallId)) {
+            this._toolCallIds.add(extToolCallId);
+            this.toolUsages.push({ toolCallId: extToolCallId, title: toolTitle, kind: 'extension' });
         }
         this.renderSources();
 

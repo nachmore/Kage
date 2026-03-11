@@ -19,7 +19,9 @@ export function processToolCallUpdate(event, state) {
 
     // Track tool usage
     if (update.title && update.toolCallId) {
-        if (!state.toolUsages.find(t => t.toolCallId === update.toolCallId)) {
+        if (!state._toolCallIds) state._toolCallIds = new Set();
+        if (!state._toolCallIds.has(update.toolCallId)) {
+            state._toolCallIds.add(update.toolCallId);
             state.toolUsages.push({
                 toolCallId: update.toolCallId,
                 title: update.title,
@@ -89,7 +91,9 @@ export function addSource(url, title, domainHint, state) {
     try {
         const parsed = new URL(url);
         const domain = domainHint || parsed.hostname.replace(/^www\./, '');
-        if (!state.toolSources.find(s => s.domain === domain)) {
+        if (!state._sourceDomains) state._sourceDomains = new Set();
+        if (!state._sourceDomains.has(domain)) {
+            state._sourceDomains.add(domain);
             const initials = domain.split('.')[0].substring(0, 2).toUpperCase();
             let hash = 0;
             for (let i = 0; i < domain.length; i++) {

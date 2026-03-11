@@ -48,6 +48,7 @@ export class ChatApp {
         this.currentAcpSessionId = null;
         this.toolSources = [];
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         this.userInfo = null;
         this.attachmentManager = new AttachmentManager();
         this.currentSuggestions = [];
@@ -775,6 +776,7 @@ export class ChatApp {
         this.elements.messagesArea.innerHTML = '';
         this.toolSources = [];
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         const timestamps = sessionData.message_timestamps || {};
         const durations = sessionData.message_durations || {};
 
@@ -930,6 +932,7 @@ export class ChatApp {
         this.messages = [];
         this.toolSources = [];
         this.toolUsages = [];
+        this._toolCallIds = new Set();
         this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kiro...</div>';
         this.elements.chatHeaderTitle.textContent = 'New Chat';
         this.elements.chatInput.focus();
@@ -1045,6 +1048,7 @@ export class ChatApp {
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];
+            this._toolCallIds = new Set();
             this.isWaitingForResponse = true;
             this._extensionToolCallHandled = false;
             this._extensionToolExecuting = false;
@@ -1174,6 +1178,7 @@ export class ChatApp {
             this.currentStreamingContent = '';
             this.toolSources = [];
             this.toolUsages = [];
+            this._toolCallIds = new Set();
             this.isWaitingForResponse = true;
             this._extensionToolCallHandled = false;
             this._extensionToolExecuting = false;
@@ -1582,8 +1587,11 @@ export class ChatApp {
     _renderExtensionToolIndicator(info, contentDiv) {
         if (info.extension && info.tool) {
             const toolTitle = `ext:${info.extension}/${info.tool}`;
-            if (!this.toolUsages.find(t => t.title === toolTitle)) {
-                this.toolUsages.push({ toolCallId: `ext-${info.extension}-${info.tool}`, title: toolTitle, kind: 'extension' });
+            const toolCallId = `ext-${info.extension}-${info.tool}`;
+            if (!this._toolCallIds) this._toolCallIds = new Set();
+            if (!this._toolCallIds.has(toolCallId)) {
+                this._toolCallIds.add(toolCallId);
+                this.toolUsages.push({ toolCallId, title: toolTitle, kind: 'extension' });
             }
             this.renderSourcesInMessage(contentDiv);
         }
@@ -1610,8 +1618,11 @@ export class ChatApp {
         console.log(`Extension tool call: ${extension}/${tool}`, params);
 
         // Track as a standard tool usage
-        if (!this.toolUsages.find(t => t.title === toolTitle)) {
-            this.toolUsages.push({ toolCallId: `ext-${extension}-${tool}`, title: toolTitle, kind: 'extension' });
+        const extToolCallId = `ext-${extension}-${tool}`;
+        if (!this._toolCallIds) this._toolCallIds = new Set();
+        if (!this._toolCallIds.has(extToolCallId)) {
+            this._toolCallIds.add(extToolCallId);
+            this.toolUsages.push({ toolCallId: extToolCallId, title: toolTitle, kind: 'extension' });
         }
         this.renderSourcesInMessage(contentDiv);
 
