@@ -4,8 +4,11 @@ import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../s
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 
+const _t0 = performance.now();
+const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
+
 function initApp() {
-    console.log('initApp called, checking Tauri...');
+    _ts('initApp called, checking Tauri...');
     
     if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.webviewWindow) {
         console.log('Tauri not ready, retrying in 50ms...');
@@ -13,7 +16,7 @@ function initApp() {
         return;
     }
     
-    console.log('Tauri ready! Initializing...');
+    _ts('Tauri ready');
     
     const { invoke } = window.__TAURI__.core;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
@@ -23,6 +26,7 @@ function initApp() {
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
+    _ts('Theme + markdown initialized');
     
     // Re-apply theme and opacity when config changes
     listen('config_updated', async () => {
@@ -31,13 +35,9 @@ function initApp() {
     
     const app = new FloatingApp(invoke, appWindow, listen);
     window._floatingApp = app; // Expose for permission modal resize
-    app.init().then(() => {
-        setMarkdownExtManager(app.extensionManager);
-        // Signal the backend that the frontend is fully initialized.
-        // Until this fires, hotkey presses are silently ignored to prevent
-        // showing a half-initialized window (wrong theme, dead input).
-        invoke('notify_frontend_ready').catch(() => {});
-    });
+    // Extension manager will be set asynchronously after extensions load in background
+    app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
+    app.init();
 }
 
 console.log('Script loaded, document.readyState:', document.readyState);

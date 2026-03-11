@@ -46,79 +46,91 @@ export class FloatingApp {
     }
 
     async init() {
-        this.cacheElements();
-        this.setupEventListeners();
-        this.setupStreamingListeners();
-        this.setupVisibilityTracking();
-        this.windowManager.setupDragging(this.elements.ghostContainer);
-        this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
+            const _t0 = performance.now();
+            const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] init: ${label}`);
 
-        // RTL detection — flip input container layout when first char is RTL
-        const inputContainer = this.elements.input?.closest('.input-container');
-        setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
-        
-        await this.loadShortcuts();
-        await loadSlashCommands(this.invoke);
-        await this.extensionManager.initialize();
-        setExtensionManager(this.extensionManager);
-        await loadFrecency(this.invoke);
-        this.setupSpeech();
+            this.cacheElements();
+            this.setupEventListeners();
+            this.setupStreamingListeners();
+            this.setupVisibilityTracking();
+            this.windowManager.setupDragging(this.elements.ghostContainer);
+            this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
 
-        // Send extension tool definitions to the agent as steering
-        this._sendExtensionToolSteering();
-        
-        // Listen for config updates
-        this.listen('config_updated', async () => {
-            console.log('Config updated, reloading...');
-            await this.loadShortcuts();
-            await this.extensionManager.onConfigUpdate();
-            await this.extensionManager.reload();
-            this.updateSpeechButtonVisibility();
-        });
+            const inputContainer = this.elements.input?.closest('.input-container');
+            setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
+            _ts('Synchronous setup done');
 
-        // Listen for extension install/uninstall
-        this.listen('extensions_changed', async () => {
-            console.log('Extensions changed, reloading...');
-            await this.extensionManager.reload();
-        });
+            // Load shortcuts and slash commands in parallel (fast IPC calls)
+            await Promise.all([
+                this.loadShortcuts(),
+                loadSlashCommands(this.invoke),
+                loadFrecency(this.invoke),
+            ]);
+            _ts('Parallel IPC done (shortcuts + commands + frecency)');
 
-        // Listen for slash commands from ACP
-        this.listen('slash_commands_available', async () => {
-            console.log('Slash commands updated, reloading...');
-            await loadSlashCommands(this.invoke);
-        });
+            this.setupSpeech();
 
-        // Listen for clipboard history hotkey
-        this.listen('clipboard_history_mode', async () => {
-            console.log('Clipboard history mode activated via hotkey');
-            this.elements.input.value = '>cb ';
-            this._enterClipboardMode();
-        });
-        
-        setTimeout(() => this.elements.input.focus(), 100);
+            // Register event listeners (synchronous, no awaits needed)
+            this.listen('config_updated', async () => {
+                console.log('Config updated, reloading...');
+                await this.loadShortcuts();
+                await this.extensionManager.onConfigUpdate();
+                await this.extensionManager.reload();
+                this.updateSpeechButtonVisibility();
+            });
 
-        // Check if we were just updated and show the celebration banner
-        this.checkForUpdateBanner();
+            this.listen('extensions_changed', async () => {
+                console.log('Extensions changed, reloading...');
+                await this.extensionManager.reload();
+            });
 
-        // Listen for banner events from the backend
-        this.listen('show_floating_banner', (event) => {
-            const { icon, text, action_label, action_type, action_data } = event.payload;
-            this.showBanner(icon, text, action_label, action_type, action_data);
-        });
+            this.listen('slash_commands_available', async () => {
+                console.log('Slash commands updated, reloading...');
+                await loadSlashCommands(this.invoke);
+            });
 
-        // Listen for update available events from the background checker
-        this.listen('update_available', (event) => {
-            const version = event.payload;
-            this.showBanner(
-                '⬆️',
-                'Kiro Assistant v' + version + ' is available!',
-                'Install now →',
-                'update_install',
-                ''
-            );
-        });
-        console.log('Initialization complete!');
-    }
+            this.listen('clipboard_history_mode', async () => {
+                console.log('Clipboard history mode activated via hotkey');
+                this.elements.input.value = '>cb ';
+                this._enterClipboardMode();
+            });
+
+            setTimeout(() => this.elements.input.focus(), 100);
+
+            this.checkForUpdateBanner();
+
+            this.listen('show_floating_banner', (event) => {
+                const { icon, text, action_label, action_type, action_data } = event.payload;
+                this.showBanner(icon, text, action_label, action_type, action_data);
+            });
+
+            this.listen('update_available', (event) => {
+                const version = event.payload;
+                this.showBanner(
+                    '⬆️',
+                    'Kiro Assistant v' + version + ' is available!',
+                    'Install now →',
+                    'update_install',
+                    ''
+                );
+            });
+
+            // Signal frontend ready NOW — the window is fully usable for input.
+            // Extension loading below happens in the background and doesn't block the UI.
+            this.invoke('notify_frontend_ready').catch(() => {});
+            _ts('notify_frontend_ready sent');
+
+            // Load extensions in the background — not needed for basic input/response
+            this.extensionManager.initialize().then(() => {
+                _ts('Extensions initialized (background)');
+                setExtensionManager(this.extensionManager);
+                this._sendExtensionToolSteering();
+                if (this._onExtensionsReady) this._onExtensionsReady();
+                _ts('Extension steering sent (background)');
+            }).catch(e => {
+                console.warn('Background extension init failed:', e);
+            });
+        }
 
     cacheElements() {
         this.elements = {
