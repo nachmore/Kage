@@ -115,12 +115,12 @@ export async function unifiedSearch(query, invoke, shortcuts) {
 
     const results = [];
 
-    // Extension search providers
+    // --- Synchronous matchers (fast, no I/O) ---
+
+    // Extension sync search providers
     if (_extensionManager) {
         const extResults = _extensionManager.matchAll(query);
         results.push(...extResults);
-        const asyncResults = await _extensionManager.matchAllAsync(query);
-        results.push(...asyncResults);
     }
 
     // > commands
@@ -179,16 +179,8 @@ export async function unifiedSearch(query, invoke, shortcuts) {
         });
     }
 
-    // Shortcuts
-    // TODO: The shortcut history integration has a few brittle spots that should be cleaned up:
-    // 1. The caller passes rawQuery (untrimmed) so we can detect trailing spaces — this is a
-    //    workaround for handleInputChange trimming the query. Consider accepting an explicit
-    //    `trailingSpace` boolean instead of relying on whitespace in the query string.
-    // 2. History entries compete on score (84) with other result types. A cleaner approach
-    //    would be to group history results under their parent shortcut as a sub-list, so they
-    //    don't get displaced by unrelated results with higher frecency boosts.
-    // 3. The result cap was bumped from 7→12 to accommodate history entries. This should be
-    //    dynamic — e.g. 7 base + N history entries — rather than a fixed increase.
+    // Shortcuts (sync matching + collect async history promises)
+    const historyPromises = [];
     if (shortcuts && shortcuts.length > 0) {
         const lower = query.toLowerCase();
         const parts = query.split(/\s+/);
@@ -199,14 +191,9 @@ export async function unifiedSearch(query, invoke, shortcuts) {
         for (const sc of shortcuts) {
             const scLower = sc.shortcut?.toLowerCase() || '';
             const nameLower = sc.name?.toLowerCase() || '';
-            // Match by: trigger starts with query, name starts with query, name contains query,
-            // OR exact trigger match when user has typed trigger + space (for history)
             const triggerMatch = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
             const nameMatch = nameLower.startsWith(lower) || nameLower.includes(lower);
             if (triggerMatch || nameMatch) {
-                // When matched by exact trigger + space, use the trigger length for arg extraction.
-                // Name-based matches with spaces in the query are unreliable for arg extraction,
-                // so only extract args when the trigger actually matched.
                 const matchedByTrigger = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
                 const triggerLen = matchedByTrigger ? sc.shortcut.length : sc.name.length;
                 const rawArgs = matchedByTrigger ? (query.length > triggerLen ? query.substring(triggerLen).trim() : '') : '';
@@ -233,50 +220,69 @@ export async function unifiedSearch(query, invoke, shortcuts) {
                     data: { shortcut: sc, args: argsArray },
                 });
 
-                // Show history when trigger is exact match + space typed (user wants to pick from history)
+                // Collect history fetch as a promise (resolved later in parallel)
                 if (scLower === triggerWord && hasSpace) {
-                    try {
-                        const history = await invoke('get_shortcut_history', { trigger: sc.shortcut });
-                        for (const entry of history) {
-                            const histArgs = entry.args || '';
-                            // Filter by partial args if user is typing
-                            if (partialArgs && !histArgs.toLowerCase().includes(partialArgs)) continue;
-                            // Don't duplicate the current exact args
-                            if (rawArgs && histArgs === rawArgs) continue;
-                            results.push({
-                                id: 'shortcut-history:' + sc.name + ':' + histArgs,
-                                type: 'shortcut',
-                                label: sc.name + ' ' + histArgs,
-                                description: '🕐 ' + (entry.at ? _relativeTime(entry.at) : ''),
-                                icon: sc.icon || '⚡',
-                                score: 84,
-                                data: { shortcut: sc, args: histArgs.split(/\s+/) },
-                            });
-                        }
-                    } catch { /* history unavailable */ }
+                    historyPromises.push(
+                        invoke('get_shortcut_history', { trigger: sc.shortcut })
+                            .then(history => {
+                                const histResults = [];
+                                for (const entry of history) {
+                                    const histArgs = entry.args || '';
+                                    if (partialArgs && !histArgs.toLowerCase().includes(partialArgs)) continue;
+                                    if (rawArgs && histArgs === rawArgs) continue;
+                                    histResults.push({
+                                        id: 'shortcut-history:' + sc.name + ':' + histArgs,
+                                        type: 'shortcut',
+                                        label: sc.name + ' ' + histArgs,
+                                        description: '🕐 ' + (entry.at ? _relativeTime(entry.at) : ''),
+                                        icon: sc.icon || '⚡',
+                                        score: 84,
+                                        data: { shortcut: sc, args: histArgs.split(/\s+/) },
+                                    });
+                                }
+                                return histResults;
+                            })
+                            .catch(() => [])
+                    );
                 }
             }
         }
     }
 
-    // Rust-side search (apps, URLs, paths, system commands)
-    try {
-        const rustJson = await invoke('handle_floating_input', { input: query });
-        const rustResults = JSON.parse(rustJson);
-        for (const r of rustResults) {
-            if (r.type === 'url') {
-                results.push({ id: 'url:' + r.value, type: 'url', label: 'Open in browser', description: r.value, icon: '🌐', score: r.score || 88, data: { value: r.value } });
-            } else if (r.type === 'path') {
-                results.push({ id: 'path:' + r.value, type: 'path', label: r.pathType === 'file' ? 'Open File' : 'Open Folder', description: r.value, icon: r.pathType === 'file' ? '📄' : '📁', score: r.score || 87, data: { value: r.value, pathType: r.pathType } });
-            } else if (r.type === 'system') {
-                results.push({ id: 'system:' + r.cmdId, type: 'system', label: r.cmdLabel, description: r.needsConfirm ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: r.score || 86, data: { cmdId: r.cmdId, cmdLabel: r.cmdLabel, needsConfirm: r.needsConfirm } });
-            } else if (r.type === 'app') {
-                results.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
-            }
-        }
-    } catch {}
+    // --- Async sources (fire in parallel) ---
 
-    // File search — triggered by "find " prefix, queries with file extensions, or wildcard patterns
+    const asyncTasks = [];
+
+    // Extension async search
+    if (_extensionManager) {
+        asyncTasks.push(
+            _extensionManager.matchAllAsync(query).catch(() => [])
+        );
+    }
+
+    // Rust-side search (apps, URLs, paths, system commands)
+    asyncTasks.push(
+        invoke('handle_floating_input', { input: query })
+            .then(rustJson => {
+                const rustResults = JSON.parse(rustJson);
+                const mapped = [];
+                for (const r of rustResults) {
+                    if (r.type === 'url') {
+                        mapped.push({ id: 'url:' + r.value, type: 'url', label: 'Open in browser', description: r.value, icon: '🌐', score: r.score || 88, data: { value: r.value } });
+                    } else if (r.type === 'path') {
+                        mapped.push({ id: 'path:' + r.value, type: 'path', label: r.pathType === 'file' ? 'Open File' : 'Open Folder', description: r.value, icon: r.pathType === 'file' ? '📄' : '📁', score: r.score || 87, data: { value: r.value, pathType: r.pathType } });
+                    } else if (r.type === 'system') {
+                        mapped.push({ id: 'system:' + r.cmdId, type: 'system', label: r.cmdLabel, description: r.needsConfirm ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: r.score || 86, data: { cmdId: r.cmdId, cmdLabel: r.cmdLabel, needsConfirm: r.needsConfirm } });
+                    } else if (r.type === 'app') {
+                        mapped.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
+                    }
+                }
+                return mapped;
+            })
+            .catch(() => [])
+    );
+
+    // File search — conditional
     const trimmedQuery = query.trim();
     const findPrefix = trimmedQuery.toLowerCase().startsWith('>find ');
     const hasExtension = /\.\w{1,6}$/.test(trimmedQuery) && !trimmedQuery.includes(' ');
@@ -286,32 +292,42 @@ export async function unifiedSearch(query, invoke, shortcuts) {
             ? trimmedQuery.replace(/^>?find\s+/i, '').trim()
             : trimmedQuery;
         if (fileQuery.length >= 2) {
-            try {
-                const fileResults = await invoke('search_files', { query: fileQuery, maxResults: 8 });
-                for (const f of fileResults) {
-                    const ext = f.name.includes('.') ? f.name.split('.').pop().toLowerCase() : '';
-                    const icon = f.is_folder ? '📁' : _fileIcon(ext);
-                    const sizeStr = f.is_folder ? '' : _formatSize(f.size);
-                    const timeStr = f.modified ? _relativeTime(f.modified) : '';
-                    const desc = [f.path, sizeStr, timeStr].filter(Boolean).join(' · ');
-                    results.push({
-                        id: 'file:' + f.path,
-                        type: 'file',
-                        label: f.name,
-                        description: desc,
-                        icon,
-                        score: findPrefix ? 90 : 70,
-                        data: { path: f.path, is_folder: f.is_folder },
-                    });
-                }
-            } catch (e) {
-                console.warn('[Search] File search failed:', e);
-            }
+            asyncTasks.push(
+                invoke('search_files', { query: fileQuery, maxResults: 8 })
+                    .then(fileResults => {
+                        const mapped = [];
+                        for (const f of fileResults) {
+                            const ext = f.name.includes('.') ? f.name.split('.').pop().toLowerCase() : '';
+                            const icon = f.is_folder ? '📁' : _fileIcon(ext);
+                            const sizeStr = f.is_folder ? '' : _formatSize(f.size);
+                            const timeStr = f.modified ? _relativeTime(f.modified) : '';
+                            const desc = [f.path, sizeStr, timeStr].filter(Boolean).join(' · ');
+                            mapped.push({
+                                id: 'file:' + f.path,
+                                type: 'file',
+                                label: f.name,
+                                description: desc,
+                                icon,
+                                score: findPrefix ? 90 : 70,
+                                data: { path: f.path, is_folder: f.is_folder },
+                            });
+                        }
+                        return mapped;
+                    })
+                    .catch(e => { console.warn('[Search] File search failed:', e); return []; })
+            );
         }
+    }
+
+    // Await all async sources + history promises in parallel
+    const allAsync = await Promise.all([...asyncTasks, ...historyPromises]);
+    for (const batch of allAsync) {
+        if (Array.isArray(batch)) results.push(...batch);
     }
 
     return _applyFrecency(results, query);
 }
+
 
 function _applyFrecency(results, query) {
     for (const r of results) {
