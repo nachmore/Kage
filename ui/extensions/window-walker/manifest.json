@@ -13,6 +13,7 @@
   },
 
   "contributes": {
-    "searchProvider": "./search.js"
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js"
   }
 }

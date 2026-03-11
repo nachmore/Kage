@@ -55,7 +55,7 @@ export default class WindowWalkerSearchProvider {
 
         return windows.map((w, i) => {
             let icon = '🪟';
-            if (w.icon_base64) {
+            if (this.config.show_icons !== false && w.icon_base64) {
                 icon = w.icon_base64.startsWith('data:') ? w.icon_base64 : 'data:image/png;base64,' + w.icon_base64;
             }
             return {
