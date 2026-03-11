@@ -143,7 +143,7 @@ impl AcpClient {
             crate::commands::system::BUILTIN_STEERING
         );
 
-        *self.streaming_accumulator.lock().unwrap() = String::new();
+        self.streaming_accumulator.lock().unwrap().clear();
 
         let request = AcpRequest {
             jsonrpc: "2.0".to_string(),
@@ -169,7 +169,7 @@ impl AcpClient {
 
         let debug = *self.transport.debug_mode.lock().unwrap();
 
-        *self.streaming_accumulator.lock().unwrap() = String::new();
+        self.streaming_accumulator.lock().unwrap().clear();
 
         if debug {
             info!("[CHAT] Sending message ({} chars): {}", content.chars().count(), content);
@@ -347,7 +347,7 @@ impl AcpClient {
         info!("Invoking sub-agent with query: {}", &query[..query.len().min(100)]);
 
         // Reset the streaming accumulator for this sub-agent's response
-        *self.streaming_accumulator.lock().unwrap() = String::new();
+        self.streaming_accumulator.lock().unwrap().clear();
 
         let command = serde_json::json!({
             "command": "invoke_subagents",

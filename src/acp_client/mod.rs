@@ -36,7 +36,7 @@ impl AcpClient {
             transport: AcpTransport::new(mode),
             session_id: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
-            streaming_accumulator: Arc::new(Mutex::new(String::new())),
+            streaming_accumulator: Arc::new(Mutex::new(String::with_capacity(64 * 1024))),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
         }
     }

@@ -214,7 +214,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     };
 
     // Reset the streaming accumulator — we'll read the full response from it
-    *client.streaming_accumulator.lock().unwrap() = String::new();
+    client.streaming_accumulator.lock().unwrap().clear();
 
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
