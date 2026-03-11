@@ -557,6 +557,14 @@ function _markDiagramRendered(container) {
         const saveBtn = wrapper.querySelector('.diagram-save-btn');
         if (saveBtn) saveBtn.style.display = '';
     }
+    // Make the diagram clickable to open lightbox (only wire once)
+    if (!container._lightboxWired) {
+        container._lightboxWired = true;
+        container.addEventListener('click', () => {
+            const svgEl = container.querySelector('svg');
+            if (svgEl) openDiagramLightbox(svgEl);
+        });
+    }
 }
 
 async function renderDiagram(codeBlock, pre, language, streaming = false) {
@@ -1142,34 +1150,7 @@ async function saveDiagramAsPng(diagramContentEl, button) {
     if (!svgEl) return;
 
     try {
-        const clone = svgEl.cloneNode(true);
-        const rect = svgEl.getBoundingClientRect();
-        const scale = 2;
-        const w = Math.ceil(rect.width * scale);
-        const h = Math.ceil(rect.height * scale);
-        clone.setAttribute('width', w);
-        clone.setAttribute('height', h);
-        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        clone.style.background = 'white';
-
-        const svgData = new XMLSerializer().serializeToString(clone);
-        const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
-
-        const blob = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, w, h);
-                ctx.drawImage(img, 0, 0, w, h);
-                canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
-            };
-            img.onerror = () => reject(new Error('SVG load failed'));
-            img.src = dataUrl;
-        });
+        const blob = await _renderDiagramToBlob(svgEl, 4);
 
         // Try native save dialog (Chromium File System Access API)
         if (window.showSaveFilePicker) {
@@ -1200,6 +1181,149 @@ async function saveDiagramAsPng(diagramContentEl, button) {
         setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
     } catch (err) {
         console.error('Save diagram failed:', err);
+    }
+}
+
+/**
+ * Render an SVG element to a PNG blob at the given scale factor.
+ * Uses the SVG's intrinsic viewBox dimensions when available for higher quality.
+ */
+async function _renderDiagramToBlob(svgEl, scale = 4) {
+    const clone = svgEl.cloneNode(true);
+
+    // Use intrinsic viewBox dimensions if available (higher quality than displayed size)
+    let baseW, baseH;
+    const viewBox = svgEl.getAttribute('viewBox');
+    if (viewBox) {
+        const parts = viewBox.split(/[\s,]+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+            baseW = parts[2];
+            baseH = parts[3];
+        }
+    }
+    if (!baseW || !baseH) {
+        const rect = svgEl.getBoundingClientRect();
+        baseW = rect.width;
+        baseH = rect.height;
+    }
+
+    const w = Math.ceil(baseW * scale);
+    const h = Math.ceil(baseH * scale);
+    clone.setAttribute('width', w);
+    clone.setAttribute('height', h);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.style.background = 'white';
+
+    const svgData = new XMLSerializer().serializeToString(clone);
+    const dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
+        };
+        img.onerror = () => reject(new Error('SVG load failed'));
+        img.src = dataUrl;
+    });
+}
+
+/**
+ * Open a diagram in a full-screen lightbox overlay.
+ * Click the backdrop or press Escape to close. Save button exports at 4x.
+ */
+function openDiagramLightbox(svgEl) {
+    // Remove any existing lightbox
+    closeDiagramLightbox();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'diagram-lightbox';
+    overlay.id = 'diagramLightbox';
+
+    // Clone the SVG at full size — remove max-width constraints
+    const clone = svgEl.cloneNode(true);
+    clone.style.maxWidth = '95vw';
+    clone.style.maxHeight = '85vh';
+    clone.style.width = 'auto';
+    clone.style.height = 'auto';
+    clone.removeAttribute('width');
+    clone.removeAttribute('height');
+    overlay.appendChild(clone);
+
+    // Action buttons
+    const actions = document.createElement('div');
+    actions.className = 'diagram-lightbox-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'diagram-lightbox-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+            const blob = await _renderDiagramToBlob(svgEl, 4);
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'diagram.png',
+                        types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } catch (ex) {
+                    if (ex.name === 'AbortError') return;
+                    throw ex;
+                }
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'diagram.png';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            }
+            saveBtn.textContent = 'Saved!';
+            setTimeout(() => { saveBtn.textContent = 'Save'; }, 2000);
+        } catch (err) {
+            console.error('Lightbox save failed:', err);
+        }
+    });
+    actions.appendChild(saveBtn);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'diagram-lightbox-btn diagram-lightbox-close';
+    closeBtn.textContent = '✕';
+    closeBtn.title = 'Close';
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeDiagramLightbox(); });
+    actions.appendChild(closeBtn);
+
+    overlay.appendChild(actions);
+
+    // Click backdrop to close (stopPropagation prevents floating window from hiding)
+    overlay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.target === overlay) closeDiagramLightbox();
+    });
+
+    // Escape to close (capture phase, stop propagation so floating window doesn't hide)
+    overlay._escHandler = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDiagramLightbox(); }
+    };
+    document.addEventListener('keydown', overlay._escHandler, true);
+
+    document.body.appendChild(overlay);
+}
+
+function closeDiagramLightbox() {
+    const existing = document.getElementById('diagramLightbox');
+    if (existing) {
+        if (existing._escHandler) document.removeEventListener('keydown', existing._escHandler, true);
+        existing.remove();
     }
 }
 
