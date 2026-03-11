@@ -428,10 +428,16 @@ export class ExtensionManager {
                 }
             }
 
-            // Load newly installed extensions
+            // Load newly installed or updated extensions
             for (const item of userExts) {
                 if (!item.enabled) continue;
-                if (this.extensions.has(item.manifest.id)) continue;
+                const existing = this.extensions.get(item.manifest.id);
+                if (existing) {
+                    // Check if version changed — if so, tear down and reload
+                    if (existing.manifest?.version === item.manifest.version) continue;
+                    console.log(`ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`);
+                    this._unloadExtension(item.manifest.id, existing);
+                }
                 try {
                     await this._loadUserExtension(item);
                     console.log(`ExtensionManager: hot-loaded '${item.manifest.id}'`);
