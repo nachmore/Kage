@@ -31,6 +31,10 @@ const MIN_UPDATE_INTERVAL_SECS: u64 = 3600;
 /// Global counter for user messages since last steering update
 static MESSAGE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
+/// Total messages sent since the last steering generation (periodic or on-quit).
+/// Used to skip on-quit generation when there's nothing new to analyze.
+static MESSAGES_SINCE_GENERATION: AtomicU32 = AtomicU32::new(0);
+
 /// Timestamp of the last periodic steering generation (initialized to epoch so
 /// the first eligible trigger is allowed through).
 static LAST_GENERATION: std::sync::LazyLock<Mutex<Instant>> =
@@ -39,6 +43,7 @@ static LAST_GENERATION: std::sync::LazyLock<Mutex<Instant>> =
 /// Increment the message counter and return true if it's time to update.
 /// Requires both the message count threshold AND the cooldown to have elapsed.
 pub fn tick_message_counter() -> bool {
+    MESSAGES_SINCE_GENERATION.fetch_add(1, Ordering::Relaxed);
     let count = MESSAGE_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     if count >= UPDATE_INTERVAL_MESSAGES {
         MESSAGE_COUNTER.store(0, Ordering::Relaxed);
@@ -54,8 +59,9 @@ pub fn tick_message_counter() -> bool {
     false
 }
 
-/// Record that a periodic generation just completed.
+/// Record that a generation just completed (periodic or on-quit).
 fn mark_generation() {
+    MESSAGES_SINCE_GENERATION.store(0, Ordering::Relaxed);
     if let Ok(mut last) = LAST_GENERATION.lock() {
         *last = Instant::now();
     }
@@ -341,6 +347,7 @@ pub fn maybe_generate_steering(
 
 /// Force an immediate steering document generation (e.g., on quit).
 /// This runs synchronously and blocks until complete.
+/// Skipped if no messages have been sent since the last generation.
 pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
     if !config.acp.assistant.auto_steering_enabled {
         return;
@@ -350,9 +357,15 @@ pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
         return;
     }
 
+    if MESSAGES_SINCE_GENERATION.load(Ordering::Relaxed) == 0 {
+        info!("Auto-steering: no new messages since last generation, skipping on-quit update");
+        return;
+    }
+
     info!("Generating auto-steering document before quit");
-    if let Err(e) = generate_steering_document(client) {
-        error!("Auto-steering generation on quit failed: {}", e);
+    match generate_steering_document(client) {
+        Ok(()) => mark_generation(),
+        Err(e) => error!("Auto-steering generation on quit failed: {}", e),
     }
 }
 
