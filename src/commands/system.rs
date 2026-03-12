@@ -9,6 +9,46 @@ use tauri::{Emitter, Manager, State};
 /// Only the very first message in a conversation with this prefix is hidden.
 pub const STEERING_MSG_PREFIX: &str = "[KIRO_STEERING_IGNORE]";
 
+/// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
+/// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
+pub fn graceful_shutdown(app: &tauri::AppHandle) {
+    // Hide all windows and tray for instant visual feedback
+    for label in &["floating", "main", "settings", "context-menu"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.hide();
+        }
+    }
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(false);
+    }
+
+    // Kill pocket-tts server if running
+    if let Some(state) = app.try_state::<AppState>() {
+        let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+        if let Some(mut child) = tts_proc.take() {
+            info!("Stopping pocket-tts server on shutdown");
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// Run the async portion of shutdown (steering + disconnect) then exit.
+/// Must be called from an async context after `graceful_shutdown`.
+pub async fn shutdown_and_exit(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        let acp_client = state.acp_client.clone();
+        let config = state.config.clone();
+        if let Ok(client) = acp_client.try_lock() {
+            if let Ok(config) = config.try_lock() {
+                crate::auto_steering::generate_steering_on_quit(&client, &config);
+            }
+            client.disconnect();
+        };
+    }
+    std::process::exit(0);
+}
+
 /// Built-in steering document embedded at compile time.
 pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
 
@@ -524,33 +564,27 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn restart_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
     info!("Restart requested via > command");
 
     // Collect current exe and args before we start tearing down
     let exe = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
     let args: Vec<String> = std::env::args().skip(1).collect();
 
-    // Hide all windows for instant feedback
-    for label in &["floating", "main", "settings", "context-menu"] {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
-        }
-    }
-    if let Some(tray) = app.tray_by_id("main-tray") {
-        let _ = tray.set_visible(false);
-    }
+    graceful_shutdown(&app);
 
-    let acp_client = state.acp_client.clone();
-    let config = state.config.clone();
-
+    let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         // Generate auto-steering and disconnect
-        if let Ok(client) = acp_client.try_lock() {
-            if let Ok(config) = config.try_lock() {
-                crate::auto_steering::generate_steering_on_quit(&client, &config);
-            }
-            client.disconnect();
+        if let Some(state) = app_handle.try_state::<AppState>() {
+            let acp_client = state.acp_client.clone();
+            let config = state.config.clone();
+            if let Ok(client) = acp_client.try_lock() {
+                if let Ok(config) = config.try_lock() {
+                    crate::auto_steering::generate_steering_on_quit(&client, &config);
+                }
+                client.disconnect();
+            };
         }
 
         // Spawn new instance with same args
@@ -567,42 +601,13 @@ pub async fn restart_app(state: State<'_, AppState>, app: tauri::AppHandle) -> R
 }
 
 #[tauri::command]
-pub async fn quit_app(state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn quit_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
     info!("Quit requested via > command");
+    graceful_shutdown(&app);
 
-    // Immediately hide all windows and tray so the user sees instant feedback
-    for label in &["floating", "main", "settings", "context-menu"] {
-        if let Some(window) = app.get_webview_window(label) {
-            let _ = window.hide();
-        }
-    }
-    // Hide the tray icon
-    if let Some(tray) = app.tray_by_id("main-tray") {
-        let _ = tray.set_visible(false);
-    }
-
-    // Kill pocket-tts server if running
-    {
-        let mut tts_proc = state.pocket_tts_process.lock().unwrap();
-        if let Some(mut child) = tts_proc.take() {
-            info!("Stopping pocket-tts server on quit");
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
-
-    // Generate auto-steering document in background, then exit
-    let acp_client = state.acp_client.clone();
-    let config = state.config.clone();
-
+    let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Ok(client) = acp_client.try_lock() {
-            if let Ok(config) = config.try_lock() {
-                crate::auto_steering::generate_steering_on_quit(&client, &config);
-            }
-            client.disconnect();
-        }
-        std::process::exit(0);
+        shutdown_and_exit(&app_handle).await;
     });
 
     Ok(())

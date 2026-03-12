@@ -1,4 +1,3 @@
-use crate::state::AppState;
 use log::info;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -96,33 +95,12 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 }
                 "quit" => {
                     info!("Application quit requested");
+                    crate::commands::system::graceful_shutdown(app_handle_inner);
 
-                    // Immediately hide all windows and tray
-                    for label in &["floating", "main", "settings", "context-menu"] {
-                        if let Some(window) = app_handle_inner.get_webview_window(label) {
-                            let _ = window.hide();
-                        }
-                    }
-                    if let Some(tray) = app_handle_inner.tray_by_id("main-tray") {
-                        let _ = tray.set_visible(false);
-                    }
-
-                    // Generate steering doc in background, then exit
-                    if let Some(state) = app_handle_inner.try_state::<AppState>() {
-                        let acp_client = state.acp_client.clone();
-                        let config = state.config.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Ok(client) = acp_client.try_lock() {
-                                if let Ok(config) = config.try_lock() {
-                                    crate::auto_steering::generate_steering_on_quit(&client, &config);
-                                }
-                                client.disconnect();
-                            }
-                            std::process::exit(0);
-                        });
-                    } else {
-                        std::process::exit(0);
-                    }
+                    let app_for_exit = app_handle_inner.clone();
+                    tauri::async_runtime::spawn(async move {
+                        crate::commands::system::shutdown_and_exit(&app_for_exit).await;
+                    });
                 }
                 _ => {}
             }
