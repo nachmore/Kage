@@ -747,11 +747,11 @@ export class FloatingApp {
         this._bannerVisible = false;
         const banner = document.getElementById('floatingBanner');
         if (banner) banner.style.display = 'none';
-        // If the banner was the only content and we're not waiting for a response,
-        // reset the UI to reclaim the space
+        // If the banner was the only content, collapse the content area
         const responseText = document.getElementById('responseText');
         if (!this.isWaitingForResponse && (!responseText || !responseText.textContent.trim())) {
-            this.resetUI();
+            document.getElementById('contentArea')?.classList.remove('visible');
+            this.elements.expandBtn?.classList.remove('visible');
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
         }
@@ -816,11 +816,11 @@ export class FloatingApp {
         // Reset tab cycle state when user types
         this._tabCycleActive = false;
         
+        // Dismiss banner as soon as user starts typing — it's served its purpose
+        if (query.length > 0) this.dismissBanner();
+
         // Update datetime visibility based on input state
         this.updateDatetimeVisibility();
-        
-        // Resize window to fit the growing input
-        await this.windowManager.resizeWindow();
         
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
@@ -831,8 +831,12 @@ export class FloatingApp {
             this.currentMatches = [];
             this.selectedIndex = -1;
             this._noMatchSinceLen = 0;
+            await this.windowManager.resizeWindow();
             return;
         }
+
+        // Resize window to fit the growing input
+        await this.windowManager.resizeWindow();
         
         // Debounced unified search — queries all sources in parallel
         // Use a longer debounce for file search patterns to avoid unnecessary disk queries
