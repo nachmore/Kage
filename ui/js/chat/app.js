@@ -1599,6 +1599,16 @@ export class ChatApp {
 
     handleToolCallUpdate(event) {
             const { updated } = processToolCallUpdate(event, this);
+
+            // Flush any pending throttled markdown render so the user sees the
+            // full streamed text before a permission dialog appears
+            if (this.currentStreamingMessage && this.currentStreamingContent) {
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                if (contentDiv) {
+                    renderMarkdown(this.currentStreamingContent, contentDiv);
+                }
+            }
+
             // Chat app doesn't render sources inline during streaming —
             // they're rendered when the message completes in renderSourcesInMessage()
         }

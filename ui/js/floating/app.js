@@ -1898,6 +1898,12 @@ export class FloatingApp {
             if (!this.isWaitingForResponse) return;
             const { updated, update } = processToolCallUpdate(event, this);
 
+            // Flush any pending throttled markdown render so the user sees the
+            // full streamed text before a permission dialog or tool indicator appears
+            if (this.currentResponse && this.currentResponse.trim().length > 0) {
+                renderMarkdown(this.currentResponse, this.elements.responseText);
+            }
+
             // Detect computer-control tool usage and keep window visible
             if (update?.title) {
                 const ccTools = ['screenshot', 'click', 'double_click', 'right_click',
