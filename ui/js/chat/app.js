@@ -1660,9 +1660,23 @@ export class ChatApp {
             if (beforeFence) {
                 renderMarkdown(beforeFence, contentDiv, true);
             } else {
-                contentDiv.innerHTML = '<span class="streaming-indicator">...</span>';
+                const friendlyName = this._getToolFriendlyName(info.extension, info.tool);
+                contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${friendlyName}...</div>`;
             }
         }
+    }
+
+    /** Look up a friendly display name for an extension tool. */
+    _getToolFriendlyName(extensionId, toolName) {
+        if (extensionId && toolName && this.extensionManager) {
+            const defs = this.extensionManager.getToolDefinitions();
+            const extDef = defs.find(d => d.extensionId === extensionId);
+            if (extDef?.tools) {
+                const tool = extDef.tools.find(t => t.name === toolName);
+                if (tool?.friendlyName) return tool.friendlyName;
+            }
+        }
+        return 'Working on it';
     }
 
     /**

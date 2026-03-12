@@ -30,6 +30,7 @@ export default class FolderToolProvider {
         return [
             {
                 name: 'pick_folder',
+                friendlyName: 'Opening folder picker',
                 description:
                     'Open a native folder picker dialog so the user can select a folder. ' +
                     'Use this when the user wants to organize, clean, or sort a folder but ' +
@@ -40,6 +41,7 @@ export default class FolderToolProvider {
             },
             {
                 name: 'get_common_folders',
+                friendlyName: 'Looking up folder locations',
                 description:
                     'Get a map of well-known folder names to their absolute paths on this system. ' +
                     'Returns folders like downloads, documents, pictures, videos, music, desktop, ' +
@@ -49,6 +51,7 @@ export default class FolderToolProvider {
             },
             {
                 name: 'scan_folder',
+                friendlyName: 'Scanning folder contents',
                 description:
                     'Scan a folder recursively and return a compact manifest of all files and directories. ' +
                     'Each entry has: path (relative), size (bytes), modified (YYYY-MM-DDTHH:MM), ' +
@@ -75,6 +78,7 @@ export default class FolderToolProvider {
             },
             {
                 name: 'submit_folder_plan',
+                friendlyName: 'Preparing folder organization plan',
                 description:
                     'Propose a folder organization plan for user review. Takes a list of operations (move, rename, delete) ' +
                     'and presents them to the user for approval before anything is changed. ' +
@@ -241,6 +245,9 @@ export default class FolderToolProvider {
             // Clear existing content and add our plan UI
             responseText.innerHTML = '';
             responseText.appendChild(container);
+
+            // Notify the app to resize the window so the plan is visible
+            document.dispatchEvent(new CustomEvent('kiro-resize-request'));
 
             // Wire up buttons
             const runBtn = container.querySelector('#folderPlanRunBtn');

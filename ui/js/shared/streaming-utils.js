@@ -316,8 +316,9 @@ export function detectExtensionToolCall(text) {
                 params: parsed.params || {},
             };
         }
-    } catch {
-        // JSON not valid yet or malformed
+    } catch (e) {
+        // JSON parse failed — log for debugging
+        console.warn('[ExtToolCall] JSON parse failed:', e.message, 'length:', jsonStr.length, 'start:', jsonStr.substring(0, 100));
     }
     return null;
 }

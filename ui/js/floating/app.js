@@ -343,6 +343,10 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         });
 
+        document.addEventListener('kiro-resize-request', () => {
+            this.windowManager.resizeWindow();
+        });
+
         document.addEventListener('kiro-show-response', (e) => {
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
@@ -1319,6 +1323,7 @@ export class FloatingApp {
         if (!this._extensionToolCallHandled) {
             const toolCall = detectExtensionToolCall(this.currentResponse);
             if (toolCall) {
+                console.log('[Floating] Extension tool call detected in chunk:', toolCall.extension, toolCall.tool);
                 this._extensionToolCallHandled = true;
                 this._handleExtensionToolCall(toolCall);
                 return;
@@ -1377,11 +1382,15 @@ export class FloatingApp {
             if (this._automationPlanStarted) return;
 
             // If extension tool is executing, the response will come as a follow-up
-            if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
+            if (this._extensionToolExecuting || this._extensionToolCallHandled) {
+                console.log('[Floating] handleMessageComplete: skipping (extensionToolExecuting=%s, extensionToolCallHandled=%s)', this._extensionToolExecuting, this._extensionToolCallHandled);
+                return;
+            }
 
             // Check for extension tool call in the completed response (fallback if not caught during streaming)
             if (!this._extensionToolCallHandled) {
                 const toolCall = detectExtensionToolCall(this.currentResponse);
+                console.log('[Floating] handleMessageComplete fallback detection:', toolCall ? `${toolCall.extension}/${toolCall.tool}` : 'null', 'responseLen:', this.currentResponse.length, 'hasFence:', this.currentResponse.includes('```extension_tool_call'));
                 if (toolCall) {
                     this._extensionToolCallHandled = true;
                     this._handleExtensionToolCall(toolCall);
@@ -1483,9 +1492,23 @@ export class FloatingApp {
         if (beforeFence) {
             renderMarkdown(beforeFence, this.elements.responseText, true);
         } else {
-            // Nothing before the fence — keep the response area clean so thinking dots show
-            this.elements.responseText.innerHTML = '';
+            // Nothing before the fence — show a loading indicator with friendly name
+            const friendlyName = this._getToolFriendlyName(info.extension, info.tool);
+            this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${friendlyName}...</div>`;
         }
+    }
+
+    /** Look up a friendly display name for an extension tool. */
+    _getToolFriendlyName(extensionId, toolName) {
+        if (extensionId && toolName && this.extensionManager) {
+            const defs = this.extensionManager.getToolDefinitions();
+            const extDef = defs.find(d => d.extensionId === extensionId);
+            if (extDef?.tools) {
+                const tool = extDef.tools.find(t => t.name === toolName);
+                if (tool?.friendlyName) return tool.friendlyName;
+            }
+        }
+        return 'Working on it';
     }
 
     /**
@@ -1579,6 +1602,11 @@ export class FloatingApp {
         this.stopThinking();
         this.elements.floatingStopBtn.style.display = 'none';
         this.updateDatetimeVisibility();
+
+        // Ensure content area is visible for tool UI, and resize after a tick
+        // to accommodate any confirmation UI the tool renders
+        this.elements.contentArea.classList.add('visible');
+        setTimeout(() => this.windowManager.resizeWindow(), 100);
 
         const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
         const success = !result.error;
