@@ -750,6 +750,7 @@ fn main() {
             commands::notify_frontend_ready,
             commands::list_open_windows,
             commands::focus_open_window,
+            commands::get_app_icon,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,5 @@
 // Expanded chat application logic
-import { renderMarkdown, initMarkdown, createTaskPlanElement } from '../shared/markdown.js';
+import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml } from '../shared/tool-utils.js';
@@ -81,6 +81,7 @@ export class ChatApp {
 
     async init() {
         initMarkdown();
+        setAppIconInvoke(this.invoke);
         this.cacheElements();
         this.setupSpeech();
         this.setupEventListeners();

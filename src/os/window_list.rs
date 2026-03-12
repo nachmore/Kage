@@ -25,6 +25,12 @@ pub fn focus_window(handle: u64) -> Result<(), String> {
     focus_window_impl(handle)
 }
 
+/// Look up a cached app icon by process name (e.g. "winword", "chrome").
+/// Returns the base64 data URI if found. The cache is populated by list_windows().
+pub fn get_app_icon(process_name: &str) -> Option<String> {
+    get_app_icon_impl(process_name)
+}
+
 #[cfg(target_os = "windows")]
 fn list_windows_impl() -> Vec<WindowInfo> {
     crate::os::windows::window_list::list_windows_impl()
@@ -53,4 +59,19 @@ fn focus_window_impl(handle: u64) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn focus_window_impl(handle: u64) -> Result<(), String> {
     crate::os::linux::window_list::focus_window_impl(handle)
+}
+
+#[cfg(target_os = "windows")]
+fn get_app_icon_impl(name: &str) -> Option<String> {
+    crate::os::windows::window_list::get_icon_by_process_name(name)
+}
+
+#[cfg(target_os = "macos")]
+fn get_app_icon_impl(_name: &str) -> Option<String> {
+    None // TODO: implement icon lookup on macOS
+}
+
+#[cfg(target_os = "linux")]
+fn get_app_icon_impl(_name: &str) -> Option<String> {
+    None // TODO: implement icon lookup on Linux
 }

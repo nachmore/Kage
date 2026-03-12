@@ -64,6 +64,73 @@ const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
 const _renderTimers = new WeakMap();   // targetElement → timer id
 const _lastRenderTime = new WeakMap(); // targetElement → timestamp
 
+// --- App icon inline rendering ---
+// Replaces <app-icon name="processName"/> tags with inline icon images.
+// Icons are fetched from the Rust side (cached by process name) and cached here.
+const _appIconCache = new Map(); // process name → data URI or null
+let _appIconInvoke = null;
+
+/**
+ * Set the invoke function for app icon lookups.
+ * Call this once during init (same invoke used everywhere).
+ */
+export function setAppIconInvoke(invoke) {
+    _appIconInvoke = invoke;
+}
+
+/**
+ * Process <app-icon> tags in a rendered container, replacing them with inline images.
+ * Uses regex on innerHTML since browsers don't reliably parse self-closing custom tags.
+ * Async — fetches icons that aren't cached yet and updates the DOM when ready.
+ */
+function _processAppIcons(container) {
+    if (!_appIconInvoke) return;
+    const html = container.innerHTML;
+    if (!html.includes('<app-icon')) return;
+
+    // Replace all <app-icon name="..."/> or <app-icon name="..."></app-icon> with placeholders
+    const pending = [];
+    const replaced = html.replace(/<app-icon\s+name="([^"]+)"\s*\/?>(?:<\/app-icon>)?/gi, (match, name) => {
+        const key = name.toLowerCase();
+        if (_appIconCache.has(key)) {
+            const dataUri = _appIconCache.get(key);
+            if (dataUri) {
+                const src = dataUri.startsWith('data:') ? dataUri : 'data:image/png;base64,' + dataUri;
+                return `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
+            }
+            return ''; // no icon available
+        }
+        // Not cached yet — insert an empty placeholder span and fetch async
+        const id = `app-icon-${_appIconPlaceholderId++}`;
+        pending.push({ id, name, key });
+        return `<span id="${id}" style="display:inline-block;width:1.2em;height:1.2em;vertical-align:middle;"></span>`;
+    });
+
+    if (replaced !== html) {
+        container.innerHTML = replaced;
+    }
+
+    // Fetch uncached icons and replace placeholders
+    for (const { id, name, key } of pending) {
+        _appIconInvoke('get_app_icon', { processName: name }).then(dataUri => {
+            _appIconCache.set(key, dataUri || null);
+            const placeholder = container.querySelector(`#${id}`);
+            if (placeholder) {
+                if (dataUri) {
+                    const src = dataUri.startsWith('data:') ? dataUri : 'data:image/png;base64,' + dataUri;
+                    placeholder.outerHTML = `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
+                } else {
+                    placeholder.outerHTML = ''; // no icon available
+                }
+            }
+        }).catch(() => {
+            _appIconCache.set(key, null);
+        });
+    }
+}
+
+let _appIconPlaceholderId = 0;
+
 // --- Incremental rendering state (per target element) ---
 // During streaming, we split markdown into a "frozen prefix" (complete blocks
 // that won't change) and an "active tail" (the last incomplete block).
@@ -299,6 +366,9 @@ function _doRender(markdown, targetElement, streaming) {
             }
         }
 
+        // Process app-icon tags
+        _processAppIcons(targetElement);
+
         // Deduplicate taskplan blocks
         _deduplicateTaskPlans(targetElement);
 
@@ -322,6 +392,9 @@ function _doRender(markdown, targetElement, streaming) {
     // Only wire up sortable tables on the final render
     _resetDiagramFailures();
     makeTablesSortable(targetElement);
+
+    // Process app-icon tags
+    _processAppIcons(targetElement);
 
     // Deduplicate taskplan blocks — keep only the last one (most up-to-date)
     _deduplicateTaskPlans(targetElement);

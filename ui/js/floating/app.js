@@ -1,7 +1,7 @@
 // Main application logic
 import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './suggestions.js';
 import { WindowManager } from './window.js';
-import { renderMarkdown, createTaskPlanElement } from '../shared/markdown.js';
+import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
@@ -171,6 +171,9 @@ export class FloatingApp {
             // Extension loading below happens in the background and doesn't block the UI.
             this.invoke('notify_frontend_ready').catch(() => {});
             _ts('notify_frontend_ready sent');
+
+            // Enable app-icon rendering in markdown
+            setAppIconInvoke(this.invoke);
 
             // Load extensions in the background — not needed for basic input/response
             this.extensionManager.initialize().then(() => {

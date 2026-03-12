@@ -988,3 +988,8 @@ pub async fn focus_open_window(
     }
     crate::os::focus_window(handle)
 }
+
+#[tauri::command]
+pub async fn get_app_icon(process_name: String) -> Result<Option<String>, String> {
+    Ok(crate::os::get_app_icon(&process_name))
+}

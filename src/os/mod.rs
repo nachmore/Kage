@@ -70,4 +70,4 @@ pub use hotkey::{capture_hotkey, cancel_hotkey_capture};
 #[allow(unused)]
 pub use hotkey::CapturedHotkey;
 pub use icon::extract_icon_base64;
-pub use window_list::{list_windows, focus_window};
+pub use window_list::{list_windows, focus_window, get_app_icon};

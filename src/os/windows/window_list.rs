@@ -124,6 +124,10 @@ use std::sync::Mutex;
 static ICON_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Option<String>>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
+// Cache icons by process name (lowercase) — for quick lookup by name
+static ICON_BY_NAME: std::sync::LazyLock<Mutex<HashMap<String, String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
 pub fn list_windows_impl() -> Vec<WindowInfo> {
     let mut state = EnumState { windows: Vec::new() };
     unsafe {
@@ -131,6 +135,7 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
     }
 
     let mut cache = ICON_CACHE.lock().unwrap();
+    let mut name_cache = ICON_BY_NAME.lock().unwrap();
 
     for (win, exe_path) in &mut state.windows {
         if exe_path.is_empty() { continue; }
@@ -138,9 +143,37 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
             crate::os::icon::extract_icon_base64(exe_path)
         });
         win.icon_base64 = icon.clone();
+        // Also cache by process name for lookup
+        if let Some(ref icon_str) = *icon {
+            if !win.process_name.is_empty() {
+                name_cache.entry(win.process_name.to_lowercase()).or_insert_with(|| icon_str.clone());
+            }
+        }
     }
 
     state.windows.into_iter().map(|(w, _)| w).collect()
+}
+
+/// Look up a cached icon by process name (e.g. "winword", "chrome").
+/// Returns the base64 data URI if found, or None.
+/// If the cache is empty, triggers a window enumeration to populate it.
+pub fn get_icon_by_process_name(name: &str) -> Option<String> {
+    let cache = ICON_BY_NAME.lock().unwrap();
+    if let Some(icon) = cache.get(&name.to_lowercase()) {
+        return Some(icon.clone());
+    }
+    // Cache miss — if the cache is empty, populate it by listing windows
+    let is_empty = cache.is_empty();
+    drop(cache);
+
+    if is_empty {
+        // Prime the cache by enumerating windows (populates both ICON_CACHE and ICON_BY_NAME)
+        let _ = list_windows_impl();
+        let cache = ICON_BY_NAME.lock().unwrap();
+        return cache.get(&name.to_lowercase()).cloned();
+    }
+
+    None
 }
 
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
