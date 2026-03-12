@@ -474,6 +474,10 @@ pub async fn open_chat_with_message(
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.hide();
     }
+    // Route notifications to the chat window while this message is in flight
+    if let Ok(mut s) = state.notification_source.lock() {
+        *s = "main".to_string();
+    }
     if let Some(main) = app.get_webview_window("main") {
         // Center on the active monitor
         crate::commands::window::center_window_on_active_monitor(&main);
