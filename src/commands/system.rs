@@ -541,11 +541,13 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
         crate::os::capture_hotkey(10000)
     }).await.map_err(|e| format!("Task error: {}", e))?;
 
-    // Re-register the global hotkey from config
+    // Re-register the global hotkeys from config
     let state: tauri::State<'_, AppState> = app.state();
     let config = state.config.lock().unwrap();
     let hotkey_string = config.get_hotkey_string();
+    let cb_hotkey = config.get_clipboard_hotkey_string();
     drop(config);
+
     if let Some(floating) = app.get_webview_window("floating") {
         use tauri_plugin_global_shortcut::ShortcutState;
         let _ = app.global_shortcut().on_shortcut(
@@ -555,6 +557,26 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
                 crate::commands::window::toggle_floating_window(&floating);
             },
         );
+    }
+
+    // Re-register clipboard hotkey if configured
+    if let Some(ref cb) = cb_hotkey {
+        if let Some(floating) = app.get_webview_window("floating") {
+            let app_handle = app.clone();
+            use tauri_plugin_global_shortcut::ShortcutState;
+            let _ = app.global_shortcut().on_shortcut(
+                cb.as_str(),
+                move |_app, _shortcut, event| {
+                    if event.state != ShortcutState::Pressed { return; }
+                    crate::commands::window::show_floating_at_mouse(&floating);
+                    let handle = app_handle.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(150));
+                        let _ = handle.emit("clipboard_history_mode", ());
+                    });
+                },
+            );
+        }
     }
 
     match result {
