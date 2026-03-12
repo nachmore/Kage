@@ -52,7 +52,15 @@ pub fn setup_notification_handler(
                     if kind == "agent_message_chunk" {
                         if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
                             let mut acc = accumulated.lock().unwrap();
-                            acc.push_str(text);
+                            if acc.len() < crate::acp_client::MAX_ACCUMULATOR_SIZE {
+                                let remaining = crate::acp_client::MAX_ACCUMULATOR_SIZE - acc.len();
+                                if text.len() <= remaining {
+                                    acc.push_str(text);
+                                } else {
+                                    acc.push_str(&text[..remaining]);
+                                    log::warn!("Streaming accumulator hit {}MB cap — truncating", crate::acp_client::MAX_ACCUMULATOR_SIZE / (1024 * 1024));
+                                }
+                            }
                             let _ = app_handle.emit("message_chunk", acc.clone());
                         }
                         return;

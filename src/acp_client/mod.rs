@@ -20,6 +20,10 @@ use std::sync::{Arc, Mutex};
 
 use crate::process_manager::ProcessManager;
 
+/// Maximum size for the streaming accumulator (10 MB).
+/// Prevents OOM if the server sends an unbounded response.
+pub const MAX_ACCUMULATOR_SIZE: usize = 10 * 1024 * 1024;
+
 pub struct AcpClient {
     transport: AcpTransport,
     session_id: Arc<Mutex<Option<String>>>,

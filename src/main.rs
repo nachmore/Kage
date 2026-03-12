@@ -140,7 +140,11 @@ fn main() {
                     } else {
                         warn!("Failed to configure Job Object");
                     }
-                    // Don't close the job handle — it needs to stay alive
+                    // The job handle must stay open for the lifetime of the process.
+                    // HANDLE is Copy with no Drop impl, so it won't be auto-closed
+                    // when it goes out of scope — exactly what we want. The OS keeps
+                    // the Job Object alive (and its KILL_ON_JOB_CLOSE policy active)
+                    // as long as the handle isn't explicitly closed via CloseHandle.
                     let _ = job;
                 }
                 Err(e) => warn!("Failed to create Job Object: {}", e),
