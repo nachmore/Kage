@@ -1231,6 +1231,8 @@ export class FloatingApp {
             this.updateDatetimeVisibility();
             await this.windowManager.resizeWindow();
             try {
+                // Notify the chat window so it can show the user bubble
+                window.__TAURI__.event.emit('floating_message_sent', { message });
                 await this.invoke('send_message_streaming', { message, attachments: null });
             } catch (e) {
                 this.showError('Error: ' + e);
@@ -1322,6 +1324,8 @@ export class FloatingApp {
                 const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
                 this.dismissBanner();
+                // Notify the chat window so it can show the user bubble
+                window.__TAURI__.event.emit('floating_message_sent', { message });
                 await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {

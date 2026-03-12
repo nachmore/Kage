@@ -379,6 +379,18 @@ export class ChatApp {
         // Refresh session list when the backend detects directory changes
         this.listen('sessions_changed', () => this.loadSessions(true));
 
+        // When a message is sent from the floating window, mirror it in the chat
+        this.listen('floating_message_sent', (event) => {
+            const { message } = event.payload || {};
+            if (!message) return;
+            // Only show if we're viewing the default/floating session
+            const isDefaultSession = this.activeSessionId === this.floatingSessionId
+                || this.activeSessionId === this.currentAcpSessionId;
+            if (!isDefaultSession) return;
+            this.addUserMessage(message);
+            this.startStreaming();
+        });
+
         // Real-time context usage from ACP metadata notifications
         this.listen('context_metadata', (event) => {
             const pct = event.payload?.params?.contextUsagePercentage;
