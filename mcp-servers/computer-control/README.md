@@ -68,7 +68,8 @@ Add to `~/.kiro/settings/mcp.json`:
 | `get_ui_tree` | Get structured element tree for a window |
 | `find_elements` | Search for elements by name, role, or automation ID |
 | `get_focused_element` | Get the currently focused element |
-| `list_windows` | List all visible top-level windows |
+| `list_windows` | List visible (non-minimized) top-level windows |
+| `list_all_windows` | List ALL top-level windows including minimized |
 | `click_element` | Click/invoke an element by ID |
 | `set_value` | Set text/value on an element by ID |
 | `toggle_element` | Toggle a checkbox/switch by ID |

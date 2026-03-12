@@ -243,7 +243,11 @@ def get_focused_element() -> str:
 
 @mcp.tool()
 def list_windows(title_filter: Optional[str] = None) -> list[dict]:
-    """List all visible top-level windows.
+    """List visible (non-minimized) top-level windows using the accessibility API.
+
+    Only returns windows that are currently visible on screen — minimized windows
+    are excluded. For a complete list including minimized windows, use
+    list_all_windows() instead.
 
     Args:
         title_filter: Substring match on window title (optional).
@@ -260,6 +264,194 @@ def list_windows(title_filter: Optional[str] = None) -> list[dict]:
     except Exception as e:
         log.exception("list_windows failed")
         return []
+
+
+@mcp.tool()
+def list_all_windows(title_filter: Optional[str] = None) -> list[dict]:
+    """List ALL top-level windows using the native OS window enumeration API.
+
+    Unlike list_windows() which only shows visible (non-minimized) windows,
+    this uses the OS window manager directly (EnumWindows on Windows, System
+    Events on macOS, wmctrl/xdotool on Linux) and returns all top-level
+    windows including minimized ones.
+
+    Use this when you need a complete and accurate count of open windows.
+
+    Args:
+        title_filter: Substring match on window title (optional).
+
+    Returns:
+        List of windows with title, process_name, and handle.
+    """
+    log.info("list_all_windows: filter=%r", title_filter)
+    try:
+        windows = _enumerate_all_windows()
+        if title_filter:
+            windows = [
+                w for w in windows
+                if title_filter.lower() in w.get("title", "").lower()
+            ]
+        log.info("list_all_windows: found %d", len(windows))
+        return windows
+    except Exception as e:
+        log.exception("list_all_windows failed")
+        return []
+
+
+def _enumerate_all_windows() -> list[dict]:
+    """Enumerate all visible top-level windows using native OS APIs."""
+    system = platform.system()
+    if system == "Windows":
+        return _enumerate_windows_win32()
+    elif system == "Darwin":
+        return _enumerate_windows_macos()
+    else:
+        return _enumerate_windows_linux()
+
+
+def _enumerate_windows_win32() -> list[dict]:
+    """Windows: Use EnumWindows via ctypes for complete window enumeration."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    EnumWindows = user32.EnumWindows
+    IsWindowVisible = user32.IsWindowVisible
+    GetWindowTextW = user32.GetWindowTextW
+    GetWindowTextLengthW = user32.GetWindowTextLengthW
+    GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+    GetWindowLongW = user32.GetWindowLongW
+    GetWindow = user32.GetWindow
+
+    GWL_EXSTYLE = -20
+    WS_EX_TOOLWINDOW = 0x00000080
+    GW_OWNER = 4
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+    results = []
+
+    def _get_process_name(pid):
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return ""
+        try:
+            buf = (ctypes.c_wchar * 260)()
+            size = wintypes.DWORD(260)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                path = buf.value
+                return os.path.splitext(os.path.basename(path))[0]
+        finally:
+            kernel32.CloseHandle(handle)
+        return ""
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def enum_callback(hwnd, lparam):
+        if not IsWindowVisible(hwnd):
+            return True
+        # Skip tool windows and owned windows
+        ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE)
+        if ex_style & WS_EX_TOOLWINDOW:
+            return True
+        if GetWindow(hwnd, GW_OWNER):
+            return True
+
+        length = GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        buf = ctypes.create_unicode_buffer(length + 1)
+        GetWindowTextW(hwnd, buf, length + 1)
+        title = buf.value.strip()
+        if not title:
+            return True
+
+        pid = wintypes.DWORD()
+        GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        process_name = _get_process_name(pid.value) if pid.value else ""
+
+        results.append({
+            "title": title,
+            "process_name": process_name,
+            "handle": int(hwnd),
+        })
+        return True
+
+    EnumWindows(enum_callback, 0)
+    return results
+
+
+def _enumerate_windows_macos() -> list[dict]:
+    """macOS: Use osascript with System Events."""
+    script = r'''
+        tell application "System Events"
+            set windowList to ""
+            repeat with proc in (every process whose visible is true)
+                set procName to name of proc
+                set procId to unix id of proc
+                repeat with win in (every window of proc)
+                    set winTitle to name of win
+                    if winTitle is not "" then
+                        set windowList to windowList & procName & "\t" & winTitle & "\t" & procId & linefeed
+                    end if
+                end repeat
+            end repeat
+        end tell
+        return windowList
+    '''
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return []
+        windows = []
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                windows.append({
+                    "title": parts[1],
+                    "process_name": parts[0],
+                    "handle": int(parts[2]) if parts[2].isdigit() else 0,
+                })
+        return windows
+    except Exception:
+        return []
+
+
+def _enumerate_windows_linux() -> list[dict]:
+    """Linux: Use wmctrl or xdotool."""
+    # Try wmctrl first
+    try:
+        result = subprocess.run(
+            ["wmctrl", "-l", "-p"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            windows = []
+            for line in result.stdout.strip().split("\n"):
+                parts = line.split(None, 4)
+                if len(parts) >= 5:
+                    handle = int(parts[0], 16) if parts[0].startswith("0x") else 0
+                    pid = int(parts[2]) if parts[2].isdigit() else 0
+                    title = parts[4]
+                    process_name = ""
+                    if pid > 0:
+                        try:
+                            process_name = open(f"/proc/{pid}/comm").read().strip()
+                        except Exception:
+                            pass
+                    if title and title != "Desktop":
+                        windows.append({
+                            "title": title,
+                            "process_name": process_name,
+                            "handle": handle,
+                        })
+            return windows
+    except Exception:
+        pass
+    return []
 
 
 # ===================================================================

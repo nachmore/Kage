@@ -101,7 +101,8 @@ capability. Each sub-agent runs with a fresh context containing only its specifi
 │    - get_ui_tree()     → structured element tree        │
 │    - find_elements()   → search by criteria             │
 │    - get_focused()     → current focus + context        │
-│    - list_windows()    → running windows                │
+│    - list_windows()    → visible (non-minimized) windows   │
+│    - list_all_windows()→ ALL windows incl. minimized      │
 │                                                         │
 │  Action:                                                │
 │    - click_element()   → invoke/press via API           │
@@ -206,7 +207,8 @@ Returns: focused element details + ancestor path to window root
 ```
 
 #### `list_windows`
-Returns all visible top-level windows.
+Returns visible (non-minimized) top-level windows. Minimized windows are excluded.
+For a complete list including minimized windows, use `list_all_windows`.
 
 ```
 Parameters:
@@ -376,7 +378,7 @@ mcp-servers/computer-control/
 
 1. **Core data structures** — `tree.py`: UIElement dataclass, tree serialization, ID registry
 2. **Windows provider** — `windows_uia.py`: tree walking + element interaction via UIA
-3. **Perception tools** — `get_ui_tree`, `find_elements`, `get_focused_element`, `list_windows`
+3. **Perception tools** — `get_ui_tree`, `find_elements`, `get_focused_element`, `list_windows`, `list_all_windows`
 4. **Action tools** — `click_element`, `set_value`, `toggle_element`, etc.
 5. **Fallback tools** — migrate existing mouse/keyboard/screenshot into `fallback.py`
 6. **Server integration** — wire everything into `server.py`

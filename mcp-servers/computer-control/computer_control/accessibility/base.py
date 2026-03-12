@@ -51,7 +51,7 @@ class AccessibilityProvider(ABC):
     def list_windows(
         self, title_filter: Optional[str] = None
     ) -> list[dict[str, Any]]:
-        """Return all visible top-level windows.
+        """Return all visible top-level windows (via accessibility API).
 
         Returns list of dicts with: title, bounds, process_name
         """

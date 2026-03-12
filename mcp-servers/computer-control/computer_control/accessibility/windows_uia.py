@@ -377,7 +377,7 @@ class WindowsUIAProvider(AccessibilityProvider):
                 if not win.Exists(maxSearchSeconds=2):
                     raise ValueError(
                         f"No window found matching '{title}'. "
-                        f"Use list_windows() to see available windows."
+                        f"Use list_windows() or list_all_windows() to see available windows."
                     )
             return win
         else:
