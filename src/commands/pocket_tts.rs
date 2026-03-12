@@ -119,7 +119,7 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<PocketTtsStatus, String> {
     let (port, python_path) = {
         let config = state.config.lock().unwrap();
-        let pp = config.pocket_tts.python_path.clone().or_else(|| find_python());
+        let pp = config.pocket_tts.python_path.clone().or_else(find_python);
         (config.pocket_tts.port, pp)
     };
 
@@ -151,7 +151,7 @@ pub async fn pocket_tts_install(
         .pocket_tts
         .python_path
         .clone()
-        .or_else(|| find_python())
+        .or_else(find_python)
         .ok_or_else(|| "Python 3 not found. Please install Python 3.10+ first.".to_string())?;
     drop(config);
 
@@ -195,10 +195,8 @@ pub async fn pocket_tts_install(
             let app = app_for_stdout;
             std::thread::spawn(move || {
                 let reader = std::io::BufReader::new(out);
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        let _ = app.emit("pocket_tts_install_output", &line);
-                    }
+                for line in reader.lines().map_while(Result::ok) {
+                    let _ = app.emit("pocket_tts_install_output", &line);
                 }
             })
         });
@@ -209,10 +207,8 @@ pub async fn pocket_tts_install(
             let app = app_for_stderr;
             std::thread::spawn(move || {
                 let reader = std::io::BufReader::new(err);
-                for line in reader.lines() {
-                    if let Ok(line) = line {
-                        let _ = app.emit("pocket_tts_install_output", &line);
-                    }
+                for line in reader.lines().map_while(Result::ok) {
+                    let _ = app.emit("pocket_tts_install_output", &line);
                 }
             })
         });
@@ -289,7 +285,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
             config.pocket_tts.temp,
             config.pocket_tts.eos_threshold,
             config.pocket_tts.python_path.clone()
-                .or_else(|| find_python())
+                .or_else(find_python)
                 .ok_or_else(|| "Python 3 not found".to_string())?,
         )
     };

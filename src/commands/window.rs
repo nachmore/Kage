@@ -133,7 +133,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                     let app_handle = app.clone();
                     std::thread::spawn(move || {
                         let selection = crate::os::clipboard::finish_selection_capture(token);
-                        let has_sel = selection.as_ref().map_or(false, |s| !s.is_empty());
+                        let has_sel = selection.as_ref().is_some_and(|s| !s.is_empty());
                         if let Ok(mut sel) = last_selection.lock() {
                             *sel = selection;
                         }
@@ -517,11 +517,9 @@ pub async fn show_notification_source_window(
             let _ = window.show();
             let _ = window.set_focus();
         }
-    } else {
-        if let Some(window) = app.get_webview_window("floating") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
+    } else if let Some(window) = app.get_webview_window("floating") {
+        let _ = window.show();
+        let _ = window.set_focus();
     }
     Ok(())
 }

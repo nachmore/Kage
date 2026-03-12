@@ -38,7 +38,7 @@ pub fn get_process_name_impl(pid: u32) -> Option<String> {
 
 pub fn kill_process_impl(pid: u32) -> bool {
     match Command::new("taskkill")
-        .args(&["/F", "/T", "/PID", &pid.to_string()])
+        .args(["/F", "/T", "/PID", &pid.to_string()])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
     {

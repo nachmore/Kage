@@ -459,7 +459,7 @@ pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&Pat
     Ok(None)
 }
 
-fn try_load_theme_variant(theme_dir: &PathBuf, variant: &str) -> Result<Option<serde_json::Value>> {
+fn try_load_theme_variant(theme_dir: &std::path::Path, variant: &str) -> Result<Option<serde_json::Value>> {
     // First read the manifest to find the variant file path
     let manifest_path = theme_dir.join("manifest.json");
     if !manifest_path.exists() {

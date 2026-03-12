@@ -6,6 +6,7 @@ use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 /// Set up the notification handler on the ACP client.
 /// This should be called once after the client is created.
 /// The handler dispatches all ACP notifications to the appropriate Tauri events.
+#[allow(clippy::too_many_arguments)]
 pub fn setup_notification_handler(
     client: &crate::acp_client::AcpClient,
     app: &tauri::AppHandle,
@@ -199,6 +200,7 @@ fn write_raw_json_silent(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
     app_handle: &tauri::AppHandle,
@@ -331,7 +333,7 @@ pub async fn send_message_streaming(
 
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
-        let had_attachments = attachments.as_ref().map_or(false, |a| !a.is_empty());
+        let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
         if let Err(e) = client.send_chat_streaming_with_recovery(message, attachments) {
             let error_str = format!("{}", e);
             let is_image_error = had_attachments && (
@@ -524,7 +526,7 @@ pub async fn dismiss_pending_permission(
         });
 
         // Write directly via pipe/tcp handles to avoid deadlock with send_message_streaming
-        let _ = write_raw_json_silent(&state.pipe_stdin, &state.tcp_writer, &response);
+        write_raw_json_silent(&state.pipe_stdin, &state.tcp_writer, &response);
 
         if let Ok(mut guard) = state.pending_permission.lock() {
             *guard = None;

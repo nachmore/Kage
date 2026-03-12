@@ -78,12 +78,11 @@ pub fn extract_meeting_url(location: &str, body: &str) -> Option<String> {
                 let after_scheme = &candidate[8..]; // skip "https://"
                 if domain_patterns.iter().any(|p| {
                     after_scheme.starts_with(p) || after_scheme.contains(&format!("{}/", p))
-                        || (p.starts_with('.') && after_scheme.find('/').map_or(false, |slash| after_scheme[..slash].ends_with(p)))
-                }) {
-                    if candidate.len() > 15 {
+                        || (p.starts_with('.') && after_scheme.find('/').is_some_and(|slash| after_scheme[..slash].ends_with(p)))
+                })
+                    && candidate.len() > 15 {
                         return Some(candidate.to_string());
                     }
-                }
             }
         }
     }

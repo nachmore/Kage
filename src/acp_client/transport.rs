@@ -236,7 +236,7 @@ impl AcpTransport {
                 }
 
                 let has_method = val.get("method").and_then(|m| m.as_str()).is_some();
-                let has_id = val.get("id").map_or(false, |id| !id.is_null());
+                let has_id = val.get("id").is_some_and(|id| !id.is_null());
 
                 if has_id && !has_method {
                     if let Ok(response) = serde_json::from_value::<AcpResponse>(val) {

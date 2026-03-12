@@ -70,6 +70,7 @@ const MAX_DEPTH: usize = 10;
 pub fn get_common_folders() -> HashMap<String, String> {
     let mut folders = HashMap::new();
 
+    #[allow(clippy::type_complexity)]
     let candidates: &[(&str, fn() -> Option<PathBuf>)] = &[
         ("downloads", dirs::download_dir),
         ("documents", dirs::document_dir),

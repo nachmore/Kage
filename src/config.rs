@@ -47,6 +47,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ToolPermissionsConfig {
     #[serde(default)]
     pub trust_all: bool,
@@ -68,16 +69,9 @@ fn default_policy() -> String {
     "ask".to_string()
 }
 
-impl Default for ToolPermissionsConfig {
-    fn default() -> Self {
-        Self {
-            trust_all: false,
-            tools: vec![],
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct UpdateConfig {
     /// Automatically check for updates once per day
     #[serde(default)]
@@ -93,16 +87,6 @@ pub struct UpdateConfig {
     pub last_updated_version: Option<String>,
 }
 
-impl Default for UpdateConfig {
-    fn default() -> Self {
-        Self {
-            auto_check: false,
-            silent_update: false,
-            last_check_time: None,
-            last_updated_version: None,
-        }
-    }
-}
 
 impl Default for AssistantConfig {
     fn default() -> Self {

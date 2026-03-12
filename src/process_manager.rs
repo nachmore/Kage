@@ -14,6 +14,10 @@ pub struct ProcessManager {
     pid: Option<u32>,
 }
 
+impl Default for ProcessManager {
+    fn default() -> Self { Self::new() }
+}
+
 impl ProcessManager {
     /// Create a new process manager
     pub fn new() -> Self {

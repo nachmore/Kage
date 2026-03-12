@@ -68,6 +68,7 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         return None;
     }
 
+    #[allow(clippy::type_complexity)]
     let candidates: &[(&[&str], fn() -> Option<std::path::PathBuf>)] = &[
         (&["downloads", "download"], dirs::download_dir),
         (&["documents", "docs"], dirs::document_dir),
@@ -92,7 +93,7 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         let font_names = ["fonts", "font"];
-        if font_names.iter().any(|n| *n == lower.as_str()) || font_names.iter().any(|n| n.starts_with(lower.as_str())) {
+        if font_names.contains(&lower.as_str()) || font_names.iter().any(|n| n.starts_with(lower.as_str())) {
             if let Ok(windir) = std::env::var("WINDIR") {
                 return Some(format!("{}\\Fonts", windir));
             }
@@ -101,7 +102,7 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
 
     // Exact match first
     for (names, resolver) in candidates {
-        if names.iter().any(|n| *n == lower.as_str()) {
+        if names.contains(&lower.as_str()) {
             return resolver().map(|p| p.to_string_lossy().to_string());
         }
     }
@@ -158,7 +159,7 @@ fn match_system_command(input: &str) -> Option<(&'static str, &'static str, bool
     // Exact match first
     for &(aliases, id, label, confirm, plat) in commands {
         if plat != "all" && plat != platform { continue; }
-        if aliases.iter().any(|a| *a == lower.as_str()) {
+        if aliases.contains(&lower.as_str()) {
             return Some((id, label, confirm));
         }
     }
@@ -435,10 +436,9 @@ fn spawn_elevated(command_id: &str) -> std::io::Result<std::process::Child> {
     // ShellExecuteW returns an HINSTANCE; values > 32 mean success
     if result.0 as usize > 32 {
         // Return a dummy child — ShellExecuteW doesn't give us a process handle
-        std::process::Command::new("cmd").args(&["/C", "rem"]).spawn()
+        std::process::Command::new("cmd").args(["/C", "rem"]).spawn()
     } else {
-        Err(std::io::Error::new(std::io::ErrorKind::Other,
-            format!("ShellExecuteW failed with code {}", result.0 as usize)))
+        Err(std::io::Error::other(format!("ShellExecuteW failed with code {}", result.0 as usize)))
     }
 }
 
@@ -699,13 +699,11 @@ fn extract_attr(tag: &str, attr: &str) -> Option<String> {
     if let Some(pos) = lower.find(&needle) {
         let after = &tag[pos + needle.len()..];
         let after = after.trim_start();
-        if after.starts_with('"') {
-            let content = &after[1..];
+        if let Some(content) = after.strip_prefix('"') {
             if let Some(end) = content.find('"') {
                 return Some(content[..end].to_string());
             }
-        } else if after.starts_with('\'') {
-            let content = &after[1..];
+        } else if let Some(content) = after.strip_prefix('\'') {
             if let Some(end) = content.find('\'') {
                 return Some(content[..end].to_string());
             }

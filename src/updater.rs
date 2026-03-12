@@ -31,6 +31,12 @@ pub struct UpdaterState {
     pub available_version: std::sync::Mutex<Option<String>>,
 }
 
+impl Default for UpdaterState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UpdaterState {
     pub fn new() -> Self {
         Self {
@@ -108,7 +114,7 @@ pub fn download_installer() -> Result<String> {
     let bytes = response.bytes().context("Failed to read installer bytes")?;
 
     let download_dir = dirs::cache_dir()
-        .or_else(|| dirs::home_dir())
+        .or_else(dirs::home_dir)
         .context("Failed to get cache directory")?
         .join("kiro-assistant");
 
@@ -234,7 +240,7 @@ pub fn start_update_loop(
                 } else if first_check {
                     true
                 } else {
-                    cfg.updates.last_check_time.as_ref().map_or(true, |t| {
+                    cfg.updates.last_check_time.as_ref().is_none_or(|t| {
                         chrono::DateTime::parse_from_rfc3339(t)
                             .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
                             .unwrap_or(true)

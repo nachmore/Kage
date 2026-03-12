@@ -24,12 +24,10 @@ pub fn set_startup_enabled_impl(enabled: bool) {
             let _ = hkcu.set_value(STARTUP_APP_NAME, &exe.to_string_lossy().to_string());
             info!("Startup registry entry added");
         }
-    } else {
-        if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-            .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
-        {
-            let _ = hkcu.delete_value(STARTUP_APP_NAME);
-            info!("Startup registry entry removed");
-        }
+    } else if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .open_subkey_with_flags(STARTUP_KEY_PATH, winreg::enums::KEY_WRITE)
+    {
+        let _ = hkcu.delete_value(STARTUP_APP_NAME);
+        info!("Startup registry entry removed");
     }
 }

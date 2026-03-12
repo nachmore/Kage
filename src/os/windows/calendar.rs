@@ -217,6 +217,7 @@ try {{
 /// - Literal CR/LF (should be \r\n)
 /// - Literal tabs (should be \t)
 /// - Other control characters
+///
 /// This handles cases where PowerShell's string escaping is incomplete.
 fn sanitize_ps_json(input: &str) -> String {
     let mut result = String::with_capacity(input.len() + 256);

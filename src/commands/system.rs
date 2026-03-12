@@ -740,8 +740,8 @@ pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os:
 /// Fetch a website's favicon and return it as a base64 data URI.
 #[tauri::command]
 pub async fn fetch_favicon(url: String) -> Result<String, String> {
-    let domain = url::Url::parse(&url.replace(|c: char| c == '{' || c == '}', ""))
-        .or_else(|_| url::Url::parse(&format!("https://{}", url.replace(|c: char| c == '{' || c == '}', ""))))
+    let domain = url::Url::parse(&url.replace(['{', '}'], ""))
+        .or_else(|_| url::Url::parse(&format!("https://{}", url.replace(['{', '}'], ""))))
         .map_err(|e| format!("Invalid URL: {}", e))?
         .host_str()
         .unwrap_or("")

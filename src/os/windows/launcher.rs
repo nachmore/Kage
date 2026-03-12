@@ -48,15 +48,13 @@ fn scan_directory_for_shortcuts(dir: &PathBuf, apps: &mut HashMap<String, AppInf
                 if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
                     let icon_path = path.to_string_lossy().to_string();
                     let key = name.to_lowercase();
-                    if !apps.contains_key(&key) {
-                        apps.insert(key, AppInfo {
+                    apps.entry(key).or_insert_with(|| AppInfo {
                             name: name.to_string(),
                             path: path.clone(),
                             icon_path: Some(icon_path),
                             emoji_icon: None,
                             icon_data: None,
                         });
-                    }
                 }
             }
         }
@@ -79,15 +77,13 @@ fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
                                     if path.extension().and_then(|s| s.to_str()) == Some("exe") {
                                         let icon_path = path.to_string_lossy().to_string();
                                         let key = display_name.to_lowercase();
-                                        if !apps.contains_key(&key) {
-                                            apps.insert(key, AppInfo {
+                                        apps.entry(key).or_insert_with(|| AppInfo {
                                                 name: display_name.clone(),
                                                 path: path.clone(),
                                                 icon_path: Some(icon_path),
                                                 emoji_icon: None,
                                                 icon_data: None,
                                             });
-                                        }
                                         break;
                                     }
                                 }
@@ -209,9 +205,9 @@ fn get_uwp_icon_base64(package: &windows::ApplicationModel::Package) -> Option<S
 }
 
 /// Find the best scale variant of a UWP icon (prefer scale-200, then 150, 100, etc.)
-fn find_best_scale_icon(base_path: &PathBuf) -> Option<PathBuf> {
+fn find_best_scale_icon(base_path: &std::path::Path) -> Option<PathBuf> {
     // If the exact file exists, use it
-    if base_path.exists() { return Some(base_path.clone()); }
+    if base_path.exists() { return Some(base_path.to_path_buf()); }
 
     let stem = base_path.file_stem()?.to_str()?;
     let ext = base_path.extension()?.to_str()?;
@@ -307,15 +303,13 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
 
     for (name, uri, emoji) in pages {
         let key = name.to_lowercase();
-        if !apps.contains_key(&key) {
-            apps.insert(key, AppInfo {
+        apps.entry(key).or_insert_with(|| AppInfo {
                 name: name.to_string(),
                 path: PathBuf::from(uri),
                 icon_path: None,
                 emoji_icon: Some(emoji.to_string()),
                 icon_data: None,
             });
-        }
     }
 
     // Bluetooth SVG icon override
@@ -334,14 +328,14 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
         // UWP app (shell:AppsFolder\AUMID) or URI protocol (ms-settings:, calculator:, etc.)
         info!("Launching: {}", path_str);
         Command::new("cmd")
-            .args(&["/C", "start", "", path_str])
+            .args(["/C", "start", "", path_str])
             .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
             .spawn()
             .context("Failed to launch")?;
     } else {
         info!("Launching Windows application at {:?}", path);
         Command::new("cmd")
-            .args(&["/C", "start", "", path_str])
+            .args(["/C", "start", "", path_str])
             .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
             .spawn()
             .context("Failed to launch application")?;

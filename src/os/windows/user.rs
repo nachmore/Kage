@@ -162,7 +162,7 @@ fn get_avatar_from_appdata() -> Option<String> {
         if ext == "png" || ext == "jpg" || ext == "bmp" {
             if let Ok(meta) = std::fs::metadata(&path) {
                 let size = meta.len();
-                if best.as_ref().map_or(true, |(s, _)| size > *s) {
+                if best.as_ref().is_none_or(|(s, _)| size > *s) {
                     best = Some((size, path));
                 }
             }
