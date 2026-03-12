@@ -440,6 +440,9 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Maximum config file size (1 MB). Anything larger is likely corrupted.
+    const MAX_CONFIG_SIZE: u64 = 1024 * 1024;
+
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
         
@@ -447,6 +450,16 @@ impl Config {
             let config = Self::default();
             config.save()?;
             return Ok(config);
+        }
+
+        let metadata = fs::metadata(&config_path)
+            .context("Failed to read config file metadata")?;
+        if metadata.len() > Self::MAX_CONFIG_SIZE {
+            anyhow::bail!(
+                "Config file is too large ({} bytes, max {}). It may be corrupted.",
+                metadata.len(),
+                Self::MAX_CONFIG_SIZE
+            );
         }
         
         let content = fs::read_to_string(&config_path)
