@@ -446,7 +446,9 @@ pub async fn try_register_hotkey(
                 }
             }
 
-            // Re-register clipboard hotkey if it exists and is different
+            // Re-register clipboard hotkey if it exists and is different.
+            // Uses show_floating_at_mouse (not toggle) so the clipboard panel
+            // appears near the cursor — matching the initial registration in main.rs.
             if let Some(ref cb) = cb_hk {
                 if *cb != hotkey_str {
                     if let Some(floating) = app.get_webview_window("floating") {
@@ -455,7 +457,7 @@ pub async fn try_register_hotkey(
                             cb.as_str(),
                             move |_app, _shortcut, event| {
                                 if event.state != ShortcutState::Pressed { return; }
-                                crate::commands::window::toggle_floating_window(&floating);
+                                crate::commands::window::show_floating_at_mouse(&floating);
                                 let handle = app_handle.clone();
                                 std::thread::spawn(move || {
                                     std::thread::sleep(std::time::Duration::from_millis(150));
@@ -494,7 +496,7 @@ pub async fn try_register_hotkey(
                         cb.as_str(),
                         move |_app, _shortcut, event| {
                             if event.state != ShortcutState::Pressed { return; }
-                            crate::commands::window::toggle_floating_window(&floating);
+                            crate::commands::window::show_floating_at_mouse(&floating);
                             let handle = app_handle.clone();
                             std::thread::spawn(move || {
                                 std::thread::sleep(std::time::Duration::from_millis(150));
