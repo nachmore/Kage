@@ -577,6 +577,8 @@ body {
 .session-current-badge { margin-left: 4px; font-size: 11px; color: var(--kiro-accent); }
 .session-default-label { color: var(--kiro-accent); font-weight: 500; }
 .session-list-separator { height: 1px; background: var(--kiro-accent); margin: 4px 12px; opacity: 0.4; }
+.session-new-dot { margin-right: 5px; font-size: 9px; color: var(--kiro-accent); vertical-align: middle; }
+.session-item.session-new .session-item-title { font-weight: 600; }
 
 
 /* Permission modal scoped to chat-main (not full window) */

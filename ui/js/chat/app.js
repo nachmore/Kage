@@ -61,6 +61,7 @@ export class ChatApp {
         this.sessions = [];
         this._sessionsFullyLoaded = false;
         this._loadingMore = false;
+        this._seenSessionIds = new Set();
         this.activeSessionId = null;
         this.floatingSessionId = null;
         this.currentAcpSessionId = null;
@@ -375,6 +376,9 @@ export class ChatApp {
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => this.handleSessionReset(event));
 
+        // Refresh session list when the backend detects directory changes
+        this.listen('sessions_changed', () => this.loadSessions(true));
+
         // Real-time context usage from ACP metadata notifications
         this.listen('context_metadata', (event) => {
             const pct = event.payload?.params?.contextUsagePercentage;
@@ -540,6 +544,11 @@ export class ChatApp {
                 this.sessions = sessions;
                 this._sessionsFullyLoaded = loadAll || sessions.length < 50;
             }
+            // On initial load, mark all sessions as seen.
+            // On subsequent refreshes, new IDs stay unseen until clicked.
+            if (this._seenSessionIds.size === 0) {
+                for (const s of this.sessions) this._seenSessionIds.add(s.session_id);
+            }
             this.renderSessionList();
         } catch (error) {
             console.error('Failed to load sessions:', error);
@@ -638,6 +647,7 @@ export class ChatApp {
                 const isFloating = session.session_id === this.floatingSessionId;
                 const isCurrent = session.session_id === this.currentAcpSessionId;
                 const isActive = session.session_id === this.activeSessionId;
+                const isNew = !this._seenSessionIds.has(session.session_id);
                 const title = session.title || 'New Chat';
                 const date = new Date(session.updated_at || session.created_at);
                 const dateStr = this.formatDate(date);
@@ -646,10 +656,12 @@ export class ChatApp {
                 if (item) {
                     // Reuse existing DOM node — update only what changed
                     item.classList.toggle('active', isActive);
+                    item.classList.toggle('session-new', isNew);
 
                     const titleEl = item.querySelector('.session-item-title');
+                    const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
                     const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
-                    const newTitleHtml = `${escapeHtml(title)}${badges}`;
+                    const newTitleHtml = `${newDot}${escapeHtml(title)}${badges}`;
                     if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
 
                     const dateEl = item.querySelector('.session-item-date');
@@ -658,7 +670,7 @@ export class ChatApp {
                     if (dateEl && dateEl.innerHTML !== newDateHtml) dateEl.innerHTML = newDateHtml;
                 } else {
                     // Create new item
-                    item = this._createSessionItem(session, { isFloating, isCurrent, isActive, title, dateStr });
+                    item = this._createSessionItem(session, { isFloating, isCurrent, isActive, isNew, title, dateStr });
                     existingById.set(key, item);
                 }
 
@@ -680,17 +692,18 @@ export class ChatApp {
         }
 
     /** Create a new session-item DOM element with event listeners. */
-    _createSessionItem(session, { isFloating, isCurrent, isActive, title, dateStr }) {
+    _createSessionItem(session, { isFloating, isCurrent, isActive, isNew, title, dateStr }) {
             const item = document.createElement('div');
-            item.className = 'session-item' + (isActive ? ' active' : '');
+            item.className = 'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
             item.dataset.sessionId = session.session_id;
 
+            const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
             const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
             const dateSuffix = (isCurrent || isFloating) ? ' · <span class="session-default-label">default session</span>' : '';
 
             item.innerHTML = `
                 <div class="session-item-content">
-                    <div class="session-item-title">${escapeHtml(title)}${badges}</div>
+                    <div class="session-item-title">${newDot}${escapeHtml(title)}${badges}</div>
                     <div class="session-item-date">${dateStr}${dateSuffix}</div>
                 </div>
                 <div class="session-item-actions">
@@ -741,6 +754,9 @@ export class ChatApp {
 
     async selectSession(sessionId) {
             if (sessionId === this.activeSessionId) return;
+
+            // Mark as seen (removes the "new" indicator)
+            this._seenSessionIds.add(sessionId);
 
             this.activeSessionId = sessionId;
             this.renderSessionList();
@@ -1017,6 +1033,7 @@ export class ChatApp {
         try {
             const newId = await this.invoke('switch_acp_session', { sessionId: null });
             this.activeSessionId = newId;
+            this._seenSessionIds.add(newId);
             // Add the new session to the list so it appears immediately
             if (!this.sessions.find(s => s.session_id === newId)) {
                 this.sessions.push({

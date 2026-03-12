@@ -209,10 +209,106 @@ fn parse_jsonl(jsonl_path: &std::path::Path) -> Vec<SessionMessage> {
     messages
 }
 
-/// Cached session list with timestamp
+/// Cached session list, invalidated by the file watcher or explicit mutations.
 pub struct SessionCache {
     pub sessions: Vec<SessionSummary>,
-    pub cached_at: std::time::Instant,
+}
+
+/// Start a background file watcher on the sessions directory.
+/// When files change, invalidates the session cache and emits a Tauri event
+/// so the frontend can refresh the session list.
+pub fn start_session_watcher(
+    session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
+    app_handle: tauri::AppHandle,
+) {
+    use notify::{Watcher, RecursiveMode, Event, EventKind};
+    use tauri::Emitter;
+
+    let sessions_dir = match dirs::home_dir() {
+        Some(home) => home.join(".kiro").join("sessions").join("cli"),
+        None => {
+            log::warn!("Cannot start session watcher: no home directory");
+            return;
+        }
+    };
+
+    if !sessions_dir.exists() {
+        // Create the directory so the watcher has something to watch
+        let _ = fs::create_dir_all(&sessions_dir);
+    }
+
+    std::thread::spawn(move || {
+        // Debounce: ignore events within 2s of the last invalidation
+        let last_invalidation = std::sync::Mutex::new(std::time::Instant::now()
+            - std::time::Duration::from_secs(10));
+
+        let cache = session_cache;
+        let app = app_handle;
+
+        let mut watcher = match notify::recommended_watcher(
+            move |res: Result<Event, notify::Error>| {
+                let event = match res {
+                    Ok(e) => e,
+                    Err(e) => {
+                        log::warn!("Session watcher error: {}", e);
+                        return;
+                    }
+                };
+
+                // Only care about creates, removes, and modifications to .json/.jsonl files
+                let dominated = matches!(
+                    event.kind,
+                    EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
+                );
+                if !dominated {
+                    return;
+                }
+
+                let dominated_ext = event.paths.iter().any(|p| {
+                    p.extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| e == "json" || e == "jsonl")
+                        .unwrap_or(false)
+                });
+                if !dominated_ext {
+                    return;
+                }
+
+                // Debounce
+                {
+                    let mut last = last_invalidation.lock().unwrap();
+                    if last.elapsed() < std::time::Duration::from_secs(2) {
+                        return;
+                    }
+                    *last = std::time::Instant::now();
+                }
+
+                log::info!("Session directory changed, invalidating cache");
+                if let Ok(mut c) = cache.lock() {
+                    *c = None;
+                }
+                let _ = app.emit("sessions_changed", ());
+            },
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                log::error!("Failed to create session watcher: {}", e);
+                return;
+            }
+        };
+
+        if let Err(e) = watcher.watch(&sessions_dir, RecursiveMode::NonRecursive) {
+            log::error!("Failed to watch sessions directory {:?}: {}", sessions_dir, e);
+            return;
+        }
+
+        log::info!("Session watcher started on {:?}", sessions_dir);
+
+        // Keep the thread alive — the watcher is dropped when this thread exits
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+        }
+    });
 }
 
 #[tauri::command]
@@ -223,18 +319,15 @@ pub async fn list_sessions(
     state: State<'_, AppState>,
 ) -> Result<Vec<SessionSummary>, String> {
     let force = force.unwrap_or(false);
-    let cache_ttl = std::time::Duration::from_secs(5);
 
-    // Check cache first
+    // Serve from cache unless invalidated by the file watcher or a force refresh
     if !force {
         let cache = state.session_cache.lock().unwrap();
         if let Some(ref cached) = *cache {
-            if cached.cached_at.elapsed() < cache_ttl {
-                let sessions = paginate(&cached.sessions, limit, offset);
-                info!("Found {} sessions (returning {} from cache, offset {})",
-                    cached.sessions.len(), sessions.len(), offset.unwrap_or(0));
-                return Ok(sessions);
-            }
+            let sessions = paginate(&cached.sessions, limit, offset);
+            info!("Found {} sessions (returning {} from cache, offset {})",
+                cached.sessions.len(), sessions.len(), offset.unwrap_or(0));
+            return Ok(sessions);
         }
     }
 
@@ -247,7 +340,6 @@ pub async fn list_sessions(
         let mut cache = state.session_cache.lock().unwrap();
         *cache = Some(SessionCache {
             sessions: all_sessions.clone(),
-            cached_at: std::time::Instant::now(),
         });
     }
 

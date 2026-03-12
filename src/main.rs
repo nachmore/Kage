@@ -489,6 +489,15 @@ fn main() {
                 });
             }
 
+            // Watch the sessions directory for external changes (e.g., kiro-cli creating sessions)
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                commands::sessions::start_session_watcher(
+                    state.session_cache.clone(),
+                    app.handle().clone(),
+                );
+            }
+
             // Background app registry scan (deferred from startup for speed)
             // and periodic refresh every hour so the list stays current.
             {
