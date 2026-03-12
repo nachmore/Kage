@@ -6,8 +6,8 @@
 //! personalized context about the user.
 //!
 //! Triggers:
-//! - Every N user messages (configurable, default 5)
-//! - On application quit
+//! - Every 5 user messages, but no more than once per hour
+//! - On application quit (bypasses the hourly cooldown)
 //!
 //! The extraction uses the ACP connection itself: we send a special prompt
 //! asking the model to analyze recent conversations and produce a structured
@@ -19,22 +19,45 @@ use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::fs;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// Number of user messages between auto-steering updates
 const UPDATE_INTERVAL_MESSAGES: u32 = 5;
 
+/// Minimum time between periodic updates (1 hour). On-exit updates bypass this.
+const MIN_UPDATE_INTERVAL_SECS: u64 = 3600;
+
 /// Global counter for user messages since last steering update
 static MESSAGE_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-/// Increment the message counter and return true if it's time to update
+/// Timestamp of the last periodic steering generation (initialized to epoch so
+/// the first eligible trigger is allowed through).
+static LAST_GENERATION: std::sync::LazyLock<Mutex<Instant>> =
+    std::sync::LazyLock::new(|| Mutex::new(Instant::now() - std::time::Duration::from_secs(MIN_UPDATE_INTERVAL_SECS + 1)));
+
+/// Increment the message counter and return true if it's time to update.
+/// Requires both the message count threshold AND the cooldown to have elapsed.
 pub fn tick_message_counter() -> bool {
     let count = MESSAGE_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     if count >= UPDATE_INTERVAL_MESSAGES {
         MESSAGE_COUNTER.store(0, Ordering::Relaxed);
-        true
-    } else {
-        false
+        // Check the hourly cooldown
+        if let Ok(last) = LAST_GENERATION.lock() {
+            if last.elapsed().as_secs() >= MIN_UPDATE_INTERVAL_SECS {
+                return true;
+            }
+            info!("Auto-steering: message threshold reached but cooldown not elapsed ({}s remaining)",
+                MIN_UPDATE_INTERVAL_SECS.saturating_sub(last.elapsed().as_secs()));
+        }
+    }
+    false
+}
+
+/// Record that a periodic generation just completed.
+fn mark_generation() {
+    if let Ok(mut last) = LAST_GENERATION.lock() {
+        *last = Instant::now();
     }
 }
 
@@ -284,7 +307,8 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 }
 
 /// Run auto-steering generation in the background if enabled.
-/// Called from the message completion handler.
+/// Called from the message completion handler. Triggers every 5 messages
+/// but no more than once per hour. On-exit generation bypasses the cooldown.
 pub fn maybe_generate_steering(
     client: Arc<tokio::sync::Mutex<AcpClient>>,
     config: Arc<std::sync::Mutex<Config>>,
@@ -307,9 +331,10 @@ pub fn maybe_generate_steering(
             return;
         }
 
-        info!("Auto-steering update triggered (every {} messages)", UPDATE_INTERVAL_MESSAGES);
-        if let Err(e) = generate_steering_document(&client) {
-            error!("Auto-steering generation failed: {}", e);
+        info!("Auto-steering update triggered (every {} messages, ≥{}s cooldown)", UPDATE_INTERVAL_MESSAGES, MIN_UPDATE_INTERVAL_SECS);
+        match generate_steering_document(&client) {
+            Ok(()) => mark_generation(),
+            Err(e) => error!("Auto-steering generation failed: {}", e),
         }
     });
 }
