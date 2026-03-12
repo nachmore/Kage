@@ -726,6 +726,7 @@ body {
     border-radius: 8px;
     overflow: hidden;
     font-size: 12px;
+    flex-shrink: 0;
 }
 
 .steering-header {
