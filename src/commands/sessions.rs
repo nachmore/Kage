@@ -109,6 +109,10 @@ fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
                                 if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX) {
                                     continue;
                                 }
+                                // Skip timestamp injections — not meaningful titles
+                                if trimmed.starts_with("[Current time:") {
+                                    continue;
+                                }
                                 if !trimmed.is_empty() {
                                     let title: String = trimmed.chars().take(60).collect();
                                     if title.len() < trimmed.len() {

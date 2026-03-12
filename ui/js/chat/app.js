@@ -887,6 +887,10 @@ export class ChatApp {
                             textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
                             continue;
                         }
+                        // Strip timestamp injections — these are metadata, not user text
+                        if (item.data.trim().startsWith('[Current time:')) {
+                            continue;
+                        }
                         textParts.push(item.data);
                     } else if (item.kind === 'image') {
                         const dataUrl = sessionImageToDataUrl(item);
