@@ -3,9 +3,20 @@
 
 use anyhow::{Context, Result};
 use log::{info, warn};
+use std::sync::Mutex;
+use std::time::Instant;
 
 use super::AcpClient;
 use super::types::{AcpRequest, format_acp_error};
+
+/// Track when we last injected a timestamp into a user message.
+/// Refreshed every 15 minutes to keep the agent's sense of time current.
+static LAST_TIMESTAMP_INJECTION: std::sync::LazyLock<Mutex<Instant>> =
+    std::sync::LazyLock::new(|| Mutex::new(Instant::now() - std::time::Duration::from_secs(3600)));
+static LAST_TIMESTAMP_DATE: std::sync::LazyLock<Mutex<String>> =
+    std::sync::LazyLock::new(|| Mutex::new(String::new()));
+
+const TIMESTAMP_REFRESH_SECS: u64 = 15 * 60; // 15 minutes
 
 impl AcpClient {
     // --- Protocol handshake ---
@@ -190,6 +201,29 @@ impl AcpClient {
         };
 
         let mut prompt: Vec<serde_json::Value> = Vec::new();
+
+        // Periodically inject current timestamp so the agent's sense of time stays fresh
+        {
+            let mut last = LAST_TIMESTAMP_INJECTION.lock().unwrap();
+            if last.elapsed().as_secs() >= TIMESTAMP_REFRESH_SECS {
+                let now = chrono::Local::now();
+                let today = now.format("%Y-%m-%d").to_string();
+                let time = now.format("%H:%M").to_string();
+
+                let mut last_date = LAST_TIMESTAMP_DATE.lock().unwrap();
+                let ts = if *last_date == today {
+                    // Same day — just the time
+                    format!("[Current time: {}]", time)
+                } else {
+                    // Date changed — include full date
+                    *last_date = today.clone();
+                    format!("[Current time: {} {}]", today, time)
+                };
+                prompt.push(serde_json::json!({ "type": "text", "text": ts }));
+                *last = Instant::now();
+            }
+        }
+
         if !content.is_empty() {
             prompt.push(serde_json::json!({ "type": "text", "text": content }));
         }
