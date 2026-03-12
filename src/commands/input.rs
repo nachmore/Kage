@@ -89,13 +89,12 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         (&["data"], dirs::data_dir),
     ];
 
-    // On Windows, override "fonts"/"font" to use the system Fonts directory
-    #[cfg(target_os = "windows")]
+    // Override "fonts"/"font" to use the system fonts directory
     {
         let font_names = ["fonts", "font"];
         if font_names.contains(&lower.as_str()) || font_names.iter().any(|n| n.starts_with(lower.as_str())) {
-            if let Ok(windir) = std::env::var("WINDIR") {
-                return Some(format!("{}\\Fonts", windir));
+            if let Some(font_dir) = crate::os::fonts_dir() {
+                return Some(font_dir.to_string_lossy().to_string());
             }
         }
     }
@@ -383,10 +382,12 @@ pub async fn execute_system_command(
     }
 
     let result = if elevated {
-        spawn_elevated(&command_id)
+        let (program, args) = crate::os::shell::system_command(command_id.as_str());
+        crate::os::shell::spawn_elevated(program, &args)
     } else {
-        let mut cmd = std::process::Command::new(get_system_command_program(&command_id));
-        cmd.args(get_system_command_args(&command_id));
+        let (program, args) = crate::os::shell::system_command(command_id.as_str());
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
@@ -405,164 +406,6 @@ pub async fn execute_system_command(
             error!("Failed to execute system command '{}': {}", command_id, e);
             Err(format!("Failed to execute: {}", e))
         }
-    }
-}
-
-/// Spawn a process with elevated (admin) privileges.
-#[cfg(target_os = "windows")]
-fn spawn_elevated(command_id: &str) -> std::io::Result<std::process::Child> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::core::PCWSTR;
-
-    let program = get_system_command_program(command_id);
-    let args = get_system_command_args(command_id).join(" ");
-
-    let verb: Vec<u16> = std::ffi::OsStr::new("runas").encode_wide().chain(std::iter::once(0)).collect();
-    let file: Vec<u16> = std::ffi::OsStr::new(program).encode_wide().chain(std::iter::once(0)).collect();
-    let params: Vec<u16> = std::ffi::OsStr::new(&args).encode_wide().chain(std::iter::once(0)).collect();
-
-    let result = unsafe {
-        ShellExecuteW(
-            None,
-            PCWSTR(verb.as_ptr()),
-            PCWSTR(file.as_ptr()),
-            PCWSTR(if args.is_empty() { std::ptr::null() } else { params.as_ptr() }),
-            PCWSTR(std::ptr::null()),
-            windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
-        )
-    };
-
-    // ShellExecuteW returns an HINSTANCE; values > 32 mean success
-    if result.0 as usize > 32 {
-        // Return a dummy child — ShellExecuteW doesn't give us a process handle
-        std::process::Command::new("cmd").args(["/C", "rem"]).spawn()
-    } else {
-        Err(std::io::Error::other(format!("ShellExecuteW failed with code {}", result.0 as usize)))
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn spawn_elevated(command_id: &str) -> std::io::Result<std::process::Child> {
-    // On Unix, use pkexec for graphical sudo
-    let program = get_system_command_program(command_id);
-    let mut args = vec![program];
-    args.extend(get_system_command_args(command_id));
-    std::process::Command::new("pkexec")
-        .args(&args)
-        .spawn()
-}
-
-#[cfg(target_os = "windows")]
-fn get_system_command_program(cmd: &str) -> &'static str {
-    match cmd {
-        "lock" => "rundll32.exe",
-        "sleep" => "rundll32.exe",
-        "screenshot" => "snippingtool",
-        "mute" | "unmute" => "powershell",
-        "emoji" => "cmd",
-        "trash" => "explorer.exe",
-        "taskmanager" => "taskmgr.exe",
-        "terminal" => "wt.exe",
-        "filemanager" => "explorer.exe",
-        "restart" => "shutdown",
-        "shutdown" => "shutdown",
-        "signout" => "shutdown",
-        _ => "cmd",
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn get_system_command_args(cmd: &str) -> Vec<&'static str> {
-    match cmd {
-        "lock" => vec!["user32.dll,LockWorkStation"],
-        "sleep" => vec!["powrprof.dll,SetSuspendState", "0,1,0"],
-        "screenshot" => vec![],
-        "mute" => vec!["-NoProfile", "-Command",
-            "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
-        "unmute" => vec!["-NoProfile", "-Command",
-            "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"],
-        "emoji" => vec!["/C", "start", "ms-inputapp:///emojiandmore"],
-        "trash" => vec!["shell:RecycleBinFolder"],
-        "taskmanager" => vec![],
-        "terminal" => vec![],
-        "filemanager" => vec![],
-        "restart" => vec!["/r", "/t", "0"],
-        "shutdown" => vec!["/s", "/t", "0"],
-        "signout" => vec!["/l"],
-        _ => vec![],
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn get_system_command_program(cmd: &str) -> &'static str {
-    match cmd {
-        "emoji" => "osascript",
-        "taskmanager" => "open",
-        "terminal" => "open",
-        "filemanager" => "open",
-        "trash" => "open",
-        _ => "osascript",
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn get_system_command_args(cmd: &str) -> Vec<&'static str> {
-    match cmd {
-        "lock" => vec!["-e", "tell application \"System Events\" to keystroke \"q\" using {command down, control down}"],
-        "sleep" => vec!["-e", "tell application \"System Events\" to sleep"],
-        "screenshot" => vec!["-e", "do shell script \"screencapture -ic\""],
-        "mute" => vec!["-e", "set volume with output muted"],
-        "unmute" => vec!["-e", "set volume without output muted"],
-        "emoji" => vec!["-e", "tell application \"System Events\" to keystroke \" \" using {command down, control down}"],
-        "trash" => vec!["-a", "Finder", "/Users"],  // Opens Finder, user navigates to trash
-        "taskmanager" => vec!["-a", "Activity Monitor"],
-        "terminal" => vec!["-a", "Terminal"],
-        "filemanager" => vec!["-a", "Finder"],
-        "restart" => vec!["-e", "tell application \"System Events\" to restart"],
-        "shutdown" => vec!["-e", "tell application \"System Events\" to shut down"],
-        "signout" => vec!["-e", "tell application \"System Events\" to log out"],
-        _ => vec![],
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn get_system_command_program(cmd: &str) -> &'static str {
-    match cmd {
-        "lock" => "loginctl",
-        "sleep" => "systemctl",
-        "screenshot" => "gnome-screenshot",
-        "mute" => "amixer",
-        "unmute" => "amixer",
-        "emoji" => "ibus",
-        "taskmanager" => "gnome-system-monitor",
-        "terminal" => "x-terminal-emulator",
-        "filemanager" => "xdg-open",
-        "trash" => "xdg-open",
-        "restart" => "systemctl",
-        "shutdown" => "systemctl",
-        "signout" => "loginctl",
-        _ => "true",
-    }
-}
-
-#[cfg(target_os = "linux")]
-fn get_system_command_args(cmd: &str) -> Vec<&'static str> {
-    match cmd {
-        "lock" => vec!["lock-session"],
-        "sleep" => vec!["suspend"],
-        "screenshot" => vec!["-c"],  // to clipboard
-        "mute" => vec!["set", "Master", "mute"],
-        "unmute" => vec!["set", "Master", "unmute"],
-        "emoji" => vec!["emoji"],
-        "taskmanager" => vec![],
-        "terminal" => vec![],
-        "filemanager" => vec!["."],
-        "trash" => vec!["trash:///"],
-        "restart" => vec!["reboot"],
-        "shutdown" => vec!["poweroff"],
-        "signout" => vec!["terminate-user", ""],
-        _ => vec![],
     }
 }
 

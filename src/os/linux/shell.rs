@@ -41,3 +41,32 @@ pub fn open_in_editor_impl(path: &str) -> Result<()> {
         .context("Failed to open in editor")?;
     Ok(())
 }
+
+
+/// Get the program and arguments for a well-known system command on Linux.
+pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
+    match cmd {
+        "lock" => ("loginctl", vec!["lock-session"]),
+        "sleep" => ("systemctl", vec!["suspend"]),
+        "screenshot" => ("gnome-screenshot", vec!["-c"]),
+        "mute" => ("amixer", vec!["set", "Master", "mute"]),
+        "unmute" => ("amixer", vec!["set", "Master", "unmute"]),
+        "emoji" => ("ibus", vec!["emoji"]),
+        "trash" => ("xdg-open", vec!["trash:///"]),
+        "taskmanager" | "taskmgr" => ("gnome-system-monitor", vec![]),
+        "terminal" => ("x-terminal-emulator", vec![]),
+        "filemanager" => ("xdg-open", vec!["."]),
+        "settings" => ("xdg-open", vec!["gnome-control-center"]),
+        "display" => ("xdg-open", vec!["gnome-control-center", "display"]),
+        "sound" => ("xdg-open", vec!["gnome-control-center", "sound"]),
+        "wifi" | "network" => ("xdg-open", vec!["gnome-control-center", "network"]),
+        "bluetooth" => ("xdg-open", vec!["gnome-control-center", "bluetooth"]),
+        "apps" => ("xdg-open", vec!["/usr/share/applications"]),
+        "updates" => ("xdg-open", vec!["gnome-control-center", "info-overview"]),
+        "devicemanager" | "devmgr" => ("lshw", vec!["-short"]),
+        "restart" => ("systemctl", vec!["reboot"]),
+        "shutdown" => ("systemctl", vec!["poweroff"]),
+        "signout" => ("loginctl", vec!["terminate-user", ""]),
+        _ => ("echo", vec!["Unknown command"]),
+    }
+}

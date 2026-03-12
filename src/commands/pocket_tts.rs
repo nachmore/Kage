@@ -14,16 +14,10 @@ pub struct PocketTtsStatus {
     pub port: u16,
 }
 
-/// Platform-specific: hide console window on Windows
-#[cfg(target_os = "windows")]
+/// Platform-specific: hide console window on Windows.
+/// Delegates to `os::configure_no_window`.
 pub fn configure_no_window(cmd: &mut Command) -> &mut Command {
-    use std::os::windows::process::CommandExt;
-    cmd.creation_flags(0x08000000) // CREATE_NO_WINDOW
-}
-
-#[cfg(not(target_os = "windows"))]
-pub fn configure_no_window(cmd: &mut Command) -> &mut Command {
-    cmd
+    crate::os::configure_no_window(cmd)
 }
 
 /// Find a working Python 3 executable

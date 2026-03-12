@@ -175,35 +175,7 @@ pub fn run_installer_and_exit(installer_path: &str, session_id: Option<&str>) ->
         }
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::process::Command;
-        use std::os::windows::process::CommandExt;
-        Command::new(installer_path)
-            .arg("/S")
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .spawn()
-            .context("Failed to run installer")?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-        Command::new("open")
-            .arg(installer_path)
-            .spawn()
-            .context("Failed to open installer")?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use std::process::Command;
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(installer_path, std::fs::Permissions::from_mode(0o755));
-        Command::new(installer_path)
-            .spawn()
-            .context("Failed to run installer")?;
-    }
+    crate::os::run_installer(installer_path)?;
 
     // Give the installer a moment to start, then exit
     std::thread::sleep(std::time::Duration::from_millis(500));

@@ -671,12 +671,7 @@ pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, String> {
         ("desktop", &["—"], dirs::desktop_dir()),
         ("documents", &["docs"], dirs::document_dir()),
         ("downloads", &["download"], dirs::download_dir()),
-        ("fonts", &["font"], {
-            #[cfg(target_os = "windows")]
-            { std::env::var("WINDIR").ok().map(|w| std::path::PathBuf::from(w).join("Fonts")) }
-            #[cfg(not(target_os = "windows"))]
-            { dirs::font_dir() }
-        }),
+        ("fonts", &["font"], crate::os::fonts_dir()),
         ("home", &["user"], dirs::home_dir()),
         ("music", &["audio"], dirs::audio_dir()),
         ("pictures", &["photos"], dirs::picture_dir()),

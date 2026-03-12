@@ -103,15 +103,7 @@ pub fn get_common_folders() -> HashMap<String, String> {
     }
 
     // System fonts directory
-    #[cfg(target_os = "windows")]
-    if let Ok(windir) = std::env::var("WINDIR") {
-        let fonts = PathBuf::from(&windir).join("Fonts");
-        if fonts.is_dir() {
-            folders.insert("fonts".to_string(), fonts.to_string_lossy().to_string());
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    if let Some(font_dir) = dirs::font_dir() {
+    if let Some(font_dir) = crate::os::fonts_dir() {
         if font_dir.is_dir() {
             folders.insert("fonts".to_string(), font_dir.to_string_lossy().to_string());
         }
