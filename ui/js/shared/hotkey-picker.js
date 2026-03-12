@@ -99,6 +99,12 @@ export class HotkeyPicker {
 
     friendlyError(err) {
         const msg = String(err);
+        if (msg.includes('already used as the main hotkey')) {
+            return 'This shortcut is already used as the main hotkey';
+        }
+        if (msg.includes('already used as the clipboard hotkey')) {
+            return 'This shortcut is already used as the clipboard hotkey';
+        }
         if (msg.includes('already registered') || msg.includes('HotKey')) {
             return 'This shortcut is already in use by another application';
         }

@@ -407,6 +407,26 @@ pub async fn try_register_hotkey(
     };
     info!("Trying to register hotkey: {}", hotkey_str);
 
+    // Check for conflicts with the other hotkey (main vs clipboard)
+    {
+        let state: tauri::State<'_, AppState> = app.state();
+        let config = state.config.lock().unwrap();
+        let main_hk = config.get_hotkey_string();
+        let cb_hk = config.get_clipboard_hotkey_string();
+        // If the new hotkey matches the existing main hotkey, it might be the
+        // clipboard picker trying to use the same combo (or vice versa).
+        // We can't tell which picker is calling us, so reject if it matches either
+        // existing hotkey — the picker that owns it will re-register on save.
+        if hotkey_str == main_hk {
+            return Err("This shortcut is already used as the main hotkey".to_string());
+        }
+        if let Some(ref cb) = cb_hk {
+            if hotkey_str == *cb {
+                return Err("This shortcut is already used as the clipboard hotkey".to_string());
+            }
+        }
+    }
+
     // Unregister all existing shortcuts first
     let _ = app.global_shortcut().unregister_all();
 
