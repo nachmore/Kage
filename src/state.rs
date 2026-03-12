@@ -9,9 +9,7 @@ pub struct AppState {
     pub acp_client: Arc<Mutex<AcpClient>>,
     pub config: Arc<std::sync::Mutex<Config>>,
     pub app_launcher: Arc<Mutex<AppLauncher>>,
-    #[allow(dead_code)]
     pub pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    #[allow(dead_code)]
     pub tcp_writer: Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     pub dev_mode: bool,
     /// The session ID used by the floating window (persists across session switches)
@@ -22,11 +20,7 @@ pub struct AppState {
     /// Slash commands received from the ACP server via _kiro.dev/commands/available
     pub slash_commands: Arc<std::sync::Mutex<Vec<SlashCommand>>>,
     /// Available models from the ACP session/new response
-    #[allow(dead_code)]
     pub available_models: Arc<std::sync::Mutex<Vec<AcpModel>>>,
-    /// Current model ID
-    #[allow(dead_code)]
-    pub current_model_id: Arc<std::sync::Mutex<Option<String>>>,
     /// Text that was selected in the previously active window when the hotkey was pressed
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
     /// Which window sent the last notification ('floating' or 'main')

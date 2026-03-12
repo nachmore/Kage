@@ -239,7 +239,6 @@ fn main() {
             pending_permission: pending_permission_arc,
             slash_commands: slash_commands_arc,
             available_models: available_models_arc,
-            current_model_id: Arc::new(std::sync::Mutex::new(None)),
             last_selection: Arc::new(std::sync::Mutex::new(None)),
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
             updater: Arc::new(updater::UpdaterState::new()),
