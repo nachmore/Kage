@@ -17,6 +17,57 @@ import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterCl
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 
+/** Map MCP/agent tool names to user-friendly descriptions. */
+const _TOOL_FRIENDLY_NAMES = {
+    // Computer control — perception
+    list_windows: 'Checking visible windows',
+    list_all_windows: 'Enumerating all open windows',
+    get_ui_tree: 'Reading application UI',
+    find_elements: 'Searching for UI elements',
+    get_focused_element: 'Checking focused element',
+    get_element_text: 'Reading text content',
+    get_element_children: 'Exploring UI details',
+    // Computer control — actions
+    click_element: 'Clicking element',
+    set_value: 'Entering text',
+    toggle_element: 'Toggling control',
+    select_element: 'Selecting item',
+    expand_element: 'Expanding menu',
+    collapse_element: 'Collapsing menu',
+    scroll_element: 'Scrolling',
+    launch_app: 'Launching application',
+    launch_and_get_tree: 'Launching application',
+    click_and_get_tree: 'Clicking and reading UI',
+    click_and_read_result: 'Clicking and reading result',
+    type_and_get_tree: 'Typing text',
+    // Computer control — fallback
+    screenshot: 'Taking screenshot',
+    click: 'Clicking',
+    type_text: 'Typing',
+    key_press: 'Pressing keys',
+    drag: 'Dragging',
+    scroll: 'Scrolling',
+    move_mouse: 'Moving cursor',
+    wait: 'Waiting',
+    // Agent tools
+    read: 'Reading file',
+    write: 'Writing file',
+    execute: 'Running command',
+    search: 'Searching',
+};
+
+function _toolFriendlyName(title) {
+    if (!title) return 'Working on it';
+    // Check exact match first
+    if (_TOOL_FRIENDLY_NAMES[title]) return _TOOL_FRIENDLY_NAMES[title];
+    // Check if the title contains a known tool name (e.g. "Running: @computer-control list_all_windows")
+    for (const [key, friendly] of Object.entries(_TOOL_FRIENDLY_NAMES)) {
+        if (title.includes(key)) return friendly;
+    }
+    // Fall back to the raw title, cleaned up
+    return title.replace(/^Running:\s*@\S+\s*/, '').replace(/_/g, ' ') || 'Working on it';
+}
+
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
         this.invoke = invoke;
@@ -1354,6 +1405,10 @@ export class FloatingApp {
         
         renderMarkdown(this.currentResponse, this.elements.responseText, true);
 
+        // Remove tool-running spinner now that text is flowing
+        const toolSpinner = this.elements.responseText.querySelector('.tool-running-indicator');
+        if (toolSpinner) toolSpinner.remove();
+
         // Feed streaming text to TTS for sentence-chunked playback
         if (this.speech) this.speech.feedStreamingText(this.currentResponse);
 
@@ -1902,6 +1957,21 @@ export class FloatingApp {
             // full streamed text before a permission dialog or tool indicator appears
             if (this.currentResponse && this.currentResponse.trim().length > 0) {
                 renderMarkdown(this.currentResponse, this.elements.responseText);
+            }
+
+            // Show a spinner while a tool is executing
+            if (update?.title) {
+                const friendly = _toolFriendlyName(update.title);
+                // Append spinner after any existing rendered text
+                let spinner = this.elements.responseText.querySelector('.tool-running-indicator');
+                if (!spinner) {
+                    spinner = document.createElement('div');
+                    spinner.className = 'folder-plan-spinner-row tool-running-indicator';
+                    this.elements.responseText.appendChild(spinner);
+                }
+                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
+                this.elements.contentArea.classList.add('visible');
+                this.windowManager.resizeWindow();
             }
 
             // Detect computer-control tool usage and keep window visible

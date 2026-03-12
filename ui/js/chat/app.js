@@ -16,6 +16,24 @@ import { setupRtlDetection } from '../shared/rtl.js';
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
 
+/** Map MCP/agent tool names to user-friendly descriptions for the spinner. */
+function _chatToolFriendlyName(title) {
+    const map = {
+        list_windows: 'Checking visible windows', list_all_windows: 'Enumerating all open windows',
+        get_ui_tree: 'Reading application UI', find_elements: 'Searching for UI elements',
+        get_element_text: 'Reading text content', launch_app: 'Launching application',
+        launch_and_get_tree: 'Launching application', click_and_get_tree: 'Clicking and reading UI',
+        click_and_read_result: 'Clicking and reading result', type_and_get_tree: 'Typing text',
+        screenshot: 'Taking screenshot', read: 'Reading file', write: 'Writing file',
+        execute: 'Running command', search: 'Searching',
+    };
+    if (map[title]) return map[title];
+    for (const [key, friendly] of Object.entries(map)) {
+        if (title.includes(key)) return friendly;
+    }
+    return title.replace(/^Running:\s*@\S+\s*/, '').replace(/_/g, ' ') || 'Working on it';
+}
+
 /** Build metadata object for a message from session turn data. */
 function _buildMsgMeta(messageId, timestamps, durations, role) {
     if (!messageId) return null;
@@ -1451,6 +1469,10 @@ export class ChatApp {
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
         renderMarkdown(this.currentStreamingContent, contentDiv, true);
 
+        // Remove tool-running spinner now that text is flowing
+        const toolSpinner = contentDiv.querySelector('.tool-running-indicator');
+        if (toolSpinner) toolSpinner.remove();
+
         // Feed streaming text to TTS for sentence-chunked playback
         if (this.speech) this.speech.feedStreamingText(this.currentStreamingContent);
 
@@ -1598,7 +1620,7 @@ export class ChatApp {
         }
 
     handleToolCallUpdate(event) {
-            const { updated } = processToolCallUpdate(event, this);
+            const { updated, update } = processToolCallUpdate(event, this);
 
             // Flush any pending throttled markdown render so the user sees the
             // full streamed text before a permission dialog appears
@@ -1606,6 +1628,21 @@ export class ChatApp {
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
                 if (contentDiv) {
                     renderMarkdown(this.currentStreamingContent, contentDiv);
+                }
+            }
+
+            // Show a spinner while a tool is executing
+            if (update?.title && this.currentStreamingMessage) {
+                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
+                if (contentDiv) {
+                    const friendly = _chatToolFriendlyName(update.title);
+                    let spinner = contentDiv.querySelector('.tool-running-indicator');
+                    if (!spinner) {
+                        spinner = document.createElement('div');
+                        spinner.className = 'folder-plan-spinner-row tool-running-indicator';
+                        contentDiv.appendChild(spinner);
+                    }
+                    spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
                 }
             }
 
