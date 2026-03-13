@@ -457,7 +457,10 @@ export class FloatingApp {
     }
 
     setupVisibilityTracking() {
+        this._windowFocused = true; // assume focused at startup
+
         this.appWindow.listen('tauri://focus', async () => {
+            this._windowFocused = true;
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
@@ -509,6 +512,7 @@ export class FloatingApp {
         });
         
         this.appWindow.listen('tauri://blur', async () => {
+            this._windowFocused = false;
             // Don't hide if permission modal is open
             const permissionModal = document.getElementById('permissionModal');
             if (permissionModal && permissionModal.style.display !== 'none') {
@@ -1513,10 +1517,9 @@ export class FloatingApp {
                 this.speech.speakResponse(this.currentResponse);
             }
 
-            // Notify if window is hidden
+            // Notify if window is not focused (user isn't looking at it)
             try {
-                const isVisible = await this.appWindow.isVisible();
-                if (!isVisible && this.currentResponse) {
+                if (!this._windowFocused && this.currentResponse) {
                     const preview = this.currentResponse.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
                     await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'floating');
                 }

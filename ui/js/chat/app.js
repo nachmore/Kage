@@ -370,6 +370,11 @@ export class ChatApp {
     }
 
     setupStreamingListeners() {
+        // Track focus for notification suppression
+        this._windowFocused = false; // chat starts hidden
+        this.appWindow.listen('tauri://focus', () => { this._windowFocused = true; });
+        this.appWindow.listen('tauri://blur', () => { this._windowFocused = false; });
+
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
         this.listen('message_complete', () => this.handleMessageComplete());
         this.listen('message_error', (event) => this.handleMessageError(event));
@@ -1599,10 +1604,10 @@ export class ChatApp {
             // Show suggestion chips
             this.showSuggestionChips();
 
-            // Notify if window is hidden
+            // Notify if window is not focused (user isn't looking at it).
+            // Only notify if this window initiated the message (isWaitingForResponse).
             try {
-                const isVisible = await this.appWindow.isVisible();
-                if (!isVisible) {
+                if (this.isWaitingForResponse && !this._windowFocused) {
                     const preview = (this.messages[this.messages.length - 1]?.content || '').substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
                     await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'main');
                 }
