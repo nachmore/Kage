@@ -539,6 +539,10 @@ export class FloatingApp {
             if (this.computerControlActive) {
                 return;
             }
+            // Don't hide if an automation plan is running
+            if (this._automationPlanStarted) {
+                return;
+            }
             // Don't hide while an extension tool is being processed
             if (this._extensionToolExecuting || this._extensionToolCallHandled) {
                 return;
