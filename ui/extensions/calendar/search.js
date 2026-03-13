@@ -71,11 +71,31 @@ export default class CalendarSearchProvider {
             if (resolved) {
                 return this._fetchEventsForDate(resolved);
             }
+            // Not a date — treat as a text filter on upcoming events
+            const events = await this._fetchEvents();
+            const filtered = events.filter(e => {
+                const haystack = [e.subject, e.location, e.organizer].filter(Boolean).join(' ').toLowerCase();
+                return haystack.includes(dateArg.toLowerCase());
+            });
+            if (filtered.length === 0) {
+                return [{
+                    id: 'cal:no-match',
+                    type: 'calendar_event',
+                    label: `No meetings matching "${dateArg}"`,
+                    description: 'Try a different search term or date',
+                    icon: '📅',
+                    score: 85,
+                    data: null,
+                    _extensionId: 'calendar',
+                }];
+            }
+            return filtered.slice(0, 8).map(e => this._eventToResult(e));
         }
 
         const events = await this._fetchEvents();
         if (events.length === 0) {
             return [{
+                id: 'cal:no-upcoming',
                 type: 'calendar_event',
                 label: 'No upcoming meetings',
                 description: 'No events found in the next ' + (this._config.lookahead_hours || 8) + ' hours',
@@ -93,10 +113,32 @@ export default class CalendarSearchProvider {
             this._fetchEvents(true).then(() => this._updateOverlay());
             return { type: 'display', value: 'Calendar refreshed' };
         }
-        if (result.data?.online_url) {
-            return { type: 'url', value: result.data.online_url };
+        const e = result.data;
+        if (!e) return null;
+
+        // Build meeting info text
+        const lines = [`📅 **${e.subject}**`];
+        const time = this._formatTimeWithDay(e.start_time);
+        const dur = this._formatDuration(e.duration_minutes);
+        lines.push(`🕐 ${time}${dur ? ' · ' + dur : ''}`);
+        if (e.location) {
+            const cleanLoc = this._stripUrlsFromLocation(e.location);
+            if (cleanLoc) lines.push(`📍 ${this._formatLocation(cleanLoc)}`);
         }
-        return null;
+        if (e.organizer) lines.push(`👤 ${e.organizer}`);
+        if (e.online_url) {
+            const provider = this._meetingProvider(e.online_url);
+            lines.push(`🔗 [Join ${provider}](${e.online_url})`);
+        }
+        const info = lines.join('\n');
+
+        // If there's a join link, open it AND display info
+        if (e.online_url) {
+            window.__TAURI__?.core?.invoke('open_url', { url: e.online_url });
+            return { type: 'display', value: info };
+        }
+        // No join link — just display info
+        return { type: 'display', value: info };
     }
 
     renderResult(result, container) {
@@ -113,15 +155,16 @@ export default class CalendarSearchProvider {
             return true;
         }
         const time = this._formatTimeWithDay(e.start_time);
-        const dur = e.duration_minutes ? `${e.duration_minutes}m` : '';
+        const dur = this._formatDuration(e.duration_minutes);
+        const provider = e.online_url ? this._meetingProvider(e.online_url) : '';
         const joinBtn = e.online_url
-            ? `<button class="timer-btn" style="font-size:11px;padding:2px 8px;" title="${this._escapeHtml(e.online_url)}" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join</button>`
+            ? `<button class="timer-btn" style="font-size:11px;padding:2px 8px;" title="${this._escapeHtml(e.online_url)}" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join${provider ? ' ' + provider : ''}</button>`
             : '';
         container.innerHTML = `
             <div class="app-icon">📅</div>
             <div class="app-info" style="flex:1;">
                 <div class="app-name">${this._escapeHtml(e.subject)}</div>
-                <div class="app-description">${time}${dur ? ' · ' + dur : ''}${e.location ? ' · ' + this._escapeHtml(e.location) : ''}</div>
+                <div class="app-description">${time}${dur ? ' · ' + dur : ''}${provider ? ' · ' + provider : ''}${e.location && !/^https?:\/\//i.test(e.location.trim()) ? ' · ' + this._escapeHtml(e.location) : ''}</div>
             </div>
             ${joinBtn}
         `;
@@ -340,6 +383,7 @@ export default class CalendarSearchProvider {
             const label = this._formatDateLabel(dateStr);
             if (!events || events.length === 0) {
                 return [{
+                    id: 'cal:no-date:' + dateStr,
                     type: 'calendar_event',
                     label: `No meetings on ${label}`,
                     description: dateStr,
@@ -370,9 +414,13 @@ export default class CalendarSearchProvider {
 
     _eventToResult(event) {
         const timeStr = this._formatTimeWithDay(event.start_time);
-        const dur = event.duration_minutes ? `${event.duration_minutes}m` : '';
-        const parts = [timeStr, dur, event.location].filter(Boolean);
+        const dur = this._formatDuration(event.duration_minutes);
+        const provider = event.online_url ? this._meetingProvider(event.online_url) : '';
+        // Skip location in description if it's a URL (provider name covers it)
+        const loc = event.location && !/^https?:\/\//i.test(event.location.trim()) ? event.location : '';
+        const parts = [timeStr, dur, provider, loc].filter(Boolean);
         return {
+            id: 'cal:' + (event.id || event.subject + ':' + event.start_time),
             type: 'calendar_event',
             label: event.subject,
             description: parts.join(' · '),
@@ -407,6 +455,53 @@ export default class CalendarSearchProvider {
             const d = new Date(isoString);
             return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         } catch { return ''; }
+    }
+
+    _formatDuration(minutes) {
+        if (!minutes) return '';
+        if (minutes < 60) return `${minutes}m`;
+        if (minutes < 1440) {
+            const h = Math.floor(minutes / 60);
+            const m = minutes % 60;
+            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+        }
+        const days = Math.round(minutes / 1440);
+        return days === 1 ? '1 day' : `${days} days`;
+    }
+
+    _meetingProvider(url) {
+        if (!url) return '';
+        const lower = url.toLowerCase();
+        if (lower.includes('zoom.us') || lower.includes('zoom.com')) return 'Zoom';
+        if (lower.includes('teams.microsoft') || lower.includes('teams.live')) return 'Teams';
+        if (lower.includes('meet.google') || lower.includes('hangouts.google')) return 'Google Meet';
+        if (lower.includes('webex') || lower.includes('cisco.com')) return 'Webex';
+        if (lower.includes('chime.aws') || lower.includes('chime://')) return 'Chime';
+        if (lower.includes('slack.com') || lower.includes('slack://')) return 'Slack';
+        if (lower.includes('bluejeans')) return 'BlueJeans';
+        if (lower.includes('gotomeeting') || lower.includes('goto.com')) return 'GoTo';
+        return 'Meeting';
+    }
+
+    _stripUrlsFromLocation(location) {
+        if (!location) return '';
+        // Remove URLs (often appended with ; or space), then clean up separators
+        return location
+            .replace(/https?:\/\/\S+/gi, '')
+            .replace(/[;,]\s*$/, '')
+            .replace(/^\s*[;,]\s*/, '')
+            .trim();
+    }
+
+    _formatLocation(location) {
+        if (!location) return '';
+        // If it's already a URL, return as a link
+        if (/^https?:\/\//i.test(location.trim())) {
+            return `[${location}](${location})`;
+        }
+        // Plain text address — link to Google Maps
+        const encoded = encodeURIComponent(location);
+        return `[${location}](https://www.google.com/maps/search/?api=1&query=${encoded})`;
     }
 
     _escapeHtml(str) {
