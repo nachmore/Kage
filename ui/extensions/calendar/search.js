@@ -115,7 +115,7 @@ export default class CalendarSearchProvider {
         const time = this._formatTimeWithDay(e.start_time);
         const dur = e.duration_minutes ? `${e.duration_minutes}m` : '';
         const joinBtn = e.online_url
-            ? `<button class="timer-btn" style="font-size:11px;padding:2px 8px;" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join</button>`
+            ? `<button class="timer-btn" style="font-size:11px;padding:2px 8px;" title="${this._escapeHtml(e.online_url)}" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join</button>`
             : '';
         container.innerHTML = `
             <div class="app-icon">📅</div>
@@ -217,7 +217,7 @@ export default class CalendarSearchProvider {
         }
 
         const joinHtml = event.online_url
-            ? `<button class="timer-btn cal-join-btn" id="calendarJoinBtn" title="Join meeting">Join</button>`
+            ? `<button class="timer-btn cal-join-btn" id="calendarJoinBtn" title="${event.online_url.replace(/"/g, '&quot;')}">Join</button>`
             : '';
         const dismissHtml = `<button class="timer-btn" id="calendarDismissBtn" style="font-size:11px;padding:1px 4px;" title="Dismiss this meeting">✕</button>`;
 
