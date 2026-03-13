@@ -139,7 +139,9 @@ try {{
     }
 
     let exit_code = output.status.code();
-    info!("[calendar] PowerShell exit code ({}): {:?}", label, exit_code);
+    if exit_code != Some(0) {
+        warn!("[calendar] PowerShell exited with code {:?} ({})", exit_code, label);
+    }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stdout_trimmed = stdout.trim();
