@@ -2269,6 +2269,7 @@ export class ChatApp {
     clearSuggestions() {
         this.currentSuggestions = [];
         this.suggestionIndex = -1;
+        this._searchGeneration = (this._searchGeneration || 0) + 1; // discard in-flight searches
         this.elements.chatSuggestions.innerHTML = '';
         this.elements.chatSuggestions.classList.remove('visible');
     }

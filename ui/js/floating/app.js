@@ -934,6 +934,8 @@ export class FloatingApp {
     }
 
     async clearSuggestions() {
+        this._searchGeneration++; // discard in-flight searches
+        if (this.searchTimeout) { clearTimeout(this.searchTimeout); this.searchTimeout = null; }
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
