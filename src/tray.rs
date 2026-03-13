@@ -13,7 +13,8 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
 
     let menu = if dev_mode {
         info!("Dev mode enabled - adding developer menu items");
-        let inspect = MenuItemBuilder::with_id("inspect", "Inspect").build(app)?;
+        let inspect = MenuItemBuilder::with_id("inspect", "Inspect Chat").build(app)?;
+        let inspect_floating = MenuItemBuilder::with_id("inspect-floating", "Inspect Floating").build(app)?;
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
         let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
         let test_update = MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
@@ -21,7 +22,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &reload, &test_banner, &test_update, &test_update_avail])
+            .items(&[&inspect, &inspect_floating, &reload, &test_banner, &test_update, &test_update_avail])
             .separator()
             .item(&quit)
             .build()?
@@ -58,9 +59,17 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     }
                 }
                 "inspect" => {
-                    info!("Opening inspector");
+                    info!("Opening chat inspector");
                     #[cfg(debug_assertions)]
                     if let Some(window) = app_handle_inner.get_webview_window("main") {
+                        window.open_devtools();
+                    }
+                }
+                "inspect-floating" => {
+                    info!("Opening floating inspector");
+                    #[cfg(debug_assertions)]
+                    if let Some(window) = app_handle_inner.get_webview_window("floating") {
+                        let _ = window.show();
                         window.open_devtools();
                     }
                 }

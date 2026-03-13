@@ -539,10 +539,6 @@ export class FloatingApp {
             if (this.computerControlActive) {
                 return;
             }
-            // Don't hide while waiting for a response
-            if (this.isWaitingForResponse) {
-                return;
-            }
             // Don't hide while an extension tool is being processed
             if (this._extensionToolExecuting || this._extensionToolCallHandled) {
                 return;
