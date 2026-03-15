@@ -1105,19 +1105,32 @@ export class FloatingApp {
         } else if (event.key === 'ArrowDown') {
             const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
-                event.preventDefault();
-                this.selectedIndex = (this.selectedIndex + 1) % itemCount;
-                updateSelection(this.elements.appSuggestions, this.selectedIndex);
+                // Only navigate suggestions if cursor is on the last line of the textarea
+                const ta = this.elements.input;
+                const textBeforeCursor = ta.value.substring(0, ta.selectionStart);
+                const textAfterCursor = ta.value.substring(ta.selectionEnd);
+                const isLastLine = !textAfterCursor.includes('\n');
+                if (isLastLine) {
+                    event.preventDefault();
+                    this.selectedIndex = (this.selectedIndex + 1) % itemCount;
+                    updateSelection(this.elements.appSuggestions, this.selectedIndex);
+                }
             }
-            // When no suggestions, let the default behavior handle cursor movement in textarea
+            // When no suggestions or not on last line, let default behavior handle cursor movement
         } else if (event.key === 'ArrowUp') {
             const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
-                event.preventDefault();
-                this.selectedIndex = this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
-                updateSelection(this.elements.appSuggestions, this.selectedIndex);
+                // Only navigate suggestions if cursor is on the first line of the textarea
+                const ta = this.elements.input;
+                const textBeforeCursor = ta.value.substring(0, ta.selectionStart);
+                const isFirstLine = !textBeforeCursor.includes('\n');
+                if (isFirstLine) {
+                    event.preventDefault();
+                    this.selectedIndex = this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
+                    updateSelection(this.elements.appSuggestions, this.selectedIndex);
+                }
             }
-            // When no suggestions, let the default behavior handle cursor movement in textarea
+            // When no suggestions or not on first line, let default behavior handle cursor movement
         } else if (event.key === 'Escape') {
             if (this._clipboardMode) {
                 event.preventDefault();
