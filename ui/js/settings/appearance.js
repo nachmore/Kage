@@ -11,20 +11,11 @@ class AppearanceSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                ${this.createControlRow(
-                    'Theme',
-                    'Choose your preferred theme or follow system settings.',
-                    `<select class="setting-select" id="theme">
-                        <option value="system">System (Auto)</option>
-                        <option value="dark">Dark</option>
-                        <option value="light">Light</option>
-                    </select>`
-                )}
-
-                <div class="setting-row" id="customThemesSection">
-                    <div class="setting-label">Custom Themes</div>
-                    <div class="setting-description">Install color themes from the store or load from a local directory.</div>
-                    <div id="installedThemesList" style="margin-top:8px;"></div>
+                <div class="setting-row" id="themeSection">
+                    <div class="setting-label">Theme</div>
+                    <div class="setting-description">Choose your preferred theme or follow system settings.</div>
+                    <input type="hidden" id="theme" value="system">
+                    <div id="themeList" class="theme-list-scroll" style="margin-top:8px;"></div>
                     <div style="margin-top:8px;">
                         <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">🛍️ Browse Themes in Store...</button>
                     </div>
@@ -227,59 +218,70 @@ class AppearanceSettingsModule extends SettingsModule {
 
         try {
             const themes = await invoke('list_themes');
-            const themeSelect = document.getElementById('theme');
-            const themeList = document.getElementById('installedThemesList');
+            const themeList = document.getElementById('themeList');
+            const themeInput = document.getElementById('theme');
             const config = await invoke('get_config');
             const activeThemeId = config.ui?.theme || 'system';
 
-            // Add installed themes to the select dropdown
-            if (themeSelect && themes.length > 0) {
-                for (const t of themes) {
-                    if (!t.enabled) continue;
-                    const opt = document.createElement('option');
-                    opt.value = t.manifest.id;
-                    opt.textContent = `${t.manifest.icon || '🎨'} ${t.manifest.name}`;
-                    themeSelect.appendChild(opt);
-                }
-                // Re-apply current value (it may be a custom theme ID)
-                if (config.ui?.theme) themeSelect.value = config.ui.theme;
+            if (themeInput) themeInput.value = activeThemeId;
+
+            if (!themeList) return;
+
+            // Built-in themes (cannot be deleted)
+            const builtins = [
+                { id: 'system', icon: '🖥️', name: 'System (Auto)', description: 'Follow OS preference' },
+                { id: 'light',  icon: '☀️', name: 'Kiro Light', description: '' },
+                { id: 'dark',   icon: '🌙', name: 'Kiro Dark', description: '' },
+            ];
+
+            let html = '';
+            for (const b of builtins) {
+                const isActive = b.id === activeThemeId;
+                const tickBtn = isActive
+                    ? `<span class="theme-action-btn theme-active-tick" title="Active theme">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>`
+                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${b.id}" title="Use this theme">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>`;
+                html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">
+                    <span class="theme-list-icon">${b.icon}</span>
+                    <span class="theme-list-name">${b.name}</span>
+                    <span class="theme-list-actions">${tickBtn}</span>
+                </div>`;
             }
 
-            // Render the installed themes list
-            if (themeList) {
-                if (themes.length === 0) {
-                    themeList.innerHTML = '<div style="font-size:12px;color:var(--kiro-text-muted);padding:4px 0;">No custom themes installed.</div>';
-                } else {
-                    let html = '';
-                    for (const t of themes) {
-                        const isActive = t.manifest.id === activeThemeId;
-                        const activeLabel = isActive
-                            ? '<span style="font-size:10px;color:var(--kiro-accent);font-weight:600;margin-left:4px;">ACTIVE</span>'
-                            : '';
-                        const useBtn = isActive ? '' : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="Use this theme">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            </button>`;
-                        const removeBtn = t.bundled ? '' : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>`;
-                        html += `<div class="theme-list-item">
-                            <span class="theme-list-icon">${t.manifest.icon || '🎨'}</span>
-                            <span class="theme-list-name">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span>${activeLabel}</span>
-                            <span class="theme-list-actions">${useBtn}${removeBtn}</span>
-                        </div>`;
-                    }
-                    themeList.innerHTML = html;
-
-                    // Wire up Use buttons
-                    themeList.querySelectorAll('.theme-use-btn').forEach(btn => {
-                        btn.addEventListener('click', () => this._useTheme(btn.dataset.themeId));
-                    });
-                    // Wire up Remove buttons
-                    themeList.querySelectorAll('.theme-remove-btn').forEach(btn => {
-                        btn.addEventListener('click', () => this._removeTheme(btn.dataset.themeId));
-                    });
-                }
+            // Custom/installed themes
+            for (const t of themes) {
+                if (!t.enabled) continue;
+                const isActive = t.manifest.id === activeThemeId;
+                const tickBtn = isActive
+                    ? `<span class="theme-action-btn theme-active-tick" title="Active theme">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>`
+                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="Use this theme">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>`;
+                const removeBtn = t.bundled ? '' : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>`;
+                html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">
+                    <span class="theme-list-icon">${t.manifest.icon || '🎨'}</span>
+                    <span class="theme-list-name">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span></span>
+                    <span class="theme-list-actions">${tickBtn}${removeBtn}</span>
+                </div>`;
             }
+
+            themeList.innerHTML = html;
+
+            // Wire up Use buttons
+            themeList.querySelectorAll('.theme-use-btn').forEach(btn => {
+                btn.addEventListener('click', () => this._useTheme(btn.dataset.themeId));
+            });
+            // Wire up Remove buttons
+            themeList.querySelectorAll('.theme-remove-btn').forEach(btn => {
+                btn.addEventListener('click', () => this._removeTheme(btn.dataset.themeId));
+            });
         } catch (e) {
             console.warn('Failed to load themes:', e);
         }
@@ -288,10 +290,8 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     async _useTheme(themeId) {
-        const themeSelect = document.getElementById('theme');
-        if (themeSelect) {
-            themeSelect.value = themeId;
-        }
+        const themeInput = document.getElementById('theme');
+        if (themeInput) themeInput.value = themeId;
         // Use the global saveSettings() from manager.js
         if (typeof saveSettings === 'function') {
             saveSettings();
@@ -306,16 +306,13 @@ class AppearanceSettingsModule extends SettingsModule {
         try {
             await invoke('uninstall_extension', { id: themeId, kind: 'theme' });
             // If the removed theme was active, switch back to system
-            const themeSelect = document.getElementById('theme');
-            if (themeSelect && themeSelect.value === themeId) {
-                themeSelect.value = 'system';
+            const themeInput = document.getElementById('theme');
+            if (themeInput && themeInput.value === themeId) {
+                themeInput.value = 'system';
                 if (typeof saveSettings === 'function') {
                     saveSettings();
                 }
             }
-            // Remove the option from the dropdown
-            const opt = themeSelect?.querySelector(`option[value="${themeId}"]`);
-            if (opt) opt.remove();
             // Refresh the list
             this.loadInstalledThemes();
         } catch (e) {

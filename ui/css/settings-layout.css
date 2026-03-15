@@ -476,6 +476,16 @@ body.light-theme .keycap-sep { color: #999; }
 .update-error-icon { font-size: 30px; color: #f87171; }
 
 /* Theme list items */
+.theme-list-scroll {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 4px;
+}
+body.light-theme .theme-list-scroll {
+    border-color: rgba(0, 0, 0, 0.1);
+}
 .theme-list-item {
     display: flex;
     align-items: center;
@@ -509,6 +519,9 @@ body.light-theme .keycap-sep { color: #999; }
 .theme-list-item:hover .theme-list-actions {
     opacity: 1;
 }
+.theme-list-item-active .theme-list-actions {
+    opacity: 1;
+}
 .theme-action-btn {
     display: flex;
     align-items: center;
@@ -527,6 +540,17 @@ body.light-theme .keycap-sep { color: #999; }
 }
 .theme-use-btn:hover {
     background: var(--kiro-accent-hover);
+}
+.theme-active-tick {
+    background: var(--kiro-accent);
+    color: #fff;
+    cursor: default;
+}
+.theme-list-item-active {
+    background: rgba(255, 255, 255, 0.04);
+}
+body.light-theme .theme-list-item-active {
+    background: rgba(0, 0, 0, 0.03);
 }
 .theme-remove-btn {
     background: transparent;
