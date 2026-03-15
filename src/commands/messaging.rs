@@ -738,13 +738,47 @@ pub async fn execute_automation_plan(
                     let result = client.streaming_accumulator.lock().unwrap().clone();
                     info!("Step {}/{} completed: {} chars", step_num, total_steps, result.len());
 
+                    // Check if the sub-agent reported a failure in its response text.
+                    // The ACP call succeeded (we got a response), but the agent may
+                    // have said "FAILED" because it couldn't actually perform the task.
+                    let result_lower = result.to_lowercase();
+                    let agent_reported_failure = result_lower.starts_with("failed")
+                        || result_lower.contains("\nfailed")
+                        || result_lower.contains("failed —")
+                        || result_lower.contains("failed -");
+
+                    if agent_reported_failure {
+                        warn!("Step {}/{} agent reported failure: {}", step_num, total_steps,
+                            &result[..result.len().min(200)]);
+                    }
+
+                    let success = !agent_reported_failure;
+
                     let _ = window.emit("automation_step_complete", serde_json::json!({
                         "step": step_num,
                         "totalSteps": total_steps,
                         "task": task,
                         "result": result,
-                        "success": true,
+                        "success": success,
                     }));
+
+                    if !success {
+                        warn!("Aborting automation plan: step {}/{} failed", step_num, total_steps);
+                        // Mark remaining steps as stopped
+                        for j in (i + 1)..plan.len() {
+                            let remaining_task = plan[j].get("task")
+                                .and_then(|t| t.as_str()).unwrap_or("Unknown task");
+                            let _ = window.emit("automation_step_complete", serde_json::json!({
+                                "step": j + 1,
+                                "totalSteps": total_steps,
+                                "task": remaining_task,
+                                "result": "Skipped due to earlier step failure",
+                                "success": false,
+                                "stopped": true,
+                            }));
+                        }
+                        break;
+                    }
                 }
                 Err(e) => {
                     let error_msg = format!("{}", e);
@@ -758,8 +792,21 @@ pub async fn execute_automation_plan(
                         "success": false,
                     }));
 
-                    // Don't stop on failure — report and continue
-                    // The user can see which steps failed
+                    // Abort on transport/protocol errors too
+                    warn!("Aborting automation plan: step {}/{} errored", step_num, total_steps);
+                    for j in (i + 1)..plan.len() {
+                        let remaining_task = plan[j].get("task")
+                            .and_then(|t| t.as_str()).unwrap_or("Unknown task");
+                        let _ = window.emit("automation_step_complete", serde_json::json!({
+                            "step": j + 1,
+                            "totalSteps": total_steps,
+                            "task": remaining_task,
+                            "result": "Skipped due to earlier step failure",
+                            "success": false,
+                            "stopped": true,
+                        }));
+                    }
+                    break;
                 }
             }
         }

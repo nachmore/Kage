@@ -1791,8 +1791,8 @@ export class FloatingApp {
         });
 
         const stepCompleteUnlisten = await this.listen('automation_step_complete', (event) => {
-            const { step, success, result } = event.payload;
-            this._automationStatuses[step] = success ? 'done' : 'failed';
+            const { step, success, result, stopped } = event.payload;
+            this._automationStatuses[step] = stopped ? 'stopped' : (success ? 'done' : 'failed');
             if (result) this._automationResults[step] = result.substring(0, 200);
             this._renderAutomationPlan();
             this.windowManager.resizeWindow();
