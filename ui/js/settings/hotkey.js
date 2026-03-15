@@ -32,7 +32,7 @@ class HotkeySettingsModule extends SettingsModule {
         const invoke = window.__TAURI__.core.invoke;
         const container = document.getElementById('settingsHotkeyPicker');
         if (!container) return;
-        this._picker = new HotkeyPicker(container, invoke, { modifiers: ['Alt'], key: 'Space' });
+        this._picker = new HotkeyPicker(container, invoke, { modifiers: ['Alt'], key: 'Space' }, 'main');
         this._picker.onChange(async (hk) => {
             try {
                 const config = await invoke('get_config');
@@ -44,7 +44,7 @@ class HotkeySettingsModule extends SettingsModule {
         // Clipboard history hotkey picker
         const cbContainer = document.getElementById('settingsClipboardHotkeyPicker');
         if (cbContainer) {
-            this._cbPicker = new HotkeyPicker(cbContainer, invoke, { modifiers: [], key: '' });
+            this._cbPicker = new HotkeyPicker(cbContainer, invoke, { modifiers: [], key: '' }, 'clipboard');
             this._cbPicker.onChange(async (hk) => {
                 try {
                     const config = await invoke('get_config');

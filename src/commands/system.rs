@@ -418,6 +418,7 @@ pub async fn try_register_hotkey(
     app: tauri::AppHandle,
     modifiers: Vec<String>,
     key: String,
+    slot: Option<String>,
 ) -> Result<bool, String> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
@@ -426,24 +427,47 @@ pub async fn try_register_hotkey(
     } else {
         format!("{}+{}", modifiers.join("+"), key)
     };
-    info!("Trying to register hotkey: {}", hotkey_str);
+    info!("Trying to register hotkey: {} (slot: {:?})", hotkey_str, slot);
 
-    // Check for conflicts with the other hotkey (main vs clipboard)
+    // Check for conflicts with the *other* hotkey slot
     {
         let state: tauri::State<'_, AppState> = app.state();
         let config = state.config.lock().unwrap();
         let main_hk = config.get_hotkey_string();
         let cb_hk = config.get_clipboard_hotkey_string();
-        // If the new hotkey matches the existing main hotkey, it might be the
-        // clipboard picker trying to use the same combo (or vice versa).
-        // We can't tell which picker is calling us, so reject if it matches either
-        // existing hotkey — the picker that owns it will re-register on save.
-        if hotkey_str == main_hk {
-            return Err("This shortcut is already used as the main hotkey".to_string());
-        }
-        if let Some(ref cb) = cb_hk {
-            if hotkey_str == *cb {
-                return Err("This shortcut is already used as the clipboard hotkey".to_string());
+        let slot_name = slot.as_deref().unwrap_or("main");
+
+        // Normalize for comparison (case-insensitive, sorted modifiers)
+        let normalize = |s: &str| -> String {
+            let mut parts: Vec<String> = s.split('+').map(|p| p.trim().to_lowercase()).collect();
+            if parts.len() > 1 {
+                let key = parts.pop().unwrap();
+                parts.sort();
+                parts.push(key);
+            }
+            parts.join("+")
+        };
+        let new_norm = normalize(&hotkey_str);
+        let main_norm = normalize(&main_hk);
+        let cb_norm = cb_hk.as_deref().map(|s| normalize(s));
+
+        if slot_name == "main" {
+            if let Some(ref cn) = cb_norm {
+                if new_norm == *cn {
+                    return Err("This shortcut is already used as the clipboard hotkey".to_string());
+                }
+            }
+            if new_norm == main_norm {
+                return Ok(true);
+            }
+        } else if slot_name == "clipboard" {
+            if new_norm == main_norm {
+                return Err("This shortcut is already used as the main hotkey".to_string());
+            }
+            if let Some(ref cn) = cb_norm {
+                if new_norm == *cn {
+                    return Ok(true);
+                }
             }
         }
     }

@@ -8,10 +8,11 @@
  *   picker.onChange((hotkey) => { ... });
  */
 export class HotkeyPicker {
-    constructor(container, invoke, initialHotkey) {
+    constructor(container, invoke, initialHotkey, slot) {
         this.container = container;
         this.invoke = invoke;
         this.hotkey = initialHotkey || { modifiers: ['Alt'], key: 'Space' };
+        this.slot = slot || 'main';
         this.capturing = false;
         this._callbacks = [];
         this.render();
@@ -79,7 +80,8 @@ export class HotkeyPicker {
                 try {
                     await this.invoke('try_register_hotkey', {
                         modifiers: result.modifiers,
-                        key: result.key
+                        key: result.key,
+                        slot: this.slot,
                     });
                     this.hotkey = { modifiers: result.modifiers, key: result.key };
                     this.showStatus('✓ Hotkey registered', 'success');
