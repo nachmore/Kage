@@ -196,7 +196,9 @@ fn write_raw_json_silent(
     value: &serde_json::Value,
 ) {
     if let Ok(json) = serde_json::to_string(value) {
-        let _ = write_raw_json(pipe_stdin, tcp_writer, &json);
+        if let Err(e) = write_raw_json(pipe_stdin, tcp_writer, &json) {
+            warn!("Failed to write raw JSON to transport: {}", e);
+        }
     }
 }
 
@@ -245,7 +247,9 @@ fn handle_permission_notification(
         tool.last_seen = timestamp;
         let mut last_save = last_config_save.lock().unwrap();
         if last_save.elapsed() >= std::time::Duration::from_secs(60) {
-            let _ = config_guard.save();
+            if let Err(e) = config_guard.save() {
+                warn!("Failed to save config (periodic): {}", e);
+            }
             *last_save = std::time::Instant::now();
         }
     } else {
@@ -255,7 +259,9 @@ fn handle_permission_notification(
             last_seen: timestamp,
         });
         // New tool discovered — save immediately
-        let _ = config_guard.save();
+        if let Err(e) = config_guard.save() {
+            warn!("Failed to save config (new tool): {}", e);
+        }
         *last_config_save.lock().unwrap() = std::time::Instant::now();
     }
 
@@ -618,7 +624,9 @@ pub async fn send_steering_message(
     async_runtime::spawn_blocking(move || {
         let client = async_runtime::block_on(client.lock());
         if client.is_connected() {
-            let _ = client.send_chat_streaming(&steering_msg, None);
+            if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
+                warn!("Failed to send auto-steering message: {}", e);
+            }
         }
     });
 
@@ -905,7 +913,9 @@ pub async fn check_extension_tool_permission(
     if let Some(tool) = existing {
         tool.last_seen = timestamp;
         let policy = tool.policy.clone();
-        let _ = config.save();
+        if let Err(e) = config.save() {
+            warn!("Failed to save config (tool policy lookup): {}", e);
+        }
         Ok(policy)
     } else {
         // First time seeing this tool — register with "ask" policy
@@ -914,7 +924,9 @@ pub async fn check_extension_tool_permission(
             policy: "ask".to_string(),
             last_seen: timestamp,
         });
-        let _ = config.save();
+        if let Err(e) = config.save() {
+            warn!("Failed to save config (new tool registration): {}", e);
+        }
         Ok("ask".to_string())
     }
 }

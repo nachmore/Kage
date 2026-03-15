@@ -112,7 +112,7 @@ export async function executeResult(result, query, ctx) {
             ctx.invoke('record_shortcut_usage', {
                 trigger: sc.shortcut,
                 args: args.join(' '),
-            }).catch(() => {});
+            }).catch((e) => { console.warn('[Shortcuts] Failed to record usage:', e); });
         }
         return execResult;
     }
@@ -230,7 +230,7 @@ export async function handleEnterAction(opts) {
                 ctx.invoke('record_shortcut_usage', {
                     trigger: matches[0].shortcut.shortcut,
                     args: matches[0].args.join(' '),
-                }).catch(() => {});
+                }).catch((e) => { console.warn('[Shortcuts] Failed to record usage:', e); });
             }
             return result.handled ? result : { handled: false };
         }

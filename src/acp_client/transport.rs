@@ -157,7 +157,9 @@ impl AcpTransport {
 
         {
             let mut pm = self.process_manager.lock().unwrap();
-            pm.store_process(child).ok();
+            if let Err(e) = pm.store_process(child) {
+                warn!("Failed to store spawned process: {}", e);
+            }
         }
 
         let stdin_arc = Arc::new(Mutex::new(stdin));

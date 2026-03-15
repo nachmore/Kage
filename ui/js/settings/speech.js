@@ -479,7 +479,7 @@ async function pocketTtsCancelInstall() {
     const invoke = window.__TAURI__.core.invoke;
     const btn = document.getElementById('pocketTtsInstallBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
-    try { await invoke('pocket_tts_cancel_install'); } catch (e) {}
+    try { await invoke('pocket_tts_cancel_install'); } catch (e) { console.warn('[Speech] Failed to cancel Pocket TTS install:', e); }
 }
 
 async function pocketTtsToggleServer() {

@@ -210,11 +210,11 @@ function initPermissionModal() {
         let floatingSessionId = null;
         try {
             floatingSessionId = await invoke('get_floating_session_id');
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.warn('[Permissions] Failed to get floating session ID:', e); }
         let currentSessionId = null;
         try {
             currentSessionId = await invoke('get_current_session_id');
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.warn('[Permissions] Failed to get current session ID:', e); }
 
         // The floating window owns the "floating session". If the request is for
         // a session that isn't the current ACP session (which the floating window

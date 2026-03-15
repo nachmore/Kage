@@ -36,7 +36,9 @@ impl ProcessManager {
         path.push("kiro-assistant");
         
         // Create directory if it doesn't exist
-        let _ = fs::create_dir_all(&path);
+        if let Err(e) = fs::create_dir_all(&path) {
+            warn!("Failed to create PID directory {:?}: {}", path, e);
+        }
         
         path.push("spawned_cli.pid");
         path

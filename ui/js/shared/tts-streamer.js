@@ -168,7 +168,7 @@ export class TtsPlaybackBar {
             if (window.__TAURI__?.core) {
                 window.__TAURI__.core.invoke('open_settings_window').then(() => {
                     window.__TAURI__.event.emit('navigate_settings_section', 'speech');
-                }).catch(() => {});
+                }).catch((e) => { console.warn('[TTS] Failed to open settings window:', e); });
             }
         };
         this._el.style.display = 'flex';

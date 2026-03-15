@@ -98,7 +98,7 @@ function initApp() {
                 x: pos.x,
                 y: pos.y,
             });
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.warn('[Chat] Failed to save window geometry:', e); }
     }
     appWindow.listen('tauri://blur', saveChatGeometry);
     appWindow.listen('tauri://close-requested', saveChatGeometry);

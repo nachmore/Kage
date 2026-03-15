@@ -54,7 +54,7 @@ class UpdatesSettingsModule extends SettingsModule {
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
             window._kiroVersion = info.version;
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.warn('[Updates] Failed to get app info:', e); }
 
         this.loadChangelog();
     }
