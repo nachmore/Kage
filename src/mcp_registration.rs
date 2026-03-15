@@ -7,16 +7,17 @@ use std::path::PathBuf;
 pub fn get_mcp_binary_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let mcp_exe = if cfg!(windows) {
-        dir.join("computer-control-mcp.exe")
-    } else {
-        dir.join("computer-control-mcp")
-    };
-    if mcp_exe.exists() {
-        Some(mcp_exe)
-    } else {
-        None
-    }
+    let name = if cfg!(windows) { "computer-control-mcp.exe" } else { "computer-control-mcp" };
+
+    // Check next to the main exe (dev builds, post-install)
+    let sibling = dir.join(name);
+    if sibling.exists() { return Some(sibling); }
+
+    // Check in resources/ subdirectory (Tauri bundle before NSIS hook runs)
+    let resource = dir.join("resources").join(name);
+    if resource.exists() { return Some(resource); }
+
+    None
 }
 
 /// Ensure the computer-control MCP server is registered in the user's mcp.json.
