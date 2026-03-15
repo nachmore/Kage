@@ -443,9 +443,6 @@ fn main() {
 
             info!("=== Setup Complete ===");
 
-            // Auto-register the computer-control MCP server
-            mcp_registration::ensure_registered();
-
             // Auto-start Pocket TTS server if configured
             if config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed {
                 info!("Pocket TTS auto-start enabled, spawning server in background");
@@ -681,6 +678,8 @@ fn main() {
             commands::is_first_run,
             commands::get_startup_enabled,
             commands::set_startup_enabled,
+            commands::get_computer_control_enabled,
+            commands::set_computer_control_enabled,
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,

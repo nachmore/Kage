@@ -281,7 +281,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
     // Create fresh window (previous one was closed/destroyed)
     let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
         .title("Welcome to Kiro Assistant")
-        .inner_size(520.0, 540.0)
+        .inner_size(580.0, 600.0)
         .resizable(false)
         .decorations(false)
         .center()
@@ -306,6 +306,7 @@ pub async fn complete_first_run(
     state: State<'_, AppState>,
     launch_at_startup: bool,
     auto_update: bool,
+    enable_computer_control: bool,
 ) -> Result<(), String> {
     let mut config = state.config.lock().unwrap();
     let is_true_first_run = !config.first_run_completed;
@@ -318,6 +319,11 @@ pub async fn complete_first_run(
     drop(config);
 
     set_startup_enabled_impl(launch_at_startup);
+
+    // Register the computer-control MCP server if the user opted in
+    if enable_computer_control {
+        crate::mcp_registration::ensure_registered();
+    }
 
     // On true first run (or dev mode), show the floating window with a welcome banner
     if is_true_first_run || state.dev_mode {
@@ -368,6 +374,21 @@ pub async fn get_startup_enabled() -> Result<bool, String> {
 #[tauri::command]
 pub async fn set_startup_enabled(enabled: bool) -> Result<(), String> {
     set_startup_enabled_impl(enabled);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_computer_control_enabled() -> Result<bool, String> {
+    Ok(crate::mcp_registration::is_registered())
+}
+
+#[tauri::command]
+pub async fn set_computer_control_enabled(enabled: bool) -> Result<(), String> {
+    if enabled {
+        crate::mcp_registration::ensure_registered();
+    } else {
+        crate::mcp_registration::unregister();
+    }
     Ok(())
 }
 

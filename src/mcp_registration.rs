@@ -1,7 +1,13 @@
 //! Auto-registration of the computer-control MCP server in mcp.json.
+//!
+//! Uses a "ka-" prefix on the server name to avoid clashing with user-defined
+//! MCP servers. Only touches its own entry — never overwrites other entries.
 
 use log::{info, warn};
 use std::path::PathBuf;
+
+/// Key used in mcp.json for our managed MCP server.
+const MCP_SERVER_KEY: &str = "ka-computer-control";
 
 /// Get the path to the computer-control-mcp binary (sibling of the current exe).
 pub fn get_mcp_binary_path() -> Option<PathBuf> {
@@ -21,7 +27,11 @@ pub fn get_mcp_binary_path() -> Option<PathBuf> {
 }
 
 /// Ensure the computer-control MCP server is registered in the user's mcp.json.
-/// Creates the file if it doesn't exist. Only adds the entry if not already present.
+///
+/// - Reads existing mcp.json and preserves all other entries untouched
+/// - Only adds/updates the "ka-computer-control" entry
+/// - Creates the file if it doesn't exist
+/// - Updates the command path if the install location changed
 pub fn ensure_registered() {
     let Some(mcp_path) = get_mcp_binary_path() else {
         warn!("computer-control-mcp binary not found next to main exe");
@@ -32,55 +42,54 @@ pub fn ensure_registered() {
         Some(h) => h.join(".kiro").join("settings"),
         None => { warn!("Cannot determine home directory for mcp.json"); return; }
     };
-    let _ = std::fs::create_dir_all(&config_dir);
+    if let Err(e) = std::fs::create_dir_all(&config_dir) {
+        warn!("Failed to create settings dir: {}", e);
+        return;
+    }
     let mcp_json_path = config_dir.join("mcp.json");
+    let path_str = mcp_path.to_string_lossy().to_string();
 
-    // Read existing config or start fresh
+    // Read existing config — preserve everything
     let mut config: serde_json::Value = if mcp_json_path.exists() {
         match std::fs::read_to_string(&mcp_json_path) {
             Ok(content) => serde_json::from_str(&content).unwrap_or(serde_json::json!({})),
-            Err(_) => serde_json::json!({}),
+            Err(e) => {
+                warn!("Failed to read mcp.json: {}", e);
+                serde_json::json!({})
+            }
         }
     } else {
         serde_json::json!({})
     };
 
     // Ensure mcpServers object exists
-    if !config.get("mcpServers").is_some() {
+    if config.get("mcpServers").is_none() {
         config["mcpServers"] = serde_json::json!({});
     }
 
     let servers = config["mcpServers"].as_object_mut().unwrap();
 
-    // Check if already registered
-    if servers.contains_key("computer-control") {
-        // Update the command path in case the install location changed
-        let path_str = mcp_path.to_string_lossy().to_string();
-        if let Some(existing) = servers.get("computer-control") {
-            let existing_cmd = existing.get("command").and_then(|c| c.as_str()).unwrap_or("");
-            if existing_cmd == path_str {
-                return; // Already up to date
-            }
+    // Check if our entry already exists and is up to date
+    if let Some(existing) = servers.get(MCP_SERVER_KEY) {
+        let existing_cmd = existing.get("command").and_then(|c| c.as_str()).unwrap_or("");
+        if existing_cmd == path_str {
+            return; // Already registered with correct path
         }
-        info!("Updating computer-control MCP server path to: {}", path_str);
-        servers.insert("computer-control".to_string(), serde_json::json!({
-            "command": path_str,
-            "args": [],
-            "disabled": false,
-            "autoApprove": []
-        }));
+        // Path changed (e.g. app was reinstalled to a different location) — update it
+        info!("Updating {} MCP server path to: {}", MCP_SERVER_KEY, path_str);
     } else {
-        let path_str = mcp_path.to_string_lossy().to_string();
-        info!("Registering computer-control MCP server at: {}", path_str);
-        servers.insert("computer-control".to_string(), serde_json::json!({
-            "command": path_str,
-            "args": [],
-            "disabled": false,
-            "autoApprove": []
-        }));
+        info!("Registering {} MCP server at: {}", MCP_SERVER_KEY, path_str);
     }
 
-    // Write back
+    // Insert/update only our entry — all other entries are untouched
+    servers.insert(MCP_SERVER_KEY.to_string(), serde_json::json!({
+        "command": path_str,
+        "args": [],
+        "disabled": false,
+        "autoApprove": []
+    }));
+
+    // Write back preserving all other content
     match serde_json::to_string_pretty(&config) {
         Ok(json) => {
             if let Err(e) = std::fs::write(&mcp_json_path, json) {
@@ -88,5 +97,51 @@ pub fn ensure_registered() {
             }
         }
         Err(e) => warn!("Failed to serialize mcp.json: {}", e),
+    }
+}
+
+/// Check if the computer-control MCP server is currently registered.
+pub fn is_registered() -> bool {
+    let config_dir = match dirs::home_dir() {
+        Some(h) => h.join(".kiro").join("settings"),
+        None => return false,
+    };
+    let mcp_json_path = config_dir.join("mcp.json");
+    if !mcp_json_path.exists() { return false; }
+
+    let config: serde_json::Value = std::fs::read_to_string(&mcp_json_path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({}));
+
+    config.get("mcpServers")
+        .and_then(|s| s.get(MCP_SERVER_KEY))
+        .is_some()
+}
+
+/// Remove the computer-control MCP server from mcp.json.
+/// Preserves all other entries.
+pub fn unregister() {
+    let config_dir = match dirs::home_dir() {
+        Some(h) => h.join(".kiro").join("settings"),
+        None => return,
+    };
+    let mcp_json_path = config_dir.join("mcp.json");
+    if !mcp_json_path.exists() { return; }
+
+    let mut config: serde_json::Value = match std::fs::read_to_string(&mcp_json_path) {
+        Ok(c) => serde_json::from_str(&c).unwrap_or(serde_json::json!({})),
+        Err(_) => return,
+    };
+
+    if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut()) {
+        if servers.remove(MCP_SERVER_KEY).is_some() {
+            info!("Unregistered {} MCP server", MCP_SERVER_KEY);
+            if let Ok(json) = serde_json::to_string_pretty(&config) {
+                if let Err(e) = std::fs::write(&mcp_json_path, json) {
+                    warn!("Failed to write mcp.json: {}", e);
+                }
+            }
+        }
     }
 }

@@ -32,6 +32,16 @@ class AssistantSettingsModule extends SettingsModule {
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
 
+                <div class="setting-row">
+                    <div class="setting-label">Computer Control</div>
+                    <div class="setting-checkbox-row">
+                        <label class="kiro-checkbox">
+                            <input type="checkbox" id="computerControlEnabled">
+                        </label>
+                        <div class="setting-description">Enable the computer-control MCP server for UI automation, app launching, and desktop interaction. Registers a local MCP server that the agent can use to control your computer.</div>
+                    </div>
+                </div>
+
                 <h2 class="settings-section-header" style="margin-top: 24px;">🍟 Quick Actions</h2>
 
                 ${this.createCheckboxRow(
@@ -74,6 +84,14 @@ class AssistantSettingsModule extends SettingsModule {
         if (autoSteering) autoSteering.checked = assistant.auto_steering_enabled || false;
         if (userPath) userPath.value = assistant.user_steering_path || '';
 
+        // Computer control — check MCP registration state
+        const ccEnabled = document.getElementById('computerControlEnabled');
+        if (ccEnabled && window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('get_computer_control_enabled').then(enabled => {
+                ccEnabled.checked = enabled;
+            }).catch(() => { ccEnabled.checked = false; });
+        }
+
         // Quick actions
         const qaEnabled = document.getElementById('quickActionsEnabled');
         const qa = config.quick_actions || { enabled: true, custom_actions: [] };
@@ -90,6 +108,13 @@ class AssistantSettingsModule extends SettingsModule {
         if (!config.acp.assistant) config.acp.assistant = {};
         config.acp.assistant.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
         config.acp.assistant.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
+
+        // Computer control — toggle MCP registration (not stored in config)
+        const ccEnabled = document.getElementById('computerControlEnabled')?.checked ?? false;
+        if (window.__TAURI__?.core) {
+            window.__TAURI__.core.invoke('set_computer_control_enabled', { enabled: ccEnabled })
+                .catch(e => console.warn('Failed to toggle computer control:', e));
+        }
 
         // Quick actions
         config.quick_actions = config.quick_actions || {};

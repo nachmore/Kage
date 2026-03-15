@@ -167,10 +167,20 @@
         </div>
     </div>
 
+    <div class="welcome-section">
+        <div class="welcome-label">Capabilities</div>
+        <div class="welcome-desc">You will always be asked before the agent uses any of these.</div>
+        <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;">
+            <div class="welcome-checkbox-row" style="border: none; border-radius: 8px;" onclick="document.getElementById('computerControl').click()">
+                <input type="checkbox" id="computerControl" checked>
+                <label for="computerControl">Enable computer control (UI automation, app launching)</label>
+            </div>
+        </div>
+    </div>
+
     <div class="welcome-actions">
         <button class="welcome-btn welcome-btn-primary" id="getStartedBtn">Get Started</button>
     </div>
-    <div class="welcome-hint">You can change these anytime in Settings</div>
 
     <script type="module">
         import { HotkeyPicker } from './js/shared/hotkey-picker.js';
@@ -214,8 +224,9 @@
             document.getElementById('getStartedBtn').addEventListener('click', async () => {
                 const launchAtStartup = document.getElementById('launchStartup').checked;
                 const autoUpdate = document.getElementById('autoUpdate').checked;
+                const enableComputerControl = document.getElementById('computerControl').checked;
                 try {
-                    await invoke('complete_first_run', { launchAtStartup, autoUpdate });
+                    await invoke('complete_first_run', { launchAtStartup, autoUpdate, enableComputerControl });
                 } catch (e) {
                     console.error('Failed to complete first run:', e);
                 }
