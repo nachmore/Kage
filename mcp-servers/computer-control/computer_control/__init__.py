@@ -1,1 +1,0 @@
-# computer-control MCP server

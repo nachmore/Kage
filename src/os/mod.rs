@@ -39,6 +39,8 @@ pub mod startup;
 pub mod hotkey;
 pub mod icon;
 pub mod window_list;
+#[allow(dead_code)] // Consumed by the computer-control-mcp binary
+pub mod accessibility;
 
 // Re-export common functionality
 pub use cursor::get_cursor_position;

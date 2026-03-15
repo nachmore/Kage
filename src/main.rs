@@ -5,10 +5,12 @@ mod acp_client;
 mod app_launcher;
 mod auto_steering;
 mod commands;
-mod config;
+#[allow(dead_code)] // Consumed by the computer-control-mcp binary, not this one
+mod computer_control;mod config;
 mod error;
 mod extensions;
 mod logger;
+mod mcp_registration;
 mod os;
 mod process_manager;
 mod single_instance;
@@ -440,6 +442,9 @@ fn main() {
             });
 
             info!("=== Setup Complete ===");
+
+            // Auto-register the computer-control MCP server
+            mcp_registration::ensure_registered();
 
             // Auto-start Pocket TTS server if configured
             if config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed {
