@@ -392,6 +392,23 @@ pub async fn set_computer_control_enabled(enabled: bool) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn get_mcp_json_path() -> Result<String, String> {
+    crate::mcp_registration::default_mcp_json_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .ok_or("Cannot determine mcp.json path".into())
+}
+
+#[tauri::command]
+pub async fn get_mcp_config(path: Option<String>) -> Result<serde_json::Value, String> {
+    Ok(crate::mcp_registration::read_mcp_json(path.as_deref()))
+}
+
+#[tauri::command]
+pub async fn save_mcp_config(path: Option<String>, config: serde_json::Value) -> Result<(), String> {
+    crate::mcp_registration::write_mcp_json(path.as_deref(), &config)
+}
+
 fn get_startup_enabled_impl() -> bool {
     crate::os::get_startup_enabled()
 }

@@ -38,6 +38,9 @@ pub struct Config {
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
+    /// Custom path to mcp.json. If empty, uses ~/.kiro/settings/mcp.json.
+    #[serde(default)]
+    pub mcp_config_path: Option<String>,
     /// Automatically update installed extensions from the store
     #[serde(default)]
     pub auto_update_extensions: bool,
@@ -417,6 +420,7 @@ impl Default for Config {
             pocket_tts: PocketTtsConfig::default(),
             clipboard_hotkey: None,
             store_url: None,
+            mcp_config_path: None,
             auto_update_extensions: false,
             last_extension_update_check: None,
         }

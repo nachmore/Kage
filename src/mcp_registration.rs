@@ -145,3 +145,36 @@ pub fn unregister() {
         }
     }
 }
+
+/// Get the default mcp.json path.
+pub fn default_mcp_json_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".kiro").join("settings").join("mcp.json"))
+}
+
+/// Read the full mcp.json content as a JSON value.
+pub fn read_mcp_json(path: Option<&str>) -> serde_json::Value {
+    let mcp_path = path
+        .map(PathBuf::from)
+        .or_else(default_mcp_json_path)
+        .unwrap_or_default();
+    if !mcp_path.exists() {
+        return serde_json::json!({ "mcpServers": {} });
+    }
+    std::fs::read_to_string(&mcp_path)
+        .ok()
+        .and_then(|c| serde_json::from_str(&c).ok())
+        .unwrap_or(serde_json::json!({ "mcpServers": {} }))
+}
+
+/// Write the full mcp.json content.
+pub fn write_mcp_json(path: Option<&str>, config: &serde_json::Value) -> Result<(), String> {
+    let mcp_path = path
+        .map(PathBuf::from)
+        .or_else(default_mcp_json_path)
+        .ok_or("Cannot determine mcp.json path")?;
+    if let Some(parent) = mcp_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let json = serde_json::to_string_pretty(config).map_err(|e| format!("Serialize: {}", e))?;
+    std::fs::write(&mcp_path, json).map_err(|e| format!("Write: {}", e))
+}

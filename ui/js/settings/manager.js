@@ -267,6 +267,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
+    settingsManager.registerModule(new McpSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
     settingsManager.registerModule(new IntegrationSettingsModule());
     settingsManager.registerModule(new ShortcutsSettingsModule());

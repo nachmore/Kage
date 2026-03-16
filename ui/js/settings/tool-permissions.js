@@ -5,7 +5,7 @@
 
 class ToolPermissionsSettingsModule extends SettingsModule {
     constructor() {
-        super('tool-permissions', 'Agent Tools', '🔧');
+        super('tool-permissions', 'Agent Permissions', '🔧');
         this.trustAll = false;
         this.tools = [];
     }
