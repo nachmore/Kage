@@ -61,3 +61,8 @@ cd ui/vendor && npm install  # Install/update JS dependencies
 - Win32 API used directly for performance-critical operations (clipboard, SendInput)
 - All config fields must have serde defaults for backward compatibility
 - Use `log::*` macros for logging, avoid `println!` except for startup banner
+
+## Security
+- CSP is intentionally disabled (`"csp": null`) — see `docs/SECURITY_MODEL.md` for rationale
+- The security boundary is the tool permission system, not the webview CSP
+- Do not add features that load external/untrusted web content without revisiting CSP
