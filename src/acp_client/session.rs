@@ -11,8 +11,8 @@ use super::types::{AcpRequest, format_acp_error};
 
 /// Track when we last injected a timestamp into a user message.
 /// Refreshed every 15 minutes to keep the agent's sense of time current.
-static LAST_TIMESTAMP_INJECTION: std::sync::LazyLock<Mutex<Instant>> =
-    std::sync::LazyLock::new(|| Mutex::new(Instant::now() - std::time::Duration::from_secs(3600)));
+static LAST_TIMESTAMP_INJECTION: std::sync::LazyLock<Mutex<Option<Instant>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 static LAST_TIMESTAMP_DATE: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(String::new()));
 
@@ -205,7 +205,8 @@ impl AcpClient {
         // Periodically inject current timestamp so the agent's sense of time stays fresh
         {
             let mut last = LAST_TIMESTAMP_INJECTION.lock().unwrap();
-            if last.elapsed().as_secs() >= TIMESTAMP_REFRESH_SECS {
+            let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
+            if elapsed >= TIMESTAMP_REFRESH_SECS {
                 let now = chrono::Local::now();
                 let today = now.format("%Y-%m-%d").to_string();
                 let time = now.format("%H:%M").to_string();
@@ -220,7 +221,7 @@ impl AcpClient {
                     format!("[Current time: {} {}]", today, time)
                 };
                 prompt.push(serde_json::json!({ "type": "text", "text": ts }));
-                *last = Instant::now();
+                *last = Some(Instant::now());
             }
         }
 

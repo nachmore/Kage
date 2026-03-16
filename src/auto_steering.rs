@@ -35,10 +35,10 @@ static MESSAGE_COUNTER: AtomicU32 = AtomicU32::new(0);
 /// Used to skip on-quit generation when there's nothing new to analyze.
 static MESSAGES_SINCE_GENERATION: AtomicU32 = AtomicU32::new(0);
 
-/// Timestamp of the last periodic steering generation (initialized to epoch so
-/// the first eligible trigger is allowed through).
-static LAST_GENERATION: std::sync::LazyLock<Mutex<Instant>> =
-    std::sync::LazyLock::new(|| Mutex::new(Instant::now() - std::time::Duration::from_secs(MIN_UPDATE_INTERVAL_SECS + 1)));
+/// Timestamp of the last periodic steering generation.
+/// Initialized to None so the first eligible trigger is always allowed through.
+static LAST_GENERATION: std::sync::LazyLock<Mutex<Option<Instant>>> =
+    std::sync::LazyLock::new(|| Mutex::new(None));
 
 /// Increment the message counter and return true if it's time to update.
 /// Requires both the message count threshold AND the cooldown to have elapsed.
@@ -49,11 +49,12 @@ pub fn tick_message_counter() -> bool {
         MESSAGE_COUNTER.store(0, Ordering::Relaxed);
         // Check the hourly cooldown
         if let Ok(last) = LAST_GENERATION.lock() {
-            if last.elapsed().as_secs() >= MIN_UPDATE_INTERVAL_SECS {
+            let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
+            if elapsed >= MIN_UPDATE_INTERVAL_SECS {
                 return true;
             }
             info!("Auto-steering: message threshold reached but cooldown not elapsed ({}s remaining)",
-                MIN_UPDATE_INTERVAL_SECS.saturating_sub(last.elapsed().as_secs()));
+                MIN_UPDATE_INTERVAL_SECS.saturating_sub(elapsed));
         }
     }
     false
@@ -63,7 +64,7 @@ pub fn tick_message_counter() -> bool {
 fn mark_generation() {
     MESSAGES_SINCE_GENERATION.store(0, Ordering::Relaxed);
     if let Ok(mut last) = LAST_GENERATION.lock() {
-        *last = Instant::now();
+        *last = Some(Instant::now());
     }
 }
 
