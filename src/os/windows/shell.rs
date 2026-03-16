@@ -8,7 +8,7 @@ pub fn open_url_impl(url: &str) -> Result<()> {
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    log::info!("[open_url] Opening: {}", url);
+    log::debug!("[open_url] ShellExecuteW: {}", url);
     let url_w = HSTRING::from(url);
     let op = HSTRING::from("open");
     unsafe {

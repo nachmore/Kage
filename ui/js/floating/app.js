@@ -107,6 +107,7 @@ export class FloatingApp {
             this.setupVisibilityTracking();
             this.windowManager.setupDragging(this.elements.ghostContainer);
             this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
+            this.windowManager.setupScaleChangeListener();
 
             const inputContainer = this.elements.input?.closest('.input-container');
             setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);

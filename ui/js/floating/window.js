@@ -197,6 +197,37 @@ export class WindowManager {
         });
     }
 
+    /** Re-layout when the display scale factor changes (e.g. undocking from a monitor). */
+    setupScaleChangeListener() {
+        const appWindow = window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
+        if (!appWindow) {
+            console.warn('[WindowManager] No appWindow — cannot listen for scale changes');
+            return;
+        }
+        console.log('[WindowManager] Listening for scale factor changes');
+
+        appWindow.onScaleChanged(async ({ payload }) => {
+            const { scaleFactor, size } = payload;
+            console.log(`[WindowManager] Scale changed: factor=${scaleFactor}, size=${size.width}x${size.height}`);
+
+            // Reset cached heights — they were in the old scale's physical pixels
+            this.userSetHeight = null;
+            this.autoGrowHeight = null;
+
+            // Recalculate the window size at the new scale
+            try {
+                const newWidth = Math.round(516 * scaleFactor);
+                const newHeight = Math.round(DEFAULT_HEIGHT * scaleFactor);
+                console.log(`[WindowManager] Resizing to ${newWidth}x${newHeight} physical px`);
+                await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
+                // Give the layout a moment to settle, then auto-size to content
+                setTimeout(() => this.resizeWindow(), 200);
+            } catch (e) {
+                console.warn('[WindowManager] DPI resize failed:', e);
+            }
+        });
+    }
+
     setupResizeHandle(resizeHandle) {
         let startX = 0;
         let startY = 0;
