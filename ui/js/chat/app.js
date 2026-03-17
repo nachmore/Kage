@@ -592,6 +592,9 @@ export class ChatApp {
     }
 
     renderSessionList() {
+            // Don't overwrite the list if we're viewing Kiro Desktop sessions
+            if (window._kiroSessionSource === 'desktop') return;
+
             const list = this.elements.sessionList;
             const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 

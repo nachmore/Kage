@@ -271,6 +271,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .message-header {
@@ -286,6 +288,7 @@ body {
     padding: 12px 16px;
     border-radius: 16px;
     word-wrap: break-word;
+    overflow-wrap: break-word;
     line-height: 1.6;
     font-size: 14px;
 }
@@ -865,6 +868,40 @@ body.light-theme .chat-header-action:hover {
 .session-search::placeholder {
     color: #888;
 }
+
+/* Session source toggle (Assistant / Desktop) */
+.session-source-toggle {
+    display: flex;
+    padding: 0 12px 8px;
+    gap: 2px;
+}
+.source-toggle-btn {
+    flex: 1;
+    padding: 5px 8px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--kiro-text-muted, #938F9B);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.source-toggle-btn:first-child { border-radius: 6px 0 0 6px; }
+.source-toggle-btn:last-child { border-radius: 0 6px 6px 0; }
+.source-toggle-btn.active {
+    background: var(--kiro-accent);
+    border-color: var(--kiro-accent);
+    color: #fff;
+}
+.source-toggle-btn:not(.active):hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+body.light-theme .source-toggle-btn {
+    border-color: rgba(0, 0, 0, 0.12);
+}
+body.light-theme .source-toggle-btn:not(.active):hover {
+    background: rgba(0, 0, 0, 0.04);
+}
 body.light-theme .session-search {
     background: rgba(0,0,0,0.04);
     border-color: rgba(0,0,0,0.1);
@@ -1016,4 +1053,122 @@ body.light-theme .sidebar-toggle-btn {
 .message.user .message-actions.user-actions {
     opacity: 0.7;
     justify-content: flex-end;
+}
+
+/* Kiro Desktop session viewer */
+.kd-workspace-header {
+    padding: 8px 16px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--kiro-text-muted, #938F9B);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.kd-session-item {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.kd-session-content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+.kd-session-item .session-item-title {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kd-session-item .session-item-date {
+    display: block;
+    margin-top: 2px;
+}
+.kd-session-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+.kd-session-item:hover .kd-session-actions { opacity: 1; }
+.kd-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--kiro-text-muted, #938F9B);
+    transition: background 0.15s, color 0.15s;
+}
+.kd-action-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--kiro-text-primary); }
+.kd-delete-btn:hover { color: #ef4444; }
+.kd-readonly-banner {
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 12px;
+    color: var(--kiro-text-muted, #938F9B);
+    background: rgba(99, 102, 241, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+body.light-theme .kd-readonly-banner {
+    background: rgba(99, 102, 241, 0.04);
+    border-color: rgba(0, 0, 0, 0.06);
+}
+.kd-loading {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--kiro-text-muted);
+    font-size: 13px;
+}
+.kd-tool-details {
+    width: 100%;
+}
+.kd-tool-summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--kiro-text-muted, #938F9B);
+    padding: 4px 0;
+    user-select: none;
+}
+.kd-tool-summary:hover { color: var(--kiro-text-primary, #E5E7EB); }
+.kd-tool-output {
+    max-height: 300px;
+    overflow: auto;
+    font-size: 11px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    margin-top: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--kiro-text-primary, #E5E7EB);
+}
+body.light-theme .kd-tool-output {
+    background: rgba(0, 0, 0, 0.04);
+}
+.tool-message {
+    padding: 4px 16px;
+}
+
+/* Prevent code blocks from overflowing message bubbles */
+.message-content pre {
+    max-width: 100%;
+    overflow-x: auto;
+}
+.message-content code {
+    word-break: break-all;
+}
+.message-content pre code {
+    word-break: normal;
 }

@@ -1,5 +1,6 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './app.js';
+import { KiroDesktopViewer } from './kiro-desktop.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
@@ -46,6 +47,54 @@ function initApp() {
         // Render extension toolbar buttons
         app.renderExtensionToolbarButtons();
     });
+
+    // Initialize Kiro Desktop viewer
+    let desktopViewer = null;
+    let currentSource = 'assistant';
+    // Expose source state so ChatApp's session refresh doesn't overwrite desktop sessions
+    window._kiroSessionSource = 'assistant';
+
+    const kdElements = {
+        sessionList: document.getElementById('sessionList'),
+        sessionSearch: document.getElementById('sessionSearch'),
+    };
+
+    (async () => {
+        const viewer = new KiroDesktopViewer(invoke, kdElements, app);
+        const available = await viewer.init();
+        if (available) {
+            desktopViewer = viewer;
+            // Wire up source toggle buttons
+            const toggle = document.getElementById('sessionSourceToggle');
+            if (toggle) {
+                toggle.querySelectorAll('.source-toggle-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        const source = btn.dataset.source;
+                        if (source === currentSource) return;
+                        currentSource = source;
+                        window._kiroSessionSource = source;
+                        toggle.querySelectorAll('.source-toggle-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+
+                        if (source === 'desktop') {
+                            await desktopViewer.loadSessions();
+                        } else {
+                            desktopViewer.restoreInputArea();
+                            app.renderSessionList();
+                            // Reload current assistant session
+                            if (app.activeSessionId) {
+                                app.selectSession(app.activeSessionId);
+                            }
+                        }
+                    });
+                });
+            }
+            // Also filter desktop sessions on search
+            kdElements.sessionSearch?.addEventListener('input', () => {
+                if (currentSource === 'desktop') desktopViewer.renderSessionList();
+            });
+        }
+    })();
 
     // Sidebar resize
     const sidebar = document.getElementById('chatSidebar');

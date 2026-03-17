@@ -1,6 +1,7 @@
 pub mod extensions;
 pub mod folder_tools;
 pub mod input;
+pub mod kiro_desktop;
 pub mod messaging;
 pub mod pocket_tts;
 pub mod sessions;
@@ -11,6 +12,7 @@ pub mod window;
 pub use extensions::*;
 pub use folder_tools::*;
 pub use input::*;
+pub use kiro_desktop::*;
 pub use messaging::*;
 pub use pocket_tts::*;
 pub use sessions::*;
