@@ -725,7 +725,7 @@ body {
 /* Steering message bubble */
 .steering-message {
     margin: 8px 16px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     overflow: hidden;
     font-size: 12px;
@@ -750,16 +750,19 @@ body {
     font-size: 16px;
     opacity: 0.7;
 }
+.steering-icon svg {
+    color: var(--kiro-text-muted, #938F9B);
+}
 
 .steering-label {
     flex: 1;
-    color: #938F9B;
+    color: var(--kiro-text-muted);
     font-size: 12px;
 }
 
 .steering-toggle {
     font-size: 10px;
-    color: #938F9B;
+    color: var(--kiro-text-muted);
     transition: transform 0.2s;
 }
 
@@ -769,7 +772,7 @@ body {
 
 .steering-body {
     padding: 12px;
-    border-top: 1px solid #3c3c3c;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     max-height: 300px;
     overflow-y: auto;
 }
@@ -780,32 +783,32 @@ body {
 
 .steering-content {
     font-size: 12px;
-    color: #938F9B;
+    color: var(--kiro-text-muted);
     line-height: 1.5;
 }
 
 .steering-content p { margin: 4px 0; }
 .steering-content h1, .steering-content h2, .steering-content h3 {
     font-size: 13px;
-    color: #b0b0b0;
+    color: var(--kiro-text-secondary, #b0b0b0);
     margin: 8px 0 4px;
 }
 
 .steering-ack {
     margin-top: 8px;
     padding-top: 8px;
-    border-top: 1px dashed #3c3c3c;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
     color: #6b7280;
     font-size: 11px;
     font-style: italic;
 }
 
 /* Light theme */
-body.light-theme .steering-message { border-color: #d4d4d4; }
+body.light-theme .steering-message { border-color: rgba(0, 0, 0, 0.1); }
 body.light-theme .steering-header { background: rgba(113, 56, 204, 0.06); }
 body.light-theme .steering-header:hover { background: rgba(113, 56, 204, 0.12); }
-body.light-theme .steering-body { border-top-color: #d4d4d4; }
-body.light-theme .steering-ack { border-top-color: #d4d4d4; }
+body.light-theme .steering-body { border-top-color: rgba(0, 0, 0, 0.1); }
+body.light-theme .steering-ack { border-top-color: rgba(0, 0, 0, 0.1); }
 
 /* Chat header action buttons (rename, reveal file) */
 .chat-header-title-group {
@@ -1231,4 +1234,12 @@ body.light-theme .kd-tool-output {
 }
 .kd-new-divider-seen {
     opacity: 0;
+}
+
+/* Session list loading indicator */
+.session-list-loader {
+    display: flex;
+    justify-content: center;
+    padding: 12px 0;
+    gap: 4px;
 }

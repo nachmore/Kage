@@ -577,9 +577,22 @@ export class ChatApp {
     async loadMoreSessions() {
         if (this._sessionsFullyLoaded || this._loadingMore) return;
         this._loadingMore = true;
+
+        // Show loading dots at the bottom of the list
+        const list = this.elements.sessionList;
+        let loader = list.querySelector('.session-list-loader');
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.className = 'session-list-loader';
+            loader.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
+            list.appendChild(loader);
+        }
+
         try {
             const more = await this.invoke('list_sessions', { limit: 50, offset: this.sessions.length });
             if (more.length > 0) {
+                // Mark loaded sessions as seen (they're not new — just paginated in)
+                for (const s of more) this._seenSessionIds.add(s.session_id);
                 this.sessions = this.sessions.concat(more);
                 this.renderSessionList();
             }
@@ -588,6 +601,7 @@ export class ChatApp {
             console.error('Failed to load more sessions:', e);
         } finally {
             this._loadingMore = false;
+            list.querySelector('.session-list-loader')?.remove();
         }
     }
 
@@ -599,6 +613,7 @@ export class ChatApp {
             const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
             if (this.sessions.length === 0) {
+                if (this._loadingMore) return; // Still loading — don't show empty state
                 list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
                 return;
             }
@@ -616,9 +631,20 @@ export class ChatApp {
             // Filter by search query
             const filtered = searchQuery
                 ? sorted.filter(s => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
-                : sorted;
+                : sorted.filter(s => {
+                    // Hide steering-only sessions ("New Chat") unless it's the current session
+                    if ((s.title || 'New Chat') === 'New Chat' && s.session_id !== defaultId) return false;
+                    return true;
+                });
 
             if (filtered.length === 0) {
+                if (this._loadingMore || !this._sessionsFullyLoaded) {
+                    // Still loading — show dots instead of empty state
+                    if (!list.querySelector('.session-list-loader')) {
+                        list.innerHTML = '<div class="session-list-loader"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+                    }
+                    return;
+                }
                 list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
                 return;
             }
@@ -708,6 +734,11 @@ export class ChatApp {
             // Remove any trailing stale children
             while (list.children.length > insertionIndex) {
                 list.lastChild.remove();
+            }
+
+            // If the filtered list is too short to scroll, auto-load more
+            if (!searchQuery && filtered.length < 15 && !this._sessionsFullyLoaded && !this._loadingMore) {
+                this.loadMoreSessions();
             }
         }
 
@@ -976,7 +1007,7 @@ export class ChatApp {
                 steeringEl.className = 'steering-message collapsed';
                 steeringEl.innerHTML = `
                     <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
-                        <span class="steering-icon">🛞</span>
+                        <span class="steering-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/><line x1="10" y1="12" x2="2.5" y2="10.7"/><line x1="14" y1="12" x2="21.5" y2="10.7"/></svg></span>
                         <span class="steering-label">Steering context sent</span>
                         <span class="steering-toggle">▶</span>
                     </div>
