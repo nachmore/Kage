@@ -144,6 +144,14 @@ export class FloatingApp {
 
             this.listen('clipboard_history_mode', async () => {
                 console.log('Clipboard history mode activated via hotkey');
+                // Clear any stale content
+                this.elements.responseText.textContent = '';
+                this.elements.contentArea.classList.remove('visible');
+                this.elements.expandBtn.classList.remove('visible');
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.currentResponse = '';
+                this.dismissBanner();
+                // Enter clipboard mode
                 this.elements.input.value = '>cb ';
                 this._enterClipboardMode();
             });
@@ -550,6 +558,17 @@ export class FloatingApp {
             }
             await this.appWindow.hide();
             this.dismissBanner();
+            // Clean up clipboard mode state on hide
+            if (this._clipboardMode) {
+                this._restoreOverlaysAfterClipboard();
+                this._clipboardMode = false;
+                this._clipboardEntries = null;
+            }
+            // Clear >cb prefix if it's still in the input
+            if (this.elements.input.value.startsWith('>cb')) {
+                this.elements.input.value = '';
+                this.clearSuggestions();
+            }
             // Hide response quick actions — if user didn't use them, they're stale
             const responseActions = document.getElementById('responseActionsContainer');
             if (responseActions) responseActions.style.display = 'none';
@@ -962,6 +981,8 @@ export class FloatingApp {
             this.currentMatches,
             () => this.windowManager.resizeWindow()
         );
+        // After dropdown renders, ensure the window is on-screen
+        await this.windowManager.resizeWindow();
     }
 
     /**

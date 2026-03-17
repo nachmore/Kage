@@ -156,10 +156,53 @@ export class WindowManager {
                 }
                 
                 await this.invoke('resize_floating_window', { height });
+                // After growing, ensure the window is still fully on-screen
+                await this._ensureOnScreen();
             } catch (error) {
                 console.error('Error resizing window:', error);
             }
         }, 50);
+    }
+
+    /** Nudge the window position if it overflows the current monitor bounds. */
+    async _ensureOnScreen() {
+        try {
+            const appWindow = window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
+            if (!appWindow) return;
+            const pos = await appWindow.outerPosition();
+            const size = await appWindow.outerSize();
+            const monitor = await appWindow.currentMonitor();
+            if (!monitor) return;
+
+            const monX = monitor.position.x;
+            const monY = monitor.position.y;
+            const monW = monitor.size.width;
+            const monH = monitor.size.height;
+
+            let x = pos.x;
+            let y = pos.y;
+            let moved = false;
+
+            // If the bottom overflows, push up
+            if (y + size.height > monY + monH) {
+                y = monY + monH - size.height;
+                moved = true;
+            }
+            // If the right overflows, push left
+            if (x + size.width > monX + monW) {
+                x = monX + monW - size.width;
+                moved = true;
+            }
+            // Don't go above or left of the monitor
+            if (x < monX) { x = monX; moved = true; }
+            if (y < monY) { y = monY; moved = true; }
+
+            if (moved) {
+                await appWindow.setPosition(new window.__TAURI__.window.PhysicalPosition(x, y));
+            }
+        } catch (e) {
+            // Ignore — best effort
+        }
     }
 
     async resetHeightForNewMessage() {

@@ -63,7 +63,7 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
         return;
     }
 
-    position_floating_window(window, "mouse", None, None);
+    position_floating_window_with_height(window, "mouse", None, None, Some(500));
     let _ = window.show();
     let _ = window.set_focus();
     state.updater.touch_activity();
@@ -160,6 +160,16 @@ fn position_floating_window(
     last_x: Option<i32>,
     last_y: Option<i32>,
 ) {
+    position_floating_window_with_height(window, strategy, last_x, last_y, None);
+}
+
+fn position_floating_window_with_height(
+    window: &WebviewWindow,
+    strategy: &str,
+    last_x: Option<i32>,
+    last_y: Option<i32>,
+    estimated_height: Option<u32>,
+) {
     match strategy {
         "mouse" => {
             // Position near cursor, but ensure fully on-screen
@@ -168,14 +178,16 @@ fn position_floating_window(
                     let mon_pos = monitor.position();
                     let mon_size = monitor.size();
                     let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
+                    // Use estimated height if provided (e.g. clipboard dropdown)
+                    let effective_height = estimated_height.unwrap_or(win_size.height) as i32;
 
                     // Start at cursor, offset slightly down-right
                     let mut x = cursor_x;
                     let mut y = cursor_y + 20;
 
-                    // Clamp to monitor bounds
+                    // Clamp to monitor bounds using the effective height
                     let max_x = mon_pos.x + mon_size.width as i32 - win_size.width as i32;
-                    let max_y = mon_pos.y + mon_size.height as i32 - win_size.height as i32;
+                    let max_y = mon_pos.y + mon_size.height as i32 - effective_height;
                     x = x.max(mon_pos.x).min(max_x);
                     y = y.max(mon_pos.y).min(max_y);
 
