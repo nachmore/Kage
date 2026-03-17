@@ -14,31 +14,117 @@ export class KiroDesktopViewer {
         this.workspaces = [];
         this.activeSessionId = null;
         this.activeWorkspace = null;
+        this._pollInterval = null;
+        this._pollUpdatedAt = 0;
+    }
+
+    /** Stop polling for CLI session updates. */
+    _stopPolling() {
+        if (this._pollInterval) {
+            clearInterval(this._pollInterval);
+            this._pollInterval = null;
+        }
+    }
+
+    /** Start polling a CLI session for updates every 3 seconds. */
+    _startPolling(conversationId, updatedAt) {
+        this._stopPolling();
+        this._pollUpdatedAt = updatedAt;
+        this._pollInterval = setInterval(async () => {
+            try {
+                const newTs = await this.invoke('kiro_cli_check_updated', {
+                    conversationId,
+                    lastUpdatedAt: this._pollUpdatedAt,
+                });
+                if (newTs) {
+                    console.log(`[KiroDesktop] CLI session updated, reloading...`);
+                    this._pollUpdatedAt = newTs;
+                    // Reload and re-render, preserving scroll + marking new messages
+                    const messages = await this.invoke('kiro_cli_load_session', { conversationId });
+                    const area = this.chatApp.elements.messagesArea;
+                    const session = this.sessions.find(s => s.id === conversationId);
+                    if (area) {
+                        const prevCount = area.querySelectorAll('.message').length;
+                        const wasAtBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
+                        this.renderMessages(area, messages, session);
+                        const newCount = area.querySelectorAll('.message').length;
+                        // Insert a "new" divider before the new messages
+                        if (newCount > prevCount && prevCount > 0) {
+                            const allMsgs = area.querySelectorAll('.message');
+                            const dividerTarget = allMsgs[prevCount];
+                            if (dividerTarget) {
+                                const divider = document.createElement('div');
+                                divider.className = 'kd-new-divider';
+                                divider.textContent = '● New';
+                                dividerTarget.before(divider);
+                                // Fade out when scrolled into view
+                                const observer = new IntersectionObserver((entries) => {
+                                    if (entries[0].isIntersecting) {
+                                        setTimeout(() => divider.classList.add('kd-new-divider-seen'), 2000);
+                                        observer.disconnect();
+                                    }
+                                }, { root: area, threshold: 0.5 });
+                                observer.observe(divider);
+                            }
+                        }
+                        if (wasAtBottom) area.scrollTop = area.scrollHeight;
+                    }
+                }
+            } catch (e) {
+                // Silently ignore poll errors (db might be locked momentarily)
+            }
+        }, 3000);
     }
 
     async init() {
-        const available = await this.invoke('kiro_desktop_available');
-        if (!available) return false;
+        const [desktopAvailable, cliAvailable] = await Promise.all([
+            this.invoke('kiro_desktop_available'),
+            this.invoke('kiro_cli_available'),
+        ]);
+        if (!desktopAvailable && !cliAvailable) return false;
+
+        this._hasDesktop = desktopAvailable;
+        this._hasCli = cliAvailable;
 
         const toggle = document.getElementById('sessionSourceToggle');
-        if (toggle) toggle.style.display = 'flex';
+        if (toggle) {
+            toggle.style.display = 'flex';
+            // Update label to reflect available sources
+            const btn = toggle.querySelector('[data-source="desktop"]');
+            if (btn) btn.textContent = 'Kiro IDE & CLI';
+        }
 
-        this.workspaces = await this.invoke('kiro_desktop_workspaces');
+        if (desktopAvailable) {
+            this.workspaces = await this.invoke('kiro_desktop_workspaces');
+        }
         return true;
     }
 
     async loadSessions(workspaceEncoded = null) {
         try {
             console.log('[KiroDesktop] Loading sessions...');
-            // Show spinner while loading
             const list = this.elements.sessionList;
             list.innerHTML = '<div class="kd-loading" style="display:flex;justify-content:center;padding:24px 0;"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
 
-            // Load .chat files — these have the full conversations with agent responses
-            this.sessions = await this.invoke('kiro_desktop_chat_sessions', { limit: 200 });
-            // Sort by date
+            // Load from both sources in parallel
+            const promises = [];
+            if (this._hasDesktop) {
+                promises.push(this.invoke('kiro_desktop_chat_sessions', { limit: 100 }));
+            } else {
+                promises.push(Promise.resolve([]));
+            }
+            if (this._hasCli) {
+                promises.push(this.invoke('kiro_cli_sessions', { limit: 100 }));
+            } else {
+                promises.push(Promise.resolve([]));
+            }
+
+            const [desktopSessions, cliSessions] = await Promise.all(promises);
+
+            // Merge and sort by date
+            this.sessions = [...desktopSessions, ...cliSessions];
             this.sessions.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-            console.log(`[KiroDesktop] Loaded ${this.sessions.length} chat sessions`);
+            console.log(`[KiroDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`);
             this.renderSessionList();
         } catch (e) {
             console.warn('[KiroDesktop] Failed to load sessions:', e);
@@ -65,41 +151,33 @@ export class KiroDesktopViewer {
             return;
         }
 
-        // Group by workspace
-        const byWorkspace = new Map();
-        for (const s of filtered) {
-            const ws = s.workspace || 'Unknown';
-            if (!byWorkspace.has(ws)) byWorkspace.set(ws, []);
-            byWorkspace.get(ws).push(s);
-        }
-
+        // Render interleaved by date (no workspace grouping)
         let html = '';
-        for (const [ws, sessions] of byWorkspace) {
-            const wsShort = ws.split(/[/\\]/).pop() || ws;
-            html += `<div class="kd-workspace-header" title="${esc(ws)}">📁 ${esc(wsShort)}</div>`;
+        for (const s of filtered) {
+            const isActive = s.id === this.activeSessionId;
+            const date = new Date(s.updated_at);
+            const dateStr = formatRelativeDate(date);
+            const sourceIcon = s.session_type === 'cli'
+                ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
+                : '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 65 47" fill="none"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kiro-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kiro-bg-primary, #1E1A24)"/></svg>';
+            const sourceLabel = s.session_type === 'cli' ? 'CLI' : 'Desktop';
+            const wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
 
-            for (const s of sessions) {
-                const isActive = s.id === this.activeSessionId;
-                const date = new Date(s.updated_at);
-                const dateStr = formatRelativeDate(date);
-                const typeIcon = s.session_type === 'vibe' ? '💬' : '🤖';
-
-                html += `<div class="session-item kd-session-item ${isActive ? 'active' : ''}"
-                    data-session-id="${esc(s.id)}" data-workspace="${esc(s.workspace_encoded)}" data-filepath="${esc(s.file_path || '')}">
-                    <div class="kd-session-content">
-                        <div class="session-item-title">${typeIcon} ${esc(s.title)}</div>
-                        <div class="session-item-date">${dateStr} · ${s.message_count} turns</div>
-                    </div>
-                    <div class="kd-session-actions">
-                        <button class="kd-action-btn kd-folder-btn" title="Open folder">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                        </button>
-                        <button class="kd-action-btn kd-delete-btn" title="Delete">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        </button>
-                    </div>
-                </div>`;
-            }
+            html += `<div class="session-item kd-session-item ${isActive ? 'active' : ''}"
+                data-session-id="${esc(s.id)}" data-workspace="${esc(s.workspace_encoded)}" data-filepath="${esc(s.file_path || '')}">
+                <div class="kd-session-content">
+                    <div class="session-item-title">${sourceIcon} ${esc(s.title)}</div>
+                    <div class="session-item-date">${dateStr} · ${esc(sourceLabel)} · ${s.message_count} turns</div>
+                </div>
+                <div class="kd-session-actions">
+                    <button class="kd-action-btn kd-folder-btn" title="Open folder">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    </button>
+                    <button class="kd-action-btn kd-delete-btn" title="Delete">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+            </div>`;
         }
 
         list.innerHTML = html;
@@ -157,6 +235,9 @@ export class KiroDesktopViewer {
             return;
         }
 
+        // Stop any existing polling
+        this._stopPolling();
+
         area.innerHTML = '<div class="kd-loading">Loading session...</div>';
 
         // Hide input area for read-only mode
@@ -164,35 +245,50 @@ export class KiroDesktopViewer {
         if (inputContainer) inputContainer.style.display = 'none';
 
         try {
-            // Find the session to check if it has a file_path (meaning it's a .chat file)
-            const session = this.sessions.find(s => s.id === sessionId && s.workspace_encoded === workspaceEncoded);
             let messages;
+            const session = this.sessions.find(s => s.id === sessionId && s.workspace_encoded === workspaceEncoded);
 
-            if (session?.file_path?.endsWith('.chat')) {
-                // Load from .chat file (has full conversations)
+            if (session?.session_type === 'cli') {
+                console.log(`[KiroDesktop] Loading CLI session: ${sessionId}`);
+                messages = await this.invoke('kiro_cli_load_session', { conversationId: sessionId });
+                // Start polling for live updates
+                const updatedMs = new Date(session.updated_at).getTime();
+                this._startPolling(sessionId, updatedMs);
+            } else if (session?.file_path?.endsWith('.chat')) {
                 console.log(`[KiroDesktop] Loading .chat file: ${session.file_path}`);
                 messages = await this.invoke('kiro_desktop_load_chat_file', { filePath: session.file_path });
             } else {
-                // Load from workspace-session
                 console.log(`[KiroDesktop] Loading workspace session: ${sessionId}`);
                 messages = await this.invoke('kiro_desktop_load_session', { workspaceEncoded, sessionId });
             }
 
             console.log(`[KiroDesktop] Loaded ${messages.length} messages`);
-            this.renderMessages(area, messages);
+            this.renderMessages(area, messages, session);
         } catch (e) {
             console.error('[KiroDesktop] Failed to load session:', e);
             area.innerHTML = `<div class="kd-loading">Failed to load: ${esc(String(e))}</div>`;
         }
     }
 
-    renderMessages(container, messages) {
+    renderMessages(container, messages, session) {
         container.innerHTML = '';
 
-        // Read-only banner
+        // Read-only banner with expandable details
+        const sourceLabel = session?.session_type === 'cli' ? 'Kiro CLI' : 'Kiro Desktop';
+        const bannerIcon = session?.session_type === 'cli'
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
+            : '<svg width="14" height="14" viewBox="0 0 65 47" fill="none" style="vertical-align:-2px"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kiro-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kiro-bg-primary, #1E1A24)"/></svg>';
         const banner = document.createElement('div');
         banner.className = 'kd-readonly-banner';
-        banner.textContent = '🔒 Read-only — Kiro Desktop session';
+        banner.innerHTML = `<details class="kd-banner-details">
+            <summary>${bannerIcon} Read-only — ${esc(sourceLabel)} session</summary>
+            <div class="kd-banner-info">
+                ${session?.workspace ? `<div>📁 Workspace: <code>${esc(session.workspace)}</code></div>` : ''}
+                ${session?.id ? `<div>🆔 Session: <code>${esc(session.id)}</code></div>` : ''}
+                ${session?.model ? `<div>🤖 Model: ${esc(session.model)}</div>` : ''}
+                ${session?.file_path ? `<div>📄 File: <code>${esc(session.file_path)}</code></div>` : ''}
+            </div>
+        </details>`;
         container.appendChild(banner);
 
         for (const msg of messages) {
@@ -223,10 +319,25 @@ export class KiroDesktopViewer {
                 if (!msg.content.trim()) continue;
                 const el = document.createElement('div');
                 el.className = 'message tool-message';
+                const toolContent = msg.content;
                 el.innerHTML = `<details class="kd-tool-details">
-                    <summary class="kd-tool-summary">🔧 Tool output</summary>
-                    <pre class="kd-tool-output">${esc(msg.content)}</pre>
+                    <summary class="kd-tool-summary">
+                        🔧 Tool output
+                        <button class="kd-tool-copy-btn" title="Copy">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </button>
+                    </summary>
+                    <pre class="kd-tool-output">${esc(toolContent)}</pre>
                 </details>`;
+                // Wire up copy button
+                el.querySelector('.kd-tool-copy-btn')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(toolContent).then(() => {
+                        const btn = e.currentTarget;
+                        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                        setTimeout(() => { btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }, 1500);
+                    });
+                });
                 container.appendChild(el);
             }
         }
@@ -252,6 +363,7 @@ export class KiroDesktopViewer {
     }
 
     restoreInputArea() {
+        this._stopPolling();
         const inputContainer = document.querySelector('.chat-input-container');
         if (inputContainer) inputContainer.style.display = '';
     }

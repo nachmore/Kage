@@ -501,3 +501,242 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
     deduped.truncate(limit);
     Ok(deduped)
 }
+
+// ---------------------------------------------------------------------------
+// Kiro CLI session support (SQLite)
+// ---------------------------------------------------------------------------
+
+/// Get the kiro-cli SQLite database path.
+fn kiro_cli_db_path() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    { std::env::var("LOCALAPPDATA").ok().map(|d| PathBuf::from(d).join("kiro-cli").join("data.sqlite3")) }
+    #[cfg(not(target_os = "windows"))]
+    { dirs::home_dir().map(|d| d.join(".local").join("share").join("kiro-cli").join("data.sqlite3")) }
+}
+
+#[tauri::command]
+pub async fn kiro_cli_available() -> bool {
+    kiro_cli_db_path().map(|p| p.exists()).unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, String> {
+    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+    if !db_path.exists() { return Ok(Vec::new()); }
+
+    let limit = limit.unwrap_or(50);
+
+    // Open read-only with SQLITE_OPEN_READONLY to avoid locking issues
+    let db = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ).map_err(|e| format!("SQLite open: {}", e))?;
+
+    let mut stmt = db.prepare(
+        "SELECT key, conversation_id, value, created_at, updated_at \
+         FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1"
+    ).map_err(|e| format!("SQLite prepare: {}", e))?;
+
+    let mut sessions = Vec::new();
+    let rows = stmt.query_map([limit as i64], |row| {
+        Ok((
+            row.get::<_, String>(0)?,  // key (workspace)
+            row.get::<_, String>(1)?,  // conversation_id
+            row.get::<_, String>(2)?,  // value (JSON)
+            row.get::<_, i64>(3)?,     // created_at
+            row.get::<_, i64>(4)?,     // updated_at
+        ))
+    }).map_err(|e| format!("SQLite query: {}", e))?;
+
+    for row in rows {
+        let (workspace, conv_id, value_json, _created_at, updated_at) = match row {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        // Extract title from transcript (first user message)
+        let title = extract_cli_title(&value_json);
+        let message_count = count_cli_messages(&value_json);
+
+        let updated_at_str = chrono::DateTime::from_timestamp(updated_at / 1000, 0)
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_default();
+
+        sessions.push(KiroDesktopSession {
+            id: conv_id,
+            title,
+            workspace: workspace.clone(),
+            workspace_encoded: workspace,
+            updated_at: updated_at_str,
+            message_count,
+            session_type: "cli".to_string(),
+            model: String::new(),
+            file_path: db_path.to_string_lossy().to_string(),
+        });
+    }
+
+    Ok(sessions)
+}
+
+fn extract_cli_title(value_json: &str) -> String {
+    // Quick parse — just get the first transcript entry
+    let json: serde_json::Value = match serde_json::from_str(value_json) {
+        Ok(v) => v,
+        Err(_) => return "Untitled".to_string(),
+    };
+    if let Some(transcript) = json.get("transcript").and_then(|t| t.as_array()) {
+        if let Some(first) = transcript.first().and_then(|t| t.as_str()) {
+            let clean = first.trim().trim_start_matches('>').trim();
+            let title: String = clean.chars().take(80).collect();
+            let title = title.replace('\n', " ").replace('\r', " ");
+            return if clean.len() > 80 { format!("{}...", title.trim()) } else { title.trim().to_string() };
+        }
+    }
+    "Untitled".to_string()
+}
+
+fn count_cli_messages(value_json: &str) -> usize {
+    // Count transcript entries (quick without full parse)
+    let json: serde_json::Value = match serde_json::from_str(value_json) {
+        Ok(v) => v,
+        Err(_) => return 0,
+    };
+    json.get("transcript").and_then(|t| t.as_array()).map(|a| a.len()).unwrap_or(0)
+}
+
+#[tauri::command]
+pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDesktopMessage>, String> {
+    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+
+    let db = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ).map_err(|e| format!("SQLite open: {}", e))?;
+
+    let value_json: String = db.query_row(
+        "SELECT value FROM conversations_v2 WHERE conversation_id = ?1",
+        [&conversation_id],
+        |row| row.get(0),
+    ).map_err(|e| format!("SQLite query: {}", e))?;
+
+    let json: serde_json::Value = serde_json::from_str(&value_json)
+        .map_err(|e| format!("JSON parse: {}", e))?;
+
+    let mut messages = Vec::new();
+
+    // Use the structured history field — it has proper roles and tool details
+    if let Some(history) = json.get("history").and_then(|h| h.as_array()) {
+        for entry in history {
+            // Extract user message
+            if let Some(user) = entry.get("user") {
+                if let Some(content) = user.get("content") {
+                    if let Some(prompt) = content.get("Prompt").and_then(|p| p.get("prompt")).and_then(|p| p.as_str()) {
+                        if !prompt.is_empty() {
+                            messages.push(KiroDesktopMessage {
+                                role: "user".to_string(),
+                                content: prompt.to_string(),
+                            });
+                        }
+                    }
+                    // Tool results — show as tool messages
+                    if let Some(tool_results) = content.get("ToolUseResults").and_then(|t| t.get("tool_use_results")).and_then(|t| t.as_array()) {
+                        for tr in tool_results {
+                            let tool_content = tr.get("content").and_then(|c| c.as_array())
+                                .map(|arr| arr.iter().filter_map(|item| {
+                                    item.get("Text").and_then(|t| t.as_str()).or_else(|| {
+                                        item.get("Json").map(|_j| "").filter(|_| false) // skip JSON for now
+                                    })
+                                }).collect::<Vec<_>>().join("\n"))
+                                .unwrap_or_default();
+                            if !tool_content.is_empty() {
+                                messages.push(KiroDesktopMessage {
+                                    role: "tool".to_string(),
+                                    content: tool_content,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Extract assistant message
+            if let Some(assistant) = entry.get("assistant") {
+                // ToolUse — assistant is calling tools
+                if let Some(tool_use) = assistant.get("ToolUse") {
+                    let content = tool_use.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    let tool_uses = tool_use.get("tool_uses").and_then(|t| t.as_array());
+
+                    // Show the assistant's text (if any)
+                    if !content.is_empty() {
+                        messages.push(KiroDesktopMessage {
+                            role: "assistant".to_string(),
+                            content: content.to_string(),
+                        });
+                    }
+
+                    // Show tool calls with names and args
+                    if let Some(tools) = tool_uses {
+                        for tool in tools {
+                            let name = tool.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
+                            let args = tool.get("args").map(|a| serde_json::to_string_pretty(a).unwrap_or_default()).unwrap_or_default();
+                            messages.push(KiroDesktopMessage {
+                                role: "tool".to_string(),
+                                content: format!("🔧 {} {}", name, args),
+                            });
+                        }
+                    }
+                }
+                // Response — final assistant message
+                if let Some(response) = assistant.get("Response") {
+                    let content = response.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    if !content.is_empty() {
+                        messages.push(KiroDesktopMessage {
+                            role: "assistant".to_string(),
+                            content: content.to_string(),
+                        });
+                    }
+                }
+                // Message — simple assistant message
+                if let Some(msg) = assistant.get("Message") {
+                    let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    if !content.is_empty() {
+                        messages.push(KiroDesktopMessage {
+                            role: "assistant".to_string(),
+                            content: content.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    info!("Loaded kiro-cli session {}: {} messages", conversation_id, messages.len());
+    Ok(messages)
+}
+
+/// Check if a kiro-cli conversation has been updated since a given timestamp.
+/// Returns the new updated_at if changed, or None if unchanged.
+#[tauri::command]
+pub async fn kiro_cli_check_updated(
+    conversation_id: String,
+    last_updated_at: i64,
+) -> Result<Option<i64>, String> {
+    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+
+    let db = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ).map_err(|e| format!("SQLite open: {}", e))?;
+
+    let current: i64 = db.query_row(
+        "SELECT updated_at FROM conversations_v2 WHERE conversation_id = ?1",
+        [&conversation_id],
+        |row| row.get(0),
+    ).map_err(|e| format!("SQLite query: {}", e))?;
+
+    if current > last_updated_at {
+        Ok(Some(current))
+    } else {
+        Ok(None)
+    }
+}
