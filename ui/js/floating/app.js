@@ -107,6 +107,16 @@ export class FloatingApp {
             this.setupVisibilityTracking();
             this.windowManager.setupDragging(this.elements.ghostContainer);
             this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
+
+            // Double-click ghost to open full chat window
+            this.windowManager._onDoubleClick = async () => {
+                try {
+                    await this.invoke('open_chat_window');
+                    await this.appWindow.hide();
+                } catch (err) {
+                    console.error('Failed to open chat window:', err);
+                }
+            };
             this.windowManager.setupScaleChangeListener();
 
             const inputContainer = this.elements.input?.closest('.input-container');

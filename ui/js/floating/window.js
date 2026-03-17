@@ -226,16 +226,46 @@ export class WindowManager {
     }
 
     setupDragging(ghostContainer) {
-        ghostContainer.addEventListener('mousedown', async (e) => {
-            this.isDragging = true;
-            try {
-                await this.invoke('start_drag_window');
-            } catch (error) {
-                console.error('Error starting drag:', error);
-            }
+        const DRAG_THRESHOLD = 5; // pixels of movement before starting drag
+        let startX = 0, startY = 0;
+        let pendingDrag = false;
+        let moveHandler = null;
+
+        ghostContainer.addEventListener('mousedown', (e) => {
+            startX = e.screenX;
+            startY = e.screenY;
+            pendingDrag = true;
+
+            // Listen for mouse movement to detect drag vs click
+            moveHandler = async (me) => {
+                if (!pendingDrag) return;
+                const dx = Math.abs(me.screenX - startX);
+                const dy = Math.abs(me.screenY - startY);
+                if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+                    pendingDrag = false;
+                    document.removeEventListener('mousemove', moveHandler);
+                    this.isDragging = true;
+                    try {
+                        await this.invoke('start_drag_window');
+                    } catch (error) {
+                        console.error('Error starting drag:', error);
+                    }
+                }
+            };
+            document.addEventListener('mousemove', moveHandler);
         });
-        
+
+        // Double-click — fires when two clicks happen without significant movement
+        ghostContainer.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            pendingDrag = false;
+            if (moveHandler) document.removeEventListener('mousemove', moveHandler);
+            if (this._onDoubleClick) this._onDoubleClick();
+        });
+
         document.addEventListener('mouseup', () => {
+            pendingDrag = false;
+            if (moveHandler) document.removeEventListener('mousemove', moveHandler);
             setTimeout(() => { this.isDragging = false; }, 200);
         });
     }
