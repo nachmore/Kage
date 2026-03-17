@@ -15,7 +15,6 @@ pub fn setup_notification_handler(
     tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
     slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
     pending_permission: std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
-    available_models: std::sync::Arc<std::sync::Mutex<Vec<crate::state::AcpModel>>>,
 ) {
     let app_handle = app.clone();
     let config = state_config;
@@ -23,7 +22,6 @@ pub fn setup_notification_handler(
     let tcp_writer = tcp_writer;
     let slash_cmds = slash_commands;
     let pending_perm = pending_permission;
-    let _models = available_models;
     let accumulated = client.streaming_accumulator.clone();
     let compacting = client.compacting.clone();
 

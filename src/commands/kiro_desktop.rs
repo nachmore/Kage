@@ -290,13 +290,6 @@ fn extract_user_text_from_chat(text: &str) -> String {
 }
 
 
-/// Try to find and load the conversation from .chat files in hash directories.
-/// Placeholder for future .chat file cross-referencing.
-#[allow(dead_code)]
-fn try_load_from_chat_files(_base: &PathBuf, _session_id: &str) -> Option<Vec<KiroDesktopMessage>> {
-    None
-}
-
 /// Read only the first N bytes of a file (for fast metadata extraction).
 fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
     use std::io::Read;

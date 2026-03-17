@@ -6,7 +6,8 @@ mod app_launcher;
 mod auto_steering;
 mod commands;
 #[allow(dead_code)] // Consumed by the computer-control-mcp binary, not this one
-mod computer_control;mod config;
+mod computer_control;
+mod config;
 mod error;
 mod extensions;
 mod logger;
@@ -80,7 +81,7 @@ fn main() {
     let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");
     let debug_mode = args.iter().any(|arg| arg == "/debug" || arg == "--debug");
 
-    // Check for session resume after update — read from last-session.txt
+    // Check for session resume after update — clean up last-session.txt
     let _resume_session_id: Option<String> = args.iter()
         .position(|arg| arg == "/resume-session" || arg == "--resume-session")
         .and_then(|i| args.get(i + 1).cloned())
@@ -222,7 +223,6 @@ fn main() {
     let slash_cmds_for_handler = slash_commands_arc.clone();
     let pending_perm_for_handler = pending_permission_arc.clone();
     let acp_for_handler = acp_client_arc.clone();
-    let models_for_handler = available_models_arc.clone();
 
     if dev_mode { info!("⏱ Tauri builder starting at +{}ms", startup_t0.elapsed().as_millis()); }
     tauri::Builder::default()
@@ -279,7 +279,6 @@ fn main() {
                     tcp_writer_for_handler,
                     slash_cmds_for_handler,
                     pending_perm_for_handler,
-                    models_for_handler,
                 );
             }
 
