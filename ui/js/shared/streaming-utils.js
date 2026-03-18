@@ -284,7 +284,7 @@ export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {})
         // Combine details and result for the detail field
         let detail = s.details || '';
         if (result && !cancelled) {
-            detail = result.substring(0, 300);
+            detail = result;
         }
         return { status, description: s.task, detail, cancelled };
     });

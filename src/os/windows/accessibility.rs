@@ -342,6 +342,15 @@ pub fn click_element_impl(element_id: &str) -> Result<String, String> {
     if elem.click().is_ok() { return Ok(format!("Clicked [{}] '{}' (coordinate fallback)", role, name)); }
     Err(format!("Failed to click [{}] '{}'", role, name))
 }
+pub fn focus_element_impl(element_id: &str) -> Result<String, String> {
+    let elem = resolve_native(element_id)?;
+    let (role, name) = (get_role(&elem), safe_name(&elem));
+    if elem.set_focus().is_ok() {
+        Ok(format!("Focused [{}] '{}'", role, name))
+    } else {
+        Err(format!("Failed to focus [{}] '{}'", role, name))
+    }
+}
 
 pub fn set_element_value_impl(element_id: &str, value: &str) -> Result<String, String> {
     let elem = resolve_native(element_id)?;

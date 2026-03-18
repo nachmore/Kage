@@ -747,20 +747,19 @@ ul:has(> .task-list-item) {
 .taskplan-title {
     font-size: 13px;
     line-height: 24px;
+    color: #e8e8e8;
 }
 .taskplan-detail {
     font-size: 11px;
     margin-top: 2px;
     line-height: 1.3;
+    color: rgba(255, 255, 255, 0.45);
 }
 
 /* Task plan status styles */
 .taskplan-done .taskplan-icon {
     background: #C09CFF;
     color: white;
-}
-.taskplan-done .taskplan-title {
-    opacity: 0.7;
 }
 .taskplan-done .taskplan-detail {
     opacity: 0.5;
@@ -803,9 +802,6 @@ ul:has(> .task-list-item) {
     background: #C09CFF;
     opacity: 0.3;
 }
-.taskplan-pending .taskplan-title {
-    opacity: 0.4;
-}
 .taskplan-error .taskplan-icon {
     background: rgba(220, 60, 60, 0.15);
     color: #dc3c3c;
@@ -847,14 +843,17 @@ ul:has(> .task-list-item) {
 }
 
 /* Light theme overrides for task plan */
+body.light-theme .taskplan-title {
+    color: #1a1a1a;
+}
+body.light-theme .taskplan-detail {
+    color: rgba(0, 0, 0, 0.45);
+}
 body.light-theme .taskplan-connector {
     background: var(--kiro-border, rgba(0,0,0,0.1));
 }
 body.light-theme .taskplan-dot {
     background: var(--kiro-border, rgba(0,0,0,0.15));
-}
-body.light-theme .taskplan-pending .taskplan-title {
-    opacity: 0.5;
 }
 body.light-theme .taskplan-spinner {
     border-color: rgba(124, 111, 224, 0.2);

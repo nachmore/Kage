@@ -88,6 +88,17 @@ pub fn click_element(element_id: &str) -> Result<String, String> {
     { crate::os::linux::accessibility::click_element_impl(element_id) }
 }
 
+pub fn focus_element(element_id: &str) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    { crate::os::windows::accessibility::focus_element_impl(element_id) }
+
+    #[cfg(target_os = "macos")]
+    { Err("focus_element not implemented on macOS".to_string()) }
+
+    #[cfg(target_os = "linux")]
+    { Err("focus_element not implemented on Linux".to_string()) }
+}
+
 pub fn set_element_value(element_id: &str, value: &str) -> Result<String, String> {
     #[cfg(target_os = "windows")]
     { crate::os::windows::accessibility::set_element_value_impl(element_id, value) }

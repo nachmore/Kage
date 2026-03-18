@@ -31,6 +31,18 @@ A blank document is ready when:
 
 If the backstage view is still showing after clicking "Blank document", try pressing Escape (key_press("escape")) to dismiss it.
 
+## Typing into Documents
+
+IMPORTANT: Use `focus_element()` instead of `click_element()` when you need to type into a document.
+- `focus_element(element_id)` sets keyboard focus via the accessibility API without moving the mouse
+- Then use `type_text("your text")` to type — keystrokes go to the focused element
+- This is more reliable than clicking because the user's mouse position is not disturbed
+
+Example workflow:
+1. Find the [document] or [edit] element in the UI tree
+2. `focus_element(element_id)` to set focus
+3. `type_text("hello")` to type
+
 ## Common Gotchas
 
 - Office apps take 3-5 seconds to fully load — use wait_seconds=4.0 in launch_and_get_tree

@@ -179,6 +179,9 @@ fn handle_tools_list(id: &serde_json::Value) -> String {
         tool_def("click_element", "Click/invoke a UI element by ID.", serde_json::json!({
             "type": "object", "properties": { "element_id": { "type": "string" } }, "required": ["element_id"]
         })),
+        tool_def("focus_element", "Set keyboard focus to a UI element without moving the mouse. Prefer this over click_element when you need to type into an element.", serde_json::json!({
+            "type": "object", "properties": { "element_id": { "type": "string" } }, "required": ["element_id"]
+        })),
         tool_def("set_value", "Set the value of a text field.", serde_json::json!({
             "type": "object", "properties": { "element_id": { "type": "string" }, "value": { "type": "string" } }, "required": ["element_id", "value"]
         })),
@@ -411,6 +414,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             }
         }
         "click_element" => dispatch_element_action(id, &args, |eid| accessibility::click_element(eid)),
+        "focus_element" => dispatch_element_action(id, &args, |eid| accessibility::focus_element(eid)),
         "set_value" => {
             let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
             let val = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
@@ -577,13 +581,26 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         }
         "type_text" => {
             let text_val = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            log::info!("[type_text] Typing {} chars: {:?}", text_val.len(), text_val);
             #[cfg(target_os = "windows")]
             {
                 let kb = uiautomation::inputs::Keyboard::new();
-                match kb.send_text(text_val) {
-                    Ok(_) => tool_result_text(id, &format!("Typed {} characters", text_val.len()), false),
-                    Err(e) => tool_result_text(id, &format!("Failed to type: {}", e), true),
+                // Handle newlines: split text on \n and send Enter between lines
+                let lines: Vec<&str> = text_val.split('\n').collect();
+                for (i, line) in lines.iter().enumerate() {
+                    if !line.is_empty() {
+                        if let Err(e) = kb.send_text(line) {
+                            return tool_result_text(id, &format!("Failed to type line {}: {}", i + 1, e), true);
+                        }
+                    }
+                    // Send Enter between lines (not after the last one)
+                    if i < lines.len() - 1 {
+                        if let Err(e) = kb.send_keys("{Enter}") {
+                            return tool_result_text(id, &format!("Failed to send Enter: {}", e), true);
+                        }
+                    }
                 }
+                tool_result_text(id, &format!("Typed {} characters ({} lines)", text_val.len(), lines.len()), false)
             }
             #[cfg(not(target_os = "windows"))]
             { tool_result_text(id, "type_text not available on this platform", true) }
