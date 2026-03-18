@@ -94,7 +94,8 @@
         "displayLanguageSelector": false,
         "sidebarImage": "icons/nsis-sidebar.bmp",
         "headerImage": "icons/nsis-header.bmp",
-        "installerHooks": "./src-tauri/windows/hooks.nsh"
+        "installerHooks": "./src-tauri/windows/hooks.nsh",
+        "template": "./src-tauri/windows/installer.nsi"
       }
     }
   }

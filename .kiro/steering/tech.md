@@ -32,8 +32,12 @@ cargo tauri dev -- /debug          # Debug logging (ACP messages)
 cargo tauri dev -- /dev /debug     # Both
 
 # Building
-cargo build                # Debug build (assets embedded — no live reload)
-cargo build --release      # Release build (optimized, assets embedded)
+cargo build                # Debug build (binaries only, no installer)
+cargo tauri build          # Release build + NSIS installer (output: target/release/bundle/nsis/)
+
+# Note: `cargo build --release` builds optimized binaries but does NOT create
+# the installer. Always use `cargo tauri build` for release distribution.
+# The computer-control-mcp binary is built automatically alongside the main binary.
 
 # Testing
 cargo test                 # All tests
@@ -52,8 +56,10 @@ cd ui/vendor && npm install  # Install/update JS dependencies
 - `cargo tauri dev` — frontend is served from disk via a local Python HTTP server
   (configured in `tauri.conf.json` → `build.beforeDevCommand` / `build.devUrl`).
   Editing HTML/JS/CSS and using "Reload UX" from the tray picks up changes instantly.
-- `cargo build` / `cargo build --release` — frontend is embedded into the binary at
-  compile time. File changes on disk have no effect until you rebuild.
+- `cargo tauri build` — frontend is embedded into the binary at compile time and
+  the NSIS installer is generated. File changes on disk have no effect until you rebuild.
+- `cargo build` / `cargo build --release` — builds raw binaries only (no installer,
+  no bundling). Useful for quick iteration but not for distribution.
 
 ## Architecture Notes
 - Compile-time platform selection via `#[cfg(target_os = "...")]`

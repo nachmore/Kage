@@ -1,9 +1,7 @@
 ; Kiro Assistant NSIS Installer Hooks
 
 !macro NSIS_HOOK_POSTINSTALL
-  ; The computer-control-mcp.exe should be built alongside the main binary
-  ; and placed in the same output directory. The beforeBuildCommand in
-  ; tauri.conf.json handles building it. We just need to verify it's there.
+  ; Verify computer-control-mcp.exe was bundled
   ${If} ${FileExists} "$INSTDIR\computer-control-mcp.exe"
     DetailPrint "computer-control MCP server found"
   ${Else}
@@ -16,6 +14,4 @@
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
   ; Remove the MCP binary
   Delete "$INSTDIR\computer-control-mcp.exe"
-  ; Clean up MCP registration from mcp.json
-  ; (The app handles this gracefully if the binary is missing)
 !macroend
