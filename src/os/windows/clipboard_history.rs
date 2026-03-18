@@ -40,13 +40,14 @@ pub fn get_clipboard_history_impl() -> Vec<ClipboardHistoryEntry> {
 }
 
 fn get_clipboard_history_sta() -> Vec<ClipboardHistoryEntry> {
-    use windows::ApplicationModel::DataTransfer::Clipboard;
+    use windows::ApplicationModel::DataTransfer::{Clipboard, ClipboardHistoryItemsResult, ClipboardHistoryItem, DataPackageView};
+    use windows_collections::IVectorView;
 
     // Get history items (async WinRT call, block on it).
     // Note: IsHistoryEnabled() is unreliable for desktop (non-UWP) apps,
     // so we skip it and just try to fetch — empty result means disabled.
-    let result = match Clipboard::GetHistoryItemsAsync() {
-        Ok(op) => match op.get() {
+    let result: ClipboardHistoryItemsResult = match Clipboard::GetHistoryItemsAsync() {
+        Ok(op) => match op.join() {
             Ok(r) => r,
             Err(e) => {
                 warn!("Failed to get clipboard history: {}", e);
@@ -59,7 +60,7 @@ fn get_clipboard_history_sta() -> Vec<ClipboardHistoryEntry> {
         }
     };
 
-    let items = match result.Items() {
+    let items: IVectorView<ClipboardHistoryItem> = match result.Items() {
         Ok(items) => items,
         Err(e) => {
             warn!("Failed to read clipboard history items: {}", e);
@@ -89,7 +90,7 @@ fn get_clipboard_history_sta() -> Vec<ClipboardHistoryEntry> {
 
     let mut entries = Vec::new();
     for (i, item) in items.into_iter().enumerate() {
-        let content = match item.Content() {
+        let content: DataPackageView = match item.Content() {
             Ok(c) => c,
             Err(_) => continue,
         };
@@ -101,8 +102,8 @@ fn get_clipboard_history_sta() -> Vec<ClipboardHistoryEntry> {
 
         if has_text {
             if let Ok(op) = content.GetTextAsync() {
-                if let Ok(text) = op.get() {
-                    let text_str = text.to_string();
+                if let Ok(text) = op.join() {
+                    let text_str: String = text.to_string();
                     if !text_str.is_empty() {
                         // Get timestamp
                         let timestamp = item

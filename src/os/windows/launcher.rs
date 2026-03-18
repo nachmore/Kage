@@ -1,11 +1,10 @@
 // Windows application launcher
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 use winreg::enums::*;
 use winreg::RegKey;
 
@@ -101,6 +100,7 @@ fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
 fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
     use windows::Management::Deployment::PackageManager;
     use windows::core::HSTRING;
+    use windows_collections::IVectorView;
 
     let pm = match PackageManager::new() {
         Ok(pm) => pm,
@@ -123,12 +123,12 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
             Ok(op) => op,
             Err(_) => continue,
         };
-        let entries = match async_op.get() {
+        let entries: IVectorView<windows::ApplicationModel::Core::AppListEntry> = match async_op.join() {
             Ok(e) => e,
             Err(_) => continue,
         };
 
-        for entry in entries {
+        for entry in &entries {
             let di = match entry.DisplayInfo() {
                 Ok(d) => d,
                 Err(_) => continue,
@@ -320,25 +320,30 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
 }
 
 pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+    use windows::core::HSTRING;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     let path_str = path.to_str().unwrap_or("");
-    if path_str.starts_with("shell:AppsFolder\\") || (path_str.contains(':') && !path_str.contains('\\')) {
-        // UWP app (shell:AppsFolder\AUMID) or URI protocol (ms-settings:, calculator:, etc.)
-        info!("Launching: {}", path_str);
-        Command::new("cmd")
-            .args(["/C", "start", "", path_str])
-            .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
-            .spawn()
-            .context("Failed to launch")?;
-    } else {
-        info!("Launching Windows application at {:?}", path);
-        Command::new("cmd")
-            .args(["/C", "start", "", path_str])
-            .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
-            .spawn()
-            .context("Failed to launch application")?;
+    info!("launch_application_impl: path={:?} path_str='{}'", path, path_str);
+
+    if path_str.is_empty() {
+        anyhow::bail!("Empty path passed to launch_application_impl");
     }
-    Ok(())
+
+    let op = HSTRING::from("open");
+    let file = HSTRING::from(path_str);
+
+    info!("ShellExecuteW: open '{}'", path_str);
+    let result = unsafe {
+        ShellExecuteW(None, &op, &file, None, None, SW_SHOWNORMAL)
+    };
+
+    if result.0 as usize > 32 {
+        info!("ShellExecuteW succeeded (code={})", result.0 as usize);
+        Ok(())
+    } else {
+        let code = result.0 as usize;
+        anyhow::bail!("ShellExecuteW failed with code {} for '{}'", code, path_str)
+    }
 }

@@ -300,12 +300,56 @@ fn tool_def(name: &str, description: &str, input_schema: serde_json::Value) -> s
     serde_json::json!({ "name": name, "description": description, "inputSchema": input_schema })
 }
 
+/// Launch an app using ShellExecuteW — the proper Win32 API.
+/// Handles program names with args (e.g. "winword /w"), paths, and URIs.
+/// Launch an app using ShellExecuteW — the proper Win32 API.
+/// Handles program names with args (e.g. "winword /w"), paths, and URIs.
+fn shell_launch(name: &str) -> Result<(), String> {
+    use windows::core::HSTRING;
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    // Detect if this is a file path (contains backslash, or drive letter like C:/)
+    let is_path = name.contains('\\') || (name.len() >= 3 && name.as_bytes().get(1) == Some(&b':'));
+    let (file_str, params_str) = if name.contains(' ') && !is_path {
+        let mut parts = name.splitn(2, ' ');
+        let prog = parts.next().unwrap_or(name);
+        let args = parts.next().unwrap_or("");
+        (prog, args)
+    } else {
+        (name, "")
+    };
+
+    let op = HSTRING::from("open");
+    let file = HSTRING::from(file_str);
+
+    log::info!("[shell_launch] file='{}' params='{}'", file_str, params_str);
+
+    let result = unsafe {
+        if params_str.is_empty() {
+            ShellExecuteW(None, &op, &file, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+        } else {
+            let params = HSTRING::from(params_str);
+            ShellExecuteW(None, &op, &file, &params, PCWSTR::null(), SW_SHOWNORMAL)
+        }
+    };
+
+    if result.0 as usize > 32 {
+        Ok(())
+    } else {
+        Err(format!("ShellExecuteW failed with code {} for '{}'", result.0 as usize, name))
+    }
+}
+
+
 // ---------------------------------------------------------------------------
 // Tool call dispatch
 // ---------------------------------------------------------------------------
 fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> String {
     let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+    log::info!("[tool_call] {} args={}", tool_name, args);
 
     match tool_name {
         "get_ui_tree" => {
@@ -402,10 +446,8 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let app = args.get("app_name").and_then(|v| v.as_str()).unwrap_or("");
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
             let wait = args.get("wait_ms").and_then(|v| v.as_u64()).unwrap_or(2000);
-            // Launch the app
-            let launch_result = std::process::Command::new("cmd")
-                .args(["/C", "start", "", app])
-                .spawn();
+            log::info!("[launch_and_get_tree] Launching: '{}' (wait={}ms, depth={})", app, wait, depth);
+            let launch_result = shell_launch(app);
             match launch_result {
                 Ok(_) => {
                     std::thread::sleep(std::time::Duration::from_millis(wait));
@@ -509,9 +551,13 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         // Utility tools
         "launch_app" => {
             let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            match std::process::Command::new("cmd").args(["/C", "start", "", name]).spawn() {
+            log::info!("[launch_app] Attempting to launch: '{}'", name);
+            match shell_launch(name) {
                 Ok(_) => tool_result_text(id, &format!("Launched '{}'", name), false),
-                Err(e) => tool_result_text(id, &format!("Failed to launch '{}': {}", name, e), true),
+                Err(e) => {
+                    log::info!("[launch_app] Failed: {}", e);
+                    tool_result_text(id, &format!("Failed to launch '{}': {}", name, e), true)
+                },
             }
         }
         "list_all_windows" => {
@@ -593,9 +639,9 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 if let (Some(px), Some(py)) = (x, y) {
                     let pt = uiautomation::types::Point::new(px as i32, py as i32);
                     let result = match (button, count) {
-                        ("right", _) => mouse.right_click(pt),
-                        (_, 2) => mouse.double_click(pt),
-                        _ => mouse.click(pt),
+                        ("right", _) => mouse.right_click(&pt),
+                        (_, 2) => mouse.double_click(&pt),
+                        _ => mouse.click(&pt),
                     };
                     match result {
                         Ok(_) => tool_result_text(id, &format!("Clicked {} at ({}, {})", button, px, py), false),
@@ -618,7 +664,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             #[cfg(target_os = "windows")]
             {
                 let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                    uiautomation::types::Point::new(from_x, from_y)
+                    &uiautomation::types::Point::new(from_x, from_y)
                 );
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 // Press, move in steps, release
@@ -628,7 +674,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 let dy = (to_y - from_y) as f64 / steps as f64;
                 for i in 1..=steps {
                     let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                        uiautomation::types::Point::new(from_x + (dx * i as f64) as i32, from_y + (dy * i as f64) as i32)
+                        &uiautomation::types::Point::new(from_x + (dx * i as f64) as i32, from_y + (dy * i as f64) as i32)
                     );
                     std::thread::sleep(std::time::Duration::from_secs_f64(duration / steps as f64));
                 }
@@ -647,7 +693,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             {
                 if let (Some(px), Some(py)) = (x, y) {
                     let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                        uiautomation::types::Point::new(px as i32, py as i32)
+                        &uiautomation::types::Point::new(px as i32, py as i32)
                     );
                 }
                 let wheel_delta = if direction == "up" { amount * 120 } else { -amount * 120 };
@@ -662,7 +708,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let y = args.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             #[cfg(target_os = "windows")]
             {
-                match uiautomation::inputs::Mouse::set_cursor_pos(uiautomation::types::Point::new(x, y)) {
+                match uiautomation::inputs::Mouse::set_cursor_pos(&uiautomation::types::Point::new(x, y)) {
                     Ok(_) => tool_result_text(id, &format!("Mouse moved to ({}, {})", x, y), false),
                     Err(e) => tool_result_text(id, &format!("Failed to move mouse: {}", e), true),
                 }
