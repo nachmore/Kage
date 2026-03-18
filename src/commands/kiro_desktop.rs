@@ -41,6 +41,9 @@ pub struct KiroDesktopSession {
     pub model: String,
     /// Path to the session file for deletion
     pub file_path: String,
+    /// Workflow ID for deduplication (multiple .chat files can belong to the same workflow)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workflow_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,6 +142,7 @@ pub async fn kiro_desktop_sessions(
                 id, title, workspace: ws_name.clone(), workspace_encoded: encoded.clone(),
                 updated_at, message_count: history_count, session_type, model,
                 file_path: path.to_string_lossy().to_string(),
+                workflow_id: None,
             });
         }
     }
@@ -418,6 +422,7 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
                         workspace: name.clone(), workspace_encoded: name.clone(),
                         updated_at, message_count: 0, session_type: "chat".into(),
                         model: String::new(), file_path: path.to_string_lossy().to_string(),
+                        workflow_id: None,
                     });
                     continue;
                 }
@@ -446,6 +451,7 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
 
             let message_count = chat.len();
             let model = json.get("metadata").and_then(|m| m.get("modelId")).and_then(|m| m.as_str()).unwrap_or("").to_string();
+            let workflow_id = json.get("metadata").and_then(|m| m.get("workflowId")).and_then(|w| w.as_str()).map(|s| s.to_string());
 
             let start_time = json.get("metadata").and_then(|m| m.get("startTime")).and_then(|t| t.as_i64()).unwrap_or(0);
             let end_time = json.get("metadata").and_then(|m| m.get("endTime")).and_then(|t| t.as_i64()).unwrap_or(start_time);
@@ -471,21 +477,21 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
                 session_type: "chat".to_string(),
                 model,
                 file_path: path.to_string_lossy().to_string(),
+                workflow_id,
             });
         }
     }
 
-    // Group by workflowId — keep only the latest .chat file per workflow
+    // Group by workflow — keep only the latest .chat file per workflow
     // (the last file has the full accumulated conversation)
     let mut by_workflow: std::collections::HashMap<String, KiroDesktopSession> = std::collections::HashMap::new();
 
     for s in sessions {
-        // Extract workflowId from the session (stored in workspace_encoded for .chat files)
-        // We need to re-read it... but we already have it from the metadata parse above.
-        // For now, use the file path to re-extract. TODO: store workflowId in the struct.
-        // Actually, let's just deduplicate by title — sessions with the same title from the
-        // same workspace are likely the same conversation at different points.
-        let key = format!("{}:{}", s.workspace, s.title);
+        // Use workflowId for dedup when available, fall back to workspace:title
+        let key = match s.workflow_id {
+            Some(ref wid) => format!("{}:{}", s.workspace, wid),
+            None => format!("{}:{}", s.workspace, s.title),
+        };
         if let Some(existing) = by_workflow.get(&key) {
             // Keep the one with more messages (later in the conversation)
             if s.message_count > existing.message_count {
@@ -572,6 +578,7 @@ pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSe
             session_type: "cli".to_string(),
             model: String::new(),
             file_path: db_path.to_string_lossy().to_string(),
+            workflow_id: None,
         });
     }
 
