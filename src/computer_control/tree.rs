@@ -2,16 +2,14 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
-
-use once_cell::sync::Lazy;
+use std::sync::{LazyLock, Mutex};
 
 // ---------------------------------------------------------------------------
 // Element ID registry
 // ---------------------------------------------------------------------------
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-static REGISTRY: Lazy<Mutex<HashMap<String, u64>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static REGISTRY: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Register a native element handle (stored as an opaque u64) and return an ephemeral ID.
 pub fn register_element(native_handle: u64) -> String {

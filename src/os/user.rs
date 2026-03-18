@@ -9,8 +9,8 @@ pub struct UserProfile {
 
 /// Get the current user's profile information
 pub fn get_user_profile() -> UserProfile {
-    let username = whoami::username();
-    let display_name = whoami::realname();
+    let username = whoami::username().unwrap_or_else(|_| "user".to_string());
+    let display_name = whoami::realname().unwrap_or_else(|_| String::new());
 
     let avatar_path = get_avatar_path_impl(&username);
 
