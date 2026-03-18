@@ -68,12 +68,6 @@ fn mark_generation() {
     }
 }
 
-/// Reset the message counter (e.g., after a manual update)
-#[allow(dead_code)]
-pub fn reset_message_counter() {
-    MESSAGE_COUNTER.store(0, Ordering::Relaxed);
-}
-
 /// The prompt sent to the LLM to extract user preferences from conversation history.
 const EXTRACTION_PROMPT: &str = r#"<role>
 You are a preference extraction assistant for Kiro Assistant, a desktop AI tool.

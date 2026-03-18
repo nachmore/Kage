@@ -83,11 +83,6 @@ impl AcpClient {
         self.transport.send_request(request)
     }
 
-    #[allow(dead_code)]
-    pub fn write_line(&self, line: &str) -> Result<()> {
-        self.transport.write_line(line)
-    }
-
     // --- Session state ---
 
     pub fn get_session_id(&self) -> Option<String> {
@@ -115,20 +110,6 @@ impl AcpClient {
     }
 
     // Session and protocol methods are in session.rs
-
-    // --- Compaction gating ---
-
-    /// Mark compaction as started — outgoing prompts will block until it completes.
-    #[allow(dead_code)]
-    pub fn set_compacting(&self, active: bool) {
-        let (lock, cvar) = &*self.compacting;
-        let mut compacting = lock.lock().unwrap();
-        *compacting = active;
-        if !active {
-            // Wake any threads waiting for compaction to finish
-            cvar.notify_all();
-        }
-    }
 
     /// Block the current thread until compaction is finished (with a timeout).
     /// Returns true if we waited, false if compaction wasn't active.

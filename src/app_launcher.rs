@@ -66,15 +66,6 @@ impl AppLauncher {
         self.app_registry = registry;
     }
 
-    /// Refresh the application registry by scanning the system.
-    /// Convenience method that combines build + apply (holds `&mut self` for the full duration).
-    #[allow(dead_code)]
-    pub fn refresh_registry(&mut self) -> Result<()> {
-        let registry = Self::build_registry()?;
-        self.apply_registry(registry);
-        Ok(())
-    }
-
     /// Find applications matching the query using fuzzy matching
     pub fn find_app(&self, query: &str) -> Vec<Application> {
         let query_lower = query.to_lowercase();

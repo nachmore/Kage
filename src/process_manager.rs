@@ -153,20 +153,6 @@ impl ProcessManager {
         self.pid = None;
     }
 
-    /// Check if the managed process is still running
-    #[allow(dead_code)]
-    pub fn is_running(&self) -> bool {
-        if let Some(child) = self.child.lock().unwrap().as_mut() {
-            // Try to check if process is still alive
-            match child.try_wait() {
-                Ok(Some(_)) => false, // Process has exited
-                Ok(None) => true,     // Process is still running
-                Err(_) => false,      // Error checking, assume not running
-            }
-        } else {
-            false
-        }
-    }
 }
 
 impl Drop for ProcessManager {

@@ -288,16 +288,9 @@ fn handle_permission_notification(
         "allow" => send_response("allow_once"),
         "deny" => send_response("reject_once"),
         _ => {
-            let session_id = notification.get("params")
-                .and_then(|p| p.get("sessionId"))
-                .and_then(|s| s.as_str())
-                .unwrap_or("")
-                .to_string();
             if let Ok(mut pending) = pending_perm.lock() {
                 *pending = Some(crate::state::PendingPermission {
                     request_id: notification.get("id").cloned().unwrap_or(serde_json::Value::Null),
-                    tool_title: tool_title.to_string(),
-                    session_id,
                 });
             }
             let _ = app_handle.emit("permission_request", serde_json::json!({

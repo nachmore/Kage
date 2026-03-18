@@ -44,11 +44,8 @@ pub struct AppState {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct PendingPermission {
     pub request_id: serde_json::Value,
-    pub tool_title: String,
-    pub session_id: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
