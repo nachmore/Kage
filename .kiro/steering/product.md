@@ -11,18 +11,33 @@ Kiro Assistant is a cross-platform desktop AI assistant with a floating window i
 - Inline math calculator (evaluates expressions as you type)
 - Selected text capture from active window (included as context for prompts)
 - Agent Communication Protocol (ACP) client for connecting to kiro-cli backend
-- Cross-platform support (Windows, macOS, Linux)
+- Cross-platform support (Windows fully implemented, macOS/Linux partial)
 - Dark/Light/System theme with configurable opacity and font size
 - Configurable window positioning (center, near mouse, remember last position)
 - Tool permission management with auto-associated emojis
 - Settings management UI with modular section architecture
+- Extension system with theme and command pack support (store UI)
+- Auto-update system with idle detection and silent updates
+- Single-instance enforcement
+- MCP server registration and management
+- Clipboard history (Windows)
+- File search integration (Windows Everything API)
+- Calendar event integration (Windows Outlook)
+- Pocket TTS (text-to-speech) server integration
+- Computer control MCP server (accessibility tree, UI automation)
+- RTL language support
+- Welcome/first-run experience
 
 ## Key Components
 
 - Floating window: Always-on-top, transparent, minimal UI for quick queries
-- Settings window: Configuration interface with sidebar navigation
+- Settings window: Configuration interface with sidebar navigation (20+ modules)
 - Chat window: Expanded conversation view with session management
+- Extension store: Browse and install extensions/themes
+- Welcome window: First-run onboarding experience
 - System tray: Background presence with quick access menu
-- ACP client: Handles communication with the AI backend service
+- ACP client: Handles communication with the AI backend service (session, transport, types)
 - Process manager: Manages spawned processes and child applications
 - Application launcher: Discovers and launches system applications
+- Updater: Auto-update with version checking and installer download
+- Computer control MCP: Accessibility tree inspection and UI automation

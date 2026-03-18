@@ -35,8 +35,7 @@ async function handleAssistantProtocol(path) {
             await _invoke('open_store_window', { tab: param || null });
             break;
         case 'settings':
-            await _invoke('open_settings_window');
-            // TODO: section routing via emit event after window opens
+            await _invoke('open_settings_window', { section: param || null });
             break;
         default:
             console.warn(`Unknown assistant: route "${path}"`);

@@ -166,9 +166,7 @@ export class TtsPlaybackBar {
         this._el.querySelector('#ttsBarStop').onclick = () => { if (this.callbacks.onStop) this.callbacks.onStop(); };
         this._el.querySelector('#ttsBarSettings').onclick = () => {
             if (window.__TAURI__?.core) {
-                window.__TAURI__.core.invoke('open_settings_window').then(() => {
-                    window.__TAURI__.event.emit('navigate_settings_section', 'speech');
-                }).catch((e) => { console.warn('[TTS] Failed to open settings window:', e); });
+                window.__TAURI__.core.invoke('open_settings_window', { section: 'speech' }).catch((e) => { console.warn('[TTS] Failed to open settings window:', e); });
             }
         };
         this._el.style.display = 'flex';

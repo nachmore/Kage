@@ -811,9 +811,7 @@ export class FloatingApp {
         this.dismissBanner();
         if (!action) return;
         if (action.type === 'settings') {
-            this.invoke('open_settings_window').then(() => {
-                window.__TAURI__.event.emit('navigate_settings_section', action.data || 'updates');
-            }).catch(() => {});
+            this.invoke('open_settings_window', { section: action.data || 'updates' }).catch(() => {});
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
         } else if (action.type === 'update_install') {

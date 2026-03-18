@@ -7,6 +7,7 @@
 
 ## Core Dependencies
 - tauri: Desktop app framework with system tray, global shortcuts, window management
+- tauri-plugin-global-shortcut, tauri-plugin-shell, tauri-plugin-notification, tauri-plugin-dialog: Tauri plugins
 - tokio: Async runtime with full feature set
 - serde/serde_json: Serialization and JSON handling
 - anyhow: Error handling
@@ -14,6 +15,16 @@
 - dirs: Cross-platform directory paths
 - log/env_logger: Logging infrastructure
 - chrono: Date and time handling
+- reqwest: HTTP client (blocking + JSON)
+- rusqlite: SQLite database (bundled)
+- semver: Semantic versioning
+- zip: Archive handling (deflate)
+- notify: File system watcher
+- url/urlencoding: URL parsing and encoding
+- base64: Base64 encoding
+- whoami: User info
+- ctrlc: Signal handling
+- winreg/windows-icons: Windows-specific registry and icon support
 
 ## Frontend
 - Pure HTML/CSS/JavaScript (no framework)
