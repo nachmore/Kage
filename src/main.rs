@@ -442,6 +442,24 @@ fn main() {
 
             info!("=== Setup Complete ===");
 
+            // Watchdog: if the frontend doesn't signal ready within 15 seconds,
+            // the webview likely failed to load (e.g. WebView2 "resource in use").
+            // Exit early rather than running headless.
+            {
+                let ready_flag = app.state::<AppState>().frontend_ready.clone();
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(15));
+                    if !ready_flag.load(std::sync::atomic::Ordering::Acquire) {
+                        error!("❌ Frontend did not become ready within 15 seconds — webview may have failed to load.");
+                        error!("   This usually means another process is holding the WebView2 user data folder.");
+                        error!("   Try closing other instances or killing stale WebView2 processes.");
+                        // Exit the app — no point running without a UI
+                        app_handle.exit(1);
+                    }
+                });
+            }
+
             // Auto-start Pocket TTS server if configured
             if config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed {
                 info!("Pocket TTS auto-start enabled, spawning server in background");
