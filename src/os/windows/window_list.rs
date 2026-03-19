@@ -189,3 +189,26 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Get the foreground window's title and process name.
+/// Returns None if no foreground window or it's our own window.
+pub fn get_foreground_window_info() -> Option<(String, String)> {
+    #[allow(non_snake_case)]
+    extern "system" {
+        fn GetForegroundWindow() -> isize;
+    }
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd == 0 { return None; }
+
+        let title = get_window_title(hwnd)?;
+        if title.contains("Kiro Assistant") { return None; }
+
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        let (process_name, _) = if pid > 0 { get_process_info(pid) } else { (String::new(), String::new()) };
+
+        Some((title, process_name))
+    }
+}

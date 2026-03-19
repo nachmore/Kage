@@ -239,6 +239,9 @@ pub struct SystemConfig {
     /// Show system notifications when responses complete while hidden.
     #[serde(default = "default_true")]
     pub show_notifications: bool,
+    /// Include the source window context (app name, title) when sending messages.
+    #[serde(default = "default_true")]
+    pub screen_context: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -408,6 +411,7 @@ impl Default for Config {
                 auto_start: false,
                 capture_selection: true,
                 show_notifications: true,
+                screen_context: true,
             },
             shortcuts: vec![],
             debug_mode: false,

@@ -242,6 +242,7 @@ fn main() {
             slash_commands: slash_commands_arc,
             available_models: available_models_arc,
             last_selection: Arc::new(std::sync::Mutex::new(None)),
+            source_window: Arc::new(std::sync::Mutex::new(None)),
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
             updater: Arc::new(updater::UpdaterState::new()),
             user_info_cache: Arc::new(std::sync::Mutex::new(None)),
@@ -799,6 +800,8 @@ fn main() {
             commands::list_open_windows,
             commands::focus_open_window,
             commands::get_app_icon,
+            commands::get_source_window,
+            commands::get_screen_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

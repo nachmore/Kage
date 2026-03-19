@@ -25,6 +25,13 @@ class IntegrationSettingsModule extends SettingsModule {
                     true
                 )}
 
+                ${this.createCheckboxRow(
+                    'Screen context awareness',
+                    'Include the source application name and window title when sending messages, so the assistant knows what you were looking at.',
+                    'screenContext',
+                    true
+                )}
+
                 <div class="setting-row" style="padding-left: 28px;">
                     <button class="setting-button" id="testNotificationBtn">Test Notification</button>
                     <span class="setting-description" id="notificationStatus" style="margin-left: 8px;"></span>
@@ -101,11 +108,14 @@ class IntegrationSettingsModule extends SettingsModule {
         if (captureSel) captureSel.checked = config.system?.capture_selection !== false;
         const showNotif = document.getElementById('showNotifications');
         if (showNotif) showNotif.checked = config.system?.show_notifications !== false;
+        const screenCtx = document.getElementById('screenContext');
+        if (screenCtx) screenCtx.checked = config.system?.screen_context !== false;
     }
 
     save(config) {
         config.system = config.system || {};
         config.system.capture_selection = document.getElementById('captureSelection')?.checked ?? true;
         config.system.show_notifications = document.getElementById('showNotifications')?.checked ?? true;
+        config.system.screen_context = document.getElementById('screenContext')?.checked ?? true;
     }
 }

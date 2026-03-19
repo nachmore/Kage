@@ -31,6 +31,12 @@ pub fn get_app_icon(process_name: &str) -> Option<String> {
     get_app_icon_impl(process_name)
 }
 
+/// Get the foreground window's title and process name.
+/// Returns None if no foreground window or it's our own window.
+pub fn get_foreground_window_info() -> Option<(String, String)> {
+    get_foreground_window_info_impl()
+}
+
 #[cfg(target_os = "windows")]
 fn list_windows_impl() -> Vec<WindowInfo> {
     crate::os::windows::window_list::list_windows_impl()
@@ -74,4 +80,19 @@ fn get_app_icon_impl(_name: &str) -> Option<String> {
 #[cfg(target_os = "linux")]
 fn get_app_icon_impl(_name: &str) -> Option<String> {
     None // TODO: implement icon lookup on Linux
+}
+
+#[cfg(target_os = "windows")]
+fn get_foreground_window_info_impl() -> Option<(String, String)> {
+    crate::os::windows::window_list::get_foreground_window_info()
+}
+
+#[cfg(target_os = "macos")]
+fn get_foreground_window_info_impl() -> Option<(String, String)> {
+    None // TODO: implement on macOS
+}
+
+#[cfg(target_os = "linux")]
+fn get_foreground_window_info_impl() -> Option<(String, String)> {
+    None // TODO: implement on Linux
 }

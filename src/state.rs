@@ -23,6 +23,8 @@ pub struct AppState {
     pub available_models: Arc<std::sync::Mutex<Vec<AcpModel>>>,
     /// Text that was selected in the previously active window when the hotkey was pressed
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
+    /// Info about the foreground window when the hotkey was pressed (title, process_name)
+    pub source_window: Arc<std::sync::Mutex<Option<(String, String)>>>,
     /// Which window sent the last notification ('floating' or 'main')
     pub notification_source: Arc<std::sync::Mutex<String>>,
     /// Updater state for auto-update system

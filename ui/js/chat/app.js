@@ -1045,7 +1045,9 @@ export class ChatApp {
         if (role === 'assistant') {
             renderMarkdown(text, contentDiv);
         } else {
-            if (text) contentDiv.textContent = text;
+            // Strip screen_context tag from display
+            const displayText = text ? text.replace(/^<screen_context[^/]*\/>\n?/, '') : text;
+            if (displayText) contentDiv.textContent = displayText;
         }
         if (imageSnapshots && imageSnapshots.length > 0) {
             contentDiv.insertAdjacentHTML('beforeend', attachmentPreviewHtml(imageSnapshots));
@@ -1304,8 +1306,11 @@ export class ChatApp {
         const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
         if (placeholder) placeholder.remove();
 
+        // Strip screen_context tag from display (it's metadata for the agent, not for the user)
+        const displayText = text.replace(/^<screen_context[^/]*\/>\n?/, '');
+
         this.messages.push({ role: 'user', content: text });
-        const msgEl = this.createMessageElement('user', text);
+        const msgEl = this.createMessageElement('user', displayText);
 
         // Set timestamp
         const ts = msgEl.querySelector('.msg-timestamp');

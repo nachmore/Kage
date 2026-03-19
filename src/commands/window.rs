@@ -104,6 +104,13 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
         None
     };
 
+    // Capture the foreground window info before we steal focus (~1ms).
+    let source_window_info = if is_showing {
+        crate::os::window_list::get_foreground_window_info()
+    } else {
+        None
+    };
+
     match window.is_visible() {
         Ok(is_visible) => {
             if is_visible {
@@ -118,6 +125,10 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                     }
                 }
                 let _ = window.hide();
+                // Clear source window info when hiding
+                if let Ok(mut sw) = state.source_window.lock() {
+                    *sw = None;
+                }
             } else {
                 // Show window immediately — don't wait for clipboard poll
                 position_floating_window(window, &start_pos, last_x, last_y);
@@ -126,6 +137,11 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
 
                 // Record floating window activity for the updater idle check
                 state.updater.touch_activity();
+
+                // Store the source window info for screen context
+                if let Ok(mut sw) = state.source_window.lock() {
+                    *sw = source_window_info;
+                }
 
                 // Phase 2: poll clipboard in background and deliver result via event.
                 // The Ctrl+C was already sent, so this just waits for the clipboard change.
@@ -546,4 +562,55 @@ pub async fn show_notification_source_window(
 pub fn notify_frontend_ready(state: tauri::State<'_, crate::state::AppState>) {
     info!("Frontend signaled ready");
     state.frontend_ready.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// Get the source window info (title, process_name) captured when the hotkey was pressed.
+#[tauri::command]
+pub async fn get_source_window(
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<Option<serde_json::Value>, AppError> {
+    let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+    match sw.as_ref() {
+        Some((title, process_name)) => Ok(Some(serde_json::json!({
+            "title": title,
+            "processName": process_name,
+        }))),
+        None => Ok(None),
+    }
+}
+
+/// Get a shallow accessibility tree snapshot of the source window for screen context.
+/// Uses depth 2 to keep it fast and small. Returns a compact text representation.
+#[tauri::command]
+pub async fn get_screen_context(
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<Option<String>, AppError> {
+    let title = {
+        let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+        match sw.as_ref() {
+            Some((title, _)) => title.clone(),
+            None => return Ok(None),
+        }
+    }; // MutexGuard dropped here
+
+    // Spawn on a blocking thread since UI Automation is COM-based
+    let result = tokio::task::spawn_blocking(move || {
+        crate::os::accessibility::get_ui_tree(Some(&title), 2, false)
+    }).await.map_err(|e| format!("Join error: {}", e))?;
+
+    match result {
+        Ok(tree) => {
+            let text = tree.to_text(0, 2);
+            // Cap at 4KB to keep token usage reasonable
+            if text.len() > 4096 {
+                Ok(Some(text[..4096].to_string() + "\n... (truncated)"))
+            } else {
+                Ok(Some(text))
+            }
+        }
+        Err(e) => {
+            log::warn!("Screen context capture failed: {}", e);
+            Ok(None)
+        }
+    }
 }

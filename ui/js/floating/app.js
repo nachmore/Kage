@@ -1373,6 +1373,20 @@ export class FloatingApp {
                 const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
                 this.dismissBanner();
+
+                // Prepend screen context (source window info) if available
+                try {
+                    const config = await this.invoke('get_config');
+                    if (config?.system?.screen_context) {
+                        const sw = await this.invoke('get_source_window');
+                        if (sw) {
+                            message = `<screen_context app="${sw.processName}" title="${sw.title}"/>\n${message}`;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Screen context unavailable:', e);
+                }
+
                 // Notify the chat window so it can show the user bubble
                 window.__TAURI__.event.emit('floating_message_sent', { message });
                 await this.invoke('send_message_streaming', { message, attachments });
