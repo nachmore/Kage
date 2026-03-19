@@ -3,15 +3,6 @@
 //! Provides a `kind` field so the frontend can programmatically distinguish
 //! error types (connection lost vs. rate limited vs. session corrupted)
 //! instead of parsing error message strings.
-//!
-//! Usage in Tauri commands:
-//! ```ignore
-//! #[tauri::command]
-//! async fn my_command() -> Result<(), AppError> {
-//!     do_thing().map_err(AppError::internal)?;
-//!     Ok(())
-//! }
-//! ```
 
 use serde::Serialize;
 

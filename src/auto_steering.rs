@@ -400,3 +400,77 @@ fn strip_header_comment(text: &str) -> String {
     }
     trimmed.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip_code_fences_markdown() {
+        let input = "```markdown\n# Hello\nWorld\n```";
+        assert_eq!(strip_code_fences(input), "# Hello\nWorld");
+    }
+
+    #[test]
+    fn test_strip_code_fences_plain() {
+        let input = "```\nsome content\n```";
+        assert_eq!(strip_code_fences(input), "some content");
+    }
+
+    #[test]
+    fn test_strip_code_fences_no_fences() {
+        let input = "just plain text";
+        assert_eq!(strip_code_fences(input), "just plain text");
+    }
+
+    #[test]
+    fn test_strip_code_fences_with_whitespace() {
+        let input = "  \n```markdown\ncontent here\n```\n  ";
+        assert_eq!(strip_code_fences(input), "content here");
+    }
+
+    #[test]
+    fn test_strip_code_fences_no_closing() {
+        let input = "```markdown\ncontent without closing";
+        assert_eq!(strip_code_fences(input), "content without closing");
+    }
+
+    #[test]
+    fn test_strip_header_comment() {
+        let input = "<!-- Auto-generated -->\n# My Steering";
+        assert_eq!(strip_header_comment(input), "# My Steering");
+    }
+
+    #[test]
+    fn test_strip_header_comment_no_comment() {
+        let input = "# Just a heading";
+        assert_eq!(strip_header_comment(input), "# Just a heading");
+    }
+
+    #[test]
+    fn test_strip_header_comment_multiline() {
+        let input = "<!-- This is a\nmultiline comment -->\nContent";
+        assert_eq!(strip_header_comment(input), "Content");
+    }
+
+    #[test]
+    fn test_strip_header_comment_empty() {
+        assert_eq!(strip_header_comment(""), "");
+    }
+
+    #[test]
+    fn test_tick_message_counter_threshold() {
+        // Reset counters
+        MESSAGE_COUNTER.store(0, Ordering::Relaxed);
+        MESSAGES_SINCE_GENERATION.store(0, Ordering::Relaxed);
+        // Reset the last generation time so cooldown doesn't block
+        *LAST_GENERATION.lock().unwrap() = None;
+
+        // Should not trigger until threshold (UPDATE_INTERVAL_MESSAGES = 5)
+        for _ in 0..UPDATE_INTERVAL_MESSAGES - 1 {
+            assert!(!tick_message_counter());
+        }
+        // At the threshold, should trigger (first time — no cooldown yet)
+        assert!(tick_message_counter());
+    }
+}

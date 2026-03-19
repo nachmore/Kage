@@ -1,55 +1,133 @@
-// Unit tests for the application launcher
+use kiro_assistant::app_launcher::AppLauncher;
 
-#[cfg(test)]
-mod tests {
-    // Note: These tests would require the app_launcher module to be public
-    // For now, we'll create integration tests that verify the behavior
-    
-    #[test]
-    fn test_fuzzy_matching_exact() {
-        // Test exact match
-        let query = "notepad";
-        let target = "notepad";
-        assert!(query.to_lowercase() == target.to_lowercase());
+#[test]
+fn test_new_launcher_empty_registry() {
+    let launcher = AppLauncher::new().unwrap();
+    let results = launcher.find_app("anything");
+    assert!(results.is_empty());
+}
+
+#[test]
+fn test_find_app_exact_match() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Notepad".to_string(),
+        path: std::path::PathBuf::from("C:\\Windows\\notepad.exe"),
+        aliases: vec!["notepad".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    let results = launcher.find_app("notepad");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Notepad");
+}
+
+#[test]
+fn test_find_app_starts_with() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Notepad".to_string(),
+        path: std::path::PathBuf::from("notepad.exe"),
+        aliases: vec!["notepad".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    let results = launcher.find_app("note");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Notepad");
+}
+
+#[test]
+fn test_find_app_contains() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Notepad".to_string(),
+        path: std::path::PathBuf::from("notepad.exe"),
+        aliases: vec!["notepad".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    let results = launcher.find_app("pad");
+    assert_eq!(results.len(), 1);
+}
+
+#[test]
+fn test_find_app_case_insensitive() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Notepad".to_string(),
+        path: std::path::PathBuf::from("notepad.exe"),
+        aliases: vec!["notepad".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    assert_eq!(launcher.find_app("NOTEPAD").len(), 1);
+    assert_eq!(launcher.find_app("NotePad").len(), 1);
+}
+
+#[test]
+fn test_find_app_no_match() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Notepad".to_string(),
+        path: std::path::PathBuf::from("notepad.exe"),
+        aliases: vec!["notepad".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    let results = launcher.find_app("zzzzz");
+    assert!(results.is_empty());
+}
+
+#[test]
+fn test_find_app_max_results() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    for i in 0..10 {
+        let name = format!("app{}", i);
+        registry.insert(name.clone(), kiro_assistant::app_launcher::Application {
+            name: name.clone(),
+            path: std::path::PathBuf::from(format!("{}.exe", name)),
+            aliases: vec![name],
+            icon_base64: None,
+            emoji_icon: None,
+        });
     }
-    
-    #[test]
-    fn test_fuzzy_matching_starts_with() {
-        // Test starts with match
-        let query = "note";
-        let target = "notepad";
-        assert!(target.to_lowercase().starts_with(&query.to_lowercase()));
-    }
-    
-    #[test]
-    fn test_fuzzy_matching_contains() {
-        // Test contains match
-        let query = "pad";
-        let target = "notepad";
-        assert!(target.to_lowercase().contains(&query.to_lowercase()));
-    }
-    
-    #[test]
-    fn test_case_insensitive() {
-        // Test case insensitive matching
-        let query1 = "NOTEPAD";
-        let query2 = "notepad";
-        let query3 = "NotePad";
-        let target = "notepad";
-        
-        assert_eq!(query1.to_lowercase(), target.to_lowercase());
-        assert_eq!(query2.to_lowercase(), target.to_lowercase());
-        assert_eq!(query3.to_lowercase(), target.to_lowercase());
-    }
-    
-    #[test]
-    fn test_alias_generation() {
-        // Test alias generation (no spaces)
-        let name = "Microsoft Word";
-        let normalized = name.to_lowercase();
-        let no_spaces = normalized.replace(" ", "");
-        
-        assert_eq!(normalized, "microsoft word");
-        assert_eq!(no_spaces, "microsoftword");
-    }
+    launcher.apply_registry(registry);
+
+    // "app" matches all 10, but find_app caps at 5
+    let results = launcher.find_app("app");
+    assert!(results.len() <= 5);
+}
+
+#[test]
+fn test_find_app_alias_no_spaces() {
+    let mut launcher = AppLauncher::new().unwrap();
+    let mut registry = std::collections::HashMap::new();
+    registry.insert("microsoft word".to_string(), kiro_assistant::app_launcher::Application {
+        name: "Microsoft Word".to_string(),
+        path: std::path::PathBuf::from("winword.exe"),
+        aliases: vec!["microsoft word".to_string(), "microsoftword".to_string()],
+        icon_base64: None,
+        emoji_icon: None,
+    });
+    launcher.apply_registry(registry);
+
+    // Should match via the no-spaces alias
+    assert_eq!(launcher.find_app("microsoftword").len(), 1);
 }

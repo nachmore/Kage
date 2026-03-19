@@ -1,52 +1,105 @@
-// Note: These tests would normally import from the main crate
-// For now, we'll create a basic test structure
+use kiro_assistant::config::{Config, HotkeyConfig};
 
 #[test]
 fn test_config_default_values() {
-    // Test that default config has expected values
-    // This would use: let config = Config::default();
-    // assert_eq!(config.version, 1);
-    // assert_eq!(config.hotkey.modifiers, vec!["Alt".to_string()]);
-    // assert_eq!(config.hotkey.key, "Space".to_string());
-    // assert_eq!(config.acp.host, "127.0.0.1");
-    // assert_eq!(config.acp.port, 8765);
-    println!("Config default values test placeholder");
+    let config = Config::default();
+    assert_eq!(config.version, 1);
+    assert_eq!(config.hotkey.modifiers, vec!["Alt".to_string()]);
+    assert_eq!(config.hotkey.key, "Space");
+    assert!(config.shortcuts.is_empty());
+    assert!(!config.first_run_completed);
 }
 
 #[test]
-fn test_config_serialization() {
-    // Test that config can be serialized to JSON
-    // let config = Config::default();
-    // let json = serde_json::to_string(&config).unwrap();
-    // assert!(json.contains("\"version\":1"));
-    println!("Config serialization test placeholder");
+fn test_config_serialization_roundtrip() {
+    let config = Config::default();
+    let json = serde_json::to_string(&config).unwrap();
+    let deserialized: Config = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.version, config.version);
+    assert_eq!(deserialized.hotkey.key, config.hotkey.key);
+    assert_eq!(deserialized.hotkey.modifiers, config.hotkey.modifiers);
+    assert_eq!(deserialized.shortcuts.len(), config.shortcuts.len());
 }
 
 #[test]
-fn test_config_deserialization() {
-    // Test that config can be deserialized from JSON
-    // let json = r#"{"version":1,"hotkey":{"modifiers":["Alt"],"key":"Space"},...}"#;
-    // let config: Config = serde_json::from_str(json).unwrap();
-    // assert_eq!(config.version, 1);
-    println!("Config deserialization test placeholder");
+fn test_config_backward_compatibility_extra_fields() {
+    // Unknown fields should be silently ignored when all required fields are present
+    let config = Config::default();
+    let mut json_val: serde_json::Value = serde_json::to_value(&config).unwrap();
+    json_val["some_future_field"] = serde_json::json!(true);
+    json_val["another"] = serde_json::json!([1, 2, 3]);
+    let json_str = serde_json::to_string(&json_val).unwrap();
+    let loaded: Config = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(loaded.version, 1);
 }
 
 #[test]
-fn test_config_persistence() {
-    // Test that config can be saved and loaded
-    // let temp_dir = tempfile::tempdir().unwrap();
-    // let config_path = temp_dir.path().join("config.json");
-    // let config = Config::default();
-    // config.save_to_path(&config_path).unwrap();
-    // let loaded = Config::load_from_path(&config_path).unwrap();
-    // assert_eq!(config, loaded);
-    println!("Config persistence test placeholder");
+fn test_config_backward_compatibility_missing_optional_fields() {
+    // Start with a full default config, remove optional fields, should still parse
+    let config = Config::default();
+    let mut json_val: serde_json::Value = serde_json::to_value(&config).unwrap();
+    // Remove fields that have #[serde(default)]
+    json_val.as_object_mut().unwrap().remove("shortcuts");
+    json_val.as_object_mut().unwrap().remove("debug_mode");
+    json_val.as_object_mut().unwrap().remove("tool_permissions");
+    json_val.as_object_mut().unwrap().remove("pocket_tts");
+    json_val.as_object_mut().unwrap().remove("extensions");
+    let json_str = serde_json::to_string(&json_val).unwrap();
+    let loaded: Config = serde_json::from_str(&json_str).unwrap();
+    assert!(loaded.shortcuts.is_empty());
+    assert!(!loaded.debug_mode);
 }
 
 #[test]
 fn test_hotkey_string_generation() {
-    // Test that hotkey string is generated correctly
-    // let config = Config::default();
-    // assert_eq!(config.get_hotkey_string(), "Alt+Space");
-    println!("Hotkey string generation test placeholder");
+    let mut config = Config::default();
+    assert_eq!(config.get_hotkey_string(), "Alt+Space");
+
+    config.hotkey = HotkeyConfig {
+        modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
+        key: "K".to_string(),
+    };
+    assert_eq!(config.get_hotkey_string(), "Ctrl+Shift+K");
+}
+
+#[test]
+fn test_hotkey_string_single_modifier() {
+    let mut config = Config::default();
+    config.hotkey = HotkeyConfig {
+        modifiers: vec!["Super".to_string()],
+        key: "Space".to_string(),
+    };
+    assert_eq!(config.get_hotkey_string(), "Super+Space");
+}
+
+#[test]
+fn test_config_ui_defaults() {
+    let config = Config::default();
+    assert_eq!(config.ui.theme, "system");
+    assert_eq!(config.ui.font_size, 14);
+    assert_eq!(config.ui.window_start_position, "center");
+}
+
+#[test]
+fn test_config_with_shortcuts_roundtrip() {
+    let mut config = Config::default();
+    config.shortcuts.push(kiro_assistant::config::ShortcutConfig {
+        name: "VSCode".to_string(),
+        shortcut: "code".to_string(),
+        action_type: "run_program".to_string(),
+        icon: None,
+        path: Some("C:\\Program Files\\VSCode\\code.exe".to_string()),
+        url: None,
+        working_directory: None,
+        arguments: Some("{*}".to_string()),
+        prompt: None,
+        script: None,
+        script_action: None,
+    });
+
+    let json = serde_json::to_string(&config).unwrap();
+    let config2: Config = serde_json::from_str(&json).unwrap();
+    assert_eq!(config2.shortcuts.len(), 1);
+    assert_eq!(config2.shortcuts[0].name, "VSCode");
+    assert_eq!(config2.shortcuts[0].arguments, Some("{*}".to_string()));
 }
