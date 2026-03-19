@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::error::AppError;
 use crate::os;
 use crate::state::AppState;
 use log::{error, info};
@@ -115,7 +116,7 @@ pub fn format_steering_message(parts: &[String]) -> String {
 }
 
 #[tauri::command]
-pub async fn get_config(state: State<'_, AppState>) -> Result<Config, String> {
+pub async fn get_config(state: State<'_, AppState>) -> Result<Config, AppError> {
     let config = state.config.lock().unwrap();
     Ok(config.clone())
 }
@@ -125,7 +126,7 @@ pub async fn save_config(
     config: Config,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Saving configuration");
     config.save().map_err(|e| {
         error!("Failed to save config: {}", e);
@@ -145,16 +146,16 @@ pub async fn save_config(
 }
 
 #[tauri::command]
-pub async fn save_frecency(data: String) -> Result<(), String> {
+pub async fn save_frecency(data: String) -> Result<(), AppError> {
     let path = dirs::config_dir()
         .ok_or("No config dir")?
         .join("kiro-assistant")
         .join("search-frecency.json");
-    std::fs::write(&path, &data).map_err(|e| format!("Failed to save frecency: {}", e))
+    Ok(std::fs::write(&path, &data).map_err(|e| format!("Failed to save frecency: {}", e))?)
 }
 
 #[tauri::command]
-pub async fn load_frecency() -> Result<String, String> {
+pub async fn load_frecency() -> Result<String, AppError> {
     let path = dirs::config_dir()
         .ok_or("No config dir")?
         .join("kiro-assistant")
@@ -176,7 +177,7 @@ fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
 
 /// Record a shortcut execution with arguments for history recall.
 #[tauri::command]
-pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), String> {
+pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), AppError> {
     let args = args.trim().to_string();
     if args.is_empty() { return Ok(()); }
 
@@ -206,13 +207,13 @@ pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), 
 
     let dir = path.parent().unwrap();
     let _ = fs::create_dir_all(dir);
-    fs::write(&path, serde_json::to_string_pretty(&history).unwrap_or_default())
-        .map_err(|e| format!("Failed to save shortcut history: {}", e))
+    Ok(fs::write(&path, serde_json::to_string_pretty(&history).unwrap_or_default())
+        .map_err(|e| format!("Failed to save shortcut history: {}", e))?)
 }
 
 /// Get history entries for a specific shortcut trigger.
 #[tauri::command]
-pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Value>, String> {
+pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Value>, AppError> {
     let path = shortcut_history_path()?;
     if !path.exists() { return Ok(vec![]); }
 
@@ -231,7 +232,7 @@ pub async fn update_tool_policy(
     tool_title: String,
     policy: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Updating tool policy: {} -> {}", tool_title, policy);
     let mut config = state.config.lock().unwrap();
     if let Some(tool) = config
@@ -252,7 +253,7 @@ pub async fn update_tool_policy(
 pub async fn remove_tool_permission(
     tool_title: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config
         .tool_permissions
@@ -265,12 +266,12 @@ pub async fn remove_tool_permission(
 }
 
 #[tauri::command]
-pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
     Ok(state.dev_mode)
 }
 
 #[tauri::command]
-pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
     // If window exists and is valid, just focus it
     if let Some(w) = app.get_webview_window("welcome") {
@@ -307,7 +308,7 @@ pub async fn complete_first_run(
     launch_at_startup: bool,
     auto_update: bool,
     enable_computer_control: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
@@ -361,29 +362,29 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, AppError> {
     let config = state.config.lock().unwrap();
     Ok(!config.first_run_completed)
 }
 
 #[tauri::command]
-pub async fn get_startup_enabled() -> Result<bool, String> {
+pub async fn get_startup_enabled() -> Result<bool, AppError> {
     Ok(get_startup_enabled_impl())
 }
 
 #[tauri::command]
-pub async fn set_startup_enabled(enabled: bool) -> Result<(), String> {
+pub async fn set_startup_enabled(enabled: bool) -> Result<(), AppError> {
     set_startup_enabled_impl(enabled);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn get_computer_control_enabled() -> Result<bool, String> {
+pub async fn get_computer_control_enabled() -> Result<bool, AppError> {
     Ok(crate::mcp_registration::is_registered())
 }
 
 #[tauri::command]
-pub async fn set_computer_control_enabled(enabled: bool) -> Result<(), String> {
+pub async fn set_computer_control_enabled(enabled: bool) -> Result<(), AppError> {
     if enabled {
         crate::mcp_registration::ensure_registered();
     } else {
@@ -393,20 +394,20 @@ pub async fn set_computer_control_enabled(enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn get_mcp_json_path() -> Result<String, String> {
+pub async fn get_mcp_json_path() -> Result<String, AppError> {
     crate::mcp_registration::default_mcp_json_path()
         .map(|p| p.to_string_lossy().to_string())
         .ok_or("Cannot determine mcp.json path".into())
 }
 
 #[tauri::command]
-pub async fn get_mcp_config(path: Option<String>) -> Result<serde_json::Value, String> {
+pub async fn get_mcp_config(path: Option<String>) -> Result<serde_json::Value, AppError> {
     Ok(crate::mcp_registration::read_mcp_json(path.as_deref()))
 }
 
 #[tauri::command]
-pub async fn save_mcp_config(path: Option<String>, config: serde_json::Value) -> Result<(), String> {
-    crate::mcp_registration::write_mcp_json(path.as_deref(), &config)
+pub async fn save_mcp_config(path: Option<String>, config: serde_json::Value) -> Result<(), AppError> {
+    Ok(crate::mcp_registration::write_mcp_json(path.as_deref(), &config)?)
 }
 
 fn get_startup_enabled_impl() -> bool {
@@ -418,7 +419,7 @@ fn set_startup_enabled_impl(enabled: bool) {
 }
 
 #[tauri::command]
-pub async fn get_app_info() -> Result<serde_json::Value, String> {
+pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
     Ok(serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "authors": env!("CARGO_PKG_AUTHORS"),
@@ -436,7 +437,7 @@ pub async fn try_register_hotkey(
     modifiers: Vec<String>,
     key: String,
     slot: Option<String>,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
     let hotkey_str = if modifiers.is_empty() {
@@ -471,7 +472,7 @@ pub async fn try_register_hotkey(
         if slot_name == "main" {
             if let Some(ref cn) = cb_norm {
                 if new_norm == *cn {
-                    return Err("This shortcut is already used as the clipboard hotkey".to_string());
+                    return Err("This shortcut is already used as the clipboard hotkey".into());
                 }
             }
             if new_norm == main_norm {
@@ -479,7 +480,7 @@ pub async fn try_register_hotkey(
             }
         } else if slot_name == "clipboard" {
             if new_norm == main_norm {
-                return Err("This shortcut is already used as the main hotkey".to_string());
+                return Err("This shortcut is already used as the main hotkey".into());
             }
             if let Some(ref cn) = cb_norm {
                 if new_norm == *cn {
@@ -588,13 +589,13 @@ pub async fn try_register_hotkey(
                     );
                 }
             }
-            Err(msg)
+            Err(msg.into())
         }
     }
 }
 
 #[tauri::command]
-pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
     // Temporarily unregister global hotkeys so they don't intercept during capture
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let _ = app.global_shortcut().unregister_all();
@@ -652,13 +653,13 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
 }
 
 #[tauri::command]
-pub async fn cancel_hotkey_capture() -> Result<(), String> {
+pub async fn cancel_hotkey_capture() -> Result<(), AppError> {
     crate::os::cancel_hotkey_capture();
     Ok(())
 }
 
 #[tauri::command]
-pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
     #[cfg(debug_assertions)]
     if let Some(window) = app.get_webview_window("floating") {
         let window: tauri::WebviewWindow = window;
@@ -670,7 +671,7 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Restart requested via > command");
 
     // Collect current exe and args before we start tearing down
@@ -707,7 +708,7 @@ pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> 
 }
 
 #[tauri::command]
-pub async fn quit_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn quit_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Quit requested via > command");
     graceful_shutdown(&app);
 
@@ -720,12 +721,12 @@ pub async fn quit_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Res
 }
 
 #[tauri::command]
-pub async fn read_clipboard() -> Result<String, String> {
+pub async fn read_clipboard() -> Result<String, AppError> {
     Ok(crate::os::read_clipboard().unwrap_or_default())
 }
 
 #[tauri::command]
-pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, String> {
+pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, AppError> {
     let dirs: Vec<(&str, &[&str], Option<std::path::PathBuf>)> = vec![
         ("cache", &["—"], dirs::cache_dir()),
         ("config", &["configuration"], dirs::config_dir()),
@@ -753,50 +754,50 @@ pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, String> {
+pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, AppError> {
     Ok(crate::os::get_clipboard_history())
 }
 
 /// Search for files using the OS-native search index.
 #[tauri::command]
-pub async fn search_files(query: String, max_results: Option<usize>) -> Result<Vec<crate::os::file_search::FileSearchResult>, String> {
+pub async fn search_files(query: String, max_results: Option<usize>) -> Result<Vec<crate::os::file_search::FileSearchResult>, AppError> {
     let max = max_results.unwrap_or(10);
     let q = query.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
         crate::os::search_files(&q, max)
     })
     .await
-    .map_err(|e| format!("Search task failed: {}", e))
+    .map_err(|e| format!("Search task failed: {}", e))?)
 }
 
 /// Get upcoming calendar events.
 #[tauri::command]
-pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::calendar::CalendarEvent>, String> {
+pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     let h = hours.unwrap_or(24).min(72);
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
         crate::os::get_upcoming_events(h)
     })
     .await
-    .map_err(|e| format!("Calendar task failed: {}", e))
+    .map_err(|e| format!("Calendar task failed: {}", e))?)
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
 #[tauri::command]
-pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os::calendar::CalendarEvent>, String> {
+pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     // Basic validation
     if date.len() != 10 || date.chars().filter(|c| *c == '-').count() != 2 {
-        return Err("Invalid date format. Use YYYY-MM-DD.".to_string());
+        return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
         crate::os::get_events_for_date(&date)
     })
     .await
-    .map_err(|e| format!("Calendar date query failed: {}", e))
+    .map_err(|e| format!("Calendar date query failed: {}", e))?)
 }
 
 /// Fetch a website's favicon and return it as a base64 data URI.
 #[tauri::command]
-pub async fn fetch_favicon(url: String) -> Result<String, String> {
+pub async fn fetch_favicon(url: String) -> Result<String, AppError> {
     let domain = url::Url::parse(&url.replace(['{', '}'], ""))
         .or_else(|_| url::Url::parse(&format!("https://{}", url.replace(['{', '}'], ""))))
         .map_err(|e| format!("Invalid URL: {}", e))?
@@ -805,7 +806,7 @@ pub async fn fetch_favicon(url: String) -> Result<String, String> {
         .to_string();
 
     if domain.is_empty() {
-        return Err("Could not extract domain from URL".to_string());
+        return Err("Could not extract domain from URL".into());
     }
 
     let favicon_url = format!("https://www.google.com/s2/favicons?domain={}&sz=64", domain);
@@ -836,7 +837,7 @@ pub async fn fetch_favicon(url: String) -> Result<String, String> {
 
 /// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
 #[tauri::command]
-pub async fn paste_clipboard_item(text: String) -> Result<(), String> {
+pub async fn paste_clipboard_item(text: String) -> Result<(), AppError> {
     crate::os::write_clipboard(&text);
     // Small delay to ensure clipboard is updated before paste
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -854,7 +855,7 @@ pub struct UserInfo {
 }
 
 #[tauri::command]
-pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, String> {
+pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, AppError> {
     // Return cached user info if available
     {
         let cached = state.user_info_cache.lock().unwrap();
@@ -934,7 +935,7 @@ pub fn compute_user_info() -> UserInfo {
 /// User steering takes precedence (placed first).
 /// Returns None if no steering content is available.
 #[tauri::command]
-pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, String> {
+pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
     let config = state.config.lock().unwrap();
     let parts = assemble_steering_parts(&config);
     Ok(Some(format_steering_message(&parts)))
@@ -943,7 +944,7 @@ pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<S
 /// Open the auto-generated steering document in the default editor.
 /// Creates the file with a header comment if it doesn't exist yet.
 #[tauri::command]
-pub async fn open_auto_steering_file() -> Result<String, String> {
+pub async fn open_auto_steering_file() -> Result<String, AppError> {
     let auto_path = Config::get_auto_steering_path()
         .map_err(|e| format!("Failed to get auto steering path: {}", e))?;
 
@@ -972,20 +973,20 @@ pub async fn open_auto_steering_file() -> Result<String, String> {
 
 /// Get the path to the auto-generated steering document
 #[tauri::command]
-pub async fn get_auto_steering_path() -> Result<String, String> {
-    Config::get_auto_steering_path()
+pub async fn get_auto_steering_path() -> Result<String, AppError> {
+    Ok(Config::get_auto_steering_path()
         .map_err(|e| format!("Failed to get path: {}", e))
         .and_then(|p| {
             p.to_str()
                 .map(|s| s.to_string())
                 .ok_or_else(|| "Invalid path encoding".to_string())
-        })
+        })?)
 }
 
 // --- Update commands ---
 
 #[tauri::command]
-pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
     let result = tauri::async_runtime::spawn_blocking(crate::updater::check_for_update)
         .await
         .map_err(|e| format!("Task error: {}", e))?
@@ -1003,15 +1004,15 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value
 }
 
 #[tauri::command]
-pub async fn fetch_changelog() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
+pub async fn fetch_changelog() -> Result<String, AppError> {
+    Ok(tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
         .await
         .map_err(|e| format!("Task error: {}", e))?
-        .map_err(|e| format!("Fetch failed: {}", e))
+        .map_err(|e| format!("Fetch failed: {}", e))?)
 }
 
 #[tauri::command]
-pub async fn get_update_urls() -> Result<serde_json::Value, String> {
+pub async fn get_update_urls() -> Result<serde_json::Value, AppError> {
     Ok(serde_json::json!({
         "version_url": crate::updater::VERSION_URL,
         "installer_url": crate::updater::INSTALLER_URL,
@@ -1022,36 +1023,36 @@ pub async fn get_update_urls() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub async fn download_and_install_update(
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let session_id = state.floating_session_id.lock()
         .ok()
         .and_then(|s| s.clone());
 
-    tauri::async_runtime::spawn_blocking(move || {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
         let path = crate::updater::download_installer()
             .map_err(|e| e.to_string())?;
         crate::updater::run_installer_and_exit(&path, session_id.as_deref())
             .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??)
 }
 
 #[tauri::command]
-pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, AppError> {
     let config = state.config.lock().unwrap();
     Ok(crate::updater::was_just_updated(&config))
 }
 
 #[tauri::command]
-pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     crate::updater::clear_update_flag(&mut config);
-    config.save().map_err(|e| format!("Failed to save: {}", e))
+    Ok(config.save().map_err(|e| format!("Failed to save: {}", e))?)
 }
 
 #[tauri::command]
-pub async fn touch_floating_activity(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn touch_floating_activity(state: State<'_, AppState>) -> Result<(), AppError> {
     state.updater.touch_activity();
     Ok(())
 }
@@ -1079,7 +1080,7 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
 // --- Window Walker ---
 
 #[tauri::command]
-pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInfo>, String> {
+pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInfo>, AppError> {
     Ok(crate::os::list_windows())
 }
 
@@ -1087,15 +1088,15 @@ pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInf
 pub async fn focus_open_window(
     handle: u64,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     // Hide the floating window before focusing the target
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.hide();
     }
-    crate::os::focus_window(handle)
+    Ok(crate::os::focus_window(handle)?)
 }
 
 #[tauri::command]
-pub async fn get_app_icon(process_name: String) -> Result<Option<String>, String> {
+pub async fn get_app_icon(process_name: String) -> Result<Option<String>, AppError> {
     Ok(crate::os::get_app_icon(&process_name))
 }

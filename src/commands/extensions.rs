@@ -1,5 +1,6 @@
 //! Tauri commands for extension, theme, and store management.
 
+use crate::error::AppError;
 use crate::extensions;
 use crate::state::AppState;
 use log::{error, info, warn};
@@ -10,19 +11,19 @@ use tauri::{Emitter, Manager, State};
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
+pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("extension", None, &config.extension_states))
 }
 
 #[tauri::command]
-pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
+pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("theme", None, &config.extension_states))
 }
 
 #[tauri::command]
-pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, String> {
+pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = state.config.lock().unwrap();
     Ok(extensions::discover_items("commands", None, &config.extension_states))
 }
@@ -35,7 +36,7 @@ pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extens
 pub async fn get_extension_config(
     id: String,
     state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let config = state.config.lock().unwrap();
     Ok(config.extensions.get(&id).cloned().unwrap_or(serde_json::json!({})))
 }
@@ -46,7 +47,7 @@ pub async fn save_extension_config(
     value: serde_json::Value,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config.extensions.insert(id.clone(), value);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
@@ -67,7 +68,7 @@ pub async fn set_extension_enabled(
     enabled: bool,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config.extension_states.insert(id.clone(), enabled);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
@@ -86,13 +87,13 @@ pub async fn set_extension_enabled(
 pub async fn load_theme_colors(
     theme_id: String,
     variant: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     match extensions::load_theme_colors(&theme_id, &variant, None) {
         Ok(Some(colors)) => Ok(colors),
         Ok(None) => Ok(serde_json::json!(null)),
         Err(e) => {
             error!("Failed to load theme colors for '{}': {}", theme_id, e);
-            Err(format!("Failed to load theme: {}", e))
+            Err(format!("Failed to load theme: {}", e).into())
         }
     }
 }
@@ -109,10 +110,10 @@ pub async fn read_extension_file(
     extension_id: String,
     kind: String,
     file_path: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     // Validate file_path to prevent directory traversal
     if file_path.contains("..") || file_path.contains('\\') || file_path.starts_with('/') {
-        return Err("Invalid file path".to_string());
+        return Err("Invalid file path".into());
     }
 
     let subdir = extensions::kind_to_subdir(&kind)
@@ -129,12 +130,12 @@ pub async fn read_extension_file(
         let canonical_parent = canonical_base.canonicalize()
             .map_err(|e| format!("Path error: {}", e))?;
         if !canonical.starts_with(&canonical_parent) {
-            return Err("Path traversal detected".to_string());
+            return Err("Path traversal detected".into());
         }
     }
 
-    std::fs::read_to_string(&full_path)
-        .map_err(|e| format!("Failed to read file: {}", e))
+    Ok(std::fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?)
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +147,7 @@ pub async fn install_extension_from_path(
     source_path: String,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<extensions::InstalledItem, String> {
+) -> Result<extensions::InstalledItem, AppError> {
     let source = std::path::PathBuf::from(&source_path);
 
     let item = if source.extension().map(|e| e == "zip").unwrap_or(false) {
@@ -177,7 +178,7 @@ pub async fn uninstall_extension(
     kind: String,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     extensions::uninstall(&id, &kind)
         .map_err(|e| format!("Uninstall failed: {}", e))?;
 
@@ -199,7 +200,7 @@ pub async fn uninstall_extension(
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), String> {
+pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
 
     if let Some(w) = app.get_webview_window("store") {
@@ -248,7 +249,7 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
 pub async fn save_store_url(
     url: Option<String>,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config.store_url = url.filter(|s| !s.is_empty());
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
@@ -287,7 +288,7 @@ fn validate_store_url(url: &str) -> Result<(), String> {
     if url.starts_with("http://localhost") || url.starts_with("http://127.0.0.1") {
         return Ok(());
     }
-    Err(format!("Store URL must use HTTPS (got: {}). HTTP is only allowed for localhost.", url))
+    Err(format!("Store URL must use HTTPS (got: {}). HTTP is only allowed for localhost.", url).into())
 }
 
 /// Build a reqwest client with timeout.
@@ -304,7 +305,7 @@ pub async fn store_get_catalog(
     search: Option<String>,
     page: Option<u32>,
     state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let base_url = {
         let config = state.config.lock().unwrap();
         resolve_store_url(&config, state.dev_mode)
@@ -346,14 +347,14 @@ pub async fn store_get_catalog(
 pub async fn store_get_detail(
     id: String,
     state: State<'_, AppState>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let base_url = {
         let config = state.config.lock().unwrap();
         resolve_store_url(&config, state.dev_mode)
     };
 
     if base_url.is_empty() {
-        return Err("No store URL configured".to_string());
+        return Err("No store URL configured".into());
     }
 
     validate_store_url(&base_url)?;
@@ -376,19 +377,19 @@ pub async fn store_install(
     id: String,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<extensions::InstalledItem, String> {
+) -> Result<extensions::InstalledItem, AppError> {
     let base_url = {
         let config = state.config.lock().unwrap();
         resolve_store_url(&config, state.dev_mode)
     };
 
     if base_url.is_empty() {
-        return Err("No store URL configured".to_string());
+        return Err("No store URL configured".into());
     }
 
     validate_store_url(&base_url)?;
 
-    store_install_inner(&base_url, &id, &state, &app).await
+    store_install_inner(&base_url, &id, &state, &app).await.map_err(AppError::from)
 }
 
 /// Check for updates to installed extensions and optionally auto-install them.
@@ -397,7 +398,7 @@ pub async fn store_install(
 pub async fn check_extension_updates(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let base_url = {
         let config = state.config.lock().unwrap();
         resolve_store_url(&config, state.dev_mode)
@@ -513,7 +514,7 @@ async fn store_install_inner(
         .map_err(|e| format!("Failed to read download: {}", e))?;
 
     if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
-        return Err("Invalid zip archive".to_string());
+        return Err("Invalid zip archive".into());
     }
 
     std::fs::write(&zip_path, &bytes)

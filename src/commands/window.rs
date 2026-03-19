@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::os;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, WebviewWindow};
@@ -239,7 +240,7 @@ fn center_floating_on_active_monitor(window: &WebviewWindow) {
 }
 
 #[tauri::command]
-pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, String> {
+pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppError> {
     info!("Testing floating window visibility");
 
     if let Some(window) = app.get_webview_window("floating") {
@@ -255,16 +256,16 @@ pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, Strin
             Ok("Window was hidden, now visible and positioned".to_string())
         }
     } else {
-        Err("Floating window not found".to_string())
+        Err(AppError::internal("Floating window not found"))
     }
 }
 
 #[tauri::command]
-pub async fn start_drag_window(window: WebviewWindow) -> Result<(), String> {
+pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
     info!("Starting window drag");
     window.start_dragging().map_err(|e| {
         error!("Failed to start dragging: {}", e);
-        e.to_string()
+        AppError::internal(e.to_string())
     })
 }
 
@@ -286,7 +287,7 @@ pub fn center_window_on_active_monitor(window: &WebviewWindow) {
 }
 
 #[tauri::command]
-pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Opening chat window");
 
     if let Some(floating_window) = app.get_webview_window("floating") {
@@ -358,7 +359,7 @@ pub async fn resize_floating_window(
     window: WebviewWindow,
     width: Option<u32>,
     height: Option<u32>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let current_size = window.inner_size().map_err(|e| e.to_string())?;
 
     let target_width = width.unwrap_or(current_size.width);
@@ -369,12 +370,12 @@ pub async fn resize_floating_window(
             width: target_width,
             height: target_height,
         }))
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::internal(e.to_string()))
 }
 
 
 #[tauri::command]
-pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>) -> Result<(), String> {
+pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>) -> Result<(), AppError> {
     info!("Opening settings window (section: {:?})", section);
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
@@ -391,7 +392,7 @@ pub async fn show_context_menu(
     x: i32,
     y: i32,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("context-menu") {
         // Get the menu window size
         let win_size = window.outer_size().unwrap_or(tauri::PhysicalSize {
@@ -440,7 +441,7 @@ pub async fn show_context_menu(
 pub async fn set_floating_opacity(
     app: tauri::AppHandle,
     opacity: f64,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     // Opacity is applied via CSS in the frontend (body opacity).
     // This command exists so the frontend can trigger it via config_updated.
     // The actual application happens in floating-theme.js loadAndApplyTheme().
@@ -454,7 +455,7 @@ pub async fn apply_chat_window_size(
     app: tauri::AppHandle,
     width: u32,
     height: u32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("main") {
         let scale = window.scale_factor().unwrap_or(1.0);
         let phys_width = (width as f64 * scale) as u32;
@@ -474,7 +475,7 @@ pub async fn save_window_position(
     state: tauri::State<'_, crate::state::AppState>,
     x: i32,
     y: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
@@ -489,7 +490,7 @@ pub async fn save_chat_window_geometry(
     height: u32,
     x: i32,
     y: i32,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     config.ui.chat_window_width = width;
     config.ui.chat_window_height = height;
@@ -502,7 +503,7 @@ pub async fn save_chat_window_geometry(
 #[tauri::command]
 pub async fn get_last_selection(
     state: tauri::State<'_, crate::state::AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, AppError> {
     let sel = state.last_selection.lock().map_err(|e| e.to_string())?;
     Ok(sel.clone())
 }
@@ -511,7 +512,7 @@ pub async fn get_last_selection(
 pub async fn set_notification_source(
     state: tauri::State<'_, crate::state::AppState>,
     source: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Ok(mut s) = state.notification_source.lock() {
         *s = source;
     }
@@ -522,7 +523,7 @@ pub async fn set_notification_source(
 pub async fn show_notification_source_window(
     app: tauri::AppHandle,
     state: tauri::State<'_, crate::state::AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let source = state.notification_source.lock()
         .map(|s| s.clone())
         .unwrap_or_else(|_| "floating".to_string());

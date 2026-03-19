@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::os;
 use crate::state::AppState;
 use log::{error, info};
@@ -176,7 +177,7 @@ fn match_system_command(input: &str) -> Option<(&'static str, &'static str, bool
 pub async fn handle_floating_input(
     input: String,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let trimmed_input = input.trim();
 
     // Collect ALL matches from all sources (no early returns)
@@ -248,7 +249,7 @@ pub async fn launch_app_by_name(
     app_name: String,
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Launching app by name: {}", app_name);
 
     let launcher = state.app_launcher.lock().await;
@@ -266,12 +267,12 @@ pub async fn launch_app_by_name(
 
         Ok(())
     } else {
-        Err(format!("Application not found: {}", app_name))
+        Err(format!("Application not found: {}", app_name).into())
     }
 }
 
 #[tauri::command]
-pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Opening URL: {}", url);
 
     let full_url = if url.starts_with("www.") {
@@ -290,7 +291,7 @@ pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Opening path: {}", path);
 
     let expanded_path = if path.starts_with('~') {
@@ -305,7 +306,7 @@ pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), String
 
     let path_obj = std::path::Path::new(&expanded_path);
     if !path_obj.exists() {
-        return Err(format!("Path does not exist: {}", expanded_path));
+        return Err(format!("Path does not exist: {}", expanded_path).into());
     }
 
     os::open_path(&expanded_path).map_err(|e| format!("Failed to open path: {}", e))?;
@@ -322,7 +323,7 @@ pub async fn execute_shortcut(
     path: String,
     args: Vec<String>,
     working_directory: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Executing shortcut: {} with args: {:?}", path, args);
 
     use std::process::Command;
@@ -372,7 +373,7 @@ pub async fn execute_system_command(
     command_id: String,
     elevated: Option<bool>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let elevated = elevated.unwrap_or(false);
     info!("Executing system command: {}{}", command_id, if elevated { " (elevated)" } else { "" });
 
@@ -404,18 +405,18 @@ pub async fn execute_system_command(
         }
         Err(e) => {
             error!("Failed to execute system command '{}': {}", command_id, e);
-            Err(format!("Failed to execute: {}", e))
+            Err(format!("Failed to execute: {}", e).into())
         }
     }
 }
 
 /// Fetch metadata (title, description, favicon) from a URL for link previews.
 #[tauri::command]
-pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, String> {
+pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppError> {
 
     // Validate URL
     if !url.starts_with("http://") && !url.starts_with("https://") {
-        return Err("Invalid URL".to_string());
+        return Err("Invalid URL".into());
     }
 
     let client = reqwest::Client::builder()
@@ -431,7 +432,7 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, Strin
     let final_url = resp.url().to_string();
     let status = resp.status();
     if !status.is_success() {
-        return Err(format!("HTTP {}", status));
+        return Err(format!("HTTP {}", status).into());
     }
 
     // Only process HTML responses

@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::state::AppState;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -110,7 +111,7 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 
 
 #[tauri::command]
-pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<PocketTtsStatus, String> {
+pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<PocketTtsStatus, AppError> {
     let (port, python_path) = {
         let config = state.config.lock().unwrap();
         let pp = config.pocket_tts.python_path.clone().or_else(find_python);
@@ -139,7 +140,7 @@ pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<Pock
 pub async fn pocket_tts_install(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let config = state.config.lock().unwrap();
     let python = config
         .pocket_tts
@@ -153,7 +154,7 @@ pub async fn pocket_tts_install(
     {
         let proc = state.pocket_tts_install_process.lock().unwrap();
         if proc.is_some() {
-            return Err("Installation already in progress".to_string());
+            return Err("Installation already in progress".into());
         }
     }
 
@@ -257,7 +258,7 @@ pub async fn pocket_tts_install(
 }
 
 #[tauri::command]
-pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<String, AppError> {
     let mut proc = state.pocket_tts_install_process.lock().unwrap();
     if let Some(mut child) = proc.take() {
         info!("Cancelling pocket-tts installation");
@@ -270,7 +271,7 @@ pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<Str
 }
 
 #[tauri::command]
-pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppError> {
     let (port, voice, temp, eos_threshold, python) = {
         let config = state.config.lock().unwrap();
         (
@@ -294,7 +295,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
         return Err(format!(
             "Server script not found at: {}",
             script_path.display()
-        ));
+        ).into());
     }
 
     info!(
@@ -382,7 +383,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
             }
             Ok(false) => {
                 let _ = child.kill();
-                Err("Server failed to start — check that pocket-tts is installed correctly".to_string())
+                Err("Server failed to start — check that pocket-tts is installed correctly".into())
             }
             Err(_) => {
                 warn!("Timeout waiting for pocket-tts server — it may still be loading the model");
@@ -401,7 +402,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, Stri
 }
 
 #[tauri::command]
-pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, String> {
+pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, AppError> {
     let mut tts_proc = state.pocket_tts_process.lock().unwrap();
     if let Some(mut child) = tts_proc.take() {
         info!("Stopping pocket-tts server");
@@ -414,7 +415,7 @@ pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, Strin
 }
 
 #[tauri::command]
-pub async fn pocket_tts_voices(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub async fn pocket_tts_voices(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
     let port = {
         let config = state.config.lock().unwrap();
         config.pocket_tts.port
@@ -451,7 +452,7 @@ pub async fn pocket_tts_voices(state: State<'_, AppState>) -> Result<serde_json:
 pub async fn pocket_tts_test(
     _text: String,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let port = {
         let config = state.config.lock().unwrap();
         config.pocket_tts.port
@@ -465,6 +466,6 @@ pub async fn pocket_tts_test(
             "http://127.0.0.1:{}/tts",
             port
         )),
-        _ => Err("Pocket TTS server is not running. Start it first.".to_string()),
+        _ => Err("Pocket TTS server is not running. Start it first.".into()),
     }
 }

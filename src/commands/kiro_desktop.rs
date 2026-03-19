@@ -4,6 +4,7 @@
 //! Uses workspace-sessions for the session index (titles, dates) and
 //! .chat files for the full conversation content.
 
+use crate::error::AppError;
 use log::info;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -64,7 +65,7 @@ pub async fn kiro_desktop_available() -> bool {
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, String> {
+pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppError> {
     let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     if !ws_dir.exists() { return Ok(Vec::new()); }
@@ -89,7 +90,7 @@ pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, Stri
 pub async fn kiro_desktop_sessions(
     workspace_encoded: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<KiroDesktopSession>, String> {
+) -> Result<Vec<KiroDesktopSession>, AppError> {
     let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     let limit = limit.unwrap_or(50);
@@ -156,11 +157,11 @@ pub async fn kiro_desktop_sessions(
 pub async fn kiro_desktop_load_session(
     workspace_encoded: String,
     session_id: String,
-) -> Result<Vec<KiroDesktopMessage>, String> {
+) -> Result<Vec<KiroDesktopMessage>, AppError> {
     let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
     let path = base.join("workspace-sessions").join(&workspace_encoded).join(format!("{}.json", session_id));
 
-    if !path.exists() { return Err(format!("Session not found: {}", session_id)); }
+    if !path.exists() { return Err(format!("Session not found: {}", session_id).into()); }
 
     let content = std::fs::read_to_string(&path).map_err(|e| format!("Read: {}", e))?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
@@ -318,7 +319,7 @@ fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_delete_session(file_path: String) -> Result<(), String> {
+pub async fn kiro_desktop_delete_session(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() { return Err("File not found".into()); }
     // Safety: only delete .json files in the kiro.kiroagent directory
@@ -332,15 +333,15 @@ pub async fn kiro_desktop_delete_session(file_path: String) -> Result<(), String
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_open_folder(file_path: String) -> Result<(), String> {
+pub async fn kiro_desktop_open_folder(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     let dir = path.parent().ok_or("No parent directory")?;
-    crate::os::shell::open_path(&dir.to_string_lossy()).map_err(|e| e.to_string())
+    Ok(crate::os::shell::open_path(&dir.to_string_lossy()).map_err(|e| e.to_string())?)
 }
 
 /// Load a .chat file directly (older format with full conversations).
 #[tauri::command]
-pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDesktopMessage>, String> {
+pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDesktopMessage>, AppError> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| format!("Read: {}", e))?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
 
@@ -384,7 +385,7 @@ pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDe
 
 /// List .chat files from hash directories as additional sessions.
 #[tauri::command]
-pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, String> {
+pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, AppError> {
     let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
     let limit = limit.unwrap_or(50);
     let mut sessions = Vec::new();
@@ -526,7 +527,7 @@ pub async fn kiro_cli_available() -> bool {
 }
 
 #[tauri::command]
-pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, String> {
+pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, AppError> {
     let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
     if !db_path.exists() { return Ok(Vec::new()); }
 
@@ -612,7 +613,7 @@ fn count_cli_messages(value_json: &str) -> usize {
 }
 
 #[tauri::command]
-pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDesktopMessage>, String> {
+pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDesktopMessage>, AppError> {
     let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
 
     let db = rusqlite::Connection::open_with_flags(
@@ -727,7 +728,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
 pub async fn kiro_cli_check_updated(
     conversation_id: String,
     last_updated_at: i64,
-) -> Result<Option<i64>, String> {
+) -> Result<Option<i64>, AppError> {
     let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
 
     let db = rusqlite::Connection::open_with_flags(

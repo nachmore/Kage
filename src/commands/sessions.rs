@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::state::AppState;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -321,7 +322,7 @@ pub async fn list_sessions(
     offset: Option<usize>,
     force: Option<bool>,
     state: State<'_, AppState>,
-) -> Result<Vec<SessionSummary>, String> {
+) -> Result<Vec<SessionSummary>, AppError> {
     let force = force.unwrap_or(false);
 
     // Serve from cache unless invalidated by the file watcher or a force refresh
@@ -458,7 +459,7 @@ fn scan_sessions() -> Result<Vec<SessionSummary>, String> {
 }
 
 #[tauri::command]
-pub async fn load_session(session_id: String) -> Result<SessionData, String> {
+pub async fn load_session(session_id: String) -> Result<SessionData, AppError> {
     let sessions_dir = get_sessions_dir()?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
@@ -466,7 +467,7 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
     info!("Loading session: {}", session_id);
 
     if !json_path.exists() {
-        return Err(format!("Session not found: {}", session_id));
+        return Err(format!("Session not found: {}", session_id).into());
     }
 
     // Read metadata from .json
@@ -544,19 +545,19 @@ pub async fn load_session(session_id: String) -> Result<SessionData, String> {
 
 /// Get the sessions directory path
 #[tauri::command]
-pub async fn get_sessions_directory() -> Result<String, String> {
+pub async fn get_sessions_directory() -> Result<String, AppError> {
     let dir = get_sessions_dir()?;
     Ok(dir.to_string_lossy().to_string())
 }
 
 /// Open the session's JSON file in the system file explorer
 #[tauri::command]
-pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
+pub async fn reveal_session_file(session_id: String) -> Result<(), AppError> {
     let sessions_dir = get_sessions_dir()?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
 
     if !json_path.exists() {
-        return Err("Session file not found".to_string());
+        return Err("Session file not found".to_string().into());
     }
 
     let path_str = json_path.to_string_lossy().to_string();
@@ -569,7 +570,7 @@ pub async fn reveal_session_file(session_id: String) -> Result<(), String> {
 
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
-pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> Result<(), AppError> {
     let sessions_dir = get_sessions_dir()?;
 
     for ext in &["json", "jsonl", "lock"] {
@@ -612,7 +613,7 @@ pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> R
 pub async fn switch_acp_session(
     session_id: Option<String>,
     state: State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = state.acp_client.clone();
     let client_guard = client.lock().await;
 
@@ -621,7 +622,7 @@ pub async fn switch_acp_session(
         info!("Not connected, attempting to connect for session switch...");
         if let Err(e) = client_guard.connect() {
             error!("Connection failed: {}", e);
-            return Err(format!("Failed to connect: {}", e));
+            return Err(AppError::connection_lost(format!("Failed to connect: {}", e)));
         }
     }
 
@@ -660,7 +661,7 @@ pub async fn switch_acp_session(
 
             client_guard
                 .load_existing_session(&id, cwd)
-                .map_err(|e| format!("Failed to load session: {}", e))
+                .map_err(|e| AppError::internal(format!("Failed to load session: {}", e)))
         }
         None => {
             info!("Creating new session");
@@ -728,7 +729,7 @@ pub async fn switch_acp_session(
 #[tauri::command]
 pub async fn get_current_session_id(
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, AppError> {
     // Use try_lock to avoid deadlocking when send_message_streaming holds the client lock
     match state.acp_client.try_lock() {
         Ok(client) => Ok(client.get_session_id()),
@@ -743,7 +744,7 @@ pub async fn get_current_session_id(
 #[tauri::command]
 pub async fn get_floating_session_id(
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, AppError> {
     let floating = state
         .floating_session_id
         .lock()
@@ -755,7 +756,7 @@ pub async fn get_floating_session_id(
 #[tauri::command]
 pub async fn restore_floating_session(
     state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, AppError> {
     let floating_id = {
         let floating = state
             .floating_session_id
@@ -779,10 +780,10 @@ pub async fn rename_session(
     session_id: String,
     title: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let title = title.trim().to_string();
     if title.is_empty() {
-        return Err("Title cannot be empty".to_string());
+        return Err("Title cannot be empty".to_string().into());
     }
 
     info!("Renaming session {} to: {}", session_id, title);

@@ -101,6 +101,13 @@ impl From<String> for AppError {
     }
 }
 
+/// Allow `?` on `Result<_, &str>` in code that returns `Result<_, AppError>`
+impl From<&str> for AppError {
+    fn from(s: &str) -> Self {
+        Self::internal(s)
+    }
+}
+
 /// Allow `?` on `anyhow::Result` in code that returns `Result<_, AppError>`
 impl From<anyhow::Error> for AppError {
     fn from(e: anyhow::Error) -> Self {

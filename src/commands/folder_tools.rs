@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -120,7 +121,7 @@ pub fn get_common_folders() -> HashMap<String, String> {
 
 /// Open a native folder picker dialog. Returns the selected path or null.
 #[tauri::command]
-pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, AppError> {
     info!("Opening native folder picker dialog");
 
     // Use blocking_pick_folder on a blocking thread to avoid blocking the async runtime
@@ -145,10 +146,10 @@ pub async fn scan_folder(
     path: String,
     max_depth: Option<usize>,
     compute_hashes: Option<bool>,
-) -> Result<ScanResult, String> {
+) -> Result<ScanResult, AppError> {
     let root = PathBuf::from(&path);
     if !root.is_dir() {
-        return Err(format!("'{}' is not a directory", path));
+        return Err(format!("'{}' is not a directory", path).into());
     }
 
     let depth_limit = max_depth.unwrap_or(MAX_DEPTH);
@@ -176,10 +177,10 @@ pub async fn scan_folder(
 pub async fn execute_folder_plan(
     root: String,
     operations: Vec<FolderOperation>,
-) -> Result<PlanExecutionResult, String> {
+) -> Result<PlanExecutionResult, AppError> {
     let root_path = PathBuf::from(&root);
     if !root_path.is_dir() {
-        return Err(format!("'{}' is not a directory", root));
+        return Err(format!("'{}' is not a directory", root).into());
     }
 
     info!("Executing folder plan: {} operations in {}", operations.len(), root);
