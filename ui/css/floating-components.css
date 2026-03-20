@@ -315,6 +315,8 @@ body.clipboard-mode .floating-banner {
 }
 .input-container.rtl .datetime-display {
     text-align: left;
+    right: auto;
+    left: 48px;
 }
 
 .expand-btn {
