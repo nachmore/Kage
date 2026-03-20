@@ -614,3 +614,121 @@ pub async fn get_screen_context(
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Inline Assist — context-aware AI popup at cursor position
+// ---------------------------------------------------------------------------
+
+/// Show the inline assist popup at the cursor position.
+/// Captures the selected text and foreground window info first.
+#[tauri::command]
+pub async fn show_inline_assist(app: tauri::AppHandle) -> Result<(), AppError> {
+    // When called as a Tauri command (not from hotkey), capture here
+    let source_info = crate::os::window_list::get_foreground_window_info();
+    let capture_token = crate::os::clipboard::begin_selection_capture();
+    let cursor_pos = get_cursor_position().unwrap_or((500, 500));
+    let selection = crate::os::clipboard::finish_selection_capture(capture_token);
+
+    show_inline_assist_with_context(app, source_info, selection, cursor_pos).await
+}
+
+/// Show the inline assist popup with pre-captured context.
+/// Called from the hotkey handler where capture happens synchronously.
+pub async fn show_inline_assist_with_context(
+    app: tauri::AppHandle,
+    source_info: Option<(String, String)>,
+    selection: Option<String>,
+    cursor_pos: (i32, i32),
+) -> Result<(), AppError> {
+    info!("show_inline_assist_with_context: source={:?}, selection_len={}, cursor=({},{})",
+        source_info, selection.as_ref().map(|s| s.len()).unwrap_or(0), cursor_pos.0, cursor_pos.1);
+
+    let state: tauri::State<'_, crate::state::AppState> = app.state();
+
+    // Store source window info for paste-back
+    if let Ok(mut sw) = state.source_window.lock() {
+        *sw = source_info.clone();
+    }
+
+    // Show the inline assist window at cursor
+    if let Some(window) = app.get_webview_window("inline-assist") {
+        info!("Found inline-assist window, positioning at ({}, {})", cursor_pos.0, cursor_pos.1);
+        // Position near cursor, with screen edge clamping
+        let mut x = cursor_pos.0;
+        let mut y = cursor_pos.1;
+
+        if let Some(monitor) = find_monitor_at_position(&window, x, y) {
+            let mon_pos = monitor.position();
+            let mon_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let win_w = (300.0 * scale) as i32;
+            let win_h = (320.0 * scale) as i32;
+            let mon_right = mon_pos.x + mon_size.width as i32;
+            let mon_bottom = mon_pos.y + mon_size.height as i32;
+
+            if x + win_w > mon_right { x = (mon_right - win_w).max(mon_pos.x); }
+            if y + win_h > mon_bottom { y = (mon_bottom - win_h).max(mon_pos.y); }
+        }
+
+        let _ = window.set_position(tauri::Position::Physical(
+            tauri::PhysicalPosition { x, y },
+        ));
+        let _ = window.show();
+        let _ = window.set_focus();
+
+        // Send the context to the frontend (delay to ensure JS module is loaded)
+        let (app_name, title) = source_info.unwrap_or_default();
+        let sel = selection.unwrap_or_default();
+        let window_clone = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let payload = serde_json::json!({
+                "selection": sel,
+                "app": app_name,
+                "title": title,
+            });
+            let _ = window_clone.emit("inline-assist-show", &payload);
+        });
+    } else {
+        warn!("inline-assist window not found — is it defined in tauri.conf.json?");
+    }
+
+    Ok(())
+}
+
+/// Apply inline assist result: hide popup, focus source window, write to clipboard, paste.
+#[tauri::command]
+pub async fn inline_assist_apply(
+    text: String,
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<(), AppError> {
+    // Hide the inline assist window FIRST so it doesn't receive the paste
+    if let Some(window) = app.get_webview_window("inline-assist") {
+        let _ = window.hide();
+    }
+
+    // Small delay to let the window fully hide
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    // Focus the source window
+    let source_title = {
+        let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+        sw.as_ref().map(|(title, _)| title.clone())
+    };
+
+    if let Some(title) = source_title {
+        let windows = crate::os::list_windows();
+        if let Some(win) = windows.iter().find(|w| w.title.contains(&title)) {
+            let _ = crate::os::window_list::focus_window(win.handle);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    // Write result to clipboard and paste
+    crate::os::clipboard::write_clipboard(&text);
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    crate::os::simulate_paste();
+
+    Ok(())
+}

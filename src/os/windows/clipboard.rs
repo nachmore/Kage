@@ -144,7 +144,7 @@ pub fn capture_selection_impl() -> Option<String> {
         }
         if let Some(ref text) = new_text {
             let trimmed = text.trim();
-            if !trimmed.is_empty() && new_text != original_clipboard {
+            if !trimmed.is_empty() {
                 info!("[selection] Captured {} chars", trimmed.len());
                 return Some(trimmed.to_string());
             }
@@ -175,9 +175,12 @@ pub fn finish_selection_capture(original_clipboard: Option<String>, seq_before: 
         } else {
             write_clipboard_impl("");
         }
+        // The sequence number changed, so a copy happened — return the text
+        // even if it matches the previous clipboard content (user may have
+        // re-selected the same text).
         if let Some(ref text) = new_text {
             let trimmed = text.trim();
-            if !trimmed.is_empty() && new_text != original_clipboard {
+            if !trimmed.is_empty() {
                 info!("[selection] Captured {} chars", trimmed.len());
                 return Some(trimmed.to_string());
             }

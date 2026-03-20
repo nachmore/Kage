@@ -41,3 +41,16 @@ export function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+/**
+ * Strip internal Kiro metadata tags from text for display purposes.
+ * Removes <_kiro_*> XML-style tags and [_KIRO_*] bracket markers.
+ * These are injected by the app for agent context and should never be shown to users.
+ */
+export function stripKiroTags(text) {
+    if (!text) return text;
+    return text
+        .replace(/<_kiro_[^>]*\/>\n?/g, '')   // <_kiro_ctx app="..." title="..."/>
+        .replace(/\[_KIRO_[A-Z_]*\][^\n]*\n?/g, '')  // [_KIRO_INLINE] Return ONLY...
+        .trim();
+}

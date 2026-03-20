@@ -6,12 +6,14 @@ class HotkeySettingsModule extends SettingsModule {
         super('hotkey', 'Hotkey & Shortcuts', '\u{1F3B9}');
         this._picker = null;
         this._cbPicker = null;
+        this._iaPicker = null;
     }
     render() {
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + this.createControlRow('Global Hotkey', 'The shortcut to summon Kiro from anywhere.', '<div id="settingsHotkeyPicker"></div>')
             + this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
+            + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
             + '<div class="setting-row" style="margin-top: 6px;"><div class="setting-label">Keyboard Shortcuts</div><div class="setting-description">Built-in shortcuts available across the application.</div></div>'
             + '<div class="shortcuts-reference">'
             + this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
@@ -54,6 +56,19 @@ class HotkeySettingsModule extends SettingsModule {
             });
         }
 
+        // Inline assist hotkey picker
+        const iaContainer = document.getElementById('settingsInlineAssistHotkeyPicker');
+        if (iaContainer) {
+            this._iaPicker = new HotkeyPicker(iaContainer, invoke, { modifiers: [], key: '' }, 'inline-assist');
+            this._iaPicker.onChange(async (hk) => {
+                try {
+                    const config = await invoke('get_config');
+                    config.inline_assist_hotkey = (hk.key) ? hk : null;
+                    await invoke('save_config', { config });
+                } catch (e) { console.error('Failed to save inline assist hotkey:', e); }
+            });
+        }
+
         document.querySelectorAll('.shortcut-ref-keys[data-keys]').forEach(el => {
             this.renderKeycaps(el, el.dataset.keys);
         });
@@ -67,6 +82,14 @@ class HotkeySettingsModule extends SettingsModule {
                 this._cbPicker.setHotkey({ modifiers: [], key: '' });
             }
         }
+        if (this._iaPicker) {
+            if (config.inline_assist_hotkey) {
+                this._iaPicker.setHotkey(config.inline_assist_hotkey);
+            } else {
+                // Show the default hotkey
+                this._iaPicker.setHotkey({ modifiers: ['Ctrl', 'Shift'], key: 'Space' });
+            }
+        }
     }
     save(config) {
         // Hotkey is saved immediately on capture via try_register_hotkey,
@@ -77,6 +100,13 @@ class HotkeySettingsModule extends SettingsModule {
         if (this._cbPicker) {
             const cbHk = this._cbPicker.hotkey;
             config.clipboard_hotkey = (cbHk && cbHk.key) ? cbHk : null;
+        }
+        if (this._iaPicker) {
+            const iaHk = this._iaPicker.hotkey;
+            config.inline_assist_hotkey = (iaHk && iaHk.key) ? iaHk : null;
+        } else if (!config.inline_assist_hotkey) {
+            // Ensure the default is written to config on first save
+            config.inline_assist_hotkey = { modifiers: ['Ctrl', 'Shift'], key: 'Space' };
         }
     }
     renderKeycaps(container, hotkeyStr) {
@@ -95,5 +125,5 @@ class HotkeySettingsModule extends SettingsModule {
             + '<span class="shortcut-ref-scope">' + scope + '</span>'
             + '</div>';
     }
-    destroy() { this._picker = null; this._cbPicker = null; }
+    destroy() { this._picker = null; this._cbPicker = null; this._iaPicker = null; }
 }

@@ -1380,7 +1380,7 @@ export class FloatingApp {
                     if (config?.system?.screen_context) {
                         const sw = await this.invoke('get_source_window');
                         if (sw) {
-                            message = `<screen_context app="${sw.processName}" title="${sw.title}"/>\n${message}`;
+                            message = `<_kiro_ctx app="${sw.processName}" title="${sw.title}"/>\n${message}`;
                         }
                     }
                 } catch (e) {

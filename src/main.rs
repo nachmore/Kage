@@ -21,7 +21,6 @@ mod updater;
 
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
-use commands::window::toggle_floating_window;
 use config::Config;
 use log::{error, info, warn};
 use process_manager::ProcessManager;
@@ -29,7 +28,6 @@ use state::AppState;
 use std::sync::Arc;
 use tauri::Manager;
 use tauri::Listener;
-use tauri::Emitter;
 use tokio::sync::Mutex;
 
 /// In debug builds on Windows, attach to the parent console (if any) so that
@@ -296,149 +294,43 @@ fn main() {
                 let _ = ctx_menu.set_shadow(false);
             }
 
-            // Register global hotkey
-            let hotkey_string = config.get_hotkey_string();
-            info!("Attempting to register global hotkey: {}", hotkey_string);
-
-            // Helper to register a hotkey
-            fn register_hotkey(app: &tauri::App, hotkey: &str, window: tauri::WebviewWindow) -> Result<(), String> {
-                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-                app.global_shortcut().on_shortcut(
-                    hotkey,
-                    move |_app, _shortcut, event| {
-                        if event.state != ShortcutState::Pressed { return; }
-                        info!("Hotkey triggered");
-                        toggle_floating_window(&window);
-                    },
-                ).map_err(|e| format!("{}", e))
+            // Configure inline-assist window
+            if let Some(ia_win) = app.get_webview_window("inline-assist") {
+                let _ = ia_win.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                #[cfg(target_os = "windows")]
+                let _ = ia_win.set_shadow(false);
             }
 
-            let active_hotkey = match register_hotkey(app, &hotkey_string, floating_window.clone()) {
-                Ok(_) => {
-                    info!("✅ Registered global hotkey: {}", hotkey_string);
-                    hotkey_string.clone()
-                }
-                Err(e) => {
-                    warn!("❌ Failed to register {}: {}", hotkey_string, e);
-                    match register_hotkey(app, "Alt+K", floating_window.clone()) {
-                        Ok(_) => {
-                            info!("✅ Registered fallback hotkey: Alt+K");
-                            "Alt+K".to_string()
-                        }
-                        Err(e2) => {
-                            error!("❌ Failed to register any hotkey: {}", e2);
-                            "None".to_string()
-                        }
-                    }
-                }
-            };
-
-            info!("Active hotkey: {}", active_hotkey);
-
-            // Register clipboard history hotkey if configured
-            if let Some(cb_hotkey) = config.get_clipboard_hotkey_string() {
-                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-                let cb_window = floating_window.clone();
-                let cb_app_handle = app.handle().clone();
-                match app.global_shortcut().on_shortcut(
-                    cb_hotkey.as_str(),
-                    move |_app, _shortcut, event| {
-                        if event.state != ShortcutState::Pressed { return; }
-                        info!("Clipboard hotkey triggered");
-                        commands::window::show_floating_at_mouse(&cb_window);
-                        // Delay event so the window has time to show and the JS listener is ready
-                        let handle = cb_app_handle.clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(150));
-                            let _ = handle.emit("clipboard_history_mode", ());
-                        });
-                    },
-                ) {
-                    Ok(_) => info!("✅ Registered clipboard hotkey: {}", cb_hotkey),
-                    Err(e) => warn!("❌ Failed to register clipboard hotkey {}: {}", cb_hotkey, e),
-                }
-            }
+            // Register all global hotkeys from config
+            commands::system::register_all_hotkeys(app.handle());
 
             // Hot-reload hotkeys when config changes
-            let current_hotkey = Arc::new(std::sync::Mutex::new(active_hotkey));
-            let current_cb_hotkey: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(
-                config.get_clipboard_hotkey_string()
-            ));
             let hotkey_app = app.handle().clone();
-            let hotkey_window = floating_window.clone();
-            let hotkey_current = current_hotkey.clone();
-            let hotkey_cb_current = current_cb_hotkey.clone();
             let hotkey_config = app.state::<AppState>().config.clone();
+            let last_hotkey_snapshot: Arc<std::sync::Mutex<(String, Option<String>, Option<String>)>> = {
+                let main = config.get_hotkey_string();
+                let cb = config.get_clipboard_hotkey_string();
+                let ia = config.get_inline_assist_hotkey_string();
+                Arc::new(std::sync::Mutex::new((main, cb, ia)))
+            };
             app.listen("config_updated", move |_| {
-                use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-                let (new_hotkey, new_cb_hotkey) = match hotkey_config.try_lock() {
-                    Ok(config) => (config.get_hotkey_string(), config.get_clipboard_hotkey_string()),
+                let (new_main, new_cb, new_ia) = match hotkey_config.try_lock() {
+                    Ok(config) => (
+                        config.get_hotkey_string(),
+                        config.get_clipboard_hotkey_string(),
+                        config.get_inline_assist_hotkey_string(),
+                    ),
                     Err(_) => return,
                 };
 
-                let mut current = hotkey_current.lock().unwrap();
-                let mut current_cb = hotkey_cb_current.lock().unwrap();
-                let main_changed = *current != new_hotkey;
-                let cb_changed = *current_cb != new_cb_hotkey;
-                if !main_changed && !cb_changed { return; }
-
-                info!("Hotkeys changed — main: {} → {}, clipboard: {:?} → {:?}",
-                    *current, new_hotkey, *current_cb, new_cb_hotkey);
-
-                // Unregister all and re-register both
-                let _ = hotkey_app.global_shortcut().unregister_all();
-
-                // Register the main hotkey
-                let window_clone = hotkey_window.clone();
-                match hotkey_app.global_shortcut().on_shortcut(
-                    new_hotkey.as_str(),
-                    move |_app, _shortcut, event| {
-                        if event.state != ShortcutState::Pressed { return; }
-                        info!("Hotkey triggered");
-                        toggle_floating_window(&window_clone);
-                    },
-                ) {
-                    Ok(_) => {
-                        info!("✅ Registered main hotkey: {}", new_hotkey);
-                        *current = new_hotkey;
-                    }
-                    Err(e) => {
-                        error!("❌ Failed to register main hotkey {}: {}", new_hotkey, e);
-                        let old = current.clone();
-                        let window_clone2 = hotkey_window.clone();
-                        let _ = hotkey_app.global_shortcut().on_shortcut(
-                            old.as_str(),
-                            move |_app, _shortcut, event| {
-                                if event.state != ShortcutState::Pressed { return; }
-                                toggle_floating_window(&window_clone2);
-                            },
-                        );
-                    }
+                let mut snapshot = last_hotkey_snapshot.lock().unwrap();
+                if snapshot.0 == new_main && snapshot.1 == new_cb && snapshot.2 == new_ia {
+                    return; // No hotkey changes
                 }
 
-                // Register clipboard hotkey if configured
-                if let Some(ref cb_hk) = new_cb_hotkey {
-                    let cb_win = hotkey_window.clone();
-                    let cb_handle = hotkey_app.clone();
-                    match hotkey_app.global_shortcut().on_shortcut(
-                        cb_hk.as_str(),
-                        move |_app, _shortcut, event| {
-                            if event.state != ShortcutState::Pressed { return; }
-                            info!("Clipboard hotkey triggered");
-                            commands::window::show_floating_at_mouse(&cb_win);
-                            let handle = cb_handle.clone();
-                            std::thread::spawn(move || {
-                                std::thread::sleep(std::time::Duration::from_millis(150));
-                                let _ = handle.emit("clipboard_history_mode", ());
-                            });
-                        },
-                    ) {
-                        Ok(_) => info!("✅ Registered clipboard hotkey: {}", cb_hk),
-                        Err(e) => warn!("❌ Failed to register clipboard hotkey {}: {}", cb_hk, e),
-                    }
-                }
-                *current_cb = new_cb_hotkey;
+                info!("Hotkeys changed — re-registering all");
+                commands::system::register_all_hotkeys(&hotkey_app);
+                *snapshot = (new_main, new_cb, new_ia);
             });
 
             info!("=== Setup Complete ===");
@@ -802,6 +694,9 @@ fn main() {
             commands::get_app_icon,
             commands::get_source_window,
             commands::get_screen_context,
+            commands::show_inline_assist,
+            commands::inline_assist_apply,
+            commands::send_inline_assist,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

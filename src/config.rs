@@ -35,6 +35,9 @@ pub struct Config {
     /// Optional hotkey for clipboard history (e.g. Alt+Shift+V)
     #[serde(default)]
     pub clipboard_hotkey: Option<HotkeyConfig>,
+    /// Optional hotkey for inline assist (default: Ctrl+Shift+Space)
+    #[serde(default = "default_inline_assist_hotkey")]
+    pub inline_assist_hotkey: Option<HotkeyConfig>,
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
@@ -220,6 +223,13 @@ fn default_date_format() -> String {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_inline_assist_hotkey() -> Option<HotkeyConfig> {
+    Some(HotkeyConfig {
+        modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
+        key: "Space".to_string(),
+    })
 }
 
 fn default_speech_silence_timeout() -> f32 {
@@ -423,6 +433,10 @@ impl Default for Config {
             extension_states: HashMap::new(),
             pocket_tts: PocketTtsConfig::default(),
             clipboard_hotkey: None,
+            inline_assist_hotkey: Some(HotkeyConfig {
+                modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
+                key: "Space".to_string(),
+            }),
             store_url: None,
             mcp_config_path: None,
             auto_update_extensions: false,
@@ -495,6 +509,14 @@ impl Config {
 
     pub fn get_clipboard_hotkey_string(&self) -> Option<String> {
         self.clipboard_hotkey.as_ref().map(|hk| {
+            let mut parts = hk.modifiers.clone();
+            parts.push(hk.key.clone());
+            parts.join("+")
+        })
+    }
+
+    pub fn get_inline_assist_hotkey_string(&self) -> Option<String> {
+        self.inline_assist_hotkey.as_ref().map(|hk| {
             let mut parts = hk.modifiers.clone();
             parts.push(hk.key.clone());
             parts.join("+")

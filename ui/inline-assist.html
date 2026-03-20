@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Inline Assist</title>
+    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            background: transparent !important;
+            overflow: hidden;
+        }
+        body {
+            font-family: var(--kiro-font);
+            padding: 4px;
+        }
+
+        .layout {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        /* --- Ghost icon bubble --- */
+        .icon-bubble {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--kiro-accent, #4a9eff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 12px rgba(74, 158, 255, 0.4);
+            flex-shrink: 0;
+            transition: transform 0.15s, box-shadow 0.15s;
+            animation: bubble-in 0.25s ease-out;
+            margin-bottom: -12px; /* overlap into the panel */
+            margin-left: 8px;
+            z-index: 10;
+            position: relative;
+        }
+        .icon-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 16px rgba(74, 158, 255, 0.6);
+        }
+        .icon-bubble svg {
+            width: 22px;
+            height: 16px;
+            animation: ghost-float 2.5s ease-in-out infinite;
+        }
+        @keyframes bubble-in {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes ghost-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+        }
+        .icon-bubble.thinking {
+            animation: thinking-pulse 1s ease-in-out infinite;
+        }
+        .icon-bubble.thinking svg {
+            animation: ghost-float 0.8s ease-in-out infinite;
+        }
+        @keyframes thinking-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 2px 12px rgba(74, 158, 255, 0.4); }
+            50% { transform: scale(1.08); box-shadow: 0 3px 20px rgba(74, 158, 255, 0.7); }
+        }
+
+        /* --- Panel --- */
+        .panel {
+            background: var(--kiro-bg-surface, #2a2a2e);
+            border: 1px solid var(--kiro-border-subtle, #444);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            min-width: 240px;
+            animation: panel-in 0.15s ease-out;
+        }
+        @keyframes panel-in {
+            0% { opacity: 0; transform: translateY(-4px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .actions {
+            padding: 4px 0;
+            padding-top: 14px; /* extra top padding to clear the overlapping bubble */
+        }
+        .action-item {
+            padding: 7px 14px;
+            color: var(--kiro-text, #ddd);
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.1s;
+            white-space: nowrap;
+        }
+        .action-item:hover, .action-item.selected {
+            background: var(--kiro-accent, #4a9eff);
+            color: #fff;
+        }
+        .action-icon { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+        .action-label { flex: 1; }
+        .custom-input-row {
+            display: flex;
+            align-items: center;
+            padding: 6px 10px;
+            gap: 6px;
+            border-top: 1px solid var(--kiro-border-subtle, #444);
+        }
+        .custom-input-row .icon { font-size: 14px; color: var(--kiro-text-muted); }
+        .custom-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--kiro-text, #ddd);
+            font-size: 13px;
+            font-family: var(--kiro-font);
+            min-width: 150px;
+        }
+        .custom-input::placeholder { color: var(--kiro-text-muted, #666); }
+        .status-bar {
+            display: none;
+            padding: 8px 14px;
+            font-size: 12px;
+            color: var(--kiro-text-muted);
+            border-top: 1px solid var(--kiro-border-subtle, #444);
+            align-items: center;
+            gap: 8px;
+        }
+        .status-bar.visible { display: flex; }
+        .spinner {
+            width: 14px; height: 14px;
+            border: 2px solid var(--kiro-border-subtle);
+            border-top-color: var(--kiro-accent);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="layout" id="layout">
+        <div class="icon-bubble" id="iconBubble" title="Open full chat">
+            <svg viewBox="0 0 65 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5.71599 33.2597C21.3537 50.3579 43.692 49.7224 56.8482 37.6892C64.8725 30.3497 68.8862 13.8647 55.4115 3.72686C41.9368 -6.41103 32.4042 11.2128 17.2667 8.73447C14.1417 8.22797 9.94157 9.04188 12.6668 12.7323C13.1844 13.4347 13.8741 13.9921 14.4889 14.4572C10.198 14.6069 8.69922 14.3808 6.07118 14.3457C3.69479 14.2406 2.01125 14.368 1.05082 15.569C-0.207458 17.5201 3.17874 20.5431 6.24957 23.1473C8.02071 24.8452 9.81893 27.134 10.9737 29.0437C9.58639 28.7602 9.25032 28.6837 7.17973 28.4703C3.87477 28.131 1.42511 28.5658 5.71759 33.2597H5.71599Z" fill="white"/>
+                <path d="M48.5012 21.9388C46.3685 22.1093 45.8461 19.5864 45.7234 18.0669C45.6135 16.6955 45.7712 15.5853 46.1821 14.8574C46.5437 14.2172 47.1044 13.862 47.8482 13.8015C48.5936 13.7409 49.2578 14.0037 49.7579 14.5851C50.3281 15.2477 50.6865 16.3101 50.7948 17.6591C50.9986 20.2075 50.1417 21.8066 48.5012 21.9372V21.9388Z" fill="#4a9eff"/>
+                <path d="M57.2707 21.2344C55.138 21.4048 54.614 18.8819 54.493 17.3624C54.3831 15.991 54.5407 14.8825 54.9517 14.153C55.3116 13.5127 55.8739 13.1575 56.6177 13.097C57.3631 13.0381 58.0273 13.2993 58.5274 13.8807C59.0976 14.5433 59.456 15.6056 59.5643 16.9547C59.7682 19.5031 58.9113 21.1022 57.2707 21.2328V21.2344Z" fill="#4a9eff"/>
+            </svg>
+        </div>
+        <div class="panel" id="panel">
+            <div class="actions" id="actions"></div>
+            <div class="custom-input-row" id="customRow">
+                <span class="icon">✨</span>
+                <input class="custom-input" id="customInput" placeholder="Ask anything..." autocomplete="off" spellcheck="false">
+            </div>
+            <div class="status-bar" id="statusBar">
+                <div class="spinner"></div>
+                <span id="statusText">Thinking...</span>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="js/inline-assist.js"></script>
+</body>
+</html>

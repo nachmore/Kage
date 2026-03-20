@@ -2,7 +2,7 @@
 import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
-import { escapeHtml } from '../shared/tool-utils.js';
+import { escapeHtml, stripKiroTags } from '../shared/tool-utils.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -147,7 +147,7 @@ export class ChatApp {
                 // Session is new / not on disk — just show empty chat
                 this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Continue your conversation...</div>';
             }
-            this.elements.chatHeaderTitle.textContent = exists?.title || 'Current Session';
+            this.elements.chatHeaderTitle.textContent = stripKiroTags(exists?.title) || 'Current Session';
         }
 
         this.elements.chatInput.focus();
@@ -694,7 +694,7 @@ export class ChatApp {
                 const isCurrent = session.session_id === this.currentAcpSessionId;
                 const isActive = session.session_id === this.activeSessionId;
                 const isNew = !this._seenSessionIds.has(session.session_id);
-                const title = session.title || 'New Chat';
+                const title = stripKiroTags(session.title) || 'New Chat';
                 const date = new Date(session.updated_at || session.created_at);
                 const dateStr = this.formatDate(date);
 
@@ -900,7 +900,7 @@ export class ChatApp {
                 // All messages rendered — finalize
                 const session = this.sessions.find(s => s.session_id === this.activeSessionId);
                 if (session) {
-                    this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
+                    this.elements.chatHeaderTitle.textContent = stripKiroTags(session.title) || 'Chat';
                 }
                 this.scrollToBottom();
                 if (this.messages.length > 0) {
@@ -912,7 +912,7 @@ export class ChatApp {
         // Update header title immediately (don't wait for batches)
         const session = this.sessions.find(s => s.session_id === this.activeSessionId);
         if (session) {
-            this.elements.chatHeaderTitle.textContent = session.title || 'Chat';
+            this.elements.chatHeaderTitle.textContent = stripKiroTags(session.title) || 'Chat';
         }
 
         renderBatch();
@@ -1045,8 +1045,8 @@ export class ChatApp {
         if (role === 'assistant') {
             renderMarkdown(text, contentDiv);
         } else {
-            // Strip screen_context tag from display
-            const displayText = text ? text.replace(/^<screen_context[^/]*\/>\n?/, '') : text;
+            // Strip internal Kiro tags from display
+            const displayText = text ? stripKiroTags(text) : text;
             if (displayText) contentDiv.textContent = displayText;
         }
         if (imageSnapshots && imageSnapshots.length > 0) {
@@ -1306,8 +1306,8 @@ export class ChatApp {
         const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
         if (placeholder) placeholder.remove();
 
-        // Strip screen_context tag from display (it's metadata for the agent, not for the user)
-        const displayText = text.replace(/^<screen_context[^/]*\/>\n?/, '');
+        // Strip internal Kiro tags from display (it's metadata for the agent, not for the user)
+        const displayText = stripKiroTags(text);
 
         this.messages.push({ role: 'user', content: text });
         const msgEl = this.createMessageElement('user', displayText);

@@ -33,6 +33,14 @@ function looksLikeCode(text) {
     const keywords = /^\s*(function|def|class|const|let|var|import|from|pub|fn|if|else|for|while|return|async|await|match|switch|case|try|catch|except|raise|throw|interface|struct|enum|impl|module|package|namespace|using|include|require|export|extends|implements)\b/m;
     if (keywords.test(text)) return true;
 
+    // Keywords anywhere (for single-line pastes where newlines are collapsed)
+    if (/\b(pub\s+fn|pub\s+async|async\s+fn|impl\s+\w+|struct\s+\w+|enum\s+\w+|trait\s+\w+)\b/.test(text)) return true;
+    if (/\b(function\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/.test(text)) return true;
+    if (/\b(def\s+\w+|import\s+\w+|from\s+\w+\s+import)\b/.test(text)) return true;
+
+    // Rust/C-style attributes and annotations
+    if (/#\[\w+/.test(text)) return true;                // #[derive], #[tauri::command], etc.
+
     // Common code patterns
     if (/[{};]\s*$/m.test(text)) return true;           // Lines ending with { } ;
     if (/\w+\(.*\)\s*[:{=>]/.test(text)) return true;   // function calls followed by : { => (def foo(): / fn bar() { / x => )
@@ -44,6 +52,11 @@ function looksLikeCode(text) {
     if (/\w+:\s*\w+\s*[,)]/.test(text) && /[(){}]/.test(text)) return true; // Type annotations like x: int, y: str
     if (/^\s*@\w+/m.test(text)) return true;             // Decorators (@property, @app.route)
     if (/\bNone\b|\bnull\b|\bnil\b|\bundefined\b/.test(text) && /[=()]/.test(text)) return true; // None/null with assignment or call
+
+    // High density of code punctuation (braces, semicolons, arrows, generics)
+    const codePunctCount = (text.match(/[{};()\[\]<>]/g) || []).length;
+    if (codePunctCount >= 6 && codePunctCount / text.length > 0.03) return true;
+
     return false;
 }
 
@@ -115,30 +128,30 @@ function getOsLanguageName() {
 
 const BUILTIN_ACTIONS = [
     // Universal
-    { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [] },
+    { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [], mode: 'inform' },
     // Prose
-    { label: 'Fix grammar', icon: '✏️', prompt: 'Fix the grammar and spelling in the following text. Return only the corrected text:\n\n{text}', contentTypes: ['prose'] },
-    { label: 'Make shorter', icon: '✂️', prompt: 'Make the following text more concise while preserving the meaning:\n\n{text}', contentTypes: ['prose'] },
-    { label: 'Translate', icon: '🌐', prompt: null, contentTypes: ['prose'], _dynamic: 'translate' },
+    { label: 'Fix grammar', icon: '✏️', prompt: 'Fix the grammar and spelling in the following text. Return only the corrected text:\n\n{text}', contentTypes: ['prose'], mode: 'replace' },
+    { label: 'Make shorter', icon: '✂️', prompt: 'Make the following text more concise while preserving the meaning. Return only the rewritten text:\n\n{text}', contentTypes: ['prose'], mode: 'replace' },
+    { label: 'Translate', icon: '🌐', prompt: null, contentTypes: ['prose'], _dynamic: 'translate', mode: 'replace' },
     // Code
-    { label: 'Explain code', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'] },
-    { label: 'Add comments', icon: '💬', prompt: 'Add clear, helpful comments to this code. Return the commented code:\n\n```\n{text}\n```', contentTypes: ['code'] },
-    { label: 'Find bugs', icon: '🐛', prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```', contentTypes: ['code'] },
+    { label: 'Explain code', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
+    { label: 'Add comments', icon: '💬', prompt: 'Add clear, helpful comments to this code. Return only the commented code, no explanations:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'replace' },
+    { label: 'Find bugs', icon: '🐛', prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
     // Errors
-    { label: 'Explain error', icon: '🔍', prompt: 'Explain this error and suggest how to fix it:\n\n```\n{text}\n```', contentTypes: ['error'] },
-    { label: 'Suggest fix', icon: '🔧', prompt: 'Suggest a fix for this error. Show the corrected code:\n\n```\n{text}\n```', contentTypes: ['error'] },
+    { label: 'Explain error', icon: '🔍', prompt: 'Explain this error and suggest how to fix it:\n\n```\n{text}\n```', contentTypes: ['error'], mode: 'inform' },
+    { label: 'Suggest fix', icon: '🔧', prompt: 'Suggest a fix for this error. Return only the corrected code:\n\n```\n{text}\n```', contentTypes: ['error'], mode: 'replace' },
     // JSON/data
-    { label: 'Format', icon: '📐', prompt: 'Format and pretty-print this data:\n\n```\n{text}\n```', contentTypes: ['json'] },
-    { label: 'Validate', icon: '✅', prompt: 'Validate this data structure and point out any issues:\n\n```\n{text}\n```', contentTypes: ['json'] },
+    { label: 'Format', icon: '📐', prompt: 'Format and pretty-print this data. Return only the formatted data:\n\n```\n{text}\n```', contentTypes: ['json'], mode: 'replace' },
+    { label: 'Validate', icon: '✅', prompt: 'Validate this data structure and point out any issues:\n\n```\n{text}\n```', contentTypes: ['json'], mode: 'inform' },
     // URL
-    { label: 'Summarize page', icon: '🌐', prompt: 'Summarize the content at this URL:\n\n{text}', contentTypes: ['url'] },
+    { label: 'Summarize page', icon: '🌐', prompt: 'Summarize the content at this URL:\n\n{text}', contentTypes: ['url'], mode: 'inform' },
     // Number
-    { label: 'Convert units', icon: '📏', prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}', contentTypes: ['number'] },
-    { label: 'Explain number', icon: '🔢', prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}', contentTypes: ['number'] },
+    { label: 'Convert units', icon: '📏', prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}', contentTypes: ['number'], mode: 'inform' },
+    { label: 'Explain number', icon: '🔢', prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}', contentTypes: ['number'], mode: 'inform' },
     // Folder organization
-    { label: 'Looks good, do it', icon: '▶️', prompt: 'Go ahead and execute the plan as proposed.', contentTypes: ['folder_plan'] },
-    { label: 'More details', icon: '🔍', prompt: 'Can you give me more details about what each operation will do and why?', contentTypes: ['folder_plan'] },
-    { label: 'Undo changes', icon: '↩️', prompt: 'Please undo/rollback the folder changes that were just made.', contentTypes: ['folder_plan'] },
+    { label: 'Looks good, do it', icon: '▶️', prompt: 'Go ahead and execute the plan as proposed.', contentTypes: ['folder_plan'], mode: 'inform' },
+    { label: 'More details', icon: '🔍', prompt: 'Can you give me more details about what each operation will do and why?', contentTypes: ['folder_plan'], mode: 'inform' },
+    { label: 'Undo changes', icon: '↩️', prompt: 'Please undo/rollback the folder changes that were just made.', contentTypes: ['folder_plan'], mode: 'inform' },
 ];
 
 // --- Chip rendering ---

@@ -1,0 +1,262 @@
+/**
+ * Inline Assist — context-aware AI popup that appears at the cursor.
+ * Shows smart actions based on selected text, plus a free-form prompt input.
+ * Results are pasted back into the source application.
+ */
+import { classifyText, getActionsForText } from './shared/quick-actions.js';
+
+console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText, 'getActionsForText:', typeof getActionsForText);
+
+(async function () {
+    const { invoke } = window.__TAURI__.core;
+    const { listen, emit } = window.__TAURI__.event;
+    const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+    const LogicalSize = window.__TAURI__.dpi.LogicalSize;
+
+    const actionsEl = document.getElementById('actions');
+    const customInput = document.getElementById('customInput');
+    const statusBar = document.getElementById('statusBar');
+    const statusText = document.getElementById('statusText');
+    const panel = document.getElementById('panel');
+    const iconBubble = document.getElementById('iconBubble');
+
+    let selectedText = '';
+    let sourceApp = '';
+    let sourceTitle = '';
+    let selectedIndex = -1;
+    let actionItems = [];
+    let isProcessing = false;
+
+    // --- Icon bubble — click to open full chat ---
+    iconBubble.addEventListener('click', async () => {
+        try {
+            // Open chat with the selected text as context
+            const message = selectedText.trim()
+                ? `The following text is currently selected:\n\`\`\`\n${selectedText.trim()}\n\`\`\``
+                : '';
+            await invoke('open_chat_with_message', { message });
+        } catch (e) {
+            console.error('Failed to open chat:', e);
+        }
+        await appWindow.hide();
+    });
+
+    // --- Listen for show event from backend ---
+    await listen('inline-assist-show', async (event) => {
+        console.log('[inline-assist] Received show event:', event.payload);
+        const { selection, app, title } = event.payload || {};
+        selectedText = selection || '';
+        console.log('[inline-assist] Selection text (' + selectedText.length + ' chars):', JSON.stringify(selectedText.substring(0, 200)));
+        console.log('[inline-assist] Classification:', classifyText(selectedText));
+        sourceApp = app || '';
+        sourceTitle = title || '';
+        selectedIndex = -1;
+        isProcessing = false;
+
+        buildActions();
+        console.log('[inline-assist] Built actions:', actionItems.length);
+        statusBar.classList.remove('visible');
+        panel.style.display = '';
+        iconBubble.classList.remove('thinking');
+        iconBubble.style.margin = '';
+        customInput.value = '';
+
+        // Resize window to fit content
+        await resizeToFit();
+        customInput.focus();
+    });
+
+    // --- Listen for streaming response ---
+    let accumulatedResponse = '';
+
+    await listen('inline_assist_chunk', (event) => {
+        accumulatedResponse = event.payload || '';
+        statusText.textContent = `Generating... (${accumulatedResponse.length} chars)`;
+    });
+
+    await listen('inline_assist_complete', async () => {
+        if (!isProcessing) return;
+        isProcessing = false;
+        iconBubble.classList.remove('thinking');
+
+        if (accumulatedResponse.trim()) {
+            try {
+                await invoke('inline_assist_apply', { text: accumulatedResponse.trim() });
+            } catch (e) {
+                console.error('Failed to apply inline assist:', e);
+            }
+        }
+
+        await appWindow.hide();
+    });
+
+    await listen('inline_assist_error', async (event) => {
+        isProcessing = false;
+        iconBubble.classList.remove('thinking');
+        // Show error briefly then hide
+        panel.style.display = '';
+        statusBar.classList.add('visible');
+        statusText.textContent = '❌ ' + (event.payload || 'Error');
+        await resizeToFit();
+        setTimeout(() => appWindow.hide(), 1500);
+    });
+
+    // --- Build action items based on selection ---
+    function buildActions() {
+        actionsEl.innerHTML = '';
+        actionItems = [];
+
+        if (!selectedText.trim()) {
+            // No selection — show generic actions
+            actionItems = [
+                { label: 'Summarize page', icon: '📝', prompt: 'Summarize what I\'m currently looking at.' },
+                { label: 'Help with this app', icon: '💡', prompt: 'Give me tips for what I\'m currently doing.' },
+            ];
+        } else {
+            // Get smart actions based on content type
+            const qaConfig = { enabled: true, custom_actions: [] };
+            try {
+                // Try to load user config for translate language etc.
+                // Fall back to defaults if unavailable
+            } catch {}
+            actionItems = getActionsForText(selectedText, qaConfig);
+        }
+
+        for (let i = 0; i < actionItems.length; i++) {
+            const action = actionItems[i];
+            const el = document.createElement('div');
+            el.className = 'action-item';
+            el.innerHTML = `<span class="action-icon">${action.icon || '⚡'}</span><span class="action-label">${action.label}</span>`;
+            el.addEventListener('click', () => executeAction(action));
+            el.addEventListener('mouseenter', () => {
+                selectedIndex = i;
+                updateSelection();
+            });
+            actionsEl.appendChild(el);
+        }
+    }
+
+    function updateSelection() {
+        const items = actionsEl.querySelectorAll('.action-item');
+        items.forEach((el, i) => el.classList.toggle('selected', i === selectedIndex));
+    }
+
+    // --- Execute an action ---
+    let currentMode = 'replace'; // 'replace' = paste back, 'inform' = show in floating UX
+
+    async function executeAction(action) {
+        if (isProcessing) return;
+        isProcessing = true;
+        accumulatedResponse = '';
+        currentMode = action.mode || 'replace';
+
+        // Build the prompt
+        let prompt = action.prompt || action.label;
+        if (selectedText.trim() && prompt.includes('{text}')) {
+            prompt = prompt.replace('{text}', selectedText.trim());
+        } else if (selectedText.trim() && !prompt.includes('{text}')) {
+            prompt = `${prompt}\n\nSelected text:\n\`\`\`\n${selectedText.trim()}\n\`\`\``;
+        }
+
+        // Add screen context
+        if (sourceApp) {
+            prompt = `<_kiro_ctx app="${sourceApp}" title="${sourceTitle}"/>\n${prompt}`;
+        }
+
+        if (currentMode === 'inform') {
+            // Send to the floating UX — hide ourselves first
+            await appWindow.hide();
+            try {
+                await invoke('open_chat_with_message', { message: prompt });
+            } catch (e) {
+                console.error('Failed to open chat:', e);
+            }
+            isProcessing = false;
+            return;
+        }
+
+        // Replace mode — collapse to ghost bubble, send inline, paste back
+        panel.style.display = 'none';
+        iconBubble.classList.add('thinking');
+        iconBubble.style.margin = '20px auto';
+        await new Promise(r => requestAnimationFrame(r));
+        await appWindow.setSize(new LogicalSize(86, 86));
+
+        // Add instruction for inline replacement
+        prompt += '\n\n[_KIRO_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences. Just the raw output text that should replace the selection.';
+
+        try {
+            await invoke('send_inline_assist', { message: prompt });
+        } catch (e) {
+            console.error('Inline assist failed:', e);
+            isProcessing = false;
+            await appWindow.hide();
+        }
+    }
+
+    async function executeCustomPrompt() {
+        const text = customInput.value.trim();
+        if (!text || isProcessing) return;
+        // Custom prompts default to 'replace' mode
+        await executeAction({ label: text, prompt: text, icon: '✨', mode: 'replace' });
+    }
+
+    // --- Keyboard navigation ---
+    document.addEventListener('keydown', (e) => {
+        if (isProcessing) {
+            if (e.key === 'Escape') {
+                // TODO: cancel generation
+                appWindow.hide();
+            }
+            return;
+        }
+
+        if (e.key === 'Escape') {
+            appWindow.hide();
+            return;
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedIndex = Math.min(selectedIndex + 1, actionItems.length - 1);
+            updateSelection();
+            return;
+        }
+
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedIndex = Math.max(selectedIndex - 1, -1);
+            updateSelection();
+            if (selectedIndex === -1) customInput.focus();
+            return;
+        }
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedIndex >= 0 && selectedIndex < actionItems.length) {
+                executeAction(actionItems[selectedIndex]);
+            } else if (customInput.value.trim()) {
+                executeCustomPrompt();
+            }
+            return;
+        }
+    });
+
+    // --- Auto-resize ---
+    async function resizeToFit() {
+        await new Promise(r => requestAnimationFrame(r));
+        await new Promise(r => requestAnimationFrame(r)); // double-raf for layout settle
+        const layoutRect = document.getElementById('layout').getBoundingClientRect();
+        await appWindow.setSize(new LogicalSize(
+            Math.max(Math.ceil(layoutRect.width) + 8, 260),
+            Math.ceil(layoutRect.height) + 8
+        ));
+    }
+
+    // --- Hide on blur ---
+    await appWindow.listen('tauri://blur', () => {
+        if (!isProcessing) {
+            setTimeout(() => appWindow.hide(), 100);
+        }
+    });
+})();

@@ -968,3 +968,48 @@ pub async fn check_extension_tool_permission(
         Ok("ask".to_string())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Inline Assist messaging
+// ---------------------------------------------------------------------------
+
+/// Send a message for inline assist and stream the response to the inline-assist window.
+#[tauri::command]
+pub async fn send_inline_assist(
+    message: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let client = state.acp_client.clone();
+
+    async_runtime::spawn_blocking(move || {
+        let client = async_runtime::block_on(client.lock());
+
+        if !client.is_connected() {
+            if let Err(e) = client.connect() {
+                let _ = app.emit("inline_assist_error", format!("Unable to connect: {}", e));
+                return;
+            }
+        }
+
+        // Clear the accumulator so we can track this response
+        client.streaming_accumulator.lock().unwrap().clear();
+
+        if let Err(e) = client.send_chat_streaming(&message, None) {
+            let _ = app.emit("inline_assist_error", format!("Failed: {}", e));
+            return;
+        }
+
+        // The response is accumulated by the notification handler.
+        // Read the final result from the accumulator.
+        let result = client.streaming_accumulator.lock().unwrap().clone();
+        if result.trim().is_empty() {
+            let _ = app.emit("inline_assist_error", "Empty response");
+        } else {
+            let _ = app.emit("inline_assist_chunk", &result);
+            let _ = app.emit("inline_assist_complete", ());
+        }
+    });
+
+    Ok(())
+}

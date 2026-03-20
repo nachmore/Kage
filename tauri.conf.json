@@ -72,6 +72,21 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "focus": false
+      },
+      {
+        "label": "inline-assist",
+        "url": "inline-assist.html",
+        "fullscreen": false,
+        "resizable": false,
+        "title": "",
+        "width": 360,
+        "height": 280,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true
       }
     ]
   },
