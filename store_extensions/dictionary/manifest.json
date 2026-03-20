@@ -1,0 +1,24 @@
+{
+  "id": "dictionary",
+  "name": "Dictionary",
+  "version": "1.4.0",
+  "type": "extension",
+  "description": "Look up word definitions, spelling corrections, and pronunciation using FreeDictionaryAPI.com",
+  "icon": "📖",
+  "author": "kiro-assistant",
+
+  "config": {
+    "enabled": { "type": "boolean", "default": true },
+    "trigger": { "type": "string", "default": "dict" },
+    "language": { "type": "string", "default": "en" },
+    "show_pronunciation": { "type": "boolean", "default": true },
+    "show_examples": { "type": "boolean", "default": true },
+    "show_synonyms": { "type": "boolean", "default": true }
+  },
+
+  "contributes": {
+    "searchProvider": "./search.js",
+    "settingsModule": "./settings.js",
+    "css": ["./styles.css"]
+  }
+}

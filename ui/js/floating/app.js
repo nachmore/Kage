@@ -868,6 +868,10 @@ export class FloatingApp {
                 this.windowManager.resizeWindow();
             },
             onCopy: async (text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+            onReplaceInput: (text) => {
+                this.elements.input.value = text;
+                this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
+            },
             onTimerStart: (ms) => this._startTimerUI(ms),
             onStopwatch: () => {
                 const sw = getSlotState('stopwatch');
@@ -1244,7 +1248,8 @@ export class FloatingApp {
         });
 
         if (result.handled) {
-            if (result.action === 'hide') { this.resetUI(); await this.appWindow.hide(); }
+            if (result.action === 'replace_input') { /* input already replaced by onReplaceInput callback */ }
+            else if (result.action === 'hide') { this.resetUI(); await this.appWindow.hide(); }
             else { this._clearInput(); }
         }
     }

@@ -43,6 +43,9 @@ export async function executeResult(result, query, ctx) {
                 await ctx.onPrompt(action.value);
             } else if (action.type === 'display' && ctx.onDisplay) {
                 ctx.onDisplay(action.value);
+            } else if (action.type === 'replace_input' && ctx.onReplaceInput) {
+                ctx.onReplaceInput(action.value);
+                return { handled: true, action: 'replace_input' };
             }
         }
         // Timer/stopwatch special handling

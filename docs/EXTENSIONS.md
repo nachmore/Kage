@@ -179,6 +179,7 @@ Returned by `execute()`:
 | `open_url` | Open URL in browser | `value: string` |
 | `open_path` | Open file/folder | `value: string` |
 | `send_prompt` | Send to AI agent | `value: string` |
+| `replace_input` | Replace the floating window input text and trigger a new search | `value: string` |
 | `custom` | Extension handles it | `data: any` |
 
 ### Score Guidelines
