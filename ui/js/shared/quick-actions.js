@@ -3,6 +3,8 @@
  * the floating window captures a text selection.
  */
 
+import { detectScript, detectLanguage } from './language-detect.js';
+
 // --- Text classification ---
 
 /**
@@ -126,6 +128,36 @@ function getOsLanguageName() {
     }
 }
 
+/**
+ * Get the OS language as an ISO 639-1 code (e.g. 'en', 'fr').
+ */
+function _getOsLanguageCode() {
+    try {
+        return (navigator.language || 'en').split('-')[0].toLowerCase();
+    } catch {
+        return 'en';
+    }
+}
+
+/**
+ * Check if the text appears to be in the target language (or a variant of it).
+ * Uses script detection first, then tinyld for Latin/Cyrillic text.
+ */
+async function _isTextInTargetLanguage(text, targetLangCode) {
+    // 1. Try script detection (instant, definitive for unique scripts)
+    const scriptLang = detectScript(text);
+    if (scriptLang) return scriptLang === targetLangCode;
+
+    // 2. For Latin/Cyrillic — use full detection (async)
+    try {
+        const detected = await detectLanguage(text);
+        if (!detected) return false; // Can't tell — show translate pill
+        return detected === targetLangCode;
+    } catch {
+        return false;
+    }
+}
+
 const BUILTIN_ACTIONS = [
     // Universal
     { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [], mode: 'inform' },
@@ -163,7 +195,7 @@ const BUILTIN_ACTIONS = [
  * @param {object} config - The quick_actions config { enabled, custom_actions }
  * @returns {Array<{ label, icon, prompt }>}
  */
-export function getActionsForText(text, config) {
+export async function getActionsForText(text, config) {
     if (!config?.enabled) return [];
 
     const types = classifyText(text);
@@ -174,13 +206,16 @@ export function getActionsForText(text, config) {
     for (const action of BUILTIN_ACTIONS) {
         if (action.contentTypes.length === 0 ||
             action.contentTypes.some(t => types.includes(t))) {
-            // Handle dynamic translate action
+            // Handle dynamic translate action — only show if text is in a different language
             if (action._dynamic === 'translate') {
-                actions.push({
-                    ...action,
-                    label: `→ ${translateLang}`,
-                    prompt: `Translate the following text to ${translateLang}. Return only the translated text:\n\n{text}`,
-                });
+                const targetLangCode = _getOsLanguageCode();
+                if (!await _isTextInTargetLanguage(text, targetLangCode)) {
+                    actions.push({
+                        ...action,
+                        label: `→ ${translateLang}`,
+                        prompt: `Translate the following text to ${translateLang}. Return only the translated text:\n\n{text}`,
+                    });
+                }
             } else {
                 actions.push(action);
             }

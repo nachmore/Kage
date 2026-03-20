@@ -524,7 +524,7 @@ export class ChatApp {
             const config = await this.invoke('get_config');
             if (!config.ui?.show_response_actions) return;
             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
-            const actions = getActionsForText(responseText || 'general text', qaConfig);
+            const actions = await getActionsForText(responseText || 'general text', qaConfig);
             if (actions.length === 0) return;
 
             const chips = document.createElement('div');

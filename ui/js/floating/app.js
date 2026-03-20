@@ -387,7 +387,7 @@ export class FloatingApp {
                         try {
                             const config = await this.invoke('get_config');
                             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
-                            const actions = getActionsForText(this.lastSelection, qaConfig);
+                            const actions = await getActionsForText(this.lastSelection, qaConfig);
                             renderQuickActionChips(actions, quickActionsContainer, (promptTemplate) => {
                                 const prompt = promptTemplate.replace(/\{text\}/g, this.lastSelection);
                                 this.sendChatMessage(prompt, { skipSelection: true });
@@ -1940,7 +1940,7 @@ export class FloatingApp {
             const config = await this.invoke('get_config');
             if (!config.ui?.show_response_actions) return;
             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
-            const actions = getActionsForText(responseText, qaConfig);
+            const actions = await getActionsForText(responseText, qaConfig);
             console.log('[QA] Actions found:', actions.length);
             if (actions.length === 0) return;
             const container = document.getElementById('responseActionsContainer');

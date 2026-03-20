@@ -121,7 +121,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
             ];
         } else {
             const qaConfig = { enabled: true, custom_actions: [] };
-            actionItems = getActionsForText(selectedText, qaConfig);
+            actionItems = await getActionsForText(selectedText, qaConfig);
         }
 
         // Add macros as actions (with a separator if there are both)
