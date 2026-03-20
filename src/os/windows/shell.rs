@@ -3,42 +3,31 @@
 use anyhow::{Context, Result};
 use std::process::Command;
 
-pub fn open_url_impl(url: &str) -> Result<()> {
-    use windows::core::HSTRING;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use super::process::spawn_detached_impl;
 
-    log::debug!("[open_url] ShellExecuteW: {}", url);
-    let url_w = HSTRING::from(url);
-    let op = HSTRING::from("open");
-    unsafe {
-        ShellExecuteW(None, &op, &url_w, None, None, SW_SHOWNORMAL);
-    }
+pub fn open_url_impl(url: &str) -> Result<()> {
+    log::debug!("[open_url] cmd /c start (detached): {}", url);
+    spawn_detached_impl(Command::new("cmd").args(["/C", "start", "", url]))
+        .context("Failed to open URL")?;
     Ok(())
 }
 
 pub fn open_path_impl(path: &str) -> Result<()> {
-    Command::new("explorer")
-        .arg(path)
-        .spawn()
+    spawn_detached_impl(Command::new("explorer").arg(path))
         .context("Failed to open path")?;
     Ok(())
 }
 
 /// Reveal a file in Explorer, selecting it
 pub fn reveal_in_file_manager_impl(path: &str) -> Result<()> {
-    Command::new("explorer")
-        .args(["/select,", path])
-        .spawn()
+    spawn_detached_impl(Command::new("explorer").args(["/select,", path]))
         .context("Failed to reveal in Explorer")?;
     Ok(())
 }
 
 /// Open a file in the default editor
 pub fn open_in_editor_impl(path: &str) -> Result<()> {
-    Command::new("cmd")
-        .args(["/C", "start", "", path])
-        .spawn()
+    spawn_detached_impl(Command::new("cmd").args(["/C", "start", "", path]))
         .context("Failed to open in editor")?;
     Ok(())
 }

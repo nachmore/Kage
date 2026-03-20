@@ -50,6 +50,9 @@ pub struct Config {
     /// ISO 8601 timestamp of the last extension update check
     #[serde(default)]
     pub last_extension_update_check: Option<String>,
+    /// Macros — named sequences of AI transformation steps
+    #[serde(default)]
+    pub macros: Vec<MacroConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -292,6 +295,49 @@ impl Default for QuickActionsConfig {
     }
 }
 
+/// A macro is a named sequence of AI transformation steps.
+/// Each step's output feeds into the next step's {input} placeholder.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacroConfig {
+    /// Display name
+    pub name: String,
+    /// Emoji icon
+    #[serde(default = "default_macro_icon")]
+    pub icon: String,
+    /// Ordered list of transformation steps
+    pub steps: Vec<MacroStep>,
+    /// What to do with the final output: "clipboard" or "replace" or "inform"
+    #[serde(default = "default_macro_output")]
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MacroStep {
+    /// Step type: "ai_prompt", "find_replace", "transform", "script"
+    #[serde(default = "default_step_type")]
+    pub step_type: String,
+    /// Prompt template for ai_prompt — {input} is replaced with the previous step's output
+    #[serde(default)]
+    pub prompt: String,
+    /// For find_replace: regex pattern to find
+    #[serde(default)]
+    pub find: String,
+    /// For find_replace: replacement string
+    #[serde(default)]
+    pub replace: String,
+    /// For transform: built-in transform name (uppercase, lowercase, trim, sort_lines, reverse, base64_encode, base64_decode, count_words, remove_blank_lines)
+    #[serde(default)]
+    pub transform: String,
+    /// For script: JS function body (receives `input` variable, must return a string)
+    #[serde(default)]
+    pub script: String,
+}
+
+fn default_step_type() -> String { "ai_prompt".to_string() }
+
+fn default_macro_icon() -> String { "🔄".to_string() }
+fn default_macro_output() -> String { "clipboard".to_string() }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
@@ -441,6 +487,7 @@ impl Default for Config {
             mcp_config_path: None,
             auto_update_extensions: false,
             last_extension_update_check: None,
+            macros: vec![],
         }
     }
 }

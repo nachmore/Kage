@@ -389,13 +389,7 @@ pub async fn execute_system_command(
         let (program, args) = crate::os::shell::system_command(command_id.as_str());
         let mut cmd = std::process::Command::new(program);
         cmd.args(args);
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
-            cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
-        }
-        cmd.spawn()
+        crate::os::process::spawn_detached(&mut cmd)
     };
 
     match result {

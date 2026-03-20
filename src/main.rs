@@ -697,6 +697,7 @@ fn main() {
             commands::show_inline_assist,
             commands::inline_assist_apply,
             commands::send_inline_assist,
+            commands::execute_macro,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

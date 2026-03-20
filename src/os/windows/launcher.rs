@@ -320,9 +320,8 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
 }
 
 pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
-    use windows::core::HSTRING;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use super::process::spawn_detached_impl;
+    use std::process::Command;
 
     let path_str = path.to_str().unwrap_or("");
     info!("launch_application_impl: path={:?} path_str='{}'", path, path_str);
@@ -331,19 +330,10 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
         anyhow::bail!("Empty path passed to launch_application_impl");
     }
 
-    let op = HSTRING::from("open");
-    let file = HSTRING::from(path_str);
+    info!("Launching (detached): '{}'", path_str);
+    spawn_detached_impl(Command::new("cmd").args(["/C", "start", "", path_str]))
+        .map_err(|e| anyhow::anyhow!("Failed to launch '{}': {}", path_str, e))?;
 
-    info!("ShellExecuteW: open '{}'", path_str);
-    let result = unsafe {
-        ShellExecuteW(None, &op, &file, None, None, SW_SHOWNORMAL)
-    };
-
-    if result.0 as usize > 32 {
-        info!("ShellExecuteW succeeded (code={})", result.0 as usize);
-        Ok(())
-    } else {
-        let code = result.0 as usize;
-        anyhow::bail!("ShellExecuteW failed with code {} for '{}'", code, path_str)
-    }
+    info!("Launch succeeded for '{}'", path_str);
+    Ok(())
 }

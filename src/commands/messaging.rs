@@ -1013,3 +1013,144 @@ pub async fn send_inline_assist(
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Macro execution — chained transformation steps (AI, regex, transform, script)
+// ---------------------------------------------------------------------------
+
+/// Execute a macro: run each step sequentially, feeding output into the next.
+/// Steps can be AI prompts, find/replace, built-in transforms, or JS scripts.
+/// Returns the final result text.
+#[tauri::command]
+pub async fn execute_macro(
+    steps: Vec<serde_json::Value>,
+    initial_input: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let client = state.acp_client.clone();
+
+    let result = async_runtime::spawn_blocking(move || {
+        let mut current_input = initial_input;
+
+        for (i, step) in steps.iter().enumerate() {
+            let step_type = step.get("step_type").and_then(|v| v.as_str()).unwrap_or("ai_prompt");
+
+            // Emit progress
+            let _ = app.emit("macro_progress", serde_json::json!({
+                "step": i + 1,
+                "total": steps.len(),
+                "type": step_type,
+            }));
+
+            match step_type {
+                "ai_prompt" => {
+                    let prompt_template = step.get("prompt").and_then(|v| v.as_str()).unwrap_or("{input}");
+                    let prompt = prompt_template.replace("{input}", &current_input);
+                    let full_prompt = format!(
+                        "{}\n\n[_KIRO_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences.",
+                        prompt
+                    );
+
+                    let client = async_runtime::block_on(client.lock());
+                    if !client.is_connected() {
+                        if let Err(e) = client.connect() {
+                            return Err(format!("Step {}: Unable to connect: {}", i + 1, e));
+                        }
+                    }
+                    client.streaming_accumulator.lock().unwrap().clear();
+                    if let Err(e) = client.send_chat_streaming(&full_prompt, None) {
+                        return Err(format!("Step {} failed: {}", i + 1, e));
+                    }
+                    let result = client.streaming_accumulator.lock().unwrap().clone();
+                    if result.trim().is_empty() {
+                        return Err(format!("Step {} returned empty result", i + 1));
+                    }
+                    current_input = result.trim().to_string();
+                }
+
+                "find_replace" => {
+                    let find = step.get("find").and_then(|v| v.as_str()).unwrap_or("");
+                    let replace = step.get("replace").and_then(|v| v.as_str()).unwrap_or("");
+                    if !find.is_empty() {
+                        match regex::Regex::new(find) {
+                            Ok(re) => {
+                                current_input = re.replace_all(&current_input, replace).to_string();
+                            }
+                            Err(e) => {
+                                return Err(format!("Step {}: Invalid regex '{}': {}", i + 1, find, e));
+                            }
+                        }
+                    }
+                }
+
+                "transform" => {
+                    let transform = step.get("transform").and_then(|v| v.as_str()).unwrap_or("");
+                    current_input = apply_transform(transform, &current_input);
+                }
+
+                other => {
+                    return Err(format!("Step {}: Unknown step type '{}'", i + 1, other));
+                }
+            }
+
+            info!("Macro step {}/{} ({}) complete: {} chars", i + 1, steps.len(), step_type, current_input.len());
+        }
+
+        Ok(current_input)
+    }).await.map_err(|e| format!("Task error: {}", e))?;
+
+    result
+}
+
+/// Apply a built-in text transform.
+fn apply_transform(name: &str, input: &str) -> String {
+    match name {
+        "uppercase" => input.to_uppercase(),
+        "lowercase" => input.to_lowercase(),
+        "trim" => input.trim().to_string(),
+        "sort_lines" => {
+            let mut lines: Vec<&str> = input.lines().collect();
+            lines.sort();
+            lines.join("\n")
+        }
+        "reverse" => input.chars().rev().collect(),
+        "reverse_lines" => {
+            let lines: Vec<&str> = input.lines().collect();
+            lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+        }
+        "remove_blank_lines" => {
+            input.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join("\n")
+        }
+        "count_words" => {
+            let count = input.split_whitespace().count();
+            format!("{} words", count)
+        }
+        "count_lines" => {
+            let count = input.lines().count();
+            format!("{} lines", count)
+        }
+        "count_chars" => {
+            format!("{} characters", input.len())
+        }
+        "base64_encode" => {
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD.encode(input.as_bytes())
+        }
+        "base64_decode" => {
+            use base64::Engine;
+            match base64::engine::general_purpose::STANDARD.decode(input.trim()) {
+                Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+                Err(e) => format!("Base64 decode error: {}", e),
+            }
+        }
+        "unique_lines" => {
+            let mut seen = std::collections::HashSet::new();
+            input.lines().filter(|l| seen.insert(*l)).collect::<Vec<_>>().join("\n")
+        }
+        "number_lines" => {
+            input.lines().enumerate().map(|(i, l)| format!("{:>4}  {}", i + 1, l)).collect::<Vec<_>>().join("\n")
+        }
+        _ => input.to_string(),
+    }
+}

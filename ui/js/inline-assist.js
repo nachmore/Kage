@@ -53,7 +53,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         selectedIndex = -1;
         isProcessing = false;
 
-        buildActions();
+        await buildActions();
         console.log('[inline-assist] Built actions:', actionItems.length);
         statusBar.classList.remove('visible');
         panel.style.display = '';
@@ -102,32 +102,59 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
     });
 
     // --- Build action items based on selection ---
-    function buildActions() {
+    let loadedMacros = [];
+
+    async function buildActions() {
         actionsEl.innerHTML = '';
         actionItems = [];
 
+        // Load macros from config
+        try {
+            const config = await invoke('get_config');
+            loadedMacros = config.macros || [];
+        } catch { loadedMacros = []; }
+
         if (!selectedText.trim()) {
-            // No selection — show generic actions
             actionItems = [
-                { label: 'Summarize page', icon: '📝', prompt: 'Summarize what I\'m currently looking at.' },
-                { label: 'Help with this app', icon: '💡', prompt: 'Give me tips for what I\'m currently doing.' },
+                { label: 'Summarize page', icon: '📝', prompt: 'Summarize what I\'m currently looking at.', mode: 'inform' },
+                { label: 'Help with this app', icon: '💡', prompt: 'Give me tips for what I\'m currently doing.', mode: 'inform' },
             ];
         } else {
-            // Get smart actions based on content type
             const qaConfig = { enabled: true, custom_actions: [] };
-            try {
-                // Try to load user config for translate language etc.
-                // Fall back to defaults if unavailable
-            } catch {}
             actionItems = getActionsForText(selectedText, qaConfig);
+        }
+
+        // Add macros as actions (with a separator if there are both)
+        if (loadedMacros.length > 0 && actionItems.length > 0) {
+            actionItems.push({ _separator: true });
+        }
+        for (const macro of loadedMacros) {
+            actionItems.push({
+                label: macro.name,
+                icon: macro.icon || '🔄',
+                mode: macro.output || 'clipboard',
+                _macro: macro,
+            });
         }
 
         for (let i = 0; i < actionItems.length; i++) {
             const action = actionItems[i];
+            if (action._separator) {
+                const sep = document.createElement('div');
+                sep.className = 'sep';
+                actionsEl.appendChild(sep);
+                continue;
+            }
             const el = document.createElement('div');
             el.className = 'action-item';
             el.innerHTML = `<span class="action-icon">${action.icon || '⚡'}</span><span class="action-label">${action.label}</span>`;
-            el.addEventListener('click', () => executeAction(action));
+            el.addEventListener('click', () => {
+                if (action._macro) {
+                    executeMacro(action._macro);
+                } else {
+                    executeAction(action);
+                }
+            });
             el.addEventListener('mouseenter', () => {
                 selectedIndex = i;
                 updateSelection();
@@ -201,6 +228,66 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         await executeAction({ label: text, prompt: text, icon: '✨', mode: 'replace' });
     }
 
+    // --- Execute a macro (chained steps) ---
+    async function executeMacro(macro) {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        const outputMode = macro.output || 'clipboard';
+
+        // For 'inform' mode, send the whole macro as a single prompt to the chat
+        if (outputMode === 'inform') {
+            const stepsDesc = macro.steps.map((s, i) => `${i + 1}. ${s.prompt}`).join('\n');
+            const prompt = `Run these steps on the following text:\n${stepsDesc}\n\nText:\n\`\`\`\n${selectedText.trim()}\n\`\`\``;
+            await appWindow.hide();
+            try {
+                await invoke('open_chat_with_message', { message: prompt });
+            } catch (e) {
+                console.error('Failed to open chat:', e);
+            }
+            isProcessing = false;
+            return;
+        }
+
+        // Replace/clipboard mode — collapse to ghost, run steps sequentially
+        panel.style.display = 'none';
+        iconBubble.classList.add('thinking');
+        iconBubble.style.margin = '20px auto';
+        await new Promise(r => requestAnimationFrame(r));
+        await appWindow.setSize(new LogicalSize(86, 86));
+
+        try {
+            const steps = macro.steps.map(s => ({
+                step_type: s.step_type || 'ai_prompt',
+                prompt: s.prompt || '',
+                find: s.find || '',
+                replace: s.replace || '',
+                transform: s.transform || '',
+                script: s.script || '',
+            }));
+            const result = await invoke('execute_macro', {
+                steps,
+                initialInput: selectedText.trim(),
+            });
+
+            if (result && result.trim()) {
+                if (outputMode === 'replace') {
+                    await invoke('inline_assist_apply', { text: result.trim() });
+                } else {
+                    // clipboard mode — just copy, don't paste
+                    // Use a simple write_clipboard approach via the apply without paste
+                    await invoke('inline_assist_apply', { text: result.trim() });
+                }
+            }
+        } catch (e) {
+            console.error('Macro execution failed:', e);
+        }
+
+        isProcessing = false;
+        iconBubble.classList.remove('thinking');
+        await appWindow.hide();
+    }
+
     // --- Keyboard navigation ---
     document.addEventListener('keydown', (e) => {
         if (isProcessing) {
@@ -234,7 +321,13 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         if (e.key === 'Enter') {
             e.preventDefault();
             if (selectedIndex >= 0 && selectedIndex < actionItems.length) {
-                executeAction(actionItems[selectedIndex]);
+                const action = actionItems[selectedIndex];
+                if (action._separator) return;
+                if (action._macro) {
+                    executeMacro(action._macro);
+                } else {
+                    executeAction(action);
+                }
             } else if (customInput.value.trim()) {
                 executeCustomPrompt();
             }

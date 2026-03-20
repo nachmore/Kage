@@ -61,6 +61,17 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
     info!("Windows: Setting CREATE_NO_WINDOW flag");
 }
 
+const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+
+/// Spawn a process that is detached from our Job Object so it survives
+/// when the assistant exits. Use this for user-facing launches (apps,
+/// URLs, explorer, system commands) — NOT for internal child processes
+/// like kiro-cli or TTS servers that should die with us.
+pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
+    cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NO_WINDOW);
+    cmd.spawn()
+}
+
 pub fn install_signal_handlers_impl<F>(cleanup_fn: F) -> Result<()>
 where
     F: Fn() + Send + 'static,
