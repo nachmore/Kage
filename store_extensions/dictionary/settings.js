@@ -44,7 +44,7 @@ class DictionaryExtSettingsModule extends SettingsModule {
     }
 
     renderContent() {
-        const options = LANGUAGES.map(l =>
+        const options = '<option value="auto">Auto-detect</option>' + LANGUAGES.map(l =>
             `<option value="${l.code}">${l.name}</option>`
         ).join('');
 
@@ -56,7 +56,7 @@ class DictionaryExtSettingsModule extends SettingsModule {
             )}
             ${this.createControlRow(
                 'Language',
-                'Dictionary language for lookups. Supports 250+ languages via FreeDictionaryAPI.com.',
+                'Dictionary language for lookups. Auto-detect uses tinyld to identify the language. Supports 250+ languages via FreeDictionaryAPI.com.',
                 `<select class="setting-input" id="dictLanguage">${options}</select>`
             )}
             ${this.createCheckboxRow('Show Pronunciation', 'Display IPA pronunciation when available', 'dictShowPronunciation', true)}
@@ -81,7 +81,7 @@ class DictionaryExtSettingsModule extends SettingsModule {
         const examples = document.getElementById('dictShowExamples');
         const syn = document.getElementById('dictShowSynonyms');
         if (trigger) trigger.value = ext.trigger ?? 'dict';
-        if (lang) lang.value = ext.language || 'en';
+        if (lang) lang.value = ext.language || 'auto';
         if (pron) pron.checked = ext.show_pronunciation !== false;
         if (examples) examples.checked = ext.show_examples !== false;
         if (syn) syn.checked = ext.show_synonyms !== false;
@@ -91,7 +91,7 @@ class DictionaryExtSettingsModule extends SettingsModule {
         if (!config.extensions) config.extensions = {};
         config.extensions['dictionary'] = {
             trigger: document.getElementById('dictTrigger')?.value ?? 'dict',
-            language: document.getElementById('dictLanguage')?.value || 'en',
+            language: document.getElementById('dictLanguage')?.value || 'auto',
             show_pronunciation: document.getElementById('dictShowPronunciation')?.checked ?? true,
             show_examples: document.getElementById('dictShowExamples')?.checked ?? true,
             show_synonyms: document.getElementById('dictShowSynonyms')?.checked ?? true,

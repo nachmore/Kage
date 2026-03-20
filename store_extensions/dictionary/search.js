@@ -7,6 +7,22 @@ const API_BASE = 'https://freedictionaryapi.com/api/v1/entries';
 const SUGGEST_API = 'https://api.datamuse.com/sug';
 const MIN_WORD_LENGTH = 2;
 
+// Lazy-load language detection
+let _detectLanguage = null;
+async function _getDetector() {
+    if (_detectLanguage) return _detectLanguage;
+    try {
+        // Use absolute URL — extensions may be loaded from blob URLs where relative imports fail
+        const base = new URL('/', location.href).href;
+        const mod = await import(base + 'js/shared/language-detect.js');
+        _detectLanguage = mod.detectLanguage;
+        return _detectLanguage;
+    } catch (e) {
+        console.warn('[Dictionary] Language detection not available:', e);
+        return null;
+    }
+}
+
 export default class DictionarySearchProvider {
     initialize(context) {
         this.config = context.config || {};
@@ -24,10 +40,19 @@ export default class DictionarySearchProvider {
         const word = this._extractWord(query);
         if (!word || !this._isLookupCandidate(word)) return [];
 
-        const lang = this.config.language || 'en';
-        const cacheKey = `${lang}:${word}`;
+        const lang = this.config.language || 'auto';
 
-        // Return cached results instantly
+        if (lang === 'auto') {
+            // Check if any language has this word cached
+            for (const [key, val] of this._cache) {
+                if (key.endsWith(':' + word) && val !== 'not_found') {
+                    return this._formatResults(val, word);
+                }
+            }
+            return [];
+        }
+
+        const cacheKey = `${lang}:${word}`;
         const cached = this._cache.get(cacheKey);
         if (cached === 'not_found') {
             const suggestCached = this._suggestCache.get(word);
@@ -36,15 +61,36 @@ export default class DictionarySearchProvider {
         }
         if (cached) return this._formatResults(cached, word);
 
-        // Not cached yet — matchAsync will fetch and return results
         return [];
     }
 
     async matchAsync(query) {
         const word = this._extractWord(query);
-        if (!word || !this._isLookupCandidate(word)) return [];
+        if (!word) {
+            console.log(`[Dictionary] No word extracted from query: "${query}"`);
+            return [];
+        }
+        if (!this._isLookupCandidate(word)) {
+            console.log(`[Dictionary] Not a lookup candidate: "${word}"`);
+            return [];
+        }
 
-        const lang = this.config.language || 'en';
+        // Resolve language: auto-detect or use configured
+        let lang = this.config.language || 'auto';
+        if (lang === 'auto') {
+            const detect = await _getDetector();
+            if (detect) {
+                const detected = await detect(word);
+                lang = detected || 'en'; // Fall back to English
+                console.log(`[Dictionary] Auto-detected language for "${word}": ${detected ? `"${detected}"` : '(none)'} → using "${lang}"`);
+            } else {
+                lang = 'en';
+                console.log(`[Dictionary] Language detection unavailable, falling back to "en"`);
+            }
+        } else {
+            console.log(`[Dictionary] Using configured language "${lang}" for "${word}"`);
+        }
+
         const cacheKey = `${lang}:${word}`;
 
         // Already cached (hit or miss) — match() handled it
@@ -52,18 +98,31 @@ export default class DictionarySearchProvider {
 
         // Fetch definition
         try {
+            const url = `${API_BASE}/${encodeURIComponent(lang)}/${encodeURIComponent(word)}`;
+            console.log(`[Dictionary] Fetching: ${url}`);
             const data = await this._fetchDefinition(word, lang);
+            console.log(`[Dictionary] Result for "${word}" (${lang}): ${data?.entries?.length ?? 0} entries`);
             if (data && data.entries && data.entries.length > 0) {
                 this._cache.set(cacheKey, data);
                 return this._formatResults(data, word);
             }
 
+            // Not found in detected language — try English as fallback
+            if (lang !== 'en') {
+                const enKey = `en:${word}`;
+                if (!this._cache.has(enKey)) {
+                    const enData = await this._fetchDefinition(word, 'en');
+                    if (enData && enData.entries && enData.entries.length > 0) {
+                        this._cache.set(enKey, enData);
+                        return this._formatResults(enData, word);
+                    }
+                }
+            }
+
             // Not found — try spelling suggestions (English only)
             this._cache.set(cacheKey, 'not_found');
-            if (lang === 'en') {
-                const suggestions = await this._fetchSpellingSuggestions(word);
-                if (suggestions.length > 0) return suggestions;
-            }
+            const suggestions = await this._fetchSpellingSuggestions(word);
+            if (suggestions.length > 0) return suggestions;
             return [this._notFoundResult(word)];
         } catch (e) {
             console.warn('[Dictionary] Lookup failed:', e);
@@ -137,10 +196,15 @@ export default class DictionarySearchProvider {
     _isLookupCandidate(query) {
         if (query.length < MIN_WORD_LENGTH) return false;
         if (query.startsWith('>') || query.startsWith('/')) return false;
+        // Skip if it looks like math, a URL, or a file path
         if (/[+\-*\/=<>{}()\[\]\\|@#$%^&]/.test(query)) return false;
         if (/^https?:\/\//.test(query)) return false;
         if (/\.\w{1,6}$/.test(query)) return false;
-        if (!/^[a-zA-ZÀ-ÿ\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\-]+(\s+[a-zA-ZÀ-ÿ\-]+)?$/.test(query)) return false;
+        // Skip if it's mostly numbers
+        if (/^\d+$/.test(query)) return false;
+        // Allow up to 2 words (any script)
+        const words = query.trim().split(/\s+/);
+        if (words.length > 2) return false;
         return true;
     }
 

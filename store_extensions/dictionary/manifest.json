@@ -1,7 +1,7 @@
 {
   "id": "dictionary",
   "name": "Dictionary",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "type": "extension",
   "description": "Look up word definitions, spelling corrections, and pronunciation using FreeDictionaryAPI.com",
   "icon": "📖",
@@ -10,7 +10,7 @@
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "trigger": { "type": "string", "default": "dict" },
-    "language": { "type": "string", "default": "en" },
+    "language": { "type": "string", "default": "auto" },
     "show_pronunciation": { "type": "boolean", "default": true },
     "show_examples": { "type": "boolean", "default": true },
     "show_synonyms": { "type": "boolean", "default": true }
