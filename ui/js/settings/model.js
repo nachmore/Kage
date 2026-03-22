@@ -14,7 +14,7 @@ class ModelSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 <div class="setting-row">
                     <div class="setting-label">Default Model</div>
-                    <div class="setting-description">Select the model to use when starting a new session. This applies on app launch and when creating new chats.</div>
+                    <div class="setting-description">Select the default model used conversations — you can change your model on the fly in the chat sessions (>sessions) experience.</div>
                     <div class="setting-control">
                         <select id="defaultModelSelect" class="setting-select">
                             <option value="">Loading models...</option>

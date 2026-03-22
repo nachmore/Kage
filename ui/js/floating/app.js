@@ -16,6 +16,7 @@ import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcut
 import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
+import { escapeHtml } from '../shared/tool-utils.js';
 
 /** Map MCP/agent tool names to user-friendly descriptions. */
 const _TOOL_FRIENDLY_NAMES = {
@@ -245,6 +246,11 @@ export class FloatingApp {
             floatingFileInput: document.getElementById('floatingFileInput'),
             floatingImageInput: document.getElementById('floatingImageInput'),
             floatingToolbarExt: document.getElementById('floatingToolbarExt'),
+            floatingContextIndicator: document.getElementById('floatingContextIndicator'),
+            floatingContextRing: document.getElementById('floatingContextRing'),
+            floatingContextPercent: document.getElementById('floatingContextPercent'),
+            floatingModelSelector: document.getElementById('floatingModelSelector'),
+            floatingModelName: document.getElementById('floatingModelName'),
         };
     }
 
@@ -415,6 +421,11 @@ export class FloatingApp {
 
             // Show/hide toolbar based on config
             this._updateToolbarVisibility();
+
+            // Model selector in toolbar — opens model settings
+            this.elements.floatingModelSelector?.addEventListener('click', () => {
+                this.invoke('open_settings_window', { section: 'model' });
+            });
         }
 
     setupStreamingListeners() {
@@ -771,7 +782,11 @@ export class FloatingApp {
             console.log('[Floating] _updateToolbarVisibility — show:', show, 'element:', !!this.elements.floatingToolbar, 'config.ui:', JSON.stringify(config.ui?.show_floating_toolbar));
             if (this.elements.floatingToolbar) {
                 this.elements.floatingToolbar.style.display = show ? 'flex' : 'none';
-                if (show) this._renderExtensionToolbarButtons();
+                if (show) {
+                    this._renderExtensionToolbarButtons();
+                    this._loadModels();
+                    this._refreshContextUsage();
+                }
             }
             this.windowManager.resizeWindow();
         } catch (e) {
@@ -806,6 +821,58 @@ export class FloatingApp {
             });
             container.appendChild(el);
         }
+    }
+
+    // --- Context % and Model Selector ---
+
+    async _refreshContextUsage() {
+        try {
+            const result = await this.invoke('execute_slash_command', { command: 'context', args: {} });
+            const msg = result?.message || JSON.stringify(result);
+            const match = msg.match(/(\d+)%/);
+            if (match) {
+                const pct = parseInt(match[1], 10);
+                if (this.elements.floatingContextPercent) this.elements.floatingContextPercent.textContent = pct + '%';
+                if (this.elements.floatingContextIndicator) this.elements.floatingContextIndicator.title = pct + '% context used';
+                this._drawContextRing(pct);
+            }
+        } catch {}
+    }
+
+    _drawContextRing(percent) {
+        const canvas = this.elements.floatingContextRing;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const size = 16, cx = size / 2, cy = size / 2, r = 6, lw = 2;
+        ctx.clearRect(0, 0, size, size);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = lw;
+        ctx.stroke();
+        if (percent > 0) {
+            let color = '#22c55e';
+            if (percent >= 90) color = '#ef4444';
+            else if (percent >= 75) color = '#eab308';
+            const start = -Math.PI / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, start, start + (Math.PI * 2 * Math.min(percent, 100) / 100));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+        }
+    }
+
+    async _loadModels() {
+        try {
+            const models = await this.invoke('get_available_models');
+            this._availableModels = models || [];
+            if (this._availableModels.length > 0) {
+                const current = this._availableModels[0];
+                if (this.elements.floatingModelName) this.elements.floatingModelName.textContent = current.name || current.modelId || '?';
+            }
+        } catch {}
     }
 
     setupSpeech() {
@@ -1716,6 +1783,9 @@ export class FloatingApp {
                 this.speech.finishStreamingText(this.currentResponse);
                 this.speech.speakResponse(this.currentResponse);
             }
+
+            // Refresh context usage in toolbar
+            this._refreshContextUsage();
 
             // Notify if window is not focused (user isn't looking at it)
             try {

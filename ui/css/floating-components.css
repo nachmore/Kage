@@ -512,6 +512,51 @@ body.light-theme .floating-toolbar-btn:hover {
     align-items: center;
     gap: 2px;
 }
+.floating-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    position: relative;
+}
+.floating-context-indicator {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--kiro-text-muted, #6b7280);
+    user-select: none;
+}
+.floating-context-indicator canvas {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+}
+.floating-model-selector {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--kiro-text-muted, #6b7280);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.floating-model-selector:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--kiro-text, #e5e7eb);
+}
+body.light-theme .floating-model-selector:hover {
+    background: rgba(0,0,0,0.06);
+    color: #374151;
+}
 
 
 /* Floating response action buttons (copy, speak) */

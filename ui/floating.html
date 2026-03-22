@@ -123,6 +123,15 @@
                     </button>
                     <div class="floating-toolbar-ext" id="floatingToolbarExt"></div>
                 </div>
+                <div class="floating-toolbar-right">
+                    <span class="floating-context-indicator" id="floatingContextIndicator" title="Context usage">
+                        <canvas id="floatingContextRing" width="16" height="16"></canvas>
+                        <span id="floatingContextPercent">--%</span>
+                    </span>
+                    <button class="floating-model-selector" id="floatingModelSelector" title="Change model in settings">
+                        <span id="floatingModelName">...</span>
+                    </button>
+                </div>
             </div>
             <input type="file" id="floatingFileInput" style="display:none" multiple>
             <input type="file" id="floatingImageInput" style="display:none" accept="image/*" multiple>
