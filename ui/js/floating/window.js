@@ -167,33 +167,41 @@ export class WindowManager {
     /** Nudge the window position if it overflows the current monitor bounds. */
     async _ensureOnScreen() {
         try {
-            const appWindow = window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
-            if (!appWindow) return;
+            // Use the same appWindow reference pattern as getMaxHeight
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const pos = await appWindow.outerPosition();
             const size = await appWindow.outerSize();
-            const monitor = await appWindow.currentMonitor();
-            if (!monitor) return;
 
-            const monX = monitor.position.x;
-            const monY = monitor.position.y;
-            const monW = monitor.size.width;
-            const monH = monitor.size.height;
+            // Get screen bounds — use screen.availHeight as fallback if monitor API fails
+            let monX = 0, monY = 0, monW, monH;
+            try {
+                const monitor = await appWindow.currentMonitor();
+                if (monitor) {
+                    monX = monitor.position.x;
+                    monY = monitor.position.y;
+                    monW = monitor.size.width;
+                    const scale = monitor.scaleFactor || 1;
+                    monH = Math.min(monitor.size.height, Math.round(window.screen.availHeight * scale));
+                }
+            } catch {}
+            if (!monW || !monH) {
+                const scale = window.devicePixelRatio || 1;
+                monW = Math.round(window.screen.availWidth * scale);
+                monH = Math.round(window.screen.availHeight * scale);
+            }
 
             let x = pos.x;
             let y = pos.y;
             let moved = false;
 
-            // If the bottom overflows, push up
             if (y + size.height > monY + monH) {
                 y = monY + monH - size.height;
                 moved = true;
             }
-            // If the right overflows, push left
             if (x + size.width > monX + monW) {
                 x = monX + monW - size.width;
                 moved = true;
             }
-            // Don't go above or left of the monitor
             if (x < monX) { x = monX; moved = true; }
             if (y < monY) { y = monY; moved = true; }
 
@@ -201,7 +209,7 @@ export class WindowManager {
                 await appWindow.setPosition(new window.__TAURI__.window.PhysicalPosition(x, y));
             }
         } catch (e) {
-            // Ignore — best effort
+            console.warn('[Window] ensureOnScreen error:', e);
         }
     }
 
