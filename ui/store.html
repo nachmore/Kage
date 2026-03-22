@@ -15,6 +15,13 @@
             color: var(--kiro-text);
             overflow: hidden;
         }
+        /* Dark scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+        body.light-theme ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+        body.light-theme ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
         .store-container {
             display: flex;
             flex-direction: column;
@@ -32,6 +39,22 @@
             font-size: 16px;
             font-weight: 600;
             color: var(--kiro-text-bright);
+            flex: 1;
+        }
+        .store-header-settings {
+            -webkit-app-region: no-drag;
+            padding: 4px 8px;
+            font-size: 14px;
+            border: 1px solid var(--kiro-border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--kiro-text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .store-header-settings:hover {
+            border-color: var(--kiro-accent);
+            color: var(--kiro-accent);
         }
         .store-tabs {
             display: flex;
@@ -95,6 +118,16 @@
             border-color: var(--kiro-accent);
             color: white;
         }
+        .store-source-select {
+            padding: 6px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            border: 1px solid var(--kiro-border);
+            background: var(--kiro-bg-input);
+            color: var(--kiro-text);
+            cursor: pointer;
+            outline: none;
+        }
         .store-content {
             flex: 1;
             overflow-y: auto;
@@ -151,12 +184,15 @@
         .store-card-footer {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-end;
+            gap: 6px;
         }
         .store-card-tags {
             display: flex;
             gap: 4px;
             flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
         }
         .store-tag {
             font-size: 10px;
@@ -164,6 +200,14 @@
             background: var(--kiro-bg-input);
             border-radius: 4px;
             color: var(--kiro-text-muted);
+        }
+        .store-source-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            background: var(--kiro-accent);
+            border-radius: 4px;
+            color: white;
+            opacity: 0.8;
         }
         .store-card-btn {
             padding: 4px 12px;
@@ -202,10 +246,32 @@
         .store-card-btn.update:hover {
             background: var(--kiro-accent-hover);
         }
+        .store-card-btn.settings-link {
+            background: transparent;
+            color: var(--kiro-text-muted);
+            border: 1px solid var(--kiro-border);
+            font-size: 11px;
+        }
+        .store-card-btn.settings-link:hover {
+            border-color: var(--kiro-accent);
+            color: var(--kiro-accent);
+        }
+        .store-card-btn.reinstall {
+            background: transparent;
+            color: var(--kiro-accent);
+            border: 1px solid var(--kiro-accent);
+            font-size: 11px;
+        }
+        .store-card-btn.reinstall:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
         .store-card-actions {
             display: flex;
             gap: 6px;
             align-items: center;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
         .store-empty {
             text-align: center;
@@ -227,6 +293,7 @@
     <div class="store-container">
         <div class="store-header">
             <h1>🛍️ Extension Store</h1>
+            <button class="store-header-settings" onclick="openSettings('store')" title="Store settings">⚙️</button>
         </div>
         <div class="store-tabs">
             <div class="store-tab active" data-tab="extensions" onclick="switchTab('extensions')">Extensions</div>
@@ -235,6 +302,9 @@
         </div>
         <div class="store-toolbar">
             <input type="text" id="storeSearch" placeholder="Search..." oninput="onSearch()">
+            <select class="store-source-select" id="sourceFilter" onchange="renderTab()" style="display:none">
+                <option value="">All Sources</option>
+            </select>
             <button class="store-filter-btn" id="installedFilter" onclick="toggleInstalledFilter()">Installed only</button>
         </div>
         <div class="store-content" id="storeContent"></div>
@@ -245,6 +315,9 @@
     let showInstalledOnly = false;
     let installedMap = new Map(); // id → { version, kind }
     let _bundledIds = new Set();
+    let _isDevMode = false;
+    let _storeSources = []; // available source names from catalog response
+    let _hasMultipleSources = false;
 
     function waitForTauri(cb) {
         if (window.__TAURI__?.core) cb();
@@ -253,6 +326,9 @@
 
     waitForTauri(async () => {
         const invoke = window.__TAURI__.core.invoke;
+
+        // Check dev mode
+        try { _isDevMode = await invoke('is_dev_mode'); } catch {}
 
         // Load bundled extension IDs
         try {
@@ -270,6 +346,8 @@
             else if (config.ui?.theme === 'system' && !window.matchMedia('(prefers-color-scheme: dark)').matches) {
                 document.body.classList.add('light-theme');
             }
+            // Check if multiple sources configured
+            _hasMultipleSources = (config.store_sources || []).filter(s => s.enabled).length > 0;
         } catch {}
 
         // Initial tab from URL param
@@ -298,18 +376,18 @@
         installedMap = new Map();
         try {
             const exts = await invoke('list_extensions');
-            exts.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'extension' }));
+            exts.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'extension', hasSettings: !!e.manifest.contributes?.settingsModule }));
         } catch {}
         try {
             const themes = await invoke('list_themes');
-            themes.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'theme' }));
+            themes.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'theme', hasSettings: false }));
         } catch {}
         try {
             const packs = await invoke('list_command_packs');
-            packs.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'commands' }));
+            packs.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'commands', hasSettings: false }));
         } catch {}
         _bundledIds.forEach(id => {
-            if (!installedMap.has(id)) installedMap.set(id, { version: '0.0.0', kind: 'extension' });
+            if (!installedMap.has(id)) installedMap.set(id, { version: '0.0.0', kind: 'extension', hasSettings: false });
         });
     }
 
@@ -362,10 +440,20 @@
         const invoke = window.__TAURI__.core.invoke;
         const search = document.getElementById('storeSearch')?.value || '';
         const kind = type === 'commands' ? 'commands' : type === 'themes' ? 'theme' : 'extension';
+        const sourceFilter = document.getElementById('sourceFilter')?.value || '';
 
         try {
-            const catalog = await invoke('store_get_catalog', { kind, search: search || null, page: 1 });
+            const catalog = await invoke('store_get_catalog', {
+                kind,
+                search: search || null,
+                page: 1,
+                source: sourceFilter || null,
+            });
             let items = catalog.items || [];
+
+            // Update source filter dropdown
+            const sources = catalog.sources || [];
+            updateSourceFilter(sources);
 
             if (showInstalledOnly) {
                 items = items.filter(i => installedMap.has(i.id));
@@ -381,41 +469,7 @@
 
             let html = '<div class="store-grid">';
             for (const item of items) {
-                const isInstalled = installedMap.has(item.id);
-                const isBundled = _bundledIds.has(item.id);
-                const updateAvailable = isInstalled && hasUpdate(item.id, item.version);
-
-                let actionHtml;
-                if (isBundled) {
-                    actionHtml = '<span class="store-card-btn installed">Built-in</span>';
-                } else if (updateAvailable) {
-                    const localVer = installedMap.get(item.id)?.version || '';
-                    actionHtml = `<div class="store-card-actions">
-                        <button class="store-card-btn update" onclick="event.stopPropagation();updateItem('${item.id}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>
-                        <button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${item.id}','${kind}')">Uninstall</button>
-                    </div>`;
-                } else if (isInstalled) {
-                    actionHtml = `<button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${item.id}','${kind}')">Uninstall</button>`;
-                } else {
-                    actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();installFromStore('${item.id}')">Install</button>`;
-                }
-
-                html += `
-                    <div class="store-card">
-                        <div class="store-card-header">
-                            <div class="store-card-icon">${esc(item.icon || '📦')}</div>
-                            <div>
-                                <div class="store-card-title">${esc(item.name)}</div>
-                                <div class="store-card-author">${esc(item.author || '')} · v${esc(item.version)}</div>
-                            </div>
-                        </div>
-                        <div class="store-card-desc">${esc(item.description || '')}</div>
-                        <div class="store-card-footer">
-                            <div class="store-card-tags">${(item.tags||[]).map(t => `<span class="store-tag">${esc(t)}</span>`).join('')}</div>
-                            ${actionHtml}
-                        </div>
-                    </div>
-                `;
+                html += renderCard(item, kind);
             }
             html += '</div>';
             container.innerHTML = html;
@@ -423,6 +477,87 @@
             container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">⚠️</div>Could not connect to store.<br>${esc(String(e))}</div>`;
         }
     }
+
+    function renderCard(item, kind) {
+        const isInstalled = installedMap.has(item.id);
+        const isBundled = _bundledIds.has(item.id);
+        const updateAvailable = isInstalled && hasUpdate(item.id, item.version);
+        const localInfo = installedMap.get(item.id);
+        const itemSource = item._source || '';
+
+        // Build action buttons
+        let actionHtml = '';
+        if (isBundled) {
+            actionHtml = '<span class="store-card-btn installed">Built-in</span>';
+        } else if (isInstalled) {
+            const buttons = [];
+
+            // Settings deep link (if extension has a settings module)
+            if (localInfo?.hasSettings) {
+                buttons.push(`<button class="store-card-btn settings-link" onclick="event.stopPropagation();openSettings('${esc(item.id)}')" title="Open settings">⚙️</button>`);
+            }
+
+            // Update button
+            if (updateAvailable) {
+                const localVer = localInfo?.version || '';
+                buttons.push(`<button class="store-card-btn update" onclick="event.stopPropagation();updateItem('${esc(item.id)}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>`);
+            }
+
+            // Reinstall button (dev mode only)
+            if (_isDevMode) {
+                buttons.push(`<button class="store-card-btn reinstall" onclick="event.stopPropagation();reinstallItem('${esc(item.id)}')" title="Re-download and reinstall">🔄</button>`);
+            }
+
+            // Uninstall button
+            buttons.push(`<button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${esc(item.id)}','${kind}')">Uninstall</button>`);
+
+            actionHtml = `<div class="store-card-actions">${buttons.join('')}</div>`;
+        } else {
+            actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();installFromStore('${esc(item.id)}')">Install</button>`;
+        }
+
+        // Source badge (only show when multiple sources exist)
+        const sourceBadge = (_hasMultipleSources && itemSource)
+            ? `<span class="store-source-badge">${esc(itemSource)}</span>`
+            : '';
+
+        return `
+            <div class="store-card">
+                <div class="store-card-header">
+                    <div class="store-card-icon">${esc(item.icon || '📦')}</div>
+                    <div>
+                        <div class="store-card-title">${esc(item.name)}</div>
+                        <div class="store-card-author">${esc(item.author || '')} · v${esc(item.version)}</div>
+                    </div>
+                </div>
+                <div class="store-card-tags">
+                    ${sourceBadge}
+                    ${(item.tags||[]).map(t => `<span class="store-tag">${esc(t)}</span>`).join('')}
+                </div>
+                <div class="store-card-desc">${esc(item.description || '')}</div>
+                <div class="store-card-footer">
+                    ${actionHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    function updateSourceFilter(sources) {
+        const select = document.getElementById('sourceFilter');
+        if (!select) return;
+        if (sources.length <= 1) {
+            select.style.display = 'none';
+            _hasMultipleSources = false;
+            return;
+        }
+        _hasMultipleSources = true;
+        select.style.display = '';
+        const current = select.value;
+        select.innerHTML = '<option value="">All Sources</option>' +
+            sources.map(s => `<option value="${esc(s)}"${s === current ? ' selected' : ''}>${esc(s)}</option>`).join('');
+    }
+
+    // --- Actions ---
 
     async function installFromStore(id) {
         const invoke = window.__TAURI__.core.invoke;
@@ -436,13 +571,18 @@
     }
 
     async function updateItem(id) {
+        await installFromStore(id);
+    }
+
+    async function reinstallItem(id) {
         const invoke = window.__TAURI__.core.invoke;
         try {
+            // Just re-install (overwrites existing)
             await invoke('store_install', { id });
             await refreshInstalled();
             renderTab();
         } catch (e) {
-            alert('Update failed: ' + e);
+            alert('Reinstall failed: ' + e);
         }
     }
 
@@ -456,6 +596,11 @@
         } catch (e) {
             alert('Uninstall failed: ' + e);
         }
+    }
+
+    function openSettings(extensionId) {
+        const invoke = window.__TAURI__.core.invoke;
+        invoke('open_settings_window', { section: extensionId });
     }
 
     let searchTimeout;

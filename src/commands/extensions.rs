@@ -304,44 +304,113 @@ pub async fn store_get_catalog(
     kind: Option<String>,
     search: Option<String>,
     page: Option<u32>,
+    source: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
-    let base_url = {
+    let (primary_url, sources) = {
         let config = state.config.lock().unwrap();
-        resolve_store_url(&config, state.dev_mode)
+        let primary = resolve_store_url(&config, state.dev_mode);
+        let sources = config.store_sources.clone();
+        (primary, sources)
     };
 
-    if base_url.is_empty() {
-        // No store configured — return empty catalog
+    // Build list of (name, url) pairs to fetch from
+    let mut store_urls: Vec<(String, String)> = Vec::new();
+    if !primary_url.is_empty() {
+        store_urls.push(("Default".to_string(), primary_url));
+    }
+    for s in &sources {
+        if s.enabled && !s.url.is_empty() {
+            if validate_store_url(&s.url).is_ok() {
+                store_urls.push((s.name.clone(), s.url.clone()));
+            }
+        }
+    }
+
+    // Filter by source name if requested
+    if let Some(ref src_filter) = source {
+        store_urls.retain(|(name, _)| name == src_filter);
+    }
+
+    if store_urls.is_empty() {
         return Ok(serde_json::json!({
             "items": [],
             "total": 0,
             "page": 1,
-            "pageSize": 20
+            "pageSize": 20,
+            "sources": []
         }));
     }
 
-    validate_store_url(&base_url)?;
-
-    let mut url = format!("{}/store/catalog?page={}", base_url, page.unwrap_or(1));
-    if let Some(ref k) = kind {
-        url.push_str(&format!("&type={}", k));
-    }
-    if let Some(ref s) = search {
-        url.push_str(&format!("&search={}", urlencoding::encode(s)));
-    }
-
+    // Fetch from all sources in parallel
     let client = store_client()?;
-    let resp = client.get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Store request failed: {}", e))?;
-    let body = resp
-        .json::<serde_json::Value>()
-        .await
-        .map_err(|e| format!("Invalid store response: {}", e))?;
-    Ok(body)
+    let source_names: Vec<String> = store_urls.iter().map(|(name, _)| name.clone()).collect();
+
+    let mut handles = Vec::new();
+    for (name, base_url) in store_urls {
+        let client = client.clone();
+        let mut url = format!("{}/store/catalog?page={}", base_url, page.unwrap_or(1));
+        if let Some(ref k) = kind {
+            url.push_str(&format!("&type={}", k));
+        }
+        if let Some(ref s) = search {
+            url.push_str(&format!("&search={}", urlencoding::encode(s)));
+        }
+        handles.push(tokio::spawn(async move {
+            match client.get(&url).send().await {
+                Ok(resp) => {
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            let mut items = Vec::new();
+                            if let Some(arr) = body.get("items").and_then(|v| v.as_array()) {
+                                for item in arr {
+                                    let mut tagged = item.clone();
+                                    if let Some(obj) = tagged.as_object_mut() {
+                                        obj.insert("_source".to_string(), serde_json::json!(name));
+                                    }
+                                    items.push(tagged);
+                                }
+                            }
+                            items
+                        }
+                        Err(_) => Vec::new(),
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to fetch from store '{}': {}", name, e);
+                    Vec::new()
+                }
+            }
+        }));
+    }
+
+    let mut all_items: Vec<serde_json::Value> = Vec::new();
+    for handle in handles {
+        if let Ok(items) = handle.await {
+            all_items.extend(items);
+        }
+    }
+
+    // Deduplicate by ID (first source wins)
+    let mut seen = std::collections::HashSet::new();
+    all_items.retain(|item| {
+        if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+            seen.insert(id.to_string())
+        } else {
+            true
+        }
+    });
+
+    let total = all_items.len();
+    Ok(serde_json::json!({
+        "items": all_items,
+        "total": total,
+        "page": page.unwrap_or(1),
+        "pageSize": 20,
+        "sources": source_names
+    }))
 }
+
 
 #[tauri::command]
 pub async fn store_get_detail(

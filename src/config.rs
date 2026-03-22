@@ -41,6 +41,9 @@ pub struct Config {
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
+    /// Additional store sources (name + URL pairs). Merged with the primary store.
+    #[serde(default)]
+    pub store_sources: Vec<StoreSource>,
     /// Custom path to mcp.json. If empty, uses ~/.kiro/settings/mcp.json.
     #[serde(default)]
     pub mcp_config_path: Option<String>,
@@ -78,6 +81,14 @@ fn default_policy() -> String {
     "ask".to_string()
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoreSource {
+    pub name: String,
+    pub url: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Default)]
@@ -484,6 +495,7 @@ impl Default for Config {
                 key: "Space".to_string(),
             }),
             store_url: None,
+            store_sources: Vec::new(),
             mcp_config_path: None,
             auto_update_extensions: false,
             last_extension_update_check: None,
