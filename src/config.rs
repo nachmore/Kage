@@ -38,6 +38,9 @@ pub struct Config {
     /// Optional hotkey for inline assist (default: Ctrl+Shift+Space)
     #[serde(default = "default_inline_assist_hotkey")]
     pub inline_assist_hotkey: Option<HotkeyConfig>,
+    /// Optional hotkey for voice input (show floating + start speech)
+    #[serde(default)]
+    pub voice_hotkey: Option<HotkeyConfig>,
     /// Custom store URL (advanced). If empty, uses the default store.
     #[serde(default)]
     pub store_url: Option<String>,
@@ -494,6 +497,7 @@ impl Default for Config {
                 modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
                 key: "Space".to_string(),
             }),
+            voice_hotkey: None,
             store_url: None,
             store_sources: Vec::new(),
             mcp_config_path: None,
@@ -576,6 +580,14 @@ impl Config {
 
     pub fn get_inline_assist_hotkey_string(&self) -> Option<String> {
         self.inline_assist_hotkey.as_ref().map(|hk| {
+            let mut parts = hk.modifiers.clone();
+            parts.push(hk.key.clone());
+            parts.join("+")
+        })
+    }
+
+    pub fn get_voice_hotkey_string(&self) -> Option<String> {
+        self.voice_hotkey.as_ref().map(|hk| {
             let mut parts = hk.modifiers.clone();
             parts.push(hk.key.clone());
             parts.join("+")

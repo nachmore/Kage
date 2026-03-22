@@ -166,6 +166,21 @@ export class FloatingApp {
                 this._enterClipboardMode();
             });
 
+            this.listen('voice_mode', () => {
+                console.log('Voice mode activated via hotkey');
+                this.elements.responseText.textContent = '';
+                this.elements.contentArea.classList.remove('visible');
+                this.elements.expandBtn.classList.remove('visible');
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.currentResponse = '';
+                this.dismissBanner();
+                this.elements.input.value = '';
+                this.clearSuggestions();
+                if (this.speech && !this.speech.isListening) {
+                    this.speech.start();
+                }
+            });
+
             setTimeout(() => this.elements.input.focus(), 100);
 
             this.checkForUpdateBanner();

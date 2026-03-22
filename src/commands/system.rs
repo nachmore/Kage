@@ -447,6 +447,7 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     let main_hk = config.get_hotkey_string();
     let cb_hk = config.get_clipboard_hotkey_string();
     let ia_hk = config.get_inline_assist_hotkey_string();
+    let voice_hk = config.get_voice_hotkey_string();
     drop(config);
 
     // 1. Main hotkey — toggle floating window
@@ -511,6 +512,29 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
         ) {
             Ok(_) => info!("✅ Registered inline assist hotkey: {}", ia),
             Err(e) => warn!("❌ Failed to register inline assist hotkey {}: {}", ia, e),
+        }
+    }
+
+    // 4. Voice input hotkey — show floating + start speech
+    if let Some(ref vk) = voice_hk {
+        if let Some(floating) = app.get_webview_window("floating") {
+            let app_handle = app.clone();
+            match app.global_shortcut().on_shortcut(
+                vk.as_str(),
+                move |_app, _shortcut, event| {
+                    if event.state != ShortcutState::Pressed { return; }
+                    info!("Voice hotkey triggered");
+                    crate::commands::window::show_floating_at_mouse(&floating);
+                    let handle = app_handle.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        let _ = handle.emit("voice_mode", ());
+                    });
+                },
+            ) {
+                Ok(_) => info!("✅ Registered voice hotkey: {}", vk),
+                Err(e) => warn!("❌ Failed to register voice hotkey {}: {}", vk, e),
+            }
         }
     }
 }

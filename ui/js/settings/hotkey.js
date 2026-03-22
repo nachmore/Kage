@@ -7,11 +7,13 @@ class HotkeySettingsModule extends SettingsModule {
         this._picker = null;
         this._cbPicker = null;
         this._iaPicker = null;
+        this._voicePicker = null;
     }
     render() {
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + this.createControlRow('Global Hotkey', 'The shortcut to summon Kiro from anywhere.', '<div id="settingsHotkeyPicker"></div>')
+            + this.createControlRow('Voice Input Hotkey', 'Summon Kiro with the microphone already listening. Leave empty to disable.', '<div id="settingsVoiceHotkeyPicker"></div>')
             + this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
             + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
             + '<div class="setting-row" style="margin-top: 6px;"><div class="setting-label">Keyboard Shortcuts</div><div class="setting-description">Built-in shortcuts available across the application.</div></div>'
@@ -69,6 +71,19 @@ class HotkeySettingsModule extends SettingsModule {
             });
         }
 
+        // Voice input hotkey picker
+        const voiceContainer = document.getElementById('settingsVoiceHotkeyPicker');
+        if (voiceContainer) {
+            this._voicePicker = new HotkeyPicker(voiceContainer, invoke, { modifiers: [], key: '' }, 'voice');
+            this._voicePicker.onChange(async (hk) => {
+                try {
+                    const config = await invoke('get_config');
+                    config.voice_hotkey = (hk.key) ? hk : null;
+                    await invoke('save_config', { config });
+                } catch (e) { console.error('Failed to save voice hotkey:', e); }
+            });
+        }
+
         document.querySelectorAll('.shortcut-ref-keys[data-keys]').forEach(el => {
             this.renderKeycaps(el, el.dataset.keys);
         });
@@ -90,6 +105,13 @@ class HotkeySettingsModule extends SettingsModule {
                 this._iaPicker.setHotkey({ modifiers: ['Ctrl', 'Shift'], key: 'Space' });
             }
         }
+        if (this._voicePicker) {
+            if (config.voice_hotkey) {
+                this._voicePicker.setHotkey(config.voice_hotkey);
+            } else {
+                this._voicePicker.setHotkey({ modifiers: [], key: '' });
+            }
+        }
     }
     save(config) {
         // Hotkey is saved immediately on capture via try_register_hotkey,
@@ -108,6 +130,10 @@ class HotkeySettingsModule extends SettingsModule {
             // Ensure the default is written to config on first save
             config.inline_assist_hotkey = { modifiers: ['Ctrl', 'Shift'], key: 'Space' };
         }
+        if (this._voicePicker) {
+            const vHk = this._voicePicker.hotkey;
+            config.voice_hotkey = (vHk && vHk.key) ? vHk : null;
+        }
     }
     renderKeycaps(container, hotkeyStr) {
         if (!container || !hotkeyStr) return;
@@ -125,5 +151,5 @@ class HotkeySettingsModule extends SettingsModule {
             + '<span class="shortcut-ref-scope">' + scope + '</span>'
             + '</div>';
     }
-    destroy() { this._picker = null; this._cbPicker = null; this._iaPicker = null; }
+    destroy() { this._picker = null; this._cbPicker = null; this._iaPicker = null; this._voicePicker = null; }
 }
