@@ -211,9 +211,10 @@ export class TtsPlaybackBar {
 // ─── TTS Streamer (Pocket TTS) ───
 
 export class TtsStreamer {
-    constructor({ port, voice, barContainer, onBarChange }) {
+    constructor({ port, voice, barContainer, onBarChange, onFinished }) {
         this.port = port;
         this.voice = voice;
+        this._onFinished = onFinished || null;
         this._sentencesSent = 0;
         this._lastSentences = [];
         this._finished = false;
@@ -340,7 +341,7 @@ export class TtsStreamer {
         if (this._stopped || this._isPaused) return;
         if (this._audioQueue.length === 0) {
             this._isPlaying = false;
-            if (this._finished && this._pendingFetches === 0) this._bar.hideAfterDelay();
+            if (this._finished && this._pendingFetches === 0) { this._bar.hideAfterDelay(); if (this._onFinished) this._onFinished(); }
             return;
         }
         this._isPlaying = true;
@@ -357,8 +358,9 @@ export class TtsStreamer {
     togglePause() { if (this._isPaused) this.resume(); else this.pause(); }
 
     stop() {
+        console.log('[TtsStreamer] stop() called — playing:', this._isPlaying, 'queue:', this._audioQueue.length, 'pending:', this._pendingFetches, 'abortControllers:', this._abortControllers.length);
         this._stopped = true; this._isPaused = false; this._isPlaying = false;
-        if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio = null; }
+        if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio.src = ''; this._currentAudio = null; }
         for (const c of this._audioQueue) URL.revokeObjectURL(c.url);
         this._audioQueue = [];
         // Abort all in-flight fetch requests

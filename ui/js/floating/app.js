@@ -176,8 +176,11 @@ export class FloatingApp {
                 this.dismissBanner();
                 this.elements.input.value = '';
                 this.clearSuggestions();
-                if (this.speech && !this.speech.isListening) {
-                    this.speech.start();
+                if (this.speech) {
+                    this.speech.voiceMode = true;
+                    if (!this.speech.isListening) {
+                        this.speech.start();
+                    }
                 }
             });
 
@@ -292,9 +295,9 @@ export class FloatingApp {
                 // Escape — stop speech/TTS first, then stop generating, then hide
                 if (e.key === 'Escape') {
                     // Stop speech recognition or TTS first
-                    if (this.speech?.isActive) {
+                    if (this.speech?.isActive || this.speech?.isListening) {
                         e.preventDefault();
-                        this.speech.stop();
+                        this.speech.stopVoiceMode();
                         this.speech.cancelSpeech();
                         return;
                     }
@@ -624,6 +627,10 @@ export class FloatingApp {
         if (sourcesEl) sourcesEl.remove();
         const compactEl = document.getElementById('toolSourcesCompact');
         if (compactEl) compactEl.remove();
+        // Exit voice conversation mode on reset
+        if (this.speech?.voiceMode) {
+            this.speech.stopVoiceMode();
+        }
         this.elements.input.focus();
         // Re-show datetime when input is cleared
         this.updateDatetimeVisibility();
@@ -1276,10 +1283,12 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message, options = {}) {
-        // Stop any ongoing TTS and speech recognition
+        // Stop any ongoing TTS; in voice mode, don't kill the mic — it will restart after response
         if (this.speech) {
             this.speech.cancelSpeech();
-            if (this.speech.isListening) this.speech.stop();
+            if (this.speech.isListening && !this.speech.voiceMode) {
+                this.speech.stop();
+            }
         }
 
         // If a plan is pending review, send the message as a revision request

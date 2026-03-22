@@ -9,6 +9,7 @@
  */
 
 import { TtsStreamer, TtsPlaybackBar, cleanForTts, preloadEmojiNames } from './tts-streamer.js';
+import { EchoCancelledVAD } from './echo-canceller.js';
 
 export class SpeechController {
     /**
@@ -45,6 +46,9 @@ export class SpeechController {
         this._ttsServerReady = false;
         this._ttsPendingText = null;
         this._warmupBar = null;
+        // Voice conversation mode — mic stays hot between exchanges
+        this.voiceMode = false;
+        this._vad = null;
     }
 
     setup() {
@@ -113,6 +117,10 @@ export class SpeechController {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
+
+            // Voice mode: interrupt TTS when user starts speaking
+            // (only works when mic is active, which is when TTS is NOT playing)
+
             const input = this.elements.input;
             if (input) {
                 input.value = finalTranscript + interimTranscript;
@@ -126,9 +134,19 @@ export class SpeechController {
             if (this.silenceTimeout > 0 && finalTranscript.trim()) {
                 this._silenceTimer = setTimeout(() => {
                     if (this.isListening && finalTranscript.trim()) {
+                        console.log('[Speech] Silence timer fired — voiceMode:', this.voiceMode);
                         this.usedSpeechForLastMessage = true;
-                        this.stop();
-                        this.onSend(finalTranscript.trim());
+                        if (this.voiceMode) {
+                            // Voice mode: stop recognition (triggers onend which restarts)
+                            // but keep isListening true so onend takes the restart path
+                            if (this.recognition) {
+                                this.recognition.stop();
+                                this.recognition = null;
+                            }
+                        } else {
+                            this.stop();
+                            this.onSend(finalTranscript.trim());
+                        }
                     }
                 }, this.silenceTimeout);
             }
@@ -140,21 +158,47 @@ export class SpeechController {
                 document.dispatchEvent(new CustomEvent('kiro-show-response', {
                     detail: 'Microphone access denied. Please allow microphone access in your system settings.'
                 }));
+                this.voiceMode = false;
+                this.stop();
+            } else if (this.voiceMode && (event.error === 'no-speech' || event.error === 'aborted')) {
+                // Transient errors in voice mode — onend will restart
+            } else {
+                this.stop();
             }
-            this.stop();
         };
 
         recognition.onend = () => {
             clearTimeout(this._silenceTimer);
+            const hadTranscript = finalTranscript.trim();
+            console.log('[Speech] onend fired — isListening:', this.isListening, 'voiceMode:', this.voiceMode, 'hadTranscript:', !!hadTranscript);
+            
             if (this.isListening) {
                 this.isListening = false;
                 this._updateUI(false);
                 this.onVisibilityUpdate();
-                if (finalTranscript.trim()) {
+                if (hadTranscript) {
                     this.usedSpeechForLastMessage = true;
+                    console.log('[Speech] Sending transcript:', hadTranscript);
                     this.onSend(finalTranscript.trim());
                 }
+                // Voice mode: restart mic immediately for next utterance
+                if (this.voiceMode) {
+                    console.log('[Speech] Voice mode: scheduling mic restart');
+                    setTimeout(() => {
+                        console.log('[Speech] Voice mode restart check — voiceMode:', this.voiceMode, 'isListening:', this.isListening);
+                        if (this.voiceMode && !this.isListening) {
+                            // Clear input for next utterance
+                            if (this.elements.input) {
+                                this.elements.input.value = '';
+                                this.elements.input.style.height = 'auto';
+                            }
+                            console.log('[Speech] Voice mode: restarting mic now');
+                            this.start();
+                        }
+                    }, 300);
+                }
             } else {
+                console.log('[Speech] onend — was not listening (manual stop)');
                 this._updateUI(false);
                 this.onVisibilityUpdate();
                 if (this.elements.input?.value.trim()) {
@@ -167,6 +211,8 @@ export class SpeechController {
         this.isListening = true;
         this._updateUI(true);
         this.onVisibilityUpdate();
+        // Pause VAD while recognition is active (avoid double-triggering)
+        if (this._vad) this._vad.pause();
 
         try {
             recognition.start();
@@ -187,6 +233,70 @@ export class SpeechController {
         }
         this._updateUI(false);
         this.onVisibilityUpdate();
+    }
+
+    /** Exit voice conversation mode entirely. */
+    stopVoiceMode() {
+        this.voiceMode = false;
+        if (this._vad) { this._vad.stop(); this._vad = null; }
+        this.stop();
+    }
+
+    /**
+     * Restart the mic after TTS finishes (voice mode).
+     */
+    _scheduleVoiceModeRestart() {
+        if (!this.voiceMode || this.isListening) return;
+        setTimeout(() => {
+            if (this.voiceMode && !this.isListening) {
+                if (this.elements.input) {
+                    this.elements.input.value = '';
+                    this.elements.input.style.height = 'auto';
+                }
+                console.log('[Speech] Voice mode: restarting mic after TTS');
+                this.start();
+            }
+        }, 300);
+    }
+
+    /**
+     * Called when TTS playback finishes. In voice mode, restarts the mic.
+     */
+    onTtsFinished() {
+        if (this.voiceMode) {
+            // Stop VAD — mic is about to start
+            if (this._vad) this._vad.pause();
+            this._scheduleVoiceModeRestart();
+        }
+    }
+
+    /**
+     * Start/resume the echo-cancelled VAD for voice mode interruption detection.
+     */
+    async _startVoiceModeVAD() {
+        if (!this.voiceMode) return;
+        if (!this._vad) {
+            this._vad = new EchoCancelledVAD({
+                onSpeechDetected: () => {
+                    console.log('[Speech] VAD: real speech detected during TTS — interrupting');
+                    this.cancelSpeech();
+                    // Brief delay for audio to fully release, then start recognition
+                    setTimeout(() => {
+                        if (!this.isListening && this.voiceMode) {
+                            if (this.elements.input) {
+                                this.elements.input.value = '';
+                                this.elements.input.style.height = 'auto';
+                            }
+                            console.log('[Speech] VAD: starting recognition after TTS cancel');
+                            this.start();
+                        }
+                    }, 200);
+                },
+            });
+            await this._vad.start();
+        } else {
+            this._vad.resume();
+        }
     }
 
     _updateUI(listening) {
@@ -391,11 +501,20 @@ export class SpeechController {
     /** Actually start Pocket TTS speech — server is known to be running */
     _startPocketTtsSpeech(text) {
         this._ttsState = 'speaking';
+        // In voice mode, stop mic and start VAD for interruption detection
+        if (this.voiceMode) {
+            if (this.isListening) {
+                console.log('[Speech] Voice mode: stopping mic during TTS playback');
+                this.stop();
+            }
+            this._startVoiceModeVAD();
+        }
         this._ttsStreamer = new TtsStreamer({
             port: this.pocketTtsPort,
             voice: this.pocketTtsVoice,
             barContainer: this.barContainer,
             onBarChange: this.onVisibilityUpdate,
+            onFinished: () => { this._ttsState = 'idle'; this._ttsStreamer = null; this.onTtsFinished(); },
         });
         this._ttsStreamer.finishText(text);
     }
@@ -439,11 +558,20 @@ export class SpeechController {
         if (!this._ttsStreamer) {
             // Start server on demand if needed (fire and forget — streamer will retry)
             this._ensurePocketTtsRunning().catch(() => {});
+            // In voice mode, stop mic and start VAD for interruption detection
+            if (this.voiceMode) {
+                if (this.isListening) {
+                    console.log('[Speech] Voice mode: stopping mic during streaming TTS');
+                    this.stop();
+                }
+                this._startVoiceModeVAD();
+            }
             this._ttsStreamer = new TtsStreamer({
                 port: this.pocketTtsPort,
                 voice: this.pocketTtsVoice,
                 barContainer: this.barContainer,
                 onBarChange: this.onVisibilityUpdate,
+                onFinished: () => { this._ttsState = 'idle'; this._ttsStreamer = null; this.onTtsFinished(); },
             });
         }
 
@@ -456,7 +584,8 @@ export class SpeechController {
     finishStreamingText(finalText) {
         if (this._ttsStreamer) {
             this._ttsStreamer.finishText(finalText);
-            this._ttsStreamer = null;
+            // Don't null the streamer here — it's still playing audio from its queue.
+            // It will be nulled by cancelSpeech() or by the onFinished callback.
             this._streamedThisResponse = true; // flag so speakResponse skips
         }
     }
@@ -499,6 +628,7 @@ export class SpeechController {
 
     /** Cancel any ongoing TTS playback. */
     cancelSpeech() {
+        console.log('[Speech] cancelSpeech called — ttsState:', this._ttsState, 'hasStreamer:', !!this._ttsStreamer, 'hasAudio:', !!this._pocketTtsAudio);
         speechSynthesis.cancel();
         this._ttsState = 'idle';
         this._ttsPendingText = null;
@@ -509,6 +639,7 @@ export class SpeechController {
             this._pocketTtsAudio = null;
         }
         if (this._ttsStreamer) {
+            console.log('[Speech] Stopping TTS streamer');
             this._ttsStreamer.stop();
             this._ttsStreamer = null;
         }
