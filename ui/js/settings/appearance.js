@@ -64,6 +64,13 @@ class AppearanceSettingsModule extends SettingsModule {
                 )}
 
                 ${this.createCheckboxRow(
+                    'Show Toolbar',
+                    'Show the attach file/image toolbar below the input in the floating window.',
+                    'showFloatingToolbar',
+                    false
+                )}
+
+                ${this.createCheckboxRow(
                     'Show Time',
                     'Display the current time in the floating window input area.',
                     'showTime',
@@ -127,6 +134,8 @@ class AppearanceSettingsModule extends SettingsModule {
             if (opacityValue) opacityValue.textContent = (config.ui.floating_window_opacity ?? 1.0).toFixed(2);
         }
         if (preserve) preserve.checked = config.ui.preserve_last_response !== false;
+        const showToolbar = document.getElementById('showFloatingToolbar');
+        if (showToolbar) showToolbar.checked = config.ui.show_floating_toolbar === true;
         const showTime = document.getElementById('showTime');
         const showDate = document.getElementById('showDate');
         const timeFormat = document.getElementById('timeFormat');
@@ -159,6 +168,7 @@ class AppearanceSettingsModule extends SettingsModule {
         }
         // Don't overwrite saved geometry when checkbox is on — it's saved by the chat window itself
         config.ui.preserve_last_response = document.getElementById('preserveLastResponse')?.checked ?? true;
+        config.ui.show_floating_toolbar = document.getElementById('showFloatingToolbar')?.checked ?? false;
         config.ui.show_time = document.getElementById('showTime')?.checked ?? false;
         config.ui.show_date = document.getElementById('showDate')?.checked ?? false;
         config.ui.time_format = document.getElementById('timeFormat')?.value || 'HH:mm';

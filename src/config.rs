@@ -203,6 +203,9 @@ pub struct UiConfig {
     /// Show quick action chips on agent responses (translate, summarize, etc.)
     #[serde(default = "default_true")]
     pub show_response_actions: bool,
+    /// Show attach file/image toolbar in the floating window
+    #[serde(default)]
+    pub show_floating_toolbar: bool,
     #[serde(default = "default_speech_silence_timeout")]
     pub speech_silence_timeout: f32,
     #[serde(default)]
@@ -472,6 +475,7 @@ impl Default for Config {
                 show_speech_button: false,
                 speech_read_back: false,
                 show_response_actions: true,
+                show_floating_toolbar: false,
                 speech_silence_timeout: 2.0,
                 speech_voice: None,
                 time_format: "HH:mm".to_string(),

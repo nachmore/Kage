@@ -62,12 +62,13 @@ export class WindowManager {
                 if (nothingExpanded) {
                     const scale = window.devicePixelRatio || 1;
                     if (this.userSetHeight) {
-                        // User manually set a height — but ensure it's at least enough for content
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         let extraHeight = 0;
                         document.querySelectorAll('.timer-bar').forEach(bar => {
                             if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
                         });
+                        const toolbar = document.getElementById('floatingToolbar');
+                        if (toolbar && toolbar.style.display !== 'none') extraHeight += toolbar.offsetHeight;
                         const minNeeded = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
                         const height = Math.max(this.userSetHeight, minNeeded);
                         await this.invoke('resize_floating_window', { height: Math.round(height) });
@@ -77,9 +78,10 @@ export class WindowManager {
                         document.querySelectorAll('.timer-bar').forEach(bar => {
                             if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
                         });
+                        const toolbar = document.getElementById('floatingToolbar');
+                        if (toolbar && toolbar.style.display !== 'none') extraHeight += toolbar.offsetHeight;
                         const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
                         const neededHeight = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
-                        // Grow beyond default if input area needs it (e.g. attachments, timer)
                         const height = Math.max(baseHeight, neededHeight);
                         this.autoGrowHeight = height > baseHeight ? height : null;
                         await this.invoke('resize_floating_window', { height });
@@ -135,6 +137,12 @@ export class WindowManager {
                 document.querySelectorAll('.timer-bar').forEach(bar => {
                     if (bar.style.display !== 'none') contentHeight += bar.offsetHeight;
                 });
+
+                // Floating toolbar (attach file/image)
+                const toolbar = document.getElementById('floatingToolbar');
+                if (toolbar && toolbar.style.display !== 'none') {
+                    contentHeight += toolbar.offsetHeight;
+                }
 
                 if (suggestionsVisible) {
                     contentHeight += appSuggestions.offsetHeight;

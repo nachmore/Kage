@@ -140,6 +140,7 @@ export class FloatingApp {
                 await this.extensionManager.onConfigUpdate();
                 await this.extensionManager.reload();
                 this.updateSpeechButtonVisibility();
+                this._updateToolbarVisibility();
             });
 
             this.listen('extensions_changed', async () => {
@@ -237,7 +238,13 @@ export class FloatingApp {
             attachmentPreviews: document.getElementById('attachmentPreviews'),
             datetimeDisplay: document.getElementById('datetimeDisplay'),
             speechBtn: document.getElementById('speechBtn'),
-            speechWave: document.getElementById('speechWave')
+            speechWave: document.getElementById('speechWave'),
+            floatingToolbar: document.getElementById('floatingToolbar'),
+            floatingAttachFileBtn: document.getElementById('floatingAttachFileBtn'),
+            floatingAttachImageBtn: document.getElementById('floatingAttachImageBtn'),
+            floatingFileInput: document.getElementById('floatingFileInput'),
+            floatingImageInput: document.getElementById('floatingImageInput'),
+            floatingToolbarExt: document.getElementById('floatingToolbarExt'),
         };
     }
 
@@ -357,6 +364,57 @@ export class FloatingApp {
                 renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
                 this.windowManager.resizeWindow();
             });
+
+            // Floating toolbar: attach file/image buttons
+            this.elements.floatingAttachFileBtn?.addEventListener('click', () => {
+                this._filePickerOpen = true;
+                this.elements.floatingFileInput?.click();
+            });
+            this.elements.floatingAttachImageBtn?.addEventListener('click', () => {
+                this._filePickerOpen = true;
+                this.elements.floatingImageInput?.click();
+            });
+            this.elements.floatingFileInput?.addEventListener('change', (e) => {
+                this._filePickerOpen = false;
+                for (const file of e.target.files) {
+                    const path = file.path || file.name;
+                    this.attachmentManager.addFile(path, file.name, file.type || 'text/plain');
+                }
+                e.target.value = '';
+                this.appWindow.show();
+                this.appWindow.setFocus();
+            });
+            this.elements.floatingImageInput?.addEventListener('change', async (e) => {
+                this._filePickerOpen = false;
+                for (const file of e.target.files) {
+                    if (!file.type.startsWith('image/')) continue;
+                    try {
+                        const base64 = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result.split(',')[1]);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(file);
+                        });
+                        this.attachmentManager.addImage(base64, file.type);
+                    } catch (err) {
+                        console.error('Failed to read image:', file.name, err);
+                    }
+                }
+                e.target.value = '';
+                this.appWindow.show();
+                this.appWindow.setFocus();
+            });
+            // Handle file picker cancel (no change event fires)
+            window.addEventListener('focus', () => {
+                if (this._filePickerOpen) {
+                    this._filePickerOpen = false;
+                    this.appWindow.show();
+                    this.appWindow.setFocus();
+                }
+            });
+
+            // Show/hide toolbar based on config
+            this._updateToolbarVisibility();
         }
 
     setupStreamingListeners() {
@@ -501,6 +559,9 @@ export class FloatingApp {
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
+            // Ensure toolbar is visible if configured
+            this._updateToolbarVisibility();
+
             // Restore any overlays hidden by clipboard mode
             if (!this._clipboardMode) {
                 this._restoreOverlaysAfterClipboard();
@@ -578,6 +639,10 @@ export class FloatingApp {
             }
             // Don't hide if an automation plan is running
             if (this._automationPlanStarted) {
+                return;
+            }
+            // Don't hide if file picker is open
+            if (this._filePickerOpen) {
                 return;
             }
             // Don't hide while an extension tool is being processed
@@ -697,6 +762,50 @@ export class FloatingApp {
 
     async updateSpeechButtonVisibility() {
         await this.speech.updateVisibility();
+    }
+
+    async _updateToolbarVisibility() {
+        try {
+            const config = await this.invoke('get_config');
+            const show = config.ui?.show_floating_toolbar === true;
+            console.log('[Floating] _updateToolbarVisibility — show:', show, 'element:', !!this.elements.floatingToolbar, 'config.ui:', JSON.stringify(config.ui?.show_floating_toolbar));
+            if (this.elements.floatingToolbar) {
+                this.elements.floatingToolbar.style.display = show ? 'flex' : 'none';
+                if (show) this._renderExtensionToolbarButtons();
+            }
+            this.windowManager.resizeWindow();
+        } catch (e) {
+            console.warn('[Floating] Failed to update toolbar visibility:', e);
+        }
+    }
+
+    _renderExtensionToolbarButtons() {
+        const container = this.elements.floatingToolbarExt;
+        if (!container || !this.extensionManager) return;
+        const buttons = this.extensionManager.getToolbarButtons();
+        console.log('[Floating] Rendering extension toolbar buttons:', buttons.length);
+        container.innerHTML = '';
+        for (const btn of buttons) {
+            const el = document.createElement('button');
+            el.className = 'floating-toolbar-btn ext-toolbar-btn';
+            el.title = btn.tooltip || btn.id;
+            el.innerHTML = typeof btn.icon === 'string' && btn.icon.startsWith('<')
+                ? btn.icon
+                : `<span style="font-size:14px;">${btn.icon || '🔧'}</span>`;
+            el.addEventListener('click', () => {
+                try {
+                    btn.onClick?.({
+                        invoke: this.invoke,
+                        getInput: () => this.elements.input?.value || '',
+                        setInput: (v) => { if (this.elements.input) this.elements.input.value = v; },
+                        getMessages: () => [],
+                    });
+                } catch (e) {
+                    console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
+                }
+            });
+            container.appendChild(el);
+        }
     }
 
     setupSpeech() {
