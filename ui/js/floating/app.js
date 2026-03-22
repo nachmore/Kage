@@ -586,6 +586,11 @@ export class FloatingApp {
             }
             await this.appWindow.hide();
             this.dismissBanner();
+            // Shut down mic and voice mode on hide
+            if (this.speech) {
+                this.speech.stopVoiceMode();
+                this.speech.cancelSpeech();
+            }
             // Clean up clipboard mode state on hide
             if (this._clipboardMode) {
                 this._restoreOverlaysAfterClipboard();
