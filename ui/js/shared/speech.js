@@ -221,6 +221,12 @@ export class SpeechController {
             this.isListening = false;
             this._updateUI(false);
             this.onVisibilityUpdate();
+            return;
+        }
+
+        // Pre-warm the TTS server so it's ready when the response arrives
+        if (this.pocketTtsEnabled) {
+            this._ensurePocketTtsRunning().catch(() => {});
         }
     }
 

@@ -227,6 +227,9 @@ export class TtsStreamer {
         this._totalChunks = 0;
         this._playedChunks = 0;
         this._abortControllers = [];
+        // Sequential dispatch queue — ensures sentences are fetched in order
+        this._dispatchQueue = [];
+        this._dispatching = false;
 
         this._bar = new TtsPlaybackBar(barContainer, onBarChange, {
             onPause: () => this.togglePause(),
@@ -238,7 +241,7 @@ export class TtsStreamer {
         if (this._stopped) return;
         const sentences = splitSentences(accumulatedText);
         while (this._sentencesSent < sentences.length - 1) {
-            this._dispatchSentence(sentences[this._sentencesSent]);
+            this._enqueueSentence(sentences[this._sentencesSent]);
             this._sentencesSent++;
         }
         this._lastSentences = sentences;
@@ -249,9 +252,25 @@ export class TtsStreamer {
         this._finished = true;
         const sentences = splitSentences(finalText);
         while (this._sentencesSent < sentences.length) {
-            this._dispatchSentence(sentences[this._sentencesSent]);
+            this._enqueueSentence(sentences[this._sentencesSent]);
             this._sentencesSent++;
         }
+    }
+
+    _enqueueSentence(sentence) {
+        if (this._stopped || !sentence.trim()) return;
+        this._dispatchQueue.push(sentence);
+        this._processQueue();
+    }
+
+    async _processQueue() {
+        if (this._dispatching || this._stopped) return;
+        this._dispatching = true;
+        while (this._dispatchQueue.length > 0 && !this._stopped) {
+            const sentence = this._dispatchQueue.shift();
+            await this._dispatchSentence(sentence);
+        }
+        this._dispatching = false;
     }
 
     async _dispatchSentence(sentence) {
