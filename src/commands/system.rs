@@ -1069,6 +1069,43 @@ pub async fn focus_open_window(
     Ok(crate::os::focus_window(handle)?)
 }
 
+// --- Activity Tracker ---
+
+#[tauri::command]
+pub async fn start_activity_tracker(
+    state: State<'_, AppState>,
+    poll_interval: Option<u64>,
+) -> Result<(), AppError> {
+    let tracker = state.activity_tracker.clone();
+    crate::activity_tracker::start_tracker(&tracker, poll_interval)
+        .await
+        .map_err(|e| format!("Failed to start tracker: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_activity_tracker(state: State<'_, AppState>) -> Result<(), AppError> {
+    let tracker = state.activity_tracker.clone();
+    crate::activity_tracker::stop_tracker(&tracker).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_activity_report(
+    state: State<'_, AppState>,
+    period: String,
+) -> Result<crate::activity_tracker::ActivityReport, AppError> {
+    let tracker = state.activity_tracker.clone();
+    Ok(crate::activity_tracker::get_report(&tracker, &period)
+        .await
+        .map_err(|e| format!("Failed to get report: {}", e))?)
+}
+
+#[tauri::command]
+pub async fn is_activity_tracker_running(state: State<'_, AppState>) -> Result<bool, AppError> {
+    Ok(state.activity_tracker.is_running())
+}
+
 #[tauri::command]
 pub async fn get_app_icon(process_name: String) -> Result<Option<String>, AppError> {
     Ok(crate::os::get_app_icon(&process_name))

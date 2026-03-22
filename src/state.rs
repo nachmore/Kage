@@ -43,6 +43,8 @@ pub struct AppState {
     pub last_tool_steering_hash: Arc<std::sync::Mutex<u64>>,
     /// Whether the floating window frontend has finished initializing
     pub frontend_ready: Arc<AtomicBool>,
+    /// Activity tracker for focus/screen time reports
+    pub activity_tracker: Arc<crate::activity_tracker::ActivityTrackerState>,
 }
 
 #[derive(Debug, Clone)]

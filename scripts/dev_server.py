@@ -172,6 +172,7 @@ MOCK_CATALOG = [
     {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kiro-assistant", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
     {"id": "todos", "name": "Todos", "type": "extension", "version": "0.8.0", "author": "kiro-assistant", "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+' to add, 'todo-' to remove.", "icon": "✅", "tags": ["productivity", "tasks", "todo", "organizer"]},
     {"id": "dictionary", "name": "Dictionary", "type": "extension", "version": "1.6.0", "author": "kiro-assistant", "description": "Look up word definitions, spelling corrections, and pronunciation. Supports 250+ languages via FreeDictionaryAPI.com.", "icon": "📖", "tags": ["dictionary", "spelling", "definitions", "language", "words", "translate"]},
+    {"id": "focus-tracker", "name": "Focus Tracker", "type": "extension", "version": "1.0.0", "author": "kiro-assistant", "description": "Track app usage, context switches, and focus streaks. Get daily/weekly/monthly reports with AI insights.", "icon": "📊", "tags": ["focus", "productivity", "screen time", "activity", "tracker", "heatmap"]},
 ]
 
 

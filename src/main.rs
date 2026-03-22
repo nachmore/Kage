@@ -2,6 +2,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod acp_client;
+mod activity_tracker;
 mod app_launcher;
 mod auto_steering;
 mod commands;
@@ -250,6 +251,7 @@ fn main() {
             automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
             frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -691,6 +693,10 @@ fn main() {
             commands::notify_frontend_ready,
             commands::list_open_windows,
             commands::focus_open_window,
+            commands::start_activity_tracker,
+            commands::stop_activity_tracker,
+            commands::get_activity_report,
+            commands::is_activity_tracker_running,
             commands::get_app_icon,
             commands::get_source_window,
             commands::get_screen_context,
