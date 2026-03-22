@@ -261,61 +261,81 @@ export class TtsStreamer {
         this._updateBarStatus();
 
         try {
-            const controller = new AbortController();
-            this._abortControllers.push(controller);
-            const resp = await fetch(`http://127.0.0.1:${this.port}/tts`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: sentence, voice: this.voice, stream: true }),
-                signal: controller.signal,
-            });
+        // Retry loop — server may still be starting up on first request
+        const maxRetries = 15;
+        let lastError = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             if (this._stopped) return;
-            if (!resp.ok) {
-                let errorMsg = `TTS server error (${resp.status})`;
-                try { const body = await resp.json(); errorMsg = body.error || errorMsg; } catch {}
-                console.warn('[TtsStreamer] TTS failed:', resp.status, errorMsg);
-                this._bar.setStatus(`Error: ${errorMsg}`);
-                setTimeout(() => this._bar.hideAfterDelay(3000), 0);
-                return;
-            }
-
-            const contentType = resp.headers.get('Content-Type') || '';
-            if (contentType.includes('octet-stream')) {
-                const sampleRate = parseInt(resp.headers.get('X-Sample-Rate') || '24000', 10);
-                console.log(`[TtsStreamer] Streaming response, sampleRate=${sampleRate}, contentType=${contentType}`);
-                const chunks = [];
-                const reader = resp.body.getReader();
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done || this._stopped) break;
-                    chunks.push(value);
-                    console.log(`[TtsStreamer] Received chunk: ${value.byteLength} bytes`);
+            try {
+                const controller = new AbortController();
+                this._abortControllers.push(controller);
+                const resp = await fetch(`http://127.0.0.1:${this.port}/tts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: sentence, voice: this.voice, stream: true }),
+                    signal: controller.signal,
+                });
+                if (this._stopped) return;
+                if (!resp.ok) {
+                    // 503 = model not loaded yet — retry
+                    if (resp.status === 503 && attempt < maxRetries) {
+                        this._bar.setStatus(`Waiting for voice model... (${attempt + 1}s)`);
+                        await new Promise(r => setTimeout(r, 1000));
+                        continue;
+                    }
+                    let errorMsg = `TTS server error (${resp.status})`;
+                    try { const body = await resp.json(); errorMsg = body.error || errorMsg; } catch {}
+                    console.warn('[TtsStreamer] TTS failed:', resp.status, errorMsg);
+                    this._bar.setStatus(`Error: ${errorMsg}`);
+                    setTimeout(() => this._bar.hideAfterDelay(3000), 0);
+                    return;
                 }
-                if (this._stopped) return;
-                const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-                console.log(`[TtsStreamer] Total PCM: ${totalLen} bytes (${chunks.length} chunks)`);
-                const pcm = new Uint8Array(totalLen);
-                let offset = 0;
-                for (const chunk of chunks) { pcm.set(new Uint8Array(chunk.buffer || chunk), offset); offset += chunk.byteLength; }
-                // Debug: check first few bytes to see if it looks like PCM or chunked framing
-                console.log(`[TtsStreamer] First 20 bytes: ${Array.from(pcm.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
-                this._audioQueue.push({ url, sentence });
-            } else {
-                const blob = await resp.blob();
-                if (this._stopped) return;
-                this._audioQueue.push({ url: URL.createObjectURL(blob), sentence });
+
+                const contentType = resp.headers.get('Content-Type') || '';
+                if (contentType.includes('octet-stream')) {
+                    const sampleRate = parseInt(resp.headers.get('X-Sample-Rate') || '24000', 10);
+                    console.log(`[TtsStreamer] Streaming response, sampleRate=${sampleRate}, contentType=${contentType}`);
+                    const chunks = [];
+                    const reader = resp.body.getReader();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done || this._stopped) break;
+                        chunks.push(value);
+                        console.log(`[TtsStreamer] Received chunk: ${value.byteLength} bytes`);
+                    }
+                    if (this._stopped) return;
+                    const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+                    console.log(`[TtsStreamer] Total PCM: ${totalLen} bytes (${chunks.length} chunks)`);
+                    const pcm = new Uint8Array(totalLen);
+                    let offset = 0;
+                    for (const chunk of chunks) { pcm.set(new Uint8Array(chunk.buffer || chunk), offset); offset += chunk.byteLength; }
+                    console.log(`[TtsStreamer] First 20 bytes: ${Array.from(pcm.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                    const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
+                    this._audioQueue.push({ url, sentence });
+                } else {
+                    const blob = await resp.blob();
+                    if (this._stopped) return;
+                    this._audioQueue.push({ url: URL.createObjectURL(blob), sentence });
+                }
+                if (!this._isPlaying && !this._isPaused) this._playNext();
+                return; // Success — exit retry loop
+            } catch (e) {
+                lastError = e;
+                if (attempt < maxRetries) {
+                    this._bar.setStatus(`Waiting for voice server... (${attempt + 1}s)`);
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
             }
-            if (!this._isPlaying && !this._isPaused) this._playNext();
-        } catch (e) {
-            console.warn('[TtsStreamer] TTS fetch error:', e);
-            this._bar.setStatus('Voice server connection failed');
-            setTimeout(() => this._bar.hideAfterDelay(3000), 0);
+        }
+        // All retries exhausted
+        console.warn('[TtsStreamer] TTS fetch error after retries:', lastError);
+        this._bar.setStatus('Voice server connection failed');
+        setTimeout(() => this._bar.hideAfterDelay(3000), 0);
         } finally {
             this._pendingFetches--;
         }
     }
-
     _playNext() {
         if (this._stopped || this._isPaused) return;
         if (this._audioQueue.length === 0) {

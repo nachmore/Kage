@@ -19,6 +19,7 @@ Usage:
 
 import argparse
 import json
+import logging
 import os
 import struct
 import sys
@@ -40,11 +41,59 @@ DEBUG = False  # set via --debug flag
 BUILTIN_VOICES = ["alba", "marius", "javert", "jean", "fantine", "cosette", "eponine", "azelma"]
 SAMPLE_RATE = 24000  # pocket-tts default
 
+logger = logging.getLogger("pocket-tts")
+
+
+def setup_logging(debug=False):
+    """Configure logging. In debug mode, writes verbose logs to a file (append mode, pruned on start)."""
+    logger.setLevel(logging.DEBUG if debug else logging.INFO)
+    logger.propagate = False  # Prevent root logger from writing to broken stdout/stderr
+
+    if debug:
+        log_dir = get_data_dir()
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "pocket_tts_server.log")
+
+        # Prune lines older than 24 hours
+        _prune_old_log_entries(log_path, max_age_hours=24)
+
+        # File handler only — stdout StreamHandler causes OSError on Windows
+        # when parent process captures stdout via pipes (Python 3.14 issue)
+        file_handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        ))
+        logger.addHandler(file_handler)
+        logger.debug("--- Server starting (log: %s) ---", log_path)
+
+
+def _prune_old_log_entries(log_path, max_age_hours=24):
+    """Remove log lines older than max_age_hours. Keeps recent entries."""
+    if not os.path.isfile(log_path):
+        return
+    try:
+        cutoff = time.time() - (max_age_hours * 3600)
+        kept = []
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                # Parse timestamp from start of line: "YYYY-MM-DD HH:MM:SS ..."
+                try:
+                    ts_str = line[:19]
+                    ts = time.mktime(time.strptime(ts_str, "%Y-%m-%d %H:%M:%S"))
+                    if ts >= cutoff:
+                        kept.append(line)
+                except (ValueError, OverflowError):
+                    kept.append(line)  # Keep unparseable lines
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.writelines(kept)
+    except Exception:
+        pass  # Non-fatal — just skip pruning
+
 
 def dbg(msg):
-    """Print debug message if DEBUG is enabled."""
-    if DEBUG:
-        print(f"[pocket-tts DEBUG] {msg}", flush=True)
+    """Log a debug message to file only."""
+    logger.debug(msg)
 
 
 def get_data_dir():
@@ -79,7 +128,7 @@ def load_model():
     global model
     try:
         from pocket_tts import TTSModel
-        print("[pocket-tts] Loading model...", flush=True)
+        logger.info("Loading model...")
         t0 = time.time()
         # temp and eos_threshold can be tuned:
         #   temp: 0.5 = more consistent, 0.7 = default, 0.9 = more expressive
@@ -88,13 +137,13 @@ def load_model():
         eos_threshold = float(os.environ.get("POCKET_TTS_EOS_THRESHOLD", "-4.0"))
         model = TTSModel.load_model(temp=temp, eos_threshold=eos_threshold)
         elapsed = time.time() - t0
-        print(f"[pocket-tts] Model loaded in {elapsed:.1f}s (temp={temp}, eos={eos_threshold})", flush=True)
+        logger.info("Model loaded in %.1fs (temp=%s, eos=%s)", elapsed, temp, eos_threshold)
         return True
     except ImportError:
-        print("[pocket-tts] ERROR: pocket-tts not installed. Run: pip install pocket-tts", flush=True)
+        logger.error("pocket-tts not installed. Run: pip install pocket-tts")
         return False
     except Exception as e:
-        print(f"[pocket-tts] ERROR loading model: {e}", flush=True)
+        logger.error("Error loading model: %s", e)
         return False
 
 
@@ -107,10 +156,10 @@ def _auto_export_safetensors(voice_name, state):
         cache_path = os.path.join(get_cache_dir(), f"{safe_name}.safetensors")
         if not os.path.isfile(cache_path):
             export_model_state(state, cache_path)
-            print(f"[pocket-tts] Auto-exported '{voice_name}' to safetensors for fast loading", flush=True)
+            logger.info("Auto-exported '%s' to safetensors for fast loading", voice_name)
     except Exception as e:
         # Non-fatal — just means next load will be slower
-        print(f"[pocket-tts] Warning: failed to auto-export '{voice_name}': {e}", flush=True)
+        logger.warning("Failed to auto-export '%s': %s", voice_name, e)
 
 
 def get_voice_state(voice_name):
@@ -136,42 +185,42 @@ def get_voice_state(voice_name):
         # 1. Check auto-exported cache
         cache_path = os.path.join(get_cache_dir(), f"{voice_name}.safetensors")
         if os.path.isfile(cache_path):
-            print(f"[pocket-tts] Loading voice from cache: {voice_name}", flush=True)
+            logger.info("Loading voice from cache: %s", voice_name)
             state = model.get_state_for_audio_prompt(cache_path)
 
         # 2. Check user safetensors
         if state is None:
             user_st = os.path.join(get_custom_voices_dir(), f"{voice_name}.safetensors")
             if os.path.isfile(user_st):
-                print(f"[pocket-tts] Loading voice from user safetensors: {voice_name}", flush=True)
+                logger.info("Loading voice from user safetensors: %s", voice_name)
                 state = model.get_state_for_audio_prompt(user_st)
 
         # 3. Check user .wav
         if state is None:
             wav_path = os.path.join(get_custom_voices_dir(), f"{voice_name}.wav")
             if os.path.isfile(wav_path):
-                print(f"[pocket-tts] Loading voice from wav: {voice_name}", flush=True)
+                logger.info("Loading voice from wav: %s", voice_name)
                 state = model.get_state_for_audio_prompt(wav_path)
                 needs_export = True
 
         # 4. HuggingFace or HTTP URL
         if state is None and (voice_name.startswith("hf://") or voice_name.startswith("http")):
-            print(f"[pocket-tts] Loading voice from URL: {voice_name}", flush=True)
+            logger.info("Loading voice from URL: %s", voice_name)
             state = model.get_state_for_audio_prompt(voice_name)
             needs_export = True
 
         # 5. Built-in voice
         if state is None and voice_name in BUILTIN_VOICES:
-            print(f"[pocket-tts] Loading built-in voice: {voice_name}", flush=True)
+            logger.info("Loading built-in voice: %s", voice_name)
             state = model.get_state_for_audio_prompt(voice_name)
             needs_export = True
 
         if state is None:
-            print(f"[pocket-tts] Unknown voice: {voice_name}", flush=True)
+            logger.warning("Unknown voice: %s", voice_name)
             return None
 
         voice_states[voice_name] = state
-        print(f"[pocket-tts] Voice '{voice_name}' ready", flush=True)
+        logger.info("Voice '%s' ready", voice_name)
 
         # Auto-export to safetensors for fast loading next time
         if needs_export:
@@ -183,7 +232,7 @@ def get_voice_state(voice_name):
 
         return state
     except Exception as e:
-        print(f"[pocket-tts] ERROR loading voice '{voice_name}': {e}", flush=True)
+        logger.error("Error loading voice '%s': %s", voice_name, e)
         return None
 
 
@@ -233,9 +282,11 @@ class TTSHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the TTS server."""
 
     def log_message(self, format, *args):
-        if len(args) >= 2 and str(args[1]) == "200":
-            return
-        print(f"[pocket-tts] {format % args}", flush=True)
+        # In debug mode, log all requests; otherwise only non-200
+        if DEBUG:
+            logger.debug("HTTP %s", format % args)
+        elif len(args) >= 2 and str(args[1]) != "200":
+            logger.info("HTTP %s", format % args)
 
     def _json_response(self, code, data):
         body = json.dumps(data).encode()
@@ -291,7 +342,7 @@ class TTSHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
         except Exception as e:
-            print(f"[pocket-tts] Unhandled POST error on {self.path}: {e}", flush=True)
+            logger.error("Unhandled POST error on %s: %s", self.path, e)
             import traceback
             traceback.print_exc()
             try:
@@ -303,7 +354,7 @@ class TTSHandler(BaseHTTPRequestHandler):
     def _handle_tts(self):
         """Generate speech and stream audio chunks back as they're generated."""
         if model is None:
-            dbg("TTS request rejected — model not loaded")
+            logger.warning("TTS request rejected — model not loaded")
             self._json_response(503, {"error": "Model not loaded"})
             return
 
@@ -410,7 +461,7 @@ class TTSHandler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
             pass
         except Exception as e:
-            print(f"[pocket-tts] TTS error: {e}", flush=True)
+            logger.error("TTS error: %s", e)
         finally:
             current_generation.clear()
             model_lock.release()
@@ -423,15 +474,15 @@ class TTSHandler(BaseHTTPRequestHandler):
             if not voice:
                 self._json_response(400, {"error": "No voice specified"})
                 return
-            print(f"[pocket-tts] Loading voice on demand: {voice}", flush=True)
+            logger.info("Loading voice on demand: %s", voice)
             state = get_voice_state(voice)
             if state is None:
                 self._json_response(400, {"error": f"Failed to load voice '{voice}'"})
             else:
-                print(f"[pocket-tts] Voice '{voice}' loaded successfully", flush=True)
+                logger.info("Voice '%s' loaded successfully", voice)
                 self._json_response(200, {"status": "loaded", "voice": voice})
         except Exception as e:
-            print(f"[pocket-tts] Error loading voice: {e}", flush=True)
+            logger.error("Error loading voice: %s", e)
             import traceback
             traceback.print_exc()
             self._json_response(500, {"error": str(e)})
@@ -488,8 +539,7 @@ def main():
 
     global DEBUG
     DEBUG = args.debug
-    if DEBUG:
-        print("[pocket-tts] DEBUG MODE ENABLED", flush=True)
+    setup_logging(debug=DEBUG)
 
     # Pass temp/eos via env vars so load_model() picks them up
     if args.temp is not None:
@@ -498,27 +548,27 @@ def main():
         os.environ["POCKET_TTS_EOS_THRESHOLD"] = str(args.eos_threshold)
 
     data_dir = get_data_dir()
-    print(f"[pocket-tts] Data directory: {data_dir}", flush=True)
-    print(f"[pocket-tts] Custom voices: {get_custom_voices_dir()}", flush=True)
-    print(f"[pocket-tts] Cache: {get_cache_dir()}", flush=True)
+    logger.info("Data directory: %s", data_dir)
+    logger.info("Custom voices: %s", get_custom_voices_dir())
+    logger.info("Cache: %s", get_cache_dir())
 
     if not args.no_preload:
         if not load_model():
-            print("[pocket-tts] WARNING: Model failed to load. Server will start but TTS won't work.", flush=True)
-            print("[pocket-tts] Install with: pip install pocket-tts", flush=True)
+            logger.warning("Model failed to load. Server will start but TTS won't work.")
+            logger.warning("Install with: pip install pocket-tts")
         else:
             # Pre-load default voice (will auto-export to safetensors)
             get_voice_state(args.voice)
 
     server = ThreadedHTTPServer(("127.0.0.1", args.port), TTSHandler)
-    print(f"[pocket-tts] Server listening on http://127.0.0.1:{args.port}", flush=True)
-    # Signal to parent process that we're ready
+    logger.info("Server listening on http://127.0.0.1:%d", args.port)
+    # Signal to parent process that we're ready (must be raw print, not logger)
     print("POCKET_TTS_READY", flush=True)
 
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("[pocket-tts] Shutting down...", flush=True)
+        logger.info("Shutting down...")
     finally:
         server.server_close()
 
