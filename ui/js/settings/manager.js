@@ -148,6 +148,33 @@ class SettingsManager {
             // Save to backend
             await this.invoke('save_config', { config });
             
+            // Check if any module needs a restart
+            const needsRestart = this.modules.some(m => m._needsRestart);
+            if (needsRestart) {
+                // Reset the flag so it doesn't trigger again on next save
+                this.modules.forEach(m => { m._needsRestart = false; });
+                this.showStatus('Settings saved. Restart required for connection changes.', 'success');
+                // Use setTimeout to let the status message render before showing dialog
+                setTimeout(async () => {
+                    try {
+                        const { ask } = window.__TAURI__.dialog;
+                        const restart = await ask('Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?', {
+                            title: 'Restart Required',
+                            kind: 'info',
+                        });
+                        if (restart) {
+                            this.invoke('restart_app');
+                        }
+                    } catch {
+                        // Fallback to native confirm if Tauri dialog not available
+                        if (confirm('Connection settings changed. Restart now?')) {
+                            this.invoke('restart_app');
+                        }
+                    }
+                }, 100);
+                return true;
+            }
+
             this.showStatus('Settings saved! All changes apply immediately.', 'success');
             return true;
         } catch (error) {

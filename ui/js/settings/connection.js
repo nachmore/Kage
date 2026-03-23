@@ -67,6 +67,13 @@ class ConnectionSettingsModule extends SettingsModule {
     }
 
     load(config) {
+        // Snapshot connection config for change detection
+        this._initialConfig = JSON.stringify({
+            mode: config.acp?.mode,
+            working_directory: config.acp?.assistant?.working_directory || null,
+        });
+        this._needsRestart = false;
+
         // Load start-on-launch setting
         const assistant = config.acp?.assistant || {};
         const startSession = document.getElementById('startSessionOnLaunch');
@@ -124,6 +131,17 @@ class ConnectionSettingsModule extends SettingsModule {
         }
 
         config.acp.assistant = existingAssistant;
+
+        // Check if connection settings changed — prompt restart
+        const currentConfig = JSON.stringify({
+            mode: config.acp.mode,
+            working_directory: config.acp.assistant?.working_directory || null,
+        });
+        if (this._initialConfig && currentConfig !== this._initialConfig) {
+            this._needsRestart = true;
+        } else {
+            this._needsRestart = false;
+        }
     }
 
     validate() {

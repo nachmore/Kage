@@ -68,13 +68,46 @@ fn main() {
     let startup_t0 = std::time::Instant::now();
 
     // Enforce single instance across all builds (debug + release)
-    let _instance_lock = match single_instance::try_acquire() {
+    let is_restart = std::env::args().any(|arg| arg == "--restart" || arg == "/restart");
+    let _instance_lock = match single_instance::try_acquire(is_restart) {
         Ok(lock) => lock,
         Err(e) => {
             error!("{}", e);
             std::process::exit(0);
         }
     };
+
+    // On restart, wait for the old process to fully release WebView2/Tauri resources
+    if is_restart {
+        info!("Restart mode: waiting for previous instance resources to release...");
+        // WebView2 can take several seconds to release its user data directory lock
+        for i in 0..20 {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            // Check if the WebView2 user data dir is unlockable
+            let webview_dir = dirs::data_local_dir()
+                .unwrap_or_default()
+                .join("kiro-assistant")
+                .join("EBWebView");
+            if webview_dir.exists() {
+                // Try to create a temp file in the dir — if it works, the lock is released
+                let test_path = webview_dir.join(".restart-test");
+                match std::fs::File::create(&test_path) {
+                    Ok(_) => {
+                        let _ = std::fs::remove_file(&test_path);
+                        info!("WebView2 resources released after {}ms", (i + 1) * 500);
+                        break;
+                    }
+                    Err(_) => {
+                        if i % 4 == 0 {
+                            info!("Still waiting for WebView2 lock... ({}s)", (i + 1) / 2);
+                        }
+                    }
+                }
+            } else {
+                break; // No WebView2 dir yet — first run
+            }
+        }
+    }
 
     let args: Vec<String> = std::env::args().collect();
     let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");

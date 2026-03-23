@@ -25,7 +25,8 @@ impl Drop for InstanceLock {
 /// Try to acquire the single-instance lock.
 /// Returns `Ok(InstanceLock)` if we're the only instance, or an error
 /// describing that another instance is already running.
-pub fn try_acquire() -> Result<InstanceLock> {
+/// If `wait` is true, retries for up to 30 seconds (used during restart).
+pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
     let config_dir = dirs::config_dir()
         .context("Failed to get config directory")?
         .join("kiro-assistant");
@@ -35,19 +36,41 @@ pub fn try_acquire() -> Result<InstanceLock> {
 
     let lock_path = config_dir.join("instance.lock");
 
-    let file = File::options()
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&lock_path)
-        .with_context(|| format!("Failed to open lock file: {:?}", lock_path))?;
+    let max_attempts = if wait { 60 } else { 1 }; // 60 x 500ms = 30s
+    for attempt in 0..max_attempts {
+        if attempt > 0 {
+            if attempt == 1 {
+                info!("Waiting for previous instance to exit...");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
 
-    if !try_lock_file(&file)? {
-        // Lock is held — but check if the owning process is still alive
-        // (handles stale locks from crashes or failed restarts)
+        let file = File::options()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .with_context(|| format!("Failed to open lock file: {:?}", lock_path))?;
+
+        match try_lock_file(&file)? {
+            true => {
+                // Got the lock — write our PID
+                use std::io::Write;
+                let mut f = &file;
+                let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
+                info!("Single-instance lock acquired: {:?}", lock_path);
+                return Ok(InstanceLock { _file: file, path: lock_path });
+            }
+            false => {
+                if attempt % 4 == 0 {
+                    info!("Lock still held (attempt {}/{}), checking if stale...", attempt + 1, max_attempts);
+                }
+            }
+        }
+
+        // Lock is held — check if stale
         if is_lock_stale(&lock_path) {
             info!("Stale lock detected, overriding...");
-            // Try to re-create the file to clear the stale lock
             drop(file);
             let _ = fs::remove_file(&lock_path);
             let file = File::options()
@@ -56,39 +79,21 @@ pub fn try_acquire() -> Result<InstanceLock> {
                 .truncate(true)
                 .open(&lock_path)
                 .with_context(|| format!("Failed to recreate lock file: {:?}", lock_path))?;
-            if !try_lock_file(&file)? {
-                anyhow::bail!(
-                    "Another instance of Kiro Assistant is already running.\n\
-                     Lock file: {:?}",
-                    lock_path
-                );
+            if try_lock_file(&file)? {
+                use std::io::Write;
+                let mut f = &file;
+                let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
+                info!("Single-instance lock acquired (after stale override): {:?}", lock_path);
+                return Ok(InstanceLock { _file: file, path: lock_path });
             }
-            // Write our PID
-            use std::io::Write;
-            let mut f = &file;
-            let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
-            info!("Single-instance lock acquired (after stale override): {:?}", lock_path);
-            return Ok(InstanceLock { _file: file, path: lock_path });
         }
-
-        anyhow::bail!(
-            "Another instance of Kiro Assistant is already running.\n\
-             Lock file: {:?}",
-            lock_path
-        );
     }
 
-    // Write our PID into the lock file for diagnostics
-    use std::io::Write;
-    let mut f = &file;
-    let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
-
-    info!("Single-instance lock acquired: {:?}", lock_path);
-
-    Ok(InstanceLock {
-        _file: file,
-        path: lock_path,
-    })
+    anyhow::bail!(
+        "Another instance of Kiro Assistant is already running.\n\
+         Lock file: {:?}",
+        lock_path
+    );
 }
 
 // --- Platform-specific locking ---

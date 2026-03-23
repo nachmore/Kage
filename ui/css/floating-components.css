@@ -355,6 +355,10 @@ body.clipboard-mode .floating-banner {
     overflow-y: auto;
 }
 
+.app-suggestion-item:last-of-type {
+    margin-bottom: 28px; /* Space so sticky footer doesn't overlap last item */
+}
+
 .app-suggestion-item {
     border-bottom: 1px solid #f3f4f6;
 }

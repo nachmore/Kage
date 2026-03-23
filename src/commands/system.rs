@@ -37,6 +37,15 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
 /// Run the async portion of shutdown (steering + disconnect) then exit.
 /// Must be called from an async context after `graceful_shutdown`.
 pub async fn shutdown_and_exit(app: &tauri::AppHandle) {
+    shutdown_and_exit_inner(app, None).await;
+}
+
+/// Shutdown with optional restart: spawns a new process right before exit.
+pub async fn shutdown_and_exit_with_restart(app: &tauri::AppHandle, exe: std::path::PathBuf, args: Vec<String>) {
+    shutdown_and_exit_inner(app, Some((exe, args))).await;
+}
+
+async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::path::PathBuf, Vec<String>)>) {
     if let Some(state) = app.try_state::<AppState>() {
         let acp_client = state.acp_client.clone();
         let config = state.config.clone();
@@ -47,6 +56,38 @@ pub async fn shutdown_and_exit(app: &tauri::AppHandle) {
             client.disconnect();
         };
     }
+
+    // Spawn new instance right before exit (if restarting)
+    if let Some((exe, args)) = restart {
+        info!("Spawning restart: {:?} {:?}", exe, args);
+        // Use CREATE_BREAKAWAY_FROM_JOB so the child survives our Job Object cleanup
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
+            match std::process::Command::new(&exe)
+                .args(&args)
+                .current_dir(std::env::current_dir().unwrap_or_default())
+                .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
+                .spawn()
+            {
+                Ok(child) => info!("Restart process spawned (PID: {})", child.id()),
+                Err(e) => error!("Failed to spawn restart process: {}", e),
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            match std::process::Command::new(&exe)
+                .args(&args)
+                .current_dir(std::env::current_dir().unwrap_or_default())
+                .spawn()
+            {
+                Ok(child) => info!("Restart process spawned (PID: {})", child.id()),
+                Err(e) => error!("Failed to spawn restart process: {}", e),
+            }
+        }
+    }
+
     std::process::exit(0);
 }
 
@@ -671,34 +712,28 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
 pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Restart requested via > command");
 
-    // Collect current exe and args before we start tearing down
     let exe = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // Filter args: only keep our app flags, not cargo flags (--no-default-features, --color, etc.)
+    let mut args: Vec<String> = Vec::new();
+    let mut skip_next = false;
+    for arg in std::env::args().skip(1) {
+        if skip_next { skip_next = false; continue; }
+        if arg == "--" { break; } // Stop at cargo separator
+        if arg.starts_with("--no-default") || arg.starts_with("--color") {
+            if arg == "--color" { skip_next = true; } // --color has a value arg
+            continue;
+        }
+        args.push(arg);
+    }
+    if !args.iter().any(|a| a == "--restart" || a == "/restart") {
+        args.push(if cfg!(windows) { "/restart" } else { "--restart" }.to_string());
+    }
 
     graceful_shutdown(&app);
 
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        // Generate auto-steering and disconnect
-        if let Some(state) = app_handle.try_state::<AppState>() {
-            let acp_client = state.acp_client.clone();
-            let config = state.config.clone();
-            if let Ok(client) = acp_client.try_lock() {
-                if let Ok(config) = config.try_lock() {
-                    crate::auto_steering::generate_steering_on_quit(&client, &config);
-                }
-                client.disconnect();
-            };
-        }
-
-        // Spawn new instance with same args
-        info!("Restarting: {:?} {:?}", exe, args);
-        let _ = std::process::Command::new(&exe)
-            .args(&args)
-            .current_dir(std::env::current_dir().unwrap_or_default())
-            .spawn();
-
-        std::process::exit(0);
+        shutdown_and_exit_with_restart(&app_handle, exe, args).await;
     });
 
     Ok(())
