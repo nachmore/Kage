@@ -48,6 +48,11 @@ export default class DictionarySearchProvider {
                 if (key.endsWith(':' + word) && val !== 'not_found') {
                     return this._formatResults(val, word);
                 }
+                if (key.endsWith(':' + word) && val === 'not_found') {
+                    const suggestCached = this._suggestCache.get(word);
+                    if (suggestCached) return suggestCached;
+                    return [this._notFoundResult(word)];
+                }
             }
             return [];
         }
@@ -66,14 +71,8 @@ export default class DictionarySearchProvider {
 
     async matchAsync(query) {
         const word = this._extractWord(query);
-        if (!word) {
-            console.log(`[Dictionary] No word extracted from query: "${query}"`);
-            return [];
-        }
-        if (!this._isLookupCandidate(word)) {
-            console.log(`[Dictionary] Not a lookup candidate: "${word}"`);
-            return [];
-        }
+        if (!word) return [];
+        if (!this._isLookupCandidate(word)) return [];
 
         // Resolve language: auto-detect or use configured
         let lang = this.config.language || 'auto';
@@ -81,14 +80,10 @@ export default class DictionarySearchProvider {
             const detect = await _getDetector();
             if (detect) {
                 const detected = await detect(word);
-                lang = detected || 'en'; // Fall back to English
-                console.log(`[Dictionary] Auto-detected language for "${word}": ${detected ? `"${detected}"` : '(none)'} → using "${lang}"`);
+                lang = detected || 'en';
             } else {
                 lang = 'en';
-                console.log(`[Dictionary] Language detection unavailable, falling back to "en"`);
             }
-        } else {
-            console.log(`[Dictionary] Using configured language "${lang}" for "${word}"`);
         }
 
         const cacheKey = `${lang}:${word}`;
@@ -99,9 +94,7 @@ export default class DictionarySearchProvider {
         // Fetch definition
         try {
             const url = `${API_BASE}/${encodeURIComponent(lang)}/${encodeURIComponent(word)}`;
-            console.log(`[Dictionary] Fetching: ${url}`);
             const data = await this._fetchDefinition(word, lang);
-            console.log(`[Dictionary] Result for "${word}" (${lang}): ${data?.entries?.length ?? 0} entries`);
             if (data && data.entries && data.entries.length > 0) {
                 this._cache.set(cacheKey, data);
                 return this._formatResults(data, word);
@@ -161,11 +154,11 @@ export default class DictionarySearchProvider {
             return true;
         }
         if (result.data?.type === 'loading') {
-            element.innerHTML = `<div class="dict-result"><span class="dict-icon">📖</span><span class="dict-word">Looking up "${_escHtml(result.data.word)}"...</span></div>`;
+            element.innerHTML = `<div class="dict-result"><div class="dict-header"><span class="dict-icon">📖</span><span class="dict-word">Looking up "${_escHtml(result.data.word)}"...</span></div></div>`;
             return true;
         }
         if (result.data?.type === 'not_found') {
-            element.innerHTML = `<div class="dict-result"><span class="dict-icon">📖</span><span class="dict-word">No definition found for "${_escHtml(result.data.word)}"</span></div>`;
+            element.innerHTML = `<div class="dict-result"><div class="dict-header"><span class="dict-icon">📖</span><span class="dict-word">No definition found for "${_escHtml(result.data.word)}"</span></div></div>`;
             return true;
         }
         return false;
@@ -217,6 +210,18 @@ export default class DictionarySearchProvider {
             icon: '📖',
             score: 85,
             data: { type: 'not_found', word },
+        };
+    }
+
+    _loadingResult(word) {
+        return {
+            id: 'dict-loading',
+            type: 'dictionary',
+            label: `Looking up "${word}"...`,
+            description: '',
+            icon: '📖',
+            score: 85,
+            data: { type: 'loading', word },
         };
     }
 

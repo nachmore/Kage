@@ -265,13 +265,30 @@ export class ExtensionManager {
         return states[id] !== false;
     }
 
+    /**
+     * Get the trigger keyword for an extension (if any).
+     * Returns the lowercase trigger string, or null if no trigger (extension sees all queries).
+     */
+    _getExtensionTrigger(id, manifest) {
+        const config = this._getExtensionConfig(id, manifest);
+        const trigger = config?.trigger;
+        if (typeof trigger === 'string' && trigger.trim()) {
+            return trigger.trim().toLowerCase();
+        }
+        return null;
+    }
+
     matchAll(query) {
         // > prefix is reserved for built-in commands — never sent to extensions
         if (query.trim().startsWith('>')) return [];
         const results = [];
+        const lowerQuery = query.trim().toLowerCase();
         for (const [id, ext] of this.extensions) {
             if (!ext.searchProvider) continue;
             if (!this._isEnabled(id)) continue;
+            // Keyword gating: if extension has a non-empty trigger, only match when query starts with it
+            const trigger = this._getExtensionTrigger(id, ext.manifest);
+            if (trigger && !lowerQuery.startsWith(trigger)) continue;
             try {
                 const matches = ext.searchProvider.match(query);
                 for (const m of matches) {
@@ -290,9 +307,13 @@ export class ExtensionManager {
         if (query.trim().startsWith('>')) return [];
         const results = [];
         const promises = [];
+        const lowerQuery = query.trim().toLowerCase();
         for (const [id, ext] of this.extensions) {
             if (!ext.searchProvider?.matchAsync) continue;
             if (!this._isEnabled(id)) continue;
+            // Keyword gating: if extension has a non-empty trigger, only match when query starts with it
+            const trigger = this._getExtensionTrigger(id, ext.manifest);
+            if (trigger && !lowerQuery.startsWith(trigger)) continue;
             promises.push(
                 ext.searchProvider.matchAsync(query)
                     .then(matches => {
