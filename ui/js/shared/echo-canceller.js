@@ -96,7 +96,6 @@ export class EchoCancelledVAD {
 
     _startMonitoring() {
         const dataArray = new Float32Array(this._analyser.fftSize);
-        let logCounter = 0;
 
         this._checkInterval = setInterval(() => {
             if (!this._active || this._paused || !this._analyser) return;
@@ -110,12 +109,6 @@ export class EchoCancelledVAD {
                 sum += dataArray[i] * dataArray[i];
             }
             const rms = Math.sqrt(sum / dataArray.length);
-
-            // Log periodically for tuning
-            logCounter++;
-            if (logCounter % 20 === 0) {
-                console.log(`[VAD] RMS: ${rms.toFixed(5)}, threshold: ${this.threshold}, consecutive: ${this._consecutiveFrames}`);
-            }
 
             if (rms > this.threshold) {
                 this._consecutiveFrames++;

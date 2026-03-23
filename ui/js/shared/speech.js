@@ -69,7 +69,6 @@ export class SpeechController {
             this.pocketTtsEnabled = config.pocket_tts?.enabled === true;
             this.pocketTtsPort = config.pocket_tts?.port || 9877;
             this.pocketTtsVoice = config.pocket_tts?.voice || 'alba';
-            console.log('[Speech] Config loaded — pocketTtsEnabled:', this.pocketTtsEnabled, 'port:', this.pocketTtsPort, 'readBack:', this.readBack);
             // Preload emoji name data if any TTS path is active
             if (this.pocketTtsEnabled || this.readBack) {
                 preloadEmojiNames();
@@ -134,7 +133,6 @@ export class SpeechController {
             if (this.silenceTimeout > 0 && finalTranscript.trim()) {
                 this._silenceTimer = setTimeout(() => {
                     if (this.isListening && finalTranscript.trim()) {
-                        console.log('[Speech] Silence timer fired — voiceMode:', this.voiceMode);
                         this.usedSpeechForLastMessage = true;
                         if (this.voiceMode) {
                             // Voice mode: stop recognition (triggers onend which restarts)
@@ -170,7 +168,6 @@ export class SpeechController {
         recognition.onend = () => {
             clearTimeout(this._silenceTimer);
             const hadTranscript = finalTranscript.trim();
-            console.log('[Speech] onend fired — isListening:', this.isListening, 'voiceMode:', this.voiceMode, 'hadTranscript:', !!hadTranscript);
             
             if (this.isListening) {
                 this.isListening = false;
@@ -178,27 +175,22 @@ export class SpeechController {
                 this.onVisibilityUpdate();
                 if (hadTranscript) {
                     this.usedSpeechForLastMessage = true;
-                    console.log('[Speech] Sending transcript:', hadTranscript);
                     this.onSend(finalTranscript.trim());
                 }
                 // Voice mode: restart mic immediately for next utterance
                 if (this.voiceMode) {
-                    console.log('[Speech] Voice mode: scheduling mic restart');
                     setTimeout(() => {
-                        console.log('[Speech] Voice mode restart check — voiceMode:', this.voiceMode, 'isListening:', this.isListening);
                         if (this.voiceMode && !this.isListening) {
                             // Clear input for next utterance
                             if (this.elements.input) {
                                 this.elements.input.value = '';
                                 this.elements.input.style.height = 'auto';
                             }
-                            console.log('[Speech] Voice mode: restarting mic now');
                             this.start();
                         }
                     }, 300);
                 }
             } else {
-                console.log('[Speech] onend — was not listening (manual stop)');
                 this._updateUI(false);
                 this.onVisibilityUpdate();
                 if (this.elements.input?.value.trim()) {
@@ -259,7 +251,6 @@ export class SpeechController {
                     this.elements.input.value = '';
                     this.elements.input.style.height = 'auto';
                 }
-                console.log('[Speech] Voice mode: restarting mic after TTS');
                 this.start();
             }
         }, 300);
@@ -284,7 +275,6 @@ export class SpeechController {
         if (!this._vad) {
             this._vad = new EchoCancelledVAD({
                 onSpeechDetected: () => {
-                    console.log('[Speech] VAD: real speech detected during TTS — interrupting');
                     this.cancelSpeech();
                     // Brief delay for audio to fully release, then start recognition
                     setTimeout(() => {
@@ -293,7 +283,6 @@ export class SpeechController {
                                 this.elements.input.value = '';
                                 this.elements.input.style.height = 'auto';
                             }
-                            console.log('[Speech] VAD: starting recognition after TTS cancel');
                             this.start();
                         }
                     }, 200);
@@ -317,9 +306,7 @@ export class SpeechController {
 
     /** Call after a response completes to read it back if speech was used. */
     speakResponse(text) {
-        console.log('[Speech] speakResponse called, readBack:', this.readBack, 'usedSpeech:', this.usedSpeechForLastMessage, 'pocketTtsEnabled:', this.pocketTtsEnabled, 'pocketTtsPort:', this.pocketTtsPort);
         if (!this.readBack || !this.usedSpeechForLastMessage) {
-            console.log('[Speech] speakResponse early return — readBack or usedSpeech is false');
             return;
         }
         this.usedSpeechForLastMessage = false;
@@ -327,7 +314,6 @@ export class SpeechController {
         // If streaming already handled TTS, skip
         if (this._streamedThisResponse) {
             this._streamedThisResponse = false;
-            console.log('[Speech] speakResponse skipped — streaming already handled');
             return;
         }
 
@@ -337,16 +323,13 @@ export class SpeechController {
             .replace(/\n+/g, '. ')
             .trim();
 
-        if (!clean) { console.log('[Speech] speakResponse — no clean text'); return; }
 
         // For Pocket TTS — use the queue system (handles warmup, dedup, replacement)
         if (this.pocketTtsEnabled && this.pocketTtsPort) {
-            console.log('[Speech] Using Pocket TTS path, state:', this._ttsState, 'serverReady:', this._ttsServerReady);
             this._queuePocketTts(text);
             return;
         }
 
-        console.log('[Speech] Using browser TTS path');
         // Browser TTS — cancel and restart
         this.cancelSpeech();
         this._speakWithBrowser(cleanForTts(clean));
@@ -358,17 +341,14 @@ export class SpeechController {
      * NEVER removes/recreates bars — reuses or replaces in place.
      */
     _queuePocketTts(text) {
-        console.log('[Speech] _queuePocketTts, state:', this._ttsState, 'serverReady:', this._ttsServerReady);
         // If warming up, just replace the pending text (latest click wins, no UI change)
         if (this._ttsState === 'warming') {
-            console.log('[Speech] Already warming — replacing pending text');
             this._ttsPendingText = text;
             return;
         }
 
         // If already speaking, stop the current generation (aborts fetch + calls /stop)
         if (this._ttsState === 'speaking' && this._ttsStreamer) {
-            console.log('[Speech] Already speaking — stopping current, will restart');
             this._ttsStreamer.stop();
             this._ttsStreamer = null;
         }
@@ -415,7 +395,6 @@ export class SpeechController {
 
     /** Fire-and-forget server warmup — runs async, updates state when done */
     async _warmUpServer() {
-        console.log('[Speech] _warmUpServer starting...');
         try {
             // Fast check: hit the HTTP /status endpoint directly (instant if server is up,
             // fails fast if not). Avoids the slow Tauri pocket_tts_check_install call which spawns
@@ -424,7 +403,6 @@ export class SpeechController {
                 const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
                 if (resp.ok) {
                     const data = await resp.json();
-                    console.log('[Speech] Server /status fast check:', JSON.stringify(data));
                     if (data.model_loaded) {
                         if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
                             console.log(`[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`);
@@ -438,10 +416,8 @@ export class SpeechController {
             } catch { /* server not running — fall through to start it */ }
 
             // Start the server (fire-and-forget — this blocks in Rust until ready)
-            console.log('[Speech] Starting Pocket TTS server...');
             if (this._warmupBar) this._warmupBar.setStatus('Loading voice model...');
             this.invoke('pocket_tts_start').then((result) => {
-                console.log('[Speech] pocket_tts_start returned:', result);
                 // Server is ready — poll the /status endpoint to confirm
                 this._pollServerReady();
             }).catch(e => {
@@ -470,7 +446,6 @@ export class SpeechController {
             const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
             if (resp.ok) {
                 const data = await resp.json();
-                console.log('[Speech] Server /status poll:', JSON.stringify(data));
                 if (data.model_loaded) {
                     // Use a voice that's already loaded if our configured voice isn't available
                     if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
@@ -510,7 +485,6 @@ export class SpeechController {
         // In voice mode, stop mic and start VAD for interruption detection
         if (this.voiceMode) {
             if (this.isListening) {
-                console.log('[Speech] Voice mode: stopping mic during TTS playback');
                 this.stop();
             }
             this._startVoiceModeVAD();
@@ -543,7 +517,6 @@ export class SpeechController {
         } catch { /* server not running */ }
 
         try {
-            console.log('[Speech] Pocket TTS server not running, starting on demand...');
             this.invoke('pocket_tts_start').then(() => {
                 setTimeout(() => { this._ttsServerReady = true; }, 1500);
             }).catch(e => console.warn('[Speech] Failed to start Pocket TTS:', e));
@@ -567,7 +540,6 @@ export class SpeechController {
             // In voice mode, stop mic and start VAD for interruption detection
             if (this.voiceMode) {
                 if (this.isListening) {
-                    console.log('[Speech] Voice mode: stopping mic during streaming TTS');
                     this.stop();
                 }
                 this._startVoiceModeVAD();
@@ -634,7 +606,6 @@ export class SpeechController {
 
     /** Cancel any ongoing TTS playback. */
     cancelSpeech() {
-        console.log('[Speech] cancelSpeech called — ttsState:', this._ttsState, 'hasStreamer:', !!this._ttsStreamer, 'hasAudio:', !!this._pocketTtsAudio);
         speechSynthesis.cancel();
         this._ttsState = 'idle';
         this._ttsPendingText = null;
@@ -645,7 +616,6 @@ export class SpeechController {
             this._pocketTtsAudio = null;
         }
         if (this._ttsStreamer) {
-            console.log('[Speech] Stopping TTS streamer');
             this._ttsStreamer.stop();
             this._ttsStreamer = null;
         }

@@ -142,11 +142,6 @@ export class FloatingApp {
                 await this.extensionManager.reload();
                 this.updateSpeechButtonVisibility();
                 this._updateToolbarVisibility();
-                // Re-trigger search if there's text in the input (refreshes icons etc.)
-                const query = this.elements.input?.value?.trim();
-                if (query) {
-                    this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
-                }
             });
 
             this.listen('extensions_changed', async () => {
@@ -784,13 +779,20 @@ export class FloatingApp {
         try {
             const config = await this.invoke('get_config');
             const show = config.ui?.show_floating_toolbar === true;
-            console.log('[Floating] _updateToolbarVisibility — show:', show, 'element:', !!this.elements.floatingToolbar, 'config.ui:', JSON.stringify(config.ui?.show_floating_toolbar));
             if (this.elements.floatingToolbar) {
                 this.elements.floatingToolbar.style.display = show ? 'flex' : 'none';
                 if (show) {
                     this._renderExtensionToolbarButtons();
-                    this._loadModels();
-                    this._refreshContextUsage();
+                    // Throttle expensive IPC calls — models load once per session, context refreshes every 5min
+                    const now = Date.now();
+                    if (!this._modelsLoaded) {
+                        this._modelsLoaded = true;
+                        this._loadModels();
+                    }
+                    if (!this._lastContextRefresh || now - this._lastContextRefresh > 300000) {
+                        this._lastContextRefresh = now;
+                        this._refreshContextUsage();
+                    }
                 }
             }
             this.windowManager.resizeWindow();

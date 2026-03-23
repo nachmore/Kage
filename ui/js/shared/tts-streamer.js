@@ -314,22 +314,18 @@ export class TtsStreamer {
                 const contentType = resp.headers.get('Content-Type') || '';
                 if (contentType.includes('octet-stream')) {
                     const sampleRate = parseInt(resp.headers.get('X-Sample-Rate') || '24000', 10);
-                    console.log(`[TtsStreamer] Streaming response, sampleRate=${sampleRate}, contentType=${contentType}`);
                     const chunks = [];
                     const reader = resp.body.getReader();
                     while (true) {
                         const { done, value } = await reader.read();
                         if (done || this._stopped) break;
                         chunks.push(value);
-                        console.log(`[TtsStreamer] Received chunk: ${value.byteLength} bytes`);
                     }
                     if (this._stopped) return;
                     const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-                    console.log(`[TtsStreamer] Total PCM: ${totalLen} bytes (${chunks.length} chunks)`);
                     const pcm = new Uint8Array(totalLen);
                     let offset = 0;
                     for (const chunk of chunks) { pcm.set(new Uint8Array(chunk.buffer || chunk), offset); offset += chunk.byteLength; }
-                    console.log(`[TtsStreamer] First 20 bytes: ${Array.from(pcm.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
                     const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
                     this._audioQueue.push({ url, sentence });
                 } else {
@@ -377,7 +373,6 @@ export class TtsStreamer {
     togglePause() { if (this._isPaused) this.resume(); else this.pause(); }
 
     stop() {
-        console.log('[TtsStreamer] stop() called — playing:', this._isPlaying, 'queue:', this._audioQueue.length, 'pending:', this._pendingFetches, 'abortControllers:', this._abortControllers.length);
         this._stopped = true; this._isPaused = false; this._isPlaying = false;
         if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio.src = ''; this._currentAudio = null; }
         for (const c of this._audioQueue) URL.revokeObjectURL(c.url);
