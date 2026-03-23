@@ -44,6 +44,16 @@ pub struct AppUsage {
     pub seconds: u64,
     pub percentage: f64,
     pub switches_to: u64,
+    /// For browsers: breakdown by website/page title
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sites: Vec<SiteUsage>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SiteUsage {
+    pub site: String,
+    pub seconds: u64,
+    pub percentage: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -157,6 +167,9 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
             _ => continue,
         };
 
+        // Skip transient system UI processes (noise, not real app usage)
+        if is_system_noise(&process) { continue; }
+
         debug!("[ActivityTracker] Active: {} ({})", process, title);
 
         // Record to DB
@@ -231,6 +244,7 @@ pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Resu
             seconds,
             percentage: 0.0,
             switches_to,
+            sites: Vec::new(),
         });
     }
 
@@ -241,6 +255,56 @@ pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Resu
         } else {
             0.0
         };
+    }
+
+    // Browser site breakdown: extract site/page from window titles
+    let browser_processes: Vec<&str> = apps.iter()
+        .filter(|a| is_browser(&a.process_name))
+        .map(|a| a.process_name.as_str())
+        .collect();
+
+    if !browser_processes.is_empty() {
+        let mut site_stmt = conn.prepare(
+            "SELECT process_name, window_title, SUM(duration_secs) as total
+             FROM activity_log
+             WHERE timestamp >= ?1
+             GROUP BY process_name, window_title
+             ORDER BY process_name, total DESC"
+        )?;
+
+        let site_rows = site_stmt.query_map(rusqlite::params![start_str], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, u64>(2)?,
+            ))
+        })?;
+
+        // Aggregate by extracted site name per browser process
+        let mut site_map: std::collections::HashMap<String, std::collections::HashMap<String, u64>> = std::collections::HashMap::new();
+        for row in site_rows {
+            let (process, title, secs) = row?;
+            if !is_browser(&process) { continue; }
+            let site = extract_site_from_title(&title, &process);
+            *site_map.entry(process).or_default().entry(site).or_default() += secs;
+        }
+
+        // Attach site breakdowns to app entries
+        for app in &mut apps {
+            if let Some(sites) = site_map.remove(&app.process_name) {
+                let app_total = app.seconds.max(1);
+                let mut site_list: Vec<SiteUsage> = sites.into_iter()
+                    .map(|(site, secs)| SiteUsage {
+                        site,
+                        seconds: secs,
+                        percentage: (secs as f64 / app_total as f64) * 100.0,
+                    })
+                    .collect();
+                site_list.sort_by(|a, b| b.seconds.cmp(&a.seconds));
+                site_list.truncate(10); // Top 10 sites per browser
+                app.sites = site_list;
+            }
+        }
     }
 
     // Context switches: count consecutive process changes
@@ -290,6 +354,72 @@ pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Resu
     })
 }
 
+/// Transient system UI processes that aren't real app usage.
+fn is_system_noise(process_name: &str) -> bool {
+    matches!(
+        process_name.to_lowercase().as_str(),
+        "shellexperiencehost" | "searchhost" | "textinputhost" |
+        "startmenuexperiencehost" | "searchui" | "cortana" |
+        "gamebar" | "gamebarftserver"
+    )
+}
+
+/// Check if a process name is a known browser.
+fn is_browser(process_name: &str) -> bool {
+    matches!(
+        process_name.to_lowercase().as_str(),
+        "chrome" | "msedge" | "firefox" | "brave" | "opera" | "vivaldi" | "arc"
+    )
+}
+
+/// Extract a site/page name from a browser window title.
+/// Browser titles typically look like: "Page Title - Site Name - Google Chrome"
+/// We strip the browser suffix and return the meaningful part.
+fn extract_site_from_title(title: &str, process_name: &str) -> String {
+    let suffixes = [
+        " - Google Chrome", " - Microsoft​ Edge", " - Microsoft Edge",
+        " — Mozilla Firefox", " - Mozilla Firefox",
+        " - Brave", " - Opera", " - Vivaldi", " - Arc",
+        " – Google Chrome", " – Microsoft Edge",
+    ];
+
+    let mut clean = title.to_string();
+    for suffix in &suffixes {
+        if let Some(pos) = clean.rfind(suffix) {
+            clean = clean[..pos].to_string();
+            break;
+        }
+    }
+
+    // If the title still has " - " separators, take the last segment as the site name
+    // e.g. "Some Page - YouTube" → "YouTube"
+    if let Some(pos) = clean.rfind(" - ") {
+        let site = clean[pos + 3..].trim();
+        if !site.is_empty() && site.len() < 60 {
+            return site.to_string();
+        }
+    }
+    if let Some(pos) = clean.rfind(" — ") {
+        let site = clean[pos + 5..].trim(); // " — " is 5 bytes in UTF-8
+        if !site.is_empty() && site.len() < 60 {
+            return site.to_string();
+        }
+    }
+
+    // Fallback: use the full cleaned title, truncated
+    let trimmed = clean.trim();
+    if trimmed.len() > 50 {
+        // Find a valid char boundary near 47 bytes
+        let mut end = 47;
+        while end > 0 && !trimmed.is_char_boundary(end) { end -= 1; }
+        format!("{}…", &trimmed[..end])
+    } else if trimmed.is_empty() {
+        prettify_process_name(process_name)
+    } else {
+        trimmed.to_string()
+    }
+}
+
 fn prettify_process_name(name: &str) -> String {
     match name.to_lowercase().as_str() {
         "code" | "code - insiders" => "VS Code".to_string(),
@@ -297,6 +427,7 @@ fn prettify_process_name(name: &str) -> String {
         "firefox" => "Firefox".to_string(),
         "msedge" => "Edge".to_string(),
         "explorer" => "File Explorer".to_string(),
+        "lockapp" => "Screen Locked".to_string(),
         "slack" => "Slack".to_string(),
         "teams" => "Teams".to_string(),
         "discord" => "Discord".to_string(),

@@ -35,6 +35,7 @@ function _renderItem(r, index, extMgr) {
         customEl.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;';
         if (extMgr.renderResult(r, customEl)) {
             item.appendChild(customEl);
+            if (r.tooltip) item.title = r.tooltip;
             return item;
         }
     }
@@ -56,6 +57,7 @@ function _renderItem(r, index, extMgr) {
             ${r.description ? `<div class="app-description">${escapeHtml(r.description)}</div>` : ''}
         </div>
     `;
+    if (r.tooltip) item.title = r.tooltip;
     return item;
 }
 

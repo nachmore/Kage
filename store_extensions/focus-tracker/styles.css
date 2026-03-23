@@ -34,16 +34,18 @@
 }
 
 .focus-app-row {
-    flex-direction: column;
-    gap: 3px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
 }
 
 .focus-bar-bg {
-    width: 100%;
+    width: 120px;
     height: 4px;
     background: rgba(255, 255, 255, 0.08);
     border-radius: 2px;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .focus-bar-fill {
@@ -74,12 +76,32 @@
     color: var(--kiro-text);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .focus-app-sessions {
     color: var(--kiro-text-secondary, #999);
     font-size: 11px;
     flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.focus-site-row {
+    padding-left: 16px;
+}
+
+.focus-bar-indent {
+    opacity: 0.6;
+}
+
+.focus-bar-site {
+    background: var(--kiro-accent, #6366f1);
+    opacity: 0.6;
+}
+
+.focus-site-name {
+    font-size: 11px;
+    font-weight: 400;
 }
 
 .focus-insight {

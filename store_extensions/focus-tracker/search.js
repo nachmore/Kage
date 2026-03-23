@@ -41,7 +41,16 @@ export default class FocusTrackerSearchProvider {
             return this._formatReport(cached.data, parsed.period);
         }
 
-        return [];
+        // Valid trigger but no cache yet — show placeholder so Enter doesn't send to agent
+        return [{
+            id: `focus-loading-${parsed.period}`,
+            type: 'focus-tracker',
+            label: `📊 Loading ${parsed.period} report...`,
+            description: 'Fetching activity data',
+            icon: '📊',
+            score: 86,
+            data: { type: 'loading', period: parsed.period },
+        }];
     }
 
     async matchAsync(query) {
@@ -75,8 +84,26 @@ export default class FocusTrackerSearchProvider {
     }
 
     execute(result) {
+        if (result.data?.type === 'loading') {
+            // Check if data has loaded into cache since the placeholder was shown
+            const cached = this._cache.get(result.data.period);
+            if (cached) {
+                const report = cached.data;
+                const totalMin = Math.round(report.total_seconds / 60);
+                const timeStr = report.total_seconds >= 3600 ? `${(report.total_seconds/3600).toFixed(1)}h` : `${totalMin}m`;
+                const streakMin = Math.round(report.longest_streak_seconds / 60);
+                return { type: 'display', value: this._buildSummaryMarkdown({
+                    period: report.period, timeStr, switches: report.context_switches,
+                    streakMin, streakApp: report.longest_streak_app, appCount: report.apps.length, report,
+                })};
+            }
+            return null;
+        }
         if (result.data?.type === 'insight') {
             return { type: 'send_prompt', value: result.data.prompt };
+        }
+        if (result.data?.type === 'summary' && result.data.report) {
+            return { type: 'display', value: this._buildSummaryMarkdown(result.data) };
         }
         if (result.data?.copyText) {
             return { type: 'copy', value: result.data.copyText };
@@ -91,6 +118,10 @@ export default class FocusTrackerSearchProvider {
         }
         if (result.data?.type === 'app-row') {
             element.innerHTML = this._renderAppRowHtml(result.data);
+            return true;
+        }
+        if (result.data?.type === 'site-row') {
+            element.innerHTML = this._renderSiteRowHtml(result.data);
             return true;
         }
         if (result.data?.type === 'insight') {
@@ -166,6 +197,7 @@ export default class FocusTrackerSearchProvider {
                 streakMin,
                 streakApp: report.longest_streak_app,
                 appCount: report.apps.length,
+                report, // full report for display on Enter
                 copyText: `${report.period}: ${timeStr} tracked, ${report.context_switches} switches, ${streakMin}m best streak (${report.longest_streak_app})`,
             },
         });
@@ -185,7 +217,10 @@ export default class FocusTrackerSearchProvider {
                     label: `${app.display_name}: ${appTime} (${pct}%)`,
                     description: `${app.switches_to} sessions`,
                     icon: _appEmoji(app.process_name),
-                    score: 85 - i,
+                    // Use high base score minus a small fraction per app to maintain order
+                    // Sites use the same base minus smaller fractions to stay under their parent
+                    score: 85 - (i * 0.01),
+                    tooltip: `${app.display_name}: ${appTime} (${pct}%), ${app.switches_to} sessions`,
                     data: {
                         type: 'app-row',
                         name: app.display_name,
@@ -195,6 +230,33 @@ export default class FocusTrackerSearchProvider {
                         copyText: `${app.display_name}: ${appTime} (${pct}%), ${app.switches_to} sessions`,
                     },
                 });
+
+                // Browser site breakdown
+                if (app.sites && app.sites.length > 0) {
+                    for (let j = 0; j < Math.min(app.sites.length, 5); j++) {
+                        const site = app.sites[j];
+                        const siteMin = Math.round(site.seconds / 60);
+                        const siteTime = site.seconds >= 3600 ? `${(site.seconds / 3600).toFixed(1)}h` : `${siteMin}m`;
+                        const sitePct = site.percentage.toFixed(0);
+                        results.push({
+                            id: `focus-site-${period}-${app.process_name}-${j}`,
+                            type: 'focus-tracker',
+                            label: `  ${site.site}: ${siteTime}`,
+                            description: `${sitePct}% of ${app.display_name}`,
+                            icon: '🔹',
+                            score: 85 - (i * 0.01) - ((j + 1) * 0.001),
+                            tooltip: `${site.site}: ${siteTime} (${sitePct}% of ${app.display_name})`,
+                            data: {
+                                type: 'site-row',
+                                site: site.site,
+                                parentApp: app.display_name,
+                                time: siteTime,
+                                pct: parseFloat(sitePct),
+                                copyText: `${site.site}: ${siteTime} (${sitePct}% of ${app.display_name})`,
+                            },
+                        });
+                    }
+                }
             }
         }
 
@@ -248,6 +310,19 @@ export default class FocusTrackerSearchProvider {
         `;
     }
 
+    _renderSiteRowHtml(data) {
+        return `
+            <div class="focus-result focus-site-row">
+                <div class="focus-bar-bg focus-bar-indent"><div class="focus-bar-fill focus-bar-site" style="width:${Math.min(data.pct, 100)}%"></div></div>
+                <div class="focus-app-info">
+                    <span class="focus-app-name focus-site-name">🔹 ${_esc(data.site)}</span>
+                    <span class="focus-app-time">${_esc(data.time)}</span>
+                    <span class="focus-app-sessions">${data.pct}% of ${_esc(data.parentApp)}</span>
+                </div>
+            </div>
+        `;
+    }
+
     _renderInsightHtml(data) {
         return `
             <div class="focus-result focus-insight">
@@ -255,6 +330,31 @@ export default class FocusTrackerSearchProvider {
                 <span class="focus-insight-text">Get AI focus insights</span>
             </div>
         `;
+    }
+
+    _buildSummaryMarkdown(data) {
+        const r = data.report;
+        const trigger = (this.config.trigger ?? 'focus').trim();
+        let md = `## 📊 ${data.period}\n\n`;
+        md += `**${data.timeStr}** tracked · **${data.switches}** context switches · **${data.streakMin}m** best streak (${data.streakApp}) · **${data.appCount}** apps\n\n`;
+
+        if (r.apps && r.apps.length > 0) {
+            md += `| App | Time | % |\n|-----|------|---|\n`;
+            for (const app of r.apps.slice(0, 10)) {
+                const t = app.seconds >= 3600 ? `${(app.seconds/3600).toFixed(1)}h` : `${Math.round(app.seconds/60)}m`;
+                md += `| ${app.display_name} | ${t} | ${app.percentage.toFixed(0)}% |\n`;
+                if (app.sites) {
+                    for (const site of app.sites.slice(0, 3)) {
+                        const st = site.seconds >= 3600 ? `${(site.seconds/3600).toFixed(1)}h` : `${Math.round(site.seconds/60)}m`;
+                        md += `| · ${site.site} | ${st} | ${site.percentage.toFixed(0)}% of ${app.display_name} |\n`;
+                    }
+                }
+            }
+        }
+
+        md += `\n---\n`;
+        md += `Try: \`${trigger} week\` · \`${trigger} month\` · \`${trigger} all\``;
+        return md;
     }
 }
 
