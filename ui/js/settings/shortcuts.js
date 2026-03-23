@@ -58,6 +58,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                                 <button class="setting-button" id="shortcutIconClear" style="display:none" onclick="shortcutsModule.clearIcon()">✕</button>
                                 <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none" onchange="shortcutsModule.onIconFileSelected(event)">
                             </div>
+                            <div style="font-size:11px;color:var(--kiro-text-muted);margin-top:4px;">Emoji, image file, or paste an image from clipboard</div>
                         </div>
                         <div class="dialog-field">
                             <label>Action Type</label>
@@ -257,6 +258,30 @@ class ShortcutsSettingsModule extends SettingsModule {
             }
         };
         document.addEventListener('keydown', this._escHandler, true);
+
+        // Paste image into icon field (works on both the emoji input and the preview)
+        const emojiInput = document.getElementById('shortcutIconEmoji');
+        const iconPreview = document.getElementById('shortcutIconPreview');
+        const handleIconPaste = (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (!file || file.size > 65536) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => this._setIconPreview(ev.target.result);
+                    reader.readAsDataURL(file);
+                    return;
+                }
+            }
+        };
+        if (emojiInput) emojiInput.addEventListener('paste', handleIconPaste);
+        if (iconPreview) {
+            iconPreview.setAttribute('tabindex', '0');
+            iconPreview.addEventListener('paste', handleIconPaste);
+        }
     }
 
     load(config) {

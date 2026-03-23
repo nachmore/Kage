@@ -142,6 +142,11 @@ export class FloatingApp {
                 await this.extensionManager.reload();
                 this.updateSpeechButtonVisibility();
                 this._updateToolbarVisibility();
+                // Re-trigger search if there's text in the input (refreshes icons etc.)
+                const query = this.elements.input?.value?.trim();
+                if (query) {
+                    this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             });
 
             this.listen('extensions_changed', async () => {
