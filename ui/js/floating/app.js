@@ -1471,6 +1471,9 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message, options = {}) {
+        // Mark that this message originates from the floating window
+        this.invoke('set_notification_source', { source: 'floating' }).catch(() => {});
+
         // Stop any ongoing TTS; in voice mode, don't kill the mic — it will restart after response
         if (this.speech) {
             this.speech.cancelSpeech();

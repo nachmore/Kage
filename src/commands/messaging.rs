@@ -293,11 +293,29 @@ fn handle_permission_notification(
                     request_id: notification.get("id").cloned().unwrap_or(serde_json::Value::Null),
                 });
             }
-            let _ = app_handle.emit("permission_request", serde_json::json!({
+
+            // Determine which window originated this conversation
+            let source = app_handle.try_state::<crate::state::AppState>()
+                .and_then(|s| s.notification_source.lock().ok().map(|s| s.clone()))
+                .unwrap_or_else(|| "floating".to_string());
+
+            let payload = serde_json::json!({
                 "notification": notification,
                 "auto_approve": false,
-                "toolName": tool_title
-            }));
+                "toolName": tool_title,
+                "source": source,
+            });
+
+            // Broadcast to all windows with source info — each window decides whether to show
+            let _ = app_handle.emit("permission_request", &payload);
+
+            // If originated from floating and it's hidden, show it (case 3: background permission)
+            if source == "floating" {
+                if let Some(floating) = app_handle.get_webview_window("floating") {
+                    let _ = floating.show();
+                    let _ = floating.set_focus();
+                }
+            }
         }
     }
 }
@@ -392,6 +410,7 @@ pub async fn send_permission_response(
     option_id: String,
     tool_title: String,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
@@ -415,6 +434,9 @@ pub async fn send_permission_response(
     if let Ok(mut pending) = state.pending_permission.lock() {
         *pending = None;
     }
+
+    // Broadcast dismissal to all windows so they close their permission modals
+    let _ = app.emit("permission_dismissed", ());
 
     Ok(())
 }

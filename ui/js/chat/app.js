@@ -1171,6 +1171,9 @@ export class ChatApp {
     // --- Messaging ---
 
     async sendMessage() {
+        // Mark that this message originates from the chat window
+        this.invoke('set_notification_source', { source: 'main' }).catch(() => {});
+
         // Stop any ongoing TTS and speech recognition
         if (this.speech) {
             this.speech.cancelSpeech();

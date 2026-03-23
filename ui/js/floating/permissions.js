@@ -205,29 +205,29 @@ function initPermissionModal() {
         const requestSessionId = notification.params?.sessionId || '';
 
         // Only handle permission requests for the floating window's own session.
-        // If the request is for a different session (e.g. one active in the main
-        // chat window), ignore it here — the chat window will handle it.
         let floatingSessionId = null;
         try {
             floatingSessionId = await invoke('get_floating_session_id');
         } catch (e) { console.warn('[Permissions] Failed to get floating session ID:', e); }
-        let currentSessionId = null;
-        try {
-            currentSessionId = await invoke('get_current_session_id');
-        } catch (e) { console.warn('[Permissions] Failed to get current session ID:', e); }
 
-        // The floating window owns the "floating session". If the request is for
-        // a session that isn't the current ACP session (which the floating window
-        // would be using), skip it.
-        const isFloatingSession = !requestSessionId
-            || requestSessionId === floatingSessionId
-            || requestSessionId === currentSessionId;
+        // Strict check: only handle if the request is for the floating session
+        // AND originated from the floating window (source check)
+        const source = event.payload.source || '';
+        const isFloatingSession = requestSessionId && floatingSessionId
+            && requestSessionId === floatingSessionId;
 
-        // If the main chat window is visible and this isn't clearly the floating
-        // session's request, let the chat window handle it.
-        const isFloatingVisible = await appWindow.isVisible();
-        if (!isFloatingVisible && !isFloatingSession) {
-            console.log('Ignoring permission request for non-floating session:', requestSessionId);
+        // If the request didn't originate from floating, only show if we're already visible
+        let isVisible = false;
+        try { isVisible = await appWindow.isVisible(); } catch {}
+        console.log(`[Permissions] source=${source} isVisible=${isVisible} reqSession=${requestSessionId} floatingSession=${floatingSessionId} isFloatingSession=${isFloatingSession}`);
+
+        if (source !== 'floating' && !isVisible) {
+            console.log('Ignoring permission request — originated from chat, floating hidden');
+            return;
+        }
+
+        if (!isFloatingSession) {
+            console.log('Ignoring permission request — not for floating session');
             return;
         }
         
@@ -250,10 +250,11 @@ function initPermissionModal() {
             } catch (e) { /* assume pending if check fails */ stillPending = true; }
 
             if (stillPending) {
-                // If the floating window is hidden, send a system notification
-                // and bring the window to the foreground so the user can respond
                 const isVisible = await appWindow.isVisible();
-                if (!isVisible) {
+                const source = event.payload.source || 'floating';
+
+                // Only force-show the floating window if the request originated from it
+                if (!isVisible && source === 'floating') {
                     const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
                     const toolName = event.payload.toolName || '';
                     const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;
@@ -273,11 +274,15 @@ function initPermissionModal() {
                             }
                         }
                     } catch { /* ignore */ }
-                    // Show the floating window so the user can respond
                     await appWindow.show();
                     await appWindow.setFocus();
                 }
-                showPermissionModal(notification, event.payload.toolName);
+
+                // Show the modal if the window is visible (either already open or just shown)
+                const nowVisible = await appWindow.isVisible();
+                if (nowVisible) {
+                    showPermissionModal(notification, event.payload.toolName);
+                }
             } else {
                 console.log('Permission request already handled, skipping modal');
             }
@@ -314,6 +319,10 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initPermissionModal);
 } else {
     initPermissionModal();
+    // Listen for permission dismissal from other windows
+    appWindow.listen('permission_dismissed', () => {
+        hidePermissionModal();
+    });
 }
 
 // Export for use in other modules
