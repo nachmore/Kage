@@ -10,6 +10,7 @@ const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
 let currentPermissionRequest = null;
 let _extensionToolCallback = null;
+let _permissionQueue = [];
 
 /**
  * Show permission modal
@@ -21,6 +22,13 @@ async function showPermissionModal(notification, toolName) {
     
     if (!modal || !toolTitle) {
         console.error('Permission modal elements not found');
+        return;
+    }
+
+    // If a permission is already showing, queue this one
+    if (currentPermissionRequest && modal.style.display === 'flex') {
+        _permissionQueue.push({ notification, toolName });
+        console.log(`[Permissions] Queued permission request (${_permissionQueue.length} in queue)`);
         return;
     }
     
@@ -103,6 +111,14 @@ async function hidePermissionModal() {
         modal.style.display = 'none';
     }
     currentPermissionRequest = null;
+
+    // Show next queued permission request
+    if (_permissionQueue.length > 0) {
+        const next = _permissionQueue.shift();
+        console.log(`[Permissions] Showing next queued request (${_permissionQueue.length} remaining)`);
+        setTimeout(() => showPermissionModal(next.notification, next.toolName), 150);
+        return; // Don't resize yet — the next modal will handle it
+    }
 
     // Trigger a resize back to fit the current content
     try {
@@ -321,6 +337,7 @@ if (document.readyState === 'loading') {
     initPermissionModal();
     // Listen for permission dismissal from other windows
     appWindow.listen('permission_dismissed', () => {
+        _permissionQueue = []; // Clear queue — other window handled it
         hidePermissionModal();
     });
 }

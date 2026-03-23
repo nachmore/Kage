@@ -21,12 +21,20 @@ waitForTauri(() => {
 
     let currentPermissionRequest = null;
     let _extensionToolCallback = null;
+    let _permissionQueue = [];
 
     function showPermissionModal(notification, toolName) {
         const modal = document.getElementById('permissionModal');
         const toolTitle = document.getElementById('permissionToolTitle');
         const toolNameEl = document.getElementById('permissionToolName');
         if (!modal || !toolTitle) return;
+
+        // If a permission is already showing, queue this one
+        if (currentPermissionRequest && modal.style.display === 'flex') {
+            _permissionQueue.push({ notification, toolName });
+            console.log(`[Permissions] Queued permission request (${_permissionQueue.length} in queue)`);
+            return;
+        }
 
         const params = notification.params || {};
         const toolCall = params.toolCall || {};
@@ -63,7 +71,14 @@ waitForTauri(() => {
         const modal = document.getElementById('permissionModal');
         if (modal) modal.style.display = 'none';
         currentPermissionRequest = null;
-        modal.dataset.sessionId = '';
+        if (modal) modal.dataset.sessionId = '';
+
+        // Show next queued permission request
+        if (_permissionQueue.length > 0) {
+            const next = _permissionQueue.shift();
+            console.log(`[Permissions] Showing next queued request (${_permissionQueue.length} remaining)`);
+            setTimeout(() => showPermissionModal(next.notification, next.toolName), 150);
+        }
     }
 
     async function handlePermissionResponse(optionId, policyOverride) {
@@ -149,6 +164,7 @@ waitForTauri(() => {
     // Listen for external dismissal (e.g. floating window auto-denied the request)
     appWindow.listen('permission_dismissed', () => {
         console.log('Permission dismissed externally');
+        _permissionQueue = []; // Clear queue — other window handled it
         hidePermissionModal();
     });
 
