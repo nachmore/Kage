@@ -352,6 +352,7 @@ body.clipboard-mode .floating-banner {
 .app-suggestions {
     background: white;
     border-top: 1px solid #e5e7eb;
+    overflow-y: auto;
 }
 
 .app-suggestion-item {

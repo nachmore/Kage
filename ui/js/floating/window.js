@@ -1,7 +1,7 @@
 // Window management and resizing
 
 const DEFAULT_HEIGHT = 76;
-const MAX_HEIGHT_PERCENT = 0.5;
+const MAX_HEIGHT_PERCENT = 0.65;
 const BODY_PADDING = 16; // 8px padding on each side
 
 export class WindowManager {
@@ -152,12 +152,21 @@ export class WindowManager {
                 const physicalHeight = Math.round((contentHeight + BODY_PADDING) * scale);
 
                 const maxHeight = await this.getMaxHeight();
-                // Auto-grow cap: use the default max, but if the user manually resized
-                // larger, fill up to their set height (don't shrink their window)
                 const autoMaxHeight = this.userSetHeight
                     ? Math.max(maxHeight, this.userSetHeight)
                     : maxHeight;
                 let height = Math.max(Math.round(DEFAULT_HEIGHT * scale), Math.min(autoMaxHeight, physicalHeight));
+
+                // If content exceeds max, cap the suggestions area so it scrolls
+                if (suggestionsVisible && physicalHeight > autoMaxHeight) {
+                    const nonSuggestionsHeight = contentHeight - appSuggestions.offsetHeight;
+                    const availableForSuggestions = (autoMaxHeight / scale) - nonSuggestionsHeight - BODY_PADDING;
+                    if (availableForSuggestions > 40) {
+                        appSuggestions.style.maxHeight = Math.floor(availableForSuggestions) + 'px';
+                    }
+                } else if (suggestionsVisible) {
+                    appSuggestions.style.maxHeight = '';
+                }
                 
                 if (physicalHeight > DEFAULT_HEIGHT * scale && !this.userSetHeight) {
                     this.autoGrowHeight = height;
