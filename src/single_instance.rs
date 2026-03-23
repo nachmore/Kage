@@ -43,6 +43,34 @@ pub fn try_acquire() -> Result<InstanceLock> {
         .with_context(|| format!("Failed to open lock file: {:?}", lock_path))?;
 
     if !try_lock_file(&file)? {
+        // Lock is held — but check if the owning process is still alive
+        // (handles stale locks from crashes or failed restarts)
+        if is_lock_stale(&lock_path) {
+            info!("Stale lock detected, overriding...");
+            // Try to re-create the file to clear the stale lock
+            drop(file);
+            let _ = fs::remove_file(&lock_path);
+            let file = File::options()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&lock_path)
+                .with_context(|| format!("Failed to recreate lock file: {:?}", lock_path))?;
+            if !try_lock_file(&file)? {
+                anyhow::bail!(
+                    "Another instance of Kiro Assistant is already running.\n\
+                     Lock file: {:?}",
+                    lock_path
+                );
+            }
+            // Write our PID
+            use std::io::Write;
+            let mut f = &file;
+            let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
+            info!("Single-instance lock acquired (after stale override): {:?}", lock_path);
+            return Ok(InstanceLock { _file: file, path: lock_path });
+        }
+
         anyhow::bail!(
             "Another instance of Kiro Assistant is already running.\n\
              Lock file: {:?}",
@@ -64,6 +92,43 @@ pub fn try_acquire() -> Result<InstanceLock> {
 }
 
 // --- Platform-specific locking ---
+
+/// Check if the lock file contains a PID of a process that's no longer running.
+fn is_lock_stale(lock_path: &std::path::Path) -> bool {
+    let content = match fs::read_to_string(lock_path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let pid: u32 = match content.trim().parse() {
+        Ok(p) => p,
+        Err(_) => return true, // Can't parse PID — treat as stale
+    };
+    // Don't consider our own PID as stale
+    if pid == std::process::id() {
+        return false;
+    }
+    !is_process_running(pid)
+}
+
+#[cfg(windows)]
+fn is_process_running(pid: u32) -> bool {
+    use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::Foundation::CloseHandle;
+    unsafe {
+        match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            Ok(handle) => {
+                let _ = CloseHandle(handle);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+}
+
+#[cfg(unix)]
+fn is_process_running(pid: u32) -> bool {
+    unsafe { libc::kill(pid as i32, 0) == 0 }
+}
 
 #[cfg(windows)]
 fn try_lock_file(file: &File) -> Result<bool> {
