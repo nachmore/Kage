@@ -64,7 +64,7 @@ export class WindowManager {
                     if (this.userSetHeight) {
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         let extraHeight = 0;
-                        document.querySelectorAll('.timer-bar').forEach(bar => {
+                        document.querySelectorAll('.extension-bar').forEach(bar => {
                             if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
                         });
                         const toolbar = document.getElementById('floatingToolbar');
@@ -75,7 +75,7 @@ export class WindowManager {
                     } else {
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         let extraHeight = 0;
-                        document.querySelectorAll('.timer-bar').forEach(bar => {
+                        document.querySelectorAll('.extension-bar').forEach(bar => {
                             if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
                         });
                         const toolbar = document.getElementById('floatingToolbar');
@@ -133,8 +133,8 @@ export class WindowManager {
                 
                 contentHeight += inputContainer?.offsetHeight || 0;
 
-                // Timer/stopwatch bars (persistent, above input container)
-                document.querySelectorAll('.timer-bar').forEach(bar => {
+                // Extension bars (persistent, above input container)
+                document.querySelectorAll('.extension-bar').forEach(bar => {
                     if (bar.style.display !== 'none') contentHeight += bar.offsetHeight;
                 });
 
@@ -353,11 +353,11 @@ export class WindowManager {
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(516 * scaleFactor);
-            // Dynamic minimum height: at least enough for input container + timer bars
+            // Dynamic minimum height: at least enough for input container + extension bars
             const inputContainer = document.querySelector('.input-container');
             const inputH = inputContainer?.offsetHeight || 44;
             let minContentH = inputH + BODY_PADDING;
-            document.querySelectorAll('.timer-bar').forEach(bar => {
+            document.querySelectorAll('.extension-bar').forEach(bar => {
                 if (bar.style.display !== 'none') minContentH += bar.offsetHeight;
             });
             const minHeight = Math.max(Math.floor(DEFAULT_HEIGHT * scaleFactor), Math.floor(minContentH * scaleFactor));

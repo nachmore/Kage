@@ -269,6 +269,74 @@ export default class MyWidget {
 }
 ```
 
+## Extension Bar API
+
+Extensions can display persistent status bars above the floating window input using the shared Extension Bar utility. These bars are automatically accounted for in the window resize logic.
+
+Import from `ui/js/shared/extension-bar.js`:
+
+```js
+import { showExtensionBar, updateExtensionBar, hideExtensionBar } from '../shared/extension-bar.js';
+```
+
+### showExtensionBar(opts)
+
+Creates and displays a bar above the input container.
+
+```js
+showExtensionBar({
+    id: 'my-bar',              // Unique bar ID
+    icon: '🔔',                // Emoji icon on the left
+    text: 'Something happened', // Main text content
+    counter: '1/3',            // Optional counter (e.g. for paging)
+    className: 'my-custom-bar', // Optional extra CSS class
+    buttons: [
+        { id: 'action', label: 'Do it', title: 'Tooltip', onClick: () => { /* ... */ } },
+        { id: 'dismiss', label: '✕', title: 'Dismiss', onClick: () => hideExtensionBar('my-bar') },
+    ],
+});
+```
+
+Returns the bar `HTMLElement`, or `null` if the input container isn't in the DOM yet.
+
+### updateExtensionBar(id, updates)
+
+Updates an existing bar's content without recreating it.
+
+```js
+updateExtensionBar('my-bar', { text: 'New text', counter: '2/3', icon: '✅' });
+```
+
+### hideExtensionBar(id)
+
+Removes the bar and triggers a window resize.
+
+```js
+hideExtensionBar('my-bar');
+```
+
+### CSS Classes
+
+All bars use the `.extension-bar` base class (defined in `floating-components.css`). Sub-elements:
+
+| Class | Element |
+|-------|---------|
+| `.extension-bar` | Bar container (flex row) |
+| `.extension-bar-icon` | Left icon |
+| `.extension-bar-text` | Main text area |
+| `.extension-bar-controls` | Right-side button container |
+| `.extension-bar-btn` | Individual button |
+| `.extension-bar-progress` | Optional progress overlay (absolute positioned) |
+
+Add a custom `className` to override the default appearance (e.g. background gradient).
+
+### Notes
+
+- Bars are hidden automatically in clipboard mode (`body.clipboard-mode .extension-bar { display: none }`)
+- Button `mousedown` events are prevented to avoid stealing focus from the floating window
+- The window resize logic queries all `.extension-bar` elements, so custom bars are included automatically
+- Use `requestAnimationFrame` or a short `setTimeout` if mounting during extension `initialize()` to ensure the DOM is ready
+
 ## Toolbar Button Provider API
 
 A toolbar button provider adds buttons to the chat window toolbar. It's an ES module that default-exports a class:

@@ -158,7 +158,7 @@ export default class CalendarSearchProvider {
         const dur = this._formatDuration(e.duration_minutes);
         const provider = e.online_url ? this._meetingProvider(e.online_url) : '';
         const joinBtn = e.online_url
-            ? `<button class="timer-btn" style="font-size:11px;padding:2px 8px;" title="${this._escapeHtml(e.online_url)}" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join${provider ? ' ' + provider : ''}</button>`
+            ? `<button class="extension-bar-btn" style="font-size:11px;padding:2px 8px;" title="${this._escapeHtml(e.online_url)}" onclick="event.stopPropagation();window.__TAURI__.core.invoke('open_url',{url:'${e.online_url.replace(/'/g, "\\'")}'})">Join${provider ? ' ' + provider : ''}</button>`
             : '';
         container.innerHTML = `
             <div class="app-icon">📅</div>
@@ -239,7 +239,7 @@ export default class CalendarSearchProvider {
         if (!bar) {
             bar = document.createElement('div');
             bar.id = 'calendarOverlayBar';
-            bar.className = 'timer-bar';
+            bar.className = 'extension-bar';
             bar.style.cssText = 'cursor:default;';
             const inputContainer = document.querySelector('.input-container');
             if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
@@ -260,20 +260,20 @@ export default class CalendarSearchProvider {
         }
 
         const joinHtml = event.online_url
-            ? `<button class="timer-btn cal-join-btn" id="calendarJoinBtn" title="${event.online_url.replace(/"/g, '&quot;')}">Join</button>`
+            ? `<button class="extension-bar-btn cal-join-btn" id="calendarJoinBtn" title="${event.online_url.replace(/"/g, '&quot;')}">Join</button>`
             : '';
-        const dismissHtml = `<button class="timer-btn" id="calendarDismissBtn" style="font-size:11px;padding:1px 4px;" title="Dismiss this meeting">✕</button>`;
+        const dismissHtml = `<button class="extension-bar-btn" id="calendarDismissBtn" style="font-size:11px;padding:1px 4px;" title="Dismiss this meeting">✕</button>`;
 
         const concurrentHtml = concurrentCount > 1
             ? `<span style="font-size:10px;opacity:0.7;margin-left:4px;">+${concurrentCount - 1} more</span>`
             : '';
 
         bar.innerHTML = `
-            <span class="timer-bar-icon">📅</span>
-            <span class="timer-bar-time" style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            <span class="extension-bar-icon">📅</span>
+            <span class="extension-bar-text" style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 <strong>[${timeLabel}]</strong> ${this._escapeHtml(event.subject)}${concurrentHtml}
             </span>
-            <div class="timer-bar-controls">
+            <div class="extension-bar-controls">
                 ${joinHtml}
                 ${dismissHtml}
             </div>

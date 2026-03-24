@@ -222,17 +222,17 @@ export function updateTimerBar(slotName, displayStr, progress, running) {
     if (!bar) {
         bar = document.createElement('div');
         bar.id = barId;
-        bar.className = 'timer-bar';
+        bar.className = 'extension-bar';
         const icon = slotName === 'stopwatch' ? '⏱️' : '⏳';
         const showAdd = slotName === 'timer' ? '' : ' style="display:none"';
         bar.innerHTML = `
-            <div class="timer-bar-progress" id="${barId}_progress"></div>
-            <span class="timer-bar-icon">${icon}</span>
-            <span class="timer-bar-time" id="${barId}_time"></span>
-            <div class="timer-bar-controls">
-                <button class="timer-btn" id="${barId}_add" title="+1 minute"${showAdd}>+1m</button>
-                <button class="timer-btn" id="${barId}_pause" title="Pause/Resume">⏸</button>
-                <button class="timer-btn" id="${barId}_stop" title="Stop">⏹</button>
+            <div class="extension-bar-progress" id="${barId}_progress"></div>
+            <span class="extension-bar-icon">${icon}</span>
+            <span class="extension-bar-text" id="${barId}_time"></span>
+            <div class="extension-bar-controls">
+                <button class="extension-bar-btn" id="${barId}_add" title="+1 minute"${showAdd}>+1m</button>
+                <button class="extension-bar-btn" id="${barId}_pause" title="Pause/Resume">⏸</button>
+                <button class="extension-bar-btn" id="${barId}_stop" title="Stop">⏹</button>
             </div>
         `;
         // Prevent buttons from stealing focus (which triggers window blur → hide)
