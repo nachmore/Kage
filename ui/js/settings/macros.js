@@ -19,7 +19,7 @@ const TRANSFORMS = [
 
 class MacrosSettingsModule extends SettingsModule {
     constructor() {
-        super('macros', 'Macros', '🔄');
+        super('macros', 'Automations', '🔄');
         this._macros = [];
     }
     render() {
