@@ -10,15 +10,14 @@ pub fn get_process_name(pid: u32) -> Option<String> {
         crate::os::windows::process::get_process_name_impl(pid)
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        // On Unix, read /proc/{pid}/comm or use ps
-        let output = Command::new("ps")
-            .args(&["-p", &pid.to_string(), "-o", "comm="])
-            .output()
-            .ok()?;
-        let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if name.is_empty() { None } else { Some(name) }
+        crate::os::linux::process::get_process_name_impl(pid)
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        crate::os::macos::process::get_process_name_impl(pid)
     }
 }
 
@@ -28,7 +27,7 @@ pub fn kill_process(pid: u32) -> bool {
     {
         crate::os::windows::process::kill_process_impl(pid)
     }
-    
+
     #[cfg(not(target_os = "windows"))]
     {
         crate::os::platform::process::kill_process_impl(pid)
@@ -42,7 +41,7 @@ pub fn configure_process_spawn(cmd: &mut Command) {
     {
         crate::os::windows::process::configure_spawn_impl(cmd);
     }
-    
+
     #[cfg(unix)]
     {
         crate::os::platform::process::configure_spawn_impl(cmd);
@@ -58,7 +57,7 @@ where
     {
         crate::os::windows::process::install_signal_handlers_impl(cleanup_fn)
     }
-    
+
     #[cfg(not(target_os = "windows"))]
     {
         crate::os::platform::process::install_signal_handlers_impl(cleanup_fn)

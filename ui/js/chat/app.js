@@ -847,12 +847,18 @@ export class ChatApp {
             } catch (error) {
                 console.error('Failed to switch ACP session:', error);
                 const msg = this.formatError(error);
-                this.showError(msg);
+                const isLocked = msg.includes('active in another process') || msg.includes('Session is active');
+                if (isLocked) {
+                    const pidMatch = msg.match(/PID\s+(\d+)/);
+                    this.showSessionLocked(sessionId, pidMatch ? pidMatch[1] : null);
+                } else {
+                    this.showError(msg);
+                }
                 this.isConnected = false;
                 this.updateConnectionStatus();
                 // Keep input disabled on session error
                 this.elements.chatInput.disabled = true;
-                this.elements.chatInput.placeholder = 'Session unavailable';
+                this.elements.chatInput.placeholder = isLocked ? 'Session is read-only' : 'Session unavailable';
                 this.elements.sendBtn.disabled = true;
             }
         }
@@ -2111,6 +2117,49 @@ export class ChatApp {
             }
         });
     }
+
+    async showSessionLocked(sessionId, pid) {
+            let processInfo = '';
+            if (pid) {
+                try {
+                    const name = await this.invoke('get_process_name', { pid: parseInt(pid) });
+                    processInfo = name ? ` (${name}, PID ${pid})` : ` (PID ${pid})`;
+                } catch {
+                    processInfo = ` (PID ${pid})`;
+                }
+            }
+            this.elements.errorContainer.innerHTML = `
+                <div class="chat-error chat-warning">
+                    <span>This session is read-only as it is open in another process${escapeHtml(processInfo)}.</span>
+                    <div class="chat-error-actions">
+                        <button class="chat-error-btn retry" id="errorRetryBtn">Retry</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('errorRetryBtn')?.addEventListener('click', async () => {
+                this.elements.errorContainer.innerHTML = '';
+                try {
+                    await this.invoke('switch_acp_session', { sessionId });
+                    this.isConnected = true;
+                    this.updateConnectionStatus();
+                    this.elements.chatInput.disabled = false;
+                    this.elements.chatInput.placeholder = 'Type your message...';
+                    this.elements.sendBtn.disabled = false;
+                    this.elements.chatInput.focus();
+                } catch (error) {
+                    const msg = this.formatError(error);
+                    const isLocked = msg.includes('active in another process') || msg.includes('Session is active');
+                    if (isLocked) {
+                        const retryPidMatch = msg.match(/PID\s+(\d+)/);
+                        this.showSessionLocked(sessionId, retryPidMatch ? retryPidMatch[1] : null);
+                    } else {
+                        this.showError(msg);
+                    }
+                }
+            });
+        }
+
 
     showSessionResetMessage(message) {
         // Show as an inline system message in the chat area

@@ -1117,6 +1117,11 @@ pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInf
 }
 
 #[tauri::command]
+pub async fn get_process_name(pid: u32) -> Result<String, AppError> {
+    Ok(crate::os::process::get_process_name(pid).unwrap_or_default())
+}
+
+#[tauri::command]
 pub async fn focus_open_window(
     handle: u64,
     app: tauri::AppHandle,

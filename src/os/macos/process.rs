@@ -8,6 +8,15 @@ use signal_hook::consts::signal::*;
 use signal_hook::iterator::Signals;
 use std::process::Command;
 
+pub fn get_process_name_impl(pid: u32) -> Option<String> {
+    let output = Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "comm="])
+        .output()
+        .ok()?;
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if name.is_empty() { None } else { Some(name) }
+}
+
 pub fn kill_process_impl(pid: u32) -> bool {
     // Try SIGTERM first
     if kill(Pid::from_raw(pid as i32), Signal::SIGTERM).is_ok() {

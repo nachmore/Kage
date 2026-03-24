@@ -725,6 +725,7 @@ fn main() {
             commands::get_common_folders,
             commands::notify_frontend_ready,
             commands::list_open_windows,
+            commands::get_process_name,
             commands::focus_open_window,
             commands::start_activity_tracker,
             commands::stop_activity_tracker,

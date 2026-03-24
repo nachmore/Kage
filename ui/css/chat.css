@@ -575,6 +575,11 @@ body {
 .chat-error-btn.dismiss { background: #f3f4f6; color: #6b7280; }
 .chat-error-btn.dismiss:hover { background: #e5e7eb; }
 
+/* Warning variant (yellow) for non-critical issues like session locks */
+.chat-error.chat-warning { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.chat-error-btn.retry { background: #d97706; color: white; }
+.chat-error-btn.retry:hover { background: #b45309; }
+
 /* Session badges */
 .session-floating-badge { margin-left: 4px; font-size: 11px; }
 .session-current-badge { margin-left: 4px; font-size: 11px; color: var(--kiro-accent); }
