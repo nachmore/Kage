@@ -86,6 +86,10 @@ class SettingsManager {
 
         // Reload config when switching tabs so data is fresh
         this.load();
+
+        // Reset scroll to top
+        const content = document.querySelector('.settings-content');
+        if (content) content.scrollTop = 0;
     }
 
     /**
