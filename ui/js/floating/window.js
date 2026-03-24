@@ -11,6 +11,61 @@ export class WindowManager {
         this.autoGrowHeight = null;
         this.resizeTimeout = null;
         this.isResizing = false; // true while the user is dragging the resize handle
+        this._currentHeight = 0;  // track current window height for animation
+        this._animFrame = null;
+    }
+
+    /**
+     * Smoothly animate the window height to a target value.
+     * Snaps instantly for small changes; lerps over ~120ms for larger ones.
+     */
+    async _animateResize(targetHeight) {
+        const target = Math.round(targetHeight);
+
+        // Cancel any in-progress animation
+        if (this._animFrame) {
+            cancelAnimationFrame(this._animFrame);
+            this._animFrame = null;
+        }
+
+        const current = this._currentHeight || target;
+        const diff = Math.abs(target - current);
+
+        // Snap instantly for small changes or first resize
+        if (diff < 20 || current === 0) {
+            this._currentHeight = target;
+            await this.invoke('resize_floating_window', { height: target });
+            return;
+        }
+
+        // Animate over ~120ms using requestAnimationFrame
+        const duration = 120;
+        const start = performance.now();
+        const from = current;
+
+        return new Promise(resolve => {
+            const step = async (now) => {
+                const elapsed = now - start;
+                const t = Math.min(elapsed / duration, 1);
+                // Ease-out cubic for a snappy feel
+                const eased = 1 - Math.pow(1 - t, 3);
+                const h = Math.round(from + (target - from) * eased);
+
+                this._currentHeight = h;
+                try {
+                    await this.invoke('resize_floating_window', { height: h });
+                } catch {}
+
+                if (t < 1) {
+                    this._animFrame = requestAnimationFrame(step);
+                } else {
+                    this._animFrame = null;
+                    this._currentHeight = target;
+                    resolve();
+                }
+            };
+            this._animFrame = requestAnimationFrame(step);
+        });
     }
 
     /**
@@ -71,7 +126,7 @@ export class WindowManager {
                         if (toolbar && toolbar.style.display !== 'none') extraHeight += toolbar.offsetHeight;
                         const minNeeded = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
                         const height = Math.max(this.userSetHeight, minNeeded);
-                        await this.invoke('resize_floating_window', { height: Math.round(height) });
+                        await this._animateResize(Math.round(height));
                     } else {
                         const inputHeight = inputContainer?.offsetHeight || 0;
                         let extraHeight = 0;
@@ -84,7 +139,7 @@ export class WindowManager {
                         const neededHeight = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
                         const height = Math.max(baseHeight, neededHeight);
                         this.autoGrowHeight = height > baseHeight ? height : null;
-                        await this.invoke('resize_floating_window', { height });
+                        await this._animateResize(height);
                     }
                     return;
                 }
@@ -172,7 +227,7 @@ export class WindowManager {
                     this.autoGrowHeight = height;
                 }
                 
-                await this.invoke('resize_floating_window', { height });
+                await this._animateResize(height);
                 // After resizing, ensure the window is still fully on-screen
                 await this._ensureOnScreen();
             } catch (error) {
