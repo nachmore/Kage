@@ -173,7 +173,7 @@ export class WindowManager {
                 }
                 
                 await this.invoke('resize_floating_window', { height });
-                // After growing, ensure the window is still fully on-screen
+                // After resizing, ensure the window is still fully on-screen
                 await this._ensureOnScreen();
             } catch (error) {
                 console.error('Error resizing window:', error);
@@ -184,21 +184,37 @@ export class WindowManager {
     /** Nudge the window position if it overflows the current monitor bounds. */
     async _ensureOnScreen() {
         try {
-            // Use the same appWindow reference pattern as getMaxHeight
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const pos = await appWindow.outerPosition();
             const size = await appWindow.outerSize();
 
-            // Get screen bounds — use screen.availHeight as fallback if monitor API fails
+            // Find the monitor that contains the window center — more reliable than
+            // currentMonitor() which can return the wrong monitor on multi-display setups.
+            const centerX = pos.x + Math.round(size.width / 2);
+            const centerY = pos.y + Math.round(size.height / 2);
+
             let monX = 0, monY = 0, monW, monH;
             try {
-                const monitor = await appWindow.currentMonitor();
-                if (monitor) {
-                    monX = monitor.position.x;
-                    monY = monitor.position.y;
-                    monW = monitor.size.width;
-                    const scale = monitor.scaleFactor || 1;
-                    monH = Math.min(monitor.size.height, Math.round(window.screen.availHeight * scale));
+                const monitors = await window.__TAURI__.window.availableMonitors();
+                if (monitors && monitors.length > 0) {
+                    let best = null;
+                    for (const m of monitors) {
+                        const mx = m.position.x, my = m.position.y;
+                        const mw = m.size.width, mh = m.size.height;
+                        if (centerX >= mx && centerX < mx + mw && centerY >= my && centerY < my + mh) {
+                            best = m;
+                            break;
+                        }
+                    }
+                    // Fallback to currentMonitor if center isn't inside any monitor bounds
+                    if (!best) best = await appWindow.currentMonitor();
+                    if (best) {
+                        monX = best.position.x;
+                        monY = best.position.y;
+                        monW = best.size.width;
+                        const scale = best.scaleFactor || 1;
+                        monH = Math.min(best.size.height, Math.round(window.screen.availHeight * scale));
+                    }
                 }
             } catch {}
             if (!monW || !monH) {
