@@ -274,7 +274,7 @@ export async function unifiedSearch(query, invoke, shortcuts) {
                     } else if (r.type === 'system') {
                         mapped.push({ id: 'system:' + r.cmdId, type: 'system', label: r.cmdLabel, description: r.needsConfirm ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: r.score || 86, data: { cmdId: r.cmdId, cmdLabel: r.cmdLabel, needsConfirm: r.needsConfirm } });
                     } else if (r.type === 'app') {
-                        mapped.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
+                        mapped.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, tooltip: r.path || '', data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
                     }
                 }
                 return mapped;
