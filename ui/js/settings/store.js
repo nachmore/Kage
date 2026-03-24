@@ -12,12 +12,21 @@ class StoreSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
+                <div class="setting-row">
+                    <button class="setting-button" id="openStoreBtn" style="font-size:12px;">🛍️ Open Extension Store</button>
+                </div>
+
                 ${this.createCheckboxRow(
                     'Auto-Update Extensions',
                     'Automatically check for and install extension updates.',
                     'autoUpdateExtensions',
                     false
                 )}
+
+                <div class="setting-row" style="margin-top: 4px;">
+                    <button class="setting-button" id="checkUpdatesBtn" style="font-size:12px;">🔄 Update All</button>
+                    <span id="updateCheckStatus" style="font-size:12px;color:var(--kiro-text-muted);margin-left:8px;"></span>
+                </div>
 
                 ${this.createControlRow(
                     'Primary Store URL',
@@ -31,12 +40,6 @@ class StoreSettingsModule extends SettingsModule {
                 </p>
                 <div id="storeSources"></div>
                 <button class="setting-button" id="addSourceBtn" style="font-size:12px;margin-top:8px;">+ Add Source</button>
-
-                <div class="setting-row" style="margin-top: 16px;">
-                    <button class="setting-button" id="openStoreBtn" style="font-size:12px;">🛍️ Open Extension Store...</button>
-                    <button class="setting-button" id="checkUpdatesBtn" style="font-size:12px;margin-left:8px;">🔄 Check for Updates Now</button>
-                    <span id="updateCheckStatus" style="font-size:12px;color:var(--kiro-text-muted);margin-left:8px;"></span>
-                </div>
             </div>
         `;
     }
