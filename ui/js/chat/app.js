@@ -2129,10 +2129,10 @@ export class ChatApp {
      */
     formatError(error) {
         if (!error) return 'Unknown error';
-        const str = typeof error === 'string' ? error : String(error);
-        // Try to extract structured error fields (e.g., "Internal error: Failed to start session: ...")
-        // The Rust backend often formats as "message: data" or just the data string
-        return str;
+        if (typeof error === 'string') return error;
+        if (error.message) return error.message;
+        if (error.toString && error.toString() !== '[object Object]') return error.toString();
+        try { return JSON.stringify(error); } catch { return 'Unknown error'; }
     }
 
 
