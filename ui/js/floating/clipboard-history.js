@@ -120,6 +120,6 @@ export function renderClipboardHistory(entries, container, currentMatches, resiz
 
     container.classList.add('visible');
     container.scrollTop = 0;
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     return 0;
 }

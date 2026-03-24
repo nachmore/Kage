@@ -139,6 +139,6 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
 
     container.classList.add('visible');
     container.scrollTop = 0;
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     return 0;
 }

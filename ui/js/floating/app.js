@@ -1171,7 +1171,6 @@ export class FloatingApp {
                 // Show send hint for non-instant results
                 if (!['color', 'math', 'devtool'].includes(results[0].type)) {
                     appendSendHint(this.elements.appSuggestions);
-                    this.windowManager.resizeWindow();
                 }
             } else {
                 this.clearSuggestions();
@@ -1264,7 +1263,7 @@ export class FloatingApp {
         item.addEventListener('click', () => this._executeSystemCommand(cmdId, needsConfirm, false));
         container.appendChild(item);
         container.classList.add('visible');
-        setTimeout(() => this.windowManager.resizeWindow(), 10);
+        this.windowManager.resizeWindow();
     }
 
     async _executeSystemCommand(cmdId, needsConfirm, elevated = false) {

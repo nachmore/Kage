@@ -24,7 +24,7 @@ export function renderShortcutSuggestion(shortcut, args, appSuggestions, current
     
     appSuggestions.appendChild(item);
     appSuggestions.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     
     return 0; // selectedIndex
 }
@@ -57,7 +57,7 @@ export function renderShortcutSuggestions(matches, appSuggestions, selectedIndex
     });
     
     appSuggestions.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
 }
 
 export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl, resizeWindow) {
@@ -76,7 +76,7 @@ export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl
     
     appSuggestions.appendChild(item);
     appSuggestions.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     
     return 0; // selectedIndex
 }
@@ -101,7 +101,7 @@ export function renderPathSuggestion(type, path, appSuggestions, currentMatches,
     
     appSuggestions.appendChild(item);
     appSuggestions.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     
     return 0; // selectedIndex
 }
@@ -141,7 +141,7 @@ export function renderSuggestions(apps, appSuggestions, selectedIndex, launchApp
     });
     
     appSuggestions.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
 }
 
 export function updateSelection(appSuggestions, selectedIndex) {

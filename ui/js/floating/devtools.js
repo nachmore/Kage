@@ -176,6 +176,6 @@ export function renderDevToolSuggestion(result, container, currentMatches, resiz
     `;
     container.appendChild(item);
     container.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     return 0;
 }

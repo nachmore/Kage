@@ -204,7 +204,7 @@ export function renderTimerSuggestion(parsed, container, currentMatches, resizeW
 
     container.appendChild(item);
     container.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     return 0;
 }
 

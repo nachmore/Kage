@@ -185,6 +185,6 @@ export function renderColorSuggestion(color, container, currentMatches, onCopy, 
     container.appendChild(hint);
 
     container.classList.add('visible');
-    setTimeout(() => resizeWindow(), 10);
+    resizeWindow();
     return 0;
 }
