@@ -267,6 +267,7 @@ body.clipboard-mode .floating-banner {
     display: flex;
     gap: 4px;
     margin-left: auto;
+    align-items: center;
 }
 
 .extension-bar-btn {

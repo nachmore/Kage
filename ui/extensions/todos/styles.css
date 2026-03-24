@@ -63,6 +63,7 @@ body.light-theme .todos-summary-header {
     color: var(--kiro-text-secondary, #938F9B);
     margin-right: 2px;
     font-variant-numeric: tabular-nums;
+    align-self: center;
 }
 
 /* Hide reminder bar in clipboard mode */
