@@ -88,3 +88,11 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
         Err(format!("Failed to focus window: {}", stderr.trim()))
     }
 }
+
+pub fn get_icon_by_process_name(_name: &str) -> Option<String> {
+    None // TODO: implement icon lookup on macOS
+}
+
+pub fn get_foreground_window_info() -> Option<(String, String)> {
+    None // TODO: implement on macOS
+}

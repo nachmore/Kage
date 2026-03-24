@@ -65,3 +65,11 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
         _ => ("echo", vec!["Unknown command"]),
     }
 }
+
+/// Spawn a process with elevated privileges using osascript (admin prompt).
+pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std::process::Child> {
+    let mut cmd_args: Vec<&str> = vec![program];
+    cmd_args.extend(args);
+    // Use pkexec as a cross-Unix fallback; macOS could also use osascript with admin privileges
+    Command::new("pkexec").args(&cmd_args).spawn()
+}

@@ -18,3 +18,7 @@ pub fn collapse_element_impl(_id: &str) -> Result<String, String> { Err(NOT_IMPL
 pub fn scroll_element_impl(_id: &str, _dir: &str, _amt: f64) -> Result<String, String> { Err(NOT_IMPL.into()) }
 pub fn get_element_text_impl(_id: &str) -> Result<String, String> { Err(NOT_IMPL.into()) }
 pub fn get_element_children_impl(_id: &str, _depth: usize) -> Result<UIElement, String> { Err(NOT_IMPL.into()) }
+
+pub fn focus_element_impl(_element_id: &str) -> Result<String, String> {
+    Err("focus_element not implemented on Linux".to_string())
+}

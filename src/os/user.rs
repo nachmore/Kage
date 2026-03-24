@@ -11,8 +11,7 @@ pub struct UserProfile {
 pub fn get_user_profile() -> UserProfile {
     let username = whoami::username().unwrap_or_else(|_| "user".to_string());
     let display_name = whoami::realname().unwrap_or_else(|_| String::new());
-
-    let avatar_path = get_avatar_path_impl(&username);
+    let avatar_path = crate::os::platform::user::get_avatar_path_impl(&username);
 
     UserProfile {
         display_name: if display_name.is_empty() {
@@ -23,19 +22,4 @@ pub fn get_user_profile() -> UserProfile {
         username,
         avatar_path,
     }
-}
-
-#[cfg(target_os = "windows")]
-fn get_avatar_path_impl(username: &str) -> Option<String> {
-    crate::os::windows::user::get_avatar_path_impl(username)
-}
-
-#[cfg(target_os = "macos")]
-fn get_avatar_path_impl(username: &str) -> Option<String> {
-    crate::os::macos::user::get_avatar_path_impl(username)
-}
-
-#[cfg(target_os = "linux")]
-fn get_avatar_path_impl(username: &str) -> Option<String> {
-    crate::os::linux::user::get_avatar_path_impl(username)
 }
