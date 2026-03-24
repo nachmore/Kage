@@ -13,7 +13,7 @@ class ColorPickerSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Enable color detection',
-                    'Detect color values (hex, rgb, hsl, named colors) in the floating window and show a preview with format conversions.',
+                    'Detect color values (hex, rgb, hsl, named colors) in the Launcher and show a preview with format conversions.',
                     'colorPickerEnabled',
                     true
                 )}

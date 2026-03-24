@@ -16,19 +16,19 @@ class HotkeySettingsModule extends SettingsModule {
             + this.createControlRow('Voice Input Hotkey', 'Summon Kiro with the microphone already listening. Leave empty to disable.', '<div id="settingsVoiceHotkeyPicker"></div>')
             + this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
             + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
-            + '<div class="setting-row" style="margin-top: 6px;"><div class="setting-label">Keyboard Shortcuts</div><div class="setting-description">Built-in shortcuts available across the application.</div></div>'
+            + '<div class="setting-section-label">Keyboard Shortcuts</div>'
             + '<div class="shortcuts-reference">'
             + this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
             + this.shortcutRow('Ctrl+W', 'Close / hide window', 'All windows')
-            + this.shortcutRow('Ctrl+,', 'Open settings', 'Floating & Chat')
-            + this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Floating')
-            + this.shortcutRow('Ctrl+L', 'Clear / reset', 'Floating')
-            + this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Floating & Chat')
-            + this.shortcutRow('Ctrl+Enter', 'Send to agent (bypass suggestions)', 'Floating')
-            + this.shortcutRow('Escape', 'Stop generating / Hide window', 'Floating')
+            + this.shortcutRow('Ctrl+,', 'Open settings', 'Launcher & Chat')
+            + this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Launcher')
+            + this.shortcutRow('Ctrl+L', 'Clear / reset', 'Launcher')
+            + this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Launcher & Chat')
+            + this.shortcutRow('Ctrl+Enter', 'Send to agent (bypass suggestions)', 'Launcher')
+            + this.shortcutRow('Escape', 'Stop generating / Hide window', 'Launcher')
             + this.shortcutRow('Enter', 'Send message', 'All')
             + this.shortcutRow('Shift+Enter', 'New line', 'All')
-            + this.shortcutRow('>cb', 'Clipboard history', 'Floating')
+            + this.shortcutRow('>cb', 'Clipboard history', 'Launcher')
             + '</div></div>';
     }
     async initialize() {

@@ -9,6 +9,8 @@ class TodosExtSettingsModule extends SettingsModule {
 
     renderContent() {
         return `
+            <div class="setting-section-label">Display</div>
+
             ${this.createControlRow(
                 'Default Category',
                 'New todos get this category unless overridden with #tag.',
@@ -30,6 +32,8 @@ class TodosExtSettingsModule extends SettingsModule {
                 'todosShowCompleted',
                 true
             )}
+            <div class="setting-section-label">Behavior</div>
+
             ${this.createCheckboxRow(
                 'Confirm Delete',
                 'Ask for confirmation before deleting a todo.',
@@ -42,8 +46,9 @@ class TodosExtSettingsModule extends SettingsModule {
                 'todosShowDueBanner',
                 true
             )}
+            <div class="setting-section-label">Data</div>
+
             <div class="setting-row">
-                <div class="setting-label">Data</div>
                 <div class="setting-description">Export or clear all your todos and reminders.</div>
                 <div class="setting-control" style="display:flex;gap:8px;margin-top:6px;">
                     <button class="setting-button" id="todosExport">Export JSON</button>

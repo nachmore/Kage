@@ -98,9 +98,29 @@ body {
     font-size: 20px;
     font-weight: 300;
     color: var(--kiro-text-bright);
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    margin: -30px -40px 20px -40px;
+    padding: 20px 40px 10px 40px;
     border-bottom: 1px solid var(--kiro-border-subtle);
+    position: sticky;
+    top: -30px;
+    background: var(--kiro-bg, #1e1e1e);
+    z-index: 10;
+}
+
+/* Sub-section divider (e.g. "Launcher", "Session Manager") */
+.setting-section-label {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--kiro-text-bright);
+    padding: 8px 12px;
+    margin: 20px -40px 12px -40px;
+    padding-left: 40px;
+    padding-right: 40px;
+    background: var(--kiro-bg-raised, #252526);
+    border-left: 3px solid var(--kiro-accent, #C09CFF);
+    position: sticky;
+    top: 22px;
+    z-index: 9;
 }
 
 /* Setting Row — vertical stack layout matching Kiro/VS Code settings */
@@ -209,7 +229,16 @@ body.light-theme .sidebar-item:hover { background: #e0e0e0; }
 body.light-theme .sidebar-item.active { background: #d8d8d8; }
 body.light-theme ::-webkit-scrollbar-thumb { background: #c0c0c0; }
 body.light-theme ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
-body.light-theme .settings-section-header { color: var(--kiro-text-bright); }
+body.light-theme .settings-section-header { color: var(--kiro-text-bright); background: var(--kiro-bg, #ffffff); }
+body.light-theme .setting-section-label { background: #e8e8e8; }
+
+/* Extension section header — adds flex layout for the disable button */
+.ext-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.ext-section-header span { flex: 1; }
 
 /* Keycap badges (VSCode-style) */
 .keycap-preview {

@@ -24,6 +24,8 @@ class UpdatesSettingsModule extends SettingsModule {
                     <div class="update-status-action" id="updateStatusAction"></div>
                 </div>
 
+                <div class="setting-section-label">Preferences</div>
+
                 ${this.createCheckboxRow(
                     'Automatically Check for Updates',
                     'Periodically check for updates.',
@@ -33,13 +35,14 @@ class UpdatesSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Silent Updates',
-                    'Download and install updates automatically when idle (no floating window activity for 5 minutes).',
+                    'Download and install updates automatically when idle (no Launcher activity for 5 minutes).',
                     'updateSilentUpdate',
                     false
                 )}
 
+                <div class="setting-section-label">Changelog</div>
+
                 <div class="setting-row">
-                    <div class="setting-label">Changelog</div>
                     <div class="setting-description">Release notes and version history.</div>
                     <div id="changelogContainer" class="changelog-box">
                         <em>Loading changelog...</em>

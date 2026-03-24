@@ -13,7 +13,7 @@ class DevToolsSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Enable developer tools',
-                    'Detect developer utility commands in the floating window (UUID, base64, hashing, etc.).',
+                    'Detect developer utility commands in the Launcher (UUID, base64, hashing, etc.).',
                     'devToolsEnabled',
                     true
                 )}

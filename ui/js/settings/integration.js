@@ -11,6 +11,8 @@ class IntegrationSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
+                <div class="setting-section-label">Behavior</div>
+
                 ${this.createCheckboxRow(
                     'Capture selected text',
                     'Grab selected text from the active window when the hotkey is pressed (uses Ctrl+C). Disable if this interferes with terminal apps or other programs.',
@@ -37,9 +39,10 @@ class IntegrationSettingsModule extends SettingsModule {
                     <span class="setting-description" id="notificationStatus" style="margin-left: 8px;"></span>
                 </div>
 
-                <div class="setting-row" style="margin-top: 16px;">
-                    <div class="setting-label">Quick Directory Access</div>
-                    <div class="setting-description">Type any of these keywords in the floating window to open the folder. Prefix matching works too — e.g. "down" opens Downloads.</div>
+                <div class="setting-section-label">Quick Directory Access</div>
+
+                <div class="setting-row">
+                    <div class="setting-description">Type any of these keywords in the Launcher to open the folder. Prefix matching works too — e.g. "down" opens Downloads.</div>
                 </div>
                 <table class="dir-reference-table">
                     <thead><tr><th>Keyword</th><th>Aliases</th><th>Path</th></tr></thead>

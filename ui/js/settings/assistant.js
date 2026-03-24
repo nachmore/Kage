@@ -32,7 +32,7 @@ class AssistantSettingsModule extends SettingsModule {
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
 
-                <h2 class="settings-section-header" style="margin-top: 24px;">🍟 Quick Actions</h2>
+                <div class="setting-section-label">Quick Actions</div>
 
                 ${this.createCheckboxRow(
                     'Show quick actions on responses',

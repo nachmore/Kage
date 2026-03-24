@@ -7,114 +7,128 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     render() {
-        return `
-            <div class="settings-section" id="${this.id}-section">
-                <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
+            return `
+                <div class="settings-section" id="${this.id}-section">
+                    <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                <div class="setting-row" id="themeSection">
-                    <div class="setting-label">Theme</div>
-                    <div class="setting-description">Choose your preferred theme or follow system settings.</div>
-                    <input type="hidden" id="theme" value="system">
-                    <div id="themeList" class="theme-list-scroll" style="margin-top:8px;"></div>
-                    <div style="margin-top:8px;">
-                        <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">🛍️ Browse Themes in Store...</button>
+                    <!-- Theme -->
+                    <div class="setting-row" id="themeSection">
+                        <div class="setting-label">Theme</div>
+                        <div class="setting-description">Choose your preferred theme or follow system settings.</div>
+                        <input type="hidden" id="theme" value="system">
+                        <div id="themeList" class="theme-list-scroll" style="margin-top:8px;"></div>
+                        <div style="margin-top:8px;">
+                            <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">🛍️ Browse Themes in Store...</button>
+                        </div>
                     </div>
-                </div>
 
-                ${this.createControlRow(
-                    'Floating Window Opacity',
-                    'Adjust transparency of the floating window (0.3 = very transparent, 1.0 = solid).',
-                    `<div class="range-container">
-                        <input type="range" class="range-slider" id="opacity" min="0.3" max="1" step="0.05" value="1">
-                        <span class="range-value" id="opacityValue">1.0</span>
-                    </div>`
-                )}
-
-                ${this.createControlRow(
-                    'Window Start Position',
-                    'Where the floating window appears when activated.',
-                    `<select class="setting-select" id="windowStartPosition">
-                        <option value="center">Center of active monitor</option>
-                        <option value="mouse">Next to mouse cursor</option>
-                        <option value="remember">Remember last position</option>
-                    </select>`
-                )}
-
-                ${this.createCheckboxRow(
-                    'Remember Session Manager Window Size & Position',
-                    'Restore the full size Session Manager chat window to its last size and position when reopened.',
-                    'rememberChatGeometry',
-                    true
-                )}
-
-                ${this.createControlRow(
-                    'Font Size',
-                    'Base font size for the floating and chat windows (in pixels).',
-                    `<div class="range-container">
-                        <input type="range" class="range-slider" id="fontSize" min="11" max="20" step="1" value="14">
-                        <span class="range-value" id="fontSizeValue">14px</span>
-                    </div>`
-                )}
-
-                ${this.createCheckboxRow(
-                    'Preserve Last Response',
-                    'Keep the last AI response visible when the floating window is reshown.',
-                    'preserveLastResponse',
-                    true
-                )}
-
-                ${this.createCheckboxRow(
-                    'Show Toolbar',
-                    'Show the attach file/image toolbar below the input in the floating window.',
-                    'showFloatingToolbar',
-                    false
-                )}
-
-                ${this.createCheckboxRow(
-                    'Show Time',
-                    'Display the current time in the floating window input area.',
-                    'showTime',
-                    false
-                )}
-
-                <div id="timeFormatRow" style="display:none; padding-left: 28px;">
                     ${this.createControlRow(
-                        'Time Format',
-                        '',
-                        '<select class="setting-select" id="timeFormat">' +
-                            '<option value="HH:mm">14:30 (24h)</option>' +
-                            '<option value="HH:mm:ss">14:30:45 (24h + sec)</option>' +
-                            '<option value="h:mm A">2:30 PM (12h)</option>' +
-                            '<option value="h:mm:ss A">2:30:45 PM (12h + sec)</option>' +
+                        'Font Size',
+                        'Base font size for the Launcher and Session Manager (in pixels).',
+                        '<div class="range-container">' +
+                            '<input type="range" class="range-slider" id="fontSize" min="11" max="20" step="1" value="14">' +
+                            '<span class="range-value" id="fontSizeValue">14px</span>' +
+                        '</div>'
+                    )}
+
+                    <!-- Launcher -->
+                    <div class="setting-section-label">Launcher</div>
+
+                    ${this.createControlRow(
+                        'Opacity',
+                        'Adjust transparency (0.3 = very transparent, 1.0 = solid).',
+                        '<div class="range-container">' +
+                            '<input type="range" class="range-slider" id="opacity" min="0.3" max="1" step="0.05" value="1">' +
+                            '<span class="range-value" id="opacityValue">1.0</span>' +
+                        '</div>'
+                    )}
+
+                    ${this.createControlRow(
+                        'Start Position',
+                        'Where the Launcher appears when activated.',
+                        '<select class="setting-select" id="windowStartPosition">' +
+                            '<option value="center">Center of active monitor</option>' +
+                            '<option value="mouse">Next to mouse cursor</option>' +
+                            '<option value="remember">Remember last position</option>' +
                         '</select>'
                     )}
-                </div>
 
-                ${this.createCheckboxRow(
-                    'Show Date',
-                    'Display the current date in the floating window input area.',
-                    'showDate',
-                    false
-                )}
+                    ${this.createCheckboxRow(
+                        'Remember Size',
+                        'Restore the Launcher to its last manually resized dimensions when reopened.',
+                        'rememberLauncherSize',
+                        false
+                    )}
 
-                <div id="dateFormatRow" style="display:none; padding-left: 28px;">
-                    ${this.createControlRow(
-                        'Date Format',
-                        '',
-                        '<select class="setting-select" id="dateFormat">' +
-                            '<option value="ddd, MMM D">Mon, Jan 5</option>' +
-                            '<option value="dddd, MMMM D">Monday, January 5</option>' +
-                            '<option value="MMM D, YYYY">Jan 5, 2026</option>' +
-                            '<option value="D MMM YYYY">5 Jan 2026</option>' +
-                            '<option value="YYYY-MM-DD">2026-01-05</option>' +
-                            '<option value="MM/DD/YYYY">01/05/2026</option>' +
-                            '<option value="DD/MM/YYYY">05/01/2026</option>' +
-                        '</select>'
+                    ${this.createCheckboxRow(
+                        'Preserve Last Response',
+                        'Keep the last AI response visible when the Launcher is reshown.',
+                        'preserveLastResponse',
+                        true
+                    )}
+
+                    ${this.createCheckboxRow(
+                        'Show Toolbar',
+                        'Show the attach file/image toolbar below the input.',
+                        'showFloatingToolbar',
+                        false
+                    )}
+
+                    ${this.createCheckboxRow(
+                        'Show Time',
+                        'Display the current time in the input area.',
+                        'showTime',
+                        false
+                    )}
+
+                    <div id="timeFormatRow" style="display:none; padding-left: 28px;">
+                        ${this.createControlRow(
+                            'Time Format',
+                            '',
+                            '<select class="setting-select" id="timeFormat">' +
+                                '<option value="HH:mm">14:30 (24h)</option>' +
+                                '<option value="HH:mm:ss">14:30:45 (24h + sec)</option>' +
+                                '<option value="h:mm A">2:30 PM (12h)</option>' +
+                                '<option value="h:mm:ss A">2:30:45 PM (12h + sec)</option>' +
+                            '</select>'
+                        )}
+                    </div>
+
+                    ${this.createCheckboxRow(
+                        'Show Date',
+                        'Display the current date in the input area.',
+                        'showDate',
+                        false
+                    )}
+
+                    <div id="dateFormatRow" style="display:none; padding-left: 28px;">
+                        ${this.createControlRow(
+                            'Date Format',
+                            '',
+                            '<select class="setting-select" id="dateFormat">' +
+                                '<option value="ddd, MMM D">Mon, Jan 5</option>' +
+                                '<option value="dddd, MMMM D">Monday, January 5</option>' +
+                                '<option value="MMM D, YYYY">Jan 5, 2026</option>' +
+                                '<option value="D MMM YYYY">5 Jan 2026</option>' +
+                                '<option value="YYYY-MM-DD">2026-01-05</option>' +
+                                '<option value="MM/DD/YYYY">01/05/2026</option>' +
+                                '<option value="DD/MM/YYYY">05/01/2026</option>' +
+                            '</select>'
+                        )}
+                    </div>
+
+                    <!-- Session Manager -->
+                    <div class="setting-section-label">Session Manager</div>
+
+                    ${this.createCheckboxRow(
+                        'Remember Window Size & Position',
+                        'Restore the Session Manager to its last size and position when reopened.',
+                        'rememberChatGeometry',
+                        true
                     )}
                 </div>
-            </div>
-        `;
-    }
+            `;
+        }
 
     load(config) {
         if (!config.ui) return;
@@ -146,6 +160,8 @@ class AppearanceSettingsModule extends SettingsModule {
         if (dateFormat) dateFormat.value = config.ui.date_format || 'ddd, MMM D';
         this.toggleDateTimeFormats();
         if (rememberChat) rememberChat.checked = (config.ui.chat_window_width || 0) > 0;
+        const rememberLauncher = document.getElementById('rememberLauncherSize');
+        if (rememberLauncher) rememberLauncher.checked = config.ui.remember_launcher_size === true;
         if (startPos) startPos.value = config.ui.window_start_position || 'center';
         if (fontSize) {
             fontSize.value = config.ui.font_size || 14;
@@ -169,6 +185,11 @@ class AppearanceSettingsModule extends SettingsModule {
         // Don't overwrite saved geometry when checkbox is on — it's saved by the chat window itself
         config.ui.preserve_last_response = document.getElementById('preserveLastResponse')?.checked ?? true;
         config.ui.show_floating_toolbar = document.getElementById('showFloatingToolbar')?.checked ?? false;
+        config.ui.remember_launcher_size = document.getElementById('rememberLauncherSize')?.checked ?? false;
+        if (!config.ui.remember_launcher_size) {
+            config.ui.launcher_width = null;
+            config.ui.launcher_height = null;
+        }
         config.ui.show_time = document.getElementById('showTime')?.checked ?? false;
         config.ui.show_date = document.getElementById('showDate')?.checked ?? false;
         config.ui.time_format = document.getElementById('timeFormat')?.value || 'HH:mm';

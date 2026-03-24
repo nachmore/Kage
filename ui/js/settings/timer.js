@@ -18,9 +18,7 @@ class TimerSettingsModule extends SettingsModule {
                     true
                 )}
 
-                <div class="setting-row" style="margin-top: 16px;">
-                    <div class="setting-label">When timer completes</div>
-                </div>
+                <div class="setting-section-label">Completion Actions</div>
 
                 ${this.createCheckboxRow(
                     'Show system notification',
@@ -66,8 +64,8 @@ class TimerSettingsModule extends SettingsModule {
                 </div>
 
                 ${this.createCheckboxRow(
-                    'Show floating window',
-                    'Automatically show the floating window if it is hidden when the timer completes.',
+                    'Show Launcher',
+                    'Automatically show the Launcher if it is hidden when the timer completes.',
                     'timerShowWindow',
                     true
                 )}

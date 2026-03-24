@@ -130,6 +130,21 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                     *sw = None;
                 }
             } else {
+                // Restore saved launcher size if enabled
+                {
+                    let config = state.config.lock().unwrap();
+                    if config.ui.remember_launcher_size {
+                        if let (Some(w), Some(h)) = (config.ui.launcher_width, config.ui.launcher_height) {
+                            let scale = window.scale_factor().unwrap_or(1.0);
+                            let phys_w = (w as f64 * scale) as u32;
+                            let phys_h = (h as f64 * scale) as u32;
+                            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize {
+                                width: phys_w,
+                                height: phys_h,
+                            }));
+                        }
+                    }
+                }
                 // Show window immediately — don't wait for clipboard poll
                 position_floating_window(window, &start_pos, last_x, last_y);
                 let _ = window.show();

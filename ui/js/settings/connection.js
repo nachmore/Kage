@@ -10,6 +10,8 @@ class ConnectionSettingsModule extends SettingsModule {
         return `
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
+
+                <div class="setting-section-label">Session</div>
                 
                 ${this.createCheckboxRow(
                     'Start Kiro backend on launch',
@@ -17,6 +19,8 @@ class ConnectionSettingsModule extends SettingsModule {
                     'startSessionOnLaunch',
                     true
                 )}
+
+                <div class="setting-section-label">Connection</div>
 
                 ${this.createControlRow(
                     'Connection Mode',
@@ -56,6 +60,8 @@ class ConnectionSettingsModule extends SettingsModule {
                         `<input type="number" class="setting-input" id="acpTimeout" value="30000">`
                     )}
                 </div>
+
+                <div class="setting-section-label">Workspace</div>
 
                 ${this.createControlRow(
                     'Agent workspace folder',

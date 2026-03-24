@@ -203,9 +203,18 @@ pub struct UiConfig {
     /// Show quick action chips on agent responses (translate, summarize, etc.)
     #[serde(default = "default_true")]
     pub show_response_actions: bool,
-    /// Show attach file/image toolbar in the floating window
+    /// Show attach file/image toolbar in the launcher
     #[serde(default)]
     pub show_floating_toolbar: bool,
+    /// Remember the launcher window size after manual resize
+    #[serde(default)]
+    pub remember_launcher_size: bool,
+    /// Saved launcher width (logical pixels)
+    #[serde(default)]
+    pub launcher_width: Option<u32>,
+    /// Saved launcher height (logical pixels)
+    #[serde(default)]
+    pub launcher_height: Option<u32>,
     #[serde(default = "default_speech_silence_timeout")]
     pub speech_silence_timeout: f32,
     #[serde(default)]
@@ -476,6 +485,9 @@ impl Default for Config {
                 speech_read_back: false,
                 show_response_actions: true,
                 show_floating_toolbar: false,
+                remember_launcher_size: false,
+                launcher_width: None,
+                launcher_height: None,
                 speech_silence_timeout: 2.0,
                 speech_voice: None,
                 time_format: "HH:mm".to_string(),

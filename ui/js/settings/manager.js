@@ -39,12 +39,11 @@ class SettingsManager {
             if (module._extensionId) {
                 const extId = module._extensionId;
                 // Framework-owned header: icon + title on left, enable/disable button on right
-                html += `<div style="display:flex;align-items:center;justify-content:space-between;">
-                    <h2 class="settings-section-header" style="margin:0;border-bottom:none;padding-bottom:0;">${module.icon} ${module.title}</h2>
+                html += `<h2 class="settings-section-header ext-section-header">
+                    <span>${module.icon} ${module.title}</span>
                     <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" onclick="toggleExtension('${extId}')">Disable</button>
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
-                </div>`;
-                html += `<hr style="border:none;border-top:1px solid var(--kiro-border-subtle);margin:12px 0 8px;">`;
+                </h2>`;
                 if (module.description) {
                     html += `<p style="font-size:12px;color:var(--kiro-text-muted);margin:0 0 16px;line-height:1.4;">${module.description}</p>`;
                 }

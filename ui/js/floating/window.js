@@ -385,7 +385,7 @@ export class WindowManager {
 
             // Recalculate the window size at the new scale
             try {
-                const newWidth = Math.round(516 * scaleFactor);
+                const newWidth = Math.round(570 * scaleFactor);
                 const newHeight = Math.round(DEFAULT_HEIGHT * scaleFactor);
                 console.log(`[WindowManager] Resizing to ${newWidth}x${newHeight} physical px`);
                 await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
@@ -423,7 +423,7 @@ export class WindowManager {
             // Mouse deltas are in logical pixels, convert to physical
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
-            const minWidth = Math.floor(516 * scaleFactor);
+            const minWidth = Math.floor(570 * scaleFactor);
             // Dynamic minimum height: at least enough for input container + extension bars
             const inputContainer = document.querySelector('.input-container');
             const inputH = inputContainer?.offsetHeight || 44;
@@ -442,13 +442,23 @@ export class WindowManager {
             }
         };
 
-        const onMouseUp = () => {
+        const onMouseUp = async () => {
             this.isResizing = false;
-            // Set a brief grace period so the subsequent click event
-            // (mouseup → click) doesn't trigger handleOutsideClick
             this._resizeEndedAt = Date.now();
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
+            // Persist launcher size if "remember" is enabled
+            try {
+                const config = await this.invoke('get_config');
+                if (config.ui?.remember_launcher_size) {
+                    const scale = window.devicePixelRatio || 1;
+                    const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+                    const size = await appWindow.innerSize();
+                    config.ui.launcher_width = Math.round(size.width / scale);
+                    config.ui.launcher_height = Math.round(size.height / scale);
+                    await this.invoke('save_config', { config });
+                }
+            } catch {}
         };
 
         resizeHandle.addEventListener('mousedown', async (e) => {

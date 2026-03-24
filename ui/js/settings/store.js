@@ -16,6 +16,8 @@ class StoreSettingsModule extends SettingsModule {
                     <button class="setting-button" id="openStoreBtn" style="font-size:12px;">🛍️ Open Extension Store</button>
                 </div>
 
+                <div class="setting-section-label">Updates</div>
+
                 ${this.createCheckboxRow(
                     'Auto-Update Extensions',
                     'Automatically check for and install extension updates.',
@@ -28,13 +30,15 @@ class StoreSettingsModule extends SettingsModule {
                     <span id="updateCheckStatus" style="font-size:12px;color:var(--kiro-text-muted);margin-left:8px;"></span>
                 </div>
 
+                <div class="setting-section-label">Store URL</div>
+
                 ${this.createControlRow(
                     'Primary Store URL',
                     'Main store URL for browsing and installing extensions. Leave empty for the default store.',
                     '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com">'
                 )}
 
-                <div class="setting-section-label" style="margin-top: 16px; font-weight: 600; font-size: 13px;">Additional Store Sources</div>
+                <div class="setting-section-label">Additional Store Sources</div>
                 <p style="font-size: 12px; color: var(--kiro-text-muted); margin: 4px 0 12px; line-height: 1.4;">
                     Add extra stores (e.g. an internal company store). Items from all enabled sources are merged in the store browser.
                 </p>

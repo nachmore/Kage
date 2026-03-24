@@ -13,6 +13,8 @@ class SpeechSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
+                <div class="setting-section-label">Voice Input</div>
+
                 <!-- Voice Input -->
                 ${this.createCheckboxRow(
                     'Show Speech Button',
@@ -30,6 +32,8 @@ class SpeechSettingsModule extends SettingsModule {
                 </div>
 
                 <!-- Read Back -->
+                <div class="setting-section-label">Agent Voice</div>
+
                 <div id="speechReadBackRow">
                 ${this.createCheckboxRow(
                     'Read Back Agent Responses',
