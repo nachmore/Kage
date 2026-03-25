@@ -215,7 +215,7 @@ class MacrosSettingsModule extends SettingsModule {
                 replace: el.querySelector('.step-replace')?.value || '',
                 transform: el.querySelector('.step-transform')?.value || '',
                 condition: el.querySelector('.step-condition')?.value || '',
-                script: el.querySelector('.step-script')?.value || '',
+                script: el.querySelector('.step-script-container')?._editor?.getValue() || el.querySelector('.step-script')?.value || '',
             }));
         });
     }
@@ -361,7 +361,7 @@ class MacrosSettingsModule extends SettingsModule {
         else if (t === 'find_replace') fields = '<div class="field-row"><input class="step-find" value="' + this._esc(step.find) + '" placeholder="Find (regex)"><input class="step-replace" value="' + this._esc(step.replace) + '" placeholder="Replace with"></div>';
         else if (t === 'transform') { const xOpts = TRANSFORMS.map(x => '<option value="'+x.value+'"'+(step.transform===x.value?' selected':'')+'>'+x.label+'</option>').join(''); fields = '<select class="step-transform">'+xOpts+'</select>'; }
         else if (t === 'condition') fields = '<input class="step-condition" value="' + this._esc(step.condition || '') + '" placeholder="Stop if output does NOT contain this text"><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">If the previous step\'s output doesn\'t contain this text, the automation stops here.</div>';
-        else if (t === 'script') fields = '<textarea class="step-script" rows="4" spellcheck="false" style="font-family:\'SF Mono\',Consolas,Monaco,monospace;font-size:12px;line-height:1.5;resize:vertical;min-height:80px;white-space:pre;tab-size:2;">' + this._esc(step.script) + '</textarea><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">JavaScript function body. The variable <code style="background:var(--kiro-bg-input);padding:1px 4px;border-radius:3px;">input</code> contains the previous step\'s output. Return a string.</div>';
+        else if (t === 'script') fields = '<div class="step-script-container" data-script="' + this._esc(step.script) + '"></div>';
         return '<div class="macro-step" data-step="'+si+'"><div class="macro-step-top"><span class="macro-step-num">'+(si+1)+'.</span><select class="macro-step-type">'+tOpts+'</select><span style="flex:1"></span><button class="macro-step-btn macro-step-up"'+(si===0?' disabled':'')+'>↑</button><button class="macro-step-btn macro-step-down"'+(si===total-1?' disabled':'')+'>↓</button><button class="macro-step-btn macro-step-remove">✕</button></div><div class="macro-step-fields">'+fields+'</div></div>';
     }
     _wireEvents(card, mi) {
@@ -369,6 +369,19 @@ class MacrosSettingsModule extends SettingsModule {
             this._macros[mi].enabled = e.target.checked;
             card.classList.toggle('disabled', !e.target.checked);
             this._markDirty();
+        });
+        // Mount script editors for any script steps
+        card.querySelectorAll('.step-script-container').forEach((container, si) => {
+            import('../shared/script-editor.js').then(({ createScriptEditor }) => {
+                const editor = createScriptEditor(container, {
+                    id: `macro_${mi}_step_${si}`,
+                    value: container.dataset.script || '',
+                    variableHint: 'input',
+                    contextHint: 'Return a string. The previous step\'s output is in the <code>input</code> variable.',
+                    rows: 5,
+                });
+                container._editor = editor;
+            });
         });
         card.querySelector('.macro-trigger-type')?.addEventListener('change', () => { this._syncFromDom(); this._renderMacros(); this._markDirty(); });
         card.querySelector('.macro-schedule-mode')?.addEventListener('change', () => { this._syncFromDom(); this._renderMacros(); this._markDirty(); });

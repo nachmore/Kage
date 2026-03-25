@@ -205,3 +205,58 @@ input:checked + .toggle-slider:before {
 .hotkey-display.capturing {
     border-color: var(--kiro-accent);
 }
+
+/* Script Editor — shared syntax-highlighted code editor */
+.script-editor {
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 120px;
+}
+.script-editor-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+}
+.script-editor-container .script-editor,
+.script-editor-container .script-highlight {
+    grid-area: 1 / 1 / 2 / 2;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 8px 10px;
+    border: 1px solid var(--kiro-border);
+    border-radius: 6px;
+    white-space: pre;
+    overflow-wrap: normal;
+    min-height: 120px;
+    tab-size: 2;
+}
+.script-editor-container .script-editor {
+    background: transparent;
+    color: transparent;
+    caret-color: var(--kiro-text-bright);
+    resize: vertical;
+    outline: none;
+}
+.script-editor-container .script-editor:focus {
+    border-color: var(--kiro-accent);
+}
+.script-editor-container .script-highlight {
+    background: var(--kiro-bg-input);
+    color: var(--kiro-text);
+    pointer-events: none;
+    z-index: 1;
+    margin: 0;
+    overflow: auto;
+}
+.script-highlight code {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    background: none !important;
+    padding: 0 !important;
+    white-space: pre;
+}
