@@ -76,10 +76,14 @@ kiro-assistant/
 │   │   └── settings/     # Settings modules (base, manager, + one per section)
 │   ├── vendor/           # NPM-managed JS dependencies (marked, mermaid, prismjs, mathjs, graphviz)
 │   ├── assets/           # Images and icons
-│   ├── extensions/       # Installed extensions
-│   ├── store-packages/   # Extension store packages
+│   ├── extensions/       # Built-in extensions (math, calendar, folder-tools, window-walker)
 │   ├── themes/           # Custom themes
 │   └── updates/          # Update staging area
+├── store/                 # Extension store
+│   ├── dev_server.py     # Dev store server (mock catalog + package downloads)
+│   ├── packages/         # Zipped extension/theme packages for store download
+│   ├── extensions/       # Store extension source (todos, color-picker, dev-tools, timer, etc.)
+│   └── themes/           # Store theme source (nord, sunset)
 ├── docs/                  # Documentation
 ├── icons/                 # Application icons
 ├── scripts/              # Development and utility scripts (Python, PowerShell)
@@ -128,5 +132,5 @@ kiro-assistant/
 - All modules must implement: `render()`, `load(config)`, `save(config)`, `validate()`
 - Optional: `initialize()` (called after render), `destroy()` (cleanup)
 - Use `createCheckboxRow()`, `createControlRow()` helpers from base class for consistent layout
-- Current modules: about, appearance, assistant, colorpicker, connection, devtools, hotkey, integration, math, mcp, model, notifications, shortcuts, speech, store, system, timer, tool-permissions, updates
+- Current modules: about, appearance, assistant, connection, hotkey, integration, math, mcp, model, notifications, shortcuts, speech, store, system, tool-permissions, updates
 - CAVEAT: When rendering markdown with `marked.parse()`, always sanitize the input first. If the source returns HTML instead of markdown, marked will pass it through raw — injecting `<style>` and `<script>` tags that corrupt the page. Check for HTML document markers (`<!`, `<html`) and wrap in a code fence before parsing.

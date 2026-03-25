@@ -1,8 +1,5 @@
 [
-  { "id": "dev-tools", "className": "DevToolsExtSettingsModule", "sidebarIcon": "🛠️", "sidebarLabel": "Developer Tools" },
   { "id": "math", "className": "MathExtSettingsModule", "sidebarIcon": "🧮", "sidebarLabel": "Math" },
-  { "id": "color-picker", "className": "ColorPickerExtSettingsModule", "sidebarIcon": "🎨", "sidebarLabel": "Color Picker" },
-  { "id": "timer", "className": "TimerExtSettingsModule", "sidebarIcon": "⏱️", "sidebarLabel": "Timer" },
   { "id": "calendar", "className": "CalendarExtSettingsModule", "sidebarIcon": "📅", "sidebarLabel": "Calendar" },
   { "id": "folder-tools" },
   { "id": "window-walker", "className": "WindowWalkerExtSettingsModule", "sidebarIcon": "🪟", "sidebarLabel": "Window Walker" }
