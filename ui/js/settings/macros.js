@@ -53,9 +53,9 @@ class MacrosSettingsModule extends SettingsModule {
             .macro-output-select { padding: 4px 6px !important; font-size: 11px !important; opacity: 0.7; }
             .macro-enable-toggle { cursor: pointer; width: 16px; height: 16px; }
             .macro-section { padding: 10px 14px; }
-            .macro-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kiro-text-muted); margin-bottom: 6px; font-weight: 600; }
+            .macro-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kiro-text); margin-bottom: 6px; font-weight: 600; }
             .macro-trigger { padding: 10px 14px; border-bottom: 1px solid var(--kiro-border-subtle); }
-            .macro-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text-muted); }
+            .macro-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text); }
             .macro-trigger-config { margin-top: 8px; }
             .macro-trigger-config input[type="number"], .macro-trigger-config input[type="time"] { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px; padding: 6px 10px; color: var(--kiro-text); font-size: 13px; }
             .macro-trigger-config input::placeholder { color: var(--kiro-text-muted); }
@@ -65,7 +65,7 @@ class MacrosSettingsModule extends SettingsModule {
             .macro-steps { padding: 10px 14px; }
             .macro-step { margin-bottom: 6px; padding: 8px 10px; background: var(--kiro-bg-surface); border-radius: 8px; border: 1px solid var(--kiro-border-subtle); }
             .macro-step-top { display: flex; align-items: center; gap: 6px; }
-            .macro-step-num { font-size: 10px; color: var(--kiro-text-muted); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
+            .macro-step-num { font-size: 10px; color: var(--kiro-text); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
             .macro-step-type { font-size: 12px; width: auto; }
             .macro-step-fields { padding-left: 26px; margin-top: 6px; }
             .macro-step-fields input, .macro-step-fields select { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; }
@@ -332,23 +332,23 @@ class MacrosSettingsModule extends SettingsModule {
         let details = '';
         if (p.mode === 'hourly') {
             const hourOpts = [1,2,3,4,6,8,12].map(h => `<option value="${h}"${p.hours===h?' selected':''}>Every ${h} hour${h>1?'s':''}</option>`).join('');
-            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${hourOpts}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`;
+            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${hourOpts}</select><span style="font-size:12px;color:var(--kiro-text)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`;
         } else if (p.mode === 'daily') {
             const dayBtns = DAYS_OF_WEEK.map(d => {
                 const active = p.days.length === 0 || p.days.includes(d.value);
                 return `<button type="button" class="sched-day-btn${active ? ' active' : ''}" data-day="${d.value}">${d.label}</button>`;
             }).join('');
-            details = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${dayBtns}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
+            details = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${dayBtns}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
         } else if (p.mode === 'monthly') {
             const ordOpts = ['1st','2nd','3rd','4th','last'].map(o => `<option value="${o}"${p.weekOrdinal===o?' selected':''}>${o}</option>`).join('');
             const dowOpts = DAYS_OF_WEEK.map(d => `<option value="${d.value}"${p.weekDay===d.value?' selected':''}>${d.label}</option>`).join('');
             const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.dayOfMonth===d?' selected':''}>${d}</option>`).join('');
             const isOrd = p.dayOfMonth === 0;
-            details = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!isOrd?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${isOrd?'disabled':''}>${dayNums}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${isOrd?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!isOrd?'disabled':''}>${ordOpts}</select> <select class="sched-month-dow" style="width:70px;" ${!isOrd?'disabled':''}>${dowOpts}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
+            details = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!isOrd?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${isOrd?'disabled':''}>${dayNums}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${isOrd?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!isOrd?'disabled':''}>${ordOpts}</select> <select class="sched-month-dow" style="width:70px;" ${!isOrd?'disabled':''}>${dowOpts}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
         } else if (p.mode === 'yearly') {
             const monthOpts = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => `<option value="${i+1}"${p.month===i+1?' selected':''}>${m}</option>`).join('');
             const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.monthDay===d?' selected':''}>${d}</option>`).join('');
-            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${monthOpts}</select><select class="sched-year-day" style="width:60px;">${dayNums}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`;
+            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${monthOpts}</select><select class="sched-year-day" style="width:60px;">${dayNums}</select><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`;
         }
         return `<select class="macro-schedule-mode">${modeOpts}</select><input type="hidden" class="macro-schedule-interval" value="${this._esc(trigger.interval || '')}">${details}`;
     }
@@ -360,7 +360,7 @@ class MacrosSettingsModule extends SettingsModule {
         if (t === 'ai_prompt') fields = '<input class="step-prompt" value="' + this._esc(step.prompt) + '" placeholder="Prompt... use {input} for previous output">';
         else if (t === 'find_replace') fields = '<div class="field-row"><input class="step-find" value="' + this._esc(step.find) + '" placeholder="Find (regex)"><input class="step-replace" value="' + this._esc(step.replace) + '" placeholder="Replace with"></div>';
         else if (t === 'transform') { const xOpts = TRANSFORMS.map(x => '<option value="'+x.value+'"'+(step.transform===x.value?' selected':'')+'>'+x.label+'</option>').join(''); fields = '<select class="step-transform">'+xOpts+'</select>'; }
-        else if (t === 'condition') fields = '<input class="step-condition" value="' + this._esc(step.condition || '') + '" placeholder="Stop if output does NOT contain this text"><div style="font-size:10px;color:var(--kiro-text-muted);margin-top:2px;">If the previous step\'s output doesn\'t contain this text, the automation stops here.</div>';
+        else if (t === 'condition') fields = '<input class="step-condition" value="' + this._esc(step.condition || '') + '" placeholder="Stop if output does NOT contain this text"><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">If the previous step\'s output doesn\'t contain this text, the automation stops here.</div>';
         else if (t === 'script') fields = '<input class="step-script" value="' + this._esc(step.script) + '" placeholder="JS: input.toUpperCase()">';
         return '<div class="macro-step" data-step="'+si+'"><div class="macro-step-top"><span class="macro-step-num">'+(si+1)+'.</span><select class="macro-step-type">'+tOpts+'</select><span style="flex:1"></span><button class="macro-step-btn macro-step-up"'+(si===0?' disabled':'')+'>↑</button><button class="macro-step-btn macro-step-down"'+(si===total-1?' disabled':'')+'>↓</button><button class="macro-step-btn macro-step-remove">✕</button></div><div class="macro-step-fields">'+fields+'</div></div>';
     }
