@@ -68,7 +68,7 @@ class MacrosSettingsModule extends SettingsModule {
             .macro-step-num { font-size: 10px; color: var(--kiro-text); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
             .macro-step-type { font-size: 12px; width: auto; }
             .macro-step-fields { padding-left: 26px; margin-top: 6px; }
-            .macro-step-fields input, .macro-step-fields select { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; }
+            .macro-step-fields input, .macro-step-fields select, .macro-step-fields textarea { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; box-sizing: border-box; }
             .macro-step-fields input::placeholder { color: var(--kiro-text-muted); }
             .macro-step-fields .field-row { display: flex; gap: 6px; }
             .macro-step-fields .field-row input { flex: 1; }
@@ -361,7 +361,7 @@ class MacrosSettingsModule extends SettingsModule {
         else if (t === 'find_replace') fields = '<div class="field-row"><input class="step-find" value="' + this._esc(step.find) + '" placeholder="Find (regex)"><input class="step-replace" value="' + this._esc(step.replace) + '" placeholder="Replace with"></div>';
         else if (t === 'transform') { const xOpts = TRANSFORMS.map(x => '<option value="'+x.value+'"'+(step.transform===x.value?' selected':'')+'>'+x.label+'</option>').join(''); fields = '<select class="step-transform">'+xOpts+'</select>'; }
         else if (t === 'condition') fields = '<input class="step-condition" value="' + this._esc(step.condition || '') + '" placeholder="Stop if output does NOT contain this text"><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">If the previous step\'s output doesn\'t contain this text, the automation stops here.</div>';
-        else if (t === 'script') fields = '<input class="step-script" value="' + this._esc(step.script) + '" placeholder="JS: input.toUpperCase()">';
+        else if (t === 'script') fields = '<textarea class="step-script" rows="4" spellcheck="false" style="font-family:\'SF Mono\',Consolas,Monaco,monospace;font-size:12px;line-height:1.5;resize:vertical;min-height:80px;white-space:pre;tab-size:2;">' + this._esc(step.script) + '</textarea><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">JavaScript function body. The variable <code style="background:var(--kiro-bg-input);padding:1px 4px;border-radius:3px;">input</code> contains the previous step\'s output. Return a string.</div>';
         return '<div class="macro-step" data-step="'+si+'"><div class="macro-step-top"><span class="macro-step-num">'+(si+1)+'.</span><select class="macro-step-type">'+tOpts+'</select><span style="flex:1"></span><button class="macro-step-btn macro-step-up"'+(si===0?' disabled':'')+'>↑</button><button class="macro-step-btn macro-step-down"'+(si===total-1?' disabled':'')+'>↓</button><button class="macro-step-btn macro-step-remove">✕</button></div><div class="macro-step-fields">'+fields+'</div></div>';
     }
     _wireEvents(card, mi) {
