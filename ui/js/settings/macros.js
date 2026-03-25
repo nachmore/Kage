@@ -56,9 +56,8 @@ class MacrosSettingsModule extends SettingsModule {
             .macro-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kiro-text-muted); margin-bottom: 6px; font-weight: 600; }
             .macro-trigger { padding: 10px 14px; border-bottom: 1px solid var(--kiro-border-subtle); }
             .macro-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text-muted); }
-            .macro-trigger-header select { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 4px 8px; color: var(--kiro-text); font-size: 12px; }
             .macro-trigger-config { margin-top: 8px; }
-            .macro-trigger-config select, .macro-trigger-config input[type="number"], .macro-trigger-config input[type="time"] { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; }
+            .macro-trigger-config input[type="number"], .macro-trigger-config input[type="time"] { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px; padding: 6px 10px; color: var(--kiro-text); font-size: 13px; }
             .macro-trigger-config input::placeholder { color: var(--kiro-text-muted); }
             .macro-trigger-config .macro-signal-name { width: 100%; margin-bottom: 6px; }
             .macro-trigger-config .macro-signal-filter { width: 100%; background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; }
@@ -67,7 +66,7 @@ class MacrosSettingsModule extends SettingsModule {
             .macro-step { margin-bottom: 6px; padding: 8px 10px; background: var(--kiro-bg-surface); border-radius: 8px; border: 1px solid var(--kiro-border-subtle); }
             .macro-step-top { display: flex; align-items: center; gap: 6px; }
             .macro-step-num { font-size: 10px; color: var(--kiro-text-muted); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
-            .macro-step-type { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 4px 8px; color: var(--kiro-text); font-size: 11px; }
+            .macro-step-type { font-size: 12px; width: auto; }
             .macro-step-fields { padding-left: 26px; margin-top: 6px; }
             .macro-step-fields input, .macro-step-fields select { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; }
             .macro-step-fields input::placeholder { color: var(--kiro-text-muted); }
@@ -82,9 +81,9 @@ class MacrosSettingsModule extends SettingsModule {
             .sched-day-btn.active { background: var(--kiro-accent) !important; color: #fff !important; border-color: var(--kiro-accent) !important; }
             .sched-day-btn:not(.active) { background: var(--kiro-bg-surface); color: var(--kiro-text-muted); }
             .sched-day-btn:hover:not(.active) { background: var(--kiro-bg-input); color: var(--kiro-text); }
-            .macro-card select { color-scheme: dark; }
+            .macro-card select { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px; color: var(--kiro-text); font-size: 13px; font-family: var(--kiro-font); cursor: pointer; padding: 6px 10px; transition: border-color 0.2s; }
+            .macro-card select:focus { outline: none; border-color: var(--kiro-accent); }
             .macro-card select option { background: var(--kiro-bg-input, #28242E); color: var(--kiro-text, #E5E7EB); }
-            body.light-theme .macro-card select { color-scheme: light; }
             body.light-theme .macro-card select option { background: #fff; color: #333; }`;
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
