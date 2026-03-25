@@ -66,49 +66,68 @@ pub fn write_clipboard_impl(text: &str) {
     }
 }
 
+fn make_key(vk: u16, up: bool) -> WinInput {
+    let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
+    WinInput {
+        input_type: INPUT_KEYBOARD,
+        ki: KbdInput { vk, scan, flags: if up { KEYEVENTF_KEYUP } else { 0 }, time: 0, extra: 0 },
+        _pad: [0u8; 8],
+    }
+}
+
+fn scan_input(scan: u16, up: bool) -> WinInput {
+    WinInput {
+        input_type: INPUT_KEYBOARD,
+        ki: KbdInput {
+            vk: 0,
+            scan,
+            flags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { 0 },
+            time: 0,
+            extra: 0,
+        },
+        _pad: [0u8; 8],
+    }
+}
+
+/// Force-release all modifier keys (both generic AND left/right-specific
+/// variants). When the user physically holds e.g. left-Alt, Windows tracks
+/// both VK_MENU *and* VK_LMENU as pressed. Releasing only the generic VK
+/// doesn't always clear the side-specific state, so apps that check
+/// GetAsyncKeyState(VK_LMENU) still see Alt as held.
+fn release_all_modifiers() {
+    let size = std::mem::size_of::<WinInput>() as i32;
+    let releases = [
+        make_key(0xA0, true), // VK_LSHIFT
+        make_key(0xA1, true), // VK_RSHIFT
+        make_key(0x10, true), // VK_SHIFT
+        make_key(0xA2, true), // VK_LCONTROL
+        make_key(0xA3, true), // VK_RCONTROL
+        make_key(0x11, true), // VK_CONTROL
+        make_key(0xA4, true), // VK_LMENU (Left Alt)
+        make_key(0xA5, true), // VK_RMENU (Right Alt)
+        make_key(0x12, true), // VK_MENU  (Alt generic)
+        make_key(0x5B, true), // VK_LWIN
+        make_key(0x5C, true), // VK_RWIN
+    ];
+    unsafe {
+        SendInput(releases.len() as u32, releases.as_ptr(), size);
+    }
+    std::thread::sleep(std::time::Duration::from_millis(30));
+}
+
 /// Save the current clipboard, release all modifier keys, and send Ctrl+C
 /// to the foreground window. Returns (original_clipboard, clipboard_seq_before_copy).
 ///
 /// This is the shared setup for both synchronous (`capture_selection_impl`)
 /// and two-phase (`begin_selection_capture` / `finish_selection_capture`) capture.
 fn send_copy_keystroke() -> (Option<String>, u32) {
-    fn make_key(vk: u16, up: bool) -> WinInput {
-        let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput { vk, scan, flags: if up { KEYEVENTF_KEYUP } else { 0 }, time: 0, extra: 0 },
-            _pad: [0u8; 8],
-        }
-    }
-    fn scan_input(scan: u16, up: bool) -> WinInput {
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput {
-                vk: 0,
-                scan,
-                flags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { 0 },
-                time: 0,
-                extra: 0,
-            },
-            _pad: [0u8; 8],
-        }
-    }
     let size = std::mem::size_of::<WinInput>() as i32;
 
     unsafe {
         let original_clipboard = read_clipboard_impl();
         let seq_before = GetClipboardSequenceNumber();
 
-        // Force-release all modifiers
-        let releases = [
-            make_key(0x10, true), // VK_SHIFT
-            make_key(0x11, true), // VK_CONTROL
-            make_key(0x12, true), // VK_MENU (Alt)
-            make_key(0x5B, true), // VK_LWIN
-            make_key(0x5C, true), // VK_RWIN
-        ];
-        SendInput(releases.len() as u32, releases.as_ptr(), size);
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        release_all_modifiers();
 
         // Send clean Ctrl+C using scan codes
         let copy_keys = [
@@ -204,29 +223,15 @@ fn wait_for_clipboard_change(seq_before: u32, timeout_ms: u32) -> bool {
 
 /// Simulate Ctrl+V paste keystroke to the foreground window.
 pub fn simulate_paste_impl() {
+    release_all_modifiers();
+
     let size = std::mem::size_of::<WinInput>() as i32;
     // Ctrl down (scan 0x1D), V down (scan 0x2F), V up, Ctrl up
     let paste_keys = [
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput { vk: 0, scan: 0x1D, flags: KEYEVENTF_SCANCODE, time: 0, extra: 0 },
-            _pad: [0u8; 8],
-        },
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput { vk: 0, scan: 0x2F, flags: KEYEVENTF_SCANCODE, time: 0, extra: 0 },
-            _pad: [0u8; 8],
-        },
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput { vk: 0, scan: 0x2F, flags: KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, time: 0, extra: 0 },
-            _pad: [0u8; 8],
-        },
-        WinInput {
-            input_type: INPUT_KEYBOARD,
-            ki: KbdInput { vk: 0, scan: 0x1D, flags: KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, time: 0, extra: 0 },
-            _pad: [0u8; 8],
-        },
+        scan_input(0x1D, false), // Ctrl down
+        scan_input(0x2F, false), // V down
+        scan_input(0x2F, true),  // V up
+        scan_input(0x1D, true),  // Ctrl up
     ];
     unsafe {
         SendInput(4, paste_keys.as_ptr(), size);
