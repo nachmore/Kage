@@ -43,36 +43,45 @@ class MacrosSettingsModule extends SettingsModule {
     }
     render() {
         const css = `
-            .macro-card { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-            .macro-card.disabled { opacity: 0.5; }
-            .macro-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-            .macro-header input, .macro-header select { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 4px 8px; color: var(--kiro-text); font-size: 13px; font-family: var(--kiro-font); }
-            .macro-icon-input { width: 36px !important; text-align: center; flex: none !important; }
-            .macro-header .macro-name-input { flex: 1; }
-            .macro-output-select { padding: 4px 6px !important; font-size: 12px !important; }
-            .macro-enable-toggle { cursor: pointer; }
-            .macro-trigger { margin: 8px 0; padding: 8px; background: var(--kiro-bg-surface); border-radius: 6px; border: 1px solid var(--kiro-border-subtle); }
-            .macro-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text-muted); margin-bottom: 6px; }
-            .macro-trigger-header select { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 3px 6px; color: var(--kiro-text); font-size: 12px; }
-            .macro-trigger-config { padding-left: 4px; }
-            .macro-trigger-config select, .macro-trigger-config input { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 4px 8px; color: var(--kiro-text); font-size: 12px; width: 100%; margin-bottom: 4px; }
+            .macro-card { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 10px; padding: 0; margin-bottom: 12px; overflow: hidden; }
+            .macro-card.disabled { opacity: 0.45; }
+            .macro-header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--kiro-border-subtle); }
+            .macro-header input, .macro-header select { background: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px 8px; color: var(--kiro-text); font-size: 13px; font-family: var(--kiro-font); }
+            .macro-header input:focus, .macro-header select:focus { border-color: var(--kiro-border-subtle); background: var(--kiro-bg-surface); outline: none; }
+            .macro-icon-input { width: 32px !important; text-align: center; flex: none !important; font-size: 16px !important; padding: 2px !important; }
+            .macro-header .macro-name-input { flex: 1; font-weight: 500; font-size: 14px; }
+            .macro-output-select { padding: 4px 6px !important; font-size: 11px !important; opacity: 0.7; }
+            .macro-enable-toggle { cursor: pointer; width: 16px; height: 16px; }
+            .macro-section { padding: 10px 14px; }
+            .macro-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kiro-text-muted); margin-bottom: 6px; font-weight: 600; }
+            .macro-trigger { padding: 10px 14px; border-bottom: 1px solid var(--kiro-border-subtle); }
+            .macro-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text-muted); }
+            .macro-trigger-header select { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 4px 8px; color: var(--kiro-text); font-size: 12px; }
+            .macro-trigger-config { margin-top: 8px; }
+            .macro-trigger-config select, .macro-trigger-config input[type="number"], .macro-trigger-config input[type="time"] { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; }
             .macro-trigger-config input::placeholder { color: var(--kiro-text-muted); }
-            .macro-steps { margin: 8px 0; }
-            .macro-step { margin-bottom: 6px; padding: 6px; background: var(--kiro-bg-surface); border-radius: 6px; border: 1px solid var(--kiro-border-subtle); }
+            .macro-trigger-config .macro-signal-name { width: 100%; margin-bottom: 6px; }
+            .macro-trigger-config .macro-signal-filter { width: 100%; background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; }
+            .macro-trigger-summary { font-size: 11px; color: var(--kiro-accent); margin-left: auto; font-style: italic; }
+            .macro-steps { padding: 10px 14px; }
+            .macro-step { margin-bottom: 6px; padding: 8px 10px; background: var(--kiro-bg-surface); border-radius: 8px; border: 1px solid var(--kiro-border-subtle); }
             .macro-step-top { display: flex; align-items: center; gap: 6px; }
-            .macro-step-num { font-size: 11px; color: var(--kiro-text-muted); width: 18px; text-align: center; flex-shrink: 0; }
-            .macro-step-type { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 3px 6px; color: var(--kiro-text); font-size: 11px; }
-            .macro-step-fields { padding-left: 24px; margin-top: 4px; }
-            .macro-step-fields input, .macro-step-fields select { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 4px 8px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; }
+            .macro-step-num { font-size: 10px; color: var(--kiro-text-muted); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
+            .macro-step-type { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 4px 8px; color: var(--kiro-text); font-size: 11px; }
+            .macro-step-fields { padding-left: 26px; margin-top: 6px; }
+            .macro-step-fields input, .macro-step-fields select { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; }
             .macro-step-fields input::placeholder { color: var(--kiro-text-muted); }
             .macro-step-fields .field-row { display: flex; gap: 6px; }
             .macro-step-fields .field-row input { flex: 1; }
-            .macro-step-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 4px; flex-shrink: 0; }
-            .macro-step-btn:hover { color: var(--kiro-text); background: var(--kiro-bg-input); }
-            .macro-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
-            .macro-delete-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 12px; padding: 2px 8px; }
-            .macro-delete-btn:hover { color: #e55; }
-            .power-status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--kiro-bg-input); color: var(--kiro-text-muted); }`;
+            .macro-step-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; opacity: 0.6; }
+            .macro-step-btn:hover { color: var(--kiro-text); background: var(--kiro-bg-input); opacity: 1; }
+            .macro-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; padding: 8px 14px; border-top: 1px solid var(--kiro-border-subtle); }
+            .macro-delete-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; }
+            .macro-delete-btn:hover { color: #e55; background: rgba(238,85,85,0.1); }
+            .sched-day-btn { width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--kiro-border-subtle); cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
+            .sched-day-btn.active { background: var(--kiro-accent) !important; color: #fff !important; border-color: var(--kiro-accent) !important; }
+            .sched-day-btn:not(.active) { background: var(--kiro-bg-surface); color: var(--kiro-text-muted); }
+            .sched-day-btn:hover:not(.active) { background: var(--kiro-bg-input); color: var(--kiro-text); }`;
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + '<div class="setting-description" style="margin-bottom:12px">Chain transformations into automated actions. Trigger them manually, on a schedule, or in response to signals from extensions.</div>'
@@ -231,8 +240,13 @@ class MacrosSettingsModule extends SettingsModule {
             h += this._triggerHtml(macro.trigger || { type: 'manual' });
             // Steps
             h += '<div class="macro-steps">';
+            h += '<div class="macro-section-label">WHEN</div>';
+            // (trigger is above)
+            h += '</div>';
+            h += '<div class="macro-steps">';
+            h += '<div class="macro-section-label">THEN</div>';
             macro.steps.forEach((step, si) => { h += this._stepHtml(step, si, macro.steps.length); });
-            h += '</div><div class="macro-actions"><button class="setting-button macro-add-step-btn" style="font-size:12px;padding:3px 10px">+ Step</button><button class="macro-delete-btn">Delete</button></div>';
+            h += '</div><div class="macro-actions"><button class="setting-button macro-add-step-btn" style="font-size:11px;padding:3px 10px">+ Step</button><button class="macro-delete-btn">Delete</button></div>';
             card.innerHTML = h;
             list.appendChild(card);
             this._wireEvents(card, mi);
@@ -314,7 +328,7 @@ class MacrosSettingsModule extends SettingsModule {
             } else if (p.mode === 'daily') {
                 const dayBtns = DAYS_OF_WEEK.map(d => {
                     const active = p.days.length === 0 || p.days.includes(d.value);
-                    return `<button type="button" class="sched-day-btn${active ? ' active' : ''}" data-day="${d.value}" style="width:32px;height:28px;border-radius:4px;border:1px solid var(--kiro-border-subtle);background:${active?'var(--kiro-accent)':'var(--kiro-bg-input)'};color:${active?'#fff':'var(--kiro-text-muted)'};cursor:pointer;font-size:11px;font-weight:600;">${d.label}</button>`;
+                    return `<button type="button" class="sched-day-btn${active ? ' active' : ''}" data-day="${d.value}">${d.label}</button>`;
                 }).join('');
                 details = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${dayBtns}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
             } else if (p.mode === 'monthly') {
@@ -353,8 +367,6 @@ class MacrosSettingsModule extends SettingsModule {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 btn.classList.toggle('active');
-                btn.style.background = btn.classList.contains('active') ? 'var(--kiro-accent)' : 'var(--kiro-bg-input)';
-                btn.style.color = btn.classList.contains('active') ? '#fff' : 'var(--kiro-text-muted)';
                 this._markDirty();
             });
             btn.addEventListener('mousedown', e => e.preventDefault());
