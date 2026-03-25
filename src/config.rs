@@ -344,6 +344,9 @@ pub struct MacroConfig {
     /// Whether this automation is enabled
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// AI-generated summary of what this automation does
+    #[serde(default)]
+    pub summary: Option<String>,
 }
 
 /// How an automation is triggered.
