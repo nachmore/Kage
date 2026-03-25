@@ -56,9 +56,12 @@ pub struct Config {
     /// ISO 8601 timestamp of the last extension update check
     #[serde(default)]
     pub last_extension_update_check: Option<String>,
-    /// Macros — named sequences of AI transformation steps
+    /// Macros/Automations — named sequences of AI transformation steps with triggers
     #[serde(default)]
     pub macros: Vec<MacroConfig>,
+    /// Power/battery settings for automations
+    #[serde(default)]
+    pub automation_power: AutomationPowerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -321,7 +324,7 @@ impl Default for QuickActionsConfig {
     }
 }
 
-/// A macro is a named sequence of AI transformation steps.
+/// A macro/automation is a named sequence of transformation steps with an optional trigger.
 /// Each step's output feeds into the next step's {input} placeholder.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroConfig {
@@ -335,7 +338,78 @@ pub struct MacroConfig {
     /// What to do with the final output: "clipboard" or "replace" or "inform"
     #[serde(default = "default_macro_output")]
     pub output: String,
+    /// How this automation is triggered (default: manual only)
+    #[serde(default)]
+    pub trigger: AutomationTrigger,
+    /// Whether this automation is enabled
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
+
+/// How an automation is triggered.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AutomationTrigger {
+    /// Only runs via inline assist / quick actions (current behavior)
+    #[serde(rename = "manual")]
+    Manual,
+    /// Runs on a time-based schedule
+    #[serde(rename = "schedule")]
+    Schedule {
+        /// Cron-like interval: "every_5m", "every_1h", "daily_09:00", "weekdays_09:00"
+        #[serde(default)]
+        interval: String,
+        /// Last execution timestamp (ISO 8601)
+        #[serde(default)]
+        last_run: Option<String>,
+    },
+    /// Runs in response to a named signal from an extension or the system
+    #[serde(rename = "signal")]
+    Signal {
+        /// Signal name, e.g. "calendar:meeting_starting", "todos:item_due", "system:clipboard_change"
+        #[serde(default)]
+        signal: String,
+        /// Optional filter (extension-defined, e.g. subject contains "standup")
+        #[serde(default)]
+        filter: Option<String>,
+    },
+}
+
+impl Default for AutomationTrigger {
+    fn default() -> Self { AutomationTrigger::Manual }
+}
+
+/// Power/battery awareness settings for automations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomationPowerConfig {
+    /// How to handle power: "auto" (detect battery), "full" (always run), "saving" (always throttle)
+    #[serde(default = "default_power_mode")]
+    pub mode: String,
+    /// Multiplier for schedule intervals when on battery (e.g. 2.0 = run half as often)
+    #[serde(default = "default_battery_multiplier")]
+    pub battery_multiplier: f32,
+    /// Multiplier when battery is low (< 20%)
+    #[serde(default = "default_low_battery_multiplier")]
+    pub low_battery_multiplier: f32,
+    /// Disable signal-triggered automations entirely on low battery
+    #[serde(default)]
+    pub disable_signals_on_low_battery: bool,
+}
+
+impl Default for AutomationPowerConfig {
+    fn default() -> Self {
+        AutomationPowerConfig {
+            mode: "auto".to_string(),
+            battery_multiplier: 2.0,
+            low_battery_multiplier: 4.0,
+            disable_signals_on_low_battery: false,
+        }
+    }
+}
+
+fn default_power_mode() -> String { "auto".to_string() }
+fn default_battery_multiplier() -> f32 { 2.0 }
+fn default_low_battery_multiplier() -> f32 { 4.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroStep {
@@ -520,6 +594,7 @@ impl Default for Config {
             auto_update_extensions: false,
             last_extension_update_check: None,
             macros: vec![],
+            automation_power: AutomationPowerConfig::default(),
         }
     }
 }

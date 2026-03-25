@@ -5,6 +5,7 @@ mod acp_client;
 mod activity_tracker;
 mod app_launcher;
 mod auto_steering;
+mod automation;
 mod commands;
 #[allow(dead_code)] // Consumed by the computer-control-mcp binary, not this one
 mod computer_control;
@@ -285,6 +286,7 @@ fn main() {
             last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
             frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
+            automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -369,6 +371,19 @@ fn main() {
             });
 
             info!("=== Setup Complete ===");
+
+            // Start automation scheduler
+            {
+                let state: tauri::State<'_, AppState> = app.state();
+                let config_arc = state.config.clone();
+                let signal_tx_arc = state.automation_signal_tx.clone();
+                let app_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
+                    *signal_tx_arc.lock().unwrap() = Some(scheduler.signal_sender());
+                    scheduler.run(signal_rx, app_handle).await;
+                });
+            }
 
             // Watchdog: if the frontend doesn't signal ready within 15 seconds,
             // the webview likely failed to load (e.g. WebView2 "resource in use").
@@ -727,6 +742,9 @@ fn main() {
             commands::list_open_windows,
             commands::get_process_name,
             commands::focus_open_window,
+            crate::automation::emit_automation_signal,
+            crate::automation::get_power_status,
+            crate::automation::list_automation_signals,
             commands::start_activity_tracker,
             commands::stop_activity_tracker,
             commands::get_activity_report,

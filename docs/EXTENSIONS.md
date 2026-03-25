@@ -550,6 +550,69 @@ Add `toolProvider` to `contributes`:
 }
 ```
 
+## Trigger Provider API
+
+A trigger provider defines signals that the extension can emit, which can be used to trigger automations. It's an ES module that default-exports a class:
+
+```js
+export default class MyTriggerProvider {
+    initialize(context) {
+        this.invoke = context.invoke;
+    }
+
+    onConfigUpdate(config) {}
+
+    /**
+     * Return an array of trigger definitions this extension can emit.
+     * These appear in the Automations settings signal picker.
+     */
+    getTriggers() {
+        return [
+            { name: 'my-ext:something_happened', description: 'When something happens', icon: '⚡' },
+            { name: 'my-ext:threshold_reached', description: 'When a threshold is reached', icon: '📊' },
+        ];
+    }
+
+    destroy() {}
+}
+```
+
+### Emitting Signals
+
+When the trigger condition is met, call the `emit_automation_signal` Tauri command:
+
+```js
+this.invoke('emit_automation_signal', {
+    name: 'my-ext:something_happened',
+    data: { key: 'value', details: '...' }
+});
+```
+
+The automation scheduler will match the signal name against configured automations and fire any that match.
+
+### Manifest
+
+Add `triggerProvider` to `contributes`:
+
+```json
+{
+  "contributes": {
+    "triggerProvider": "./triggers.js"
+  }
+}
+```
+
+### Built-in System Signals
+
+These signals are always available (no extension needed):
+
+| Signal | Description |
+|--------|-------------|
+| `system:clipboard_change` | Clipboard content changed |
+| `system:window_focus` | A window gained focus |
+| `system:idle_5m` | System idle for 5 minutes |
+| `system:resume` | System resumed from sleep |
+
 ## Theme Format
 
 Themes override CSS variables defined in `shared-kiro-tokens.css`:

@@ -64,6 +64,8 @@ pub struct ExtensionContributes {
     pub message_formatters: Option<String>,
     #[serde(default)]
     pub tool_provider: Option<String>,
+    #[serde(default)]
+    pub trigger_provider: Option<String>,
 }
 
 

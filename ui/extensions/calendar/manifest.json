@@ -16,6 +16,7 @@
   "contributes": {
     "searchProvider": "./search.js",
     "settingsModule": "./settings.js",
-    "toolProvider": "./tools.js"
+    "toolProvider": "./tools.js",
+    "triggerProvider": "./triggers.js"
   }
 }

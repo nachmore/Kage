@@ -39,6 +39,7 @@ pub mod startup;
 pub mod hotkey;
 pub mod icon;
 pub mod window_list;
+pub mod power;
 #[allow(dead_code)] // Consumed by the computer-control-mcp binary
 pub mod accessibility;
 

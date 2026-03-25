@@ -5,6 +5,7 @@ pub mod acp_client;
 pub mod activity_tracker;
 pub mod app_launcher;
 pub mod auto_steering;
+pub mod automation;
 pub mod commands;
 pub mod computer_control;
 pub mod error;

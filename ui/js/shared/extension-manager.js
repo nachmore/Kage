@@ -117,6 +117,17 @@ export class ExtensionManager {
             }
         }
 
+        // Load trigger provider
+        if (manifest.contributes?.triggerProvider) {
+            try {
+                const mod = await import(`../../${basePath}/${manifest.contributes.triggerProvider}`);
+                ext.triggerProvider = new mod.default();
+                ext.triggerProvider.initialize?.(context);
+            } catch (e) {
+                console.warn(`Failed to load trigger provider for '${id}':`, e);
+            }
+        }
+
         // Load CSS
         this._loadBundledCss(id, basePath, manifest);
 
@@ -599,5 +610,30 @@ export class ExtensionManager {
         block += '</suggested_actions_format>';
 
         return block;
+    }
+
+    /**
+     * Get trigger definitions from all loaded extensions.
+     * Returns an array of { extensionId, extensionName, extensionIcon, triggers: [...] }
+     */
+    getTriggerDefinitions() {
+        const defs = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.triggerProvider) continue;
+            try {
+                const triggers = ext.triggerProvider.getTriggers?.() || [];
+                if (triggers.length > 0) {
+                    defs.push({
+                        extensionId: id,
+                        extensionName: ext.manifest.name,
+                        extensionIcon: ext.manifest.icon || '🔌',
+                        triggers,
+                    });
+                }
+            } catch (e) {
+                console.warn(`Failed to get triggers from '${id}':`, e);
+            }
+        }
+        return defs;
     }
 }
