@@ -1,15 +1,16 @@
 /**
- * Todos Settings Module
- * Configures default category, sort order, display preferences.
+ * Todos & Reminders Settings Module
  */
 class TodosExtSettingsModule extends SettingsModule {
     constructor() {
-        super('todos', 'Todos', '✅');
-        this.description = 'Task manager. Type "todo! <task>" to add, "todos" to view list.';
+        super('todos', 'Todos & Reminders', '✅');
+        this.description = 'Task manager with reminders. Type "todo+ <task>" to add, "todo+ <task> due:<date>" for a reminder, "todos" to view list.';
     }
 
     renderContent() {
         return `
+            <div class="setting-section-label">Display</div>
+
             ${this.createControlRow(
                 'Default Category',
                 'New todos get this category unless overridden with #tag.',
@@ -31,15 +32,24 @@ class TodosExtSettingsModule extends SettingsModule {
                 'todosShowCompleted',
                 true
             )}
+            <div class="setting-section-label">Behavior</div>
+
             ${this.createCheckboxRow(
                 'Confirm Delete',
                 'Ask for confirmation before deleting a todo.',
                 'todosConfirmDelete',
                 true
             )}
+            ${this.createCheckboxRow(
+                'Show Due Reminder Banner',
+                'Show a banner in the floating window when reminders are due today or overdue.',
+                'todosShowDueBanner',
+                true
+            )}
+            <div class="setting-section-label">Data</div>
+
             <div class="setting-row">
-                <div class="setting-label">Data</div>
-                <div class="setting-description">Export or clear all your todos.</div>
+                <div class="setting-description">Export or clear all your todos and reminders.</div>
                 <div class="setting-control" style="display:flex;gap:8px;margin-top:6px;">
                     <button class="setting-button" id="todosExport">Export JSON</button>
                     <button class="setting-button" id="todosImport">Import JSON</button>
@@ -63,10 +73,12 @@ class TodosExtSettingsModule extends SettingsModule {
         const sort = document.getElementById('todosSortBy');
         const show = document.getElementById('todosShowCompleted');
         const confirm = document.getElementById('todosConfirmDelete');
+        const banner = document.getElementById('todosShowDueBanner');
         if (cat) cat.value = ext.default_category || '';
         if (sort) sort.value = ext.sort_by || 'created';
         if (show) show.checked = ext.show_completed !== false;
         if (confirm) confirm.checked = ext.confirm_delete !== false;
+        if (banner) banner.checked = ext.show_due_banner !== false;
     }
 
     save(config) {
@@ -76,6 +88,7 @@ class TodosExtSettingsModule extends SettingsModule {
             sort_by: document.getElementById('todosSortBy')?.value || 'created',
             show_completed: document.getElementById('todosShowCompleted')?.checked ?? true,
             confirm_delete: document.getElementById('todosConfirmDelete')?.checked ?? true,
+            show_due_banner: document.getElementById('todosShowDueBanner')?.checked ?? true,
         };
     }
 
@@ -96,8 +109,7 @@ class TodosExtSettingsModule extends SettingsModule {
 
     _import() {
         const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
+        input.type = 'file'; input.accept = '.json';
         input.onchange = async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -109,19 +121,17 @@ class TodosExtSettingsModule extends SettingsModule {
                 if (!invoke) throw new Error('Tauri not available');
                 await invoke('save_extension_data', { key: 'kiro-todos', data: JSON.stringify(data) });
                 alert(`Imported ${data.length} todos.`);
-            } catch (err) {
-                alert('Failed to import: ' + err.message);
-            }
+            } catch (err) { alert('Failed to import: ' + err.message); }
         };
         input.click();
     }
 
     _clearAll() {
-        if (!confirm('Delete ALL todos? This cannot be undone.')) return;
+        if (!confirm('Delete ALL todos and reminders? This cannot be undone.')) return;
         const invoke = window.__TAURI__?.core?.invoke;
         if (!invoke) return;
         invoke('delete_extension_data', { key: 'kiro-todos' }).then(() => {
-            alert('All todos cleared.');
+            alert('All todos and reminders cleared.');
         }).catch(e => console.error('Failed to clear todos:', e));
     }
 

@@ -1,9 +1,9 @@
 {
   "id": "todos",
-  "name": "Todos",
-  "version": "0.8.0",
+  "name": "Todos & Reminders",
+  "version": "1.0.0",
   "type": "extension",
-  "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo-' to remove.",
+  "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo+ <task> due:<date>' for a reminder with a due-date banner.",
   "icon": "✅",
   "author": "kiro-assistant",
 
@@ -12,13 +12,15 @@
     "default_category": { "type": "string", "default": "" },
     "show_completed": { "type": "boolean", "default": true },
     "confirm_delete": { "type": "boolean", "default": true },
-    "sort_by": { "type": "string", "default": "created" }
+    "sort_by": { "type": "string", "default": "created" },
+    "show_due_banner": { "type": "boolean", "default": true }
   },
 
   "contributes": {
     "searchProvider": "./search.js",
     "settingsModule": "./settings.js",
     "toolbarButtons": "./toolbar.js",
+    "triggerProvider": "./triggers.js",
     "css": ["./styles.css"]
   }
 }
