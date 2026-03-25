@@ -68,6 +68,15 @@ export default class FocusTrackerSearchProvider {
         try {
             const report = await this.invoke('get_activity_report', { period: parsed.period });
             this._cache.set(parsed.period, { data: report, time: Date.now() });
+
+            // Pre-fetch comparison period so it's cached for the AI summary on Enter
+            const compPeriod = this._getComparisonPeriod(parsed.period);
+            if (compPeriod && !this._cache.has(compPeriod)) {
+                this.invoke('get_activity_report', { period: compPeriod }).then(compReport => {
+                    this._cache.set(compPeriod, { data: compReport, time: Date.now() });
+                }).catch(() => {});
+            }
+
             return this._formatReport(report, parsed.period);
         } catch (e) {
             console.warn('[FocusTracker] Report failed:', e);
@@ -85,25 +94,17 @@ export default class FocusTrackerSearchProvider {
 
     execute(result) {
         if (result.data?.type === 'loading') {
-            // Check if data has loaded into cache since the placeholder was shown
             const cached = this._cache.get(result.data.period);
             if (cached) {
-                const report = cached.data;
-                const totalMin = Math.round(report.total_seconds / 60);
-                const timeStr = report.total_seconds >= 3600 ? `${(report.total_seconds/3600).toFixed(1)}h` : `${totalMin}m`;
-                const streakMin = Math.round(report.longest_streak_seconds / 60);
-                return { type: 'display', value: this._buildSummaryMarkdown({
-                    period: report.period, timeStr, switches: report.context_switches,
-                    streakMin, streakApp: report.longest_streak_app, appCount: report.apps.length, report,
-                })};
+                return this._buildPromptAction(cached.data, result.data.period);
             }
             return null;
         }
         if (result.data?.type === 'insight') {
-            return { type: 'send_prompt', value: result.data.prompt };
+            return { type: 'prompt', value: result.data.prompt };
         }
         if (result.data?.type === 'summary' && result.data.report) {
-            return { type: 'display', value: this._buildSummaryMarkdown(result.data) };
+            return this._buildPromptAction(result.data.report, result.data.report.period);
         }
         if (result.data?.copyText) {
             return { type: 'copy', value: result.data.copyText };
@@ -186,7 +187,7 @@ export default class FocusTrackerSearchProvider {
             id: `focus-summary-${period}`,
             type: 'focus-tracker',
             label: `📊 ${report.period}: ${timeStr} tracked`,
-            description: `${report.context_switches} switches · ${streakMin}m best streak (${report.longest_streak_app})`,
+            description: `${report.context_switches} switches · ${streakMin}m best streak (${report.longest_streak_app}) · Enter for AI summary`,
             icon: '📊',
             score: 86,
             data: {
@@ -330,6 +331,50 @@ export default class FocusTrackerSearchProvider {
                 <span class="focus-insight-text">Get AI focus insights</span>
             </div>
         `;
+    }
+
+    _getComparisonPeriod(period) {
+        const map = { 'today': 'week', 'week': 'month', 'month': 'all' };
+        return map[period] || null;
+    }
+
+    _buildPromptAction(report, period) {
+        const compPeriod = this._getComparisonPeriod(period);
+        const compCached = compPeriod ? this._cache.get(compPeriod) : null;
+
+        let prompt = `Here is my focus/activity tracking data. Please give me a brief summary of what's going on, and 2-3 actionable recommendations.\n\n`;
+        prompt += `## ${report.period} Report\n`;
+        prompt += this._formatReportForPrompt(report);
+
+        if (compCached) {
+            const compLabel = compPeriod === 'all' ? 'All Time' : compPeriod.charAt(0).toUpperCase() + compPeriod.slice(1);
+            prompt += `\n## ${compLabel} Report (for context)\n`;
+            prompt += this._formatReportForPrompt(compCached.data);
+            prompt += `\nCompare my ${report.period.toLowerCase()} to the ${compLabel.toLowerCase()} data — are things trending better or worse? What stands out?\n`;
+        }
+
+        prompt += `\nBe concise and specific. Focus on patterns, not just restating numbers.`;
+        return { type: 'prompt', value: prompt };
+    }
+
+    _formatReportForPrompt(report) {
+        const totalMin = Math.round(report.total_seconds / 60);
+        const timeStr = report.total_seconds >= 3600 ? `${(report.total_seconds/3600).toFixed(1)}h` : `${totalMin}m`;
+        const streakMin = Math.round(report.longest_streak_seconds / 60);
+
+        let text = `Total: ${timeStr} tracked, ${report.context_switches} context switches, ${streakMin}m longest streak (${report.longest_streak_app})\n`;
+        text += `Apps:\n`;
+        for (const app of report.apps.slice(0, 10)) {
+            const t = app.seconds >= 3600 ? `${(app.seconds/3600).toFixed(1)}h` : `${Math.round(app.seconds/60)}m`;
+            text += `- ${app.display_name}: ${t} (${app.percentage.toFixed(0)}%), ${app.switches_to} sessions\n`;
+            if (app.sites) {
+                for (const site of app.sites.slice(0, 3)) {
+                    const st = site.seconds >= 3600 ? `${(site.seconds/3600).toFixed(1)}h` : `${Math.round(site.seconds/60)}m`;
+                    text += `  - ${site.site}: ${st} (${site.percentage.toFixed(0)}% of ${app.display_name})\n`;
+                }
+            }
+        }
+        return text;
     }
 
     _buildSummaryMarkdown(data) {
