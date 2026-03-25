@@ -84,14 +84,14 @@ function _debounceSave(invoke) {
         for (const [id, entry] of Object.entries(_frecencyData)) {
             if (entry.lastUsed < cutoff) delete _frecencyData[id];
         }
-        invoke('save_frecency', { data: JSON.stringify(_frecencyData) }).catch(() => {});
+        invoke('save_extension_data', { key: 'search-frecency', data: JSON.stringify(_frecencyData) }).catch(() => {});
     }, 2000);
 }
 
 export async function loadFrecency(invoke) {
     if (_frecencyLoaded) return;
     try {
-        const json = await invoke('load_frecency');
+        const json = await invoke('load_extension_data', { key: 'search-frecency' });
         if (json) _frecencyData = JSON.parse(json);
     } catch {}
     _frecencyLoaded = true;

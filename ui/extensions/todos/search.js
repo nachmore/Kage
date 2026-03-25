@@ -19,9 +19,10 @@ export default class TodosSearchProvider {
         this.config = context.config || {};
         this.invoke = context.invoke;
         this.todos = [];
-        this._load();
+        this._loadFailed = false;
+        this._ready = this._load();
         // Check for due reminders on startup
-        setTimeout(() => this._checkDueReminders(), 1000);
+        this._ready.then(() => setTimeout(() => this._checkDueReminders(), 1000));
         // Re-check when window regains focus (covers case where app was open overnight)
         window.addEventListener('focus', () => this._checkDueReminders());
     }
@@ -30,22 +31,33 @@ export default class TodosSearchProvider {
         this.config = config || {};
     }
 
-    // --- Persistence via localStorage ---
+    // --- Persistence via file (through Tauri IPC) ---
 
-    _load() {
+    async _load() {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) { this.todos = []; return; }
+            const raw = await invoke('load_extension_data', { key: STORAGE_KEY });
             this.todos = raw ? JSON.parse(raw) : [];
-        } catch {
+            this._loadFailed = false;
+        } catch (e) {
+            console.error('Todos: failed to load', e);
             this.todos = [];
+            this._loadFailed = true;
         }
     }
 
-    _save() {
+    async _save() {
+        if (this._loadFailed) {
+            console.warn('Todos: skipping save — last load failed, refusing to overwrite potentially recoverable data');
+            return;
+        }
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.todos));
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) return;
+            await invoke('save_extension_data', { key: STORAGE_KEY, data: JSON.stringify(this.todos) });
         } catch (e) {
-            console.warn('Todos: failed to save', e);
+            console.error('Todos: failed to save', e);
         }
     }
 
@@ -209,7 +221,7 @@ export default class TodosSearchProvider {
     // --- Due-date reminder banner ---
 
     _checkDueReminders() {
-        this._load();
+        // Data is already in memory from initial load; no need to re-read
         console.log('[Todos] _checkDueReminders: config.show_due_banner =', this.config.show_due_banner, 'todos count =', this.todos.length);
         if (this.config.show_due_banner === false) return;
         const due = this.todos.filter(t => this._isDueTodayOrOverdue(t));
@@ -314,7 +326,6 @@ export default class TodosSearchProvider {
     // --- Search matching ---
 
     match(query) {
-        this._load();
         const lower = query.trim().toLowerCase();
 
         // "todo" alone → summary
@@ -567,7 +578,6 @@ export default class TodosSearchProvider {
     }
 
     _buildSummaryText() {
-        this._load();
         const stats = this.getStats();
         const lines = [];
         const pct = stats.total > 0 ? Math.round((stats.complete / stats.total) * 100) : 0;
@@ -664,7 +674,7 @@ export default class TodosSearchProvider {
 
     // --- Public API for toolbar ---
 
-    getTodos() { this._load(); return this.todos; }
+    getTodos() { return this.todos; }
 
     addTodo(text, opts = {}) {
         const todo = {

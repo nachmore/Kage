@@ -82,18 +82,16 @@ class TodosExtSettingsModule extends SettingsModule {
     validate() { return { valid: true }; }
 
     _export() {
-        try {
-            const raw = localStorage.getItem('kiro-todos') || '[]';
-            const blob = new Blob([raw], { type: 'application/json' });
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+        invoke('load_extension_data', { key: 'kiro-todos' }).then(raw => {
+            const data = raw || '[]';
+            const blob = new Blob([data], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'kiro-todos.json';
-            a.click();
+            a.href = url; a.download = 'kiro-todos.json'; a.click();
             URL.revokeObjectURL(url);
-        } catch (e) {
-            console.error('Todos export failed:', e);
-        }
+        }).catch(e => console.error('Todos export failed:', e));
     }
 
     _import() {
@@ -107,7 +105,9 @@ class TodosExtSettingsModule extends SettingsModule {
                 const text = await file.text();
                 const data = JSON.parse(text);
                 if (!Array.isArray(data)) throw new Error('Invalid format');
-                localStorage.setItem('kiro-todos', JSON.stringify(data));
+                const invoke = window.__TAURI__?.core?.invoke;
+                if (!invoke) throw new Error('Tauri not available');
+                await invoke('save_extension_data', { key: 'kiro-todos', data: JSON.stringify(data) });
                 alert(`Imported ${data.length} todos.`);
             } catch (err) {
                 alert('Failed to import: ' + err.message);
@@ -118,8 +118,11 @@ class TodosExtSettingsModule extends SettingsModule {
 
     _clearAll() {
         if (!confirm('Delete ALL todos? This cannot be undone.')) return;
-        localStorage.removeItem('kiro-todos');
-        alert('All todos cleared.');
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+        invoke('delete_extension_data', { key: 'kiro-todos' }).then(() => {
+            alert('All todos cleared.');
+        }).catch(e => console.error('Failed to clear todos:', e));
     }
 
     destroy() {}

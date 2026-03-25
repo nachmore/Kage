@@ -4,17 +4,28 @@
 export default class TodosToolbarProvider {
     initialize(context) {
         this.config = context.config || {};
+        this.invoke = context.invoke;
+        this._todos = [];
+        this._ready = this._loadTodos();
     }
 
     onConfigUpdate(config) {
         this.config = config || {};
     }
 
-    _getTodos() {
+    async _loadTodos() {
         try {
-            const raw = localStorage.getItem('kiro-todos');
-            return raw ? JSON.parse(raw) : [];
-        } catch { return []; }
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) return;
+            const raw = await invoke('load_extension_data', { key: 'kiro-todos' });
+            this._todos = raw ? JSON.parse(raw) : [];
+        } catch {
+            this._todos = [];
+        }
+    }
+
+    _getTodos() {
+        return this._todos;
     }
 
     _getStats(todos) {

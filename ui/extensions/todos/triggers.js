@@ -6,11 +6,23 @@ export default class TodosTriggerProvider {
         this.invoke = context.invoke;
         this._interval = null;
         this._lastNotified = new Set();
-        this._startPolling();
+        this._todos = [];
+        this._loadTodos().then(() => this._startPolling());
     }
 
     onConfigUpdate(config) {
         this._config = config || {};
+    }
+
+    async _loadTodos() {
+        try {
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) return;
+            const raw = await invoke('load_extension_data', { key: 'kiro-todos' });
+            this._todos = raw ? JSON.parse(raw) : [];
+        } catch {
+            this._todos = [];
+        }
     }
 
     getTriggers() {
@@ -22,15 +34,14 @@ export default class TodosTriggerProvider {
     }
 
     _startPolling() {
-        // Check every 5 minutes for due items
         this._checkDueItems();
         this._interval = setInterval(() => this._checkDueItems(), 300_000);
     }
 
-    _checkDueItems() {
+    async _checkDueItems() {
+        await this._loadTodos();
         try {
-            const raw = localStorage.getItem('kiro-todos');
-            const todos = raw ? JSON.parse(raw) : [];
+            const todos = this._todos;
             const now = new Date();
             const todayStr = now.toISOString().split('T')[0];
 

@@ -605,3 +605,79 @@ async fn store_install_inner(
 
     Ok(item)
 }
+
+// ---------------------------------------------------------------------------
+// Generic extension data persistence
+// ---------------------------------------------------------------------------
+// Stores extension data as JSON files in the user's config directory:
+//   <config_dir>/kiro-assistant/extension-data/<name>.json
+// This is preferred over localStorage because it survives reinstalls,
+// WebView2 data resets, and is fully under our control.
+
+/// Returns the directory for extension data files, creating it if needed.
+fn extension_data_dir() -> Result<std::path::PathBuf, String> {
+    let dir = dirs::config_dir()
+        .ok_or("No config directory")?
+        .join("kiro-assistant")
+        .join("extension-data");
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create extension-data dir: {}", e))?;
+    }
+    Ok(dir)
+}
+
+/// Validate that a data key is safe for use as a filename.
+fn validate_data_key(key: &str) -> Result<(), String> {
+    if key.is_empty() || key.len() > 128 {
+        return Err("Data key must be 1-128 characters".into());
+    }
+    // Allow alphanumeric, hyphens, underscores, dots
+    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Data key contains invalid characters (allowed: a-z, 0-9, -, _, .)".into());
+    }
+    // Prevent path traversal
+    if key.contains("..") {
+        return Err("Data key must not contain '..'".into());
+    }
+    Ok(())
+}
+
+/// Save arbitrary JSON data for an extension.
+/// Stored at: <config_dir>/kiro-assistant/extension-data/<key>.json
+#[tauri::command]
+pub async fn save_extension_data(key: String, data: String) -> Result<(), AppError> {
+    validate_data_key(&key)?;
+    let dir = extension_data_dir()?;
+    let path = dir.join(format!("{}.json", key));
+    std::fs::write(&path, &data)
+        .map_err(|e| format!("Failed to save extension data '{}': {}", key, e))?;
+    Ok(())
+}
+
+/// Load JSON data for an extension. Returns null if the file doesn't exist.
+/// Read from: <config_dir>/kiro-assistant/extension-data/<key>.json
+#[tauri::command]
+pub async fn load_extension_data(key: String) -> Result<Option<String>, AppError> {
+    validate_data_key(&key)?;
+    let dir = extension_data_dir()?;
+    let path = dir.join(format!("{}.json", key));
+    match std::fs::read_to_string(&path) {
+        Ok(data) => Ok(Some(data)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Failed to load extension data '{}': {}", key, e))?,
+    }
+}
+
+/// Delete extension data file.
+#[tauri::command]
+pub async fn delete_extension_data(key: String) -> Result<(), AppError> {
+    validate_data_key(&key)?;
+    let dir = extension_data_dir()?;
+    let path = dir.join(format!("{}.json", key));
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(format!("Failed to delete extension data '{}': {}", key, e))?,
+    }
+}

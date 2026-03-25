@@ -15,29 +15,41 @@ export default class TodosSearchProvider {
         this.config = context.config || {};
         this.invoke = context.invoke;
         this.todos = [];
-        this._load();
+        this._loadFailed = false;
+        this._ready = this._load();
     }
 
     onConfigUpdate(config) {
         this.config = config || {};
     }
 
-    // --- Persistence via localStorage ---
+    // --- Persistence via file (through Tauri IPC) ---
 
-    _load() {
+    async _load() {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) { this.todos = []; return; }
+            const raw = await invoke('load_extension_data', { key: STORAGE_KEY });
             this.todos = raw ? JSON.parse(raw) : [];
-        } catch {
+            this._loadFailed = false;
+        } catch (e) {
+            console.error('Todos: failed to load', e);
             this.todos = [];
+            this._loadFailed = true;
         }
     }
 
-    _save() {
+    async _save() {
+        if (this._loadFailed) {
+            console.warn('Todos: skipping save — last load failed');
+            return;
+        }
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(this.todos));
+            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
+            if (!invoke) return;
+            await invoke('save_extension_data', { key: STORAGE_KEY, data: JSON.stringify(this.todos) });
         } catch (e) {
-            console.warn('Todos: failed to save', e);
+            console.error('Todos: failed to save', e);
         }
     }
 
@@ -163,7 +175,6 @@ export default class TodosSearchProvider {
     // --- Search matching ---
 
     match(query) {
-        this._load(); // refresh from storage
         const lower = query.trim().toLowerCase();
 
         // "todo" alone → summary as first item + a few recent todos below
@@ -494,7 +505,6 @@ export default class TodosSearchProvider {
     }
 
     _buildSummaryText() {
-        this._load();
         const stats = this.getStats();
         const lines = [];
 
@@ -605,7 +615,6 @@ export default class TodosSearchProvider {
     // --- Public API for toolbar badge ---
 
     getTodos() {
-        this._load();
         return this.todos;
     }
 
