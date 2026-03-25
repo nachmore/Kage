@@ -81,7 +81,11 @@ class MacrosSettingsModule extends SettingsModule {
             .sched-day-btn { width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--kiro-border-subtle); cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
             .sched-day-btn.active { background: var(--kiro-accent) !important; color: #fff !important; border-color: var(--kiro-accent) !important; }
             .sched-day-btn:not(.active) { background: var(--kiro-bg-surface); color: var(--kiro-text-muted); }
-            .sched-day-btn:hover:not(.active) { background: var(--kiro-bg-input); color: var(--kiro-text); }`;
+            .sched-day-btn:hover:not(.active) { background: var(--kiro-bg-input); color: var(--kiro-text); }
+            .macro-card select { color-scheme: dark; }
+            .macro-card select option { background: var(--kiro-bg-input, #28242E); color: var(--kiro-text, #E5E7EB); }
+            body.light-theme .macro-card select { color-scheme: light; }
+            body.light-theme .macro-card select option { background: #fff; color: #333; }`;
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + '<div class="setting-description" style="margin-bottom:12px">Chain transformations into automated actions. Trigger them manually, on a schedule, or in response to signals from extensions.</div>'
@@ -211,6 +215,7 @@ class MacrosSettingsModule extends SettingsModule {
                 find: el.querySelector('.step-find')?.value || '',
                 replace: el.querySelector('.step-replace')?.value || '',
                 transform: el.querySelector('.step-transform')?.value || '',
+                condition: el.querySelector('.step-condition')?.value || '',
                 script: el.querySelector('.step-script')?.value || '',
             }));
         });
@@ -236,13 +241,13 @@ class MacrosSettingsModule extends SettingsModule {
                 + '<input class="macro-name-input" value="' + this._esc(macro.name) + '" placeholder="Automation name">'
                 + '<select class="macro-output-select">' + outOpts + '</select>'
                 + '</div>';
-            // Trigger section
-            h += this._triggerHtml(macro.trigger || { type: 'manual' });
-            // Steps
-            h += '<div class="macro-steps">';
+            // Trigger section (WHEN)
+            h += '<div class="macro-trigger">';
             h += '<div class="macro-section-label">WHEN</div>';
-            // (trigger is above)
+            h += '<div class="macro-trigger-header"><span>Trigger:</span><select class="macro-trigger-type">' + this._triggerTypeOpts(macro.trigger) + '</select></div>';
+            h += this._triggerConfigHtml(macro.trigger || { type: 'manual' });
             h += '</div>';
+            // Steps (THEN)
             h += '<div class="macro-steps">';
             h += '<div class="macro-section-label">THEN</div>';
             macro.steps.forEach((step, si) => { h += this._stepHtml(step, si, macro.steps.length); });
@@ -252,106 +257,111 @@ class MacrosSettingsModule extends SettingsModule {
             this._wireEvents(card, mi);
         });
     }
+    _triggerTypeOpts(trigger) {
+        const t = (trigger || {}).type || 'manual';
+        return [['manual','🖱️ Manual'],['schedule','⏰ Schedule'],['signal','⚡ Signal']].map(([v,l]) => '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>').join('');
+    }
+    _triggerConfigHtml(trigger) {
+        const t = (trigger || {}).type || 'manual';
+        if (t === 'schedule') {
+            return '<div class="macro-trigger-config">' + this._scheduleConfigHtml(trigger) + '</div>';
+        } else if (t === 'signal') {
+            const sigOpts = '<option value="">Select signal...</option>' + this._signals.map(s => '<option value="'+s.name+'"'+(trigger.signal===s.name?' selected':'')+'>' + (s.icon||'⚡') + ' ' + s.name + ' — ' + (s.description||'') + '</option>').join('');
+            return '<div class="macro-trigger-config"><select class="macro-signal-name">' + sigOpts + '</select>'
+                + '<input class="macro-signal-filter" value="' + this._esc(trigger.filter || '') + '" placeholder="Optional filter (text match on signal data)">'
+                + '</div>';
+        }
+        return '<div class="macro-trigger-config" style="font-size:11px;color:var(--kiro-text-muted);margin-top:4px;">Runs via inline assist hotkey or quick actions.</div>';
+    }
     _triggerHtml(trigger) {
-            const t = trigger.type || 'manual';
-            const typeOpts = [['manual','🖱️ Manual'],['schedule','⏰ Schedule'],['signal','⚡ Signal']].map(([v,l]) => '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>').join('');
-            let config = '';
-            if (t === 'schedule') {
-                config = '<div class="macro-trigger-config">' + this._scheduleConfigHtml(trigger) + '</div>';
-            } else if (t === 'signal') {
-                const sigOpts = '<option value="">Select signal...</option>' + this._signals.map(s => '<option value="'+s.name+'"'+(trigger.signal===s.name?' selected':'')+'>' + (s.icon||'⚡') + ' ' + s.name + ' — ' + (s.description||'') + '</option>').join('');
-                config = '<div class="macro-trigger-config"><select class="macro-signal-name">' + sigOpts + '</select>'
-                    + '<input class="macro-signal-filter" value="' + this._esc(trigger.filter || '') + '" placeholder="Optional filter (text match on signal data)">'
-                    + '</div>';
-            }
-            return '<div class="macro-trigger"><div class="macro-trigger-header"><span>Trigger:</span><select class="macro-trigger-type">' + typeOpts + '</select></div>' + config + '</div>';
-        }
+        // Legacy — kept for compatibility but cards now use _triggerTypeOpts + _triggerConfigHtml directly
+        return this._triggerConfigHtml(trigger);
+    }
 
-        _parseScheduleInterval(interval) {
-            if (!interval) return { mode: 'daily', hours: 1, minute: 0, time: '09:00', days: [], dayOfMonth: 1, weekOrdinal: '1st', weekDay: '1', month: 1, monthDay: 1 };
-            const r = { mode: 'daily', hours: 1, minute: 0, time: '09:00', days: [], dayOfMonth: 1, weekOrdinal: '1st', weekDay: '1', month: 1, monthDay: 1 };
-            if (interval.startsWith('hourly_')) {
-                r.mode = 'hourly';
-                const rest = interval.substring(7);
-                const parts = rest.split('_at_');
-                r.hours = parseInt(parts[0]) || 1;
-                r.minute = parts[1] ? parseInt(parts[1]) : 0;
-            } else if (interval.startsWith('daily_')) {
-                r.mode = 'daily';
-                const rest = interval.substring(6);
-                const daysPart = rest.match(/_days_([\d,]+)$/);
-                r.time = daysPart ? rest.replace(daysPart[0], '') : rest;
-                r.days = daysPart ? daysPart[1].split(',') : [];
-            } else if (interval.startsWith('monthly_')) {
-                r.mode = 'monthly';
-                const rest = interval.substring(8);
-                const ordMatch = rest.match(/^(\w+)_(\w+)_(.+)$/);
-                if (ordMatch && ['1st','2nd','3rd','4th','last'].includes(ordMatch[1])) {
-                    r.weekOrdinal = ordMatch[1]; r.weekDay = ordMatch[2]; r.time = ordMatch[3];
-                    r.dayOfMonth = 0;
-                } else {
-                    const dayMatch = rest.match(/^(\d+)_(.+)$/);
-                    if (dayMatch) { r.dayOfMonth = parseInt(dayMatch[1]); r.time = dayMatch[2]; }
-                }
-            } else if (interval.startsWith('yearly_')) {
-                r.mode = 'yearly';
-                const rest = interval.substring(7);
-                const parts = rest.match(/^(\d+)-(\d+)_(.+)$/);
-                if (parts) { r.month = parseInt(parts[1]); r.monthDay = parseInt(parts[2]); r.time = parts[3]; }
-            } else if (interval.startsWith('every_')) {
-                r.mode = 'hourly'; const rest = interval.substring(6);
-                if (rest.endsWith('h')) r.hours = parseInt(rest) || 1;
-                else if (rest.endsWith('m')) { r.hours = 0; r.minute = parseInt(rest) || 30; }
+    _parseScheduleInterval(interval) {
+        if (!interval) return { mode: 'daily', hours: 1, minute: 0, time: '09:00', days: [], dayOfMonth: 1, weekOrdinal: '1st', weekDay: '1', month: 1, monthDay: 1 };
+        const r = { mode: 'daily', hours: 1, minute: 0, time: '09:00', days: [], dayOfMonth: 1, weekOrdinal: '1st', weekDay: '1', month: 1, monthDay: 1 };
+        if (interval.startsWith('hourly_')) {
+            r.mode = 'hourly';
+            const rest = interval.substring(7);
+            const parts = rest.split('_at_');
+            r.hours = parseInt(parts[0]) || 1;
+            r.minute = parts[1] ? parseInt(parts[1]) : 0;
+        } else if (interval.startsWith('daily_')) {
+            r.mode = 'daily';
+            const rest = interval.substring(6);
+            const daysPart = rest.match(/_days_([\d,]+)$/);
+            r.time = daysPart ? rest.replace(daysPart[0], '') : rest;
+            r.days = daysPart ? daysPart[1].split(',') : [];
+        } else if (interval.startsWith('monthly_')) {
+            r.mode = 'monthly';
+            const rest = interval.substring(8);
+            const ordMatch = rest.match(/^(\w+)_(\w+)_(.+)$/);
+            if (ordMatch && ['1st','2nd','3rd','4th','last'].includes(ordMatch[1])) {
+                r.weekOrdinal = ordMatch[1]; r.weekDay = ordMatch[2]; r.time = ordMatch[3];
+                r.dayOfMonth = 0;
+            } else {
+                const dayMatch = rest.match(/^(\d+)_(.+)$/);
+                if (dayMatch) { r.dayOfMonth = parseInt(dayMatch[1]); r.time = dayMatch[2]; }
             }
-            return r;
+        } else if (interval.startsWith('yearly_')) {
+            r.mode = 'yearly';
+            const rest = interval.substring(7);
+            const parts = rest.match(/^(\d+)-(\d+)_(.+)$/);
+            if (parts) { r.month = parseInt(parts[1]); r.monthDay = parseInt(parts[2]); r.time = parts[3]; }
+        } else if (interval.startsWith('every_')) {
+            r.mode = 'hourly'; const rest = interval.substring(6);
+            if (rest.endsWith('h')) r.hours = parseInt(rest) || 1;
+            else if (rest.endsWith('m')) { r.hours = 0; r.minute = parseInt(rest) || 30; }
         }
-
-        _buildScheduleInterval(parsed) {
-            switch (parsed.mode) {
-                case 'hourly': return `hourly_${parsed.hours}${parsed.minute ? '_at_' + parsed.minute : ''}`;
-                case 'daily': return `daily_${parsed.time}${parsed.days.length > 0 && parsed.days.length < 7 ? '_days_' + parsed.days.join(',') : ''}`;
-                case 'monthly':
-                    if (parsed.dayOfMonth === 0) return `monthly_${parsed.weekOrdinal}_${parsed.weekDay}_${parsed.time}`;
-                    return `monthly_${parsed.dayOfMonth}_${parsed.time}`;
-                case 'yearly': return `yearly_${String(parsed.month).padStart(2,'0')}-${String(parsed.monthDay).padStart(2,'0')}_${parsed.time}`;
-                default: return '';
-            }
+        return r;
+    }
+    _buildScheduleInterval(parsed) {
+        switch (parsed.mode) {
+            case 'hourly': return `hourly_${parsed.hours}${parsed.minute ? '_at_' + parsed.minute : ''}`;
+            case 'daily': return `daily_${parsed.time}${parsed.days.length > 0 && parsed.days.length < 7 ? '_days_' + parsed.days.join(',') : ''}`;
+            case 'monthly':
+                if (parsed.dayOfMonth === 0) return `monthly_${parsed.weekOrdinal}_${parsed.weekDay}_${parsed.time}`;
+                return `monthly_${parsed.dayOfMonth}_${parsed.time}`;
+            case 'yearly': return `yearly_${String(parsed.month).padStart(2,'0')}-${String(parsed.monthDay).padStart(2,'0')}_${parsed.time}`;
+            default: return '';
         }
-
-        _scheduleConfigHtml(trigger) {
-            const p = this._parseScheduleInterval(trigger.interval);
-            const modeOpts = SCHEDULE_MODES.map(m => `<option value="${m.value}"${p.mode===m.value?' selected':''}>${m.label}</option>`).join('');
-            let details = '';
-            if (p.mode === 'hourly') {
-                const hourOpts = [1,2,3,4,6,8,12].map(h => `<option value="${h}"${p.hours===h?' selected':''}>Every ${h} hour${h>1?'s':''}</option>`).join('');
-                details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${hourOpts}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`;
-            } else if (p.mode === 'daily') {
-                const dayBtns = DAYS_OF_WEEK.map(d => {
-                    const active = p.days.length === 0 || p.days.includes(d.value);
-                    return `<button type="button" class="sched-day-btn${active ? ' active' : ''}" data-day="${d.value}">${d.label}</button>`;
-                }).join('');
-                details = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${dayBtns}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
-            } else if (p.mode === 'monthly') {
-                const ordOpts = ['1st','2nd','3rd','4th','last'].map(o => `<option value="${o}"${p.weekOrdinal===o?' selected':''}>${o}</option>`).join('');
-                const dowOpts = DAYS_OF_WEEK.map(d => `<option value="${d.value}"${p.weekDay===d.value?' selected':''}>${d.label}</option>`).join('');
-                const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.dayOfMonth===d?' selected':''}>${d}</option>`).join('');
-                const isOrd = p.dayOfMonth === 0;
-                details = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!isOrd?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${isOrd?'disabled':''}>${dayNums}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${isOrd?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!isOrd?'disabled':''}>${ordOpts}</select> <select class="sched-month-dow" style="width:70px;" ${!isOrd?'disabled':''}>${dowOpts}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
-            } else if (p.mode === 'yearly') {
-                const monthOpts = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => `<option value="${i+1}"${p.month===i+1?' selected':''}>${m}</option>`).join('');
-                const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.monthDay===d?' selected':''}>${d}</option>`).join('');
-                details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${monthOpts}</select><select class="sched-year-day" style="width:60px;">${dayNums}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`;
-            }
-            return `<select class="macro-schedule-mode">${modeOpts}</select><input type="hidden" class="macro-schedule-interval" value="${this._esc(trigger.interval || '')}">${details}`;
+    }
+    _scheduleConfigHtml(trigger) {
+        const p = this._parseScheduleInterval(trigger.interval);
+        const modeOpts = SCHEDULE_MODES.map(m => `<option value="${m.value}"${p.mode===m.value?' selected':''}>${m.label}</option>`).join('');
+        let details = '';
+        if (p.mode === 'hourly') {
+            const hourOpts = [1,2,3,4,6,8,12].map(h => `<option value="${h}"${p.hours===h?' selected':''}>Every ${h} hour${h>1?'s':''}</option>`).join('');
+            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${hourOpts}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`;
+        } else if (p.mode === 'daily') {
+            const dayBtns = DAYS_OF_WEEK.map(d => {
+                const active = p.days.length === 0 || p.days.includes(d.value);
+                return `<button type="button" class="sched-day-btn${active ? ' active' : ''}" data-day="${d.value}">${d.label}</button>`;
+            }).join('');
+            details = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${dayBtns}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
+        } else if (p.mode === 'monthly') {
+            const ordOpts = ['1st','2nd','3rd','4th','last'].map(o => `<option value="${o}"${p.weekOrdinal===o?' selected':''}>${o}</option>`).join('');
+            const dowOpts = DAYS_OF_WEEK.map(d => `<option value="${d.value}"${p.weekDay===d.value?' selected':''}>${d.label}</option>`).join('');
+            const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.dayOfMonth===d?' selected':''}>${d}</option>`).join('');
+            const isOrd = p.dayOfMonth === 0;
+            details = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!isOrd?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${isOrd?'disabled':''}>${dayNums}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${isOrd?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!isOrd?'disabled':''}>${ordOpts}</select> <select class="sched-month-dow" style="width:70px;" ${!isOrd?'disabled':''}>${dowOpts}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
+        } else if (p.mode === 'yearly') {
+            const monthOpts = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => `<option value="${i+1}"${p.month===i+1?' selected':''}>${m}</option>`).join('');
+            const dayNums = Array.from({length:31},(_,i)=>i+1).map(d => `<option value="${d}"${p.monthDay===d?' selected':''}>${d}</option>`).join('');
+            details = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${monthOpts}</select><select class="sched-year-day" style="width:60px;">${dayNums}</select><span style="font-size:12px;color:var(--kiro-text-muted)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`;
         }
+        return `<select class="macro-schedule-mode">${modeOpts}</select><input type="hidden" class="macro-schedule-interval" value="${this._esc(trigger.interval || '')}">${details}`;
+    }
 
     _stepHtml(step, si, total) {
         const t = step.step_type || 'ai_prompt';
-        const tOpts = [['ai_prompt','🤖 AI Prompt'],['find_replace','🔍 Find/Replace'],['transform','⚙️ Transform'],['script','📜 Script']].map(([v,l]) => '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>').join('');
+        const tOpts = [['ai_prompt','🤖 AI Prompt'],['find_replace','🔍 Find/Replace'],['transform','⚙️ Transform'],['condition','🔀 Condition'],['script','📜 Script']].map(([v,l]) => '<option value="'+v+'"'+(t===v?' selected':'')+'>'+l+'</option>').join('');
         let fields = '';
         if (t === 'ai_prompt') fields = '<input class="step-prompt" value="' + this._esc(step.prompt) + '" placeholder="Prompt... use {input} for previous output">';
         else if (t === 'find_replace') fields = '<div class="field-row"><input class="step-find" value="' + this._esc(step.find) + '" placeholder="Find (regex)"><input class="step-replace" value="' + this._esc(step.replace) + '" placeholder="Replace with"></div>';
         else if (t === 'transform') { const xOpts = TRANSFORMS.map(x => '<option value="'+x.value+'"'+(step.transform===x.value?' selected':'')+'>'+x.label+'</option>').join(''); fields = '<select class="step-transform">'+xOpts+'</select>'; }
+        else if (t === 'condition') fields = '<input class="step-condition" value="' + this._esc(step.condition || '') + '" placeholder="Stop if output does NOT contain this text"><div style="font-size:10px;color:var(--kiro-text-muted);margin-top:2px;">If the previous step\'s output doesn\'t contain this text, the automation stops here.</div>';
         else if (t === 'script') fields = '<input class="step-script" value="' + this._esc(step.script) + '" placeholder="JS: input.toUpperCase()">';
         return '<div class="macro-step" data-step="'+si+'"><div class="macro-step-top"><span class="macro-step-num">'+(si+1)+'.</span><select class="macro-step-type">'+tOpts+'</select><span style="flex:1"></span><button class="macro-step-btn macro-step-up"'+(si===0?' disabled':'')+'>↑</button><button class="macro-step-btn macro-step-down"'+(si===total-1?' disabled':'')+'>↓</button><button class="macro-step-btn macro-step-remove">✕</button></div><div class="macro-step-fields">'+fields+'</div></div>';
     }

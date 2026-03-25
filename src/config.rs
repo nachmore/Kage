@@ -413,7 +413,7 @@ fn default_low_battery_multiplier() -> f32 { 4.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroStep {
-    /// Step type: "ai_prompt", "find_replace", "transform", "script"
+    /// Step type: "ai_prompt", "find_replace", "transform", "condition", "script"
     #[serde(default = "default_step_type")]
     pub step_type: String,
     /// Prompt template for ai_prompt — {input} is replaced with the previous step's output
@@ -425,9 +425,12 @@ pub struct MacroStep {
     /// For find_replace: replacement string
     #[serde(default)]
     pub replace: String,
-    /// For transform: built-in transform name (uppercase, lowercase, trim, sort_lines, reverse, base64_encode, base64_decode, count_words, remove_blank_lines)
+    /// For transform: built-in transform name
     #[serde(default)]
     pub transform: String,
+    /// For condition: text that must be present in the previous output to continue
+    #[serde(default)]
+    pub condition: String,
     /// For script: JS function body (receives `input` variable, must return a string)
     #[serde(default)]
     pub script: String,

@@ -91,6 +91,7 @@ class ConnectionSettingsModule extends SettingsModule {
         if (config.acp && config.acp.mode) {
             const mode = config.acp.mode;
             const modeSelect = document.getElementById('acpMode');
+            if (!modeSelect) return;
             
             if (mode.type === 'local') {
                 modeSelect.value = 'local';
