@@ -233,8 +233,8 @@
 
 .diagram-lightbox-btn {
     background: rgba(0, 0, 0, 0.5);
-    color: var(--kiro-accent-light, #C09CFF);
-    border: 1px solid var(--kiro-accent-light, #C09CFF);
+    color: var(--kage-accent-light, #C09CFF);
+    border: 1px solid var(--kage-accent-light, #C09CFF);
     border-radius: 4px;
     padding: 4px 10px;
     font-size: 11px;
@@ -247,9 +247,9 @@
 }
 
 .diagram-lightbox-btn:hover {
-    background: var(--kiro-accent, #7138CC);
+    background: var(--kage-accent, #7138CC);
     color: white;
-    border-color: var(--kiro-accent, #7138CC);
+    border-color: var(--kage-accent, #7138CC);
 }
 
 .diagram-lightbox-close {

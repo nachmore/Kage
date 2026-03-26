@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "Countdown timer and stopwatch with notification sounds",
   "icon": "⏱️",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "enabled": { "type": "boolean", "default": true },

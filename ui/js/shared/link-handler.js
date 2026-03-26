@@ -2,7 +2,7 @@
  * Global link click interceptor.
  *
  * - http/https links → open in default browser via Tauri
- * - assistant: protocol → route to internal actions (store, settings, etc.)
+ * - kage: protocol → route to internal actions (store, settings, etc.)
  * - All other clicks on <a> tags → prevent default navigation
  *
  * Usage: import { initLinkHandler } from './link-handler.js';
@@ -12,18 +12,18 @@
 let _invoke = null;
 
 /**
- * assistant: protocol routes.
- * Format: assistant:<action>[/<param>]
+ * kage: protocol routes.
+ * Format: kage:<action>[/<param>]
  *
  * Supported routes:
- *   assistant:store              → open extension store
- *   assistant:store/themes       → open store on themes tab
- *   assistant:store/extensions   → open store on extensions tab
- *   assistant:store/commands     → open store on commands tab
- *   assistant:settings           → open settings window
- *   assistant:settings/<section> → open settings on a specific section
+ *   kage:store              → open extension store
+ *   kage:store/themes       → open store on themes tab
+ *   kage:store/extensions   → open store on extensions tab
+ *   kage:store/commands     → open store on commands tab
+ *   kage:settings           → open settings window
+ *   kage:settings/<section> → open settings on a specific section
  */
-async function handleAssistantProtocol(path) {
+async function handleKageProtocol(path) {
     if (!_invoke) return;
 
     const parts = path.split('/').filter(Boolean);
@@ -38,7 +38,7 @@ async function handleAssistantProtocol(path) {
             await _invoke('open_settings_window', { section: param || null });
             break;
         default:
-            console.warn(`Unknown assistant: route "${path}"`);
+            console.warn(`Unknown kage: route "${path}"`);
     }
 }
 
@@ -56,13 +56,13 @@ export function initLinkHandler(invoke) {
         const href = anchor.getAttribute('href');
         if (!href || href === '#') return;
 
-        // assistant: protocol — internal deep links
-        if (href.startsWith('assistant:')) {
+        // kage: protocol — internal deep links
+        if (href.startsWith('kage:')) {
             e.preventDefault();
             e.stopPropagation();
-            const path = href.slice('assistant:'.length);
-            handleAssistantProtocol(path).catch(err =>
-                console.warn('assistant: link error:', err)
+            const path = href.slice('kage:'.length);
+            handleKageProtocol(path).catch(err =>
+                console.warn('kage: link error:', err)
             );
             return;
         }

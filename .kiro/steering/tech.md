@@ -25,7 +25,7 @@
 - whoami: User info
 - ctrlc: Signal handling
 - winreg/windows-icons: Windows-specific registry and icon support
-- rfd: Native file dialogs (used by computer-control-mcp for folder picker)
+- rfd: Native file dialogs (used by kage-computer-control-mcp for folder picker)
 
 ## Frontend
 - Pure HTML/CSS/JavaScript (no framework)
@@ -49,15 +49,15 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 
 # Note: `cargo build --release` builds optimized binaries but does NOT create
 # the installer. Always use `cargo tauri build` for release distribution.
-# The computer-control-mcp binary is built automatically alongside the main binary.
+# The kage-computer-control-mcp binary is built automatically alongside the main binary.
 
-# IMPORTANT: The computer-control-mcp is a SEPARATE binary (src/bin/computer_control_mcp.rs).
-# `cargo tauri dev` only rebuilds the main kiro-assistant binary.
-# After changing computer-control-mcp, you MUST rebuild it explicitly:
-cargo build --bin computer-control-mcp
-# Then restart the app so kiro-cli picks up the new binary.
+# IMPORTANT: The kage-computer-control-mcp is a SEPARATE binary (src/bin/computer_control_mcp.rs).
+# `cargo tauri dev` only rebuilds the main kage binary.
+# After changing kage-computer-control-mcp, you MUST rebuild it explicitly:
+cargo build --bin kage-computer-control-mcp
+# Then restart the app so kage-cli picks up the new binary.
 # If the old binary is locked (running), kill it first:
-# Get-Process -Name "computer-control-mcp" | Stop-Process -Force
+# Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
 
 # Testing
 cargo test                 # All tests

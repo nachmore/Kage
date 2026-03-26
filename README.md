@@ -1,4 +1,4 @@
-# Kiro Assistant
+# Kage
 
 A cross-platform desktop AI assistant with a floating window interface. Provides quick access to AI capabilities through a system tray application activated via global shortcuts.
 

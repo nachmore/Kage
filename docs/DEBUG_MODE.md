@@ -7,13 +7,13 @@ Debug mode provides detailed logging of ACP (Agent Communication Protocol) messa
 Start the application with the `/debug` or `--debug` command-line argument:
 
 ```bash
-kiro-assistant.exe /debug
+kage.exe /debug
 ```
 
 or
 
 ```bash
-kiro-assistant.exe --debug
+kage.exe --debug
 ```
 
 When enabled, you'll see a startup message:
@@ -61,13 +61,13 @@ Debug logs are printed with timestamps:
 
 Logs are also written to a file regardless of debug mode. The location varies by platform:
 
-- **Windows**: `%LOCALAPPDATA%\kiro-assistant\logs\kiro-assistant.log`
-- **macOS**: `~/Library/Application Support/kiro-assistant/logs/kiro-assistant.log`
-- **Linux**: `~/.local/share/kiro-assistant/logs/kiro-assistant.log`
+- **Windows**: `%LOCALAPPDATA%\kage\logs\kage.log`
+- **macOS**: `~/Library/Application Support/kage/logs/kage.log`
+- **Linux**: `~/.local/share/kage/logs/kage.log`
 
 ## Use Cases
 
-- Troubleshooting connection issues with kiro-cli
+- Troubleshooting connection issues with kage-cli
 - Debugging message format problems
 - Understanding the ACP protocol flow
 - Development and testing of new features

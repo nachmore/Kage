@@ -46,10 +46,10 @@ impl FileLogger {
     fn get_log_path() -> Result<PathBuf> {
         let log_dir = dirs::data_local_dir()
             .context("Failed to get local data directory")?
-            .join("kiro-assistant")
+            .join("kage")
             .join("logs");
         
-        Ok(log_dir.join("kiro-assistant.log"))
+        Ok(log_dir.join("kage.log"))
     }
     
     fn rotate_logs_if_needed(log_path: &PathBuf) -> Result<()> {
@@ -178,7 +178,7 @@ pub fn init_logger() -> Result<()> {
     
     log::set_max_level(LevelFilter::Info);
     
-    log::info!("Kiro Assistant started");
+    log::info!("Kage started");
     log::info!("Log file: {:?}", FileLogger::get_log_path()?);
     
     Ok(())

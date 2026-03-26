@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shortcuts allow you to execute commands directly from the Kiro floating window without sending them to the LLM. This is perfect for quick access to frequently used tools, scripts, or applications.
+Shortcuts allow you to execute commands directly from the Kage floating window without sending them to the LLM. This is perfect for quick access to frequently used tools, scripts, or applications.
 
 ## Features
 
@@ -16,7 +16,7 @@ Shortcuts allow you to execute commands directly from the Kiro floating window w
 
 ### Accessing Shortcuts Settings
 
-1. Open Kiro settings (system tray → Settings)
+1. Open Kage settings (system tray → Settings)
 2. Click on "Shortcuts" in the left sidebar (⚡ icon)
 3. Click "Add Shortcut" to create a new one
 

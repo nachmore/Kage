@@ -36,7 +36,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
     };
 
     // Load tray icon from embedded PNG
-    let icon_bytes = include_bytes!("../ui/assets/kiro-assistant-icon.png");
+    let icon_bytes = include_bytes!("../ui/assets/kage-icon.png");
     let icon = tauri::image::Image::from_bytes(icon_bytes)
         .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
 

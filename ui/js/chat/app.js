@@ -2,7 +2,7 @@
 import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
-import { escapeHtml, stripKiroTags } from '../shared/tool-utils.js';
+import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
@@ -15,7 +15,7 @@ import { getActionsForText, renderQuickActionChips } from '../shared/quick-actio
 import { setupRtlDetection } from '../shared/rtl.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
-const STEERING_MSG_PREFIX = '[KIRO_STEERING_IGNORE]';
+const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
 
 /** Map MCP/agent tool names to user-friendly descriptions for the spinner. */
 function _chatToolFriendlyName(title) {
@@ -149,7 +149,7 @@ export class ChatApp {
                 // Session is new / not on disk — just show empty chat
                 this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Continue your conversation...</div>';
             }
-            this.elements.chatHeaderTitle.textContent = stripKiroTags(exists?.title) || 'Current Session';
+            this.elements.chatHeaderTitle.textContent = stripKageTags(exists?.title) || 'Current Session';
         }
 
         this.elements.chatInput.focus();
@@ -429,14 +429,14 @@ export class ChatApp {
         });
 
         // Handle slash command results (dispatched by floating-commands.js execute functions)
-        document.addEventListener('kiro-show-response', (e) => {
+        document.addEventListener('kage-show-response', (e) => {
             if (e.detail) {
                 this.addMessageFromHistory('assistant', e.detail);
                 this.scrollToBottom();
             }
         });
 
-        document.addEventListener('kiro-show-selection', (e) => {
+        document.addEventListener('kage-show-selection', (e) => {
             const { command, options } = e.detail;
             if (!options || options.length === 0) return;
             // Show selection as a system message with clickable options
@@ -608,8 +608,8 @@ export class ChatApp {
     }
 
     renderSessionList() {
-            // Don't overwrite the list if we're viewing Kiro Desktop sessions
-            if (window._kiroSessionSource === 'desktop') return;
+            // Don't overwrite the list if we're viewing Kage Desktop sessions
+            if (window._kageSessionSource === 'desktop') return;
 
             const list = this.elements.sessionList;
             const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
@@ -696,7 +696,7 @@ export class ChatApp {
                 const isCurrent = session.session_id === this.currentAcpSessionId;
                 const isActive = session.session_id === this.activeSessionId;
                 const isNew = !this._seenSessionIds.has(session.session_id);
-                const title = stripKiroTags(session.title) || 'New Chat';
+                const title = stripKageTags(session.title) || 'New Chat';
                 const date = new Date(session.updated_at || session.created_at);
                 const dateStr = this.formatDate(date);
 
@@ -908,7 +908,7 @@ export class ChatApp {
                 // All messages rendered — finalize
                 const session = this.sessions.find(s => s.session_id === this.activeSessionId);
                 if (session) {
-                    this.elements.chatHeaderTitle.textContent = stripKiroTags(session.title) || 'Chat';
+                    this.elements.chatHeaderTitle.textContent = stripKageTags(session.title) || 'Chat';
                 }
                 this.scrollToBottom();
                 if (this.messages.length > 0) {
@@ -920,7 +920,7 @@ export class ChatApp {
         // Update header title immediately (don't wait for batches)
         const session = this.sessions.find(s => s.session_id === this.activeSessionId);
         if (session) {
-            this.elements.chatHeaderTitle.textContent = stripKiroTags(session.title) || 'Chat';
+            this.elements.chatHeaderTitle.textContent = stripKageTags(session.title) || 'Chat';
         }
 
         renderBatch();
@@ -1053,8 +1053,8 @@ export class ChatApp {
         if (role === 'assistant') {
             renderMarkdown(text, contentDiv);
         } else {
-            // Strip internal Kiro tags from display
-            const displayText = text ? stripKiroTags(text) : text;
+            // Strip internal Kage tags from display
+            const displayText = text ? stripKageTags(text) : text;
             if (displayText) contentDiv.textContent = displayText;
         }
         if (imageSnapshots && imageSnapshots.length > 0) {
@@ -1091,7 +1091,7 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
-        this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kiro...</div>';
+        this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kage...</div>';
         this.elements.chatHeaderTitle.textContent = 'New Chat';
         this.elements.chatInput.focus();
 
@@ -1146,7 +1146,7 @@ export class ChatApp {
                 // Clear the display
                 this.activeSessionId = null;
                 this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Select a session to continue...</div>';
-                this.elements.chatHeaderTitle.textContent = 'Kiro Assistant';
+                this.elements.chatHeaderTitle.textContent = 'Kage';
             }
 
             this.renderSessionList();
@@ -1317,8 +1317,8 @@ export class ChatApp {
         const placeholder = this.elements.messagesArea.querySelector('.message-placeholder');
         if (placeholder) placeholder.remove();
 
-        // Strip internal Kiro tags from display (it's metadata for the agent, not for the user)
-        const displayText = stripKiroTags(text);
+        // Strip internal Kage tags from display (it's metadata for the agent, not for the user)
+        const displayText = stripKageTags(text);
 
         this.messages.push({ role: 'user', content: text });
         const msgEl = this.createMessageElement('user', displayText);
@@ -1644,7 +1644,7 @@ export class ChatApp {
 
             // Set timestamp on the message actions bar
             if (this.elements.messagesArea.lastElementChild) {
-                const msgEl = this.elements.messagesArea.querySelector('.message.assistant:last-of-type');
+                const msgEl = this.elements.messagesArea.querySelector('.message.agent:last-of-type');
                 const ts = msgEl?.querySelector('.msg-timestamp');
                 if (ts) {
                     let label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1664,7 +1664,7 @@ export class ChatApp {
             try {
                 if (this.isWaitingForResponse && !this._windowFocused) {
                     const preview = (this.messages[this.messages.length - 1]?.content || '').substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                    await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'main');
+                    await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'main');
                 }
             } catch { /* ignore */ }
         }
@@ -2592,7 +2592,7 @@ export class ChatApp {
         if (this._isCompacting) return;
         try {
             const config = await this.invoke('get_config');
-            const threshold = config.acp?.assistant?.auto_compact_threshold ?? 90;
+            const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;
             if (threshold === 0 || percent < threshold) return;
         } catch { return; }
 

@@ -1,7 +1,7 @@
 //! Single-instance enforcement using an OS-level file lock.
 //!
 //! Both debug and release builds use the same lock file in the shared
-//! config directory (`kiro-assistant/`), so only one instance can run
+//! config directory (`kage/`), so only one instance can run
 //! regardless of build profile.
 
 use anyhow::{Context, Result};
@@ -29,7 +29,7 @@ impl Drop for InstanceLock {
 pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
     let config_dir = dirs::config_dir()
         .context("Failed to get config directory")?
-        .join("kiro-assistant");
+        .join("kage");
 
     fs::create_dir_all(&config_dir)
         .context("Failed to create config directory")?;
@@ -90,7 +90,7 @@ pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
     }
 
     anyhow::bail!(
-        "Another instance of Kiro Assistant is already running.\n\
+        "Another instance of Kage is already running.\n\
          Lock file: {:?}",
         lock_path
     );

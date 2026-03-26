@@ -187,7 +187,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
 
         // Add screen context
         if (sourceApp) {
-            prompt = `<_kiro_ctx app="${sourceApp}" title="${sourceTitle}"/>\n${prompt}`;
+            prompt = `<_kage_ctx app="${sourceApp}" title="${sourceTitle}"/>\n${prompt}`;
         }
 
         if (currentMode === 'inform') {
@@ -210,7 +210,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         await appWindow.setSize(new LogicalSize(86, 86));
 
         // Add instruction for inline replacement
-        prompt += '\n\n[_KIRO_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences. Just the raw output text that should replace the selection.';
+        prompt += '\n\n[_KAGE_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences. Just the raw output text that should replace the selection.';
 
         try {
             await invoke('send_inline_assist', { message: prompt });

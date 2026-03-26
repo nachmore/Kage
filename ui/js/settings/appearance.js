@@ -261,8 +261,8 @@ class AppearanceSettingsModule extends SettingsModule {
             // Built-in themes (cannot be deleted)
             const builtins = [
                 { id: 'system', icon: '🖥️', name: 'System (Auto)', description: 'Follow OS preference' },
-                { id: 'light',  icon: '☀️', name: 'Kiro Light', description: '' },
-                { id: 'dark',   icon: '🌙', name: 'Kiro Dark', description: '' },
+                { id: 'light',  icon: '☀️', name: 'Kage Light', description: '' },
+                { id: 'dark',   icon: '🌙', name: 'Kage Dark', description: '' },
             ];
 
             let html = '';
@@ -298,7 +298,7 @@ class AppearanceSettingsModule extends SettingsModule {
                     </button>`;
                 html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">
                     <span class="theme-list-icon">${t.manifest.icon || '🎨'}</span>
-                    <span class="theme-list-name">${esc(t.manifest.name)} <span style="color:var(--kiro-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span></span>
+                    <span class="theme-list-name">${esc(t.manifest.name)} <span style="color:var(--kage-text-muted);font-size:11px;">v${esc(t.manifest.version)}</span></span>
                     <span class="theme-list-actions">${tickBtn}${removeBtn}</span>
                 </div>`;
             }

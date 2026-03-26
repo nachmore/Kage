@@ -1,9 +1,9 @@
-/* Kiro shared control styles — buttons, checkboxes, inputs, toggles */
+/* Kage shared control styles — buttons, checkboxes, inputs, toggles */
 
 /* Button */
 .setting-button {
     padding: 6px 16px;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     border: none;
     border-radius: 6px;
     color: #ffffff;
@@ -12,79 +12,80 @@
     cursor: pointer;
     transition: background 0.15s;
 }
-.setting-button:hover { background: var(--kiro-accent-hover); }
-.setting-button:active { background: var(--kiro-accent-active); }
+.setting-button:hover { background: var(--kage-accent-hover); }
+.setting-button:active { background: var(--kage-accent-active); }
 
 /* Text Input */
 .setting-input {
     width: 100%;
     padding: 6px 10px;
-    background: var(--kiro-bg-input);
-    border: 1px solid var(--kiro-border);
+    background: var(--kage-bg-input);
+    border: 1px solid var(--kage-border);
     border-radius: 4px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     font-size: 13px;
-    font-family: var(--kiro-font);
+    font-family: var(--kage-font);
     transition: border-color 0.2s;
 }
 .setting-input:focus {
     outline: none;
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
 /* Select */
 .setting-select {
     width: 100%;
     padding: 6px 10px;
-    background: var(--kiro-bg-input);
-    border: 1px solid var(--kiro-border);
+    background: var(--kage-bg-input);
+    border: 1px solid var(--kage-border);
     border-radius: 4px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     font-size: 13px;
-    font-family: var(--kiro-font);
+    font-family: var(--kage-font);
     cursor: pointer;
     transition: border-color 0.2s;
 }
+
 .setting-select:focus {
     outline: none;
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
-/* Kiro Checkbox */
-.kiro-checkbox {
+/* Kage Checkbox */
+.kage-checkbox {
     display: inline-flex;
     align-items: center;
     cursor: pointer;
     gap: 8px;
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     user-select: none;
 }
-.kiro-checkbox input[type="checkbox"] {
+.kage-checkbox input[type="checkbox"] {
     appearance: none;
     -webkit-appearance: none;
     width: 18px;
     height: 18px;
-    border: 1px solid var(--kiro-border);
+    border: 1px solid var(--kage-border);
     border-radius: 3px;
-    background: var(--kiro-bg-input);
+    background: var(--kage-bg-input);
     cursor: pointer;
     position: relative;
     flex-shrink: 0;
     transition: background 0.15s, border-color 0.15s;
 }
-.kiro-checkbox input[type="checkbox"]:checked {
-    background: var(--kiro-accent);
-    border-color: var(--kiro-accent);
+.kage-checkbox input[type="checkbox"]:checked {
+    background: var(--kage-accent);
+    border-color: var(--kage-accent);
 }
-.kiro-checkbox input[type="checkbox"]:checked:hover {
-    background: var(--kiro-accent-hover);
-    border-color: var(--kiro-accent-hover);
+.kage-checkbox input[type="checkbox"]:checked:hover {
+    background: var(--kage-accent-hover);
+    border-color: var(--kage-accent-hover);
 }
-.kiro-checkbox input[type="checkbox"]:not(:checked):hover {
-    border-color: var(--kiro-accent);
+.kage-checkbox input[type="checkbox"]:not(:checked):hover {
+    border-color: var(--kage-accent);
 }
-.kiro-checkbox input[type="checkbox"]:checked::after {
+.kage-checkbox input[type="checkbox"]:checked::after {
     content: '\2713';
     position: absolute;
     top: 50%;
@@ -95,8 +96,8 @@
     font-weight: 700;
     line-height: 1;
 }
-.kiro-checkbox input[type="checkbox"]:focus-visible {
-    outline: 2px solid var(--kiro-accent);
+.kage-checkbox input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--kage-accent);
     outline-offset: 1px;
 }
 
@@ -112,10 +113,10 @@
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: var(--kiro-border);
+    background-color: var(--kage-border);
     transition: 0.2s;
     border-radius: 10px;
-    border: 1px solid var(--kiro-border);
+    border: 1px solid var(--kage-border);
 }
 .toggle-slider:before {
     position: absolute;
@@ -129,12 +130,12 @@
     border-radius: 50%;
 }
 input:checked + .toggle-slider {
-    background-color: var(--kiro-accent);
-    border-color: var(--kiro-accent);
+    background-color: var(--kage-accent);
+    border-color: var(--kage-accent);
 }
 input:checked + .toggle-slider:hover {
-    background-color: var(--kiro-accent-hover);
-    border-color: var(--kiro-accent-hover);
+    background-color: var(--kage-accent-hover);
+    border-color: var(--kage-accent-hover);
 }
 input:checked + .toggle-slider:before {
     transform: translateX(20px);
@@ -149,7 +150,7 @@ input:checked + .toggle-slider:before {
 .range-slider {
     flex: 1;
     height: 4px;
-    background: var(--kiro-border);
+    background: var(--kage-border);
     border-radius: 2px;
     outline: none;
     -webkit-appearance: none;
@@ -159,25 +160,25 @@ input:checked + .toggle-slider:before {
     appearance: none;
     width: 14px;
     height: 14px;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     cursor: pointer;
     border-radius: 50%;
     transition: background 0.15s;
 }
 .range-slider::-webkit-slider-thumb:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
 }
 .range-slider::-moz-range-thumb {
     width: 14px;
     height: 14px;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     cursor: pointer;
     border-radius: 50%;
     border: none;
 }
 .range-value {
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     min-width: 40px;
     text-align: right;
 }
@@ -195,15 +196,15 @@ input:checked + .toggle-slider:before {
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
-    background: var(--kiro-bg-input);
-    border: 1px solid var(--kiro-border);
+    background: var(--kage-bg-input);
+    border: 1px solid var(--kage-border);
     border-radius: 4px;
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     min-width: 120px;
 }
 .hotkey-display.capturing {
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
 /* Script Editor — shared syntax-highlighted code editor */
@@ -227,7 +228,7 @@ input:checked + .toggle-slider:before {
     font-size: 12px;
     line-height: 1.5;
     padding: 8px 10px;
-    border: 1px solid var(--kiro-border);
+    border: 1px solid var(--kage-border);
     border-radius: 6px;
     white-space: pre;
     overflow-wrap: normal;
@@ -237,16 +238,16 @@ input:checked + .toggle-slider:before {
 .script-editor-container .script-editor {
     background: transparent;
     color: transparent;
-    caret-color: var(--kiro-text-bright);
+    caret-color: var(--kage-text-bright);
     resize: vertical;
     outline: none;
 }
 .script-editor-container .script-editor:focus {
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 .script-editor-container .script-highlight {
-    background: var(--kiro-bg-input);
-    color: var(--kiro-text);
+    background: var(--kage-bg-input);
+    color: var(--kage-text);
     pointer-events: none;
     z-index: 1;
     margin: 0;

@@ -47,10 +47,10 @@ pub struct SessionData {
     pub message_durations: HashMap<String, f64>,
 }
 
-/// Get the sessions directory: [home]/.kiro/sessions/cli
+/// Get the sessions directory: [home]/.kage/sessions/cli
 fn get_sessions_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-    Ok(home.join(".kiro").join("sessions").join("cli"))
+    Ok(home.join(".kage").join("sessions").join("cli"))
 }
 
 fn get_title_cache_path() -> Result<PathBuf, String> {
@@ -230,7 +230,7 @@ pub fn start_session_watcher(
     use tauri::Emitter;
 
     let sessions_dir = match dirs::home_dir() {
-        Some(home) => home.join(".kiro").join("sessions").join("cli"),
+        Some(home) => home.join(".kage").join("sessions").join("cli"),
         None => {
             log::warn!("Cannot start session watcher: no home directory");
             return;
@@ -667,7 +667,7 @@ pub async fn switch_acp_session(
             info!("Creating new session");
             let cwd = {
                 let cfg = state.config.lock().unwrap();
-                cfg.acp.assistant.working_directory.clone()
+                cfg.acp.agent.working_directory.clone()
             };
             let (new_session_id, models_json) = client_guard
                 .create_session(cwd)
@@ -684,13 +684,13 @@ pub async fn switch_acp_session(
 
             // Apply default model if configured
             let cfg = state.config.lock().unwrap();
-            if let Some(ref default_model) = cfg.acp.assistant.default_model {
+            if let Some(ref default_model) = cfg.acp.agent.default_model {
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);
                     let request = crate::acp_client::AcpRequest {
                         jsonrpc: "2.0".to_string(),
                         id: serde_json::json!(4),
-                        method: "_kiro.dev/commands/execute".to_string(),
+                        method: "_kage.dev/commands/execute".to_string(),
                         params: serde_json::json!({
                             "sessionId": new_session_id,
                             "command": { "command": "model", "args": { "modelName": default_model } }

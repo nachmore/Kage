@@ -8,7 +8,7 @@ use tauri::{Emitter, Manager, State};
 
 /// Prefix used to mark steering messages that should be hidden in the UI.
 /// Only the very first message in a conversation with this prefix is hidden.
-pub const STEERING_MSG_PREFIX: &str = "[KIRO_STEERING_IGNORE]";
+pub const STEERING_MSG_PREFIX: &str = "[KAGE_STEERING_IGNORE]";
 
 /// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
@@ -98,7 +98,7 @@ pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
 /// Returns the joined parts (without the STEERING_MSG_PREFIX wrapper).
 /// Callers are responsible for adding the prefix and any instructions.
 pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
-    let assistant = &config.acp.assistant;
+    let assistant = &config.acp.agent;
     let mut parts: Vec<String> = Vec::new();
 
     // Built-in steering (always first)
@@ -190,7 +190,7 @@ pub async fn save_config(
 pub async fn save_frecency(data: String) -> Result<(), AppError> {
     let path = dirs::config_dir()
         .ok_or("No config dir")?
-        .join("kiro-assistant")
+        .join("kage")
         .join("search-frecency.json");
     Ok(std::fs::write(&path, &data).map_err(|e| format!("Failed to save frecency: {}", e))?)
 }
@@ -199,7 +199,7 @@ pub async fn save_frecency(data: String) -> Result<(), AppError> {
 pub async fn load_frecency() -> Result<String, AppError> {
     let path = dirs::config_dir()
         .ok_or("No config dir")?
-        .join("kiro-assistant")
+        .join("kage")
         .join("search-frecency.json");
     match std::fs::read_to_string(&path) {
         Ok(data) => Ok(data),
@@ -212,7 +212,7 @@ const MAX_SHORTCUT_HISTORY: usize = 20;
 fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
     Ok(dirs::config_dir()
         .ok_or("No config dir")?
-        .join("kiro-assistant")
+        .join("kage")
         .join("shortcut-history.json"))
 }
 
@@ -322,7 +322,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
     }
     // Create fresh window (previous one was closed/destroyed)
     let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
-        .title("Welcome to Kiro Assistant")
+        .title("Welcome to Kage")
         .inner_size(580.0, 600.0)
         .resizable(false)
         .decorations(false)
@@ -387,7 +387,7 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
         .map(|k| format!("<span class=\"keycap\">{}</span>", k))
         .collect::<Vec<_>>()
         .join("<span class=\"keycap-sep\">+</span>");
-    let text = format!("<b>Welcome to the Assistant!</b><br/>&nbsp;<br>Press {} anytime to summon me.", keycaps);
+    let text = format!("<b>Welcome to Kage!</b><br/>&nbsp;<br>Press {} anytime to summon me.", keycaps);
 
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.show();
@@ -1102,7 +1102,7 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
     }
     let _ = app.emit("show_floating_banner", serde_json::json!({
         "icon": "🎉",
-        "text": "Kiro Assistant has been updated!",
+        "text": "Kage has been updated!",
         "action_label": "View changelog →",
         "action_type": "settings",
         "action_data": "updates"

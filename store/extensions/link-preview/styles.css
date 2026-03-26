@@ -18,7 +18,7 @@
 
 .link-preview-card:hover {
     background: rgba(255, 255, 255, 0.1);
-    border-color: var(--kiro-accent, #7138CC);
+    border-color: var(--kage-accent, #7138CC);
 }
 
 .link-preview-icon {
@@ -54,7 +54,7 @@
 
 .link-preview-domain {
     font-size: 11px;
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -63,7 +63,7 @@
 .link-preview-title {
     font-weight: 600;
     font-size: 13px;
-    color: var(--kiro-accent-light, #C09CFF);
+    color: var(--kage-accent-light, #C09CFF);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -71,14 +71,14 @@
 }
 
 .link-preview-loading {
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
     font-weight: 400;
     font-style: italic;
 }
 
 .link-preview-desc {
     font-size: 11px;
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
     line-height: 1.3;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -107,5 +107,5 @@ body.light-theme .link-preview-card:hover {
 }
 
 body.light-theme .link-preview-title {
-    color: var(--kiro-accent, #7138CC);
+    color: var(--kage-accent, #7138CC);
 }

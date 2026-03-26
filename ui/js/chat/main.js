@@ -1,6 +1,6 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './app.js';
-import { KiroDesktopViewer } from './kiro-desktop.js';
+import { KageDesktopViewer } from './kage-desktop.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
@@ -48,11 +48,11 @@ function initApp() {
         app.renderExtensionToolbarButtons();
     });
 
-    // Initialize Kiro Desktop viewer
+    // Initialize Kage Desktop viewer
     let desktopViewer = null;
-    let currentSource = 'assistant';
+    let currentSource = 'kage';
     // Expose source state so ChatApp's session refresh doesn't overwrite desktop sessions
-    window._kiroSessionSource = 'assistant';
+    window._kageSessionSource = 'kage';
 
     const kdElements = {
         sessionList: document.getElementById('sessionList'),
@@ -60,7 +60,7 @@ function initApp() {
     };
 
     (async () => {
-        const viewer = new KiroDesktopViewer(invoke, kdElements, app);
+        const viewer = new KageDesktopViewer(invoke, kdElements, app);
         const available = await viewer.init();
         if (available) {
             desktopViewer = viewer;
@@ -72,7 +72,7 @@ function initApp() {
                         const source = btn.dataset.source;
                         if (source === currentSource) return;
                         currentSource = source;
-                        window._kiroSessionSource = source;
+                        window._kageSessionSource = source;
                         toggle.querySelectorAll('.source-toggle-btn').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
 

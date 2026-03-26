@@ -3,7 +3,7 @@
 /* Summary bubble injected into the chat messages area */
 .todos-summary-bubble {
     margin: 8px 16px;
-    border: 1px solid var(--kiro-border, #3c3c3c);
+    border: 1px solid var(--kage-border, #3c3c3c);
     border-radius: 8px;
     overflow: hidden;
     font-size: 13px;
@@ -17,10 +17,10 @@
     gap: 8px;
     padding: 8px 12px;
     background: rgba(74, 158, 255, 0.08);
-    border-bottom: 1px solid var(--kiro-border, #3c3c3c);
+    border-bottom: 1px solid var(--kage-border, #3c3c3c);
     font-size: 12px;
     font-weight: 600;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
 }
 
 .todos-summary-header svg { opacity: 0.7; flex-shrink: 0; }
@@ -28,19 +28,19 @@
 
 .todos-summary-close {
     background: none; border: none;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     cursor: pointer; font-size: 14px; padding: 0 2px; opacity: 0.6;
 }
 .todos-summary-close:hover { opacity: 1; }
 
 .todos-summary-body {
     padding: 10px 14px;
-    color: var(--kiro-text-primary, #e0e0e0);
+    color: var(--kage-text-primary, #e0e0e0);
     line-height: 1.5;
 }
 .todos-summary-body ul { list-style: none; padding: 0; margin: 4px 0; }
 .todos-summary-body li { padding: 2px 0; }
-.todos-summary-body strong { color: var(--kiro-text-primary, #e0e0e0); }
+.todos-summary-body strong { color: var(--kage-text-primary, #e0e0e0); }
 .todos-summary-body del { opacity: 0.5; }
 
 body.light-theme .todos-summary-bubble { border-color: #d4d4d4; }
@@ -60,7 +60,7 @@ body.light-theme .todos-summary-header {
 
 .reminder-bar-counter {
     font-size: 11px;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     margin-right: 2px;
     font-variant-numeric: tabular-nums;
     align-self: center;

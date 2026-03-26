@@ -4,7 +4,7 @@ use log::{info, warn};
 use std::fs;
 use std::path::PathBuf;
 
-const PLIST_LABEL: &str = "com.kiro-assistant.app";
+const PLIST_LABEL: &str = "com.kage.app";
 
 fn get_plist_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join("Library/LaunchAgents").join(format!("{}.plist", PLIST_LABEL)))

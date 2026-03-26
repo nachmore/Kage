@@ -1074,18 +1074,18 @@ const _tryStopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none
 
 function runCodeInSandbox(code, wrapper, button) {
     // Flag to suppress blur-hide while sandbox iframe is being created
-    window._kiroSandboxActive = true;
+    window._kageSandboxActive = true;
 
     // If already running, stop it
-    if (wrapper._kiroSandboxCleanup) {
-        wrapper._kiroSandboxCleanup();
+    if (wrapper._kageSandboxCleanup) {
+        wrapper._kageSandboxCleanup();
         return;
     }
 
     // Remove any previous output
     const prev = wrapper.querySelector('.try-output');
     if (prev) prev.remove();
-    const prevIframe = wrapper._kiroSandboxIframe;
+    const prevIframe = wrapper._kageSandboxIframe;
     if (prevIframe && prevIframe.parentNode) prevIframe.remove();
 
     // Create output container
@@ -1116,7 +1116,7 @@ function runCodeInSandbox(code, wrapper, button) {
     iframe.sandbox = 'allow-scripts';
     iframe.style.cssText = 'display:none;width:0;height:0;border:0;';
     document.body.appendChild(iframe);
-    wrapper._kiroSandboxIframe = iframe;
+    wrapper._kageSandboxIframe = iframe;
 
     let finished = false;
     let timeout;
@@ -1132,12 +1132,12 @@ function runCodeInSandbox(code, wrapper, button) {
     function cleanup(reason) {
         if (finished) return;
         finished = true;
-        window._kiroSandboxActive = false;
+        window._kageSandboxActive = false;
         clearTimeout(timeout);
         window.removeEventListener('message', onMessage);
         if (iframe.parentNode) iframe.remove();
-        wrapper._kiroSandboxIframe = null;
-        wrapper._kiroSandboxCleanup = null;
+        wrapper._kageSandboxIframe = null;
+        wrapper._kageSandboxCleanup = null;
         button.innerHTML = _tryPlayIcon;
         button.classList.remove('try-button-running');
         if (reason === 'stopped') appendLine('try-output-dim', '⏹ Stopped');
@@ -1147,12 +1147,12 @@ function runCodeInSandbox(code, wrapper, button) {
         }
     }
 
-    wrapper._kiroSandboxCleanup = () => cleanup('stopped');
+    wrapper._kageSandboxCleanup = () => cleanup('stopped');
 
     function onMessage(e) {
         if (e.source !== iframe.contentWindow) return;
         const msg = e.data;
-        if (!msg || msg._kiroSandbox !== true) return;
+        if (!msg || msg._kageSandbox !== true) return;
         if (msg.type === 'log') appendLine('', msg.args.map(String).join(' '));
         else if (msg.type === 'warn') appendLine('try-output-warn', msg.args.map(String).join(' '));
         else if (msg.type === 'error') appendLine('try-output-error', msg.args.map(String).join(' '));
@@ -1175,7 +1175,7 @@ function runCodeInSandbox(code, wrapper, button) {
         <script>
         (function() {
             function send(type, data) {
-                parent.postMessage(Object.assign({ _kiroSandbox: true, type: type }, data), '*');
+                parent.postMessage(Object.assign({ _kageSandbox: true, type: type }, data), '*');
             }
             window.onerror = function(msg) {
                 send('exception', { message: String(msg) });

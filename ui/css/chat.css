@@ -51,7 +51,7 @@ body {
     z-index: 10;
 }
 .sidebar-resize-handle:hover {
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     opacity: 0.4;
 }
 
@@ -83,7 +83,7 @@ body {
 .sidebar-title {
     font-size: 15px;
     font-weight: 700;
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -92,7 +92,7 @@ body {
 .new-session-btn {
     padding: 10px 16px;
     margin: 12px 16px;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     border: none;
     border-radius: 8px;
     color: #ffffff;
@@ -107,9 +107,9 @@ body {
 }
 
 .new-session-btn:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px var(--kiro-accent-glow);
+    box-shadow: 0 4px 12px var(--kage-accent-glow);
 }
 
 .session-list {
@@ -183,7 +183,7 @@ body {
 
 .sidebar-footer-btn:hover {
     background: #e5e7eb;
-    color: var(--kiro-accent);
+    color: var(--kage-accent);
 }
 
 /* Main Chat Area */
@@ -264,7 +264,7 @@ body {
     justify-content: center;
     font-size: 16px;
     flex-shrink: 0;
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
 }
 
 .message-bubble {
@@ -299,7 +299,7 @@ body {
 .message-content li p { display: inline; margin: 0; }
 
 .message.user .message-content {
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
     color: #19161D;
     border-radius: 16px 16px 4px 16px;
 }
@@ -356,7 +356,7 @@ body {
 }
 
 .chat-input-wrapper:focus-within {
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
 .chat-input {
@@ -393,7 +393,7 @@ body {
     border-radius: 6px;
     font-size: 13px;
     font-weight: 600;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     color: #ffffff;
     cursor: pointer;
     transition: all 0.2s;
@@ -407,9 +407,9 @@ body {
 }
 
 .chat-send-btn:hover:not(:disabled) {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px var(--kiro-accent-glow);
+    box-shadow: 0 4px 12px var(--kage-accent-glow);
 }
 
 .chat-send-btn:disabled {
@@ -582,10 +582,10 @@ body {
 
 /* Session badges */
 .session-floating-badge { margin-left: 4px; font-size: 11px; }
-.session-current-badge { margin-left: 4px; font-size: 11px; color: var(--kiro-accent); }
-.session-default-label { color: var(--kiro-accent); font-weight: 500; }
-.session-list-separator { height: 1px; background: var(--kiro-accent); margin: 4px 12px; opacity: 0.4; }
-.session-new-dot { margin-right: 5px; font-size: 9px; color: var(--kiro-accent); vertical-align: middle; }
+.session-current-badge { margin-left: 4px; font-size: 11px; color: var(--kage-accent); }
+.session-default-label { color: var(--kage-accent); font-weight: 500; }
+.session-list-separator { height: 1px; background: var(--kage-accent); margin: 4px 12px; opacity: 0.4; }
+.session-new-dot { margin-right: 5px; font-size: 9px; color: var(--kage-accent); vertical-align: middle; }
 .session-item.session-new .session-item-title { font-weight: 600; }
 
 
@@ -694,7 +694,7 @@ body {
     font-weight: 600;
     color: #1f2937;
     background: transparent;
-    border: 1px solid var(--kiro-accent);
+    border: 1px solid var(--kage-accent);
     border-radius: 4px;
     padding: 2px 6px;
     outline: none;
@@ -756,18 +756,18 @@ body {
     opacity: 0.7;
 }
 .steering-icon svg {
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
 }
 
 .steering-label {
     flex: 1;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     font-size: 12px;
 }
 
 .steering-toggle {
     font-size: 10px;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     transition: transform 0.2s;
 }
 
@@ -788,14 +788,14 @@ body {
 
 .steering-content {
     font-size: 12px;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     line-height: 1.5;
 }
 
 .steering-content p { margin: 4px 0; }
 .steering-content h1, .steering-content h2, .steering-content h3 {
     font-size: 13px;
-    color: var(--kiro-text-secondary, #b0b0b0);
+    color: var(--kage-text-secondary, #b0b0b0);
     margin: 8px 0 4px;
 }
 
@@ -845,7 +845,7 @@ body.light-theme .steering-ack { border-top-color: rgba(0, 0, 0, 0.1); }
     border-radius: 4px;
 }
 .chat-header-action:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
 }
 body.light-theme .chat-header-action {
     color: #333333;
@@ -871,7 +871,7 @@ body.light-theme .chat-header-action:hover {
     transition: border-color 0.15s;
 }
 .session-search:focus {
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 .session-search::placeholder {
     color: #888;
@@ -888,7 +888,7 @@ body.light-theme .chat-header-action:hover {
     padding: 5px 8px;
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     font-size: 11px;
     font-weight: 500;
     cursor: pointer;
@@ -897,8 +897,8 @@ body.light-theme .chat-header-action:hover {
 .source-toggle-btn:first-child { border-radius: 6px 0 0 6px; }
 .source-toggle-btn:last-child { border-radius: 0 6px 6px 0; }
 .source-toggle-btn.active {
-    background: var(--kiro-accent);
-    border-color: var(--kiro-accent);
+    background: var(--kage-accent);
+    border-color: var(--kage-accent);
     color: #fff;
 }
 .source-toggle-btn:not(.active):hover {
@@ -954,7 +954,7 @@ body.light-theme .session-search::placeholder {
 }
 .session-action-btn.session-action-edit:hover,
 .session-action-btn.session-action-reveal:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
 }
 .session-action-btn.session-action-delete:hover {
     background: rgba(220, 38, 38, 0.3);
@@ -967,7 +967,7 @@ body.light-theme .session-action-btn {
     width: 100%;
     padding: 4px 8px;
     background: rgba(255,255,255,0.1);
-    border: 1px solid var(--kiro-accent);
+    border: 1px solid var(--kage-accent);
     border-radius: 4px;
     color: #fff;
     font-size: 13px;
@@ -993,7 +993,7 @@ body.light-theme .session-rename-input {
     margin-right: 8px;
 }
 .sidebar-toggle-btn:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
 }
 body.light-theme .sidebar-toggle-btn {
     color: #333;
@@ -1024,7 +1024,7 @@ body.light-theme .sidebar-toggle-btn {
 
 .msg-timestamp {
     font-size: 10px;
-    color: var(--kiro-text-muted, #9ca3af);
+    color: var(--kage-text-muted, #9ca3af);
     margin-left: auto;
     opacity: 0.7;
 }
@@ -1039,21 +1039,21 @@ body.light-theme .sidebar-toggle-btn {
 }
 
 .chat-chip {
-    background: var(--kiro-bg-input, #2d2d30);
-    border: 1px solid var(--kiro-border, #3c3c3c);
+    background: var(--kage-bg-input, #2d2d30);
+    border: 1px solid var(--kage-border, #3c3c3c);
     border-radius: 20px;
     padding: 6px 14px;
     font-size: 12px;
-    color: var(--kiro-text, #cccccc);
+    color: var(--kage-text, #cccccc);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
     white-space: nowrap;
 }
 
 .chat-chip:hover {
-    background: var(--kiro-bg-elevated, #252526);
-    border-color: var(--kiro-accent, #7138CC);
-    color: var(--kiro-text-bright, #ffffff);
+    background: var(--kage-bg-elevated, #252526);
+    border-color: var(--kage-accent, #7138CC);
+    color: var(--kage-text-bright, #ffffff);
 }
 
 
@@ -1063,12 +1063,12 @@ body.light-theme .sidebar-toggle-btn {
     justify-content: flex-end;
 }
 
-/* Kiro Desktop session viewer */
+/* Kage Desktop session viewer */
 .kd-workspace-header {
     padding: 8px 16px 4px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     overflow: hidden;
@@ -1122,16 +1122,16 @@ body.light-theme .sidebar-toggle-btn {
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     transition: background 0.15s, color 0.15s;
 }
-.kd-action-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--kiro-text-primary); }
+.kd-action-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--kage-text-primary); }
 .kd-delete-btn:hover { color: #ef4444; }
 .kd-readonly-banner {
     text-align: center;
     padding: 8px 16px;
     font-size: 12px;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     background: rgba(99, 102, 241, 0.06);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -1155,7 +1155,7 @@ body.light-theme .kd-readonly-banner {
 .kd-loading {
     text-align: center;
     padding: 40px 16px;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     font-size: 13px;
 }
 .kd-tool-details {
@@ -1164,14 +1164,14 @@ body.light-theme .kd-readonly-banner {
 .kd-tool-summary {
     cursor: pointer;
     font-size: 12px;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     padding: 4px 0;
     user-select: none;
     display: flex;
     align-items: center;
     gap: 6px;
 }
-.kd-tool-summary:hover { color: var(--kiro-text-primary, #E5E7EB); }
+.kd-tool-summary:hover { color: var(--kage-text-primary, #E5E7EB); }
 .kd-tool-copy-btn {
     display: inline-flex;
     align-items: center;
@@ -1179,14 +1179,14 @@ body.light-theme .kd-readonly-banner {
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     padding: 2px;
     border-radius: 3px;
     opacity: 0;
     transition: opacity 0.15s, color 0.15s;
 }
 .kd-tool-details[open] .kd-tool-copy-btn { opacity: 1; }
-.kd-tool-copy-btn:hover { color: var(--kiro-accent, #6366f1); }
+.kd-tool-copy-btn:hover { color: var(--kage-accent, #6366f1); }
 .kd-tool-output {
     max-height: 300px;
     overflow: auto;
@@ -1197,7 +1197,7 @@ body.light-theme .kd-readonly-banner {
     margin-top: 4px;
     white-space: pre-wrap;
     word-break: break-all;
-    color: var(--kiro-text-primary, #E5E7EB);
+    color: var(--kage-text-primary, #E5E7EB);
 }
 body.light-theme .kd-tool-output {
     background: rgba(0, 0, 0, 0.04);
@@ -1226,7 +1226,7 @@ body.light-theme .kd-tool-output {
     padding: 4px 16px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--kiro-accent, #6366f1);
+    color: var(--kage-accent, #6366f1);
     opacity: 1;
     transition: opacity 1s ease-out;
 }
@@ -1234,7 +1234,7 @@ body.light-theme .kd-tool-output {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--kiro-accent, #6366f1);
+    background: var(--kage-accent, #6366f1);
     opacity: 0.4;
 }
 .kd-new-divider-seen {

@@ -1,9 +1,9 @@
 /* Settings window layout — sidebar, content area, setting rows */
 
 body {
-    font-family: var(--kiro-font);
-    background: var(--kiro-bg);
-    color: var(--kiro-text);
+    font-family: var(--kage-font);
+    background: var(--kage-bg);
+    color: var(--kage-text);
     overflow: hidden;
     height: 100vh;
 }
@@ -25,17 +25,17 @@ body {
     justify-content: space-between;
     padding: 0 15px;
     z-index: 100;
-    border-bottom: 1px solid var(--kiro-border-subtle);
+    border-bottom: 1px solid var(--kage-border-subtle);
 }
 .settings-title {
     font-size: 13px;
     font-weight: 400;
-    color: var(--kiro-text);
+    color: var(--kage-text);
 }
 .close-btn {
     background: transparent;
     border: none;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     cursor: pointer;
     padding: 4px 12px;
     border-radius: 3px;
@@ -47,21 +47,21 @@ body {
 /* Sidebar */
 .settings-sidebar {
     width: 180px;
-    background: var(--kiro-bg-elevated);
-    border-right: 1px solid var(--kiro-border-subtle);
+    background: var(--kage-bg-elevated);
+    border-right: 1px solid var(--kage-border-subtle);
     overflow-y: auto;
     flex-shrink: 0;
 }
 .sidebar-section { margin-bottom: 20px; }
 .sidebar-separator {
     height: 1px;
-    background: var(--kiro-border-subtle, rgba(255,255,255,0.08));
+    background: var(--kage-border-subtle, rgba(255,255,255,0.08));
     margin: 6px 12px;
 }
 .sidebar-section-title {
     font-size: 11px;
     font-weight: 600;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     padding: 8px 20px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -69,7 +69,7 @@ body {
 .sidebar-item {
     padding: 6px 20px;
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     cursor: pointer;
     transition: background 0.1s;
     display: flex;
@@ -80,8 +80,8 @@ body {
 .sidebar-item:hover { background: #2a2d2e; }
 .sidebar-item.active {
     background: #37373d;
-    color: var(--kiro-text-bright);
-    border-left: 2px solid var(--kiro-accent);
+    color: var(--kage-text-bright);
+    border-left: 2px solid var(--kage-accent);
     padding-left: 18px;
 }
 .sidebar-item-icon { font-size: 14px; }
@@ -97,13 +97,13 @@ body {
 .settings-section-header {
     font-size: 20px;
     font-weight: 300;
-    color: var(--kiro-text-bright);
+    color: var(--kage-text-bright);
     margin: -30px -40px 20px -40px;
     padding: 20px 40px 10px 40px;
-    border-bottom: 1px solid var(--kiro-border-subtle);
+    border-bottom: 1px solid var(--kage-border-subtle);
     position: sticky;
     top: -30px;
-    background: var(--kiro-bg, #1e1e1e);
+    background: var(--kage-bg, #1e1e1e);
     z-index: 10;
 }
 
@@ -111,19 +111,19 @@ body {
 .setting-section-label {
     font-size: 17px;
     font-weight: 500;
-    color: var(--kiro-text-bright);
+    color: var(--kage-text-bright);
     padding: 8px 12px;
     margin: 20px -40px 12px -40px;
     padding-left: 40px;
     padding-right: 40px;
-    background: var(--kiro-bg-raised, #252526);
-    border-left: 3px solid var(--kiro-accent, #C09CFF);
+    background: var(--kage-bg-raised, #252526);
+    border-left: 3px solid var(--kage-accent, #C09CFF);
     position: sticky;
     top: 22px;
     z-index: 9;
 }
 
-/* Setting Row — vertical stack layout matching Kiro/VS Code settings */
+/* Setting Row — vertical stack layout matching Kage/VS Code settings */
 .setting-row {
     padding: 12px 0;
     margin-bottom: 4px;
@@ -132,14 +132,14 @@ body {
 
 .setting-label {
     font-size: 13px;
-    color: var(--kiro-text-bright);
+    color: var(--kage-text-bright);
     margin-bottom: 6px;
     font-weight: 600;
 }
 
 .setting-description {
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     line-height: 1.5;
     margin-bottom: 6px;
 }
@@ -192,7 +192,7 @@ body {
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--kiro-bg); }
+::-webkit-scrollbar-track { background: var(--kage-bg); }
 ::-webkit-scrollbar-thumb { background: #424242; border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: #4e4e4e; }
 
@@ -203,14 +203,14 @@ body {
     left: 180px;
     right: 0;
     padding: 12px 40px;
-    background: var(--kiro-bg-elevated);
-    border-top: 1px solid var(--kiro-border-subtle);
+    background: var(--kage-bg-elevated);
+    border-top: 1px solid var(--kage-border-subtle);
     display: flex;
     justify-content: flex-end;
 }
 .save-button {
     padding: 8px 24px;
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     border: none;
     border-radius: 6px;
     color: #ffffff;
@@ -219,7 +219,7 @@ body {
     transition: background 0.15s;
     font-weight: 500;
 }
-.save-button:hover { background: var(--kiro-accent-hover); }
+.save-button:hover { background: var(--kage-accent-hover); }
 
 
 /* Light theme overrides for settings */
@@ -229,7 +229,7 @@ body.light-theme .sidebar-item:hover { background: #e0e0e0; }
 body.light-theme .sidebar-item.active { background: #d8d8d8; }
 body.light-theme ::-webkit-scrollbar-thumb { background: #c0c0c0; }
 body.light-theme ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
-body.light-theme .settings-section-header { color: var(--kiro-text-bright); background: var(--kiro-bg, #ffffff); }
+body.light-theme .settings-section-header { color: var(--kage-text-bright); background: var(--kage-bg, #ffffff); }
 body.light-theme .setting-section-label { background: #e8e8e8; }
 
 /* Extension section header — adds flex layout for the disable button */
@@ -254,7 +254,7 @@ body.light-theme .setting-section-label { background: #e8e8e8; }
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
     color: #ffffff;
-    font-family: var(--kiro-font);
+    font-family: var(--kage-font);
     font-size: 12px;
     font-weight: 500;
     line-height: 20px;
@@ -275,8 +275,8 @@ body.light-theme .keycap {
 }
 body.light-theme .keycap-sep { color: #999; }
 .keycap-preview.capturing .keycap {
-    border-color: var(--kiro-accent);
-    box-shadow: 0 0 0 1px var(--kiro-accent-glow);
+    border-color: var(--kage-accent);
+    box-shadow: 0 0 0 1px var(--kage-accent-glow);
 }
 
 /* Custom hotkey dropdown */
@@ -284,14 +284,14 @@ body.light-theme .keycap-sep { color: #999; }
 .hotkey-dropdown-selected {
     display: flex; align-items: center; justify-content: space-between;
     padding: 6px 10px; cursor: pointer;
-    background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px;
+    background: var(--kage-bg-input); border: 1px solid var(--kage-border); border-radius: 4px;
     transition: border-color 0.2s; min-height: 34px;
 }
-.hotkey-dropdown-selected:hover { border-color: var(--kiro-accent); }
-.hotkey-dropdown-arrow { color: var(--kiro-text-muted); font-size: 12px; margin-left: 8px; }
+.hotkey-dropdown-selected:hover { border-color: var(--kage-accent); }
+.hotkey-dropdown-arrow { color: var(--kage-text-muted); font-size: 12px; margin-left: 8px; }
 .hotkey-dropdown-menu {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
-    background: var(--kiro-bg-elevated); border: 1px solid var(--kiro-border); border-radius: 4px;
+    background: var(--kage-bg-elevated); border: 1px solid var(--kage-border); border-radius: 4px;
     margin-top: 2px; padding: 4px 0; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     max-height: 300px; overflow-y: auto;
 }
@@ -301,13 +301,13 @@ body.light-theme .keycap-sep { color: #999; }
 }
 .hotkey-dropdown-item:hover { background: rgba(113, 56, 204, 0.15); }
 .hotkey-dropdown-item.active { background: rgba(113, 56, 204, 0.25); }
-.hotkey-dropdown-label { font-size: 11px; color: var(--kiro-text-muted); }
-.hotkey-dropdown-divider { height: 1px; background: var(--kiro-border); margin: 4px 0; }
+.hotkey-dropdown-label { font-size: 11px; color: var(--kage-text-muted); }
+.hotkey-dropdown-divider { height: 1px; background: var(--kage-border); margin: 4px 0; }
 
 /* Shortcuts reference table */
 .shortcuts-reference {
     margin: 8px 0;
-    border: 1px solid var(--kiro-border-subtle);
+    border: 1px solid var(--kage-border-subtle);
     border-radius: 6px;
     overflow: hidden;
 }
@@ -315,7 +315,7 @@ body.light-theme .keycap-sep { color: #999; }
     display: flex;
     align-items: center;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--kiro-border-subtle);
+    border-bottom: 1px solid var(--kage-border-subtle);
     gap: 12px;
 }
 .shortcut-ref-row:last-child { border-bottom: none; }
@@ -327,18 +327,18 @@ body.light-theme .keycap-sep { color: #999; }
 .shortcut-ref-desc {
     flex: 1;
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
 }
 .shortcut-ref-scope {
     font-size: 11px;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     white-space: nowrap;
 }
 
 /* About card */
 .about-card {
     background: rgba(255,255,255,0.04);
-    border: 1px solid var(--kiro-border-subtle);
+    border: 1px solid var(--kage-border-subtle);
     border-radius: 10px;
     padding: 24px;
 }
@@ -356,11 +356,11 @@ body.light-theme .keycap-sep { color: #999; }
 .about-app-name {
     font-size: 18px;
     font-weight: 600;
-    color: var(--kiro-text-bright, #E5E7EB);
+    color: var(--kage-text-bright, #E5E7EB);
 }
 .about-version {
     font-size: 13px;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     margin-top: 2px;
 }
 .about-homepage {
@@ -368,7 +368,7 @@ body.light-theme .keycap-sep { color: #999; }
     margin-top: 2px;
 }
 .about-homepage a {
-    color: var(--kiro-accent, #6366f1);
+    color: var(--kage-accent, #6366f1);
     text-decoration: none;
 }
 .about-homepage a:hover {
@@ -376,11 +376,11 @@ body.light-theme .keycap-sep { color: #999; }
 }
 .about-description {
     font-size: 13px;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     line-height: 1.5;
     margin-bottom: 16px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--kiro-border-subtle);
+    border-bottom: 1px solid var(--kage-border-subtle);
 }
 .about-info {
     display: flex;
@@ -396,10 +396,10 @@ body.light-theme .keycap-sep { color: #999; }
 }
 .about-label {
     min-width: 80px;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
 }
 .about-row a {
-    color: var(--kiro-accent, #6366f1);
+    color: var(--kage-accent, #6366f1);
     text-decoration: none;
 }
 .about-row a:hover {
@@ -407,7 +407,7 @@ body.light-theme .keycap-sep { color: #999; }
 }
 .about-actions {
     padding-top: 16px;
-    border-top: 1px solid var(--kiro-border-subtle);
+    border-top: 1px solid var(--kage-border-subtle);
 }
 
 /* Updates — changelog box */
@@ -415,15 +415,15 @@ body.light-theme .keycap-sep { color: #999; }
     margin-top: 8px;
     max-height: 400px;
     overflow-y: auto;
-    background: var(--kiro-bg-elevated);
-    border: 1px solid var(--kiro-border-subtle);
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border-subtle);
     border-radius: 6px;
     padding: 16px;
     font-size: 13px;
     line-height: 1.6;
 }
 .changelog-box h1, .changelog-box h2, .changelog-box h3 {
-    color: var(--kiro-text-bright);
+    color: var(--kage-text-bright);
     margin-top: 16px;
     margin-bottom: 8px;
 }
@@ -433,13 +433,13 @@ body.light-theme .keycap-sep { color: #999; }
 .changelog-box ul { padding-left: 20px; margin: 8px 0; }
 .changelog-box li { margin: 4px 0; }
 .changelog-box code {
-    background: var(--kiro-bg);
+    background: var(--kage-bg);
     padding: 1px 4px;
     border-radius: 3px;
     font-size: 12px;
 }
 .changelog-box pre {
-    background: var(--kiro-bg);
+    background: var(--kage-bg);
     padding: 12px;
     border-radius: 4px;
     overflow-x: auto;
@@ -451,8 +451,8 @@ body.light-theme .keycap-sep { color: #999; }
     align-items: center;
     gap: 14px;
     padding: 14px 16px;
-    background: var(--kiro-bg-elevated);
-    border: 1px solid var(--kiro-border-subtle);
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border-subtle);
     border-radius: 8px;
     margin-bottom: 20px;
 }
@@ -469,16 +469,16 @@ body.light-theme .keycap-sep { color: #999; }
 .update-status-title {
     font-size: 13px;
     font-weight: 500;
-    color: var(--kiro-text-bright);
+    color: var(--kage-text-bright);
 }
 .update-status-detail {
     font-size: 12px;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
     margin-top: 2px;
 }
 .update-status-action { flex-shrink: 0; }
 .update-install-btn {
-    background: var(--kiro-accent) !important;
+    background: var(--kage-accent) !important;
     color: #fff !important;
     border: none !important;
     padding: 6px 16px !important;
@@ -487,13 +487,13 @@ body.light-theme .keycap-sep { color: #999; }
     cursor: pointer;
 }
 .update-install-btn:hover {
-    background: var(--kiro-accent-hover) !important;
+    background: var(--kage-accent-hover) !important;
 }
 .update-spinner {
     width: 26px;
     height: 26px;
-    border: 2px solid var(--kiro-border-subtle);
-    border-top-color: var(--kiro-accent);
+    border: 2px solid var(--kage-border-subtle);
+    border-top-color: var(--kage-accent);
     border-radius: 50%;
     animation: update-spin 0.8s linear infinite;
 }
@@ -501,7 +501,7 @@ body.light-theme .keycap-sep { color: #999; }
     to { transform: rotate(360deg); }
 }
 .update-check-icon { font-size: 30px; color: #4ade80; }
-.update-available-icon { font-size: 30px; color: var(--kiro-accent); }
+.update-available-icon { font-size: 30px; color: var(--kage-accent); }
 .update-error-icon { font-size: 30px; color: #f87171; }
 
 /* Theme list items */
@@ -564,14 +564,14 @@ body.light-theme .theme-list-scroll {
     transition: background 0.15s, color 0.15s;
 }
 .theme-use-btn {
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     color: #fff;
 }
 .theme-use-btn:hover {
-    background: var(--kiro-accent-hover);
+    background: var(--kage-accent-hover);
 }
 .theme-active-tick {
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     color: #fff;
     cursor: default;
 }
@@ -583,7 +583,7 @@ body.light-theme .theme-list-item-active {
 }
 .theme-remove-btn {
     background: transparent;
-    color: var(--kiro-text-muted);
+    color: var(--kage-text-muted);
 }
 .theme-remove-btn:hover {
     background: rgba(220, 38, 38, 0.15);
@@ -612,10 +612,10 @@ body.light-theme .mcp-server-item:hover { background: rgba(0, 0, 0, 0.02); }
 .mcp-server-details { min-width: 0; }
 .mcp-server-name { font-size: 13px; font-weight: 500; }
 .mcp-server-badge {
-    font-size: 10px; font-weight: 600; color: var(--kiro-accent);
+    font-size: 10px; font-weight: 600; color: var(--kage-accent);
     background: rgba(99, 102, 241, 0.12); padding: 1px 6px; border-radius: 4px; margin-left: 6px;
 }
-.mcp-server-desc { font-size: 11px; color: var(--kiro-text-muted); margin-top: 2px; }
+.mcp-server-desc { font-size: 11px; color: var(--kage-text-muted); margin-top: 2px; }
 .mcp-server-cmd { font-family: monospace; word-break: break-all; }
 .mcp-server-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .mcp-server-edit-btn, .mcp-server-delete-btn {
@@ -624,7 +624,7 @@ body.light-theme .mcp-server-item:hover { background: rgba(0, 0, 0, 0.02); }
     background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px; cursor: pointer;
-    color: var(--kiro-text-muted, #938F9B);
+    color: var(--kage-text-muted, #938F9B);
     transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     opacity: 0;
 }
@@ -634,8 +634,8 @@ body.light-theme .mcp-server-delete-btn { border-color: rgba(0, 0, 0, 0.15); }
 .mcp-server-item:hover .mcp-server-delete-btn { opacity: 1; }
 .mcp-server-edit-btn:hover {
     background: rgba(99, 102, 241, 0.1);
-    border-color: var(--kiro-accent);
-    color: var(--kiro-accent);
+    border-color: var(--kage-accent);
+    color: var(--kage-accent);
 }
 .mcp-server-delete-btn:hover {
     background: rgba(220, 38, 38, 0.1);
@@ -645,18 +645,18 @@ body.light-theme .mcp-server-delete-btn { border-color: rgba(0, 0, 0, 0.15); }
 .mcp-server-edit-btn svg, .mcp-server-delete-btn svg { width: 14px; height: 14px; }
 
 /* Toggle switch */
-.kiro-toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
-.kiro-toggle input { opacity: 0; width: 0; height: 0; }
-.kiro-toggle-slider {
+.kage-toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+.kage-toggle input { opacity: 0; width: 0; height: 0; }
+.kage-toggle-slider {
     position: absolute; cursor: pointer; inset: 0;
     background: rgba(255, 255, 255, 0.15); border-radius: 20px; transition: 0.2s;
 }
-.kiro-toggle-slider::before {
+.kage-toggle-slider::before {
     content: ''; position: absolute; height: 14px; width: 14px;
     left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s;
 }
-.kiro-toggle input:checked + .kiro-toggle-slider { background: var(--kiro-accent); }
-.kiro-toggle input:checked + .kiro-toggle-slider::before { transform: translateX(16px); }
+.kage-toggle input:checked + .kage-toggle-slider { background: var(--kage-accent); }
+.kage-toggle input:checked + .kage-toggle-slider::before { transform: translateX(16px); }
 
 /* MCP Dialog */
 .mcp-dialog-overlay {
@@ -664,11 +664,11 @@ body.light-theme .mcp-server-delete-btn { border-color: rgba(0, 0, 0, 0.15); }
     display: flex; align-items: center; justify-content: center; z-index: 1000;
 }
 .mcp-dialog {
-    background: var(--kiro-bg-primary, #1E1A24); border: 1px solid rgba(255,255,255,0.12);
+    background: var(--kage-bg-primary, #1E1A24); border: 1px solid rgba(255,255,255,0.12);
     border-radius: 12px; padding: 24px; width: 400px; max-width: 90vw;
 }
 .mcp-dialog-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
 .mcp-dialog-label { font-size: 12px; font-weight: 500; margin-top: 10px; display: block; }
 .mcp-dialog-input { width: 100%; margin-top: 4px; }
 .mcp-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-.mcp-dialog-save { background: var(--kiro-accent) !important; color: white !important; }
+.mcp-dialog-save { background: var(--kage-accent) !important; color: white !important; }

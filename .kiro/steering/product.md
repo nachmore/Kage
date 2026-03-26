@@ -1,6 +1,6 @@
 # Product Overview
 
-Kiro Assistant is a cross-platform desktop AI assistant with a floating window interface. It provides quick access to AI capabilities through a system tray application activated via global shortcuts.
+Kage is a cross-platform desktop AI assistant with a floating window interface. It provides quick access to AI capabilities through a system tray application activated via global shortcuts.
 
 ## Core Features
 
@@ -10,7 +10,7 @@ Kiro Assistant is a cross-platform desktop AI assistant with a floating window i
 - Script shortcuts with JS execution and AI-assisted script generation
 - Inline math calculator (evaluates expressions as you type)
 - Selected text capture from active window (included as context for prompts)
-- Agent Communication Protocol (ACP) client for connecting to kiro-cli backend
+- Agent Communication Protocol (ACP) client for connecting to kage-cli backend
 - Cross-platform support (Windows fully implemented, macOS/Linux partial)
 - Dark/Light/System theme with configurable opacity and font size
 - Configurable window positioning (center, near mouse, remember last position)

@@ -4,7 +4,7 @@
  */
 class AboutSettingsModule extends SettingsModule {
     constructor() {
-        super('about', 'About Kiro Assistant', 'ℹ️');
+        super('about', 'About Kage', 'ℹ️');
     }
 
     render() {
@@ -13,9 +13,9 @@ class AboutSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 <div class="about-card">
                     <div class="about-logo-row">
-                        <img src="../assets/kiro-assistant-icon.png" class="about-logo" alt="Kiro">
+                        <img src="../assets/kage-icon.png" class="about-logo" alt="Kage">
                         <div>
-                            <div class="about-app-name">Kiro Assistant</div>
+                            <div class="about-app-name">Kage</div>
                             <div class="about-version" id="aboutVersion">loading...</div>
                             <div class="about-homepage" id="aboutHomepage"></div>
                         </div>
@@ -67,7 +67,7 @@ class AboutSettingsModule extends SettingsModule {
                 if (info.authors) rows.push(this.infoRow('Author', info.authors));
                 if (info.repository && info.repository !== 'TBD') rows.push(this.infoRow('Repository', '<a href="' + info.repository + '" target="_blank">' + info.repository.replace('https://', '') + '</a>'));
                 if (info.license) rows.push(this.infoRow('License', info.license));
-                rows.push(this.infoRow('Copyright', '© 2025 ' + (info.authors || 'Kiro Team')));
+                rows.push(this.infoRow('Copyright', '© 2025 ' + (info.authors || 'Kage Team')));
                 infoEl.innerHTML = rows.join('');
             }
         } catch (e) {

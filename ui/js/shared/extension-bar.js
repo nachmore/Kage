@@ -81,7 +81,7 @@ export function showExtensionBar(opts) {
 
     // Request window resize to account for the new bar
     requestAnimationFrame(() => {
-        document.dispatchEvent(new CustomEvent('kiro-resize-request'));
+        document.dispatchEvent(new CustomEvent('kage-resize-request'));
     });
 
     return bar;
@@ -120,6 +120,6 @@ export function hideExtensionBar(id) {
     if (bar) {
         bar.style.display = 'none';
         bar.remove();
-        document.dispatchEvent(new CustomEvent('kiro-resize-request'));
+        document.dispatchEvent(new CustomEvent('kage-resize-request'));
     }
 }

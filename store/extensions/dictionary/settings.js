@@ -63,10 +63,10 @@ class DictionaryExtSettingsModule extends SettingsModule {
             ${this.createCheckboxRow('Show Examples', 'Display usage examples when available', 'dictShowExamples', true)}
             ${this.createCheckboxRow('Show Synonyms', 'Display synonyms when available', 'dictShowSynonyms', true)}
             <div class="setting-row" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
-                Data sourced from <a href="https://en.wiktionary.org/" target="_blank" style="color: var(--kiro-accent);">Wiktionary</a>
-                via <a href="https://freedictionaryapi.com/" target="_blank" style="color: var(--kiro-accent);">FreeDictionaryAPI.com</a>
-                under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" style="color: var(--kiro-accent);">CC BY-SA 4.0</a>.
-                Spelling suggestions by <a href="https://www.datamuse.com/" target="_blank" style="color: var(--kiro-accent);">Datamuse</a>.
+                Data sourced from <a href="https://en.wiktionary.org/" target="_blank" style="color: var(--kage-accent);">Wiktionary</a>
+                via <a href="https://freedictionaryapi.com/" target="_blank" style="color: var(--kage-accent);">FreeDictionaryAPI.com</a>
+                under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" style="color: var(--kage-accent);">CC BY-SA 4.0</a>.
+                Spelling suggestions by <a href="https://www.datamuse.com/" target="_blank" style="color: var(--kage-accent);">Datamuse</a>.
             </div>
         `;
     }

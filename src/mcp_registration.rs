@@ -13,7 +13,7 @@ const MCP_SERVER_KEY: &str = "ka-computer-control";
 pub fn get_mcp_binary_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let name = if cfg!(windows) { "computer-control-mcp.exe" } else { "computer-control-mcp" };
+    let name = if cfg!(windows) { "kage-computer-control-mcp.exe" } else { "kage-computer-control-mcp" };
 
     // Check next to the main exe (dev builds, post-install)
     let sibling = dir.join(name);
@@ -34,12 +34,12 @@ pub fn get_mcp_binary_path() -> Option<PathBuf> {
 /// - Updates the command path if the install location changed
 pub fn ensure_registered() {
     let Some(mcp_path) = get_mcp_binary_path() else {
-        warn!("computer-control-mcp binary not found next to main exe");
+        warn!("kage-computer-control-mcp binary not found next to main exe");
         return;
     };
 
     let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kiro").join("settings"),
+        Some(h) => h.join(".kage").join("settings"),
         None => { warn!("Cannot determine home directory for mcp.json"); return; }
     };
     if let Err(e) = std::fs::create_dir_all(&config_dir) {
@@ -103,7 +103,7 @@ pub fn ensure_registered() {
 /// Check if the computer-control MCP server is currently registered.
 pub fn is_registered() -> bool {
     let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kiro").join("settings"),
+        Some(h) => h.join(".kage").join("settings"),
         None => return false,
     };
     let mcp_json_path = config_dir.join("mcp.json");
@@ -123,7 +123,7 @@ pub fn is_registered() -> bool {
 /// Preserves all other entries.
 pub fn unregister() {
     let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kiro").join("settings"),
+        Some(h) => h.join(".kage").join("settings"),
         None => return,
     };
     let mcp_json_path = config_dir.join("mcp.json");
@@ -148,7 +148,7 @@ pub fn unregister() {
 
 /// Get the default mcp.json path.
 pub fn default_mcp_json_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".kiro").join("settings").join("mcp.json"))
+    dirs::home_dir().map(|h| h.join(".kage").join("settings").join("mcp.json"))
 }
 
 /// Read the full mcp.json content as a JSON value.

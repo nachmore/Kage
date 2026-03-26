@@ -7,9 +7,9 @@
   "acp": {
     "mode": {
       "type": "local",
-      "spawn_command": "C:\\workplace\\kiro-cli\\target\\release\\chat_cli.exe acp"
+      "spawn_command": "C:\\workplace\\kage-cli\\target\\release\\chat_cli.exe acp"
     },
-    "assistant": {
+    "agent": {
       "start_session_on_launch": true,
       "auto_steering_enabled": false,
       "user_steering_path": null

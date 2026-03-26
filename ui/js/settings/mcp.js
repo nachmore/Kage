@@ -23,7 +23,7 @@ class McpSettingsModule extends SettingsModule {
 
                 <div class="setting-row">
                     <div class="setting-label">Servers</div>
-                    <div class="setting-description">MCP servers provide tools the agent can use. Built-in servers are managed by Kiro Assistant.</div>
+                    <div class="setting-description">MCP servers provide tools the agent can use. Built-in servers are managed by Kage.</div>
                     <div id="mcpServerList" style="margin-top: 8px;"></div>
                     <div style="margin-top: 10px;">
                         <button class="setting-button" id="mcpAddServerBtn" style="font-size: 12px;">+ Add Server</button>
@@ -125,9 +125,9 @@ class McpSettingsModule extends SettingsModule {
                     </div>
                 </div>
                 <div class="mcp-server-actions">
-                    <label class="kiro-toggle">
+                    <label class="kage-toggle">
                         <input type="checkbox" id="${toggleId}" ${enabled ? 'checked' : ''} data-key="${b.key}" data-builtin="true">
-                        <span class="kiro-toggle-slider"></span>
+                        <span class="kage-toggle-slider"></span>
                     </label>
                 </div>
             </div>`;
@@ -156,16 +156,16 @@ class McpSettingsModule extends SettingsModule {
                     <button class="mcp-server-delete-btn" data-key="${esc(key)}" title="Remove">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
-                    <label class="kiro-toggle">
+                    <label class="kage-toggle">
                         <input type="checkbox" id="${toggleId}" ${enabled ? 'checked' : ''} data-key="${esc(key)}">
-                        <span class="kiro-toggle-slider"></span>
+                        <span class="kage-toggle-slider"></span>
                     </label>
                 </div>
             </div>`;
         }
 
         if (!html) {
-            html = '<div style="color: var(--kiro-text-muted); font-size: 12px; padding: 8px 0;">No MCP servers configured.</div>';
+            html = '<div style="color: var(--kage-text-muted); font-size: 12px; padding: 8px 0;">No MCP servers configured.</div>';
         }
 
         list.innerHTML = html;

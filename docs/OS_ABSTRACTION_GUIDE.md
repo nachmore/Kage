@@ -284,7 +284,7 @@ Test the cross-platform API:
 ```rust
 // tests/os_integration_test.rs
 
-use kiro_assistant::os;
+use kage::os;
 
 #[test]
 fn test_clipboard_works() {

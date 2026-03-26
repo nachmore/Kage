@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "UUID generation, base64 encode/decode, hashing, epoch conversion, JSON formatting",
   "icon": "🔧",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "enabled": { "type": "boolean", "default": true },

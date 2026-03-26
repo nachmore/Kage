@@ -1,20 +1,20 @@
 {
   "name": "Nord Light",
   "colors": {
-    "kiro-accent": "#5E81AC",
-    "kiro-accent-hover": "#4C6E96",
-    "kiro-accent-active": "#3B5B80",
-    "kiro-accent-light": "#5E81AC",
-    "kiro-accent-glow": "rgba(94, 129, 172, 0.15)",
-    "kiro-gradient": "linear-gradient(135deg, #88C0D0 0%, #5E81AC 100%)",
-    "kiro-bg": "#ECEFF4",
-    "kiro-bg-elevated": "#FFFFFF",
-    "kiro-bg-input": "#E5E9F0",
-    "kiro-border": "#D8DEE9",
-    "kiro-border-subtle": "#E5E9F0",
-    "kiro-text": "#3B4252",
-    "kiro-text-bright": "#2E3440",
-    "kiro-text-muted": "#7B88A1",
-    "kiro-section-accent": "#A3BE8C"
+    "kage-accent": "#5E81AC",
+    "kage-accent-hover": "#4C6E96",
+    "kage-accent-active": "#3B5B80",
+    "kage-accent-light": "#5E81AC",
+    "kage-accent-glow": "rgba(94, 129, 172, 0.15)",
+    "kage-gradient": "linear-gradient(135deg, #88C0D0 0%, #5E81AC 100%)",
+    "kage-bg": "#ECEFF4",
+    "kage-bg-elevated": "#FFFFFF",
+    "kage-bg-input": "#E5E9F0",
+    "kage-border": "#D8DEE9",
+    "kage-border-subtle": "#E5E9F0",
+    "kage-text": "#3B4252",
+    "kage-text-bright": "#2E3440",
+    "kage-text-muted": "#7B88A1",
+    "kage-section-accent": "#A3BE8C"
   }
 }

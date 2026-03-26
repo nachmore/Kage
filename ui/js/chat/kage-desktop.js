@@ -1,11 +1,11 @@
 import { renderMarkdown } from '../shared/markdown.js';
 
 /**
- * Kiro Desktop session viewer — read-only display of Kiro IDE chat sessions.
+ * Kage Desktop session viewer — read-only display of Kage IDE chat sessions.
  * Reuses the ChatApp's message rendering for consistent UX.
  */
 
-export class KiroDesktopViewer {
+export class KageDesktopViewer {
     constructor(invoke, elements, chatApp) {
         this.invoke = invoke;
         this.elements = elements;
@@ -32,15 +32,15 @@ export class KiroDesktopViewer {
         this._pollUpdatedAt = updatedAt;
         this._pollInterval = setInterval(async () => {
             try {
-                const newTs = await this.invoke('kiro_cli_check_updated', {
+                const newTs = await this.invoke('kage_cli_check_updated', {
                     conversationId,
                     lastUpdatedAt: this._pollUpdatedAt,
                 });
                 if (newTs) {
-                    console.log(`[KiroDesktop] CLI session updated, reloading...`);
+                    console.log(`[KageDesktop] CLI session updated, reloading...`);
                     this._pollUpdatedAt = newTs;
                     // Reload and re-render, preserving scroll + marking new messages
-                    const messages = await this.invoke('kiro_cli_load_session', { conversationId });
+                    const messages = await this.invoke('kage_cli_load_session', { conversationId });
                     const area = this.chatApp.elements.messagesArea;
                     const session = this.sessions.find(s => s.id === conversationId);
                     if (area) {
@@ -78,8 +78,8 @@ export class KiroDesktopViewer {
 
     async init() {
         const [desktopAvailable, cliAvailable] = await Promise.all([
-            this.invoke('kiro_desktop_available'),
-            this.invoke('kiro_cli_available'),
+            this.invoke('kage_desktop_available'),
+            this.invoke('kage_cli_available'),
         ]);
         if (!desktopAvailable && !cliAvailable) return false;
 
@@ -91,30 +91,30 @@ export class KiroDesktopViewer {
             toggle.style.display = 'flex';
             // Update label to reflect available sources
             const btn = toggle.querySelector('[data-source="desktop"]');
-            if (btn) btn.textContent = 'Kiro IDE & CLI';
+            if (btn) btn.textContent = 'Kage IDE & CLI';
         }
 
         if (desktopAvailable) {
-            this.workspaces = await this.invoke('kiro_desktop_workspaces');
+            this.workspaces = await this.invoke('kage_desktop_workspaces');
         }
         return true;
     }
 
     async loadSessions(workspaceEncoded = null) {
         try {
-            console.log('[KiroDesktop] Loading sessions...');
+            console.log('[KageDesktop] Loading sessions...');
             const list = this.elements.sessionList;
             list.innerHTML = '<div class="kd-loading" style="display:flex;justify-content:center;padding:24px 0;"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
 
             // Load from both sources in parallel
             const promises = [];
             if (this._hasDesktop) {
-                promises.push(this.invoke('kiro_desktop_chat_sessions', { limit: 100 }));
+                promises.push(this.invoke('kage_desktop_chat_sessions', { limit: 100 }));
             } else {
                 promises.push(Promise.resolve([]));
             }
             if (this._hasCli) {
-                promises.push(this.invoke('kiro_cli_sessions', { limit: 100 }));
+                promises.push(this.invoke('kage_cli_sessions', { limit: 100 }));
             } else {
                 promises.push(Promise.resolve([]));
             }
@@ -124,10 +124,10 @@ export class KiroDesktopViewer {
             // Merge and sort by date
             this.sessions = [...desktopSessions, ...cliSessions];
             this.sessions.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-            console.log(`[KiroDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`);
+            console.log(`[KageDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`);
             this.renderSessionList();
         } catch (e) {
-            console.warn('[KiroDesktop] Failed to load sessions:', e);
+            console.warn('[KageDesktop] Failed to load sessions:', e);
             this.sessions = [];
             this.renderSessionList();
         }
@@ -138,7 +138,7 @@ export class KiroDesktopViewer {
         const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
         if (this.sessions.length === 0) {
-            list.innerHTML = '<div class="session-list-empty">No Kiro Desktop sessions found</div>';
+            list.innerHTML = '<div class="session-list-empty">No Kage Desktop sessions found</div>';
             return;
         }
 
@@ -159,7 +159,7 @@ export class KiroDesktopViewer {
             const dateStr = formatRelativeDate(date);
             const sourceIcon = s.session_type === 'cli'
                 ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-                : '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 65 47" fill="none"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kiro-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kiro-bg-primary, #1E1A24)"/></svg>';
+                : '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 65 47" fill="none"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kage-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kage-bg-primary, #1E1A24)"/></svg>';
             const sourceLabel = s.session_type === 'cli' ? 'CLI' : 'Desktop';
             const wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
 
@@ -187,13 +187,13 @@ export class KiroDesktopViewer {
             item.addEventListener('click', async (e) => {
                 // Don't trigger on action button clicks
                 if (e.target.closest('.kd-action-btn')) return;
-                console.log(`[KiroDesktop] Clicked session: ${item.dataset.sessionId}`);
+                console.log(`[KageDesktop] Clicked session: ${item.dataset.sessionId}`);
                 this.activeSessionId = item.dataset.sessionId;
                 this.activeWorkspace = item.dataset.workspace;
                 try {
                     await this.loadAndDisplaySession(item.dataset.workspace, item.dataset.sessionId);
                 } catch (e) {
-                    console.error('[KiroDesktop] Error loading session:', e);
+                    console.error('[KageDesktop] Error loading session:', e);
                 }
                 list.querySelectorAll('.kd-session-item').forEach(el => el.classList.remove('active'));
                 item.classList.add('active');
@@ -205,7 +205,7 @@ export class KiroDesktopViewer {
                 folderBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const fp = item.dataset.filepath;
-                    if (fp) this.invoke('kiro_desktop_open_folder', { filePath: fp }).catch(console.warn);
+                    if (fp) this.invoke('kage_desktop_open_folder', { filePath: fp }).catch(console.warn);
                 });
             }
 
@@ -217,11 +217,11 @@ export class KiroDesktopViewer {
                     const fp = item.dataset.filepath;
                     if (!fp || !confirm('Delete this session?')) return;
                     try {
-                        await this.invoke('kiro_desktop_delete_session', { filePath: fp });
+                        await this.invoke('kage_desktop_delete_session', { filePath: fp });
                         item.remove();
                         this.sessions = this.sessions.filter(s => s.file_path !== fp);
                     } catch (err) {
-                        console.warn('[KiroDesktop] Delete failed:', err);
+                        console.warn('[KageDesktop] Delete failed:', err);
                     }
                 });
             }
@@ -231,7 +231,7 @@ export class KiroDesktopViewer {
     async loadAndDisplaySession(workspaceEncoded, sessionId) {
         const area = this.chatApp.elements.messagesArea;
         if (!area) {
-            console.error('[KiroDesktop] messagesArea not found');
+            console.error('[KageDesktop] messagesArea not found');
             return;
         }
 
@@ -249,23 +249,23 @@ export class KiroDesktopViewer {
             const session = this.sessions.find(s => s.id === sessionId && s.workspace_encoded === workspaceEncoded);
 
             if (session?.session_type === 'cli') {
-                console.log(`[KiroDesktop] Loading CLI session: ${sessionId}`);
-                messages = await this.invoke('kiro_cli_load_session', { conversationId: sessionId });
+                console.log(`[KageDesktop] Loading CLI session: ${sessionId}`);
+                messages = await this.invoke('kage_cli_load_session', { conversationId: sessionId });
                 // Start polling for live updates
                 const updatedMs = new Date(session.updated_at).getTime();
                 this._startPolling(sessionId, updatedMs);
             } else if (session?.file_path?.endsWith('.chat')) {
-                console.log(`[KiroDesktop] Loading .chat file: ${session.file_path}`);
-                messages = await this.invoke('kiro_desktop_load_chat_file', { filePath: session.file_path });
+                console.log(`[KageDesktop] Loading .chat file: ${session.file_path}`);
+                messages = await this.invoke('kage_desktop_load_chat_file', { filePath: session.file_path });
             } else {
-                console.log(`[KiroDesktop] Loading workspace session: ${sessionId}`);
-                messages = await this.invoke('kiro_desktop_load_session', { workspaceEncoded, sessionId });
+                console.log(`[KageDesktop] Loading workspace session: ${sessionId}`);
+                messages = await this.invoke('kage_desktop_load_session', { workspaceEncoded, sessionId });
             }
 
-            console.log(`[KiroDesktop] Loaded ${messages.length} messages`);
+            console.log(`[KageDesktop] Loaded ${messages.length} messages`);
             this.renderMessages(area, messages, session);
         } catch (e) {
-            console.error('[KiroDesktop] Failed to load session:', e);
+            console.error('[KageDesktop] Failed to load session:', e);
             area.innerHTML = `<div class="kd-loading">Failed to load: ${esc(String(e))}</div>`;
         }
     }
@@ -274,10 +274,10 @@ export class KiroDesktopViewer {
         container.innerHTML = '';
 
         // Read-only banner with expandable details
-        const sourceLabel = session?.session_type === 'cli' ? 'Kiro CLI' : 'Kiro Desktop';
+        const sourceLabel = session?.session_type === 'cli' ? 'Kage CLI' : 'Kage Desktop';
         const bannerIcon = session?.session_type === 'cli'
             ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-            : '<svg width="14" height="14" viewBox="0 0 65 47" fill="none" style="vertical-align:-2px"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kiro-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kiro-bg-primary, #1E1A24)"/></svg>';
+            : '<svg width="14" height="14" viewBox="0 0 65 47" fill="none" style="vertical-align:-2px"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kage-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kage-bg-primary, #1E1A24)"/></svg>';
         const banner = document.createElement('div');
         banner.className = 'kd-readonly-banner';
         banner.innerHTML = `<details class="kd-banner-details">
@@ -351,7 +351,7 @@ export class KiroDesktopViewer {
                 b.block_type === 'text' &&
                 !b.text.startsWith('<identity>') &&
                 !b.text.startsWith('## Included Rules') &&
-                !b.text.startsWith('[KIRO_STEERING') &&
+                !b.text.startsWith('[KAGE_STEERING') &&
                 !b.text.startsWith('Follow these instructions') &&
                 b.text.length < 5000
             );

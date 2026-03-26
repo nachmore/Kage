@@ -1,8 +1,8 @@
 {
-  "name": "kiro-assistant-vendor",
+  "name": "kage-vendor",
   "version": "1.0.0",
   "private": true,
-  "description": "Vendored JS dependencies for Kiro Assistant UI. Run 'npm install' to update.",
+  "description": "Vendored JS dependencies for Kage UI. Run 'npm install' to update.",
   "dependencies": {
     "@hpcc-js/wasm-graphviz": "^1.6.0",
     "marked": "^15.0.0",

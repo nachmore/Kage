@@ -295,7 +295,7 @@ fn walk_dir(
         }
 
         // Skip our own trash directory to avoid scanning/nesting it
-        if file_name == "_kiro_trash" {
+        if file_name == "_kage_trash" {
             continue;
         }
 
@@ -483,14 +483,14 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                 }
 
                 // Don't re-trash files that are already in the trash
-                if op.from.starts_with("_kiro_trash/") || op.from.starts_with("_kiro_trash\\") {
+                if op.from.starts_with("_kage_trash/") || op.from.starts_with("_kage_trash\\") {
                     errors.push(format!("'{}': already in trash, skipping", op.from));
                     failed += 1;
                     continue;
                 }
 
-                // Safety: move to a _kiro_trash subfolder instead of actual delete
-                let trash_dir = root.join("_kiro_trash");
+                // Safety: move to a _kage_trash subfolder instead of actual delete
+                let trash_dir = root.join("_kage_trash");
                 if let Err(e) = std::fs::create_dir_all(&trash_dir) {
                     errors.push(format!("Cannot create trash dir: {}", e));
                     failed += 1;
@@ -519,7 +519,7 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
 
                 match std::fs::rename(&from_abs, &trash_dest) {
                     Ok(_) => {
-                        let trash_rel = format!("_kiro_trash/{}", op.from);
+                        let trash_rel = format!("_kage_trash/{}", op.from);
                         rollback.push((trash_rel, op.from.clone()));
                         completed += 1;
                     }

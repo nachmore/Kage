@@ -2,9 +2,9 @@
 
 ## v0.2.0 — Initial Release
 
-Welcome to Kiro Assistant! Here's what's included in this first release:
+Welcome to Kage! Here's what's included in this first release:
 
-### AI Assistant
+### AI
 - Floating window interface summoned via global hotkey
 - Full chat window for longer conversations with session history
 - Streaming responses with markdown rendering, code highlighting, and mermaid diagrams

@@ -22,12 +22,12 @@
 .focus-title {
     font-weight: 600;
     font-size: 13px;
-    color: var(--kiro-text);
+    color: var(--kage-text);
 }
 
 .focus-meta {
     font-size: 11px;
-    color: var(--kiro-text-secondary, #999);
+    color: var(--kage-text-secondary, #999);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -50,7 +50,7 @@
 
 .focus-bar-fill {
     height: 100%;
-    background: var(--kiro-accent, #6366f1);
+    background: var(--kage-accent, #6366f1);
     border-radius: 2px;
     transition: width 0.3s ease;
 }
@@ -64,7 +64,7 @@
 
 .focus-app-name {
     font-weight: 500;
-    color: var(--kiro-text);
+    color: var(--kage-text);
     flex: 1;
     min-width: 0;
     overflow: hidden;
@@ -73,14 +73,14 @@
 }
 
 .focus-app-time {
-    color: var(--kiro-text);
+    color: var(--kage-text);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     white-space: nowrap;
 }
 
 .focus-app-sessions {
-    color: var(--kiro-text-secondary, #999);
+    color: var(--kage-text-secondary, #999);
     font-size: 11px;
     flex-shrink: 0;
     white-space: nowrap;
@@ -95,7 +95,7 @@
 }
 
 .focus-bar-site {
-    background: var(--kiro-accent, #6366f1);
+    background: var(--kage-accent, #6366f1);
     opacity: 0.6;
 }
 
@@ -110,5 +110,5 @@
 
 .focus-insight-text {
     font-size: 13px;
-    color: var(--kiro-accent, #6366f1);
+    color: var(--kage-accent, #6366f1);
 }

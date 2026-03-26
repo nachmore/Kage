@@ -109,7 +109,7 @@ export class FloatingApp {
             this.setupStreamingListeners();
             this.setupVisibilityTracking();
             this.setupNetworkMonitor();
-            this.windowManager.setupDragging(this.elements.ghostContainer);
+            this.windowManager.setupDragging(this.elements.mascotContainer);
             this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
 
             // Double-click ghost to open full chat window
@@ -202,7 +202,7 @@ export class FloatingApp {
                 const version = event.payload;
                 this.showBanner(
                     '⬆️',
-                    'Kiro Assistant v' + version + ' is available!',
+                    'Kage v' + version + ' is available!',
                     'Install now →',
                     'update_install',
                     ''
@@ -238,7 +238,7 @@ export class FloatingApp {
             loadingDots: document.getElementById('loadingDots'),
             expandBtn: document.getElementById('expandBtn'),
             floatingStopBtn: document.getElementById('floatingStopBtn'),
-            ghostContainer: document.querySelector('.ghost-container'),
+            mascotContainer: document.querySelector('.mascot-container'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
             datetimeDisplay: document.getElementById('datetimeDisplay'),
             speechBtn: document.getElementById('speechBtn'),
@@ -500,17 +500,17 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         });
 
-        document.addEventListener('kiro-clear', () => {
+        document.addEventListener('kage-clear', () => {
             this.resetUI();
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
         });
 
-        document.addEventListener('kiro-resize-request', () => {
+        document.addEventListener('kage-resize-request', () => {
             this.windowManager.resizeWindow();
         });
 
-        document.addEventListener('kiro-show-response', (e) => {
+        document.addEventListener('kage-show-response', (e) => {
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
             this.elements.appSuggestions.classList.remove('visible');
@@ -522,7 +522,7 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         });
 
-        document.addEventListener('kiro-show-selection', (e) => {
+        document.addEventListener('kage-show-selection', (e) => {
             const { command, options } = e.detail;
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
@@ -743,7 +743,7 @@ export class FloatingApp {
     }
 
     startThinking() {
-        this.elements.ghostContainer.classList.add('thinking');
+        this.elements.mascotContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
         // Show inline stop button in input area, hide datetime
         this.updateDatetimeVisibility();
@@ -751,7 +751,7 @@ export class FloatingApp {
     }
 
     stopThinking() {
-        this.elements.ghostContainer.classList.remove('thinking');
+        this.elements.mascotContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
     }
 
@@ -1004,7 +1004,7 @@ export class FloatingApp {
         try {
             const wasUpdated = await this.invoke('was_just_updated');
             if (wasUpdated) {
-                this.showBanner('🎉', 'Kiro Assistant has been updated!', 'View changelog →', 'settings', 'updates');
+                this.showBanner('🎉', 'Kage has been updated!', 'View changelog →', 'settings', 'updates');
                 // Clear the flag so it only shows once
                 this.invoke('clear_update_flag').catch(() => {});
             }
@@ -1342,9 +1342,9 @@ export class FloatingApp {
                 args: { [argKey]: value }
             });
             const msg = result?.message || `Selected: ${value}`;
-            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: msg }));
+            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
         } catch (e) {
-            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
         }
     }
 
@@ -1624,7 +1624,7 @@ export class FloatingApp {
                     if (config?.system?.screen_context) {
                         const sw = await this.invoke('get_source_window');
                         if (sw) {
-                            message = `<_kiro_ctx app="${sw.processName}" title="${sw.title}"/>\n${message}`;
+                            message = `<_kage_ctx app="${sw.processName}" title="${sw.title}"/>\n${message}`;
                         }
                     }
                 } catch (e) {
@@ -1648,7 +1648,7 @@ export class FloatingApp {
         
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');
-            this.elements.ghostContainer.classList.remove('thinking');
+            this.elements.mascotContainer.classList.remove('thinking');
             // Ensure content area is visible (safety net if something else hid it)
             this.elements.contentArea.classList.add('visible');
             this.elements.expandBtn.classList.add('visible');
@@ -1831,7 +1831,7 @@ export class FloatingApp {
             try {
                 if (!this._windowFocused && this.currentResponse) {
                     const preview = this.currentResponse.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                    await sendAppNotification(this.invoke, 'Kiro Assistant', preview || 'Response ready', 'floating');
+                    await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'floating');
                 }
             } catch { /* ignore */ }
         }
@@ -2359,7 +2359,7 @@ export class FloatingApp {
 
     renderSourcesCompact() {
             this.elements.loadingDots.classList.remove('visible');
-            this.elements.ghostContainer.classList.remove('thinking');
+            this.elements.mascotContainer.classList.remove('thinking');
 
             let compactEl = document.getElementById('toolSourcesCompact');
             if (!compactEl) {
@@ -2442,7 +2442,7 @@ export class FloatingApp {
         const container = document.querySelector('.floating-container');
         if (container && !container.contains(event.target)) {
             // Don't hide if a sandbox iframe is running (Try button)
-            if (window._kiroSandboxActive) return;
+            if (window._kageSandboxActive) return;
             await this.appWindow.hide();
         }
     }

@@ -24,7 +24,7 @@ body.dark-theme .input-box::placeholder {
     color: #938F9B;
 }
 
-/* Link colors handled globally via --kiro-link tokens */
+/* Link colors handled globally via --kage-link tokens */
 
 body.dark-theme .expand-btn {
     color: #938F9B;
@@ -32,7 +32,7 @@ body.dark-theme .expand-btn {
 
 body.dark-theme .expand-btn:hover {
     background: #352F3D;
-    color: var(--kiro-accent-light);
+    color: var(--kage-accent-light);
 }
 
 /* Suggestion dark theme handled by shared-components.css */

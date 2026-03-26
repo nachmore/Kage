@@ -14,8 +14,8 @@ class ConnectionSettingsModule extends SettingsModule {
                 <div class="setting-section-label">Session</div>
                 
                 ${this.createCheckboxRow(
-                    'Start Kiro backend on launch',
-                    'Speed up initial responses by pre-launching the Kiro backend on Assistant launch.',
+                    'Start agent backend on launch',
+                    'Speed up initial responses by pre-launching the ACP backend when Kage starts.',
                     'startSessionOnLaunch',
                     true
                 )}
@@ -76,17 +76,17 @@ class ConnectionSettingsModule extends SettingsModule {
         // Snapshot connection config for change detection
         this._initialConfig = JSON.stringify({
             mode: config.acp?.mode,
-            working_directory: config.acp?.assistant?.working_directory || null,
+            working_directory: config.acp?.agent?.working_directory || null,
         });
         this._needsRestart = false;
 
         // Load start-on-launch setting
-        const assistant = config.acp?.assistant || {};
+        const agentCfg = config.acp?.agent || {};
         const startSession = document.getElementById('startSessionOnLaunch');
-        if (startSession) startSession.checked = assistant.start_session_on_launch !== false;
+        if (startSession) startSession.checked = agentCfg.start_session_on_launch !== false;
 
         const workDir = document.getElementById('workingDirectory');
-        if (workDir) workDir.value = assistant.working_directory || '';
+        if (workDir) workDir.value = agentCfg.working_directory || '';
 
         if (config.acp && config.acp.mode) {
             const mode = config.acp.mode;
@@ -115,10 +115,10 @@ class ConnectionSettingsModule extends SettingsModule {
     save(config) {
         if (!config.acp) config.acp = {};
 
-        // Preserve existing assistant settings
-        const existingAssistant = config.acp.assistant || {};
-        existingAssistant.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
-        existingAssistant.working_directory = document.getElementById('workingDirectory').value.trim() || null;
+        // Preserve existing agent settings
+        const existingAgent = config.acp.agent || {};
+        existingAgent.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
+        existingAgent.working_directory = document.getElementById('workingDirectory').value.trim() || null;
         
         const mode = document.getElementById('acpMode').value;
         
@@ -137,12 +137,12 @@ class ConnectionSettingsModule extends SettingsModule {
             };
         }
 
-        config.acp.assistant = existingAssistant;
+        config.acp.agent = existingAgent;
 
         // Check if connection settings changed — prompt restart
         const currentConfig = JSON.stringify({
             mode: config.acp.mode,
-            working_directory: config.acp.assistant?.working_directory || null,
+            working_directory: config.acp.agent?.working_directory || null,
         });
         if (this._initialConfig && currentConfig !== this._initialConfig) {
             this._needsRestart = true;

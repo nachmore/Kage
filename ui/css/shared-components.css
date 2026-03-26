@@ -2,13 +2,13 @@
 
 /* Global link colors — uses tokens so all windows get consistent link styling */
 a {
-    color: var(--kiro-link);
+    color: var(--kage-link);
 }
 a:visited {
-    color: var(--kiro-link-visited);
+    color: var(--kage-link-visited);
 }
 a:hover {
-    color: var(--kiro-link-hover);
+    color: var(--kage-link-hover);
 }
 
 /* Sortable table headers */
@@ -60,7 +60,7 @@ body.dark-theme .message-content th:hover {
 
 .streaming-indicator {
     display: inline;
-    color: var(--kiro-accent);
+    color: var(--kage-accent);
     font-weight: 600;
     margin-left: 2px;
     animation: pulse-fade 1.4s ease-in-out infinite;
@@ -88,7 +88,7 @@ body.dark-theme .message-content th:hover {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
     animation: dot-bounce 1.4s ease-in-out infinite;
 }
 
@@ -516,14 +516,14 @@ body.dark-theme .message-content th:hover {
     position: absolute;
     inset: 0;
     background: rgba(142, 72, 255, 0.1);
-    border: 2px dashed var(--kiro-accent);
+    border: 2px dashed var(--kage-accent);
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 16px;
     font-weight: 600;
-    color: var(--kiro-accent);
+    color: var(--kage-accent);
     z-index: 50;
     pointer-events: none;
 }
@@ -588,7 +588,7 @@ body.dark-theme .attachment-remove-btn {
     background: rgba(255,255,255,0.08);
 }
 .hk-picker-display.hk-capturing {
-    border-color: var(--kiro-accent, #6366f1);
+    border-color: var(--kage-accent, #6366f1);
     background: rgba(99, 102, 241, 0.08);
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
@@ -672,12 +672,12 @@ ul:has(> .task-list-item) {
     padding: 6px 10px;
     margin: 3px 0;
     border-radius: 6px;
-    background: var(--kiro-surface-secondary, rgba(255,255,255,0.04));
-    border-left: 3px solid var(--kiro-border, rgba(255,255,255,0.08));
+    background: var(--kage-surface-secondary, rgba(255,255,255,0.04));
+    border-left: 3px solid var(--kage-border, rgba(255,255,255,0.08));
     transition: border-color 0.2s, background 0.2s;
 }
 .task-list-item:has(input:checked) {
-    border-left-color: var(--kiro-accent, #7c6fe0);
+    border-left-color: var(--kage-accent, #7c6fe0);
     background: rgba(124, 111, 224, 0.06);
 }
 .task-list-item input[type="checkbox"] {
@@ -686,7 +686,7 @@ ul:has(> .task-list-item) {
     width: 18px;
     height: 18px;
     min-width: 18px;
-    border: 2px solid var(--kiro-border, rgba(255,255,255,0.2));
+    border: 2px solid var(--kage-border, rgba(255,255,255,0.2));
     border-radius: 50%;
     background: transparent;
     margin-top: 1px;
@@ -695,8 +695,8 @@ ul:has(> .task-list-item) {
     transition: background 0.2s, border-color 0.2s;
 }
 .task-list-item input[type="checkbox"]:checked {
-    background: var(--kiro-accent, #7c6fe0);
-    border-color: var(--kiro-accent, #7c6fe0);
+    background: var(--kage-accent, #7c6fe0);
+    border-color: var(--kage-accent, #7c6fe0);
 }
 .task-list-item input[type="checkbox"]:checked::after {
     content: '\2713';
@@ -739,7 +739,7 @@ ul:has(> .task-list-item) {
     width: 2px;
     flex: 1;
     min-height: 8px;
-    background: var(--kiro-border, rgba(255,255,255,0.1));
+    background: var(--kage-border, rgba(255,255,255,0.1));
 }
 .taskplan-content {
     flex: 1;
@@ -829,7 +829,7 @@ ul:has(> .task-list-item) {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--kiro-border, rgba(255,255,255,0.15));
+    background: var(--kage-border, rgba(255,255,255,0.15));
 }
 /* Active spinner */
 .taskplan-spinner {
@@ -852,27 +852,27 @@ body.light-theme .taskplan-detail {
     color: rgba(0, 0, 0, 0.45);
 }
 body.light-theme .taskplan-connector {
-    background: var(--kiro-border, rgba(0,0,0,0.1));
+    background: var(--kage-border, rgba(0,0,0,0.1));
 }
 body.light-theme .taskplan-dot {
-    background: var(--kiro-border, rgba(0,0,0,0.15));
+    background: var(--kage-border, rgba(0,0,0,0.15));
 }
 body.light-theme .taskplan-spinner {
     border-color: rgba(124, 111, 224, 0.2);
-    border-top-color: var(--kiro-accent, #7c6fe0);
+    border-top-color: var(--kage-accent, #7c6fe0);
 }
 body.light-theme .taskplan-active .taskplan-icon {
     background: rgba(124, 111, 224, 0.1);
-    color: var(--kiro-accent, #7c6fe0);
+    color: var(--kage-accent, #7c6fe0);
 }
 body.light-theme .taskplan-active .taskplan-title {
-    color: var(--kiro-accent, #7c6fe0);
+    color: var(--kage-accent, #7c6fe0);
 }
 body.light-theme .taskplan-active .taskplan-detail {
-    color: var(--kiro-accent, #7c6fe0);
+    color: var(--kage-accent, #7c6fe0);
 }
 body.light-theme .taskplan-done .taskplan-icon {
-    background: var(--kiro-accent, #7c6fe0);
+    background: var(--kage-accent, #7c6fe0);
 }
 
 /* Task plan review actions (shown before execution) */
@@ -893,7 +893,7 @@ body.light-theme .taskplan-done .taskplan-icon {
     transition: all 0.15s;
 }
 .taskplan-run-btn {
-    background: var(--kiro-accent, #C09CFF);
+    background: var(--kage-accent, #C09CFF);
     color: #000;
 }
 .taskplan-run-btn:hover {
@@ -901,7 +901,7 @@ body.light-theme .taskplan-done .taskplan-icon {
 }
 .taskplan-review-hint {
     font-size: 12px;
-    color: var(--kiro-text-secondary, rgba(255,255,255,0.4));
+    color: var(--kage-text-secondary, rgba(255,255,255,0.4));
 }
 
 /* --- Speech (shared across floating + chat) --- */
@@ -1173,7 +1173,7 @@ body.light-theme .chat-send-btn.stop-mode:hover {
 }
 
 .ctx-item:hover {
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
     color: #fff;
 }
 
@@ -1192,7 +1192,7 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     padding: 6px 12px;
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid var(--kiro-border, #3a3640);
+    border-bottom: 1px solid var(--kage-border, #3a3640);
     font-size: 13px;
     flex-shrink: 0;
 }
@@ -1202,7 +1202,7 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     left: 0;
     top: 0;
     bottom: 0;
-    background: var(--kiro-accent, #C09CFF);
+    background: var(--kage-accent, #C09CFF);
     opacity: 0.12;
     transition: width 0.3s linear;
     pointer-events: none;
@@ -1216,7 +1216,7 @@ body.light-theme .chat-send-btn.stop-mode:hover {
 
 .tts-bar-status {
     font-size: 12px;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     flex: 1;
     white-space: nowrap;
     overflow: hidden;
@@ -1231,8 +1231,8 @@ body.light-theme .chat-send-btn.stop-mode:hover {
 
 .tts-bar-controls button {
     background: transparent;
-    border: 1px solid var(--kiro-border, #3a3640);
-    color: var(--kiro-text-secondary, #938F9B);
+    border: 1px solid var(--kage-border, #3a3640);
+    color: var(--kage-text-secondary, #938F9B);
     border-radius: 4px;
     padding: 2px 6px;
     cursor: pointer;
@@ -1244,8 +1244,8 @@ body.light-theme .chat-send-btn.stop-mode:hover {
 }
 
 .tts-bar-controls button:hover {
-    background: var(--kiro-surface-hover, #352F3D);
-    color: var(--kiro-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352F3D);
+    color: var(--kage-text-primary, #E5E7EB);
 }
 
 
@@ -1274,18 +1274,18 @@ body.light-theme .chat-send-btn.stop-mode:hover {
     font-size: 10px;
     width: 14px;
     text-align: center;
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
     transition: transform 0.15s;
 }
 
 .json-bracket {
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
     font-size: 12px;
 }
 
 .json-children {
     padding-left: 20px;
-    border-left: 1px solid var(--kiro-border-subtle, #2b2b2b);
+    border-left: 1px solid var(--kage-border-subtle, #2b2b2b);
     margin-left: 6px;
 }
 
@@ -1298,7 +1298,7 @@ body.light-theme .chat-send-btn.stop-mode:hover {
 }
 
 .json-index {
-    color: var(--kiro-text-muted, #888);
+    color: var(--kage-text-muted, #888);
 }
 
 .json-string {
@@ -1330,7 +1330,7 @@ body.light-theme .json-children { border-left-color: #e5e5e5; }
 .msg-action-btn {
     background: none;
     border: none;
-    color: var(--kiro-text-muted, #9ca3af);
+    color: var(--kage-text-muted, #9ca3af);
     cursor: pointer;
     padding: 3px 6px;
     border-radius: 4px;
@@ -1340,7 +1340,7 @@ body.light-theme .json-children { border-left-color: #e5e5e5; }
 }
 
 .msg-action-btn:hover {
-    color: var(--kiro-text, #cccccc);
+    color: var(--kage-text, #cccccc);
     background: rgba(255,255,255,0.08);
 }
 
@@ -1363,13 +1363,13 @@ body.light-theme .json-children { border-left-color: #e5e5e5; }
 .folder-plan-header {
     font-size: 13px;
     font-weight: 600;
-    color: var(--kiro-text-primary, #E5E7EB);
+    color: var(--kage-text-primary, #E5E7EB);
     margin-bottom: 4px;
 }
 
 .folder-plan-root {
     font-size: 11px;
-    color: var(--kiro-text-muted, #9ca3af);
+    color: var(--kage-text-muted, #9ca3af);
     font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
     margin-bottom: 8px;
     word-break: break-all;
@@ -1400,13 +1400,13 @@ body.light-theme .folder-plan-item {
 
 .folder-plan-cancel-btn {
     background: transparent !important;
-    border: 1px solid var(--kiro-border, #3a3640) !important;
-    color: var(--kiro-text-secondary, #938F9B) !important;
+    border: 1px solid var(--kage-border, #3a3640) !important;
+    color: var(--kage-text-secondary, #938F9B) !important;
 }
 
 .folder-plan-cancel-btn:hover {
-    background: var(--kiro-surface-hover, #352F3D) !important;
-    color: var(--kiro-text-primary, #E5E7EB) !important;
+    background: var(--kage-surface-hover, #352F3D) !important;
+    color: var(--kage-text-primary, #E5E7EB) !important;
 }
 
 /* Folder Plan spinner (shown during execution) */
@@ -1415,7 +1415,7 @@ body.light-theme .folder-plan-item {
     width: 12px;
     height: 12px;
     border: 2px solid rgba(255,255,255,0.15);
-    border-top-color: var(--kiro-accent-light, #C09CFF);
+    border-top-color: var(--kage-accent-light, #C09CFF);
     border-radius: 50%;
     animation: folder-plan-spin 0.8s linear infinite;
     vertical-align: middle;
@@ -1428,7 +1428,7 @@ body.light-theme .folder-plan-item {
 
 body.light-theme .folder-plan-spinner {
     border-color: rgba(0,0,0,0.1);
-    border-top-color: var(--kiro-accent, #7138CC);
+    border-top-color: var(--kage-accent, #7138CC);
 }
 
 /* Compaction notice */
@@ -1437,6 +1437,6 @@ body.light-theme .folder-plan-spinner {
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     padding: 8px 0;
 }

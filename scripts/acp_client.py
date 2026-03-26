@@ -21,7 +21,7 @@ from acp import spawn_agent_process, text_block, PROTOCOL_VERSION
 from acp.connection import StreamDirection, StreamEvent
 from acp.interfaces import Client
 
-DEFAULT_COMMAND = r"C:\Users\nachmano\AppData\Local\Toolbox\bin\kiro-cli.exe"
+DEFAULT_COMMAND = r"C:\Users\nachmano\AppData\Local\Toolbox\bin\kage-cli.exe"
 DEFAULT_ARGS = ["acp"]
 
 # ANSI colours

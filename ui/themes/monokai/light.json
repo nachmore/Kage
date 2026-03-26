@@ -1,19 +1,19 @@
 {
   "name": "Monokai Light",
   "colors": {
-    "kiro-accent": "#F92672",
-    "kiro-accent-hover": "#D41D5E",
-    "kiro-accent-active": "#B01550",
-    "kiro-accent-light": "#F92672",
-    "kiro-accent-glow": "rgba(249, 38, 114, 0.15)",
-    "kiro-bg": "#FAFAF8",
-    "kiro-bg-elevated": "#FFFFFF",
-    "kiro-bg-input": "#F5F5F0",
-    "kiro-border": "#E0DFD5",
-    "kiro-border-subtle": "#ECEADF",
-    "kiro-text": "#49483E",
-    "kiro-text-bright": "#272822",
-    "kiro-text-muted": "#75715E",
-    "kiro-section-accent": "#629B1E"
+    "kage-accent": "#F92672",
+    "kage-accent-hover": "#D41D5E",
+    "kage-accent-active": "#B01550",
+    "kage-accent-light": "#F92672",
+    "kage-accent-glow": "rgba(249, 38, 114, 0.15)",
+    "kage-bg": "#FAFAF8",
+    "kage-bg-elevated": "#FFFFFF",
+    "kage-bg-input": "#F5F5F0",
+    "kage-border": "#E0DFD5",
+    "kage-border-subtle": "#ECEADF",
+    "kage-text": "#49483E",
+    "kage-text-bright": "#272822",
+    "kage-text-muted": "#75715E",
+    "kage-section-accent": "#629B1E"
   }
 }

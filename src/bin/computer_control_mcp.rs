@@ -1,11 +1,11 @@
 //! Computer Control MCP Server — standalone binary.
 //!
 //! Speaks MCP (JSON-RPC over stdio) and provides accessibility-based
-//! desktop automation tools. Spawned by kiro-cli as an MCP server.
+//! desktop automation tools. Spawned by kage-cli as an MCP server.
 
 use std::io::{self, BufRead, Write};
 
-use kiro_assistant::os::accessibility;
+use kage::os::accessibility;
 
 // ---------------------------------------------------------------------------
 // Raw Win32 FFI for mouse events (avoids windows crate version conflicts)
@@ -48,12 +48,12 @@ fn main() {
     // Log to file only — stdout/stderr are reserved for JSON-RPC
     let log_dir = dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".kiro")
+        .join(".kage")
         .join("logs");
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
         eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
     }
-    let log_file = log_dir.join("computer-control-mcp.log");
+    let log_file = log_dir.join("kage-computer-control-mcp.log");
     match std::fs::OpenOptions::new().create(true).append(true).open(&log_file) {
         Ok(file) => {
             // LineWriter ensures each log line is flushed immediately
@@ -311,7 +311,7 @@ fn handle_tools_list(id: &serde_json::Value) -> String {
             },
             "required": ["path"]
         })),
-        tool_def("execute_folder_plan", "Execute a folder organization plan: move, rename, or delete files. Deletes are safe — files go to a _kiro_trash subfolder. Returns success/failure counts.", serde_json::json!({
+        tool_def("execute_folder_plan", "Execute a folder organization plan: move, rename, or delete files. Deletes are safe — files go to a _kage_trash subfolder. Returns success/failure counts.", serde_json::json!({
             "type": "object",
             "properties": {
                 "root": { "type": "string", "description": "Absolute path to the root folder" },
@@ -790,7 +790,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         }
         // Folder tools
         "get_common_folders" => {
-            let folders = kiro_assistant::commands::folder_tools::get_common_folders();
+            let folders = kage::commands::folder_tools::get_common_folders();
             let text = serde_json::to_string_pretty(&folders).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
@@ -877,7 +877,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             if !root.is_dir() {
                 return tool_result_text(id, &format!("Not a directory: {}", path), true);
             }
-            let result = kiro_assistant::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
+            let result = kage::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
@@ -886,7 +886,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             if root_str.is_empty() {
                 return tool_result_text(id, "Missing required parameter: root", true);
             }
-            let ops: Vec<kiro_assistant::commands::folder_tools::FolderOperation> = match args.get("operations") {
+            let ops: Vec<kage::commands::folder_tools::FolderOperation> = match args.get("operations") {
                 Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
                 None => return tool_result_text(id, "Missing required parameter: operations", true),
             };
@@ -897,7 +897,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             if !root.is_dir() {
                 return tool_result_text(id, &format!("Not a directory: {}", root_str), true);
             }
-            let result = kiro_assistant::commands::folder_tools::execute_plan(root, &ops);
+            let result = kage::commands::folder_tools::execute_plan(root, &ops);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }

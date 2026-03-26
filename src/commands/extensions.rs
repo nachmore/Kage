@@ -572,7 +572,7 @@ async fn store_install_inner(
     app: &tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, String> {
     let url = format!("{}/store/catalog/{}/download", base_url, id);
-    let zip_path = std::env::temp_dir().join(format!("kiro-download-{}.zip", id));
+    let zip_path = std::env::temp_dir().join(format!("kage-download-{}.zip", id));
 
     let client = store_client()?;
     let resp = client.get(&url)
@@ -610,7 +610,7 @@ async fn store_install_inner(
 // Generic extension data persistence
 // ---------------------------------------------------------------------------
 // Stores extension data as JSON files in the user's config directory:
-//   <config_dir>/kiro-assistant/extension-data/<name>.json
+//   <config_dir>/kage/extension-data/<name>.json
 // This is preferred over localStorage because it survives reinstalls,
 // WebView2 data resets, and is fully under our control.
 
@@ -618,7 +618,7 @@ async fn store_install_inner(
 fn extension_data_dir() -> Result<std::path::PathBuf, String> {
     let dir = dirs::config_dir()
         .ok_or("No config directory")?
-        .join("kiro-assistant")
+        .join("kage")
         .join("extension-data");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)
@@ -644,7 +644,7 @@ fn validate_data_key(key: &str) -> Result<(), String> {
 }
 
 /// Save arbitrary JSON data for an extension.
-/// Stored at: <config_dir>/kiro-assistant/extension-data/<key>.json
+/// Stored at: <config_dir>/kage/extension-data/<key>.json
 #[tauri::command]
 pub async fn save_extension_data(key: String, data: String) -> Result<(), AppError> {
     validate_data_key(&key)?;
@@ -656,7 +656,7 @@ pub async fn save_extension_data(key: String, data: String) -> Result<(), AppErr
 }
 
 /// Load JSON data for an extension. Returns null if the file doesn't exist.
-/// Read from: <config_dir>/kiro-assistant/extension-data/<key>.json
+/// Read from: <config_dir>/kage/extension-data/<key>.json
 #[tauri::command]
 pub async fn load_extension_data(key: String) -> Result<Option<String>, AppError> {
     validate_data_key(&key)?;

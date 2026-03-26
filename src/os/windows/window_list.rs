@@ -100,7 +100,7 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
         };
 
         // Skip our own window
-        if title.contains("Kiro Assistant") { return 1; }
+        if title.contains("Kage") { return 1; }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
@@ -203,7 +203,7 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
         if hwnd == 0 { return None; }
 
         let title = get_window_title(hwnd)?;
-        if title.contains("Kiro Assistant") { return None; }
+        if title.contains("Kage") { return None; }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);

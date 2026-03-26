@@ -21,7 +21,7 @@ class SystemSettingsModule extends SettingsModule {
                 
                 ${this.createCheckboxRow(
                     'Auto-start on system startup',
-                    'Launch Kiro Assistant automatically when you log in.',
+                    'Launch Kage automatically when you log in.',
                     'autoStart',
                     false
                 )}

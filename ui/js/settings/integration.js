@@ -29,7 +29,7 @@ class IntegrationSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Screen context awareness',
-                    'Include the source application name and window title when sending messages, so the assistant knows what you were looking at.',
+                    'Include the source application name and window title when sending messages, so Kage knows what you were looking at.',
                     'screenContext',
                     true
                 )}
@@ -51,11 +51,11 @@ class IntegrationSettingsModule extends SettingsModule {
 
                 <style>
                     .dir-reference-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0 4px; }
-                    .dir-reference-table th { text-align: left; padding: 6px 10px; color: var(--kiro-text-muted); font-weight: 500; border-bottom: 1px solid var(--kiro-border-subtle); }
-                    .dir-reference-table td { padding: 5px 10px; border-bottom: 1px solid var(--kiro-border-subtle); color: var(--kiro-text); }
+                    .dir-reference-table th { text-align: left; padding: 6px 10px; color: var(--kage-text-muted); font-weight: 500; border-bottom: 1px solid var(--kage-border-subtle); }
+                    .dir-reference-table td { padding: 5px 10px; border-bottom: 1px solid var(--kage-border-subtle); color: var(--kage-text); }
                     .dir-reference-table tr:last-child td { border-bottom: none; }
-                    .dir-reference-table tr:hover td { background: var(--kiro-bg-input); }
-                    .dir-reference-table code { font-size: 11px; padding: 1px 5px; background: var(--kiro-bg-input); border-radius: 3px; }
+                    .dir-reference-table tr:hover td { background: var(--kage-bg-input); }
+                    .dir-reference-table code { font-size: 11px; padding: 1px 5px; background: var(--kage-bg-input); border-radius: 3px; }
                 </style>
             </div>
         `;
@@ -73,7 +73,7 @@ class IntegrationSettingsModule extends SettingsModule {
                 const tbody = document.getElementById('dirReferenceBody');
                 if (tbody) {
                     tbody.innerHTML = dirs.map(d =>
-                        `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || '<span style="color:var(--kiro-text-muted)">not available</span>'}</td></tr>`
+                        `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || '<span style="color:var(--kage-text-muted)">not available</span>'}</td></tr>`
                     ).join('');
                 }
             } catch (e) {
@@ -95,7 +95,7 @@ class IntegrationSettingsModule extends SettingsModule {
                     granted = perm === 'granted';
                 }
                 if (granted) {
-                    notif.sendNotification({ title: 'Kiro Assistant', body: 'Notifications are working!' });
+                    notif.sendNotification({ title: 'Kage', body: 'Notifications are working!' });
                     statusEl.textContent = '✅ Notification sent!';
                 } else {
                     statusEl.textContent = '❌ Permission denied. Check your OS notification settings.';

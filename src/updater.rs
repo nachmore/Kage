@@ -116,12 +116,12 @@ pub fn download_installer() -> Result<String> {
     let download_dir = dirs::cache_dir()
         .or_else(dirs::home_dir)
         .context("Failed to get cache directory")?
-        .join("kiro-assistant");
+        .join("kage");
 
     std::fs::create_dir_all(&download_dir)?;
 
     let ext = if cfg!(windows) { ".exe" } else if cfg!(target_os = "macos") { ".dmg" } else { ".AppImage" };
-    let installer_path = download_dir.join(format!("kiro-assistant-update{}", ext));
+    let installer_path = download_dir.join(format!("kage-update{}", ext));
 
     std::fs::write(&installer_path, &bytes)
         .context("Failed to write installer")?;
@@ -169,7 +169,7 @@ pub fn run_installer_and_exit(installer_path: &str, session_id: Option<&str>) ->
     // Write session ID to the lock file so the new instance can resume
     if let Some(sid) = session_id {
         if let Ok(lock_dir) = dirs::config_dir().context("config dir") {
-            let session_file = lock_dir.join("kiro-assistant").join("last-session.txt");
+            let session_file = lock_dir.join("kage").join("last-session.txt");
             let _ = std::fs::write(&session_file, sid);
             info!("Wrote session ID to {:?}", session_file);
         }

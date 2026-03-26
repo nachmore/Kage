@@ -5,7 +5,7 @@
   "type": "theme",
   "description": "Arctic, north-bluish color palette inspired by the Nord theme. Clean and icy.",
   "icon": "❄️",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "contributes": {
     "themes": {

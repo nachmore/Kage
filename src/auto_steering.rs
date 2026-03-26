@@ -70,11 +70,11 @@ fn mark_generation() {
 
 /// The prompt sent to the LLM to extract user preferences from conversation history.
 const EXTRACTION_PROMPT: &str = r#"<role>
-You are a preference extraction assistant for Kiro Assistant, a desktop AI tool.
+You are a preference extraction assistant for Kage, a desktop AI tool.
 </role>
 
 <context>
-The user has opted in to "Auto-Steering" in their settings because they want the assistant to remember their preferences across sessions. This document will be shown to the user and they can edit or delete it at any time. This is a user-requested personalization feature.
+The user has opted in to "Auto-Steering" in their settings because they want Kage to remember their preferences across sessions. This document will be shown to the user and they can edit or delete it at any time. This is a user-requested personalization feature.
 </context>
 
 <instructions>
@@ -94,8 +94,8 @@ Produce a markdown document with these sections (omit any section where nothing 
 ## Interests & Expertise
 (Topics, technologies, domains they work in — 2-4 bullet points max)
 
-## Assistant Behavior
-(Any explicit instructions or preferences for how the assistant should respond — 2-4 bullet points max)
+## Kage Behavior
+(Any explicit instructions or preferences for how Kage should respond — 2-4 bullet points max)
 
 Only include information clearly stated or strongly implied. If very little information is available, output a minimal document with just what you found.
 
@@ -112,7 +112,7 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
 
     let home = dirs::home_dir().context("Failed to get home directory")?;
     let jsonl_path = home
-        .join(".kiro")
+        .join(".kage")
         .join("sessions")
         .join("cli")
         .join(format!("{}.jsonl", session_id));
@@ -169,7 +169,7 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
                     let text = text.trim();
                     // Skip steering messages and extraction prompts
                     if !text.is_empty()
-                        && !text.starts_with("[KIRO_STEERING_IGNORE]")
+                        && !text.starts_with("[KAGE_STEERING_IGNORE]")
                     {
                         text_parts.push(text.to_string());
                     }
@@ -243,7 +243,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
     let steering_prompt = format!(
-        "[KIRO_STEERING_IGNORE] [AUTO_STEERING_EXTRACTION]\n{}",
+        "[KAGE_STEERING_IGNORE] [AUTO_STEERING_EXTRACTION]\n{}",
         prompt_with_existing
     );
 
@@ -322,7 +322,7 @@ pub fn maybe_generate_steering(
     tauri::async_runtime::spawn(async move {
         {
             let config = config.lock().unwrap();
-            if !config.acp.assistant.auto_steering_enabled {
+            if !config.acp.agent.auto_steering_enabled {
                 return;
             }
         }
@@ -344,7 +344,7 @@ pub fn maybe_generate_steering(
 /// This runs synchronously and blocks until complete.
 /// Skipped if no messages have been sent since the last generation.
 pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
-    if !config.acp.assistant.auto_steering_enabled {
+    if !config.acp.agent.auto_steering_enabled {
         return;
     }
 

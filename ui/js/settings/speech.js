@@ -66,9 +66,9 @@ class SpeechSettingsModule extends SettingsModule {
 
                     <!-- Status + Setup (collapsible) -->
                     <div id="pocketTtsSetupSection">
-                        <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kiro-bg-secondary);margin-bottom:8px;cursor:pointer;" onclick="togglePocketTtsSetup()">
+                        <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kage-bg-secondary);margin-bottom:8px;cursor:pointer;" onclick="togglePocketTtsSetup()">
                             <span id="pocketTtsStatusText" style="font-size:12px;">Checking...</span>
-                            <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kiro-text-muted);">▼ Setup</span>
+                            <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kage-text-muted);">▼ Setup</span>
                         </div>
                         <div id="pocketTtsSetupSteps" style="display:none;">
                             <div id="pocketTtsStep1" class="setting-row" style="display:none;">
@@ -84,7 +84,7 @@ class SpeechSettingsModule extends SettingsModule {
                                     <button class="setting-button" id="pocketTtsInstallBtn" onclick="pocketTtsInstall()">Install</button>
                                     <span id="pocketTtsInstallStatus" style="font-size:12px;"></span>
                                 </div>
-                                <pre id="pocketTtsInstallLog" style="display:none;font-size:11px;max-height:150px;overflow-y:auto;background:var(--kiro-bg-tertiary);padding:8px;border-radius:6px;margin-top:8px;white-space:pre-wrap;word-break:break-all;"></pre>
+                                <pre id="pocketTtsInstallLog" style="display:none;font-size:11px;max-height:150px;overflow-y:auto;background:var(--kage-bg-tertiary);padding:8px;border-radius:6px;margin-top:8px;white-space:pre-wrap;word-break:break-all;"></pre>
                             </div>
                             <div id="pocketTtsStep3" class="setting-row" style="display:none;">
                                 <div class="setting-label">Server</div>
@@ -102,13 +102,13 @@ class SpeechSettingsModule extends SettingsModule {
 
                         ${this.createCheckboxRow(
                             'Auto-Start Server',
-                            'Pre-start the Pocket TTS server when Kiro launches for faster first speech. If off, the server starts automatically on first use (with a brief delay).',
+                            'Pre-start the Pocket TTS server when Kage launches for faster first speech. If off, the server starts automatically on first use (with a brief delay).',
                             'pocketTtsAutoStart',
                             false
                         )}
 
                         <!-- Voice & Generation -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kiro-text-muted);margin-bottom:4px;">Voice & Generation</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Voice & Generation</div></div>
 
                         ${this.createControlRow(
                             'Voice',
@@ -138,7 +138,7 @@ class SpeechSettingsModule extends SettingsModule {
                         </div>
 
                         <!-- Custom Voices -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kiro-text-muted);margin-bottom:4px;">Custom Voices</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Custom Voices</div></div>
 
                         <div class="setting-row">
                             <div class="setting-description">
@@ -160,7 +160,7 @@ class SpeechSettingsModule extends SettingsModule {
                         </div>
 
                         <!-- Advanced -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kiro-text-muted);margin-bottom:4px;">Advanced</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Advanced</div></div>
 
                         ${this.createControlRow(
                             'Server Port',
@@ -513,7 +513,7 @@ async function pocketTtsTest() {
         const config = await invoke('get_config');
         const port = config.pocket_tts?.port || 9877;
         const voice = document.getElementById('pocketTtsVoice')?.value || 'alba';
-        const resp = await fetch(`http://127.0.0.1:${port}/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Hello! I am your Kiro assistant, using Pocket TTS for high quality speech.', voice, stream: false }) });
+        const resp = await fetch(`http://127.0.0.1:${port}/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Hello! I am your Kage, using Pocket TTS for high quality speech.', voice, stream: false }) });
         if (!resp.ok) { const err = await resp.json().catch(() => ({ error: resp.statusText })); throw new Error(err.error || 'Failed'); }
         const blob = await resp.blob(); const url = URL.createObjectURL(blob);
         _pocketTtsTestAudio = new Audio(url);
@@ -554,9 +554,9 @@ async function pocketTtsOpenVoicesDir() {
     const invoke = window.__TAURI__.core.invoke;
     try {
         let basePath;
-        if (navigator.platform.startsWith('Win')) { basePath = ((await invoke('get_user_info')).home || '') + '\\AppData\\Local\\kiro-assistant\\pocket-tts\\voices'; }
-        else if (navigator.platform === 'MacIntel') { basePath = '~/Library/Application Support/kiro-assistant/pocket-tts/voices'; }
-        else { basePath = '~/.local/share/kiro-assistant/pocket-tts/voices'; }
+        if (navigator.platform.startsWith('Win')) { basePath = ((await invoke('get_user_info')).home || '') + '\\AppData\\Local\\kage\\pocket-tts\\voices'; }
+        else if (navigator.platform === 'MacIntel') { basePath = '~/Library/Application Support/kage/pocket-tts/voices'; }
+        else { basePath = '~/.local/share/kage/pocket-tts/voices'; }
         await invoke('open_path', { path: basePath });
     } catch (e) { console.warn('[Speech] Failed to open voices dir:', e); }
 }

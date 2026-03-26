@@ -7,7 +7,7 @@ mod app_launcher;
 mod auto_steering;
 mod automation;
 mod commands;
-#[allow(dead_code)] // Consumed by the computer-control-mcp binary, not this one
+#[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary, not this one
 mod computer_control;
 mod config;
 mod error;
@@ -65,7 +65,7 @@ fn main() {
         eprintln!("Continuing without file logging...");
     }
 
-    info!("=== Kiro Assistant Starting ===");
+    info!("=== Kage Starting ===");
     let startup_t0 = std::time::Instant::now();
 
     // Enforce single instance across all builds (debug + release)
@@ -87,7 +87,7 @@ fn main() {
             // Check if the WebView2 user data dir is unlockable
             let webview_dir = dirs::data_local_dir()
                 .unwrap_or_default()
-                .join("kiro-assistant")
+                .join("kage")
                 .join("EBWebView");
             if webview_dir.exists() {
                 // Try to create a temp file in the dir — if it works, the lock is released
@@ -121,12 +121,12 @@ fn main() {
         .or_else(|| {
             // Also check the last-session.txt file (written by the updater before exit)
             dirs::config_dir()
-                .map(|d| d.join("kiro-assistant").join("last-session.txt"))
+                .map(|d| d.join("kage").join("last-session.txt"))
                 .and_then(|p| std::fs::read_to_string(&p).ok())
                 .map(|s| {
                     // Clean up the file after reading
                     let _ = std::fs::remove_file(
-                        dirs::config_dir().unwrap().join("kiro-assistant").join("last-session.txt")
+                        dirs::config_dir().unwrap().join("kage").join("last-session.txt")
                     );
                     s.trim().to_string()
                 })
@@ -296,7 +296,7 @@ fn main() {
         })
         .setup(move |app| {
             info!("Setting up application");
-            info!("=== Kiro Assistant Setup ===");
+            info!("=== Kage Setup ===");
 
             let config = config_for_setup;
             let dev_mode = dev_mode_for_setup;
@@ -451,7 +451,7 @@ fn main() {
                 });
             }
 
-            // Watch the sessions directory for external changes (e.g., kiro-cli creating sessions)
+            // Watch the sessions directory for external changes (e.g., kage-cli creating sessions)
             {
                 let state: tauri::State<'_, AppState> = app.state();
                 commands::sessions::start_session_watcher(
@@ -493,7 +493,7 @@ fn main() {
             }
 
             // Start default session on launch if configured
-            if config.acp.assistant.start_session_on_launch {
+            if config.acp.agent.start_session_on_launch {
                 info!("start_session_on_launch enabled, spawning background session init");
                 let state: tauri::State<'_, AppState> = app.state();
                 let acp_client = state.acp_client.clone();
@@ -511,7 +511,7 @@ fn main() {
                     info!("Creating default session on launch...");
                     let cwd = {
                         let cfg = config_arc.lock().unwrap();
-                        cfg.acp.assistant.working_directory.clone()
+                        cfg.acp.agent.working_directory.clone()
                     };
                     match client.create_session(cwd) {
                         Ok((session_id, models_json)) => {
@@ -538,7 +538,7 @@ fn main() {
                             {
                                 let default_model = {
                                     let cfg = config_arc.lock().unwrap();
-                                    cfg.acp.assistant.default_model.clone()
+                                    cfg.acp.agent.default_model.clone()
                                 };
                                 if let Some(ref model) = default_model {
                                     if !model.is_empty() {
@@ -546,7 +546,7 @@ fn main() {
                                         let request = crate::acp_client::AcpRequest {
                                             jsonrpc: "2.0".to_string(),
                                             id: serde_json::json!(4),
-                                            method: "_kiro.dev/commands/execute".to_string(),
+                                            method: "_kage.dev/commands/execute".to_string(),
                                             params: serde_json::json!({
                                                 "sessionId": session_id,
                                                 "command": { "command": "model", "args": { "modelName": model } }
@@ -643,18 +643,18 @@ fn main() {
             commands::get_mcp_json_path,
             commands::get_mcp_config,
             commands::save_mcp_config,
-            commands::kiro_desktop_available,
-            commands::kiro_desktop_workspaces,
-            commands::kiro_desktop_sessions,
-            commands::kiro_desktop_load_session,
-            commands::kiro_desktop_load_chat_file,
-            commands::kiro_desktop_chat_sessions,
-            commands::kiro_desktop_delete_session,
-            commands::kiro_desktop_open_folder,
-            commands::kiro_cli_available,
-            commands::kiro_cli_sessions,
-            commands::kiro_cli_load_session,
-            commands::kiro_cli_check_updated,
+            commands::kage_desktop_available,
+            commands::kage_desktop_workspaces,
+            commands::kage_desktop_sessions,
+            commands::kage_desktop_load_session,
+            commands::kage_desktop_load_chat_file,
+            commands::kage_desktop_chat_sessions,
+            commands::kage_desktop_delete_session,
+            commands::kage_desktop_open_folder,
+            commands::kage_cli_available,
+            commands::kage_cli_sessions,
+            commands::kage_cli_load_session,
+            commands::kage_cli_check_updated,
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,

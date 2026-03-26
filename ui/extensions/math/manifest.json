@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "Inline math expression evaluator with unit conversions",
   "icon": "🧮",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "enabled": { "type": "boolean", "default": true },

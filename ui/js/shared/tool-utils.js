@@ -43,14 +43,14 @@ export function escapeHtml(text) {
 }
 
 /**
- * Strip internal Kiro metadata tags from text for display purposes.
- * Removes <_kiro_*> XML-style tags and [_KIRO_*] bracket markers.
+ * Strip internal Kage metadata tags from text for display purposes.
+ * Removes <_kage_*> XML-style tags and [_KAGE_*] bracket markers.
  * These are injected by the app for agent context and should never be shown to users.
  */
-export function stripKiroTags(text) {
+export function stripKageTags(text) {
     if (!text) return text;
     return text
-        .replace(/<_kiro_[^>]*\/>\n?/g, '')   // <_kiro_ctx app="..." title="..."/>
-        .replace(/\[_KIRO_[A-Z_]*\][^\n]*\n?/g, '')  // [_KIRO_INLINE] Return ONLY...
+        .replace(/<_kage_[^>]*\/>\n?/g, '')   // <_kage_ctx app="..." title="..."/>
+        .replace(/\[_KAGE_[A-Z_]*\][^\n]*\n?/g, '')  // [_KAGE_INLINE] Return ONLY...
         .trim();
 }

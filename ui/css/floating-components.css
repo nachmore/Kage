@@ -2,11 +2,11 @@
 @import url('shared-components.css');
 
 /* Ghost Container */
-.ghost-container {
+.mascot-container {
     width: 60px;
     min-width: 60px;
     flex-shrink: 0;
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
     border-radius: 12px 0 0 12px;
     display: flex;
     align-items: center;
@@ -16,14 +16,14 @@
     -webkit-user-select: none;
 }
 
-.ghost-icon {
+.mascot-icon {
     width: 36px;
     height: 36px;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
     transition: transform 0.3s ease;
 }
 
-.ghost-container.thinking .ghost-icon {
+.mascot-container.thinking .mascot-icon {
     animation: thinking-float 2.5s ease-in-out infinite;
 }
 
@@ -37,17 +37,17 @@
     100% { transform: translateY(0) translateX(0) rotate(0deg) scaleX(1); }
 }
 
-.ghost-icon .ghost-eye {
+.mascot-icon .mascot-eye {
     transform-origin: center;
     transform-box: fill-box;
-    animation: kiro-static-blink 3.5s ease-in-out infinite;
+    animation: kage-static-blink 3.5s ease-in-out infinite;
 }
 
-.ghost-icon .ghost-eye-right {
+.mascot-icon .mascot-eye-right {
     animation-delay: 0.1s;
 }
 
-@keyframes kiro-static-blink {
+@keyframes kage-static-blink {
     0%, 88%, 100% { transform: scaleY(1); }
     90%, 92% { transform: scaleY(0.1); }
 }
@@ -169,7 +169,7 @@
 }
 
 .selection-checkbox input[type="checkbox"] {
-    accent-color: var(--kiro-accent);
+    accent-color: var(--kage-accent);
     cursor: pointer;
 }
 
@@ -194,10 +194,10 @@ body.dark-theme .selection-checkbox {
     align-items: center;
     gap: 4px;
     padding: 4px 10px;
-    border: 1px solid var(--kiro-border, #3a3640);
+    border: 1px solid var(--kage-border, #3a3640);
     border-radius: 16px;
     background: transparent;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     font-size: 12px;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -205,9 +205,9 @@ body.dark-theme .selection-checkbox {
 }
 
 .quick-action-chip:hover {
-    background: var(--kiro-surface-hover, #352F3D);
-    border-color: var(--kiro-accent, #C09CFF);
-    color: var(--kiro-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352F3D);
+    border-color: var(--kage-accent, #C09CFF);
+    color: var(--kage-text-primary, #E5E7EB);
 }
 
 .quick-action-icon {
@@ -233,7 +233,7 @@ body.clipboard-mode .floating-banner {
     padding: 6px 12px;
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid var(--kiro-border, #3a3640);
+    border-bottom: 1px solid var(--kage-border, #3a3640);
     font-size: 13px;
     flex-shrink: 0;
 }
@@ -243,7 +243,7 @@ body.clipboard-mode .floating-banner {
     left: 0;
     top: 0;
     bottom: 0;
-    background: var(--kiro-accent, #C09CFF);
+    background: var(--kage-accent, #C09CFF);
     opacity: 0.12;
     transition: width 0.2s linear;
     pointer-events: none;
@@ -258,7 +258,7 @@ body.clipboard-mode .floating-banner {
     font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
     font-size: 18px;
     font-weight: 600;
-    color: var(--kiro-text-primary, #E5E7EB);
+    color: var(--kage-text-primary, #E5E7EB);
     font-variant-numeric: tabular-nums;
     min-width: 60px;
 }
@@ -272,9 +272,9 @@ body.clipboard-mode .floating-banner {
 
 .extension-bar-btn {
     background: transparent;
-    border: 1px solid var(--kiro-border, #3a3640);
+    border: 1px solid var(--kage-border, #3a3640);
     border-radius: 6px;
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
     padding: 2px 8px;
     font-size: 12px;
     cursor: pointer;
@@ -282,13 +282,13 @@ body.clipboard-mode .floating-banner {
 }
 
 .extension-bar-btn:hover {
-    background: var(--kiro-surface-hover, #352F3D);
-    color: var(--kiro-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352F3D);
+    color: var(--kage-text-primary, #E5E7EB);
 }
 
 .offline-bar {
     background: rgba(255, 160, 50, 0.08);
-    color: var(--kiro-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938F9B);
 }
 .offline-bar .extension-bar-text {
     font-family: inherit;
@@ -356,7 +356,7 @@ body.clipboard-mode .floating-banner {
 .expand-btn:hover {
     opacity: 1;
     background: #f3f4f6;
-    color: var(--kiro-accent);
+    color: var(--kage-accent);
 }
 
 /* App Suggestions — extends shared .suggestion-list / .suggestion-item */
@@ -389,7 +389,7 @@ body.clipboard-mode .floating-banner {
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    background: var(--kiro-gradient);
+    background: var(--kage-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -494,7 +494,7 @@ body.dark-theme .datetime-date {
     display: flex;
     align-items: center;
     padding: 4px 12px;
-    border-top: 1px solid var(--kiro-border-subtle, rgba(255,255,255,0.06));
+    border-top: 1px solid var(--kage-border-subtle, rgba(255,255,255,0.06));
     gap: 4px;
 }
 .floating-toolbar-left {
@@ -511,13 +511,13 @@ body.dark-theme .datetime-date {
     border: none;
     background: transparent;
     border-radius: 6px;
-    color: var(--kiro-text-muted, #6b7280);
+    color: var(--kage-text-muted, #6b7280);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
 .floating-toolbar-btn:hover {
     background: rgba(255,255,255,0.08);
-    color: var(--kiro-text, #e5e7eb);
+    color: var(--kage-text, #e5e7eb);
 }
 body.light-theme .floating-toolbar-btn:hover {
     background: rgba(0,0,0,0.06);
@@ -540,7 +540,7 @@ body.light-theme .floating-toolbar-btn:hover {
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: var(--kiro-text-muted, #6b7280);
+    color: var(--kage-text-muted, #6b7280);
     user-select: none;
 }
 .floating-context-indicator canvas {
@@ -557,7 +557,7 @@ body.light-theme .floating-toolbar-btn:hover {
     background: transparent;
     border-radius: 4px;
     font-size: 11px;
-    color: var(--kiro-text-muted, #6b7280);
+    color: var(--kage-text-muted, #6b7280);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
     max-width: 140px;
@@ -567,7 +567,7 @@ body.light-theme .floating-toolbar-btn:hover {
 }
 .floating-model-selector:hover {
     background: rgba(255,255,255,0.08);
-    color: var(--kiro-text, #e5e7eb);
+    color: var(--kage-text, #e5e7eb);
 }
 body.light-theme .floating-model-selector:hover {
     background: rgba(0,0,0,0.06);

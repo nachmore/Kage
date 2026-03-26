@@ -31,52 +31,52 @@ class AutomationsSettingsModule extends SettingsModule {
     render() {
         const css = `
             .auto-list { }
-            .auto-card { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 10px; margin-bottom: 8px; overflow: hidden; transition: box-shadow 0.2s; }
-            .auto-card.expanded { box-shadow: 0 0 0 1px var(--kiro-accent, #C09CFF); }
+            .auto-card { background: var(--kage-bg-input); border: 1px solid var(--kage-border-subtle); border-radius: 10px; margin-bottom: 8px; overflow: hidden; transition: box-shadow 0.2s; }
+            .auto-card.expanded { box-shadow: 0 0 0 1px var(--kage-accent, #C09CFF); }
             .auto-card.disabled { opacity: 0.45; }
             .auto-collapsed { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; user-select: none; }
             .auto-collapsed:hover { background: rgba(255,255,255,0.03); }
             .auto-collapsed-icon { font-size: 18px; flex-shrink: 0; }
             .auto-collapsed-info { flex: 1; min-width: 0; }
-            .auto-collapsed-name { font-size: 13px; font-weight: 500; color: var(--kiro-text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .auto-collapsed-summary { font-size: 11px; color: var(--kiro-text-secondary, #938F9B); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
-            .auto-trigger-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--kiro-bg-surface); color: var(--kiro-text); white-space: nowrap; flex-shrink: 0; }
+            .auto-collapsed-name { font-size: 13px; font-weight: 500; color: var(--kage-text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .auto-collapsed-summary { font-size: 11px; color: var(--kage-text-secondary, #938F9B); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+            .auto-trigger-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--kage-bg-surface); color: var(--kage-text); white-space: nowrap; flex-shrink: 0; }
             .auto-enable-toggle { cursor: pointer; width: 16px; height: 16px; flex-shrink: 0; }
             .auto-expanded { padding: 0 14px 14px; }
-            .auto-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kiro-text); margin: 12px 0 6px; font-weight: 600; }
-            .auto-header-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--kiro-border-subtle); }
-            .auto-header-row input, .auto-header-row select { background: var(--kiro-bg-surface); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; padding: 4px 8px; color: var(--kiro-text); font-size: 13px; font-family: var(--kiro-font); }
-            .auto-header-row input:focus { border-color: var(--kiro-accent); background: var(--kiro-bg-input); outline: none; }
+            .auto-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--kage-text); margin: 12px 0 6px; font-weight: 600; }
+            .auto-header-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--kage-border-subtle); }
+            .auto-header-row input, .auto-header-row select { background: var(--kage-bg-surface); border: 1px solid var(--kage-border-subtle); border-radius: 4px; padding: 4px 8px; color: var(--kage-text); font-size: 13px; font-family: var(--kage-font); }
+            .auto-header-row input:focus { border-color: var(--kage-accent); background: var(--kage-bg-input); outline: none; }
             .auto-icon-input { width: 32px !important; text-align: center; flex: none !important; font-size: 16px !important; padding: 2px !important; }
             .auto-name-input { flex: 1; font-weight: 500; font-size: 14px; }
             .auto-trigger { margin-top: 8px; }
-            .auto-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kiro-text); }
+            .auto-trigger-header { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--kage-text); }
             .auto-trigger-config { margin-top: 8px; }
-            .auto-step { margin-bottom: 6px; padding: 8px 10px; background: var(--kiro-bg-surface); border-radius: 8px; border: 1px solid var(--kiro-border-subtle); }
+            .auto-step { margin-bottom: 6px; padding: 8px 10px; background: var(--kage-bg-surface); border-radius: 8px; border: 1px solid var(--kage-border-subtle); }
             .auto-step-top { display: flex; align-items: center; gap: 6px; }
-            .auto-step-num { font-size: 10px; color: var(--kiro-text); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kiro-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
+            .auto-step-num { font-size: 10px; color: var(--kage-text); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--kage-bg-input); border-radius: 50%; flex-shrink: 0; font-weight: 600; }
             .auto-step-fields { padding-left: 26px; margin-top: 6px; }
-            .auto-step-fields input, .auto-step-fields select, .auto-step-fields textarea { width: 100%; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kiro-text); font-size: 12px; font-family: var(--kiro-font); margin-bottom: 4px; box-sizing: border-box; }
-            .auto-step-fields input::placeholder { color: var(--kiro-text-muted); }
+            .auto-step-fields input, .auto-step-fields select, .auto-step-fields textarea { width: 100%; background: var(--kage-bg-input); border: 1px solid var(--kage-border-subtle); border-radius: 6px; padding: 5px 10px; color: var(--kage-text); font-size: 12px; font-family: var(--kage-font); margin-bottom: 4px; box-sizing: border-box; }
+            .auto-step-fields input::placeholder { color: var(--kage-text-muted); }
             .auto-step-fields .field-row { display: flex; gap: 6px; }
             .auto-step-fields .field-row input { flex: 1; }
-            .auto-step-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; opacity: 0.6; }
-            .auto-step-btn:hover { color: var(--kiro-text); background: var(--kiro-bg-input); opacity: 1; }
-            .auto-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--kiro-border-subtle); margin-top: 10px; }
-            .auto-actions .auto-save-btn { background: var(--kiro-accent); color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
+            .auto-step-btn { background: none; border: none; color: var(--kage-text-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0; opacity: 0.6; }
+            .auto-step-btn:hover { color: var(--kage-text); background: var(--kage-bg-input); opacity: 1; }
+            .auto-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid var(--kage-border-subtle); margin-top: 10px; }
+            .auto-actions .auto-save-btn { background: var(--kage-accent); color: #fff; border: none; border-radius: 6px; padding: 6px 16px; font-size: 12px; font-weight: 600; cursor: pointer; }
             .auto-actions .auto-save-btn:hover { opacity: 0.9; }
-            .auto-actions .auto-cancel-btn { background: none; border: 1px solid var(--kiro-border-subtle); border-radius: 6px; padding: 6px 16px; font-size: 12px; color: var(--kiro-text); cursor: pointer; }
-            .auto-actions .auto-cancel-btn:hover { background: var(--kiro-bg-surface); }
-            .auto-actions .auto-delete-btn { background: none; border: none; color: var(--kiro-text-muted); cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; margin-left: auto; }
+            .auto-actions .auto-cancel-btn { background: none; border: 1px solid var(--kage-border-subtle); border-radius: 6px; padding: 6px 16px; font-size: 12px; color: var(--kage-text); cursor: pointer; }
+            .auto-actions .auto-cancel-btn:hover { background: var(--kage-bg-surface); }
+            .auto-actions .auto-delete-btn { background: none; border: none; color: var(--kage-text-muted); cursor: pointer; font-size: 11px; padding: 4px 10px; border-radius: 4px; margin-left: auto; }
             .auto-actions .auto-delete-btn:hover { color: #e55; background: rgba(238,85,85,0.1); }
             .auto-validation-banner { background: rgba(217,119,6,0.15); border: 1px solid rgba(217,119,6,0.3); color: #fcd34d; border-radius: 6px; padding: 6px 12px; font-size: 12px; margin-bottom: 8px; }
-            .auto-card select { background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); border-radius: 4px; color: var(--kiro-text); font-size: 13px; font-family: var(--kiro-font); cursor: pointer; padding: 6px 10px; }
-            .auto-card select:focus { outline: none; border-color: var(--kiro-accent); }
-            .auto-card select option { background: var(--kiro-bg-input, #28242E); color: var(--kiro-text, #E5E7EB); }
-            .sched-day-btn { width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--kiro-border-subtle); cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
-            .sched-day-btn.active { background: var(--kiro-accent) !important; color: #fff !important; border-color: var(--kiro-accent) !important; }
-            .sched-day-btn:not(.active) { background: var(--kiro-bg-surface); color: var(--kiro-text-muted); }
-            .sched-day-btn:hover:not(.active) { background: var(--kiro-bg-input); color: var(--kiro-text); }`;
+            .auto-card select { background: var(--kage-bg-input); border: 1px solid var(--kage-border); border-radius: 4px; color: var(--kage-text); font-size: 13px; font-family: var(--kage-font); cursor: pointer; padding: 6px 10px; }
+            .auto-card select:focus { outline: none; border-color: var(--kage-accent); }
+            .auto-card select option { background: var(--kage-bg-input, #28242E); color: var(--kage-text, #E5E7EB); }
+            .sched-day-btn { width: 34px; height: 30px; border-radius: 6px; border: 1px solid var(--kage-border-subtle); cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
+            .sched-day-btn.active { background: var(--kage-accent) !important; color: #fff !important; border-color: var(--kage-accent) !important; }
+            .sched-day-btn:not(.active) { background: var(--kage-bg-surface); color: var(--kage-text-muted); }
+            .sched-day-btn:hover:not(.active) { background: var(--kage-bg-input); color: var(--kage-text); }`;
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + '<div class="setting-description" style="margin-bottom:12px">Chain transformations into automated actions. Trigger them manually, on a schedule, or in response to signals from extensions.</div>'
@@ -180,7 +180,7 @@ class AutomationsSettingsModule extends SettingsModule {
         if (!list) return;
         list.innerHTML = '';
         if (this._automations.length === 0) {
-            list.innerHTML = '<div class="setting-description" style="color:var(--kiro-text-muted);font-style:italic">No automations defined yet.</div>';
+            list.innerHTML = '<div class="setting-description" style="color:var(--kage-text-muted);font-style:italic">No automations defined yet.</div>';
             return;
         }
         this._automations.forEach((auto, i) => {
@@ -238,7 +238,7 @@ class AutomationsSettingsModule extends SettingsModule {
             const sigOpts = '<option value="">Select signal...</option>' + this._signals.map(s => '<option value="'+s.name+'"'+(auto.trigger.signal===s.name?' selected':'')+'>'+(s.icon||'⚡')+' '+s.name+' — '+(s.description||'')+'</option>').join('');
             trigConfig = '<select class="auto-signal-name" style="width:100%;margin-bottom:6px;">'+sigOpts+'</select><input class="auto-signal-filter setting-input" value="'+this._esc(auto.trigger.filter||'')+'" placeholder="Optional filter (text match on signal data)">';
         } else {
-            trigConfig = '<div style="font-size:11px;color:var(--kiro-text-secondary);margin-top:4px;">Runs via inline assist hotkey or quick actions.</div>';
+            trigConfig = '<div style="font-size:11px;color:var(--kage-text-secondary);margin-top:4px;">Runs via inline assist hotkey or quick actions.</div>';
         }
 
         let stepsHtml = '';
@@ -248,7 +248,7 @@ class AutomationsSettingsModule extends SettingsModule {
             <div class="auto-header-row">
                 <input class="auto-icon-input" value="${this._esc(auto.icon)}" maxlength="2">
                 <input class="auto-name-input" value="${this._esc(auto.name)}" placeholder="Automation name" style="flex:1;font-weight:500;font-size:14px;">
-                <span style="font-size:11px;color:var(--kiro-text-secondary);flex-shrink:0;">Output:</span>
+                <span style="font-size:11px;color:var(--kage-text-secondary);flex-shrink:0;">Output:</span>
                 <select class="auto-output-select">${outOpts}</select>
             </div>
             <div class="auto-expanded">
@@ -449,10 +449,10 @@ class AutomationsSettingsModule extends SettingsModule {
         const p = this._parseScheduleInterval(trigger.interval);
         const modeOpts = SCHEDULE_MODES.map(m => `<option value="${m.value}"${p.mode===m.value?' selected':''}>${m.label}</option>`).join('');
         let d = '';
-        if (p.mode === 'hourly') { const ho = [1,2,3,4,6,8,12].map(h => `<option value="${h}"${p.hours===h?' selected':''}>Every ${h}h</option>`).join(''); d = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${ho}</select><span style="font-size:12px;color:var(--kiro-text)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`; }
-        else if (p.mode === 'daily') { const db = DAYS_OF_WEEK.map(dw => `<button type="button" class="sched-day-btn${p.days.length===0||p.days.includes(dw.value)?' active':''}" data-day="${dw.value}">${dw.label}</button>`).join(''); d = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${db}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`; }
-        else if (p.mode === 'monthly') { const oo = ['1st','2nd','3rd','4th','last'].map(o => `<option value="${o}"${p.weekOrdinal===o?' selected':''}>${o}</option>`).join(''); const dwo = DAYS_OF_WEEK.map(dw => `<option value="${dw.value}"${p.weekDay===dw.value?' selected':''}>${dw.label}</option>`).join(''); const dn = Array.from({length:31},(_,j)=>j+1).map(n => `<option value="${n}"${p.dayOfMonth===n?' selected':''}>${n}</option>`).join(''); const io = p.dayOfMonth===0; d = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!io?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${io?'disabled':''}>${dn}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${io?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!io?'disabled':''}>${oo}</select> <select class="sched-month-dow" style="width:70px;" ${!io?'disabled':''}>${dwo}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`; }
-        else if (p.mode === 'yearly') { const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,j) => `<option value="${j+1}"${p.month===j+1?' selected':''}>${m}</option>`).join(''); const dn = Array.from({length:31},(_,j)=>j+1).map(n => `<option value="${n}"${p.monthDay===n?' selected':''}>${n}</option>`).join(''); d = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${mo}</select><select class="sched-year-day" style="width:60px;">${dn}</select><span style="font-size:12px;color:var(--kiro-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`; }
+        if (p.mode === 'hourly') { const ho = [1,2,3,4,6,8,12].map(h => `<option value="${h}"${p.hours===h?' selected':''}>Every ${h}h</option>`).join(''); d = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${ho}</select><span style="font-size:12px;color:var(--kage-text)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`; }
+        else if (p.mode === 'daily') { const db = DAYS_OF_WEEK.map(dw => `<button type="button" class="sched-day-btn${p.days.length===0||p.days.includes(dw.value)?' active':''}" data-day="${dw.value}">${dw.label}</button>`).join(''); d = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${db}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kage-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`; }
+        else if (p.mode === 'monthly') { const oo = ['1st','2nd','3rd','4th','last'].map(o => `<option value="${o}"${p.weekOrdinal===o?' selected':''}>${o}</option>`).join(''); const dwo = DAYS_OF_WEEK.map(dw => `<option value="${dw.value}"${p.weekDay===dw.value?' selected':''}>${dw.label}</option>`).join(''); const dn = Array.from({length:31},(_,j)=>j+1).map(n => `<option value="${n}"${p.dayOfMonth===n?' selected':''}>${n}</option>`).join(''); const io = p.dayOfMonth===0; d = `<div style="margin-top:6px;"><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="day" ${!io?'checked':''}> Day <select class="sched-month-day" style="width:60px;" ${io?'disabled':''}>${dn}</select></label></div><div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="monthMode" class="sched-month-mode" value="ordinal" ${io?'checked':''}> <select class="sched-month-ordinal" style="width:70px;" ${!io?'disabled':''}>${oo}</select> <select class="sched-month-dow" style="width:70px;" ${!io?'disabled':''}>${dwo}</select></label></div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kage-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`; }
+        else if (p.mode === 'yearly') { const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,j) => `<option value="${j+1}"${p.month===j+1?' selected':''}>${m}</option>`).join(''); const dn = Array.from({length:31},(_,j)=>j+1).map(n => `<option value="${n}"${p.monthDay===n?' selected':''}>${n}</option>`).join(''); d = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-year-month">${mo}</select><select class="sched-year-day" style="width:60px;">${dn}</select><span style="font-size:12px;color:var(--kage-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div>`; }
         return `<select class="auto-schedule-mode">${modeOpts}</select>${d}`;
     }
 
@@ -464,7 +464,7 @@ class AutomationsSettingsModule extends SettingsModule {
         if (t === 'ai_prompt') fields = '<input class="step-prompt" value="'+this._esc(step.prompt)+'" placeholder="Prompt... use {input} for previous output">';
         else if (t === 'find_replace') fields = '<div class="field-row"><input class="step-find" value="'+this._esc(step.find)+'" placeholder="Find (regex)"><input class="step-replace" value="'+this._esc(step.replace)+'" placeholder="Replace with"></div>';
         else if (t === 'transform') { const xo = TRANSFORMS.map(x => '<option value="'+x.value+'"'+(step.transform===x.value?' selected':'')+'>'+x.label+'</option>').join(''); fields = '<select class="step-transform">'+xo+'</select>'; }
-        else if (t === 'condition') fields = '<input class="step-condition" value="'+this._esc(step.condition||'')+'" placeholder="Continue only if output contains this text"><div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">Stops the automation if the previous output doesn\'t match.</div>';
+        else if (t === 'condition') fields = '<input class="step-condition" value="'+this._esc(step.condition||'')+'" placeholder="Continue only if output contains this text"><div style="font-size:10px;color:var(--kage-text-secondary);margin-top:2px;">Stops the automation if the previous output doesn\'t match.</div>';
         else if (t === 'script') fields = '<div class="step-script-container" data-script="'+this._esc(step.script)+'"></div>';
         return '<div class="auto-step" data-step="'+si+'"><div class="auto-step-top"><span class="auto-step-num">'+(si+1)+'.</span><select class="auto-step-type">'+tOpts+'</select><span style="flex:1"></span><button class="auto-step-btn auto-step-up"'+(si===0?' disabled':'')+'>↑</button><button class="auto-step-btn auto-step-down"'+(si===total-1?' disabled':'')+'>↓</button><button class="auto-step-btn auto-step-remove">✕</button></div><div class="auto-step-fields">'+fields+'</div></div>';
     }

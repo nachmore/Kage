@@ -1,10 +1,10 @@
 /**
  * Assistant Settings Module
- * Manages Kiro Assistant-specific settings: session launch, steering documents
+ * Manages Kage-specific settings: session launch, steering documents
  */
 class AssistantSettingsModule extends SettingsModule {
     constructor() {
-        super('assistant', 'Personalization', '✨');
+        super('personalization', 'Personalization', '✨');
     }
 
     render() {
@@ -15,10 +15,10 @@ class AssistantSettingsModule extends SettingsModule {
                 <div class="setting-row">
                     <div class="setting-label">Auto-generate steering document</div>
                     <div class="setting-checkbox-row">
-                        <label class="kiro-checkbox">
+                        <label class="kage-checkbox">
                             <input type="checkbox" id="autoSteeringEnabled">
                         </label>
-                        <div class="setting-description">Automatically summarize your conversations to build a personalized steering document that guides the assistant across all sessions.</div>
+                        <div class="setting-description">Automatically summarize your conversations to build a personalized steering document that guides Kage across all sessions.</div>
                     </div>
                     <div class="setting-control" style="margin-top: 8px;">
                         <button class="setting-button" id="openAutoSteeringBtn">Open File</button>
@@ -43,7 +43,7 @@ class AssistantSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Show quick actions on selected text',
-                    'When you summon the assistant with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
+                    'When you summon Kage with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
                     'quickActionsEnabled',
                     true
                 )}
@@ -67,12 +67,12 @@ class AssistantSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const assistant = config.acp?.assistant || {};
+        const agentCfg = config.acp?.agent || {};
         const autoSteering = document.getElementById('autoSteeringEnabled');
         const userPath = document.getElementById('userSteeringPath');
 
-        if (autoSteering) autoSteering.checked = assistant.auto_steering_enabled || false;
-        if (userPath) userPath.value = assistant.user_steering_path || '';
+        if (autoSteering) autoSteering.checked = agentCfg.auto_steering_enabled || false;
+        if (userPath) userPath.value = agentCfg.user_steering_path || '';
 
         // Quick actions
         const qaEnabled = document.getElementById('quickActionsEnabled');
@@ -87,9 +87,9 @@ class AssistantSettingsModule extends SettingsModule {
 
     save(config) {
         if (!config.acp) config.acp = {};
-        if (!config.acp.assistant) config.acp.assistant = {};
-        config.acp.assistant.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
-        config.acp.assistant.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
+        if (!config.acp.agent) config.acp.agent = {};
+        config.acp.agent.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
+        config.acp.agent.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
 
         // Quick actions
         config.quick_actions = config.quick_actions || {};
@@ -107,11 +107,11 @@ class AssistantSettingsModule extends SettingsModule {
         if (pathInput) {
             const platform = navigator.platform || '';
             if (platform.startsWith('Win')) {
-                pathInput.placeholder = 'e.g., C:\\Users\\you\\kiro-steering.md';
+                pathInput.placeholder = 'e.g., C:\\Users\\you\\kage-steering.md';
             } else if (platform.startsWith('Mac')) {
-                pathInput.placeholder = 'e.g., /Users/you/kiro-steering.md';
+                pathInput.placeholder = 'e.g., /Users/you/kage-steering.md';
             } else {
-                pathInput.placeholder = 'e.g., /home/you/kiro-steering.md';
+                pathInput.placeholder = 'e.g., /home/you/kage-steering.md';
             }
         }
 

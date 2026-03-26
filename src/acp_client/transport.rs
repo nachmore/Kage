@@ -77,7 +77,7 @@ impl AcpTransport {
                     return Ok(());
                 }
                 info!("Local mode: spawning process");
-                self.spawn_kiro_process(spawn_command)?;
+                self.spawn_backend_process(spawn_command)?;
                 Ok(())
             }
             AcpConnectionMode::Remote { .. } => {
@@ -115,7 +115,7 @@ impl AcpTransport {
                 self.start_reader_thread(ReaderSource::Tcp(BufReader::new(read_clone)));
 
                 *self.connected.lock().unwrap() = true;
-                info!("Connected to kiro-cli at {}", addr);
+                info!("Connected to kage-cli at {}", addr);
                 Ok(())
             }
             Err(e) => {
@@ -131,7 +131,7 @@ impl AcpTransport {
         }
     }
 
-    fn spawn_kiro_process(&self, command_str: &str) -> Result<()> {
+    fn spawn_backend_process(&self, command_str: &str) -> Result<()> {
         info!("Spawning: {}", command_str);
 
         let parts: Vec<&str> = command_str.split_whitespace().collect();

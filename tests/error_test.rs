@@ -1,4 +1,4 @@
-use kiro_assistant::error::{AppError, ErrorKind};
+use kage::error::{AppError, ErrorKind};
 
 #[test]
 fn test_app_error_construction() {

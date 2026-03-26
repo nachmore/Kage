@@ -3,7 +3,7 @@
 //! Each function delegates to the platform-specific implementation in
 //! `src/os/{windows,macos,linux}/accessibility.rs` via the `platform` alias.
 //!
-//! Consumed by the `computer-control-mcp` binary via the lib crate.
+//! Consumed by the `kage-computer-control-mcp` binary via the lib crate.
 
 use crate::computer_control::tree::UIElement;
 

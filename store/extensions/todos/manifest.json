@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo+ <task> due:<date>' for a reminder with a due-date banner.",
   "icon": "✅",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "enabled": { "type": "boolean", "default": true },

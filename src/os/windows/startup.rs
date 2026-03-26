@@ -3,7 +3,7 @@
 use log::{info, warn};
 
 const STARTUP_KEY_PATH: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const STARTUP_APP_NAME: &str = "Kiro Assistant";
+const STARTUP_APP_NAME: &str = "Kage";
 
 pub fn get_startup_enabled_impl() -> bool {
     if let Ok(hkcu) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)

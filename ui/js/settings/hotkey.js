@@ -12,8 +12,8 @@ class HotkeySettingsModule extends SettingsModule {
     render() {
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
-            + this.createControlRow('Global Hotkey', 'The shortcut to summon Kiro from anywhere.', '<div id="settingsHotkeyPicker"></div>')
-            + this.createControlRow('Voice Input Hotkey', 'Summon Kiro with the microphone already listening. Leave empty to disable.', '<div id="settingsVoiceHotkeyPicker"></div>')
+            + this.createControlRow('Global Hotkey', 'The shortcut to summon Kage from anywhere.', '<div id="settingsHotkeyPicker"></div>')
+            + this.createControlRow('Voice Input Hotkey', 'summon Kage with the microphone already listening. Leave empty to disable.', '<div id="settingsVoiceHotkeyPicker"></div>')
             + this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
             + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
             + '<div class="setting-section-label">Keyboard Shortcuts</div>'

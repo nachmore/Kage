@@ -58,7 +58,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                                 <button class="setting-button" id="shortcutIconClear" style="display:none" onclick="shortcutsModule.clearIcon()">✕</button>
                                 <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none" onchange="shortcutsModule.onIconFileSelected(event)">
                             </div>
-                            <div style="font-size:11px;color:var(--kiro-text-muted);margin-top:4px;">Emoji, image file, or paste an image from clipboard</div>
+                            <div style="font-size:11px;color:var(--kage-text-muted);margin-top:4px;">Emoji, image file, or paste an image from clipboard</div>
                         </div>
                         <div class="dialog-field">
                             <label>Action Type</label>
@@ -126,7 +126,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                                 </div>
                             </div>
                             <div class="dialog-field">
-                                <label>✨ Ask Kiro to write or update the script</label>
+                                <label>✨ Ask Kage to write or update the script</label>
                                 <div class="ai-prompt-row">
                                     <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="e.g., Parse a Jira ticket URL and return the ticket ID" onkeydown="if(event.key==='Enter'){event.preventDefault();shortcutsModule.generateScript()}">
                                     <button class="setting-button" id="scriptAiBtn" onclick="shortcutsModule.generateScript()">Generate</button>
@@ -171,39 +171,39 @@ class ShortcutsSettingsModule extends SettingsModule {
             </div>
 
             <style>
-                .shortcuts-list { margin: 20px 0; border: 1px solid var(--kiro-border-subtle); border-radius: 4px; overflow: hidden; }
-                .shortcut-item { padding: 16px; border-bottom: 1px solid var(--kiro-border-subtle); display: flex; justify-content: space-between; align-items: flex-start; background: var(--kiro-bg-input); }
+                .shortcuts-list { margin: 20px 0; border: 1px solid var(--kage-border-subtle); border-radius: 4px; overflow: hidden; }
+                .shortcut-item { padding: 16px; border-bottom: 1px solid var(--kage-border-subtle); display: flex; justify-content: space-between; align-items: flex-start; background: var(--kage-bg-input); }
                 .shortcut-item:last-child { border-bottom: none; }
-                .shortcut-item:hover { background: var(--kiro-bg-elevated); }
+                .shortcut-item:hover { background: var(--kage-bg-elevated); }
                 .shortcut-info { flex: 1; }
-                .shortcut-name { font-size: 14px; font-weight: 500; color: var(--kiro-text-bright); margin-bottom: 4px; }
-                .shortcut-trigger { display: inline-block; padding: 2px 8px; background: var(--kiro-accent); color: #ffffff; border-radius: 3px; font-size: 12px; font-family: 'Courier New', monospace; margin-bottom: 8px; }
-                .shortcut-details { font-size: 12px; color: var(--kiro-text-muted); line-height: 1.6; }
+                .shortcut-name { font-size: 14px; font-weight: 500; color: var(--kage-text-bright); margin-bottom: 4px; }
+                .shortcut-trigger { display: inline-block; padding: 2px 8px; background: var(--kage-accent); color: #ffffff; border-radius: 3px; font-size: 12px; font-family: 'Courier New', monospace; margin-bottom: 8px; }
+                .shortcut-details { font-size: 12px; color: var(--kage-text-muted); line-height: 1.6; }
                 .shortcut-actions { display: flex; gap: 8px; }
-                .shortcut-action-btn { padding: 4px 12px; background: transparent; border: 1px solid var(--kiro-border); border-radius: 2px; color: var(--kiro-text); font-size: 12px; cursor: pointer; transition: all 0.2s; }
-                .shortcut-action-btn:hover { background: var(--kiro-border); border-color: var(--kiro-accent); }
+                .shortcut-action-btn { padding: 4px 12px; background: transparent; border: 1px solid var(--kage-border); border-radius: 2px; color: var(--kage-text); font-size: 12px; cursor: pointer; transition: all 0.2s; }
+                .shortcut-action-btn:hover { background: var(--kage-border); border-color: var(--kage-accent); }
                 .shortcut-action-btn.delete:hover { background: #c0392b; border-color: #c0392b; color: #ffffff; }
                 .shortcuts-actions { display: flex; gap: 12px; margin-bottom: 16px; }
                 .shortcut-dialog { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-                .shortcut-dialog-content { background: var(--kiro-bg-elevated); border: 1px solid var(--kiro-border-subtle); border-radius: 4px; width: 600px; max-width: 90%; max-height: 90vh; overflow: auto; }
-                .shortcut-dialog-header { padding: 16px 20px; border-bottom: 1px solid var(--kiro-border-subtle); display: flex; justify-content: space-between; align-items: center; }
-                .shortcut-dialog-header h3 { font-size: 16px; font-weight: 500; color: var(--kiro-text-bright); margin: 0; }
-                .dialog-close-btn { background: transparent; border: none; color: var(--kiro-text); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 2px; }
-                .dialog-close-btn:hover { background: var(--kiro-border); }
+                .shortcut-dialog-content { background: var(--kage-bg-elevated); border: 1px solid var(--kage-border-subtle); border-radius: 4px; width: 600px; max-width: 90%; max-height: 90vh; overflow: auto; }
+                .shortcut-dialog-header { padding: 16px 20px; border-bottom: 1px solid var(--kage-border-subtle); display: flex; justify-content: space-between; align-items: center; }
+                .shortcut-dialog-header h3 { font-size: 16px; font-weight: 500; color: var(--kage-text-bright); margin: 0; }
+                .dialog-close-btn { background: transparent; border: none; color: var(--kage-text); font-size: 24px; cursor: pointer; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 2px; }
+                .dialog-close-btn:hover { background: var(--kage-border); }
                 .shortcut-dialog-body { padding: 20px; }
                 .dialog-field { margin-bottom: 16px; }
                 .dialog-field:last-child { margin-bottom: 0; }
-                .dialog-field label { display: block; font-size: 13px; color: var(--kiro-text); margin-bottom: 6px; font-weight: 500; }
-                .shortcut-dialog-footer { padding: 16px 20px; border-top: 1px solid var(--kiro-border-subtle); display: flex; justify-content: flex-end; gap: 12px; }
-                .shortcut-test-section { border-top: 1px solid var(--kiro-border-subtle); }
-                .shortcut-test-header { padding: 10px 20px; font-size: 12px; color: var(--kiro-text-muted); cursor: pointer; user-select: none; }
-                .shortcut-test-header:hover { color: var(--kiro-text); background: var(--kiro-bg-input); }
+                .dialog-field label { display: block; font-size: 13px; color: var(--kage-text); margin-bottom: 6px; font-weight: 500; }
+                .shortcut-dialog-footer { padding: 16px 20px; border-top: 1px solid var(--kage-border-subtle); display: flex; justify-content: flex-end; gap: 12px; }
+                .shortcut-test-section { border-top: 1px solid var(--kage-border-subtle); }
+                .shortcut-test-header { padding: 10px 20px; font-size: 12px; color: var(--kage-text-muted); cursor: pointer; user-select: none; }
+                .shortcut-test-header:hover { color: var(--kage-text); background: var(--kage-bg-input); }
                 #shortcutTestBody { padding: 0 20px 12px; }
-                .shortcut-test-output { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; line-height: 1.5; padding: 8px 12px; border-radius: 4px; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); color: var(--kiro-text); white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; margin: 0; }
+                .shortcut-test-output { font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px; line-height: 1.5; padding: 8px 12px; border-radius: 4px; background: var(--kage-bg-input); border: 1px solid var(--kage-border); color: var(--kage-text); white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; margin: 0; }
                 .shortcut-test-output.test-error { color: #e74c3c; border-color: #e74c3c40; }
-                .shortcut-test-output.test-success { border-color: var(--kiro-accent); }
-                .shortcuts-empty { padding: 40px; text-align: center; color: var(--kiro-text-muted); font-size: 13px; }
-                .shortcut-icon-preview { width: 32px; height: 32px; border-radius: 6px; background: var(--kiro-bg-input); border: 1px solid var(--kiro-border); display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
+                .shortcut-test-output.test-success { border-color: var(--kage-accent); }
+                .shortcuts-empty { padding: 40px; text-align: center; color: var(--kage-text-muted); font-size: 13px; }
+                .shortcut-icon-preview { width: 32px; height: 32px; border-radius: 6px; background: var(--kage-bg-input); border: 1px solid var(--kage-border); display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
                 .shortcut-icon-preview img { width: 100%; height: 100%; object-fit: cover; }
                 .script-editor { font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 12px; line-height: 1.5; resize: vertical; min-height: 120px; }
                 .script-editor-container {
@@ -216,21 +216,21 @@ class ShortcutsSettingsModule extends SettingsModule {
                     font-size: 12px; line-height: 1.5;
                     padding: 6px 10px; margin: 0;
                     white-space: pre; word-break: normal;
-                    border: 1px solid var(--kiro-border); border-radius: 4px;
+                    border: 1px solid var(--kage-border); border-radius: 4px;
                     overflow: auto; box-sizing: border-box;
                     min-height: 120px; tab-size: 2;
                 }
                 .script-editor-container .script-editor {
                     background: transparent; color: transparent;
-                    caret-color: var(--kiro-text-bright);
+                    caret-color: var(--kage-text-bright);
                     resize: vertical; width: 100%; z-index: 2;
                     outline: none;
                 }
                 .script-editor-container .script-editor:focus {
-                    border-color: var(--kiro-accent);
+                    border-color: var(--kage-accent);
                 }
                 .script-editor-container .script-highlight {
-                    background: var(--kiro-bg-input); color: var(--kiro-text);
+                    background: var(--kage-bg-input); color: var(--kage-text);
                     pointer-events: none; z-index: 1;
                     border-color: transparent;
                     overflow: auto;
@@ -618,7 +618,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         }
 
         const parts = [
-            '<role>You are a JavaScript code generator for Kiro Assistant shortcut scripts.</role>',
+            '<role>You are a JavaScript code generator for Kage shortcut scripts.</role>',
             '',
             '<instructions>',
             'Write a JavaScript function body that will be used inside `new Function("...args", <your code>)`.',
@@ -763,7 +763,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         const blob = new Blob([JSON.stringify(this.shortcuts, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'kiro-shortcuts.json'; a.click();
+        a.href = url; a.download = 'kage-shortcuts.json'; a.click();
         URL.revokeObjectURL(url);
     }
 

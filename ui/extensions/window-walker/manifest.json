@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "Switch between open windows. Type 'w ' to list and filter windows.",
   "icon": "🪟",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "enabled": { "type": "boolean", "default": true },

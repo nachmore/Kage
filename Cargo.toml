@@ -1,8 +1,8 @@
 [package]
-name = "kiro-assistant"
+name = "kage"
 version = "0.2.0"
 edition = "2021"
-default-run = "kiro-assistant"
+default-run = "kage"
 authors = ["Oren Nachman (nachmano@)"]
 description = "Your AI-powered desktop companion!"
 license = "MIT"
@@ -10,13 +10,13 @@ repository = "TBD"
 homepage = "TBD"
 
 [package.metadata.update]
-version_url = "https://example.com/kiro-assistant/latest-version.txt"
-installer_url = "https://example.com/kiro-assistant/kiro-assistant-setup.exe"
-changelog_url = "https://example.com/kiro-assistant/CHANGELOG.md"
+version_url = "https://example.com/kage/latest-version.txt"
+installer_url = "https://example.com/kage/kage-setup.exe"
+changelog_url = "https://example.com/kage/CHANGELOG.md"
 
 [package.metadata.update.dev]
 version_url = "http://localhost:1420/updates/latest-version"
-installer_url = "http://localhost:1420/updates/kiro-assistant-setup.exe"
+installer_url = "http://localhost:1420/updates/kage-setup.exe"
 changelog_url = "http://localhost:1420/updates/CHANGELOG.md"
 
 [dependencies]
@@ -88,5 +88,5 @@ lto = true
 codegen-units = 1
 
 [[bin]]
-name = "computer-control-mcp"
+name = "kage-computer-control-mcp"
 path = "src/bin/computer_control_mcp.rs"

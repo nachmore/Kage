@@ -34,7 +34,7 @@ fn list_with_wmctrl() -> Option<Vec<WindowInfo>> {
         let title = parts[4].trim().to_string();
 
         if title.is_empty() || title == "Desktop" { continue; }
-        if title.contains("Kiro") { continue; }
+        if title.contains("Kage") { continue; }
 
         let process_name = if pid > 0 {
             get_process_name_linux(pid)
@@ -73,7 +73,7 @@ fn list_with_xdotool() -> Option<Vec<WindowInfo>> {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
             .unwrap_or_default();
 
-        if title.is_empty() || title.contains("Kiro") { continue; }
+        if title.is_empty() || title.contains("Kage") { continue; }
 
         // Get PID
         let pid_output = Command::new("xdotool")

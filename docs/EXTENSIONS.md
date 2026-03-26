@@ -1,6 +1,6 @@
 # Extension Development Guide
 
-This document describes how to create extensions for Kiro Assistant. Extensions can add search providers (instant results in the floating window), settings pages, widget slots, and custom themes.
+This document describes how to create extensions for Kage. Extensions can add search providers (instant results in the floating window), settings pages, widget slots, and custom themes.
 
 ## Extension Types
 
@@ -615,7 +615,7 @@ These signals are always available (no extension needed):
 
 ## Theme Format
 
-Themes override CSS variables defined in `shared-kiro-tokens.css`:
+Themes override CSS variables defined in `shared-kage-tokens.css`:
 
 ```json
 {
@@ -641,15 +641,15 @@ Color file (`dark.json`):
 {
   "name": "My Theme Dark",
   "colors": {
-    "kiro-accent": "#FF6B6B",
-    "kiro-accent-hover": "#FF8E8E",
-    "kiro-bg": "#1a1a2e",
-    "kiro-text": "#e0e0e0"
+    "kage-accent": "#FF6B6B",
+    "kage-accent-hover": "#FF8E8E",
+    "kage-bg": "#1a1a2e",
+    "kage-text": "#e0e0e0"
   }
 }
 ```
 
-Only override the variables you want to change. Unspecified variables fall back to the built-in defaults. See `ui/css/shared-kiro-tokens.css` for all available variables.
+Only override the variables you want to change. Unspecified variables fall back to the built-in defaults. See `ui/css/shared-kage-tokens.css` for all available variables.
 
 ## Installation
 
@@ -660,7 +660,7 @@ Extensions are distributed as `.zip` files. The zip should contain either:
 Install methods:
 1. **Store** — browse and install from the Extension Store
 2. **Local file** — install from a `.zip` file or directory path
-3. **Manual** — place the extension directory in `<config_dir>/kiro-assistant/extensions/<id>/`
+3. **Manual** — place the extension directory in `<config_dir>/kage/extensions/<id>/`
 
 ## Enable / Disable
 

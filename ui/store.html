@@ -4,15 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extension Store</title>
-    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
-    <link rel="stylesheet" href="css/shared-kiro-controls.css">
+    <link rel="stylesheet" href="css/shared-kage-tokens.css">
+    <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: var(--kiro-font);
-            background: var(--kiro-bg);
-            color: var(--kiro-text);
+            font-family: var(--kage-font);
+            background: var(--kage-bg);
+            color: var(--kage-text);
             overflow: hidden;
         }
         /* Dark scrollbar */
@@ -29,7 +29,7 @@
         }
         .store-header {
             padding: 16px 20px;
-            border-bottom: 1px solid var(--kiro-border);
+            border-bottom: 1px solid var(--kage-border);
             display: flex;
             align-items: center;
             gap: 12px;
@@ -38,93 +38,93 @@
         .store-header h1 {
             font-size: 16px;
             font-weight: 600;
-            color: var(--kiro-text-bright);
+            color: var(--kage-text-bright);
             flex: 1;
         }
         .store-header-settings {
             -webkit-app-region: no-drag;
             padding: 4px 8px;
             font-size: 14px;
-            border: 1px solid var(--kiro-border);
+            border: 1px solid var(--kage-border);
             border-radius: 6px;
             background: transparent;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
             cursor: pointer;
             transition: all 0.15s;
         }
         .store-header-settings:hover {
-            border-color: var(--kiro-accent);
-            color: var(--kiro-accent);
+            border-color: var(--kage-accent);
+            color: var(--kage-accent);
         }
         .store-tabs {
             display: flex;
             gap: 4px;
             padding: 0 20px;
-            border-bottom: 1px solid var(--kiro-border);
+            border-bottom: 1px solid var(--kage-border);
             -webkit-app-region: no-drag;
         }
         .store-tab {
             padding: 10px 16px;
             cursor: pointer;
             border-bottom: 2px solid transparent;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
             font-size: 13px;
             transition: all 0.15s;
         }
-        .store-tab:hover { color: var(--kiro-text); }
+        .store-tab:hover { color: var(--kage-text); }
         .store-tab.active {
-            color: var(--kiro-accent);
-            border-bottom-color: var(--kiro-accent);
+            color: var(--kage-accent);
+            border-bottom-color: var(--kage-accent);
         }
         .store-toolbar {
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 10px 20px;
-            border-bottom: 1px solid var(--kiro-border-subtle);
+            border-bottom: 1px solid var(--kage-border-subtle);
         }
         .store-toolbar input {
             flex: 1;
             padding: 8px 12px;
-            background: var(--kiro-bg-input);
-            border: 1px solid var(--kiro-border);
+            background: var(--kage-bg-input);
+            border: 1px solid var(--kage-border);
             border-radius: 6px;
-            color: var(--kiro-text);
+            color: var(--kage-text);
             font-size: 13px;
             outline: none;
         }
         .store-toolbar input:focus {
-            border-color: var(--kiro-accent);
-            box-shadow: 0 0 0 2px var(--kiro-accent-glow);
+            border-color: var(--kage-accent);
+            box-shadow: 0 0 0 2px var(--kage-accent-glow);
         }
         .store-filter-btn {
             padding: 6px 12px;
             font-size: 12px;
             font-weight: 500;
             border-radius: 6px;
-            border: 1px solid var(--kiro-border);
+            border: 1px solid var(--kage-border);
             background: transparent;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
             cursor: pointer;
             transition: all 0.15s;
             white-space: nowrap;
         }
         .store-filter-btn:hover {
-            border-color: var(--kiro-accent);
-            color: var(--kiro-text);
+            border-color: var(--kage-accent);
+            color: var(--kage-text);
         }
         .store-filter-btn.active {
-            background: var(--kiro-accent);
-            border-color: var(--kiro-accent);
+            background: var(--kage-accent);
+            border-color: var(--kage-accent);
             color: white;
         }
         .store-source-select {
             padding: 6px 10px;
             font-size: 12px;
             border-radius: 6px;
-            border: 1px solid var(--kiro-border);
-            background: var(--kiro-bg-input);
-            color: var(--kiro-text);
+            border: 1px solid var(--kage-border);
+            background: var(--kage-bg-input);
+            color: var(--kage-text);
             cursor: pointer;
             outline: none;
         }
@@ -139,15 +139,15 @@
             gap: 12px;
         }
         .store-card {
-            background: var(--kiro-bg-elevated);
-            border: 1px solid var(--kiro-border);
+            background: var(--kage-bg-elevated);
+            border: 1px solid var(--kage-border);
             border-radius: 8px;
             padding: 14px;
             transition: border-color 0.15s, box-shadow 0.15s;
         }
         .store-card:hover {
-            border-color: var(--kiro-accent);
-            box-shadow: 0 0 0 1px var(--kiro-accent-glow);
+            border-color: var(--kage-accent);
+            box-shadow: 0 0 0 1px var(--kage-accent-glow);
         }
         .store-card-header {
             display: flex;
@@ -162,22 +162,22 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--kiro-bg-input);
+            background: var(--kage-bg-input);
             border-radius: 8px;
             flex-shrink: 0;
         }
         .store-card-title {
             font-size: 14px;
             font-weight: 600;
-            color: var(--kiro-text-bright);
+            color: var(--kage-text-bright);
         }
         .store-card-author {
             font-size: 11px;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
         }
         .store-card-desc {
             font-size: 12px;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
             line-height: 1.4;
             margin-bottom: 10px;
         }
@@ -197,14 +197,14 @@
         .store-tag {
             font-size: 10px;
             padding: 2px 6px;
-            background: var(--kiro-bg-input);
+            background: var(--kage-bg-input);
             border-radius: 4px;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
         }
         .store-source-badge {
             font-size: 9px;
             padding: 2px 6px;
-            background: var(--kiro-accent);
+            background: var(--kage-accent);
             border-radius: 4px;
             color: white;
             opacity: 0.8;
@@ -218,15 +218,15 @@
             font-weight: 500;
         }
         .store-card-btn.install {
-            background: var(--kiro-accent);
+            background: var(--kage-accent);
             color: white;
         }
         .store-card-btn.install:hover {
-            background: var(--kiro-accent-hover);
+            background: var(--kage-accent-hover);
         }
         .store-card-btn.installed {
-            background: var(--kiro-bg-input);
-            color: var(--kiro-text-muted);
+            background: var(--kage-bg-input);
+            color: var(--kage-text-muted);
             cursor: default;
         }
         .store-card-btn.uninstall {
@@ -239,27 +239,27 @@
             background: rgba(238, 85, 85, 0.1);
         }
         .store-card-btn.update {
-            background: var(--kiro-accent);
+            background: var(--kage-accent);
             color: white;
             font-size: 11px;
         }
         .store-card-btn.update:hover {
-            background: var(--kiro-accent-hover);
+            background: var(--kage-accent-hover);
         }
         .store-card-btn.settings-link {
             background: transparent;
-            color: var(--kiro-text-muted);
-            border: 1px solid var(--kiro-border);
+            color: var(--kage-text-muted);
+            border: 1px solid var(--kage-border);
             font-size: 11px;
         }
         .store-card-btn.settings-link:hover {
-            border-color: var(--kiro-accent);
-            color: var(--kiro-accent);
+            border-color: var(--kage-accent);
+            color: var(--kage-accent);
         }
         .store-card-btn.reinstall {
             background: transparent;
-            color: var(--kiro-accent);
-            border: 1px solid var(--kiro-accent);
+            color: var(--kage-accent);
+            border: 1px solid var(--kage-accent);
             font-size: 11px;
         }
         .store-card-btn.reinstall:hover {
@@ -276,13 +276,13 @@
         .store-empty {
             text-align: center;
             padding: 40px;
-            color: var(--kiro-text-muted);
+            color: var(--kage-text-muted);
         }
         .store-empty-icon { font-size: 32px; margin-bottom: 8px; }
         .store-loading-spinner {
             width: 24px; height: 24px; margin: 0 auto 8px;
-            border: 3px solid var(--kiro-border);
-            border-top-color: var(--kiro-accent);
+            border: 3px solid var(--kage-border);
+            border-top-color: var(--kage-accent);
             border-radius: 50%;
             animation: store-spin 0.6s linear infinite;
         }

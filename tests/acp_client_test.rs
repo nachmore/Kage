@@ -1,4 +1,4 @@
-use kiro_assistant::acp_client::types::*;
+use kage::acp_client::types::*;
 
 #[test]
 fn test_acp_request_serialization() {

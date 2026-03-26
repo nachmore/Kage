@@ -14,7 +14,7 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'quit',
-        description: 'Quit Kiro Assistant',
+        description: 'Quit Kage',
         icon: '🚪',
         execute: async (invoke) => {
             await invoke('quit_app');
@@ -22,7 +22,7 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'restart',
-        description: 'Restart Kiro Assistant',
+        description: 'Restart Kage',
         icon: '🔄',
         execute: async (invoke) => {
             await invoke('restart_app');
@@ -41,7 +41,7 @@ const LOCAL_COMMANDS = [
         description: 'Clear the visible response (does not clear conversation history)',
         icon: '🧹',
         execute: async (_invoke, appWindow) => {
-            document.dispatchEvent(new CustomEvent('kiro-clear'));
+            document.dispatchEvent(new CustomEvent('kage-clear'));
         }
     },
     {
@@ -49,7 +49,7 @@ const LOCAL_COMMANDS = [
         description: 'Open full chat with sessions',
         icon: '💬',
         execute: async (invoke, appWindow) => {
-            document.dispatchEvent(new CustomEvent('kiro-clear'));
+            document.dispatchEvent(new CustomEvent('kage-clear'));
             await invoke('open_chat_window');
             await appWindow.hide();
         }
@@ -62,9 +62,9 @@ const LOCAL_COMMANDS = [
             try {
                 const id = await invoke('get_current_session_id');
                 const text = id || 'No active session';
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: text }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
             }
         }
     },
@@ -75,19 +75,19 @@ const LOCAL_COMMANDS = [
         execute: async (invoke, _appWindow, args) => {
             const title = args?.trim();
             if (!title) {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Usage: >session-title New Session Name' }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Usage: >session-title New Session Name' }));
                 return;
             }
             try {
                 const sessionId = await invoke('get_current_session_id');
                 if (!sessionId) {
-                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'No active session to rename' }));
+                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'No active session to rename' }));
                     return;
                 }
                 await invoke('rename_session', { sessionId, title });
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: `Session renamed to: ${title}` }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: `Session renamed to: ${title}` }));
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
             }
         }
     },
@@ -108,12 +108,12 @@ const LOCAL_COMMANDS = [
             try {
                 const sessionId = await invoke('get_current_session_id');
                 if (!sessionId) {
-                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'No active session' }));
+                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'No active session' }));
                     return;
                 }
                 await invoke('reveal_session_file', { sessionId });
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
             }
         }
     },
@@ -231,7 +231,7 @@ export function matchSlashCommands(input) {
                         const msg = result?.message || '';
                         const lines = msg.split('\n').filter(l => l.trim());
                         if (lines.length > 0) {
-                            document.dispatchEvent(new CustomEvent('kiro-show-selection', {
+                            document.dispatchEvent(new CustomEvent('kage-show-selection', {
                                 detail: {
                                     command: cmdName,
                                     options: lines.map(line => {
@@ -248,10 +248,10 @@ export function matchSlashCommands(input) {
                                 }
                             }));
                         } else {
-                            document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: msg || 'No options available' }));
+                            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg || 'No options available' }));
                         }
                     } catch (e) {
-                        document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                        document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
                     }
                     return;
                 }
@@ -263,9 +263,9 @@ export function matchSlashCommands(input) {
                         args: null
                     });
                     const msg = result?.message || (result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed');
-                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: result?.message || msg }));
+                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: result?.message || msg }));
                 } catch (e) {
-                    document.dispatchEvent(new CustomEvent('kiro-show-response', { detail: 'Error: ' + e }));
+                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
                 }
             }
         }));

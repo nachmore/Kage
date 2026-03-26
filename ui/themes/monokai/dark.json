@@ -1,19 +1,19 @@
 {
   "name": "Monokai Dark",
   "colors": {
-    "kiro-accent": "#F92672",
-    "kiro-accent-hover": "#FF4D8A",
-    "kiro-accent-active": "#C4195A",
-    "kiro-accent-light": "#F9A8C9",
-    "kiro-accent-glow": "rgba(249, 38, 114, 0.3)",
-    "kiro-bg": "#272822",
-    "kiro-bg-elevated": "#2D2E27",
-    "kiro-bg-input": "#3E3D32",
-    "kiro-border": "#49483E",
-    "kiro-border-subtle": "#3E3D32",
-    "kiro-text": "#F8F8F2",
-    "kiro-text-bright": "#FFFFFF",
-    "kiro-text-muted": "#75715E",
-    "kiro-section-accent": "#A6E22E"
+    "kage-accent": "#F92672",
+    "kage-accent-hover": "#FF4D8A",
+    "kage-accent-active": "#C4195A",
+    "kage-accent-light": "#F9A8C9",
+    "kage-accent-glow": "rgba(249, 38, 114, 0.3)",
+    "kage-bg": "#272822",
+    "kage-bg-elevated": "#2D2E27",
+    "kage-bg-input": "#3E3D32",
+    "kage-border": "#49483E",
+    "kage-border-subtle": "#3E3D32",
+    "kage-text": "#F8F8F2",
+    "kage-text-bright": "#FFFFFF",
+    "kage-text-muted": "#75715E",
+    "kage-section-accent": "#A6E22E"
   }
 }

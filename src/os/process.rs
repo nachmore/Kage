@@ -27,8 +27,8 @@ where
     crate::os::platform::process::install_signal_handlers_impl(cleanup_fn)
 }
 
-/// Spawn a process detached from the assistant's Job Object (Windows) so it
-/// survives when the assistant exits. On other platforms, this is a plain spawn.
+/// Spawn a process detached from Kage's Job Object (Windows) so it
+/// survives when Kage exits. On other platforms, this is a plain spawn.
 /// Use for user-facing launches (apps, URLs, explorer, system commands).
 pub fn spawn_detached(cmd: &mut Command) -> std::io::Result<std::process::Child> {
     #[cfg(target_os = "windows")]

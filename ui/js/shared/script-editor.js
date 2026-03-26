@@ -46,7 +46,7 @@ export function createScriptEditor(container, opts = {}) {
             <button class="setting-button" id="${id}_aiBtn" style="font-size:11px;white-space:nowrap;">✨ Generate</button>
             <button class="setting-button" id="${id}_aiUndo" style="font-size:11px;display:none;">Undo</button>
         </div>
-        <div id="${id}_aiStatus" style="font-size:11px;color:var(--kiro-text-secondary);margin-bottom:4px;"></div>`;
+        <div id="${id}_aiStatus" style="font-size:11px;color:var(--kage-text-secondary);margin-bottom:4px;"></div>`;
     }
 
     html += `<div class="script-editor-container">
@@ -54,8 +54,8 @@ export function createScriptEditor(container, opts = {}) {
         <textarea id="${id}_textarea" class="setting-input script-editor" rows="${rows}" spellcheck="false" wrap="off"
             placeholder="${opts.placeholder || '// ' + varHint + ' contains the previous output\\nreturn ' + varHint + '.toUpperCase();'}">${_esc(opts.value || '')}</textarea>
     </div>
-    <div style="font-size:10px;color:var(--kiro-text-secondary);margin-top:2px;">
-        JavaScript function body. The variable <code style="background:var(--kiro-bg-input);padding:1px 4px;border-radius:3px;">${varHint}</code> contains the input. ${ctxHint}
+    <div style="font-size:10px;color:var(--kage-text-secondary);margin-top:2px;">
+        JavaScript function body. The variable <code style="background:var(--kage-bg-input);padding:1px 4px;border-radius:3px;">${varHint}</code> contains the input. ${ctxHint}
     </div>`;
 
     container.innerHTML = html;
@@ -106,7 +106,7 @@ export function createScriptEditor(container, opts = {}) {
 
             const currentScript = textarea?.value.trim() || '';
             const parts = [
-                '<role>You are a JavaScript code generator for Kiro Assistant automation scripts.</role>',
+                '<role>You are a JavaScript code generator for Kage automation scripts.</role>',
                 '',
                 '<instructions>',
                 `Write a JavaScript function body. The variable "${varHint}" contains the input from the previous step.`,

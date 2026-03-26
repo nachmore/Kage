@@ -45,7 +45,7 @@ class SettingsManager {
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
                 </h2>`;
                 if (module.description) {
-                    html += `<p style="font-size:12px;color:var(--kiro-text-muted);margin:0 0 16px;line-height:1.4;">${module.description}</p>`;
+                    html += `<p style="font-size:12px;color:var(--kage-text-muted);margin:0 0 16px;line-height:1.4;">${module.description}</p>`;
                 }
                 html += `<div id="ext-content-${extId}">`;
                 html += module.renderContent ? module.renderContent() : module.render();
@@ -520,7 +520,7 @@ function _updateExtToggleUI(extId, enabled) {
     const content = document.getElementById('ext-content-' + extId);
     if (btn) {
         btn.textContent = enabled ? 'Disable' : 'Enable';
-        btn.style.background = enabled ? '#c44' : 'var(--kiro-accent)';
+        btn.style.background = enabled ? '#c44' : 'var(--kage-accent)';
         btn.style.color = 'white';
         btn.style.border = 'none';
     }

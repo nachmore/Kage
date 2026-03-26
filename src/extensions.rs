@@ -2,11 +2,11 @@
 //!
 //! Extensions live in two locations:
 //! - Bundled: `<app_resource_dir>/extensions/` (read-only, ships with app)
-//! - User:    `<config_dir>/kiro-assistant/extensions/` (user-installed)
+//! - User:    `<config_dir>/kage/extensions/` (user-installed)
 //!
 //! Themes live similarly:
 //! - Bundled: `<app_resource_dir>/themes/`
-//! - User:    `<config_dir>/kiro-assistant/themes/`
+//! - User:    `<config_dir>/kage/themes/`
 //!
 //! User-installed items take precedence over bundled ones with the same ID.
 
@@ -104,10 +104,10 @@ pub struct InstalledItem {
 // Directory helpers
 // ---------------------------------------------------------------------------
 
-/// Get a user directory under `<config_dir>/kiro-assistant/<subdir>/`
+/// Get a user directory under `<config_dir>/kage/<subdir>/`
 pub fn user_item_dir(subdir: &str) -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Failed to get config directory")?;
-    Ok(config_dir.join("kiro-assistant").join(subdir))
+    Ok(config_dir.join("kage").join(subdir))
 }
 
 /// Map an item kind ("extension", "theme", "commands") to its user directory name.
@@ -331,7 +331,7 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
 pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
     // Extract to a temp directory
     let temp_dir = std::env::temp_dir().join(format!(
-        "kiro-ext-{}",
+        "kage-ext-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("tmp")
     ));
     if temp_dir.exists() {

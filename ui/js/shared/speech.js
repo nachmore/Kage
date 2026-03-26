@@ -94,7 +94,7 @@ export class SpeechController {
     start() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            document.dispatchEvent(new CustomEvent('kiro-show-response', {
+            document.dispatchEvent(new CustomEvent('kage-show-response', {
                 detail: 'Speech recognition is not supported in this environment.'
             }));
             return;
@@ -153,7 +153,7 @@ export class SpeechController {
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
             if (event.error === 'not-allowed') {
-                document.dispatchEvent(new CustomEvent('kiro-show-response', {
+                document.dispatchEvent(new CustomEvent('kage-show-response', {
                     detail: 'Microphone access denied. Please allow microphone access in your system settings.'
                 }));
                 this.voiceMode = false;

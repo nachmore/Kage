@@ -1,4 +1,4 @@
-use kiro_assistant::extensions;
+use kage::extensions;
 
 #[test]
 fn test_kind_to_subdir_extension() {

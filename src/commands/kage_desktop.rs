@@ -1,6 +1,6 @@
-//! Commands for reading Kiro Desktop (IDE) chat sessions.
+//! Commands for reading Kage Desktop (IDE) chat sessions.
 //!
-//! Loads conversations from .chat files in the Kiro Desktop data directory.
+//! Loads conversations from .chat files in the Kage Desktop data directory.
 //! Uses workspace-sessions for the session index (titles, dates) and
 //! .chat files for the full conversation content.
 
@@ -9,29 +9,29 @@ use log::info;
 use serde::Serialize;
 use std::path::PathBuf;
 
-/// Get the Kiro Desktop globalStorage directory.
-fn kiro_desktop_data_dir() -> Option<PathBuf> {
+/// Get the Kage Desktop globalStorage directory.
+fn kage_desktop_data_dir() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
-    { dirs::config_dir().map(|d| d.join("Kiro").join("User").join("globalStorage").join("kiro.kiroagent")) }
+    { dirs::config_dir().map(|d| d.join("Kage").join("User").join("globalStorage").join("kage.kageagent")) }
     #[cfg(target_os = "macos")]
-    { dirs::home_dir().map(|d| d.join("Library").join("Application Support").join("Kiro").join("User").join("globalStorage").join("kiro.kiroagent")) }
+    { dirs::home_dir().map(|d| d.join("Library").join("Application Support").join("Kage").join("User").join("globalStorage").join("kage.kageagent")) }
     #[cfg(target_os = "linux")]
     {
         std::env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from)
             .or_else(|| dirs::home_dir().map(|d| d.join(".config")))
-            .map(|d| d.join("Kiro").join("User").join("globalStorage").join("kiro.kiroagent"))
+            .map(|d| d.join("Kage").join("User").join("globalStorage").join("kage.kageagent"))
     }
 }
 
 #[derive(Debug, Serialize)]
-pub struct KiroDesktopWorkspace {
+pub struct KageDesktopWorkspace {
     pub name: String,
     pub encoded: String,
     pub session_count: usize,
 }
 
 #[derive(Debug, Serialize)]
-pub struct KiroDesktopSession {
+pub struct KageDesktopSession {
     pub id: String,
     pub title: String,
     pub workspace: String,
@@ -48,7 +48,7 @@ pub struct KiroDesktopSession {
 }
 
 #[derive(Debug, Serialize)]
-pub struct KiroDesktopMessage {
+pub struct KageDesktopMessage {
     pub role: String,
     pub content: String,
 }
@@ -60,13 +60,13 @@ fn base64_decode_path(encoded: &str) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_available() -> bool {
-    kiro_desktop_data_dir().map(|d| d.exists()).unwrap_or(false)
+pub async fn kage_desktop_available() -> bool {
+    kage_desktop_data_dir().map(|d| d.exists()).unwrap_or(false)
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppError> {
-    let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
+pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
+    let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     if !ws_dir.exists() { return Ok(Vec::new()); }
 
@@ -79,7 +79,7 @@ pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppE
             .map(|rd| rd.flatten().filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false)).count())
             .unwrap_or(0);
         if session_count > 0 {
-            workspaces.push(KiroDesktopWorkspace { name, encoded, session_count });
+            workspaces.push(KageDesktopWorkspace { name, encoded, session_count });
         }
     }
     workspaces.sort_by(|a, b| b.session_count.cmp(&a.session_count));
@@ -87,11 +87,11 @@ pub async fn kiro_desktop_workspaces() -> Result<Vec<KiroDesktopWorkspace>, AppE
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_sessions(
+pub async fn kage_desktop_sessions(
     workspace_encoded: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<KiroDesktopSession>, AppError> {
-    let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
+) -> Result<Vec<KageDesktopSession>, AppError> {
+    let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     let limit = limit.unwrap_or(50);
 
@@ -139,7 +139,7 @@ pub async fn kiro_desktop_sessions(
                     .map(|dt| dt.to_rfc3339()).unwrap_or_default())
                 .unwrap_or_default();
 
-            sessions.push(KiroDesktopSession {
+            sessions.push(KageDesktopSession {
                 id, title, workspace: ws_name.clone(), workspace_encoded: encoded.clone(),
                 updated_at, message_count: history_count, session_type, model,
                 file_path: path.to_string_lossy().to_string(),
@@ -154,11 +154,11 @@ pub async fn kiro_desktop_sessions(
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_load_session(
+pub async fn kage_desktop_load_session(
     workspace_encoded: String,
     session_id: String,
-) -> Result<Vec<KiroDesktopMessage>, AppError> {
-    let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
+) -> Result<Vec<KageDesktopMessage>, AppError> {
+    let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let path = base.join("workspace-sessions").join(&workspace_encoded).join(format!("{}.json", session_id));
 
     if !path.exists() { return Err(format!("Session not found: {}", session_id).into()); }
@@ -178,7 +178,7 @@ pub async fn kiro_desktop_load_session(
             let text = extract_text_content(msg.get("content"));
             // Skip system prompts and steering
             if text.is_empty() || is_system_message(&text) { continue; }
-            messages.push(KiroDesktopMessage { role: "user".into(), content: text });
+            messages.push(KageDesktopMessage { role: "user".into(), content: text });
         }
 
         // The actual agent response is in promptLogs.completion
@@ -190,7 +190,7 @@ pub async fn kiro_desktop_load_session(
                 if let Some(logs) = entry.get("promptLogs") {
                     let completion = logs.get("completion").and_then(|c| c.as_str()).unwrap_or("");
                     if !completion.is_empty() {
-                        messages.push(KiroDesktopMessage { role: "assistant".into(), content: completion.to_string() });
+                        messages.push(KageDesktopMessage { role: "assistant".into(), content: completion.to_string() });
                         continue;
                     }
                 }
@@ -198,7 +198,7 @@ pub async fn kiro_desktop_load_session(
                 if text == "On it." { continue; }
             }
             if !text.is_empty() {
-                messages.push(KiroDesktopMessage { role: "assistant".into(), content: text });
+                messages.push(KageDesktopMessage { role: "assistant".into(), content: text });
             }
         }
     }
@@ -209,14 +209,14 @@ pub async fn kiro_desktop_load_session(
         // The workspace-sessions don't store completions.
         // Return what we have — user messages only — with a note.
         if !messages.is_empty() {
-            messages.insert(0, KiroDesktopMessage {
+            messages.insert(0, KageDesktopMessage {
                 role: "assistant".into(),
                 content: "*Agent responses are not available for this session format. Only user prompts are shown.*".into(),
             });
         }
     }
 
-    info!("Loaded Kiro Desktop session {}: {} messages", session_id, messages.len());
+    info!("Loaded Kage Desktop session {}: {} messages", session_id, messages.len());
     Ok(messages)
 }
 
@@ -319,21 +319,21 @@ fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_delete_session(file_path: String) -> Result<(), AppError> {
+pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() { return Err("File not found".into()); }
-    // Safety: only delete .json files in the kiro.kiroagent directory
+    // Safety: only delete .json files in the kage.kageagent directory
     let path_str = path.to_string_lossy();
-    if !path_str.contains("kiro.kiroagent") || !path_str.ends_with(".json") {
+    if !path_str.contains("kage.kageagent") || !path_str.ends_with(".json") {
         return Err("Invalid file path".into());
     }
     std::fs::remove_file(path).map_err(|e| format!("Delete failed: {}", e))?;
-    info!("Deleted Kiro Desktop session: {}", file_path);
+    info!("Deleted Kage Desktop session: {}", file_path);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn kiro_desktop_open_folder(file_path: String) -> Result<(), AppError> {
+pub async fn kage_desktop_open_folder(file_path: String) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     let dir = path.parent().ok_or("No parent directory")?;
     Ok(crate::os::shell::open_path(&dir.to_string_lossy()).map_err(|e| e.to_string())?)
@@ -341,7 +341,7 @@ pub async fn kiro_desktop_open_folder(file_path: String) -> Result<(), AppError>
 
 /// Load a .chat file directly (older format with full conversations).
 #[tauri::command]
-pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDesktopMessage>, AppError> {
+pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDesktopMessage>, AppError> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| format!("Read: {}", e))?;
     let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
 
@@ -366,14 +366,14 @@ pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDe
             if is_system_message(content) { continue; }
             let extracted = extract_user_text_from_chat(content);
             if extracted.is_empty() { continue; }
-            messages.push(KiroDesktopMessage {
+            messages.push(KageDesktopMessage {
                 role: normalized_role.to_string(),
                 content: extracted,
             });
             continue;
         }
 
-        messages.push(KiroDesktopMessage {
+        messages.push(KageDesktopMessage {
             role: normalized_role.to_string(),
             content: content.to_string(),
         });
@@ -385,8 +385,8 @@ pub async fn kiro_desktop_load_chat_file(file_path: String) -> Result<Vec<KiroDe
 
 /// List .chat files from hash directories as additional sessions.
 #[tauri::command]
-pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, AppError> {
-    let base = kiro_desktop_data_dir().ok_or("Kiro Desktop not found")?;
+pub async fn kage_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<KageDesktopSession>, AppError> {
+    let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let limit = limit.unwrap_or(50);
     let mut sessions = Vec::new();
 
@@ -418,7 +418,7 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
                         .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
                             .map(|dt| dt.to_rfc3339()).unwrap_or_default())
                         .unwrap_or_default();
-                    sessions.push(KiroDesktopSession {
+                    sessions.push(KageDesktopSession {
                         id, title: "Untitled".into(),
                         workspace: name.clone(), workspace_encoded: name.clone(),
                         updated_at, message_count: 0, session_type: "chat".into(),
@@ -470,7 +470,7 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
                     .unwrap_or_default()
             };
 
-            sessions.push(KiroDesktopSession {
+            sessions.push(KageDesktopSession {
                 id, title,
                 workspace: name.clone(),
                 workspace_encoded: name.clone(),
@@ -485,7 +485,7 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
 
     // Group by workflow — keep only the latest .chat file per workflow
     // (the last file has the full accumulated conversation)
-    let mut by_workflow: std::collections::HashMap<String, KiroDesktopSession> = std::collections::HashMap::new();
+    let mut by_workflow: std::collections::HashMap<String, KageDesktopSession> = std::collections::HashMap::new();
 
     for s in sessions {
         // Use workflowId for dedup when available, fall back to workspace:title
@@ -503,32 +503,32 @@ pub async fn kiro_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kiro
         }
     }
 
-    let mut deduped: Vec<KiroDesktopSession> = by_workflow.into_values().collect();
+    let mut deduped: Vec<KageDesktopSession> = by_workflow.into_values().collect();
     deduped.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     deduped.truncate(limit);
     Ok(deduped)
 }
 
 // ---------------------------------------------------------------------------
-// Kiro CLI session support (SQLite)
+// Kage CLI session support (SQLite)
 // ---------------------------------------------------------------------------
 
-/// Get the kiro-cli SQLite database path.
-fn kiro_cli_db_path() -> Option<PathBuf> {
+/// Get the kage-cli SQLite database path.
+fn kage_cli_db_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
-    { std::env::var("LOCALAPPDATA").ok().map(|d| PathBuf::from(d).join("kiro-cli").join("data.sqlite3")) }
+    { std::env::var("LOCALAPPDATA").ok().map(|d| PathBuf::from(d).join("kage-cli").join("data.sqlite3")) }
     #[cfg(not(target_os = "windows"))]
-    { dirs::home_dir().map(|d| d.join(".local").join("share").join("kiro-cli").join("data.sqlite3")) }
+    { dirs::home_dir().map(|d| d.join(".local").join("share").join("kage-cli").join("data.sqlite3")) }
 }
 
 #[tauri::command]
-pub async fn kiro_cli_available() -> bool {
-    kiro_cli_db_path().map(|p| p.exists()).unwrap_or(false)
+pub async fn kage_cli_available() -> bool {
+    kage_cli_db_path().map(|p| p.exists()).unwrap_or(false)
 }
 
 #[tauri::command]
-pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSession>, AppError> {
-    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+pub async fn kage_cli_sessions(limit: Option<usize>) -> Result<Vec<KageDesktopSession>, AppError> {
+    let db_path = kage_cli_db_path().ok_or("kage-cli database not found")?;
     if !db_path.exists() { return Ok(Vec::new()); }
 
     let limit = limit.unwrap_or(50);
@@ -569,7 +569,7 @@ pub async fn kiro_cli_sessions(limit: Option<usize>) -> Result<Vec<KiroDesktopSe
             .map(|dt| dt.to_rfc3339())
             .unwrap_or_default();
 
-        sessions.push(KiroDesktopSession {
+        sessions.push(KageDesktopSession {
             id: conv_id,
             title,
             workspace: workspace.clone(),
@@ -613,8 +613,8 @@ fn count_cli_messages(value_json: &str) -> usize {
 }
 
 #[tauri::command]
-pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDesktopMessage>, AppError> {
-    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDesktopMessage>, AppError> {
+    let db_path = kage_cli_db_path().ok_or("kage-cli database not found")?;
 
     let db = rusqlite::Connection::open_with_flags(
         &db_path,
@@ -640,7 +640,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
                 if let Some(content) = user.get("content") {
                     if let Some(prompt) = content.get("Prompt").and_then(|p| p.get("prompt")).and_then(|p| p.as_str()) {
                         if !prompt.is_empty() {
-                            messages.push(KiroDesktopMessage {
+                            messages.push(KageDesktopMessage {
                                 role: "user".to_string(),
                                 content: prompt.to_string(),
                             });
@@ -657,7 +657,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
                                 }).collect::<Vec<_>>().join("\n"))
                                 .unwrap_or_default();
                             if !tool_content.is_empty() {
-                                messages.push(KiroDesktopMessage {
+                                messages.push(KageDesktopMessage {
                                     role: "tool".to_string(),
                                     content: tool_content,
                                 });
@@ -676,7 +676,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
 
                     // Show the assistant's text (if any)
                     if !content.is_empty() {
-                        messages.push(KiroDesktopMessage {
+                        messages.push(KageDesktopMessage {
                             role: "assistant".to_string(),
                             content: content.to_string(),
                         });
@@ -687,7 +687,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
                         for tool in tools {
                             let name = tool.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
                             let args = tool.get("args").map(|a| serde_json::to_string_pretty(a).unwrap_or_default()).unwrap_or_default();
-                            messages.push(KiroDesktopMessage {
+                            messages.push(KageDesktopMessage {
                                 role: "tool".to_string(),
                                 content: format!("🔧 {} {}", name, args),
                             });
@@ -698,7 +698,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
                 if let Some(response) = assistant.get("Response") {
                     let content = response.get("content").and_then(|c| c.as_str()).unwrap_or("");
                     if !content.is_empty() {
-                        messages.push(KiroDesktopMessage {
+                        messages.push(KageDesktopMessage {
                             role: "assistant".to_string(),
                             content: content.to_string(),
                         });
@@ -708,7 +708,7 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
                 if let Some(msg) = assistant.get("Message") {
                     let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or("");
                     if !content.is_empty() {
-                        messages.push(KiroDesktopMessage {
+                        messages.push(KageDesktopMessage {
                             role: "assistant".to_string(),
                             content: content.to_string(),
                         });
@@ -718,18 +718,18 @@ pub async fn kiro_cli_load_session(conversation_id: String) -> Result<Vec<KiroDe
         }
     }
 
-    info!("Loaded kiro-cli session {}: {} messages", conversation_id, messages.len());
+    info!("Loaded kage-cli session {}: {} messages", conversation_id, messages.len());
     Ok(messages)
 }
 
-/// Check if a kiro-cli conversation has been updated since a given timestamp.
+/// Check if a kage-cli conversation has been updated since a given timestamp.
 /// Returns the new updated_at if changed, or None if unchanged.
 #[tauri::command]
-pub async fn kiro_cli_check_updated(
+pub async fn kage_cli_check_updated(
     conversation_id: String,
     last_updated_at: i64,
 ) -> Result<Option<i64>, AppError> {
-    let db_path = kiro_cli_db_path().ok_or("kiro-cli database not found")?;
+    let db_path = kage_cli_db_path().ok_or("kage-cli database not found")?;
 
     let db = rusqlite::Connection::open_with_flags(
         &db_path,

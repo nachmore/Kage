@@ -3,7 +3,7 @@
 ## Directory Organization
 
 ```
-kiro-assistant/
+kage/
 ├── src/                    # Rust source code
 │   ├── main.rs            # Application entry point, Tauri setup, hotkey registration
 │   ├── lib.rs             # Library root, module declarations
@@ -30,9 +30,9 @@ kiro-assistant/
 │   │   ├── sessions.rs    # Session management (list, load, switch, rename)
 │   │   ├── system.rs      # System commands (config, clipboard, devtools, quit, steering)
 │   │   ├── extensions.rs  # Extension management commands
-│   │   ├── folder_tools.rs # Folder/file operations (scan, plan, execute — also used by computer-control-mcp)
+│   │   ├── folder_tools.rs # Folder/file operations (scan, plan, execute — also used by kage-computer-control-mcp)
 │   │   ├── pocket_tts.rs  # Pocket TTS server management
-│   │   └── kiro_desktop.rs # Kiro Desktop integration commands
+│   │   └── kage_desktop.rs # Kage Desktop integration commands
 │   └── os/                # OS abstraction layer
 │       ├── mod.rs         # Platform selection and re-exports
 │       ├── cursor.rs      # Cross-platform cursor API
@@ -72,7 +72,7 @@ kiro-assistant/
 │   │   │   ├── app.js, main.js, window.js, suggestions.js, search-unified.js
 │   │   │   ├── permissions.js, clipboard-history.js, color.js
 │   │   │   └── context-menu.js, devtools.js, timer.js
-│   │   ├── chat/         # Chat window modules (app, main, permissions, kiro-desktop)
+│   │   ├── chat/         # Chat window modules (app, main, permissions, kage-desktop)
 │   │   └── settings/     # Settings modules (base, manager, + one per section)
 │   ├── vendor/           # NPM-managed JS dependencies (marked, mermaid, prismjs, mathjs, graphviz)
 │   ├── assets/           # Images and icons
@@ -89,7 +89,7 @@ kiro-assistant/
 ├── sample_sessions/      # Sample ACP session data for testing
 ├── gen/                  # Generated schemas (ACL manifests, capabilities, desktop/windows schemas)
 ├── capabilities/         # Default capability definitions
-└── .kiro/                # Kiro configuration
+└── .kiro/                # Kiro IDE configuration (not app-related)
     ├── specs/            # Feature specifications
     └── steering/         # AI assistant guidance
 ```
@@ -99,7 +99,7 @@ kiro-assistant/
 ### Shared Utilities
 - `ui/js/shared/tool-utils.js` — shared `getToolIcon()`, `getToolEmoji()`, `escapeHtml()` used across floating, chat, settings, and permissions UIs. Always import from here, never duplicate.
 - `ui/css/shared-components.css` — shared component styles (keycaps, hotkey picker, etc.) used across all windows. Add reusable styles here, never duplicate into window-specific CSS files. Must be loaded in every window's HTML.
-- `ui/css/shared-kiro-tokens.css` — CSS variables (colors, spacing). Loaded in every window.
+- `ui/css/shared-kage-tokens.css` — CSS variables (colors, spacing). Loaded in every window.
 - Never duplicate styles or code across files. If something is used in more than one window, move it to a shared file.
 
 ### OS Abstraction
@@ -115,7 +115,7 @@ kiro-assistant/
 - Changes propagated via `config_updated` Tauri event
 
 ### Theme System
-- CSS variables in `shared-kiro-tokens.css` (dark defaults, light overrides via `body.light-theme`)
+- CSS variables in `shared-kage-tokens.css` (dark defaults, light overrides via `body.light-theme`)
 - Theme applied via `loadAndApplyTheme()` in `theme.js`
 - All windows listen for `config_updated` to reapply theme
 

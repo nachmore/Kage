@@ -97,12 +97,12 @@ class TodosExtSettingsModule extends SettingsModule {
     _export() {
         const invoke = window.__TAURI__?.core?.invoke;
         if (!invoke) return;
-        invoke('load_extension_data', { key: 'kiro-todos' }).then(raw => {
+        invoke('load_extension_data', { key: 'kage-todos' }).then(raw => {
             const data = raw || '[]';
             const blob = new Blob([data], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = 'kiro-todos.json'; a.click();
+            a.href = url; a.download = 'kage-todos.json'; a.click();
             URL.revokeObjectURL(url);
         }).catch(e => console.error('Todos export failed:', e));
     }
@@ -119,7 +119,7 @@ class TodosExtSettingsModule extends SettingsModule {
                 if (!Array.isArray(data)) throw new Error('Invalid format');
                 const invoke = window.__TAURI__?.core?.invoke;
                 if (!invoke) throw new Error('Tauri not available');
-                await invoke('save_extension_data', { key: 'kiro-todos', data: JSON.stringify(data) });
+                await invoke('save_extension_data', { key: 'kage-todos', data: JSON.stringify(data) });
                 alert(`Imported ${data.length} todos.`);
             } catch (err) { alert('Failed to import: ' + err.message); }
         };
@@ -130,7 +130,7 @@ class TodosExtSettingsModule extends SettingsModule {
         if (!confirm('Delete ALL todos and reminders? This cannot be undone.')) return;
         const invoke = window.__TAURI__?.core?.invoke;
         if (!invoke) return;
-        invoke('delete_extension_data', { key: 'kiro-todos' }).then(() => {
+        invoke('delete_extension_data', { key: 'kage-todos' }).then(() => {
             alert('All todos and reminders cleared.');
         }).catch(e => console.error('Failed to clear todos:', e));
     }

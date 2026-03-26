@@ -4,7 +4,7 @@ use log::{info, warn};
 use std::fs;
 use std::path::PathBuf;
 
-const DESKTOP_FILENAME: &str = "kiro-assistant.desktop";
+const DESKTOP_FILENAME: &str = "kage.desktop";
 
 fn get_autostart_path() -> Option<PathBuf> {
     dirs::config_dir().map(|c| c.join("autostart").join(DESKTOP_FILENAME))
@@ -25,7 +25,7 @@ pub fn set_startup_enabled_impl(enabled: bool) {
         let desktop_content = format!(
             "[Desktop Entry]\n\
              Type=Application\n\
-             Name=Kiro Assistant\n\
+             Name=Kage\n\
              Exec={}\n\
              X-GNOME-Autostart-enabled=true\n\
              Hidden=false\n",

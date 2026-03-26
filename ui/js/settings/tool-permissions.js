@@ -260,7 +260,7 @@ toolPermStyle.textContent = `
 
     .agent-tool-select:focus {
         outline: none;
-        border-color: var(--kiro-accent);
+        border-color: var(--kage-accent);
     }
 
     .agent-tool-remove {

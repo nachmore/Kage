@@ -12,7 +12,7 @@
  * Items due today or overdue show a banner bar in the floating window.
  */
 
-const STORAGE_KEY = 'kiro-todos';
+const STORAGE_KEY = 'kage-todos';
 
 export default class TodosSearchProvider {
     initialize(context) {
@@ -289,7 +289,7 @@ export default class TodosSearchProvider {
                 this._dueItems.splice(this._dueIndex, 1);
                 if (this._dueItems.length === 0) {
                     bar.remove();
-                    document.dispatchEvent(new CustomEvent('kiro-resize-request'));
+                    document.dispatchEvent(new CustomEvent('kage-resize-request'));
                 } else {
                     this._dueIndex = this._dueIndex % this._dueItems.length;
                     this._updateReminderBar();
@@ -298,10 +298,10 @@ export default class TodosSearchProvider {
             document.getElementById('reminderDismiss').onclick = () => {
                 bar.remove();
                 this._dueItems = [];
-                document.dispatchEvent(new CustomEvent('kiro-resize-request'));
+                document.dispatchEvent(new CustomEvent('kage-resize-request'));
             };
 
-            document.dispatchEvent(new CustomEvent('kiro-resize-request'));
+            document.dispatchEvent(new CustomEvent('kage-resize-request'));
         };
         tryMount();
     }

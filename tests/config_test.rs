@@ -1,4 +1,4 @@
-use kiro_assistant::config::{Config, HotkeyConfig};
+use kage::config::{Config, HotkeyConfig};
 
 #[test]
 fn test_config_default_values() {
@@ -83,7 +83,7 @@ fn test_config_ui_defaults() {
 #[test]
 fn test_config_with_shortcuts_roundtrip() {
     let mut config = Config::default();
-    config.shortcuts.push(kiro_assistant::config::ShortcutConfig {
+    config.shortcuts.push(kage::config::ShortcutConfig {
         name: "VSCode".to_string(),
         shortcut: "code".to_string(),
         action_type: "run_program".to_string(),

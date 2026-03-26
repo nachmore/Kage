@@ -1,4 +1,4 @@
-use kiro_assistant::config::{Config, ShortcutConfig};
+use kage::config::{Config, ShortcutConfig};
 
 #[test]
 fn test_shortcut_config_serialization() {

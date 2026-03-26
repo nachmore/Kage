@@ -278,8 +278,8 @@ export default class CalendarSearchProvider {
                 ${dismissHtml}
             </div>
             <style>
-                .cal-join-btn { font-size:11px; padding:2px 10px; border:1px solid var(--kiro-accent) !important; color:var(--kiro-text-bright) !important; background:transparent; }
-                .cal-join-btn:hover { background:var(--kiro-accent) !important; color:#fff !important; }
+                .cal-join-btn { font-size:11px; padding:2px 10px; border:1px solid var(--kage-accent) !important; color:var(--kage-text-bright) !important; background:transparent; }
+                .cal-join-btn:hover { background:var(--kage-accent) !important; color:#fff !important; }
             </style>
         `;
         bar.style.display = 'flex';

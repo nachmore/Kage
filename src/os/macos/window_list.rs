@@ -46,7 +46,7 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
         let pid: u64 = parts[2].parse().unwrap_or(0);
 
         // Skip our own window
-        if process_name.contains("Kiro") { continue; }
+        if process_name.contains("Kage") { continue; }
 
         windows.push(WindowInfo {
             title,

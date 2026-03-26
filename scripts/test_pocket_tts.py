@@ -151,7 +151,7 @@ def main():
     parser.add_argument("--port", type=int, default=9877)
     parser.add_argument("--voice", type=str, default="alba")
     parser.add_argument("--text", type=str,
-                        default="Hello! I am your Kiro assistant. This is a test of the Pocket TTS engine.")
+                        default="Hello! I am your Kage. This is a test of the Pocket TTS engine.")
     parser.add_argument("--output", type=str, default=None, help="Save audio to file")
     parser.add_argument("--no-play", action="store_true", help="Skip audio playback")
     parser.add_argument("--all-voices", action="store_true", help="Test all built-in voices")

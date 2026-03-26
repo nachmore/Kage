@@ -1,5 +1,5 @@
 """
-Pocket TTS streaming server for Kiro Assistant.
+Pocket TTS streaming server for Kage.
 
 Wraps kyutai-labs/pocket-tts as an HTTP server that accepts text
 and streams back WAV audio chunks for low-latency playback.
@@ -97,14 +97,14 @@ def dbg(msg):
 
 
 def get_data_dir():
-    """Return the Kiro pocket-tts data directory."""
+    """Return the kage pocket-tts data directory."""
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
     elif sys.platform == "darwin":
         base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
     else:
         base = os.environ.get("XDG_DATA_HOME", os.path.join(os.path.expanduser("~"), ".local", "share"))
-    path = os.path.join(base, "kiro-assistant", "pocket-tts")
+    path = os.path.join(base, "kage", "pocket-tts")
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -528,7 +528,7 @@ def main():
     # Note: UTF-8 encoding for stdout/stderr is set via PYTHONIOENCODING env var
     # in the Rust launcher to avoid cp1252 encoding crashes on Windows.
 
-    parser = argparse.ArgumentParser(description="Pocket TTS server for Kiro Assistant")
+    parser = argparse.ArgumentParser(description="Pocket TTS server for Kage")
     parser.add_argument("--port", type=int, default=9877, help="Port to listen on")
     parser.add_argument("--voice", type=str, default="alba", help="Default voice to pre-load")
     parser.add_argument("--no-preload", action="store_true", help="Don't pre-load model at startup")

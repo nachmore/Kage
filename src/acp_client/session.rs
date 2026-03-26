@@ -35,8 +35,8 @@ impl AcpClient {
                     "terminal": true
                 },
                 "clientInfo": {
-                    "name": "kiro-assistant",
-                    "title": "Kiro Assistant",
+                    "name": "kage",
+                    "title": "Kage",
                     "version": "0.1.0"
                 }
             }),

@@ -47,7 +47,7 @@ pub struct Config {
     /// Additional store sources (name + URL pairs). Merged with the primary store.
     #[serde(default)]
     pub store_sources: Vec<StoreSource>,
-    /// Custom path to mcp.json. If empty, uses ~/.kiro/settings/mcp.json.
+    /// Custom path to mcp.json. If empty, uses ~/.kage/settings/mcp.json.
     #[serde(default)]
     pub mcp_config_path: Option<String>,
     /// Automatically update installed extensions from the store
@@ -114,7 +114,7 @@ pub struct UpdateConfig {
 }
 
 
-impl Default for AssistantConfig {
+impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             start_session_on_launch: true,
@@ -137,11 +137,11 @@ pub struct HotkeyConfig {
 pub struct AcpConfig {
     pub mode: AcpMode,
     #[serde(default)]
-    pub assistant: AssistantConfig,
+    pub agent: AgentConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AssistantConfig {
+pub struct AgentConfig {
     #[serde(default = "default_true")]
     pub start_session_on_launch: bool,
     #[serde(default)]
@@ -545,7 +545,7 @@ impl Default for Config {
                     port: 8765,
                     timeout_ms: 30000,
                 },
-                assistant: AssistantConfig::default(),
+                agent: AgentConfig::default(),
             },
             ui: UiConfig {
                 theme: "system".to_string(),
@@ -658,7 +658,7 @@ impl Config {
         let config_dir = dirs::config_dir()
             .context("Failed to get config directory")?;
         
-        Ok(config_dir.join("kiro-assistant").join("config.json"))
+        Ok(config_dir.join("kage").join("config.json"))
     }
     
     pub fn get_hotkey_string(&self) -> String {
@@ -695,6 +695,6 @@ impl Config {
     pub fn get_auto_steering_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .context("Failed to get config directory")?;
-        Ok(config_dir.join("kiro-assistant").join("auto-steering.md"))
+        Ok(config_dir.join("kage").join("auto-steering.md"))
     }
 }

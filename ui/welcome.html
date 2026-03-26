@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Kiro Assistant</title>
-    <link rel="stylesheet" href="css/shared-kiro-tokens.css">
+    <title>Welcome to Kage</title>
+    <link rel="stylesheet" href="css/shared-kage-tokens.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--kiro-bg-primary, #1E1A24);
+            background: var(--kage-bg-primary, #1E1A24);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 10px;
-            color: var(--kiro-text-primary, #E5E7EB);
+            color: var(--kage-text-primary, #E5E7EB);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -72,13 +72,13 @@
             background: rgba(255,255,255,0.08);
         }
         .welcome-hotkey-display.capturing {
-            border-color: var(--kiro-accent, #6366f1);
+            border-color: var(--kage-accent, #6366f1);
             background: rgba(99, 102, 241, 0.08);
             box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
         }
         .welcome-hotkey-hint {
             font-size: 11px;
-            color: var(--kiro-accent, #6366f1);
+            color: var(--kage-accent, #6366f1);
             margin-top: 6px;
         }
         .hotkey-key {
@@ -105,7 +105,7 @@
         .welcome-checkbox-row input[type="checkbox"] {
             width: 16px;
             height: 16px;
-            accent-color: var(--kiro-accent, #6366f1);
+            accent-color: var(--kage-accent, #6366f1);
         }
         .welcome-checkbox-row label {
             font-size: 13px;
@@ -127,11 +127,11 @@
             transition: background 0.15s, transform 0.1s;
         }
         .welcome-btn-primary {
-            background: var(--kiro-accent, #6366f1);
+            background: var(--kage-accent, #6366f1);
             color: #fff;
         }
         .welcome-btn-primary:hover {
-            background: var(--kiro-accent-hover, #5558e6);
+            background: var(--kage-accent-hover, #5558e6);
             transform: translateY(-1px);
         }
         .welcome-hint {
@@ -143,13 +143,13 @@
     </style>
 </head>
 <body>
-    <img class="welcome-logo" src="assets/kiro-assistant-icon.png" alt="Kiro">
-    <div class="welcome-title">Welcome to Kiro Assistant</div>
+    <img class="welcome-logo" src="assets/kage-icon.png" alt="Kage">
+    <div class="welcome-title">Welcome to Kage</div>
     <div class="welcome-subtitle">Your AI-powered desktop companion</div>
 
     <div class="welcome-section">
         <div class="welcome-label">Global Hotkey</div>
-        <div class="welcome-desc">Press this shortcut anywhere to summon Kiro</div>
+        <div class="welcome-desc">Press this shortcut anywhere to summon Kage</div>
         <div id="hotkeyPickerContainer"></div>
     </div>
 
@@ -158,11 +158,11 @@
         <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;">
             <div class="welcome-checkbox-row" style="border: none; border-bottom: 1px solid rgba(255,255,255,0.08); border-radius: 8px 8px 0 0;" onclick="document.getElementById('launchStartup').click()">
                 <input type="checkbox" id="launchStartup" checked>
-                <label for="launchStartup">Launch Kiro when Windows starts</label>
+                <label for="launchStartup">Launch Kage when Windows starts</label>
             </div>
             <div class="welcome-checkbox-row" style="border: none; border-radius: 0 0 8px 8px;" onclick="document.getElementById('autoUpdate').click()">
                 <input type="checkbox" id="autoUpdate" checked>
-                <label for="autoUpdate">Keep Kiro Assistant up to date automatically</label>
+                <label for="autoUpdate">Keep Kage up to date automatically</label>
             </div>
         </div>
     </div>

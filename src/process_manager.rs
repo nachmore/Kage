@@ -33,7 +33,7 @@ impl ProcessManager {
     fn get_pid_file_path() -> PathBuf {
         let mut path = dirs::data_local_dir()
             .unwrap_or_else(|| PathBuf::from("."));
-        path.push("kiro-assistant");
+        path.push("kage");
         
         // Create directory if it doesn't exist
         if let Err(e) = fs::create_dir_all(&path) {
@@ -58,12 +58,12 @@ impl ProcessManager {
                 if let Ok(pid) = content.trim().parse::<u32>() {
                     info!("Found PID file with PID: {}", pid);
                     
-                    // Verify the PID still belongs to a kiro-related process
+                    // Verify the PID still belongs to a kage-related process
                     // to avoid killing a recycled PID that now belongs to something else
                     match os::process::get_process_name(pid) {
                         Some(name) => {
                             let name_lower = name.to_lowercase();
-                            let is_ours = name_lower.contains("kiro")
+                            let is_ours = name_lower.contains("Kage")
                                 || name_lower.contains("node")
                                 || name_lower.contains("npx");
                             
@@ -75,7 +75,7 @@ impl ProcessManager {
                                     warn!("Failed to kill orphaned process (PID: {}, name: {})", pid, name);
                                 }
                             } else {
-                                info!("PID {} is '{}' — not a kiro process, skipping kill (PID was recycled)", pid, name);
+                                info!("PID {} is '{}' — not a kage process, skipping kill (PID was recycled)", pid, name);
                             }
                         }
                         None => {

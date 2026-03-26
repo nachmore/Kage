@@ -3,9 +3,9 @@
   "name": "Sunset",
   "version": "1.0.0",
   "type": "theme",
-  "description": "Warm sunset colors — amber accents with deep twilight backgrounds. A sample theme extension showing how to customize Kiro's appearance.",
+  "description": "Warm sunset colors — amber accents with deep twilight backgrounds. A sample theme extension showing how to customize Kage's appearance.",
   "icon": "🌅",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "contributes": {
     "themes": {

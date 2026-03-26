@@ -27,9 +27,9 @@ export function applyTheme(setting) {
  */
 function clearCustomThemeColors() {
     const root = document.documentElement;
-    // Remove all --kiro-* custom properties that were set inline
+    // Remove all --kage-* custom properties that were set inline
     for (const prop of Array.from(root.style)) {
-        if (prop.startsWith('--kiro-')) {
+        if (prop.startsWith('--kage-')) {
             root.style.removeProperty(prop);
         }
     }
@@ -37,7 +37,7 @@ function clearCustomThemeColors() {
 
 /**
  * Apply CSS variables from a theme extension's color map.
- * @param {Object} colors - key/value map, e.g. { "kiro-accent": "#E8853D" }
+ * @param {Object} colors - key/value map, e.g. { "kage-accent": "#E8853D" }
  */
 function applyCustomThemeColors(colors) {
     if (!colors || typeof colors !== 'object') return;

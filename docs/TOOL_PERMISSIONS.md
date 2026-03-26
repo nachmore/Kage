@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Tool Permissions system provides user control over which tools the AI assistant can use. When the ACP (Agent Communication Protocol) requests permission to use a tool, the user is presented with options to approve or deny the request.
+The Tool Permissions system provides user control over which tools the AI can use. When the ACP (Agent Communication Protocol) requests permission to use a tool, the user is presented with options to approve or deny the request.
 
 ## User Experience
 

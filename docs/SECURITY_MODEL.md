@@ -7,15 +7,15 @@ design decision, not an oversight.
 
 ### Why CSP is disabled
 
-Kiro Assistant's webview does not load external web content. All content sources are:
+Kage's webview does not load external web content. All content sources are:
 
-- **Agent responses** — from the trusted ACP backend (kiro-cli), rendered as markdown
+- **Agent responses** — from the trusted ACP backend (kage-cli), rendered as markdown
 - **Local UI** — HTML/JS/CSS bundled into the binary at compile time
 - **Extensions** — installed from a controlled store or local directories
 - **Agent-produced JS** — intentionally executed in a sandboxed eval context
 
 In a typical web application, CSP prevents cross-site scripting (XSS) where
-untrusted user input is injected into the page. In Kiro Assistant:
+untrusted user input is injected into the page. In Kage:
 
 1. There are no untrusted content sources — no web browsing, no external URLs
 2. The agent already has more power through its tool access (file I/O, shell

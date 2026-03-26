@@ -1,10 +1,10 @@
 {
-  "productName": "Kiro Assistant",
+  "productName": "Kage",
   "version": "0.2.0",
-  "identifier": "com.kiro.assistant",
+  "identifier": "com.kage.app",
   "build": {
     "beforeDevCommand": "python ../../scripts/dev_server.py",
-    "beforeBuildCommand": "cargo build --release --bin computer-control-mcp",
+    "beforeBuildCommand": "cargo build --release --bin kage-computer-control-mcp",
     "devUrl": "http://localhost:1420",
     "frontendDist": "./ui"
   },
@@ -19,7 +19,7 @@
         "label": "main",
         "fullscreen": false,
         "resizable": true,
-        "title": "Chat Sessions - Kiro Assistant",
+        "title": "Chat Sessions - Kage",
         "width": 800,
         "height": 600,
         "visible": false,
@@ -33,7 +33,7 @@
         "resizable": false,
         "minWidth": 570,
         "minHeight": 76,
-        "title": "Kiro Assistant",
+        "title": "Kage",
         "width": 570,
         "height": 76,
         "visible": false,
@@ -49,7 +49,7 @@
         "url": "settings.html",
         "fullscreen": false,
         "resizable": true,
-        "title": "Settings - Kiro Assistant",
+        "title": "Settings - Kage",
         "width": 800,
         "height": 700,
         "minWidth": 600,
@@ -101,7 +101,7 @@
       "icons/icon.ico"
     ],
     "shortDescription": "AI powered launcher",
-    "longDescription": "Kiro Assistant is a cross-platform desktop AI assistant with a floating window interface, system tray integration, and custom command shortcuts.",
+    "longDescription": "Kage is a cross-platform desktop AI interface with a floating window, system tray integration, and custom command shortcuts.",
     "publisher": "Oren Nachman",
     "windows": {
       "nsis": {

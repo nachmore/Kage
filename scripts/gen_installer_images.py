@@ -1,4 +1,4 @@
-"""Generate NSIS installer images for Kiro Assistant.
+"""Generate NSIS installer images for Kage.
 
 Sidebar: 164x314 BMP - shown on welcome/finish pages
 Header:  150x57  BMP - shown on other installer pages
@@ -8,7 +8,7 @@ import os
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPT_DIR)
-ICON_PATH = os.path.join(ROOT, "ui", "assets", "kiro-assistant-icon.png")
+ICON_PATH = os.path.join(ROOT, "ui", "assets", "kage-icon.png")
 OUT_DIR = os.path.join(ROOT, "icons")
 
 # Dark gradient colors matching the app theme
@@ -61,7 +61,7 @@ def gen_sidebar():
     except Exception as e:
         print(f"Warning: Could not load icon: {e}")
 
-    # Draw "Kiro" text below the icon
+    # Draw "Kage" text below the icon
     try:
         font = ImageFont.truetype("segoeui.ttf", 22)
         font_small = ImageFont.truetype("segoeui.ttf", 11)
@@ -69,14 +69,14 @@ def gen_sidebar():
         font = ImageFont.load_default()
         font_small = font
 
-    text = "Kiro"
+    text = "Kage"
     bbox = draw.textbbox((0, 0), text, font=font)
     tw = bbox[2] - bbox[0]
     tx = (w - tw) // 2
     ty = int(h * 0.42)
     draw.text((tx, ty), text, fill=(229, 231, 235), font=font)
 
-    sub = "Assistant"
+    sub = ""
     bbox2 = draw.textbbox((0, 0), sub, font=font_small)
     sw = bbox2[2] - bbox2[0]
     sx = (w - sw) // 2
@@ -108,7 +108,7 @@ def gen_header():
         print(f"Warning: Could not load icon: {e}")
         icon_x = 12
 
-    # "Kiro" on first line, "Assistant" on second — dark text on light bg
+    # "Kage" on first line, "" on second — dark text on light bg
     try:
         font_title = ImageFont.truetype("segoeuib.ttf", 16)  # bold
         font_sub = ImageFont.truetype("segoeui.ttf", 13)
@@ -116,8 +116,8 @@ def gen_header():
         font_title = ImageFont.load_default()
         font_sub = font_title
 
-    draw.text((icon_x, 10), "Kiro", fill=(30, 26, 36), font=font_title)
-    draw.text((icon_x, 29), "Assistant", fill=(100, 100, 110), font=font_sub)
+    draw.text((icon_x, 10), "Kage", fill=(30, 26, 36), font=font_title)
+    draw.text((icon_x, 29), "", fill=(100, 100, 110), font=font_sub)
 
     out = os.path.join(OUT_DIR, "nsis-header.bmp")
     img.save(out, "BMP")

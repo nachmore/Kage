@@ -1,11 +1,11 @@
-; Kiro Assistant NSIS Installer Hooks
+; Kage NSIS Installer Hooks
 
 !macro NSIS_HOOK_POSTINSTALL
-  ; Verify computer-control-mcp.exe was bundled
-  ${If} ${FileExists} "$INSTDIR\computer-control-mcp.exe"
+  ; Verify kage-computer-control-mcp.exe was bundled
+  ${If} ${FileExists} "$INSTDIR\kage-computer-control-mcp.exe"
     DetailPrint "computer-control MCP server found"
   ${Else}
-    DetailPrint "Warning: computer-control-mcp.exe not found in install directory"
+    DetailPrint "Warning: kage-computer-control-mcp.exe not found in install directory"
   ${EndIf}
 !macroend
 
@@ -13,5 +13,5 @@
   ; Remove startup registry entry on uninstall
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCTNAME}"
   ; Remove the MCP binary
-  Delete "$INSTDIR\computer-control-mcp.exe"
+  Delete "$INSTDIR\kage-computer-control-mcp.exe"
 !macroend

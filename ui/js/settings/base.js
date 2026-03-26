@@ -26,7 +26,7 @@ class SettingsModule {
             <div class="setting-row">
                 <div class="setting-label">${label}</div>
                 <div class="setting-checkbox-row">
-                    <label class="kiro-checkbox">
+                    <label class="kage-checkbox">
                         <input type="checkbox" id="${checkboxId}"${checkedAttr}>
                     </label>
                     ${description ? `<div class="setting-description">${description}</div>` : ''}

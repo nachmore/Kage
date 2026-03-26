@@ -1,4 +1,4 @@
-use kiro_assistant::app_launcher::AppLauncher;
+use kage::app_launcher::AppLauncher;
 
 #[test]
 fn test_new_launcher_empty_registry() {
@@ -11,7 +11,7 @@ fn test_new_launcher_empty_registry() {
 fn test_find_app_exact_match() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
         path: std::path::PathBuf::from("C:\\Windows\\notepad.exe"),
         aliases: vec!["notepad".to_string()],
@@ -29,7 +29,7 @@ fn test_find_app_exact_match() {
 fn test_find_app_starts_with() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
         path: std::path::PathBuf::from("notepad.exe"),
         aliases: vec!["notepad".to_string()],
@@ -47,7 +47,7 @@ fn test_find_app_starts_with() {
 fn test_find_app_contains() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
         path: std::path::PathBuf::from("notepad.exe"),
         aliases: vec!["notepad".to_string()],
@@ -64,7 +64,7 @@ fn test_find_app_contains() {
 fn test_find_app_case_insensitive() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
         path: std::path::PathBuf::from("notepad.exe"),
         aliases: vec!["notepad".to_string()],
@@ -81,7 +81,7 @@ fn test_find_app_case_insensitive() {
 fn test_find_app_no_match() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("notepad".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
         path: std::path::PathBuf::from("notepad.exe"),
         aliases: vec!["notepad".to_string()],
@@ -100,7 +100,7 @@ fn test_find_app_max_results() {
     let mut registry = std::collections::HashMap::new();
     for i in 0..10 {
         let name = format!("app{}", i);
-        registry.insert(name.clone(), kiro_assistant::app_launcher::Application {
+        registry.insert(name.clone(), kage::app_launcher::Application {
             name: name.clone(),
             path: std::path::PathBuf::from(format!("{}.exe", name)),
             aliases: vec![name],
@@ -119,7 +119,7 @@ fn test_find_app_max_results() {
 fn test_find_app_alias_no_spaces() {
     let mut launcher = AppLauncher::new().unwrap();
     let mut registry = std::collections::HashMap::new();
-    registry.insert("microsoft word".to_string(), kiro_assistant::app_launcher::Application {
+    registry.insert("microsoft word".to_string(), kage::app_launcher::Application {
         name: "Microsoft Word".to_string(),
         path: std::path::PathBuf::from("winword.exe"),
         aliases: vec!["microsoft word".to_string(), "microsoftword".to_string()],

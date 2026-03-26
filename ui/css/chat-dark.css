@@ -18,15 +18,15 @@ body.dark-theme .new-session-btn {
 }
 
 body.dark-theme .session-list-separator {
-    background: var(--kiro-accent);
+    background: var(--kage-accent);
 }
 
 body.dark-theme .session-default-label {
-    color: var(--kiro-accent-light);
+    color: var(--kage-accent-light);
 }
 
 body.dark-theme .session-current-badge {
-    color: var(--kiro-accent-light);
+    color: var(--kage-accent-light);
 }
 
 body.dark-theme .session-item:hover {
@@ -60,7 +60,7 @@ body.dark-theme .sidebar-footer-btn {
 
 body.dark-theme .sidebar-footer-btn:hover {
     background: #352F3D;
-    color: var(--kiro-accent-light);
+    color: var(--kage-accent-light);
 }
 
 body.dark-theme .chat-main {
@@ -80,7 +80,7 @@ body.dark-theme .messages-area {
     background: #211D25;
 }
 
-/* Link colors handled globally via --kiro-link tokens */
+/* Link colors handled globally via --kage-link tokens */
 
 body.dark-theme .message.assistant .message-content {
     background: #28242E;
@@ -106,7 +106,7 @@ body.dark-theme .chat-input-wrapper {
 }
 
 body.dark-theme .chat-input-wrapper:focus-within {
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
 body.dark-theme .chat-input {
@@ -192,7 +192,7 @@ body.dark-theme .compacting-notice.compacting-done {
 
 body.dark-theme .chat-header-title-input {
     color: #E5E7EB;
-    border-color: var(--kiro-accent);
+    border-color: var(--kage-accent);
 }
 
 /* Suggestion dark theme handled by shared-components.css */

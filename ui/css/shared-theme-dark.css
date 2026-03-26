@@ -4,10 +4,10 @@ body.dark-theme .response-text {
     color: #E5E7EB;
 }
 
-/* Link colors now handled globally via --kiro-link tokens in shared-kiro-tokens.css */
+/* Link colors now handled globally via --kage-link tokens in shared-kage-tokens.css */
 
 body.dark-theme .streaming-indicator {
-    color: var(--kiro-accent-light);
+    color: var(--kage-accent-light);
 }
 
 body.dark-theme .code-block-wrapper {

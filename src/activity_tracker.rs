@@ -87,7 +87,7 @@ impl ActivityTrackerState {
 fn db_path() -> PathBuf {
     let dir = dirs::config_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("kiro-assistant");
+        .join("kage");
     std::fs::create_dir_all(&dir).ok();
     dir.join("activity.db")
 }

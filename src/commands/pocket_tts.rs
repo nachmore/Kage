@@ -313,7 +313,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppE
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // Pass --debug when the assistant is in debug mode
+    // Pass --debug when Kage is in debug mode
     if state.config.lock().unwrap().debug_mode {
         cmd.arg("--debug");
     }

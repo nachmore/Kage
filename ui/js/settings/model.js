@@ -81,11 +81,11 @@ class ModelSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        this._loadedDefault = config.acp?.assistant?.default_model || '';
+        this._loadedDefault = config.acp?.agent?.default_model || '';
         // Refresh models from backend every time the tab is shown
         this.loadModels();
 
-        const threshold = config.acp?.assistant?.auto_compact_threshold ?? 90;
+        const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;
         const slider = document.getElementById('autoCompactThreshold');
         const label = document.getElementById('autoCompactThresholdValue');
         if (slider) slider.value = threshold;
@@ -94,11 +94,11 @@ class ModelSettingsModule extends SettingsModule {
 
     save(config) {
         if (!config.acp) config.acp = {};
-        if (!config.acp.assistant) config.acp.assistant = {};
+        if (!config.acp.agent) config.acp.agent = {};
         const selected = this.getSelectedModelId();
-        config.acp.assistant.default_model = selected || null;
+        config.acp.agent.default_model = selected || null;
         const slider = document.getElementById('autoCompactThreshold');
-        config.acp.assistant.auto_compact_threshold = slider ? parseInt(slider.value, 10) : 90;
+        config.acp.agent.auto_compact_threshold = slider ? parseInt(slider.value, 10) : 90;
     }
 
     validate() {

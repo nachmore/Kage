@@ -27,7 +27,7 @@ class StoreSettingsModule extends SettingsModule {
 
                 <div class="setting-row" style="margin-top: 4px;">
                     <button class="setting-button" id="checkUpdatesBtn" style="font-size:12px;">🔄 Update All</button>
-                    <span id="updateCheckStatus" style="font-size:12px;color:var(--kiro-text-muted);margin-left:8px;"></span>
+                    <span id="updateCheckStatus" style="font-size:12px;color:var(--kage-text-muted);margin-left:8px;"></span>
                 </div>
 
                 <div class="setting-section-label">Store URL</div>
@@ -39,7 +39,7 @@ class StoreSettingsModule extends SettingsModule {
                 )}
 
                 <div class="setting-section-label">Additional Store Sources</div>
-                <p style="font-size: 12px; color: var(--kiro-text-muted); margin: 4px 0 12px; line-height: 1.4;">
+                <p style="font-size: 12px; color: var(--kage-text-muted); margin: 4px 0 12px; line-height: 1.4;">
                     Add extra stores (e.g. an internal company store). Items from all enabled sources are merged in the store browser.
                 </p>
                 <div id="storeSources"></div>
@@ -97,10 +97,10 @@ class StoreSettingsModule extends SettingsModule {
                 if (status) {
                     if (result.updated > 0) {
                         status.textContent = `✓ Updated ${result.updated} extension${result.updated > 1 ? 's' : ''}`;
-                        status.style.color = 'var(--kiro-accent)';
+                        status.style.color = 'var(--kage-accent)';
                     } else {
                         status.textContent = '✓ All extensions up to date';
-                        status.style.color = 'var(--kiro-accent)';
+                        status.style.color = 'var(--kage-accent)';
                     }
                     setTimeout(() => { if (status) status.textContent = ''; }, 5000);
                 }

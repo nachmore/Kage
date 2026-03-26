@@ -1,6 +1,6 @@
 # Settings Modules
 
-Modular settings system for Kiro Assistant.
+Modular settings system for Kage.
 
 ## Structure
 

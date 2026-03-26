@@ -5,7 +5,7 @@
   "type": "extension",
   "description": "A sample extension that responds to 'test' with 'Hello World'. Use this as a template for building your own extensions.",
   "icon": "👋",
-  "author": "kiro-assistant",
+  "author": "kage",
 
   "config": {
     "greeting": { "type": "string", "default": "Hello World" },

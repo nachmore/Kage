@@ -49,8 +49,8 @@ export default class ColorPickerSearchProvider {
                     <input type="color" value="${hex}" data-color-picker style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none;padding:0;">
                 </div>
                 <div>
-                    <div style="font-family:monospace;font-size:13px;color:var(--kiro-text-primary, #d4d4d4);" data-color-label>${formats.hex} · ${formats.rgb}</div>
-                    <div style="font-family:monospace;font-size:12px;color:var(--kiro-text-muted, #9ca3af);" data-hsl-label>${formats.hsl}</div>
+                    <div style="font-family:monospace;font-size:13px;color:var(--kage-text-primary, #d4d4d4);" data-color-label>${formats.hex} · ${formats.rgb}</div>
+                    <div style="font-family:monospace;font-size:12px;color:var(--kage-text-muted, #9ca3af);" data-hsl-label>${formats.hsl}</div>
                 </div>
             </div>
         `;

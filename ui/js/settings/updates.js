@@ -19,7 +19,7 @@ class UpdatesSettingsModule extends SettingsModule {
                     </div>
                     <div class="update-status-body">
                         <div class="update-status-title" id="updateStatusTitle">Checking for updates</div>
-                        <div class="update-status-detail" id="updateStatusDetail">Version ${escapeHtml(window._kiroVersion || '...')}</div>
+                        <div class="update-status-detail" id="updateStatusDetail">Version ${escapeHtml(window._kageVersion || '...')}</div>
                     </div>
                     <div class="update-status-action" id="updateStatusAction"></div>
                 </div>
@@ -56,7 +56,7 @@ class UpdatesSettingsModule extends SettingsModule {
         // Cache current version for display
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
-            window._kiroVersion = info.version;
+            window._kageVersion = info.version;
         } catch (e) { console.warn('[Updates] Failed to get app info:', e); }
 
         this.loadChangelog();
@@ -94,7 +94,7 @@ class UpdatesSettingsModule extends SettingsModule {
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<div class="update-spinner"></div>';
         if (title) title.textContent = 'Checking for updates...';
-        if (detail) detail.textContent = 'Version ' + (window._kiroVersion || '...');
+        if (detail) detail.textContent = 'Version ' + (window._kageVersion || '...');
         if (action) action.innerHTML = '';
     }
 
@@ -104,7 +104,7 @@ class UpdatesSettingsModule extends SettingsModule {
         const detail = document.getElementById('updateStatusDetail');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<span class="update-check-icon">✓</span>';
-        if (title) title.textContent = 'Kiro Assistant is up to date';
+        if (title) title.textContent = 'Kage is up to date';
         if (detail) detail.textContent = 'Version ' + escapeHtml(version);
         if (action) action.innerHTML = '<button class="setting-button" id="recheckBtn">Check again</button>';
         document.getElementById('recheckBtn')?.addEventListener('click', () => {
@@ -120,7 +120,7 @@ class UpdatesSettingsModule extends SettingsModule {
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<span class="update-available-icon">⬆</span>';
         if (title) title.textContent = 'Update available — v' + escapeHtml(version);
-        if (detail) detail.textContent = 'Current version: ' + (window._kiroVersion || '...');
+        if (detail) detail.textContent = 'Current version: ' + (window._kageVersion || '...');
         if (action) action.innerHTML = '<button class="setting-button update-install-btn" id="installNowBtn">Install Now</button>';
         document.getElementById('installNowBtn')?.addEventListener('click', () => this.installUpdate());
     }

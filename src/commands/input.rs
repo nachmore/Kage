@@ -416,7 +416,7 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .redirect(reqwest::redirect::Policy::limited(3))
-        .user_agent("Mozilla/5.0 (compatible; KiroAssistant/1.0)")
+        .user_agent("Mozilla/5.0 (compatible; Kage/1.0)")
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 

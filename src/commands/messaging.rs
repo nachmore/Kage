@@ -82,7 +82,7 @@ pub fn setup_notification_handler(
             return;
         }
 
-        if method == "_kiro.dev/commands/available" {
+        if method == "_kage.dev/commands/available" {
             if let Some(commands) = notification.get("params")
                 .and_then(|p| p.get("commands"))
                 .and_then(|c| c.as_array())
@@ -100,14 +100,14 @@ pub fn setup_notification_handler(
             return;
         }
 
-        if method.starts_with("_kiro.dev/") {
+        if method.starts_with("_kage.dev/") {
             // Emit metadata (context usage) to frontend
-            if method == "_kiro.dev/metadata" {
+            if method == "_kage.dev/metadata" {
                 let _ = app_handle.emit("context_metadata", &notification);
                 return;
             }
             // Emit compaction status to frontend
-            if method == "_kiro.dev/compaction/status" {
+            if method == "_kage.dev/compaction/status" {
                 // Gate outgoing prompts while compaction is in progress
                 if let Some(status) = notification.get("params")
                     .and_then(|p| p.get("status"))
@@ -133,7 +133,7 @@ pub fn setup_notification_handler(
                 return;
             }
             // Rate limit error — emit as a user-visible error
-            if method == "_kiro.dev/error/rate_limit" {
+            if method == "_kage.dev/error/rate_limit" {
                 let message = notification.get("params")
                     .and_then(|p| p.get("message"))
                     .and_then(|m| m.as_str())
@@ -591,7 +591,7 @@ pub async fn execute_slash_command(
         let request = crate::acp_client::AcpRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(3),
-            method: "_kiro.dev/commands/execute".to_string(),
+            method: "_kage.dev/commands/execute".to_string(),
             params: serde_json::json!({
                 "sessionId": session_id,
                 "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
@@ -1070,7 +1070,7 @@ pub async fn execute_macro(
                     let prompt_template = step.get("prompt").and_then(|v| v.as_str()).unwrap_or("{input}");
                     let prompt = prompt_template.replace("{input}", &current_input);
                     let full_prompt = format!(
-                        "{}\n\n[_KIRO_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences.",
+                        "{}\n\n[_KAGE_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences.",
                         prompt
                     );
 
