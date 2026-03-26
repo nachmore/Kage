@@ -17,6 +17,7 @@ import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterCl
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 
 /** Map MCP/agent tool names to user-friendly descriptions. */
 const _TOOL_FRIENDLY_NAMES = {
@@ -106,6 +107,7 @@ export class FloatingApp {
             this.setupEventListeners();
             this.setupStreamingListeners();
             this.setupVisibilityTracking();
+            this.setupNetworkMonitor();
             this.windowManager.setupDragging(this.elements.ghostContainer);
             this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
 
@@ -562,6 +564,17 @@ export class FloatingApp {
         });
     }
 
+    setupNetworkMonitor() {
+        const bar = document.getElementById('offlineBar');
+        const update = (online) => {
+            if (bar) bar.style.display = online ? 'none' : 'flex';
+            this.windowManager.resizeWindow();
+        };
+        // Do a real connectivity check on startup
+        checkOnline().then(online => update(online));
+        onNetworkChange(update);
+    }
+
     setupVisibilityTracking() {
         this._windowFocused = true; // assume focused at startup
 
@@ -569,6 +582,13 @@ export class FloatingApp {
             this._windowFocused = true;
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
+
+            // Check network status when launcher is invoked (debounced)
+            checkOnline().then(online => {
+                const bar = document.getElementById('offlineBar');
+                if (bar) bar.style.display = online ? 'none' : 'flex';
+                this.windowManager.resizeWindow();
+            });
 
             // Ensure toolbar is visible if configured
             this._updateToolbarVisibility();
@@ -1717,6 +1737,9 @@ export class FloatingApp {
     async handleMessageComplete() {
             if (!this.isWaitingForResponse) return;
 
+            // Successful response means we're online
+            markOnline();
+
             // Always hide stop button when a prompt completes — the agent is done generating
             this.elements.floatingStopBtn.style.display = 'none';
             this.updateDatetimeVisibility();
@@ -2224,12 +2247,18 @@ export class FloatingApp {
     async handleMessageError(event) {
         if (!this.isWaitingForResponse) return;
         
-        this.showError('Error: ' + event.payload);
         this.isWaitingForResponse = false;
         this.computerControlActive = false;
         this.elements.floatingStopBtn.style.display = 'none';
-        // Restore datetime display
         this.updateDatetimeVisibility();
+
+        // Check if this is actually a network issue
+        const online = await checkOnError();
+        if (!online) {
+            this.showError(OFFLINE_MESSAGE);
+        } else {
+            this.showError('Error: ' + event.payload);
+        }
     }
 
     handleSessionReset(event) {

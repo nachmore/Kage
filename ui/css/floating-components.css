@@ -286,6 +286,16 @@ body.clipboard-mode .floating-banner {
     color: var(--kiro-text-primary, #E5E7EB);
 }
 
+.offline-bar {
+    background: rgba(255, 160, 50, 0.08);
+    color: var(--kiro-text-secondary, #938F9B);
+}
+.offline-bar .extension-bar-text {
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: normal;
+}
+
 .input-box {
     flex: 1;
     padding: 10px 12px;

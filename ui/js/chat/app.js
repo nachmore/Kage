@@ -3,6 +3,7 @@ import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke }
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml, stripKiroTags } from '../shared/tool-utils.js';
+import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
@@ -107,6 +108,7 @@ export class ChatApp {
         this.loadSessions();
 
         await this.checkConnection();
+        this.setupNetworkMonitor();
 
         // Load toolbar data in background
         this.loadModels();
@@ -1577,6 +1579,11 @@ export class ChatApp {
     async handleMessageComplete() {
             if (!this.isWaitingForResponse) return;
 
+            // Successful response means we're online
+            markOnline();
+            this.isConnected = true;
+            this.updateConnectionStatus();
+
             // If automation plan is running, don't overwrite the plan UI
             if (this._automationPlanStarted) return;
 
@@ -1662,7 +1669,7 @@ export class ChatApp {
             } catch { /* ignore */ }
         }
 
-    handleMessageError(event) {
+    async handleMessageError(event) {
         this.hideTypingIndicator();
 
         if (this.currentStreamingMessage) {
@@ -1670,12 +1677,19 @@ export class ChatApp {
             this.currentStreamingMessage = null;
         }
 
-        this.showError('Error: ' + event.payload);
-        this.isConnected = false;
-        this.updateConnectionStatus();
         this.isWaitingForResponse = false;
         this.updateInputState();
         this.elements.chatInput.focus();
+
+        // Check if this is actually a network issue
+        const online = await checkOnError();
+        if (!online) {
+            this.showError(OFFLINE_MESSAGE);
+        } else {
+            this.showError('Error: ' + event.payload);
+        }
+        this.isConnected = online;
+        this.updateConnectionStatus();
     }
 
     handleSessionReset(event) {
@@ -2076,9 +2090,33 @@ export class ChatApp {
         this.updateConnectionStatus();
     }
 
+    setupNetworkMonitor() {
+        onNetworkChange((online) => {
+            this.updateConnectionStatus();
+            if (!online) {
+                this.showError(OFFLINE_MESSAGE);
+            } else {
+                const container = this.elements.errorContainer;
+                if (container?.textContent?.includes('No internet')) {
+                    container.innerHTML = '';
+                }
+            }
+        });
+        // Do a real connectivity check on startup
+        checkOnline().then(online => {
+            if (!online) {
+                this.isConnected = false;
+                this.updateConnectionStatus();
+            }
+        });
+    }
+
     updateConnectionStatus() {
         const el = this.elements.connectionStatus;
-        if (this.isConnected) {
+        if (!isOnline()) {
+            el.textContent = 'Offline';
+            el.className = 'chat-header-status disconnected';
+        } else if (this.isConnected) {
             el.textContent = 'Connected';
             el.className = 'chat-header-status connected';
         } else {
