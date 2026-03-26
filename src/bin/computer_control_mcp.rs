@@ -295,6 +295,34 @@ fn handle_tools_list(id: &serde_json::Value) -> String {
         })),
         tool_def("get_cursor_position", "Get the current mouse cursor position.", serde_json::json!({ "type": "object", "properties": {} })),
         tool_def("get_screen_size", "Get the screen dimensions.", serde_json::json!({ "type": "object", "properties": {} })),
+        // Folder tools
+        tool_def("get_common_folders", "Get a map of well-known folder names (downloads, documents, pictures, desktop, etc.) to their absolute paths on this system. Use this to resolve folder names the user mentions.", serde_json::json!({
+            "type": "object", "properties": {}
+        })),
+        tool_def("pick_folder", "Open a native folder picker dialog so the user can select a folder. Returns the chosen path or null if cancelled.", serde_json::json!({
+            "type": "object", "properties": {}
+        })),
+        tool_def("scan_folder", "Scan a folder recursively and return a manifest of all files and directories with sizes, dates, and content hashes for duplicate detection.", serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Absolute path to the folder to scan" },
+                "max_depth": { "type": "integer", "default": 10, "description": "Maximum recursion depth" },
+                "compute_hashes": { "type": "boolean", "default": true, "description": "Compute content hashes for duplicate detection" }
+            },
+            "required": ["path"]
+        })),
+        tool_def("execute_folder_plan", "Execute a folder organization plan: move, rename, or delete files. Deletes are safe — files go to a _kiro_trash subfolder. Returns success/failure counts.", serde_json::json!({
+            "type": "object",
+            "properties": {
+                "root": { "type": "string", "description": "Absolute path to the root folder" },
+                "operations": {
+                    "type": "array",
+                    "description": "Array of operations. Each: {action: 'move'|'rename'|'delete', from: 'relative/path', to: 'dest/path', reason: 'why'}",
+                    "items": { "type": "object" }
+                }
+            },
+            "required": ["root", "operations"]
+        })),
     ]});
     json_rpc_result(id, tools)
 }
@@ -759,6 +787,119 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             }
             #[cfg(not(target_os = "windows"))]
             { tool_result_text(id, "Not available on this platform", true) }
+        }
+        // Folder tools
+        "get_common_folders" => {
+            let folders = kiro_assistant::commands::folder_tools::get_common_folders();
+            let text = serde_json::to_string_pretty(&folders).unwrap_or_default();
+            tool_result_text(id, &text, false)
+        }
+        "pick_folder" => {
+            #[cfg(target_os = "windows")]
+            {
+                // Use Win32 IFileOpenDialog directly with the foreground window as owner
+                // so the dialog appears on top of the floating window.
+                let result = std::thread::spawn(|| -> Option<String> {
+                    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+                    use windows::Win32::UI::Shell::{IFileOpenDialog, FileOpenDialog, FOS_PICKFOLDERS, FOS_FORCEFILESYSTEM};
+                    use windows::Win32::System::Com::{CoInitializeEx, CoCreateInstance, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED};
+
+                    unsafe {
+                        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+                        let dialog: IFileOpenDialog = match CoCreateInstance(&FileOpenDialog, None, CLSCTX_ALL) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                log::error!("[pick_folder] Failed to create dialog: {}", e);
+                                CoUninitialize();
+                                return None;
+                            }
+                        };
+
+                        // Set folder picker mode
+                        if let Err(e) = dialog.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM) {
+                            log::error!("[pick_folder] SetOptions failed: {}", e);
+                            CoUninitialize();
+                            return None;
+                        }
+
+                        // Show with foreground window as owner
+                        let hwnd = GetForegroundWindow();
+                        let hr = dialog.Show(Some(hwnd));
+                        if hr.is_err() {
+                            // User cancelled or error
+                            CoUninitialize();
+                            return None;
+                        }
+
+                        let result = dialog.GetResult().ok().and_then(|item| {
+                            item.GetDisplayName(windows::Win32::UI::Shell::SIGDN_FILESYSPATH).ok().map(|name| {
+                                let path = name.to_string().unwrap_or_default();
+                                // Free the CoTaskMem string
+                                windows::Win32::System::Com::CoTaskMemFree(Some(name.as_ptr() as *const _));
+                                path
+                            })
+                        });
+
+                        CoUninitialize();
+                        result
+                    }
+                }).join().unwrap_or(None);
+
+                match result {
+                    Some(path) => {
+                        let path_str = path.replace('\\', "\\\\");
+                        tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
+                    }
+                    None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
+                }
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let result = std::thread::spawn(|| rfd::FileDialog::new().pick_folder()).join().unwrap_or(None);
+                match result {
+                    Some(path) => {
+                        let path_str = path.to_string_lossy().replace('\\', "\\\\");
+                        tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
+                    }
+                    None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
+                }
+            }
+        }
+        "scan_folder" => {
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            if path.is_empty() {
+                return tool_result_text(id, "Missing required parameter: path", true);
+            }
+            let max_depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
+            let compute_hashes = args.get("compute_hashes").and_then(|v| v.as_bool()).unwrap_or(true);
+            let root = std::path::Path::new(path);
+            if !root.is_dir() {
+                return tool_result_text(id, &format!("Not a directory: {}", path), true);
+            }
+            let result = kiro_assistant::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
+            let text = serde_json::to_string_pretty(&result).unwrap_or_default();
+            tool_result_text(id, &text, false)
+        }
+        "execute_folder_plan" => {
+            let root_str = args.get("root").and_then(|v| v.as_str()).unwrap_or("");
+            if root_str.is_empty() {
+                return tool_result_text(id, "Missing required parameter: root", true);
+            }
+            let ops: Vec<kiro_assistant::commands::folder_tools::FolderOperation> = match args.get("operations") {
+                Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+                None => return tool_result_text(id, "Missing required parameter: operations", true),
+            };
+            if ops.is_empty() {
+                return tool_result_text(id, "Operations array is empty", true);
+            }
+            let root = std::path::Path::new(root_str);
+            if !root.is_dir() {
+                return tool_result_text(id, &format!("Not a directory: {}", root_str), true);
+            }
+            let result = kiro_assistant::commands::folder_tools::execute_plan(root, &ops);
+            let text = serde_json::to_string_pretty(&result).unwrap_or_default();
+            tool_result_text(id, &text, false)
         }
         _ => json_rpc_error(id, -32601, &format!("Unknown tool: {}", tool_name)),
     }

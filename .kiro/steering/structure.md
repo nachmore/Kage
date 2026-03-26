@@ -76,7 +76,7 @@ kiro-assistant/
 │   │   └── settings/     # Settings modules (base, manager, + one per section)
 │   ├── vendor/           # NPM-managed JS dependencies (marked, mermaid, prismjs, mathjs, graphviz)
 │   ├── assets/           # Images and icons
-│   ├── extensions/       # Built-in extensions (math, calendar, folder-tools, window-walker)
+│   ├── extensions/       # Built-in extensions (math, calendar, window-walker)
 │   ├── themes/           # Custom themes
 │   └── updates/          # Update staging area
 ├── store/                 # Extension store

@@ -200,7 +200,9 @@ pub async fn execute_folder_plan(
 
 // ── Internal helpers ──────────────────────────────────────────────────
 
-fn scan_directory(root: &Path, max_depth: usize, compute_hashes: bool) -> ScanResult {
+/// Scan a directory recursively and return a manifest of all files.
+/// Public so the computer-control MCP binary can use it directly.
+pub fn scan_directory(root: &Path, max_depth: usize, compute_hashes: bool) -> ScanResult {
     let mut state = WalkState {
         entries: Vec::new(),
         total_files: 0,
@@ -387,7 +389,8 @@ fn compute_file_hash(path: &Path) -> Option<String> {
     Some(format!("{:016x}", hash))
 }
 
-fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutionResult {
+/// Execute a folder organization plan. Public for MCP binary access.
+pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutionResult {
     let mut completed = 0;
     let mut failed = 0;
     let mut errors = Vec::new();

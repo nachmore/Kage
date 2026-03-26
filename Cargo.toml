@@ -43,6 +43,7 @@ semver = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-dialog = "2"
+rfd = "0.15"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 regex = "1"
 

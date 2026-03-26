@@ -90,6 +90,7 @@ export class FloatingApp {
         this.toolUsages = [];
         this._toolCallIds = new Set();
         this.computerControlActive = false;
+        this._noBlurTools = new Set(); // MCP tools that should prevent window hide on blur
         this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
         this.extensionManager = new ExtensionManager(invoke);
@@ -666,6 +667,10 @@ export class FloatingApp {
             }
             // Don't hide if computer control is active — user needs to track progress
             if (this.computerControlActive) {
+                return;
+            }
+            // Don't hide if a focus-stealing MCP tool is running (e.g. folder picker dialog)
+            if (this._noBlurTools.size > 0) {
                 return;
             }
             // Don't hide if an automation plan is running
@@ -1740,6 +1745,9 @@ export class FloatingApp {
             // Successful response means we're online
             markOnline();
 
+            // Clear no-blur tool tracking
+            this._noBlurTools.clear();
+
             // Always hide stop button when a prompt completes — the agent is done generating
             this.elements.floatingStopBtn.style.display = 'none';
             this.updateDatetimeVisibility();
@@ -2249,6 +2257,7 @@ export class FloatingApp {
         
         this.isWaitingForResponse = false;
         this.computerControlActive = false;
+        this._noBlurTools.clear();
         this.elements.floatingStopBtn.style.display = 'none';
         this.updateDatetimeVisibility();
 
@@ -2302,6 +2311,12 @@ export class FloatingApp {
                     'get_cursor_position'];
                 if (ccTools.includes(update.title)) {
                     this.computerControlActive = true;
+                }
+
+                // Tools that steal focus (show dialogs) — prevent blur-hide while running
+                const noBlurToolNames = ['pick_folder'];
+                if (noBlurToolNames.includes(update.title)) {
+                    this._noBlurTools.add(update.toolCallId);
                 }
             }
 
