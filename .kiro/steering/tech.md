@@ -25,6 +25,7 @@
 - whoami: User info
 - ctrlc: Signal handling
 - winreg/windows-icons: Windows-specific registry and icon support
+- rfd: Native file dialogs (used by computer-control-mcp for folder picker)
 
 ## Frontend
 - Pure HTML/CSS/JavaScript (no framework)
@@ -49,6 +50,14 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 # Note: `cargo build --release` builds optimized binaries but does NOT create
 # the installer. Always use `cargo tauri build` for release distribution.
 # The computer-control-mcp binary is built automatically alongside the main binary.
+
+# IMPORTANT: The computer-control-mcp is a SEPARATE binary (src/bin/computer_control_mcp.rs).
+# `cargo tauri dev` only rebuilds the main kiro-assistant binary.
+# After changing computer-control-mcp, you MUST rebuild it explicitly:
+cargo build --bin computer-control-mcp
+# Then restart the app so kiro-cli picks up the new binary.
+# If the old binary is locked (running), kill it first:
+# Get-Process -Name "computer-control-mcp" | Stop-Process -Force
 
 # Testing
 cargo test                 # All tests
@@ -78,6 +87,8 @@ cd ui/vendor && npm install  # Install/update JS dependencies
 - Win32 API used directly for performance-critical operations (clipboard, SendInput)
 - All config fields must have serde defaults for backward compatibility
 - Use `log::*` macros for logging, avoid `println!` except for startup banner
+- Extension data persistence: use `save_extension_data`/`load_extension_data` Tauri commands (stores JSON in config_dir/extension-data/). NEVER use localStorage — it can be wiped by WebView2 updates or reinstalls.
+- Network detection: `ui/js/shared/network.js` provides real connectivity checks (HTTP ping). Used by floating and chat windows to show offline banner and provide friendly errors. Non-blocking — never prevents sends.
 
 ## Security
 - CSP is intentionally disabled (`"csp": null`) — see `docs/SECURITY_MODEL.md` for rationale

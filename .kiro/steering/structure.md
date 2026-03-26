@@ -30,7 +30,7 @@ kiro-assistant/
 │   │   ├── sessions.rs    # Session management (list, load, switch, rename)
 │   │   ├── system.rs      # System commands (config, clipboard, devtools, quit, steering)
 │   │   ├── extensions.rs  # Extension management commands
-│   │   ├── folder_tools.rs # Folder/file tool commands
+│   │   ├── folder_tools.rs # Folder/file operations (scan, plan, execute — also used by computer-control-mcp)
 │   │   ├── pocket_tts.rs  # Pocket TTS server management
 │   │   └── kiro_desktop.rs # Kiro Desktop integration commands
 │   └── os/                # OS abstraction layer
@@ -67,7 +67,7 @@ kiro-assistant/
 │   │   │   ├── attachments.js, streaming-utils.js, tool-utils.js, notify.js
 │   │   │   ├── extension-manager.js, math-eval.js, timer-sounds.js, hotkey-picker.js
 │   │   │   ├── link-handler.js, quick-actions.js, result-executor.js
-│   │   │   └── rtl.js, search-engine.js, tts-streamer.js
+│   │   │   └── rtl.js, search-engine.js, tts-streamer.js, network.js
 │   │   ├── floating/     # Floating window modules
 │   │   │   ├── app.js, main.js, window.js, suggestions.js, search-unified.js
 │   │   │   ├── permissions.js, clipboard-history.js, color.js
@@ -80,9 +80,8 @@ kiro-assistant/
 │   ├── themes/           # Custom themes
 │   └── updates/          # Update staging area
 ├── store/                 # Extension store
-│   ├── dev_server.py     # Dev store server (mock catalog + package downloads)
 │   ├── packages/         # Zipped extension/theme packages for store download
-│   ├── extensions/       # Store extension source (todos, color-picker, dev-tools, timer, etc.)
+│   ├── extensions/       # Store extension source (todos, color-picker, dev-tools, timer, dictionary, focus-tracker, hello-world, link-preview)
 │   └── themes/           # Store theme source (nord, sunset)
 ├── docs/                  # Documentation
 ├── icons/                 # Application icons

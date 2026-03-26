@@ -166,7 +166,7 @@ const BUILTIN_ACTIONS = [
     { label: 'Make shorter', icon: '✂️', prompt: 'Make the following text more concise while preserving the meaning. Return only the rewritten text:\n\n{text}', contentTypes: ['prose'], mode: 'replace' },
     { label: 'Translate', icon: '🌐', prompt: null, contentTypes: ['prose'], _dynamic: 'translate', mode: 'replace' },
     // Code
-    { label: 'Explain code', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
+    { label: 'Explain', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
     { label: 'Add comments', icon: '💬', prompt: 'Add clear, helpful comments to this code. Return only the commented code, no explanations:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'replace' },
     { label: 'Find bugs', icon: '🐛', prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
     // Errors

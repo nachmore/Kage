@@ -25,6 +25,8 @@ Kiro Assistant is a cross-platform desktop AI assistant with a floating window i
 - Calendar event integration (Windows Outlook)
 - Pocket TTS (text-to-speech) server integration
 - Computer control MCP server (accessibility tree, UI automation)
+- Folder organization tools via MCP (scan, plan, execute, native folder picker)
+- Network connectivity detection with offline mode (local features still work)
 - RTL language support
 - Welcome/first-run experience
 
@@ -40,4 +42,4 @@ Kiro Assistant is a cross-platform desktop AI assistant with a floating window i
 - Process manager: Manages spawned processes and child applications
 - Application launcher: Discovers and launches system applications
 - Updater: Auto-update with version checking and installer download
-- Computer control MCP: Accessibility tree inspection and UI automation
+- Computer control MCP: Accessibility tree inspection, UI automation, and folder organization tools
