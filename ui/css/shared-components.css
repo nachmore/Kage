@@ -129,6 +129,7 @@ body.dark-theme .message-content th:hover {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     width: 100%;
     max-width: 480px;
+    max-height: 100%;
     animation: modalSlideIn 0.2s ease-out;
     border: 1px solid #333;
     display: flex;
@@ -143,6 +144,7 @@ body.dark-theme .message-content th:hover {
 .permission-header {
     padding: 24px 24px 16px 24px;
     border-bottom: 1px solid #333;
+    flex-shrink: 0;
 }
 
 .permission-header h3 {
