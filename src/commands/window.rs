@@ -257,7 +257,7 @@ fn position_floating_window_with_height(
 }
 
 /// Center the floating window horizontally on the active monitor, 1/3 down
-fn center_floating_on_active_monitor(window: &WebviewWindow) {
+pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
     if let Some(monitor) = get_active_monitor(window) {
         let pos = monitor.position();
         let size = monitor.size();

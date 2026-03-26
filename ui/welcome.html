@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Kage</title>
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
+    <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -16,229 +17,335 @@
             color: var(--kage-text-primary, #E5E7EB);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
             height: 100vh;
             overflow: hidden;
-            padding: 32px;
             user-select: none;
         }
-        .welcome-logo {
-            width: 72px;
-            height: 72px;
-            margin-bottom: 16px;
-        }
-        .welcome-title {
-            font-size: 22px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        .welcome-subtitle {
-            font-size: 13px;
-            color: #938F9B;
-            margin-bottom: 28px;
-        }
-        .welcome-section {
-            width: 100%;
-            max-width: 380px;
-            margin-bottom: 20px;
-        }
-        .welcome-label {
-            font-size: 13px;
-            font-weight: 500;
-            margin-bottom: 6px;
-        }
-        .welcome-desc {
-            font-size: 12px;
-            color: #938F9B;
-            margin-bottom: 8px;
-        }
-        .welcome-hotkey-display {
+
+        /* Wizard layout */
+        .wizard { display: flex; flex-direction: column; height: 100%; }
+        .wizard-body { flex: 1; overflow-y: auto; position: relative; }
+        .wizard-footer {
+            padding: 16px 40px 24px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 6px;
-            padding: 10px 14px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
+            border-top: 1px solid rgba(255,255,255,0.06);
         }
-        .welcome-hotkey-display:hover {
-            border-color: rgba(99, 102, 241, 0.4);
-            background: rgba(255,255,255,0.08);
+        .wizard-step { display: none; height: 100%; }
+        .wizard-step.active { display: flex; flex-direction: column; }
+
+        /* Sticky step header (steps 2 & 3) */
+        .step-header {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--kage-bg-primary, #1E1A24);
+            padding: 20px 40px 0px;
+            border-bottom: 1px solid var(--kage-border-subtle, #2b2b2b);
         }
-        .welcome-hotkey-display.capturing {
-            border-color: var(--kage-accent, #6366f1);
-            background: rgba(99, 102, 241, 0.08);
-            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+        body.light-theme .step-header {
+            background: var(--kage-bg, #f5f5f5);
         }
-        .welcome-hotkey-hint {
-            font-size: 11px;
-            color: var(--kage-accent, #6366f1);
-            margin-top: 6px;
+        .step-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 40px 16px;
         }
-        .hotkey-key {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2px 8px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 5px;
-            font-size: 13px;
-            min-width: 28px;
+
+        /* Step 1 has no sticky header — it's just centered content */
+        .wizard-step[data-step="0"] { justify-content: center; align-items: center; padding: 32px 40px; }
+
+        /* Step indicators */
+        .wizard-dots { display: flex; gap: 8px; }
+        .wizard-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: rgba(255,255,255,0.15);
+            transition: background 0.2s;
         }
-        .welcome-checkbox-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        .welcome-checkbox-row input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--kage-accent, #6366f1);
-        }
-        .welcome-checkbox-row label {
-            font-size: 13px;
-            cursor: pointer;
-        }
-        .welcome-actions {
-            margin-top: 12px;
-            width: 100%;
-            max-width: 380px;
-        }
-        .welcome-btn {
-            width: 100%;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
+        .wizard-dot.active { background: var(--kage-accent, #7138CC); }
+        .wizard-dot.done { background: var(--kage-accent-light, #C09CFF); }
+
+        /* Buttons */
+        .wizard-btns { display: flex; gap: 10px; }
+        .wiz-btn {
+            padding: 9px 24px; border: none; border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer;
             transition: background 0.15s, transform 0.1s;
         }
-        .welcome-btn-primary {
-            background: var(--kage-accent, #6366f1);
-            color: #fff;
+        .wiz-btn-primary {
+            background: var(--kage-accent, #7138CC); color: #fff;
         }
-        .welcome-btn-primary:hover {
-            background: var(--kage-accent-hover, #5558e6);
-            transform: translateY(-1px);
+        .wiz-btn-primary:hover { background: var(--kage-accent-hover, #8E47FF); transform: translateY(-1px); }
+        .wiz-btn-secondary {
+            background: rgba(255,255,255,0.08); color: #ccc;
         }
-        .welcome-hint {
-            margin-top: 16px;
-            font-size: 11px;
-            color: #6b7280;
-            text-align: center;
+        .wiz-btn-secondary:hover { background: rgba(255,255,255,0.12); }
+
+        /* Step 1: Welcome */
+        .welcome-hero { text-align: center; padding-top: 40px; }
+        .welcome-logo { width: 80px; height: 80px; margin-bottom: 20px; }
+        .welcome-title { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+        .welcome-subtitle { font-size: 14px; color: #938F9B; margin-bottom: 24px; }
+        .welcome-blurb {
+            font-size: 13px; color: #b0adb5; line-height: 1.6;
+            max-width: 400px; margin: 0 auto; text-align: center;
         }
-    </style>
+
+        /* Shared form styles */
+        .section-label { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #E5E7EB; }
+        .section-desc { font-size: 12px; color: #938F9B; margin-bottom: 12px; line-height: 1.5; }
+        .step-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+        .step-subtitle { font-size: 13px; color: #938F9B; margin-bottom: 24px; }
+        .form-group { margin-bottom: 20px; }
+
+        /* Scrollbar theming */
+        .step-content::-webkit-scrollbar { width: 8px; }
+        .step-content::-webkit-scrollbar-track { background: transparent; }
+        .step-content::-webkit-scrollbar-thumb {
+            background: var(--kage-border, #3c3c3c);
+            border-radius: 4px;
+        }
+        .step-content::-webkit-scrollbar-thumb:hover {
+            background: var(--kage-text-muted, #888);
+        }
+</style>
 </head>
 <body>
-    <img class="welcome-logo" src="assets/kage-icon.png" alt="Kage">
-    <div class="welcome-title">Welcome to Kage</div>
-    <div class="welcome-subtitle">Your AI-powered desktop companion</div>
-
-    <div class="welcome-section">
-        <div class="welcome-label">Global Hotkey</div>
-        <div class="welcome-desc">Press this shortcut anywhere to summon Kage</div>
-        <div id="hotkeyPickerContainer"></div>
-    </div>
-
-    <div class="welcome-section">
-        <div class="welcome-label">Settings</div>
-        <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;">
-            <div class="welcome-checkbox-row" style="border: none; border-bottom: 1px solid rgba(255,255,255,0.08); border-radius: 8px 8px 0 0;" onclick="document.getElementById('launchStartup').click()">
-                <input type="checkbox" id="launchStartup" checked>
-                <label for="launchStartup">Launch Kage when Windows starts</label>
+<div class="wizard">
+    <div class="wizard-body">
+        <!-- Step 1: Welcome -->
+        <div class="wizard-step active" data-step="0">
+            <div class="welcome-hero">
+                <img class="welcome-logo" src="assets/kage-icon.png" alt="Kage">
+                <div class="welcome-title">Welcome to Kage</div>
+                <div class="welcome-subtitle">Your AI-powered desktop companion</div>
+                <div class="welcome-blurb">
+                    Let's get you set up. We'll configure how Kage connects to your AI backend,
+                    set your global hotkey, and choose a few preferences. This only takes a minute.
+                </div>
             </div>
-            <div class="welcome-checkbox-row" style="border: none; border-radius: 0 0 8px 8px;" onclick="document.getElementById('autoUpdate').click()">
-                <input type="checkbox" id="autoUpdate" checked>
-                <label for="autoUpdate">Keep Kage up to date automatically</label>
+        </div>
+
+        <!-- Step 2: Agent Connection -->
+        <div class="wizard-step" data-step="1">
+            <div class="step-header">
+                <div class="step-title">Agent Connection</div>
+                <div class="step-subtitle">Tell Kage how to reach your AI backend</div>
+            </div>
+            <div class="step-content">
+
+            <div class="form-group">
+                <div class="section-label">Connection Mode</div>
+                <div class="section-desc">Choose how Kage connects to the ACP server that powers your AI agent.</div>
+                <select class="setting-select" id="wAcpMode">
+                    <option value="local">Local — spawn a process on this machine</option>
+                    <option value="remote">Remote — connect to a running server</option>
+                </select>
+            </div>
+
+            <div id="wLocalSettings">
+                <div class="form-group">
+                    <div class="section-label">Spawn Command</div>
+                    <div class="section-desc">Full command to start the ACP server, including the path to the binary and any arguments.</div>
+                    <input type="text" class="setting-input" id="wSpawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
+                </div>
+            </div>
+
+            <div id="wRemoteSettings" style="display:none;">
+                <div class="form-group">
+                    <div class="section-label">Host</div>
+                    <input type="text" class="setting-input" id="wAcpHost" value="127.0.0.1">
+                </div>
+                <div style="display:flex;gap:12px;">
+                    <div class="form-group" style="flex:1;">
+                        <div class="section-label">Port</div>
+                        <input type="number" class="setting-input" id="wAcpPort" value="8765">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <div class="section-label">Timeout (ms)</div>
+                        <input type="number" class="setting-input" id="wAcpTimeout" value="30000">
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Preferences -->
+        <div class="wizard-step" data-step="2">
+            <div class="step-header">
+                <div class="step-title">Preferences</div>
+                <div class="step-subtitle">Customize how Kage works for you</div>
+            </div>
+            <div class="step-content">
+
+            <div class="form-group">
+                <div class="section-label">Global Hotkey</div>
+                <div class="section-desc">Press this shortcut anywhere to summon Kage</div>
+                <div id="hotkeyPickerContainer"></div>
+            </div>
+
+            <div class="form-group">
+                <div class="section-label">Settings</div>
+                <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;">
+                    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="launchStartup" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
+                        <span style="font-size:13px;">Launch Kage when your computer starts</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="autoUpdate" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
+                        <span style="font-size:13px;">Keep Kage up to date automatically</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="section-label">Capabilities</div>
+                <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;">
+                    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="computerControl" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
+                        <span style="font-size:13px;">Enable computer control (UI automation, app launching)</span>
+                    </label>
+                    <div style="padding:10px 14px;">
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="event.stopPropagation()">
+                            <input type="checkbox" id="enablePersonalization" checked style="width:16px;height:16px;accent-color:var(--kage-accent);margin-top:2px;flex-shrink:0;">
+                            <div>
+                                <span style="font-size:13px;">Learn my preferences over time</span>
+                                <div style="font-size:11px;color:#938F9B;margin-top:4px;line-height:1.5;">
+                                    Kage will build a profile of your preferences from conversations. You can view and edit this anytime in Settings. This data stays on your machine and is only shared with your chosen agent to improve responses.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
             </div>
         </div>
     </div>
 
-    <div class="welcome-section">
-        <div class="welcome-label">Capabilities</div>
-        <div class="welcome-desc">You will always be asked before the agent uses any of these.</div>
-        <div style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;">
-            <div class="welcome-checkbox-row" style="border: none; border-radius: 8px;" onclick="document.getElementById('computerControl').click()">
-                <input type="checkbox" id="computerControl" checked>
-                <label for="computerControl">Enable computer control (UI automation, app launching)</label>
-            </div>
+    <div class="wizard-footer">
+        <div class="wizard-dots">
+            <div class="wizard-dot active" data-dot="0"></div>
+            <div class="wizard-dot" data-dot="1"></div>
+            <div class="wizard-dot" data-dot="2"></div>
+        </div>
+        <div class="wizard-btns">
+            <button class="wiz-btn wiz-btn-secondary" id="backBtn" style="display:none;">Back</button>
+            <button class="wiz-btn wiz-btn-primary" id="nextBtn">Get Started</button>
         </div>
     </div>
+</div>
 
-    <div class="welcome-actions">
-        <button class="welcome-btn welcome-btn-primary" id="getStartedBtn">Get Started</button>
-    </div>
+<script type="module">
+    import { HotkeyPicker } from './js/shared/hotkey-picker.js';
 
-    <script type="module">
-        import { HotkeyPicker } from './js/shared/hotkey-picker.js';
+    function initWelcome() {
+        if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
+        const { invoke } = window.__TAURI__.core;
+        const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+        appWindow.show().then(() => appWindow.setFocus());
 
-        function initWelcome() {
-            if (!window.__TAURI__?.core) {
-                setTimeout(initWelcome, 50);
-                return;
+        let currentStep = 0;
+        const totalSteps = 3;
+        const steps = document.querySelectorAll('.wizard-step');
+        const dots = document.querySelectorAll('.wizard-dot');
+        const backBtn = document.getElementById('backBtn');
+        const nextBtn = document.getElementById('nextBtn');
+
+        function showStep(n) {
+            currentStep = n;
+            steps.forEach((s, i) => s.classList.toggle('active', i === n));
+            dots.forEach((d, i) => {
+                d.classList.toggle('active', i === n);
+                d.classList.toggle('done', i < n);
+            });
+            backBtn.style.display = n === 0 ? 'none' : '';
+            nextBtn.textContent = n === 0 ? 'Get Started' : n === totalSteps - 1 ? 'Finish' : 'Next';
+        }
+
+        // ACP mode toggle
+        const modeSelect = document.getElementById('wAcpMode');
+        modeSelect.addEventListener('change', () => {
+            document.getElementById('wLocalSettings').style.display = modeSelect.value === 'local' ? '' : 'none';
+            document.getElementById('wRemoteSettings').style.display = modeSelect.value === 'remote' ? '' : 'none';
+        });
+
+        // Load existing config
+        let hotkeyPicker;
+        invoke('get_config').then(config => {
+            if (config.hotkey) {
+                hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, config.hotkey);
+            } else {
+                hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, { modifiers: ['Alt'], key: 'Space' });
             }
-            const { invoke } = window.__TAURI__.core;
-            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-
-            // Show window now that content is loaded
-            appWindow.show().then(() => appWindow.setFocus());
-
-            // Initialize hotkey picker
-            const picker = new HotkeyPicker(
-                document.getElementById('hotkeyPickerContainer'),
-                invoke,
-                { modifiers: ['Alt'], key: 'Space' }
-            );
-
-            // Load current hotkey from config
-            invoke('get_config').then(config => {
-                if (config.hotkey) picker.setHotkey(config.hotkey);
-            }).catch(() => {});
-
-            // Welcome page defaults startup to ON (saved on Get Started click)
-
-            // Save on hotkey change
-            picker.onChange(async (hk) => {
-                try {
-                    const config = await invoke('get_config');
-                    config.hotkey = hk;
-                    await invoke('save_config', { config });
-                } catch (e) {
-                    console.error('Failed to save hotkey:', e);
-                }
+            hotkeyPicker.onChange(async (hk) => {
+                try { const c = await invoke('get_config'); c.hotkey = hk; await invoke('save_config', { config: c }); } catch {}
             });
 
-            document.getElementById('getStartedBtn').addEventListener('click', async () => {
-                const launchAtStartup = document.getElementById('launchStartup').checked;
-                const autoUpdate = document.getElementById('autoUpdate').checked;
-                const enableComputerControl = document.getElementById('computerControl').checked;
-                try {
-                    await invoke('complete_first_run', { launchAtStartup, autoUpdate, enableComputerControl });
-                } catch (e) {
-                    console.error('Failed to complete first run:', e);
+            // Pre-fill ACP settings if already configured
+            if (config.acp?.mode) {
+                const mode = config.acp.mode;
+                if (mode.type === 'remote') {
+                    modeSelect.value = 'remote';
+                    document.getElementById('wLocalSettings').style.display = 'none';
+                    document.getElementById('wRemoteSettings').style.display = '';
+                    if (mode.host) document.getElementById('wAcpHost').value = mode.host;
+                    if (mode.port) document.getElementById('wAcpPort').value = mode.port;
+                    if (mode.timeout_ms) document.getElementById('wAcpTimeout').value = mode.timeout_ms;
+                } else if (mode.spawn_command) {
+                    document.getElementById('wSpawnCommand').value = mode.spawn_command;
                 }
+            }
+        }).catch(() => {
+            hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, { modifiers: ['Alt'], key: 'Space' });
+        });
+
+        backBtn.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
+
+        nextBtn.addEventListener('click', async () => {
+            if (currentStep < totalSteps - 1) {
+                // Save ACP config when leaving step 1
+                if (currentStep === 1) {
+                    try {
+                        const config = await invoke('get_config');
+                        if (!config.acp) config.acp = {};
+                        const mode = modeSelect.value;
+                        if (mode === 'local') {
+                            config.acp.mode = { type: 'local', spawn_command: document.getElementById('wSpawnCommand').value.trim() };
+                        } else {
+                            config.acp.mode = {
+                                type: 'remote',
+                                host: document.getElementById('wAcpHost').value,
+                                port: parseInt(document.getElementById('wAcpPort').value),
+                                timeout_ms: parseInt(document.getElementById('wAcpTimeout').value),
+                            };
+                        }
+                        await invoke('save_config', { config });
+                    } catch (e) { console.error('Failed to save ACP config:', e); }
+                }
+                showStep(currentStep + 1);
+            } else {
+                // Finish
+                try {
+                    await invoke('complete_first_run', {
+                        launchAtStartup: document.getElementById('launchStartup').checked,
+                        autoUpdate: document.getElementById('autoUpdate').checked,
+                        enableComputerControl: document.getElementById('computerControl').checked,
+                        enablePersonalization: document.getElementById('enablePersonalization').checked,
+                    });
+                } catch (e) { console.error('Failed to complete first run:', e); }
                 await appWindow.close();
-            });
-        }
+            }
+        });
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initWelcome);
-        } else {
-            initWelcome();
-        }
-    </script>
+        showStep(0);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initWelcome);
+    } else {
+        initWelcome();
+    }
+</script>
 </body>
 </html>

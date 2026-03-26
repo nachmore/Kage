@@ -323,7 +323,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
     // Create fresh window (previous one was closed/destroyed)
     let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
         .title("Welcome to Kage")
-        .inner_size(580.0, 600.0)
+        .inner_size(580.0, 640.0)
         .resizable(false)
         .decorations(false)
         .center()
@@ -349,6 +349,7 @@ pub async fn complete_first_run(
     launch_at_startup: bool,
     auto_update: bool,
     enable_computer_control: bool,
+    enable_personalization: bool,
 ) -> Result<(), AppError> {
     let mut config = state.config.lock().unwrap();
     let is_true_first_run = !config.first_run_completed;
@@ -357,6 +358,7 @@ pub async fn complete_first_run(
         config.updates.auto_check = true;
         config.updates.silent_update = true;
     }
+    config.acp.agent.auto_steering_enabled = enable_personalization;
     let _ = config.save();
     drop(config);
 
@@ -390,6 +392,7 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
     let text = format!("<b>Welcome to Kage!</b><br/>&nbsp;<br>Press {} anytime to summon me.", keycaps);
 
     if let Some(floating) = app.get_webview_window("floating") {
+        crate::commands::window::center_floating_on_active_monitor(&floating);
         let _ = floating.show();
         let _ = floating.set_focus();
     }

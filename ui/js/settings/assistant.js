@@ -13,21 +13,21 @@ class AssistantSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 <div class="setting-row">
-                    <div class="setting-label">Auto-generate steering document</div>
+                    <div class="setting-label">Learn my preferences</div>
                     <div class="setting-checkbox-row">
                         <label class="kage-checkbox">
                             <input type="checkbox" id="autoSteeringEnabled">
                         </label>
-                        <div class="setting-description">Automatically summarize your conversations to build a personalized steering document that guides Kage across all sessions.</div>
+                        <div class="setting-description">Let Kage learn your preferences from conversations and remember them across sessions. You can view and edit what it learns at any time. This data stays on your machine and is only shared with your chosen agent.</div>
                     </div>
                     <div class="setting-control" style="margin-top: 8px;">
-                        <button class="setting-button" id="openAutoSteeringBtn">Open File</button>
+                        <button class="setting-button" id="openAutoSteeringBtn">View Learned Preferences</button>
                     </div>
                 </div>
 
                 ${this.createControlWithActionRow(
-                    'User steering document',
-                    'Path to your own steering document. This takes precedence over the auto-generated one and will never be overwritten.',
+                    'Custom steering document',
+                    'Point Kage to your own instructions file. This is always included alongside learned preferences and is never modified by Kage.',
                     '<input type="text" class="setting-input" id="userSteeringPath" placeholder="">',
                     '<button class="setting-button" id="openUserSteeringBtn">Open</button>'
                 )}
