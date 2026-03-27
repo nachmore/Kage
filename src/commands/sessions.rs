@@ -47,10 +47,59 @@ pub struct SessionData {
     pub message_durations: HashMap<String, f64>,
 }
 
-/// Get the sessions directory: [home]/.kage/sessions/cli
+/// Resolve the sessions directory from config.
+/// Priority: 1) explicit sessions_directory, 2) auto-detect from spawn_command, 3) probe common paths
+fn get_sessions_dir_from_config(config: &crate::config::Config) -> Result<PathBuf, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
+
+    // 1) Explicit override
+    if let Some(ref dir) = config.acp.agent.sessions_directory {
+        let p = PathBuf::from(dir);
+        if p.is_absolute() {
+            return Ok(p);
+        }
+        return Ok(home.join(dir));
+    }
+
+    // 2) Auto-detect from spawn_command — kiro-cli → ~/.kiro/sessions/cli
+    if let crate::config::AcpMode::Local { ref spawn_command } = config.acp.mode {
+        let cmd_lower = spawn_command.to_lowercase();
+        if cmd_lower.contains("kiro-cli") || cmd_lower.contains("kiro_cli") {
+            let dir = home.join(".kiro").join("sessions").join("cli");
+            if dir.exists() { return Ok(dir); }
+        }
+        // Dev builds use chat_cli as the binary name
+        if cmd_lower.contains("chat_cli") {
+            let dir = home.join(".kiro").join("sessions").join("cli");
+            if dir.exists() { return Ok(dir); }
+        }
+    }
+
+    // 3) Probe common paths
+    let candidates = [
+        home.join(".kiro").join("sessions").join("cli"),
+        home.join(".kage").join("sessions").join("cli"),
+    ];
+    for dir in &candidates {
+        if dir.exists() {
+            return Ok(dir.clone());
+        }
+    }
+
+    // Default to kiro path
+    Ok(home.join(".kiro").join("sessions").join("cli"))
+}
+
+/// Fallback for callers without config access — probes common paths
 fn get_sessions_dir() -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-    Ok(home.join(".kage").join("sessions").join("cli"))
+    for dir in [
+        home.join(".kiro").join("sessions").join("cli"),
+        home.join(".kage").join("sessions").join("cli"),
+    ] {
+        if dir.exists() { return Ok(dir); }
+    }
+    Ok(home.join(".kiro").join("sessions").join("cli"))
 }
 
 fn get_title_cache_path() -> Result<PathBuf, String> {
@@ -337,7 +386,8 @@ pub async fn list_sessions(
     }
 
     // Scan and cache
-    let all_sessions = scan_sessions()?;
+    let config = state.config.lock().unwrap().clone();
+    let all_sessions = scan_sessions_with_config(&config)?;
     let total = all_sessions.len();
 
     // Store in cache
@@ -362,10 +412,13 @@ fn paginate(sessions: &[SessionSummary], limit: Option<usize>, offset: Option<us
     }
 }
 
-/// Scan the sessions directory — optimized to only extract titles for sessions
-/// that will actually be returned (deferred title extraction).
-fn scan_sessions() -> Result<Vec<SessionSummary>, String> {
-    let sessions_dir = get_sessions_dir()?;
+/// Scan the sessions directory using auto-detected path.
+fn scan_sessions_with_config(config: &crate::config::Config) -> Result<Vec<SessionSummary>, String> {
+    let sessions_dir = get_sessions_dir_from_config(config)?;
+    scan_sessions_in_dir(&sessions_dir)
+}
+
+fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, String> {
 
     if !sessions_dir.exists() {
         info!("Sessions directory does not exist yet: {:?}", sessions_dir);
@@ -459,8 +512,9 @@ fn scan_sessions() -> Result<Vec<SessionSummary>, String> {
 }
 
 #[tauri::command]
-pub async fn load_session(session_id: String) -> Result<SessionData, AppError> {
-    let sessions_dir = get_sessions_dir()?;
+pub async fn load_session(session_id: String, state: State<'_, AppState>) -> Result<SessionData, AppError> {
+    let config = state.config.lock().unwrap().clone();
+    let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
 
@@ -545,15 +599,17 @@ pub async fn load_session(session_id: String) -> Result<SessionData, AppError> {
 
 /// Get the sessions directory path
 #[tauri::command]
-pub async fn get_sessions_directory() -> Result<String, AppError> {
-    let dir = get_sessions_dir()?;
+pub async fn get_sessions_directory(state: State<'_, AppState>) -> Result<String, AppError> {
+    let config = state.config.lock().unwrap().clone();
+    let dir = get_sessions_dir_from_config(&config)?;
     Ok(dir.to_string_lossy().to_string())
 }
 
 /// Open the session's JSON file in the system file explorer
 #[tauri::command]
-pub async fn reveal_session_file(session_id: String) -> Result<(), AppError> {
-    let sessions_dir = get_sessions_dir()?;
+pub async fn reveal_session_file(session_id: String, state: State<'_, AppState>) -> Result<(), AppError> {
+    let config = state.config.lock().unwrap().clone();
+    let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
 
     if !json_path.exists() {
@@ -571,7 +627,8 @@ pub async fn reveal_session_file(session_id: String) -> Result<(), AppError> {
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
 pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> Result<(), AppError> {
-    let sessions_dir = get_sessions_dir()?;
+    let config = state.config.lock().unwrap().clone();
+    let sessions_dir = get_sessions_dir_from_config(&config)?;
 
     for ext in &["json", "jsonl", "lock"] {
         let path = sessions_dir.join(format!("{}.{}", session_id, ext));
@@ -643,7 +700,8 @@ pub async fn switch_acp_session(
 
             // Read the cwd from the session's .json metadata file
             let cwd = {
-                let sessions_dir = get_sessions_dir()?;
+                let config = state.config.lock().unwrap().clone();
+                let sessions_dir = get_sessions_dir_from_config(&config)?;
                 let json_path = sessions_dir.join(format!("{}.json", id));
                 if json_path.exists() {
                     fs::read_to_string(&json_path)

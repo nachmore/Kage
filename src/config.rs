@@ -123,6 +123,7 @@ impl Default for AgentConfig {
             default_model: None,
             working_directory: None,
             auto_compact_threshold: 90,
+            sessions_directory: None,
         }
     }
 }
@@ -157,6 +158,10 @@ pub struct AgentConfig {
     /// Auto-compact threshold (0-100). When context usage >= this %, auto-send /compact. 0 = disabled.
     #[serde(default = "default_auto_compact_threshold")]
     pub auto_compact_threshold: u32,
+    /// Custom sessions directory. If unset, auto-detected from spawn_command
+    /// (kiro-cli → ~/.kiro/sessions/cli, kage-cli → ~/.kage/sessions/cli).
+    #[serde(default)]
+    pub sessions_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

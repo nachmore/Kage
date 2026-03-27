@@ -68,6 +68,12 @@ class ConnectionSettingsModule extends SettingsModule {
                     'The folder the agent works in. It can read and modify files under this path. Leave empty to use the current directory.',
                     `<input type="text" class="setting-input" id="workingDirectory" placeholder="">`
                 )}
+
+                ${this.createControlRow(
+                    'Sessions directory',
+                    'Where session files are stored. Leave empty to auto-detect based on the ACP server.',
+                    `<input type="text" class="setting-input" id="sessionsDirectory" placeholder="Auto-detect">`
+                )}
             </div>
         `;
     }
@@ -87,6 +93,9 @@ class ConnectionSettingsModule extends SettingsModule {
 
         const workDir = document.getElementById('workingDirectory');
         if (workDir) workDir.value = agentCfg.working_directory || '';
+
+        const sessDir = document.getElementById('sessionsDirectory');
+        if (sessDir) sessDir.value = agentCfg.sessions_directory || '';
 
         if (config.acp && config.acp.mode) {
             const mode = config.acp.mode;
@@ -119,6 +128,7 @@ class ConnectionSettingsModule extends SettingsModule {
         const existingAgent = config.acp.agent || {};
         existingAgent.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
         existingAgent.working_directory = document.getElementById('workingDirectory').value.trim() || null;
+        existingAgent.sessions_directory = document.getElementById('sessionsDirectory').value.trim() || null;
         
         const mode = document.getElementById('acpMode').value;
         
