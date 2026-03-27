@@ -4,6 +4,7 @@ import { KageDesktopViewer } from './kage-desktop.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
+import { createMascot } from '../shared/mascot.js';
 
 let app = null;
 
@@ -20,6 +21,10 @@ function initApp() {
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
+
+    // Render sidebar mascot
+    const sidebarMascot = document.getElementById('sidebarMascot');
+    if (sidebarMascot) createMascot({ size: 28 }).then(svg => sidebarMascot.appendChild(svg));
 
     // Re-apply theme when config changes
     listen('config_updated', async () => {

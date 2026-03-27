@@ -84,7 +84,14 @@
 
         /* Step 1: Welcome */
         .welcome-hero { text-align: center; padding-top: 40px; }
-        .welcome-logo { width: 80px; height: 80px; margin-bottom: 20px; }
+        .welcome-logo {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .welcome-title { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
         .welcome-subtitle { font-size: 14px; color: #938F9B; margin-bottom: 24px; }
         .welcome-blurb {
@@ -117,7 +124,7 @@
         <!-- Step 1: Welcome -->
         <div class="wizard-step active" data-step="0">
             <div class="welcome-hero">
-                <img class="welcome-logo" src="assets/kage-icon.png" alt="Kage">
+                <div class="welcome-logo" id="welcomeMascot"></div>
                 <div class="welcome-title">Welcome to Kage</div>
                 <div class="welcome-subtitle">Your AI-powered desktop companion</div>
                 <div class="welcome-blurb">
@@ -238,12 +245,28 @@
 
 <script type="module">
     import { HotkeyPicker } from './js/shared/hotkey-picker.js';
+    import { createMascotController } from './js/shared/mascot.js';
+    import { ANIMATIONS } from './js/shared/mascot-animations.js';
 
     function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
         const { invoke } = window.__TAURI__.core;
         const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
         appWindow.show().then(() => appWindow.setFocus());
+
+        // Render mascot with periodic waving
+        const mascotEl = document.getElementById('welcomeMascot');
+        if (mascotEl) {
+            createMascotController(mascotEl, {
+                size: 120,
+                idle: ANIMATIONS.waving,
+                periodic: ANIMATIONS.waving,
+                periodicInterval: 10000,
+                periodicJitter: 2000,
+                invert: true,
+                outline: { color: 'var(--kage-mascot-outline, #7138CC)', radius: 2 },
+            });
+        }
 
         let currentStep = 0;
         const totalSteps = 3;

@@ -33,6 +33,9 @@
 
     /* Font stack */
     --kage-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+
+    /* Mascot */
+    --kage-mascot-outline: var(--kage-accent, #7138CC);
 }
 
 /* Light theme overrides */

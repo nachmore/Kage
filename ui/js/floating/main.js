@@ -3,6 +3,8 @@ import { FloatingApp } from './app.js';
 import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
+import { createMascotController } from '../shared/mascot.js';
+import { ANIMATIONS } from '../shared/mascot-animations.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -38,6 +40,21 @@ function initApp() {
     // Extension manager will be set asynchronously after extensions load in background
     app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
     app.init();
+
+    // Set up mascot with idle → periodic waving → jumping when active
+    const mascotContainer = document.getElementById('floatingMascot');
+    if (mascotContainer) {
+        const mascotCtrl = createMascotController(mascotContainer, {
+            size: 40,
+            idle: ANIMATIONS.waving,
+            periodic: ANIMATIONS.waving,
+            periodicInterval: 10000,
+            periodicJitter: 2000,
+            preload: [ANIMATIONS.jumping],
+        });
+        // Expose so FloatingApp can drive it from startThinking/stopThinking
+        window._kageMascot = mascotCtrl;
+    }
 }
 
 console.log('Script loaded, document.readyState:', document.readyState);

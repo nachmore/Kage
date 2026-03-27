@@ -4,6 +4,7 @@
  * Results are pasted back into the source application.
  */
 import { classifyText, getActionsForText } from './shared/quick-actions.js';
+import { createMascot } from './shared/mascot.js';
 
 console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText, 'getActionsForText:', typeof getActionsForText);
 
@@ -12,6 +13,10 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
     const { listen, emit } = window.__TAURI__.event;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const LogicalSize = window.__TAURI__.dpi.LogicalSize;
+
+    // Render mascot icon
+    const mascotEl = document.getElementById('inlineAssistMascot');
+    if (mascotEl) createMascot({ size: 24 }).then(svg => mascotEl.appendChild(svg));
 
     const actionsEl = document.getElementById('actions');
     const customInput = document.getElementById('customInput');

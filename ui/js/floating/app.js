@@ -745,6 +745,10 @@ export class FloatingApp {
     startThinking() {
         this.elements.mascotContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
+        // Switch mascot to jumping animation at larger size
+        if (window._kageMascot) {
+            import('../shared/mascot-animations.js').then(m => window._kageMascot.setActive(m.ANIMATIONS.jumping, 60));
+        }
         // Show inline stop button in input area, hide datetime
         this.updateDatetimeVisibility();
         this.elements.floatingStopBtn.style.display = '';
@@ -753,6 +757,8 @@ export class FloatingApp {
     stopThinking() {
         this.elements.mascotContainer.classList.remove('thinking');
         this.elements.loadingDots.classList.remove('visible');
+        // Return mascot to idle with a wave transition
+        if (window._kageMascot) window._kageMascot.setIdle(true);
     }
 
     stopGenerating() {

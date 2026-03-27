@@ -16,40 +16,9 @@
     -webkit-user-select: none;
 }
 
-.mascot-icon {
-    width: 36px;
-    height: 36px;
+.mascot-icon,
+.mascot-container .kage-mascot {
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-    transition: transform 0.3s ease;
-}
-
-.mascot-container.thinking .mascot-icon {
-    animation: thinking-float 2.5s ease-in-out infinite;
-}
-
-@keyframes thinking-float {
-    0% { transform: translateY(0) translateX(0) rotate(0deg) scaleX(1); }
-    15% { transform: translateY(-8px) translateX(-3px) rotate(-5deg) scaleX(1); }
-    35% { transform: translateY(-12px) translateX(2px) rotate(3deg) scaleX(-1); }
-    50% { transform: translateY(-8px) translateX(4px) rotate(5deg) scaleX(-1); }
-    65% { transform: translateY(-12px) translateX(2px) rotate(2deg) scaleX(-1); }
-    85% { transform: translateY(-8px) translateX(-3px) rotate(-4deg) scaleX(1); }
-    100% { transform: translateY(0) translateX(0) rotate(0deg) scaleX(1); }
-}
-
-.mascot-icon .mascot-eye {
-    transform-origin: center;
-    transform-box: fill-box;
-    animation: kage-static-blink 3.5s ease-in-out infinite;
-}
-
-.mascot-icon .mascot-eye-right {
-    animation-delay: 0.1s;
-}
-
-@keyframes kage-static-blink {
-    0%, 88%, 100% { transform: scaleY(1); }
-    90%, 92% { transform: scaleY(0.1); }
 }
 
 /* Speech Bubble */

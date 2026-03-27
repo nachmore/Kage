@@ -522,7 +522,7 @@
             : '';
 
         return `
-            <div class="store-card">
+            <div class="store-card" data-item-id="${esc(item.id)}">
                 <div class="store-card-header">
                     <div class="store-card-icon">${esc(item.icon || '📦')}</div>
                     <div>
@@ -559,42 +559,63 @@
 
     // --- Actions ---
 
+    function setCardBusy(id, label) {
+        const card = document.querySelector(`.store-card[data-item-id="${id}"]`);
+        if (!card) return;
+        const footer = card.querySelector('.store-card-footer');
+        if (footer) footer.innerHTML = `<span class="store-card-btn installed" style="opacity:0.7;">${label}</span>`;
+    }
+
     async function installFromStore(id) {
         const invoke = window.__TAURI__.core.invoke;
+        setCardBusy(id, 'Installing…');
         try {
             await invoke('store_install', { id });
             await refreshInstalled();
             renderTab();
         } catch (e) {
             alert('Install failed: ' + e);
+            renderTab();
         }
     }
 
     async function updateItem(id) {
-        await installFromStore(id);
+        const invoke = window.__TAURI__.core.invoke;
+        setCardBusy(id, 'Updating…');
+        try {
+            await invoke('store_install', { id });
+            await refreshInstalled();
+            renderTab();
+        } catch (e) {
+            alert('Update failed: ' + e);
+            renderTab();
+        }
     }
 
     async function reinstallItem(id) {
         const invoke = window.__TAURI__.core.invoke;
+        setCardBusy(id, 'Reinstalling…');
         try {
-            // Just re-install (overwrites existing)
             await invoke('store_install', { id });
             await refreshInstalled();
             renderTab();
         } catch (e) {
             alert('Reinstall failed: ' + e);
+            renderTab();
         }
     }
 
     async function uninstallItem(id, kind) {
         if (!confirm(`Uninstall "${id}"?`)) return;
         const invoke = window.__TAURI__.core.invoke;
+        setCardBusy(id, 'Removing…');
         try {
             await invoke('uninstall_extension', { id, kind });
             await refreshInstalled();
             renderTab();
         } catch (e) {
             alert('Uninstall failed: ' + e);
+            renderTab();
         }
     }
 

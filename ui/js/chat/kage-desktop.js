@@ -1,4 +1,5 @@
 import { renderMarkdown } from '../shared/markdown.js';
+import { mascotHTML } from '../shared/mascot.js';
 
 /**
  * Kage Desktop session viewer — read-only display of Kage IDE chat sessions.
@@ -159,7 +160,7 @@ export class KageDesktopViewer {
             const dateStr = formatRelativeDate(date);
             const sourceIcon = s.session_type === 'cli'
                 ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-                : '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 65 47" fill="none"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kage-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kage-bg-primary, #1E1A24)"/></svg>';
+                : mascotHTML({ size: 14, className: 'kd-source-icon' });
             const sourceLabel = s.session_type === 'cli' ? 'CLI' : 'Desktop';
             const wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
 
@@ -277,7 +278,7 @@ export class KageDesktopViewer {
         const sourceLabel = session?.session_type === 'cli' ? 'Kage CLI' : 'Kage Desktop';
         const bannerIcon = session?.session_type === 'cli'
             ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-            : '<svg width="14" height="14" viewBox="0 0 65 47" fill="none" style="vertical-align:-2px"><path d="M5.7 33.3C21.4 50.4 43.7 49.7 56.8 37.7C64.9 30.3 68.9 13.9 55.4 3.7C41.9-6.4 32.4 11.2 17.3 8.7C14.1 8.2 9.9 9 12.7 12.7C13.2 13.4 13.9 14 14.5 14.5C10.2 14.6 8.7 14.4 6.1 14.3C3.7 14.2 2 14.4 1.1 15.6C-.2 17.5 3.2 20.5 6.2 23.1C8 24.8 9.8 27.1 11 29C9.6 28.8 9.3 28.7 7.2 28.5C3.9 28.1 1.4 28.6 5.7 33.3Z" fill="currentColor"/><path d="M48.5 21.9C46.4 22.1 45.8 19.6 45.7 18.1C45.6 16.7 45.8 15.6 46.2 14.9C46.5 14.2 47.1 13.9 47.8 13.8C48.6 13.7 49.3 14 49.8 14.6C50.3 15.2 50.7 16.3 50.8 17.7C51 20.2 50.1 21.8 48.5 21.9Z" fill="var(--kage-bg-primary, #1E1A24)"/><path d="M57.3 21.2C55.1 21.4 54.6 18.9 54.5 17.4C54.4 16 54.5 14.9 55 14.2C55.3 13.5 55.9 13.2 56.6 13.1C57.4 13 58 13.3 58.5 13.9C59.1 14.5 59.5 15.6 59.6 17C59.8 19.5 58.9 21.1 57.3 21.2Z" fill="var(--kage-bg-primary, #1E1A24)"/></svg>';
+            : mascotHTML({ size: 14 });
         const banner = document.createElement('div');
         banner.className = 'kd-readonly-banner';
         banner.innerHTML = `<details class="kd-banner-details">

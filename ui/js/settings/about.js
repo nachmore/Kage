@@ -13,7 +13,7 @@ class AboutSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 <div class="about-card">
                     <div class="about-logo-row">
-                        <img src="../assets/kage-icon.png" class="about-logo" alt="Kage">
+                        <div class="about-logo" id="aboutMascot"></div>
                         <div>
                             <div class="about-app-name">Kage</div>
                             <div class="about-version" id="aboutVersion">loading...</div>
@@ -33,6 +33,19 @@ class AboutSettingsModule extends SettingsModule {
     }
 
     async initialize() {
+        // Render mascot
+        const mascotEl = document.getElementById('aboutMascot');
+        if (mascotEl) {
+            const { createMascot } = await import('../shared/mascot.js');
+            const owl = await createMascot({
+                size: 72,
+                outline: { color: 'var(--kage-mascot-outline, #7138CC)', radius: 1.5 },
+            });
+            // White body on dark, dark body on light — override the CSS variable on this instance
+            owl.style.setProperty('--kage-mascot-body', 'var(--kage-text-bright, #ffffff)');
+            mascotEl.appendChild(owl);
+        }
+
         const btn = document.getElementById('showWelcomeBtn');
         if (btn) {
             btn.addEventListener('click', async () => {

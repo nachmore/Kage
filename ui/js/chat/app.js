@@ -3,6 +3,7 @@ import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke }
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
+import { mascotHTML } from '../shared/mascot.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
@@ -1401,11 +1402,7 @@ export class ChatApp {
         const avatar = document.createElement('div');
         avatar.className = 'message-avatar';
         if (role === 'assistant') {
-            avatar.innerHTML = `<svg width="18" height="18" viewBox="0 0 65 47" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5.71599 33.2597C21.3537 50.3579 43.692 49.7224 56.8482 37.6892C64.8725 30.3497 68.8862 13.8647 55.4115 3.72686C41.9368 -6.41103 32.4042 11.2128 17.2667 8.73447C14.1417 8.22797 9.94157 9.04188 12.6668 12.7323C13.1844 13.4347 13.8741 13.9921 14.4889 14.4572C10.198 14.6069 8.69922 14.3808 6.07118 14.3457C3.69479 14.2406 2.01125 14.368 1.05082 15.569C-0.207458 17.5201 3.17874 20.5431 6.24957 23.1473C8.02071 24.8452 9.81893 27.134 10.9737 29.0437C9.58639 28.7602 9.25032 28.6837 7.17973 28.4703C3.87477 28.131 1.42511 28.5658 5.71759 33.2597H5.71599Z" fill="white"/>
-                <path d="M48.5012 21.9388C46.3685 22.1093 45.8461 19.5864 45.7234 18.0669C45.6135 16.6955 45.7712 15.5853 46.1821 14.8574C46.5437 14.2172 47.1044 13.862 47.8482 13.8015C48.5936 13.7409 49.2578 14.0037 49.7579 14.5851C50.3281 15.2477 50.6865 16.3101 50.7948 17.6591C50.9986 20.2075 50.1417 21.8066 48.5012 21.9372V21.9388Z" fill="black"/>
-                <path d="M57.2707 21.2344C55.138 21.4048 54.614 18.8819 54.493 17.3624C54.3831 15.991 54.5407 14.8825 54.9517 14.153C55.3116 13.5127 55.8739 13.1575 56.6177 13.097C57.3631 13.0381 58.0273 13.2993 58.5274 13.8807C59.0976 14.5433 59.456 15.6056 59.5643 16.9547C59.7682 19.5031 58.9113 21.1022 57.2707 21.2328V21.2344Z" fill="black"/>
-            </svg>`;
+            avatar.innerHTML = mascotHTML({ size: 18 });
         } else {
             if (this.userInfo?.avatar_base64) {
                 const img = document.createElement('img');
