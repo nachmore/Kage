@@ -2,7 +2,7 @@
 import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
-import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
+import { escapeHtml, stripKageTags, getToolFriendlyName, getExtensionToolFriendlyName } from '../shared/tool-utils.js';
 import { mascotHTML } from '../shared/mascot.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
@@ -17,24 +17,6 @@ import { setupRtlDetection } from '../shared/rtl.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
-
-/** Map MCP/agent tool names to user-friendly descriptions for the spinner. */
-function _chatToolFriendlyName(title) {
-    const map = {
-        list_windows: 'Checking visible windows', list_all_windows: 'Enumerating all open windows',
-        get_ui_tree: 'Reading application UI', find_elements: 'Searching for UI elements',
-        get_element_text: 'Reading text content', launch_app: 'Launching application',
-        launch_and_get_tree: 'Launching application', click_and_get_tree: 'Clicking and reading UI',
-        click_and_read_result: 'Clicking and reading result', type_and_get_tree: 'Typing text',
-        screenshot: 'Taking screenshot', read: 'Reading file', write: 'Writing file',
-        execute: 'Running command', search: 'Searching',
-    };
-    if (map[title]) return map[title];
-    for (const [key, friendly] of Object.entries(map)) {
-        if (title.includes(key)) return friendly;
-    }
-    return title.replace(/^Running:\s*@\S+\s*/, '').replace(/_/g, ' ') || 'Working on it';
-}
 
 /** Build metadata object for a message from session turn data. */
 function _buildMsgMeta(messageId, timestamps, durations, role) {
@@ -1733,7 +1715,7 @@ export class ChatApp {
             if (update?.title && this.currentStreamingMessage) {
                 const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
                 if (contentDiv) {
-                    const friendly = _chatToolFriendlyName(update.title);
+                    const friendly = getToolFriendlyName(update.title);
                     let spinner = contentDiv.querySelector('.tool-running-indicator');
                     if (!spinner) {
                         spinner = document.createElement('div');
@@ -1805,23 +1787,10 @@ export class ChatApp {
             if (beforeFence) {
                 renderMarkdown(beforeFence, contentDiv, true);
             } else {
-                const friendlyName = this._getToolFriendlyName(info.extension, info.tool);
+                const friendlyName = getExtensionToolFriendlyName(info.extension, info.tool, this.extensionManager);
                 contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${friendlyName}...</div>`;
             }
         }
-    }
-
-    /** Look up a friendly display name for an extension tool. */
-    _getToolFriendlyName(extensionId, toolName) {
-        if (extensionId && toolName && this.extensionManager) {
-            const defs = this.extensionManager.getToolDefinitions();
-            const extDef = defs.find(d => d.extensionId === extensionId);
-            if (extDef?.tools) {
-                const tool = extDef.tools.find(t => t.name === toolName);
-                if (tool?.friendlyName) return tool.friendlyName;
-            }
-        }
-        return 'Working on it';
     }
 
     /**
