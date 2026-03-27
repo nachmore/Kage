@@ -8,18 +8,9 @@
  */
 
 import { createPermissionHandler } from '../shared/permissions-core.js';
+import { waitForTauri } from '../shared/tauri-init.js';
 
-function waitForTauri(callback) {
-    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.webviewWindow) {
-        callback();
-    } else {
-        setTimeout(() => waitForTauri(callback), 50);
-    }
-}
-
-waitForTauri(() => {
-    const { invoke } = window.__TAURI__.core;
-    const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+waitForTauri(({ invoke, appWindow }) => {
 
     const handler = createPermissionHandler(invoke, appWindow, {
         // Store session ID on the modal element for session-scoping

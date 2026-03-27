@@ -1,23 +1,15 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './app.js';
 import { KageDesktopViewer } from './kage-desktop.js';
-import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
+import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { createMascot } from '../shared/mascot.js';
+import { waitForTauri } from '../shared/tauri-init.js';
 
 let app = null;
 
-function initApp() {
-    if (!window.__TAURI__ || !window.__TAURI__.core || !window.__TAURI__.webviewWindow) {
-        setTimeout(initApp, 50);
-        return;
-    }
-
-    const { invoke } = window.__TAURI__.core;
-    const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-    const { listen } = window.__TAURI__.event;
-
+waitForTauri(({ invoke, appWindow, listen }) => {
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
@@ -49,14 +41,12 @@ function initApp() {
     app = new ChatApp(invoke, appWindow, listen);
     app.init().then(() => {
         setMarkdownExtManager(app.extensionManager);
-        // Render extension toolbar buttons
         app.renderExtensionToolbarButtons();
     });
 
     // Initialize Kage Desktop viewer
     let desktopViewer = null;
     let currentSource = 'kage';
-    // Expose source state so ChatApp's session refresh doesn't overwrite desktop sessions
     window._kageSessionSource = 'kage';
 
     const kdElements = {
@@ -69,7 +59,6 @@ function initApp() {
         const available = await viewer.init();
         if (available) {
             desktopViewer = viewer;
-            // Wire up source toggle buttons
             const toggle = document.getElementById('sessionSourceToggle');
             if (toggle) {
                 toggle.querySelectorAll('.source-toggle-btn').forEach(btn => {
@@ -86,7 +75,6 @@ function initApp() {
                         } else {
                             desktopViewer.restoreInputArea();
                             app.renderSessionList();
-                            // Reload current assistant session
                             if (app.activeSessionId) {
                                 app.selectSession(app.activeSessionId);
                             }
@@ -94,7 +82,6 @@ function initApp() {
                     });
                 });
             }
-            // Also filter desktop sessions on search
             kdElements.sessionSearch?.addEventListener('input', () => {
                 if (currentSource === 'desktop') desktopViewer.renderSessionList();
             });
@@ -165,17 +152,14 @@ function initApp() {
             await app.loadSessions();
             await app.checkConnection();
 
-            // Refresh toolbar data
             app.loadModels();
             app.refreshContextUsage();
 
-            // Auto-select current session if nothing is selected
             if (!app.activeSessionId && app.currentAcpSessionId) {
                 const exists = app.sessions.find(s => s.session_id === app.currentAcpSessionId);
                 if (exists) {
                     await app.selectSession(app.currentAcpSessionId);
                 } else {
-                    // Add synthetic entry
                     app.sessions.unshift({
                         session_id: app.currentAcpSessionId,
                         title: 'Current Session',
@@ -196,10 +180,4 @@ function initApp() {
             app.renderSessionList();
         }
     });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
-} else {
-    initApp();
-}
+});
