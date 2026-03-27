@@ -4,7 +4,8 @@ import { KageDesktopViewer } from './kage-desktop.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
-import { createMascot } from '../shared/mascot.js';
+import { createMascotController, getMascotThemeSettings } from '../shared/mascot.js';
+import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 
 let app = null;
@@ -14,9 +15,20 @@ waitForTauri(({ invoke, appWindow, listen }) => {
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
 
-    // Render sidebar mascot
+    // Render sidebar mascot with outline and periodic waving
     const sidebarMascot = document.getElementById('sidebarMascot');
-    if (sidebarMascot) createMascot({ size: 28 }).then(svg => sidebarMascot.appendChild(svg));
+    if (sidebarMascot) {
+        const { outlineColor, invert } = getMascotThemeSettings();
+        createMascotController(sidebarMascot, {
+            size: 28,
+            idle: ANIMATIONS.waving,
+            periodic: ANIMATIONS.waving,
+            periodicInterval: 30000,
+            periodicJitter: 5000,
+            invert,
+            outline: { color: outlineColor, radius: 1.5 },
+        });
+    }
 
     // Re-apply theme when config changes
     listen('config_updated', async () => {

@@ -1,16 +1,16 @@
 /* Expanded chat dark theme overrides */
 
 body.dark-theme {
-    background: #19161D;
+    background: var(--kage-bg);
 }
 
 body.dark-theme .sidebar {
-    background: #1E1A24;
-    border-right-color: #352F3D;
+    background: var(--kage-bg-elevated);
+    border-right-color: var(--kage-border-subtle);
 }
 
 body.dark-theme .sidebar-header {
-    border-bottom-color: #352F3D;
+    border-bottom-color: var(--kage-border-subtle);
 }
 
 body.dark-theme .new-session-btn {
@@ -64,12 +64,12 @@ body.dark-theme .sidebar-footer-btn:hover {
 }
 
 body.dark-theme .chat-main {
-    background: #211D25;
+    background: var(--kage-bg);
 }
 
 body.dark-theme .chat-header {
-    background: #1E1A24;
-    border-bottom-color: #352F3D;
+    background: var(--kage-bg-elevated);
+    border-bottom-color: var(--kage-border-subtle);
 }
 
 body.dark-theme .chat-header-title {
@@ -77,7 +77,7 @@ body.dark-theme .chat-header-title {
 }
 
 body.dark-theme .messages-area {
-    background: #211D25;
+    background: var(--kage-bg);
 }
 
 /* Link colors handled globally via --kage-link tokens */
@@ -96,8 +96,8 @@ body.dark-theme .typing-indicator {
 }
 
 body.dark-theme .chat-input-container {
-    background: #1E1A24;
-    border-top-color: #352F3D;
+    background: var(--kage-bg-elevated);
+    border-top-color: var(--kage-border-subtle);
 }
 
 body.dark-theme .chat-input-wrapper {

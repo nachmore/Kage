@@ -72,12 +72,6 @@ body {
 .sidebar-logo {
     width: 28px;
     height: 28px;
-    animation: gentleFloat 3s ease-in-out infinite;
-}
-
-@keyframes gentleFloat {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-3px); }
 }
 
 .sidebar-title {

@@ -37,13 +37,13 @@ class AboutSettingsModule extends SettingsModule {
         // Render mascot
         const mascotEl = document.getElementById('aboutMascot');
         if (mascotEl) {
-            const { createMascot } = await import('../shared/mascot.js');
+            const { createMascot, getMascotThemeSettings } = await import('../shared/mascot.js');
+            const { outlineColor, invert } = getMascotThemeSettings();
             const owl = await createMascot({
                 size: 72,
-                outline: { color: 'var(--kage-mascot-outline, #7138CC)', radius: 1.5 },
+                invert,
+                outline: { color: outlineColor, radius: 1.5 },
             });
-            // White body on dark, dark body on light — override the CSS variable on this instance
-            owl.style.setProperty('--kage-mascot-body', 'var(--kage-text-bright, #ffffff)');
             mascotEl.appendChild(owl);
         }
 

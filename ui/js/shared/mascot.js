@@ -11,11 +11,25 @@
  * CSS variables consumed (with fallbacks):
  *   --kage-mascot-body:  body fill color   (default: --kage-accent-light / #C09CFF in dark, #1a1a1a in light)
  *   --kage-mascot-eyes:  eye area fill     (default: --kage-bg / #1e1e1e in dark, #ffffff in light)
+ *   --kage-mascot-outline: outline color for SVG filter (default: #38B2AC)
+ *   --kage-mascot-invert: set to "1" to render mascot white (default: "0")
  */
 
 // ─── SVG source ─────────────────────────────────────────────────────────────
 const MASCOT_SVG_PATH = 'assets/kage-icon.svg';
 let _svgCache = null; // cached parsed SVG document
+
+/**
+ * Read mascot theme settings from CSS custom properties.
+ * Returns { outlineColor, invert } resolved from the current theme.
+ */
+export function getMascotThemeSettings() {
+    const style = getComputedStyle(document.documentElement);
+    const outlineColor = style.getPropertyValue('--kage-mascot-outline').trim() || '#38B2AC';
+    const invertVal = style.getPropertyValue('--kage-mascot-invert').trim();
+    const invert = invertVal === '1' || invertVal === 'true';
+    return { outlineColor, invert };
+}
 
 /** Fetch and parse the mascot SVG, caching the result. */
 async function loadMascotSVG() {
@@ -148,7 +162,7 @@ export async function createMascot(opts = {}) {
     if (className) className.split(' ').forEach(c => c && svg.classList.add(c));
 
     if (outline) {
-        const color = typeof outline === 'string' ? outline : (outline.color || 'var(--kage-mascot-outline, #7138CC)');
+        const color = typeof outline === 'string' ? outline : (outline.color || '#38B2AC');
         const radius = (typeof outline === 'object' && outline.radius) || 2;
         const filterId = ensureOutlineFilter(color, radius);
         svg.style.filter = `url(#${filterId})`;
@@ -219,7 +233,7 @@ export function createAnimatedMascot(opts = {}) {
     // Set up outline filter if requested
     let filterStyle = '';
     if (outline) {
-        const color = typeof outline === 'string' ? outline : (outline.color || '#ff8c00');
+        const color = typeof outline === 'string' ? outline : (outline.color || '#38B2AC');
         const radius = outline.radius || 2;
         const filterId = ensureOutlineFilter(color, radius);
         filterStyle = `filter:url(#${filterId});`;

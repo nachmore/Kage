@@ -3,7 +3,7 @@ import { FloatingApp } from './app.js';
 import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
-import { createMascotController } from '../shared/mascot.js';
+import { createMascotController, getMascotThemeSettings } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 
@@ -33,12 +33,15 @@ waitForTauri(({ invoke, appWindow, listen }) => {
     // Set up mascot with idle → periodic waving → jumping when active
     const mascotContainer = document.getElementById('floatingMascot');
     if (mascotContainer) {
+        const { outlineColor, invert } = getMascotThemeSettings();
         const mascotCtrl = createMascotController(mascotContainer, {
             size: 40,
             idle: ANIMATIONS.waving,
             periodic: ANIMATIONS.waving,
             periodicInterval: 10000,
             periodicJitter: 2000,
+            invert,
+            outline: { color: outlineColor, radius: 2 },
             preload: [ANIMATIONS.jumping],
         });
         // Expose so FloatingApp can drive it from startThinking/stopThinking
