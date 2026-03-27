@@ -256,18 +256,29 @@ fn position_floating_window_with_height(
     }
 }
 
-/// Center the floating window horizontally on the active monitor, 1/3 down
-pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
+/// Center a window on the active monitor.
+/// `vertical_fraction` controls vertical placement (0.33 = 1/3 down, 0.5 = centered).
+/// `default_size` is used if the window's inner size can't be determined.
+pub fn center_on_active_monitor(
+    window: &WebviewWindow,
+    vertical_fraction: f64,
+    default_size: tauri::PhysicalSize<u32>,
+) {
     if let Some(monitor) = get_active_monitor(window) {
-        let pos = monitor.position();
-        let size = monitor.size();
-        let window_size = window.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
-        let x = pos.x + (size.width as i32 - window_size.width as i32) / 2;
-        let y = pos.y + size.height as i32 / 3;
+        let mon_pos = monitor.position();
+        let mon_size = monitor.size();
+        let win_size = window.inner_size().unwrap_or(default_size);
+        let x = mon_pos.x + (mon_size.width as i32 - win_size.width as i32) / 2;
+        let y = mon_pos.y + ((mon_size.height as f64 - win_size.height as f64) * vertical_fraction) as i32;
         let _ = window.set_position(tauri::Position::Physical(
             tauri::PhysicalPosition { x, y },
         ));
     }
+}
+
+/// Center the floating window horizontally on the active monitor, 1/3 down
+pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
+    center_on_active_monitor(window, 0.33, tauri::PhysicalSize { width: 500, height: 60 });
 }
 
 #[tauri::command]
@@ -302,19 +313,7 @@ pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
 
 /// Center a window on the active monitor (where the cursor is)
 pub fn center_window_on_active_monitor(window: &WebviewWindow) {
-    if let Some(monitor) = get_active_monitor(window) {
-        let mon_pos = monitor.position();
-        let mon_size = monitor.size();
-        let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize {
-            width: 800,
-            height: 600,
-        });
-        let x = mon_pos.x + (mon_size.width as i32 - win_size.width as i32) / 2;
-        let y = mon_pos.y + (mon_size.height as i32 - win_size.height as i32) / 2;
-        let _ = window.set_position(tauri::Position::Physical(
-            tauri::PhysicalPosition { x, y },
-        ));
-    }
+    center_on_active_monitor(window, 0.5, tauri::PhysicalSize { width: 800, height: 600 });
 }
 
 #[tauri::command]
@@ -395,11 +394,6 @@ pub async fn resize_floating_window(
 
     let target_width = width.unwrap_or(current_size.width);
     let target_height = height.unwrap_or(current_size.height);
-
-    info!(
-        "resize_floating_window: {}x{} -> {}x{}",
-        current_size.width, current_size.height, target_width, target_height
-    );
 
     window
         .set_size(tauri::Size::Physical(tauri::PhysicalSize {
