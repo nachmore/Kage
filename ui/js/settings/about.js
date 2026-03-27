@@ -26,6 +26,7 @@ class AboutSettingsModule extends SettingsModule {
                     </div>
                     <div class="about-actions">
                         <button class="setting-button" id="showWelcomeBtn">Show Welcome Screen</button>
+                        <button class="setting-button" id="openConfigFolderBtn" style="margin-left:8px;">Open Config Folder</button>
                     </div>
                 </div>
             </div>
@@ -53,6 +54,22 @@ class AboutSettingsModule extends SettingsModule {
                     await window.__TAURI__.core.invoke('open_welcome_window');
                 } catch (e) {
                     console.error('Failed to open welcome window:', e);
+                }
+            });
+        }
+
+        const configBtn = document.getElementById('openConfigFolderBtn');
+        if (configBtn) {
+            configBtn.addEventListener('click', async () => {
+                try {
+                    const folders = await window.__TAURI__.core.invoke('get_common_folders');
+                    const configBase = folders?.config;
+                    if (configBase) {
+                        const sep = configBase.includes('\\') ? '\\' : '/';
+                        await window.__TAURI__.core.invoke('open_path', { path: configBase + sep + 'kage' });
+                    }
+                } catch (e) {
+                    console.error('Failed to open config folder:', e);
                 }
             });
         }
