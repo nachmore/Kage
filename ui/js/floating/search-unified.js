@@ -93,14 +93,27 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
 
         let item = existingByKey.get(key);
         if (item) {
-            // Reuse existing DOM node — update content if it's an extension item
+            // Reuse existing DOM node — update content
             existingByKey.delete(key);
+            let updated = false;
             if (r._extensionId && extMgr) {
                 const customEl = document.createElement('div');
                 customEl.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1;';
                 if (extMgr.renderResult(r, customEl)) {
                     item.innerHTML = '';
                     item.appendChild(customEl);
+                    updated = true;
+                }
+            }
+            // If no custom renderer handled it, update text if it changed
+            if (!updated) {
+                const nameEl = item.querySelector('.app-name');
+                if (nameEl && nameEl.textContent !== r.label) {
+                    nameEl.textContent = r.label;
+                }
+                const descEl = item.querySelector('.app-description');
+                if (descEl && r.description && descEl.textContent !== r.description) {
+                    descEl.textContent = r.description;
                 }
             }
         } else {
