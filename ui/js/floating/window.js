@@ -92,12 +92,20 @@ export class WindowManager {
         // Don't auto-resize while the user is manually dragging the resize handle
         if (this.isResizing) return;
 
+        // Don't auto-resize while the permission modal is open — it manages its own size
+        const permModal = document.getElementById('permissionModal');
+        if (permModal && permModal.style.display !== 'none') return;
+
         if (this.resizeTimeout) {
             clearTimeout(this.resizeTimeout);
         }
         
         this.resizeTimeout = setTimeout(async () => {
             try {
+                // Re-check permission modal — it may have opened during the debounce delay
+                const permModal2 = document.getElementById('permissionModal');
+                if (permModal2 && permModal2.style.display !== 'none') return;
+
                 // Force layout reflow before measuring
                 void document.body.offsetHeight;
 
@@ -302,6 +310,10 @@ export class WindowManager {
     }
 
     async resetHeightForNewMessage() {
+        // Don't reset height while the permission modal is open
+        const permModal = document.getElementById('permissionModal');
+        if (permModal && permModal.style.display !== 'none') return;
+
         try {
             const scale = window.devicePixelRatio || 1;
             let height;

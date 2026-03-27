@@ -396,6 +396,11 @@ pub async fn resize_floating_window(
     let target_width = width.unwrap_or(current_size.width);
     let target_height = height.unwrap_or(current_size.height);
 
+    info!(
+        "resize_floating_window: {}x{} -> {}x{}",
+        current_size.width, current_size.height, target_width, target_height
+    );
+
     window
         .set_size(tauri::Size::Physical(tauri::PhysicalSize {
             width: target_width,

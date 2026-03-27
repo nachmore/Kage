@@ -430,6 +430,42 @@ export function createMascotController(container, opts = {}) {
         container.innerHTML = '';
     }
 
+    let _pausedState = null;
+
+    /** Freeze the mascot on its current idle frame and stop all timers. */
+    function pause() {
+        if (_pausedState) return; // already paused
+        _pausedState = state;
+        if (periodicTimer) { clearTimeout(periodicTimer); periodicTimer = null; }
+        for (const { anim } of anims.values()) {
+            if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
+        }
+        // Show static idle frame
+        if (idle) {
+            const { key, anim } = getOrCreate(idle);
+            switchTo(key);
+            anim.showIdle();
+        }
+        state = 'paused';
+    }
+
+    /** Resume from where we left off. */
+    function resume() {
+        if (!_pausedState) return;
+        const prev = _pausedState;
+        _pausedState = null;
+        if (prev === 'active') {
+            // Can't resume active without knowing which animation — just go idle
+            state = 'idle';
+            showStatic();
+            schedulePeriodicPlay();
+        } else {
+            state = 'idle';
+            showStatic();
+            schedulePeriodicPlay();
+        }
+    }
+
     // Preload all images, then initialize
     const allFrames = new Set();
     if (idle) idle.frames.forEach(f => allFrames.add(f));
@@ -448,5 +484,5 @@ export function createMascotController(container, opts = {}) {
         }
     });
 
-    return { setActive, setIdle, destroy, get state() { return state; } };
+    return { setActive, setIdle, pause, resume, destroy, get state() { return state; } };
 }

@@ -563,3 +563,11 @@ body.light-theme .floating-model-selector:hover {
     padding-left: 12px;
     padding-right: 12px;
 }
+
+/* Permission modal overlay — transparent in floating window to preserve
+   the window's own transparency and rounded corners. The modal card itself
+   provides enough visual contrast. */
+.permission-modal-overlay {
+    background: transparent;
+    backdrop-filter: none;
+}

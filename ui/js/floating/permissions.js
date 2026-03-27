@@ -1,369 +1,166 @@
 /**
- * Permission Modal Handler
- * Handles tool permission requests from the ACP
+ * Permission Modal Handler — Floating Window
+ *
+ * Uses shared permissions-core for all common logic.
+ * Adds floating-specific behavior:
+ *   - Resizes the floating window to fit the modal
+ *   - Checks session ownership (only handles floating session requests)
+ *   - Sends OS notifications when window is hidden
+ *   - Checks has_pending_permission before showing
  */
 
-import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
+import { createPermissionHandler } from '../shared/permissions-core.js';
 
 const { invoke } = window.__TAURI__.core;
 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
 
-let currentPermissionRequest = null;
-let _extensionToolCallback = null;
-let _permissionQueue = [];
+const handler = createPermissionHandler(invoke, appWindow, {
+    // Resize the floating window to fit the permission modal
+    async onShow(modal) {
+        // Pause mascot animations while modal is open
+        if (window._kageMascot) window._kageMascot.pause();
 
-/**
- * Show permission modal
- */
-async function showPermissionModal(notification, toolName) {
-    const modal = document.getElementById('permissionModal');
-    const toolTitle = document.getElementById('permissionToolTitle');
-    const toolNameEl = document.getElementById('permissionToolName');
-    
-    if (!modal || !toolTitle) {
-        console.error('Permission modal elements not found');
-        return;
-    }
-
-    // If a permission is already showing, queue this one
-    if (currentPermissionRequest && modal.style.display === 'flex') {
-        _permissionQueue.push({ notification, toolName });
-        console.log(`[Permissions] Queued permission request (${_permissionQueue.length} in queue)`);
-        return;
-    }
-    
-    // Extract tool information
-    const params = notification.params || {};
-    const toolCall = params.toolCall || {};
-    const title = toolCall.title || 'Unknown Tool';
-    
-    // Store the current request
-    currentPermissionRequest = {
-        id: notification.id,
-        sessionId: params.sessionId,
-        toolCall: toolCall,
-        options: params.options || [],
-        toolName: toolName || null
-    };
-    
-    // Update modal content
-    toolTitle.textContent = title;
-    
-    // Show tool name with emoji if available
-    if (toolNameEl) {
-        if (toolName) {
-            const emoji = getToolEmoji(toolName);
-            toolNameEl.innerHTML = `<span class="tool-emoji">${emoji}</span><span class="tool-label">${escapeHtml(toolName)}</span>`;
-            toolNameEl.style.display = 'flex';
-        } else {
-            toolNameEl.style.display = 'none';
+        // Cancel any in-flight WindowManager animation/debounce that could fight our resize
+        const wm = window._floatingApp?.windowManager;
+        if (wm) {
+            if (wm.resizeTimeout) { clearTimeout(wm.resizeTimeout); wm.resizeTimeout = null; }
+            if (wm._animFrame) { cancelAnimationFrame(wm._animFrame); wm._animFrame = null; }
         }
-    }
-    
-    // Show modal
-    modal.style.display = 'flex';
-    
-    // Prevent window from hiding while modal is open
-    try {
-        await appWindow.setFocus();
-        await appWindow.setAlwaysOnTop(true);
-    } catch (error) {
-        console.error('Failed to set window focus:', error);
-    }
-    
-    // Resize window to fit the permission modal.
-    // Two-pass: first grow large enough, then measure and fine-tune.
-    try {
-        const scale = window.devicePixelRatio || 1;
 
-        // First pass: grow to a generous size so the modal can lay out fully
-        await invoke('resize_floating_window', {
-            width: Math.round(540 * scale),
-            height: Math.round(520 * scale)
-        });
+        try {
+            await appWindow.setFocus();
+            await appWindow.setAlwaysOnTop(true);
+        } catch (error) {
+            console.error('Failed to set window focus:', error);
+        }
 
-        // Wait for layout to settle
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // Two-pass resize: first grow large enough, then measure and fine-tune
+        try {
+            const scale = window.devicePixelRatio || 1;
 
-        // Second pass: measure the actual modal and fit precisely
-        const modalEl = modal.querySelector('.permission-modal');
-        if (modalEl) {
-            const rect = modalEl.getBoundingClientRect();
-            // Account for overlay padding (20px top + 20px bottom) and some breathing room
-            const neededHeight = Math.round((rect.height + 60) * scale);
-            const neededWidth = Math.round(540 * scale);
             await invoke('resize_floating_window', {
-                width: neededWidth,
-                height: Math.max(neededHeight, Math.round(520 * scale))
+                width: Math.round(540 * scale),
+                height: Math.round(700 * scale)
             });
-        }
-    } catch (error) {
-        console.error('Failed to resize window for modal:', error);
-    }
-}
 
-/**
- * Hide permission modal
- */
-async function hidePermissionModal() {
-    const modal = document.getElementById('permissionModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    currentPermissionRequest = null;
+            await new Promise(resolve => setTimeout(resolve, 50));
 
-    // Show next queued permission request
-    if (_permissionQueue.length > 0) {
-        const next = _permissionQueue.shift();
-        console.log(`[Permissions] Showing next queued request (${_permissionQueue.length} remaining)`);
-        setTimeout(() => showPermissionModal(next.notification, next.toolName), 150);
-        return; // Don't resize yet — the next modal will handle it
-    }
-
-    // Trigger a resize back to fit the current content
-    try {
-        // Use the FloatingApp's window manager if available
-        if (window._floatingApp?.windowManager) {
-            await window._floatingApp.windowManager.resizeWindow();
-        }
-    } catch (e) {
-        // ignore
-    }
-}
-
-/**
- * Handle permission response
- */
-async function handlePermissionResponse(optionId, policyOverride) {
-    if (!currentPermissionRequest) {
-        console.error('No active permission request');
-        return;
-    }
-    
-    console.log('Handling permission response:', optionId, policyOverride || '');
-    
-    try {
-        const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
-
-        // Extension tool requests use a callback instead of ACP response
-        if (_extensionToolCallback) {
-            const allowed = optionId === 'allow_once' || optionId === 'allow_always';
-            const updatePolicy = policyOverride || (optionId === 'allow_always' ? 'allow' : null);
-            if (updatePolicy) {
-                await invoke('update_tool_policy', { toolTitle: policyTitle, policy: updatePolicy });
+            const modalEl = modal.querySelector('.permission-modal');
+            if (modalEl) {
+                const rect = modalEl.getBoundingClientRect();
+                const neededHeight = Math.round((rect.height + 80) * scale);
+                const neededWidth = Math.round(540 * scale);
+                const finalHeight = Math.max(neededHeight, Math.round(600 * scale));
+                await invoke('resize_floating_window', {
+                    width: neededWidth,
+                    height: finalHeight
+                });
             }
-            const cb = _extensionToolCallback;
-            _extensionToolCallback = null;
-            await hidePermissionModal();
-            cb(allowed);
-            return;
+        } catch (error) {
+            console.error('Failed to resize window for modal:', error);
         }
+    },
 
-        console.log('Sending permission response to backend...');
-        await invoke('send_permission_response', {
-            requestId: currentPermissionRequest.id,
-            optionId: optionId,
-            toolTitle: policyTitle
-        });
-        
-        // If "Always Deny", update the tool policy to "deny"
-        if (policyOverride) {
-            await invoke('update_tool_policy', {
-                toolTitle: policyTitle,
-                policy: policyOverride
-            });
-        }
-        
-        console.log('Permission response sent successfully');
-        
-        // Small delay to ensure the response is processed
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        await hidePermissionModal();
-        console.log('Modal hidden, conversation should continue');
-    } catch (error) {
-        console.error('Failed to send permission response:', error);
-        alert('Failed to send permission response: ' + error);
-    }
-}
+    // Resize back to fit content after modal is hidden
+    async onHide(_modal, hasQueuedNext) {
+        // Resume mascot animations (only when no more queued modals)
+        if (!hasQueuedNext && window._kageMascot) window._kageMascot.resume();
 
-/**
- * Initialize permission modal
- */
-function initPermissionModal() {
-    // Set up button handlers
-    const denyAlwaysBtn = document.getElementById('permissionDenyAlways');
-    const denyBtn = document.getElementById('permissionDeny');
-    const onceBtn = document.getElementById('permissionOnce');
-    const alwaysBtn = document.getElementById('permissionAlways');
-    
-    if (denyAlwaysBtn) {
-        denyAlwaysBtn.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
-    }
-    
-    if (denyBtn) {
-        denyBtn.addEventListener('click', () => handlePermissionResponse('reject_once'));
-    }
-    
-    if (onceBtn) {
-        onceBtn.addEventListener('click', () => handlePermissionResponse('allow_once'));
-    }
-    
-    if (alwaysBtn) {
-        alwaysBtn.addEventListener('click', () => handlePermissionResponse('allow_always'));
-    }
-    
-    // Listen for permission requests from backend
-    appWindow.listen('permission_request', async (event) => {
-        console.log('Permission request received:', event.payload);
-        
+        if (hasQueuedNext) return; // Next modal will handle sizing
+        try {
+            if (window._floatingApp?.windowManager) {
+                await window._floatingApp.windowManager.resizeWindow();
+            }
+        } catch (e) { /* ignore */ }
+    },
+
+    // Only handle requests for the floating window's own session
+    async onRequestReceived(event, invoke, appWindow) {
         const { notification, auto_approve } = event.payload;
         const requestSessionId = notification.params?.sessionId || '';
 
-        // Only handle permission requests for the floating window's own session.
         let floatingSessionId = null;
         try {
             floatingSessionId = await invoke('get_floating_session_id');
         } catch (e) { console.warn('[Permissions] Failed to get floating session ID:', e); }
 
-        // Strict check: only handle if the request is for the floating session
-        // AND originated from the floating window (source check)
         const source = event.payload.source || '';
         const isFloatingSession = requestSessionId && floatingSessionId
             && requestSessionId === floatingSessionId;
 
-        // If the request didn't originate from floating, only show if we're already visible
         let isVisible = false;
         try { isVisible = await appWindow.isVisible(); } catch {}
-        console.log(`[Permissions] source=${source} isVisible=${isVisible} reqSession=${requestSessionId} floatingSession=${floatingSessionId} isFloatingSession=${isFloatingSession}`);
 
         if (source !== 'floating' && !isVisible) {
             console.log('Ignoring permission request — originated from chat, floating hidden');
-            return;
+            return { handle: false };
         }
 
         if (!isFloatingSession) {
             console.log('Ignoring permission request — not for floating session');
-            return;
+            return { handle: false };
         }
-        
+
         if (auto_approve) {
-            // Auto-approve the request
-            console.log('Auto-approving permission request');
-            invoke('send_permission_response', {
-                requestId: notification.id,
-                optionId: 'allow_once',
-                toolTitle: notification.params?.toolCall?.title || 'Unknown'
-            }).catch(error => {
-                console.error('Failed to auto-approve:', error);
-            });
-        } else {
-            // Double-check with the backend that this request is still pending.
-            // It may have been auto-denied by dismiss_pending_permission already.
-            let stillPending = false;
+            return { handle: true };
+        }
+
+        // Double-check the request is still pending
+        let stillPending = false;
+        try {
+            stillPending = await invoke('has_pending_permission');
+        } catch (e) { stillPending = true; }
+
+        if (!stillPending) {
+            console.log('Permission request already handled, skipping modal');
+            return { handle: false };
+        }
+
+        const currentlyVisible = await appWindow.isVisible();
+        const eventSource = event.payload.source || 'floating';
+
+        // Force-show the floating window if the request originated from it
+        if (!currentlyVisible && eventSource === 'floating') {
+            const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
+            const toolName = event.payload.toolName || '';
+            const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;
             try {
-                stillPending = await invoke('has_pending_permission');
-            } catch (e) { /* assume pending if check fails */ stillPending = true; }
-
-            if (stillPending) {
-                const isVisible = await appWindow.isVisible();
-                const source = event.payload.source || 'floating';
-
-                // Only force-show the floating window if the request originated from it
-                if (!isVisible && source === 'floating') {
-                    const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
-                    const toolName = event.payload.toolName || '';
-                    const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;
-                    try {
-                        const notif = window.__TAURI__?.notification;
-                        if (notif) {
-                            let granted = await notif.isPermissionGranted();
-                            if (!granted) {
-                                const perm = await notif.requestPermission();
-                                granted = perm === 'granted';
-                            }
-                            if (granted) {
-                                notif.sendNotification({
-                                    title: '🔐 Tool Permission Required',
-                                    body: body
-                                });
-                            }
-                        }
-                    } catch { /* ignore */ }
-                    await appWindow.show();
-                    await appWindow.setFocus();
+                const notif = window.__TAURI__?.notification;
+                if (notif) {
+                    let granted = await notif.isPermissionGranted();
+                    if (!granted) {
+                        const perm = await notif.requestPermission();
+                        granted = perm === 'granted';
+                    }
+                    if (granted) {
+                        notif.sendNotification({
+                            title: '🔐 Tool Permission Required',
+                            body: body
+                        });
+                    }
                 }
-
-                // Show the modal if the window is visible (either already open or just shown)
-                const nowVisible = await appWindow.isVisible();
-                if (nowVisible) {
-                    showPermissionModal(notification, event.payload.toolName);
-                }
-            } else {
-                console.log('Permission request already handled, skipping modal');
-            }
+            } catch { /* ignore */ }
+            await appWindow.show();
+            await appWindow.setFocus();
         }
-    });
-    
-    // Close modal on overlay click
-    const modal = document.getElementById('permissionModal');
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                handlePermissionResponse('reject_once');
-            }
-        });
+
+        const nowVisible = await appWindow.isVisible();
+        if (!nowVisible) return { handle: false };
+
+        return { handle: true };
     }
+});
 
-    // Esc to deny, block all keyboard input while modal is open
-    document.addEventListener('keydown', (e) => {
-        if (!currentPermissionRequest) return;
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            handlePermissionResponse('reject_once');
-        } else {
-            // Block typing from reaching the input behind the modal
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    }, true);
-}
-
-// Initialize when DOM is ready
+// Initialize
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initPermissionModal);
+    document.addEventListener('DOMContentLoaded', () => handler.init());
 } else {
-    initPermissionModal();
-    // Listen for permission dismissal from other windows
-    appWindow.listen('permission_dismissed', () => {
-        _permissionQueue = []; // Clear queue — other window handled it
-        hidePermissionModal();
-    });
+    handler.init();
 }
 
-// Export for use in other modules
+// Export for use by FloatingApp (extension tool permission checks)
 window.PermissionModal = {
-    show: showPermissionModal,
-    hide: hidePermissionModal,
-    /**
-     * Show the permission modal for an extension tool call.
-     * Returns a promise that resolves to true (allowed) or false (denied).
-     */
-    showForExtensionTool(extensionId, toolName, icon) {
-        return new Promise((resolve) => {
-            const toolTitle = `ext:${extensionId}/${toolName}`;
-            const notification = {
-                id: null,
-                params: {
-                    toolCall: {
-                        title: `${icon} ${extensionId}/${toolName}`,
-                    },
-                    options: [],
-                },
-            };
-            _extensionToolCallback = resolve;
-            showPermissionModal(notification, toolTitle);
-        });
-    }
+    show: handler.show,
+    hide: handler.hide,
+    showForExtensionTool: handler.showForExtensionTool,
 };
