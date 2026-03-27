@@ -1,0 +1,21 @@
+{
+  "name": "Kiro-ish Dark",
+  "colors": {
+    "kage-accent": "#7138CC",
+    "kage-accent-hover": "#8E47FF",
+    "kage-accent-active": "#5E2EB3",
+    "kage-accent-light": "#C09CFF",
+    "kage-accent-glow": "rgba(142, 71, 255, 0.3)",
+    "kage-gradient": "linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%)",
+    "kage-bg": "#1e1e1e",
+    "kage-bg-elevated": "#252526",
+    "kage-bg-input": "#2d2d30",
+    "kage-border": "#3c3c3c",
+    "kage-border-subtle": "#2b2b2b",
+    "kage-text": "#cccccc",
+    "kage-text-bright": "#ffffff",
+    "kage-text-muted": "#888888",
+    "kage-section-accent": "#00b7c3",
+    "kage-mascot-outline": "#7138CC"
+  }
+}

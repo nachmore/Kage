@@ -46,16 +46,17 @@ body {
     gap: 8px;
     padding: 8px 12px;
     margin: -4px -4px -4px -4px;
-    background: linear-gradient(135deg, #2d3a5a 0%, #1a2a4a 100%);
+    background: linear-gradient(135deg, var(--kage-bg-elevated) 0%, var(--kage-bg) 100%);
     border-radius: 6px;
     cursor: pointer;
     font-size: 12px;
-    color: #c8d6e9;
+    color: var(--kage-text);
+    border: 1px solid var(--kage-border-subtle);
     transition: background 0.2s;
     user-select: none;
 }
 .floating-banner:hover {
-    background: linear-gradient(135deg, #3a4b6b 0%, #243a5a 100%);
+    background: linear-gradient(135deg, var(--kage-border) 0%, var(--kage-bg-elevated) 100%);
 }
 .floating-banner-icon { font-size: 30px; flex-shrink: 0; }
 .floating-banner-text { flex: 1; line-height: 1.4; }

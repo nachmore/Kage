@@ -1,0 +1,21 @@
+{
+  "name": "Kiro-ish Light",
+  "colors": {
+    "kage-accent": "#7138CC",
+    "kage-accent-hover": "#8E47FF",
+    "kage-accent-active": "#5E2EB3",
+    "kage-accent-light": "#7138CC",
+    "kage-accent-glow": "rgba(113, 56, 204, 0.15)",
+    "kage-gradient": "linear-gradient(135deg, #8FCDFC 0%, #C09CFF 100%)",
+    "kage-bg": "#f5f5f5",
+    "kage-bg-elevated": "#ffffff",
+    "kage-bg-input": "#ffffff",
+    "kage-border": "#d4d4d4",
+    "kage-border-subtle": "#e5e5e5",
+    "kage-text": "#333333",
+    "kage-text-bright": "#111111",
+    "kage-text-muted": "#777777",
+    "kage-section-accent": "#00b7c3",
+    "kage-mascot-outline": "#7138CC"
+  }
+}

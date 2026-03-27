@@ -913,14 +913,14 @@ body.light-theme .taskplan-done .taskplan-icon {
     width: 28px;
     height: 28px;
     padding: 0;
-    background: rgba(100, 100, 255, 0.1);
-    border: 1px solid rgba(100, 100, 255, 0.25);
+    background: var(--kage-accent-glow);
+    border: 1px solid var(--kage-accent);
     border-radius: 6px;
-    color: #818cf8;
+    color: var(--kage-accent-light);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s, color 0.15s, right 0.15s;
 }
-.speech-btn:hover { background: rgba(100, 100, 255, 0.2); border-color: rgba(100, 100, 255, 0.4); }
+.speech-btn:hover { background: var(--kage-accent-glow); border-color: var(--kage-accent-hover); color: var(--kage-accent-hover); }
 .speech-btn.listening,
 .chat-toolbar-btn.speech-listening {
     background: rgba(239, 68, 68, 0.15);
@@ -928,8 +928,8 @@ body.light-theme .taskplan-done .taskplan-icon {
     color: #ef4444;
     animation: speech-pulse 1.5s ease-in-out infinite;
 }
-body.light-theme .speech-btn { background: rgba(100, 100, 255, 0.08); border-color: rgba(100, 100, 255, 0.2); color: #6366f1; }
-body.light-theme .speech-btn:hover { background: rgba(100, 100, 255, 0.15); border-color: rgba(100, 100, 255, 0.35); }
+body.light-theme .speech-btn { background: var(--kage-accent-glow); border-color: var(--kage-accent); color: var(--kage-accent); }
+body.light-theme .speech-btn:hover { background: var(--kage-accent-glow); border-color: var(--kage-accent-hover); }
 
 @keyframes speech-pulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }

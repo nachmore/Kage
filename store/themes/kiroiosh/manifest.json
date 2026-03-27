@@ -1,0 +1,16 @@
+{
+  "id": "kiroiosh-theme",
+  "name": "Kiro-ish",
+  "version": "1.0.0",
+  "type": "theme",
+  "description": "Teal-accented theme with cool, calming tones. Inspired by the Kiro mascot palette.",
+  "icon": "🐱",
+  "author": "kage",
+
+  "contributes": {
+    "themes": {
+      "dark": "./dark.json",
+      "light": "./light.json"
+    }
+  }
+}
