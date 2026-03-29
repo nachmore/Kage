@@ -18,7 +18,7 @@ export function getToolIcon(kind) {
 
 /**
  * Get emoji for a tool name (used in permissions and settings)
- */
+ */ 
 export function getToolEmoji(name) {
     const lower = (name || '').toLowerCase();
     // Extension tools — use the extension's icon if available

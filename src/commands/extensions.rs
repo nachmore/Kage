@@ -681,3 +681,74 @@ pub async fn delete_extension_data(key: String) -> Result<(), AppError> {
         Err(e) => Err(format!("Failed to delete extension data '{}': {}", key, e))?,
     }
 }
+
+// ---------------------------------------------------------------------------
+// Bundled package installation (for first-run wizard)
+// ---------------------------------------------------------------------------
+
+/// Resolve the path to the bundled store/packages directory.
+/// Checks dev path first (project root), then next to the executable (production).
+fn bundled_packages_dir() -> Option<std::path::PathBuf> {
+    // Dev mode: relative to project root
+    let dev_path = std::path::PathBuf::from("store/packages");
+    if dev_path.exists() {
+        return Some(dev_path);
+    }
+
+    // Production: next to the executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let bundled = exe_dir.join("store").join("packages");
+            if bundled.exists() {
+                return Some(bundled);
+            }
+            // One level up (some installer layouts)
+            if let Some(parent) = exe_dir.parent() {
+                let up_one = parent.join("store").join("packages");
+                if up_one.exists() {
+                    return Some(up_one);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Install an extension from the bundled packages directory.
+/// Used by the first-run wizard to install recommended extensions without network access.
+#[tauri::command]
+pub async fn install_bundled_package(
+    id: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<extensions::InstalledItem, AppError> {
+    let packages_dir = bundled_packages_dir()
+        .ok_or_else(|| AppError::from("Bundled packages directory not found"))?;
+
+    // Try common naming patterns: id.zip, id-theme.zip
+    let candidates = vec![
+        packages_dir.join(format!("{}.zip", id)),
+        packages_dir.join(format!("{}-theme.zip", id)),
+    ];
+
+    let zip_path = candidates.into_iter()
+        .find(|p| p.exists())
+        .ok_or_else(|| AppError::from(format!("Bundled package not found for '{}'", id)))?;
+
+    info!("Installing bundled package '{}' from {:?}", id, zip_path);
+
+    let item = extensions::install_from_zip(&zip_path)
+        .map_err(|e| AppError::from(format!("Failed to install bundled package '{}': {}", id, e)))?;
+
+    let mut config = state.config.lock().unwrap();
+    config.extension_states.insert(item.manifest.id.clone(), true);
+    let _ = config.save();
+    drop(config);
+
+    if let Err(e) = app.emit("extensions_changed", ()) {
+        error!("Failed to emit extensions_changed: {}", e);
+    }
+
+    Ok(item)
+}
