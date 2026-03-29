@@ -35,8 +35,8 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             .build()?
     };
 
-    // Load tray icon from embedded PNG
-    let icon_bytes = include_bytes!("../ui/assets/kage-icon.png");
+    // Load tray icon — use 128px source so Windows can downscale crisply at any DPI
+    let icon_bytes = include_bytes!("../icons/128x128.png");
     let icon = tauri::image::Image::from_bytes(icon_bytes)
         .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
 
