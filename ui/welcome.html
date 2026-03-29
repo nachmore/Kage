@@ -289,13 +289,13 @@
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
         const { invoke } = window.__TAURI__.core;
         const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-        appWindow.show().then(() => appWindow.setFocus());
 
-        // Render mascot with periodic waving
+        // Render mascot before showing the window so it's visible immediately
         const mascotEl = document.getElementById('welcomeMascot');
+        let mascotReady = Promise.resolve();
         if (mascotEl) {
             const { outlineColor, invert } = getMascotThemeSettings();
-            createMascotController(mascotEl, {
+            const ctrl = createMascotController(mascotEl, {
                 size: 120,
                 idle: ANIMATIONS.waving,
                 periodic: ANIMATIONS.waving,
@@ -304,7 +304,11 @@
                 invert,
                 outline: { color: outlineColor, radius: 2 },
             });
+            mascotReady = ctrl.ready;
         }
+
+        // Show the window only after the first mascot frame has loaded
+        mascotReady.then(() => appWindow.show().then(() => appWindow.setFocus()));
 
         let currentStep = 0;
         const totalSteps = 4;

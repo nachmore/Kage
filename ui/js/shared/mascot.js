@@ -198,13 +198,17 @@ export function mascotHTML(opts = {}) {
 // ─── Animation support ──────────────────────────────────────────────────────
 
 /** Preload an image and return a promise that resolves when loaded. */
+const _preloadCache = new Map();
 function preloadImg(src) {
-    return new Promise((resolve) => {
+    if (_preloadCache.has(src)) return _preloadCache.get(src);
+    const p = new Promise((resolve) => {
         const img = new Image();
         img.onload = () => resolve(src);
         img.onerror = () => resolve(src); // resolve anyway, don't block
         img.src = src;
     });
+    _preloadCache.set(src, p);
+    return p;
 }
 
 /**
@@ -243,6 +247,7 @@ export function createAnimatedMascot(opts = {}) {
     const imgs = framePaths.map((src, i) => {
         const img = document.createElement('img');
         img.src = src;
+        preloadImg(src); // register in cache so later preloadImg calls share the same promise
         img.width = w;
         img.height = h;
         img.style.cssText = `position:absolute;top:0;left:0;display:${i === 0 ? 'block' : 'none'};${filterStyle}`;
@@ -455,12 +460,8 @@ export function createMascotController(container, opts = {}) {
         for (const { anim } of anims.values()) {
             if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
         }
-        // Show static idle frame
-        if (idle) {
-            const { key, anim } = getOrCreate(idle);
-            switchTo(key);
-            anim.showIdle();
-        }
+        // Return to idle — show placeholder or static frame
+        showStatic();
         state = 'paused';
     }
 
@@ -481,11 +482,26 @@ export function createMascotController(container, opts = {}) {
         }
     }
 
-    // Preload all images, then initialize
+    // Show the idle frame immediately (frame 0 is in the DOM as an <img>).
+    showStatic();
+
+    // Promise that resolves when the first visible frame has loaded.
+    // Callers can await this before showing the window.
+    const firstFrameSrc = idle?.frames?.[0];
+    const readyPromise = firstFrameSrc
+        ? new Promise(resolve => {
+            // Find the frame 0 <img> that createAnimatedMascot just created
+            const img = container.querySelector('img[src$="' + firstFrameSrc.split('/').pop() + '"]');
+            if (img && img.complete) { resolve(); }
+            else if (img) { img.onload = resolve; img.onerror = resolve; }
+            else { resolve(); }
+        })
+        : Promise.resolve();
+
+    // Preload remaining frames in the background for smooth animation later
     const allFrames = new Set();
     if (idle) idle.frames.forEach(f => allFrames.add(f));
     if (periodic) periodic.frames.forEach(f => allFrames.add(f));
-    // Also preload any extra animations passed in
     if (opts.preload) {
         for (const animDef of opts.preload) {
             animDef.frames.forEach(f => allFrames.add(f));
@@ -493,11 +509,10 @@ export function createMascotController(container, opts = {}) {
     }
 
     Promise.all([...allFrames].map(preloadImg)).then(() => {
-        showStatic();
         if (periodic) {
             setTimeout(() => { if (state === 'idle') playPeriodic(); }, 500);
         }
     });
 
-    return { setActive, setIdle, pause, resume, destroy, get state() { return state; } };
+    return { setActive, setIdle, pause, resume, destroy, ready: readyPromise, get state() { return state; } };
 }
