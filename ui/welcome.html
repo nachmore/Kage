@@ -139,6 +139,24 @@
         .ext-toggle-btn:hover { background: rgba(255,255,255,0.08); }
         .ext-loading { text-align: center; padding: 40px 0; color: #938F9B; font-size: 13px; }
         .ext-empty { text-align: center; padding: 40px 0; color: #938F9B; font-size: 13px; }
+
+        /* Detected agent card */
+        .agent-detected {
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px; padding: 20px; text-align: center;
+        }
+        .agent-detected-icon { font-size: 32px; margin-bottom: 8px; }
+        .agent-detected-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .agent-detected-path { font-size: 11px; color: #938F9B; word-break: break-all; margin-bottom: 4px; }
+        .agent-detected-version { font-size: 11px; color: #938F9B; }
+        .agent-detected-status { font-size: 13px; color: var(--kage-accent-light, #C09CFF); margin-bottom: 12px; }
+        .agent-manual-link {
+            font-size: 12px; color: var(--kage-accent); background: none; border: none;
+            cursor: pointer; padding: 4px 8px; margin-top: 12px;
+        }
+        .agent-manual-link:hover { text-decoration: underline; }
+        .agent-searching { text-align: center; padding: 30px 0; color: #938F9B; font-size: 13px; }
+        .agent-not-found { text-align: center; padding: 20px 0; color: #938F9B; font-size: 13px; margin-bottom: 16px; }
 </style>
 </head>
 <body>
@@ -165,36 +183,42 @@
             </div>
             <div class="step-content">
 
-            <div class="form-group">
-                <div class="section-label">Connection Mode</div>
-                <div class="section-desc">Choose how Kage connects to the ACP server that powers your AI agent.</div>
-                <select class="setting-select" id="wAcpMode">
-                    <option value="local">Local — spawn a process on this machine</option>
-                    <option value="remote">Remote — connect to a running server</option>
-                </select>
+            <div id="wAgentAutoDetect">
+                <div class="agent-searching">🔍 Searching for agents…</div>
             </div>
 
-            <div id="wLocalSettings">
+            <div id="wManualConfig" style="display:none;">
                 <div class="form-group">
-                    <div class="section-label">Spawn Command</div>
-                    <div class="section-desc">Full command to start the ACP server, including the path to the binary and any arguments.</div>
-                    <input type="text" class="setting-input" id="wSpawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
+                    <div class="section-label">Connection Mode</div>
+                    <div class="section-desc">Choose how Kage connects to the ACP server that powers your AI agent.</div>
+                    <select class="setting-select" id="wAcpMode">
+                        <option value="local">Local — spawn a process on this machine</option>
+                        <option value="remote">Remote — connect to a running server</option>
+                    </select>
                 </div>
-            </div>
 
-            <div id="wRemoteSettings" style="display:none;">
-                <div class="form-group">
-                    <div class="section-label">Host</div>
-                    <input type="text" class="setting-input" id="wAcpHost" value="127.0.0.1">
-                </div>
-                <div style="display:flex;gap:12px;">
-                    <div class="form-group" style="flex:1;">
-                        <div class="section-label">Port</div>
-                        <input type="number" class="setting-input" id="wAcpPort" value="8765">
+                <div id="wLocalSettings">
+                    <div class="form-group">
+                        <div class="section-label">Spawn Command</div>
+                        <div class="section-desc">Full command to start the ACP server, including the path to the binary and any arguments.</div>
+                        <input type="text" class="setting-input" id="wSpawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
                     </div>
-                    <div class="form-group" style="flex:1;">
-                        <div class="section-label">Timeout (ms)</div>
-                        <input type="number" class="setting-input" id="wAcpTimeout" value="30000">
+                </div>
+
+                <div id="wRemoteSettings" style="display:none;">
+                    <div class="form-group">
+                        <div class="section-label">Host</div>
+                        <input type="text" class="setting-input" id="wAcpHost" value="127.0.0.1">
+                    </div>
+                    <div style="display:flex;gap:12px;">
+                        <div class="form-group" style="flex:1;">
+                            <div class="section-label">Port</div>
+                            <input type="number" class="setting-input" id="wAcpPort" value="8765">
+                        </div>
+                        <div class="form-group" style="flex:1;">
+                            <div class="section-label">Timeout (ms)</div>
+                            <input type="number" class="setting-input" id="wAcpTimeout" value="30000">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -318,6 +342,9 @@
         const nextBtn = document.getElementById('nextBtn');
         let storeExtensions = []; // catalog items loaded on step 3
         let extCatalogLoaded = false;
+        let detectedAgent = null; // auto-detected agent, if any
+        let agentDetectionDone = false;
+        let useManualConfig = false;
 
         function showStep(n) {
             currentStep = n;
@@ -336,6 +363,78 @@
             document.getElementById('wLocalSettings').style.display = modeSelect.value === 'local' ? '' : 'none';
             document.getElementById('wRemoteSettings').style.display = modeSelect.value === 'remote' ? '' : 'none';
         });
+
+        // Agent auto-detection
+        async function runAgentDetection() {
+            if (agentDetectionDone) return;
+            const container = document.getElementById('wAgentAutoDetect');
+            try {
+                const agents = await invoke('detect_agents');
+                agentDetectionDone = true;
+                if (agents.length > 0) {
+                    detectedAgent = agents[0];
+                    const versionHtml = detectedAgent.version
+                        ? `<div class="agent-detected-version">${detectedAgent.version}</div>`
+                        : '';
+                    container.innerHTML = `
+                        <div class="agent-detected">
+                            <div class="agent-detected-icon">✅</div>
+                            <div class="agent-detected-status">Agent found</div>
+                            <div class="agent-detected-name">${detectedAgent.name}</div>
+                            <div class="agent-detected-path">${detectedAgent.path}</div>
+                            ${versionHtml}
+                            <button class="agent-manual-link" id="wShowManual">Configure manually</button>
+                        </div>`;
+                    document.getElementById('wShowManual').addEventListener('click', showManualConfig);
+                } else {
+                    container.innerHTML = `<div class="agent-not-found">No agent found automatically. Configure the connection below.</div>`;
+                    showManualConfig();
+                }
+            } catch (e) {
+                agentDetectionDone = true;
+                container.innerHTML = `<div class="agent-not-found">Could not detect agents. Configure the connection below.</div>`;
+                showManualConfig();
+            }
+        }
+
+        function showManualConfig() {
+            useManualConfig = true;
+            document.getElementById('wManualConfig').style.display = '';
+            // Collapse the detected agent card to a compact bar
+            if (detectedAgent) {
+                const container = document.getElementById('wAgentAutoDetect');
+                container.innerHTML = `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-bottom:16px;">
+                        <span style="font-size:12px;color:#938F9B;">✅ ${detectedAgent.name} found</span>
+                        <button class="agent-manual-link" id="wUseDetected" style="margin:0;">Use auto-detected</button>
+                    </div>`;
+                document.getElementById('wUseDetected').addEventListener('click', switchToDetected);
+            }
+            // Pre-fill the spawn command if empty
+            if (detectedAgent && !document.getElementById('wSpawnCommand').value) {
+                document.getElementById('wSpawnCommand').value = detectedAgent.spawn_command;
+            }
+        }
+
+        function switchToDetected() {
+            useManualConfig = false;
+            document.getElementById('wManualConfig').style.display = 'none';
+            // Restore the full detected agent card
+            const container = document.getElementById('wAgentAutoDetect');
+            const versionHtml = detectedAgent.version
+                ? `<div class="agent-detected-version">${detectedAgent.version}</div>`
+                : '';
+            container.innerHTML = `
+                <div class="agent-detected">
+                    <div class="agent-detected-icon">✅</div>
+                    <div class="agent-detected-status">Agent found</div>
+                    <div class="agent-detected-name">${detectedAgent.name}</div>
+                    <div class="agent-detected-path">${detectedAgent.path}</div>
+                    ${versionHtml}
+                    <button class="agent-manual-link" id="wShowManual">Configure manually</button>
+                </div>`;
+            document.getElementById('wShowManual').addEventListener('click', showManualConfig);
+        }
 
         // Load existing config
         let hotkeyPicker;
@@ -366,6 +465,9 @@
         }).catch(() => {
             hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, { modifiers: ['Alt'], key: 'Space' });
         });
+
+        // Start agent detection early (runs in background)
+        runAgentDetection();
 
         backBtn.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
 
@@ -458,16 +560,20 @@
                     try {
                         const config = await invoke('get_config');
                         if (!config.acp) config.acp = {};
-                        const mode = modeSelect.value;
-                        if (mode === 'local') {
-                            config.acp.mode = { type: 'local', spawn_command: document.getElementById('wSpawnCommand').value.trim() };
-                        } else {
-                            config.acp.mode = {
-                                type: 'remote',
-                                host: document.getElementById('wAcpHost').value,
-                                port: parseInt(document.getElementById('wAcpPort').value),
-                                timeout_ms: parseInt(document.getElementById('wAcpTimeout').value),
-                            };
+                        if (useManualConfig) {
+                            const mode = modeSelect.value;
+                            if (mode === 'local') {
+                                config.acp.mode = { type: 'local', spawn_command: document.getElementById('wSpawnCommand').value.trim() };
+                            } else {
+                                config.acp.mode = {
+                                    type: 'remote',
+                                    host: document.getElementById('wAcpHost').value,
+                                    port: parseInt(document.getElementById('wAcpPort').value),
+                                    timeout_ms: parseInt(document.getElementById('wAcpTimeout').value),
+                                };
+                            }
+                        } else if (detectedAgent) {
+                            config.acp.mode = { type: 'local', spawn_command: detectedAgent.spawn_command };
                         }
                         await invoke('save_config', { config });
                     } catch (e) { console.error('Failed to save ACP config:', e); }

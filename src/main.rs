@@ -637,6 +637,7 @@ fn main() {
             commands::open_welcome_window,
             commands::complete_first_run,
             commands::is_first_run,
+            commands::detect_agents,
             commands::get_startup_enabled,
             commands::set_startup_enabled,
             commands::get_computer_control_enabled,

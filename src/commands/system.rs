@@ -1188,3 +1188,121 @@ pub async fn is_activity_tracker_running(state: State<'_, AppState>) -> Result<b
 pub async fn get_app_icon(process_name: String) -> Result<Option<String>, AppError> {
     Ok(crate::os::get_app_icon(&process_name))
 }
+
+// ---------------------------------------------------------------------------
+// Agent auto-detection
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize, Clone)]
+pub struct DetectedAgent {
+    pub name: String,
+    pub path: String,
+    pub spawn_command: String,
+    pub version: Option<String>,
+}
+
+/// Search well-known locations for ACP-compatible agent binaries.
+#[tauri::command]
+pub async fn detect_agents() -> Result<Vec<DetectedAgent>, AppError> {
+    Ok(tauri::async_runtime::spawn_blocking(detect_agents_sync)
+        .await
+        .map_err(|e| format!("Task error: {}", e))?)
+}
+
+fn detect_agents_sync() -> Vec<DetectedAgent> {
+    let mut agents = Vec::new();
+    let home = dirs::home_dir();
+
+    // Known agent definitions: (display_name, binary_name, acp_args)
+    let known = [
+        ("Kiro CLI", "kiro-cli", "acp"),
+    ];
+
+    for (display_name, bin_name, acp_args) in &known {
+        let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+
+        // Windows-specific locations
+        #[cfg(target_os = "windows")]
+        {
+            if let Ok(local) = std::env::var("LOCALAPPDATA") {
+                candidates.push(std::path::PathBuf::from(&local).join("Toolbox").join("bin").join(format!("{}.exe", bin_name)));
+                candidates.push(std::path::PathBuf::from(&local).join("Programs").join(format!("{}.exe", bin_name)));
+            }
+            if let Some(ref h) = home {
+                candidates.push(h.join(".local").join("bin").join(format!("{}.exe", bin_name)));
+            }
+        }
+
+        // macOS-specific locations
+        #[cfg(target_os = "macos")]
+        {
+            if let Some(ref h) = home {
+                candidates.push(h.join(".local").join("bin").join(bin_name));
+                candidates.push(h.join(".toolbox").join("bin").join(bin_name));
+            }
+            candidates.push(std::path::PathBuf::from("/usr/local/bin").join(bin_name));
+            candidates.push(std::path::PathBuf::from("/opt/homebrew/bin").join(bin_name));
+        }
+
+        // Linux-specific locations
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(ref h) = home {
+                candidates.push(h.join(".local").join("bin").join(bin_name));
+                candidates.push(h.join(".toolbox").join("bin").join(bin_name));
+                candidates.push(h.join("bin").join(bin_name));
+            }
+            candidates.push(std::path::PathBuf::from("/usr/local/bin").join(bin_name));
+            candidates.push(std::path::PathBuf::from("/usr/bin").join(bin_name));
+            // Snap
+            candidates.push(std::path::PathBuf::from("/snap/bin").join(bin_name));
+        }
+
+        // Also check PATH via `which` / `where`
+        if let Ok(output) = std::process::Command::new(if cfg!(windows) { "where" } else { "which" })
+            .arg(bin_name)
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let p = std::path::PathBuf::from(line.trim());
+                    if !candidates.contains(&p) {
+                        candidates.push(p);
+                    }
+                }
+            }
+        }
+
+        // Check each candidate
+        for path in candidates {
+            if !path.exists() { continue; }
+
+            let path_str = path.to_string_lossy().to_string();
+
+            // Skip if we already found this exact path
+            if agents.iter().any(|a: &DetectedAgent| a.path == path_str) { continue; }
+
+            // Try to get version
+            let version = std::process::Command::new(&path)
+                .arg("--version")
+                .output()
+                .ok()
+                .and_then(|o| {
+                    if o.status.success() {
+                        let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                        if !v.is_empty() { Some(v) } else { None }
+                    } else { None }
+                });
+
+            agents.push(DetectedAgent {
+                name: display_name.to_string(),
+                path: path_str.clone(),
+                spawn_command: format!("{} {}", path_str, acp_args),
+                version,
+            });
+        }
+    }
+
+    agents
+}
