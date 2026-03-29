@@ -167,10 +167,21 @@
                         </div>
                     </div>
                     <div class="permission-actions">
-                        <button class="permission-btn permission-btn-deny-always" id="permissionDenyAlways">Always Deny</button>
-                        <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
-                        <button class="permission-btn permission-btn-once" id="permissionOnce">Allow</button>
-                        <button class="permission-btn permission-btn-always" id="permissionAlways">Always Allow</button>
+                        <div class="permission-deny-group">
+                            <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
+                            <button class="permission-btn permission-btn-deny-menu" id="permissionDenyMenu" title="More options">▾</button>
+                            <div class="permission-deny-dropdown" id="permissionDenyDropdown" style="display:none;">
+                                <button class="permission-dropdown-item permission-dropdown-deny" id="permissionDenyAlways">Always deny</button>
+                            </div>
+                        </div>
+                        <div class="permission-allow-group">
+                            <button class="permission-btn permission-btn-allow" id="permissionAllow">Allow</button>
+                            <button class="permission-btn permission-btn-allow-menu" id="permissionAllowMenu" title="More options">▾</button>
+                            <div class="permission-allow-dropdown" id="permissionAllowDropdown" style="display:none;">
+                                <button class="permission-dropdown-item" id="permissionAllow24h">Allow for 24 hours</button>
+                                <button class="permission-dropdown-item" id="permissionAllowAlways">Always allow</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

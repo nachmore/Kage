@@ -71,20 +71,71 @@ pub struct ToolPermissionsConfig {
     pub trust_all: bool,
     #[serde(default)]
     pub tools: Vec<ToolPolicy>,
+    /// Terminator mode: auto-approve all tool requests without any prompts
+    #[serde(default)]
+    pub terminator_mode: bool,
 }
 
-/// Per-tool permission policy: "ask", "allow", or "deny"
+/// Per-tool permission policy: "ask", "allow_once", "allow_24h", "allow_always", "deny"
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPolicy {
     pub title: String,
     #[serde(default = "default_policy")]
-    pub policy: String, // "ask", "allow", "deny"
+    pub policy: String,
     #[serde(default)]
-    pub last_seen: String, // ISO 8601 timestamp
+    pub last_seen: String,    // ISO 8601 — last time this tool was requested
+    #[serde(default)]
+    pub granted_at: String,   // ISO 8601 — when the current grant was issued
+    #[serde(default = "default_grant_type")]
+    pub grant_type: String,   // "once", "24h", "always"
 }
 
 fn default_policy() -> String {
     "ask".to_string()
+}
+
+fn default_grant_type() -> String {
+    "once".to_string()
+}
+
+impl ToolPolicy {
+    /// Check if this tool's grant is still valid.
+    /// Returns the effective policy considering expiry and staleness.
+    pub fn effective_policy(&self) -> &str {
+        if self.policy == "deny" {
+            return "deny";
+        }
+        if self.policy != "allow" {
+            return "ask";
+        }
+        // Policy is "allow" — check grant conditions
+        match self.grant_type.as_str() {
+            "always" => {
+                // Check 30-day staleness
+                if let Ok(last) = chrono::DateTime::parse_from_rfc3339(&self.last_seen) {
+                    let days = (chrono::Utc::now() - last.with_timezone(&chrono::Utc)).num_days();
+                    if days > 30 {
+                        return "ask"; // stale — re-prompt
+                    }
+                }
+                "allow"
+            }
+            "24h" => {
+                // Check if granted_at is within 24 hours
+                if let Ok(granted) = chrono::DateTime::parse_from_rfc3339(&self.granted_at) {
+                    let hours = (chrono::Utc::now() - granted.with_timezone(&chrono::Utc)).num_hours();
+                    if hours < 24 {
+                        return "allow";
+                    }
+                }
+                "ask" // expired
+            }
+            _ => {
+                // "once" — already consumed, back to ask
+                "ask"
+            }
+        }
+    }
 }
 
 

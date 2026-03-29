@@ -84,8 +84,14 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (hooks.onHide) await hooks.onHide(modal, false);
     }
 
-    async function handlePermissionResponse(optionId, policyOverride) {
+    async function handlePermissionResponse(optionId, policyOverride, grantType) {
         if (!currentPermissionRequest) return;
+
+        // Close dropdowns if open
+        const allowDropdown = document.getElementById('permissionAllowDropdown');
+        const denyDropdown = document.getElementById('permissionDenyDropdown');
+        if (allowDropdown) allowDropdown.style.display = 'none';
+        if (denyDropdown) denyDropdown.style.display = 'none';
 
         try {
             const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
@@ -93,9 +99,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             // Extension tool requests use a callback instead of ACP response
             if (_extensionToolCallback) {
                 const allowed = optionId === 'allow_once' || optionId === 'allow_always';
-                const updatePolicy = policyOverride || (optionId === 'allow_always' ? 'allow' : null);
-                if (updatePolicy) {
-                    await invoke('update_tool_policy', { toolTitle: policyTitle, policy: updatePolicy });
+                if (policyOverride) {
+                    await invoke('update_tool_policy', { toolTitle: policyTitle, policy: policyOverride, grantType: grantType || 'once' });
                 }
                 const cb = _extensionToolCallback;
                 _extensionToolCallback = null;
@@ -113,7 +118,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             if (policyOverride) {
                 await invoke('update_tool_policy', {
                     toolTitle: policyTitle,
-                    policy: policyOverride
+                    policy: policyOverride,
+                    grantType: grantType || 'once'
                 });
             }
 
@@ -126,10 +132,49 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     }
 
     function wireButtons() {
-        document.getElementById('permissionDenyAlways')?.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
+        // Deny button (single use)
         document.getElementById('permissionDeny')?.addEventListener('click', () => handlePermissionResponse('reject_once'));
-        document.getElementById('permissionOnce')?.addEventListener('click', () => handlePermissionResponse('allow_once'));
-        document.getElementById('permissionAlways')?.addEventListener('click', () => handlePermissionResponse('allow_always'));
+
+        // Deny dropdown toggle
+        const denyMenuBtn = document.getElementById('permissionDenyMenu');
+        const denyDropdown = document.getElementById('permissionDenyDropdown');
+        if (denyMenuBtn && denyDropdown) {
+            denyMenuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                denyDropdown.style.display = denyDropdown.style.display === 'none' ? 'block' : 'none';
+                // Close the other dropdown
+                const allowDropdown = document.getElementById('permissionAllowDropdown');
+                if (allowDropdown) allowDropdown.style.display = 'none';
+            });
+        }
+
+        // Deny always
+        document.getElementById('permissionDenyAlways')?.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
+
+        // Allow button (single use)
+        document.getElementById('permissionAllow')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', 'once'));
+
+        // Allow dropdown toggle
+        const menuBtn = document.getElementById('permissionAllowMenu');
+        const dropdown = document.getElementById('permissionAllowDropdown');
+        if (menuBtn && dropdown) {
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+                // Close the other dropdown
+                if (denyDropdown) denyDropdown.style.display = 'none';
+            });
+        }
+
+        // Close all dropdowns when clicking outside
+        document.addEventListener('click', () => {
+            if (denyDropdown) denyDropdown.style.display = 'none';
+            if (dropdown) dropdown.style.display = 'none';
+        });
+
+        // Allow dropdown items
+        document.getElementById('permissionAllow24h')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', '24h'));
+        document.getElementById('permissionAllowAlways')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', 'always'));
     }
 
     function wireOverlayDismiss() {

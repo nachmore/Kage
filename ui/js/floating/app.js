@@ -163,6 +163,9 @@ export class FloatingApp {
             this.invoke('notify_frontend_ready').catch(() => {});
             _ts('notify_frontend_ready sent');
 
+            // Check for terminator mode and show a one-time banner
+            this._checkTerminatorMode();
+
             // Enable app-icon rendering in markdown
             setAppIconInvoke(this.invoke);
 
@@ -1031,6 +1034,16 @@ export class FloatingApp {
             this.windowManager.userSetHeight = null;
             this.windowManager.resizeWindow();
         }
+    }
+
+    async _checkTerminatorMode() {
+        try {
+            const isTerminator = await this.invoke('is_terminator_mode');
+            if (isTerminator && !sessionStorage.getItem('terminator_banner_dismissed')) {
+                this.showBanner('🤖', 'Terminator Mode — all tools auto-approved', 'Dismiss', 'dismiss', '');
+                sessionStorage.setItem('terminator_banner_dismissed', '1');
+            }
+        } catch { /* ignore */ }
     }
 
     matchShortcut(input) {

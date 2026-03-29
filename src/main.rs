@@ -628,6 +628,7 @@ fn main() {
             commands::remove_tool_permission,
             commands::update_tool_policy,
             commands::is_dev_mode,
+            commands::is_terminator_mode,
             commands::open_devtools,
             commands::capture_hotkey_combo,
             commands::cancel_hotkey_capture,

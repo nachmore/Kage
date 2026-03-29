@@ -13,13 +13,6 @@ class ToolPermissionsSettingsModule extends SettingsModule {
     render() {
         return `
             <div class="settings-section-header">${this.icon} Agent Tools</div>
-            
-            ${this.createCheckboxRow(
-                'Trust All Tools',
-                'Automatically approve all tool requests without prompting. <span style="color: #f44336;">Warning:</span> This allows the AI to use any tool without your explicit permission.',
-                'trustAllTools',
-                false
-            )}
 
             <div class="setting-row">
                 <div class="setting-label">Seen Tools</div>
@@ -31,24 +24,40 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 </div>
                 <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">Reset All Permissions</button>
             </div>
+
+            <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">⚠️ Danger Zone</div>
+            <div class="setting-row terminator-row">
+                ${this.createCheckboxRow(
+                    'Terminator Mode',
+                    'Auto-approve ALL tool requests without prompting. The AI can read, write, execute, and delete without your permission.',
+                    'terminatorMode',
+                    false
+                )}
+            </div>
         `;
     }
 
     initialize() {
-        const trustAllCheckbox = document.getElementById('trustAllTools');
-        if (trustAllCheckbox) {
-            trustAllCheckbox.addEventListener('change', (e) => {
-                this.trustAll = e.target.checked;
+        const terminatorCheckbox = document.getElementById('terminatorMode');
+        if (terminatorCheckbox) {
+            terminatorCheckbox.addEventListener('change', async (e) => {
                 if (e.target.checked) {
-                    const confirmed = confirm(
-                        'Warning: Enabling "Trust All Tools" will automatically approve all tool requests.\n\n' +
-                        'The AI can use any tool without your permission.\n\nAre you sure?'
-                    );
+                    const { ask } = window.__TAURI__?.dialog || {};
+                    let confirmed = false;
+                    if (ask) {
+                        confirmed = await ask(
+                            'Terminator Mode will auto-approve ALL tool requests.\n\nThe AI can read, write, execute, and delete without asking.\n\nAre you sure?',
+                            { title: '⚠️ Enable Terminator Mode', kind: 'warning' }
+                        );
+                    } else {
+                        confirmed = confirm('⚠️ Terminator Mode will auto-approve ALL tool requests. Are you sure?');
+                    }
                     if (!confirmed) {
                         e.target.checked = false;
-                        this.trustAll = false;
+                        return;
                     }
                 }
+                this.terminatorMode = e.target.checked;
             });
         }
 
@@ -57,14 +66,14 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             resetBtn.addEventListener('click', async () => {
                 if (!confirm('This will remove all tool permissions and reset to "Always Ask" for everything. Continue?')) return;
                 this.tools = [];
-                this.trustAll = false;
-                const trustAllCheckbox = document.getElementById('trustAllTools');
-                if (trustAllCheckbox) trustAllCheckbox.checked = false;
+                this.terminatorMode = false;
+                const terminatorCheckbox = document.getElementById('terminatorMode');
+                if (terminatorCheckbox) terminatorCheckbox.checked = false;
                 this.renderToolsList();
                 // Save immediately
                 try {
                     const config = await window.__TAURI__.core.invoke('get_config');
-                    config.tool_permissions = { trust_all: false, tools: [] };
+                    config.tool_permissions = { trust_all: false, terminator_mode: false, tools: [] };
                     await window.__TAURI__.core.invoke('save_config', { config });
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
@@ -74,12 +83,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        this.trustAll = config.tool_permissions?.trust_all || false;
+        this.terminatorMode = config.tool_permissions?.terminator_mode || false;
         this.tools = config.tool_permissions?.tools || [];
         
-        const trustAllCheckbox = document.getElementById('trustAllTools');
-        if (trustAllCheckbox) {
-            trustAllCheckbox.checked = this.trustAll;
+        const terminatorCheckbox = document.getElementById('terminatorMode');
+        if (terminatorCheckbox) {
+            terminatorCheckbox.checked = this.terminatorMode;
         }
         
         this.renderToolsList();
@@ -87,7 +96,8 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
     save(config) {
         config.tool_permissions = {
-            trust_all: this.trustAll,
+            trust_all: false, // deprecated, kept for compat
+            terminator_mode: this.terminatorMode,
             tools: this.tools
         };
     }
@@ -117,11 +127,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                     <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
                         <div class="agent-tool-name">${escapeHtml(tool.title)} ${badge}</div>
-                        <div class="agent-tool-meta">Last seen: ${lastSeen}</div>
+                        <div class="agent-tool-meta">Last seen: ${lastSeen}${tool.grant_type === '24h' && tool.granted_at ? ' · Granted: ' + new Date(tool.granted_at).toLocaleString() : ''}</div>
                     </div>
                     <select class="agent-tool-select" data-index="${index}" onchange="updateToolPolicy(${index}, this.value)">
                         <option value="ask" ${tool.policy === 'ask' ? 'selected' : ''}>Always Ask</option>
-                        <option value="allow" ${tool.policy === 'allow' ? 'selected' : ''}>Allow</option>
+                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === '24h' ? 'selected' : ''} data-grant="24h">Allow 24h</option>
+                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === 'always' ? 'selected' : ''} data-grant="always">Always Allow</option>
                         <option value="deny" ${tool.policy === 'deny' ? 'selected' : ''}>Deny</option>
                     </select>
                     <button class="agent-tool-remove" onclick="removeSeenTool(${index})" title="Remove">✕</button>
@@ -301,6 +312,16 @@ toolPermStyle.textContent = `
     .reset-permissions-btn:hover {
         background: rgba(244, 67, 54, 0.2);
         border-color: rgba(244, 67, 54, 0.5);
+    }
+
+    .terminator-row {
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        padding: 4px;
+        background: rgba(239, 68, 68, 0.05);
+    }
+    .terminator-row .setting-label {
+        color: #ef4444;
     }
 `;
 document.head.appendChild(toolPermStyle);

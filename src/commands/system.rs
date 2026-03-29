@@ -272,10 +272,13 @@ pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Val
 pub async fn update_tool_policy(
     tool_title: String,
     policy: String,
+    grant_type: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
-    info!("Updating tool policy: {} -> {}", tool_title, policy);
+    let gt = grant_type.unwrap_or_else(|| "once".to_string());
+    info!("Updating tool policy: {} -> {} (grant: {})", tool_title, policy, gt);
     let mut config = state.config.lock().unwrap();
+    let timestamp = chrono::Utc::now().to_rfc3339();
     if let Some(tool) = config
         .tool_permissions
         .tools
@@ -283,6 +286,8 @@ pub async fn update_tool_policy(
         .find(|t| t.title == tool_title)
     {
         tool.policy = policy;
+        tool.grant_type = gt;
+        tool.granted_at = timestamp;
     }
     config
         .save()
@@ -309,6 +314,12 @@ pub async fn remove_tool_permission(
 #[tauri::command]
 pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
     Ok(state.dev_mode)
+}
+
+#[tauri::command]
+pub async fn is_terminator_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
+    let config = state.config.lock().unwrap();
+    Ok(config.tool_permissions.terminator_mode)
 }
 
 #[tauri::command]

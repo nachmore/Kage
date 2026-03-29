@@ -255,6 +255,8 @@ fn handle_permission_notification(
             title: tool_title.to_string(),
             policy: "ask".to_string(),
             last_seen: timestamp,
+            granted_at: String::new(),
+            grant_type: "once".to_string(),
         });
         // New tool discovered — save immediately
         if let Err(e) = config_guard.save() {
@@ -263,12 +265,12 @@ fn handle_permission_notification(
         *last_config_save.lock().unwrap() = std::time::Instant::now();
     }
 
-    let policy = if config_guard.tool_permissions.trust_all {
+    let policy = if config_guard.tool_permissions.terminator_mode || config_guard.tool_permissions.trust_all {
         "allow".to_string()
     } else {
         config_guard.tool_permissions.tools.iter()
             .find(|t| t.title == tool_title)
-            .map(|t| t.policy.clone())
+            .map(|t| t.effective_policy().to_string())
             .unwrap_or_else(|| "ask".to_string())
     };
     drop(config_guard);
@@ -960,7 +962,9 @@ pub async fn check_extension_tool_permission(
             config.tool_permissions.tools.push(crate::config::ToolPolicy {
                 title: tool_title,
                 policy: "allow".to_string(),
-                last_seen: timestamp,
+                last_seen: timestamp.clone(),
+                granted_at: timestamp.clone(),
+                grant_type: "always".to_string(),
             });
             let _ = config.save();
         }
@@ -983,6 +987,8 @@ pub async fn check_extension_tool_permission(
             title: tool_title,
             policy: "ask".to_string(),
             last_seen: timestamp,
+            granted_at: String::new(),
+            grant_type: "once".to_string(),
         });
         if let Err(e) = config.save() {
             warn!("Failed to save config (new tool registration): {}", e);
