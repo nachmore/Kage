@@ -17,7 +17,7 @@
 
 // ─── SVG source ─────────────────────────────────────────────────────────────
 const MASCOT_SVG_PATH = 'assets/kage-icon.svg';
-let _svgCache = null; // cached parsed SVG document
+const _svgCache = new Map(); // path → parsed SVG document
 
 /**
  * Read mascot theme settings from CSS custom properties.
@@ -31,14 +31,15 @@ export function getMascotThemeSettings() {
     return { outlineColor, invert };
 }
 
-/** Fetch and parse the mascot SVG, caching the result. */
-async function loadMascotSVG() {
-    if (_svgCache) return _svgCache;
-    const resp = await fetch(MASCOT_SVG_PATH);
+/** Fetch and parse an SVG file, caching the result. */
+async function loadSVG(path) {
+    if (_svgCache.has(path)) return _svgCache.get(path);
+    const resp = await fetch(path);
     const text = await resp.text();
     const parser = new DOMParser();
-    _svgCache = parser.parseFromString(text, 'image/svg+xml');
-    return _svgCache;
+    const doc = parser.parseFromString(text, 'image/svg+xml');
+    _svgCache.set(path, doc);
+    return doc;
 }
 
 /**
@@ -108,7 +109,7 @@ function ensureCSS() {
  * @param {number} [radius=2]  Outline thickness in px
  * @returns {string} The filter ID to use in `filter: url(#id)`
  */
-function ensureOutlineFilter(color, radius = 2) {
+export function ensureOutlineFilter(color, radius = 2) {
     const id = `kage-outline-${++_filterCounter}`;
     let svgHost = document.getElementById('kage-svg-filters');
     if (!svgHost) {
@@ -153,9 +154,9 @@ function ensureOutlineFilter(color, radius = 2) {
  */
 export async function createMascot(opts = {}) {
     ensureCSS();
-    const { size = 48, className = '', invert = false, outline = null } = opts;
+    const { size = 48, className = '', invert = false, outline = null, src = null } = opts;
 
-    const doc = await loadMascotSVG();
+    const doc = await loadSVG(src || MASCOT_SVG_PATH);
     const svg = buildMascotFromSource(doc, size);
     svg.classList.add('kage-mascot');
     if (invert) svg.classList.add('kage-mascot-inverted');

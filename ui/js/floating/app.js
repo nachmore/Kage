@@ -1039,9 +1039,33 @@ export class FloatingApp {
     async _checkTerminatorMode() {
         try {
             const isTerminator = await this.invoke('is_terminator_mode');
-            if (isTerminator && !sessionStorage.getItem('terminator_banner_dismissed')) {
-                this.showBanner('🤖', 'Terminator Mode — all tools auto-approved', 'Dismiss', 'dismiss', '');
-                sessionStorage.setItem('terminator_banner_dismissed', '1');
+            if (isTerminator && !sessionStorage.getItem('terminator_bar_dismissed')) {
+                // Create an extension-bar style overlay
+                let bar = document.getElementById('terminatorBar');
+                if (!bar) {
+                    bar = document.createElement('div');
+                    bar.id = 'terminatorBar';
+                    bar.className = 'extension-bar';
+                    bar.style.cssText = 'cursor:default;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);';
+                    const inputContainer = document.querySelector('.input-container');
+                    if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
+                }
+                bar.innerHTML = `
+                    <span class="extension-bar-icon">🤖</span>
+                    <span class="extension-bar-text" style="flex:1;font-size:12px;color:#ef4444;">Terminator Mode — all tools auto-approved</span>
+                    <div class="extension-bar-controls">
+                        <button class="extension-bar-btn" id="terminatorDismissBtn" style="font-size:11px;padding:1px 4px;color:#ef4444;border-color:rgba(239,68,68,0.3);" title="Dismiss">✕</button>
+                    </div>
+                `;
+                bar.style.display = 'flex';
+                document.getElementById('terminatorDismissBtn')?.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    bar.style.display = 'none';
+                    bar.remove();
+                    sessionStorage.setItem('terminator_bar_dismissed', '1');
+                    this.windowManager.resizeWindow();
+                });
+                this.windowManager.resizeWindow();
             }
         } catch { /* ignore */ }
     }

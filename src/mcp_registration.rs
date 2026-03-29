@@ -7,7 +7,7 @@ use log::{info, warn};
 use std::path::PathBuf;
 
 /// Key used in mcp.json for our managed MCP server.
-const MCP_SERVER_KEY: &str = "ka-computer-control";
+const MCP_SERVER_KEY: &str = "kage-computer-control";
 
 /// Get the path to the computer-control-mcp binary (sibling of the current exe).
 pub fn get_mcp_binary_path() -> Option<PathBuf> {
@@ -29,7 +29,7 @@ pub fn get_mcp_binary_path() -> Option<PathBuf> {
 /// Ensure the computer-control MCP server is registered in the user's mcp.json.
 ///
 /// - Reads existing mcp.json and preserves all other entries untouched
-/// - Only adds/updates the "ka-computer-control" entry
+/// - Only adds/updates the "kage-computer-control" entry
 /// - Creates the file if it doesn't exist
 /// - Updates the command path if the install location changed
 pub fn ensure_registered() {

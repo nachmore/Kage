@@ -89,7 +89,7 @@ class McpSettingsModule extends SettingsModule {
     _getBuiltins() {
         return [
             {
-                key: 'ka-computer-control',
+                key: 'kage-computer-control',
                 name: 'Computer Control',
                 icon: '🖥️',
                 description: 'UI automation, app launching, and desktop interaction',

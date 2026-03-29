@@ -134,8 +134,10 @@ class SettingsManager {
                 }
             }
 
-            // Build config object
-            const config = { version: 1 };
+            // Start from the current config so fields not owned by any module
+            // (e.g. first_run_completed) are preserved across saves.
+            const config = await this.invoke('get_config');
+            config.version = 1;
             this.modules.forEach(module => {
                 module.save(config);
                 // Save extension enabled state

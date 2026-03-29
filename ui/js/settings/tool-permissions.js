@@ -27,17 +27,36 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
             <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">⚠️ Danger Zone</div>
             <div class="setting-row terminator-row">
-                ${this.createCheckboxRow(
-                    'Terminator Mode',
-                    'Auto-approve ALL tool requests without prompting. The AI can read, write, execute, and delete without your permission.',
-                    'terminatorMode',
-                    false
-                )}
+                <div class="terminator-header">
+                    <div class="terminator-mascot" id="terminatorMascot"></div>
+                    <div class="terminator-text">
+                        ${this.createCheckboxRow(
+                            'Terminator Mode',
+                            'Auto-approve ALL tool requests without prompting. The AI can read, write, execute, and delete without your permission.',
+                            'terminatorMode',
+                            false
+                        )}
+                    </div>
+                </div>
             </div>
         `;
     }
 
     initialize() {
+        // Render terminator mascot with red outline
+        const mascotEl = document.getElementById('terminatorMascot');
+        if (mascotEl) {
+            (async () => {
+                const { createMascot } = await import('../shared/mascot.js');
+                const svg = await createMascot({
+                    src: 'assets/kage-terminator.svg',
+                    size: 96,
+                    outline: { color: '#ef4444', radius: 1.5 },
+                });
+                mascotEl.appendChild(svg);
+            })();
+        }
+
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
             terminatorCheckbox.addEventListener('change', async (e) => {
@@ -322,6 +341,19 @@ toolPermStyle.textContent = `
     }
     .terminator-row .setting-label {
         color: #ef4444;
+    }
+    .terminator-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+    .terminator-mascot {
+        flex-shrink: 0;
+        width: 96px;
+        height: 96px;
+    }
+    .terminator-text {
+        flex: 1;
     }
 `;
 document.head.appendChild(toolPermStyle);

@@ -84,7 +84,7 @@ Example: <app-icon name="WINWORD"/> Document.docx — Microsoft Word
 When the user asks you to perform actions on their computer (opening apps, clicking, typing, etc.) using the computer-control MCP tools:
 
 FOLDER TOOLS:
-The computer-control MCP (ka-computer-control) also includes folder organization tools. These are MCP tools you call directly — just like launch_app or get_ui_tree. Do NOT use find_elements or shell commands for these.
+The computer-control MCP (kage-computer-control) also includes folder organization tools. These are MCP tools you call directly — just like launch_app or get_ui_tree. Do NOT use find_elements or shell commands for these.
 - `pick_folder` — opens a native OS folder picker dialog. Call this tool directly (not find_elements).
 - `get_common_folders` — returns paths for well-known folders (downloads, documents, desktop, etc.)
 - `scan_folder` — scans a folder recursively, returns file manifest with sizes, dates, and duplicate detection
