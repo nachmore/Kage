@@ -4,31 +4,59 @@ import { KageDesktopViewer } from './kage-desktop.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
-import { createMascotController, getMascotThemeSettings } from '../shared/mascot.js';
+import { createMascotController, createMascot, getMascotThemeSettings, setTerminatorMode, mascotHTML } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 
 let app = null;
 
-waitForTauri(({ invoke, appWindow, listen }) => {
+waitForTauri(async ({ invoke, appWindow, listen }) => {
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
 
-    // Render sidebar mascot with outline and periodic waving
-    const sidebarMascot = document.getElementById('sidebarMascot');
-    if (sidebarMascot) {
-        const { outlineColor, invert } = getMascotThemeSettings();
-        createMascotController(sidebarMascot, {
-            size: 28,
-            idle: ANIMATIONS.waving,
-            periodic: ANIMATIONS.waving,
-            periodicInterval: 30000,
-            periodicJitter: 5000,
-            invert,
-            outline: { color: outlineColor, radius: 1.5 },
-        });
+    // Check terminator mode and set it globally for mascot rendering
+    let isTerminator = false;
+    try { isTerminator = await invoke('is_terminator_mode'); } catch {}
+    setTerminatorMode(isTerminator);
+
+    // Render sidebar mascot and title — extracted so it can be refreshed on config change
+    async function refreshSidebarMascot() {
+        const title = document.querySelector('.sidebar-title');
+        const mascot = document.getElementById('sidebarMascot');
+        if (title) {
+            if (isTerminator) {
+                title.style.background = 'none';
+                title.style.webkitTextFillColor = '#ef4444';
+            } else {
+                title.style.background = '';
+                title.style.webkitTextFillColor = '';
+            }
+        }
+        if (mascot) {
+            mascot.innerHTML = '';
+            if (isTerminator) {
+                const svg = await createMascot({
+                    src: 'assets/kage-terminator.svg',
+                    size: 28,
+                    outline: { color: '#ef4444', radius: 1 },
+                });
+                mascot.appendChild(svg);
+            } else {
+                const { outlineColor, invert } = getMascotThemeSettings();
+                createMascotController(mascot, {
+                    size: 28,
+                    idle: ANIMATIONS.waving,
+                    periodic: ANIMATIONS.waving,
+                    periodicInterval: 30000,
+                    periodicJitter: 5000,
+                    invert,
+                    outline: { color: outlineColor, radius: 1.5 },
+                });
+            }
+        }
     }
+    await refreshSidebarMascot();
 
     // Re-apply theme when config changes
     listen('config_updated', async () => {
@@ -40,6 +68,19 @@ waitForTauri(({ invoke, appWindow, listen }) => {
             app.renderExtensionToolbarButtons();
         }
         if (app?.loadShortcuts) app.loadShortcuts();
+
+        // Refresh terminator mode (may have been toggled in settings)
+        let newTerminator = false;
+        try { newTerminator = await invoke('is_terminator_mode'); } catch {}
+        if (newTerminator !== isTerminator) {
+            isTerminator = newTerminator;
+            setTerminatorMode(isTerminator);
+            refreshSidebarMascot();
+            // Re-render all assistant message avatars
+            document.querySelectorAll('.message.assistant .message-avatar').forEach(el => {
+                el.innerHTML = mascotHTML({ size: 18 });
+            });
+        }
     });
 
     // Listen for extension install/uninstall

@@ -3,7 +3,7 @@ import { FloatingApp } from './app.js';
 import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
-import { createMascotController, getMascotThemeSettings } from '../shared/mascot.js';
+import { createMascotController, getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 
@@ -22,6 +22,15 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // Re-apply theme and opacity when config changes
     listen('config_updated', async () => {
         await loadAndApplyTheme(invoke);
+
+        // Refresh terminator mode (may have been toggled in settings)
+        let newTerminator = false;
+        try { newTerminator = await invoke('is_terminator_mode'); } catch {}
+        if (newTerminator !== isTerminator) {
+            isTerminator = newTerminator;
+            setTerminatorMode(isTerminator);
+            await refreshFloatingMascot();
+        }
     });
 
     const app = new FloatingApp(invoke, appWindow, listen);
@@ -31,14 +40,18 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     app.init();
 
     // Set up mascot — use terminator variant if terminator mode is active
-    const mascotContainer = document.getElementById('floatingMascot');
-    if (mascotContainer) {
-        const { outlineColor, invert } = getMascotThemeSettings();
-        let isTerminator = false;
-        try { isTerminator = await invoke('is_terminator_mode'); } catch {}
+    let isTerminator = false;
+    try { isTerminator = await invoke('is_terminator_mode'); } catch {}
+    setTerminatorMode(isTerminator);
+
+    async function refreshFloatingMascot() {
+        const mascotContainer = document.getElementById('floatingMascot');
+        if (!mascotContainer) return;
+        // Destroy existing mascot controller if any
+        if (window._kageMascot) { window._kageMascot.destroy(); window._kageMascot = null; }
+        mascotContainer.innerHTML = '';
 
         if (isTerminator) {
-            // Terminator mode: show static terminator mascot with red outline
             const { createMascot } = await import('../shared/mascot.js');
             const svg = await createMascot({
                 src: 'assets/kage-terminator.svg',
@@ -46,8 +59,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 outline: { color: '#ef4444', radius: 1 },
             });
             mascotContainer.appendChild(svg);
-            window._kageMascot = null; // no animation controller
+            window._kageMascot = null;
         } else {
+            const { outlineColor, invert } = getMascotThemeSettings();
             const mascotCtrl = createMascotController(mascotContainer, {
                 size: 40,
                 idle: ANIMATIONS.waving,
@@ -61,4 +75,5 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             window._kageMascot = mascotCtrl;
         }
     }
+    await refreshFloatingMascot();
 });

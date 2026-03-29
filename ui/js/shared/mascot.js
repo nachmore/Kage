@@ -17,7 +17,15 @@
 
 // ─── SVG source ─────────────────────────────────────────────────────────────
 const MASCOT_SVG_PATH = 'assets/kage-icon.svg';
+const TERMINATOR_SVG_PATH = 'assets/kage-terminator.svg';
 const _svgCache = new Map(); // path → parsed SVG document
+let _terminatorMode = false;
+
+/** Set terminator mode globally. Call once at startup. */
+export function setTerminatorMode(enabled) { _terminatorMode = enabled; }
+
+/** Check if terminator mode is active. */
+export function isTerminatorMode() { return _terminatorMode; }
 
 /**
  * Read mascot theme settings from CSS custom properties.
@@ -182,12 +190,17 @@ export function mascotHTML(opts = {}) {
     const { size = 48, className = '', invert = false } = opts;
     const cls = ['kage-mascot', invert ? 'kage-mascot-inverted' : '', className].filter(Boolean).join(' ');
     const id = `kage-mascot-${++_filterCounter}`;
+    const svgPath = _terminatorMode ? TERMINATOR_SVG_PATH : MASCOT_SVG_PATH;
     // Kick off async load to hydrate the placeholder
-    loadMascotSVG().then(doc => {
+    loadSVG(svgPath).then(doc => {
         const placeholder = document.getElementById(id);
         if (!placeholder) return;
         const svg = buildMascotFromSource(doc, size);
         svg.classList.add(...cls.split(' ').filter(Boolean));
+        if (_terminatorMode) {
+            const filterId = ensureOutlineFilter('#ef4444', 1);
+            svg.style.filter = `url(#${filterId})`;
+        }
         placeholder.replaceWith(svg);
     });
     return `<span id="${id}" class="${cls}" style="display:inline-block;width:${size}px;height:${size}px;"></span>`;
