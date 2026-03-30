@@ -64,6 +64,7 @@ cargo test                 # All Rust tests
 cargo test --test acp_client_test  # Specific Rust test
 cd ui/tests && npm test    # All JS tests (shared modules: theme, tool-utils, etc.)
 cd ui/tests && npm install # Install JS test deps (first time only)
+python scripts/test_all.py # Run ALL tests (Rust + JS) in one command
 
 # Code Quality
 cargo check                # Check without building
