@@ -23,6 +23,10 @@ sample_sessions/
 ui/vendor/node_modules/
 ui/vendor/package-lock.json
 
+# Test dependencies
+ui/tests/node_modules/
+ui/tests/package-lock.json
+
 # Python cache
 __pycache__/
 *.pyc

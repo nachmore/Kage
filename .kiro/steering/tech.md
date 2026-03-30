@@ -60,8 +60,10 @@ cargo build --bin kage-computer-control-mcp
 # Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
 
 # Testing
-cargo test                 # All tests
-cargo test --test acp_client_test  # Specific test
+cargo test                 # All Rust tests
+cargo test --test acp_client_test  # Specific Rust test
+cd ui/tests && npm test    # All JS tests (shared modules: theme, tool-utils, etc.)
+cd ui/tests && npm install # Install JS test deps (first time only)
 
 # Code Quality
 cargo check                # Check without building
