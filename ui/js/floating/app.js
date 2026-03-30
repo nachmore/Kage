@@ -1605,6 +1605,7 @@ export class FloatingApp {
                 this.isWaitingForResponse = true;
                 this._extensionToolCallHandled = false;
                 this._extensionToolExecuting = false;
+                this._automationPlanStarted = false;
                 this._promptGeneration++;
                 const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
