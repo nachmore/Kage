@@ -1456,11 +1456,6 @@ export class FloatingApp {
         }
 
         if (!message && !hasAttachments && !hasSelection) return;
-        
-        if (this.isWaitingForResponse) {
-            this.stopThinking();
-            this.isWaitingForResponse = false;
-        }
 
         const result = await handleEnterAction({
             message,
@@ -1547,20 +1542,6 @@ export class FloatingApp {
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
-        this.elements.contentArea.classList.remove('visible');
-        this.toolSources = [];
-        this.toolUsages = [];
-        this._toolCallIds = new Set();
-        const sourcesEl2 = document.getElementById('toolSources');
-        if (sourcesEl2) sourcesEl2.remove();
-        const compactEl2 = document.getElementById('toolSourcesCompact');
-        if (compactEl2) compactEl2.remove();
-        
-        await this.windowManager.resetHeightForNewMessage();
-        this.startThinking();
-        this.updateDatetimeVisibility();
-        this.elements.expandBtn.classList.remove('visible');
-        await this.windowManager.resizeWindow();
 
         // Dismiss any pending permission request from the main chat window
         // so the session isn't stalled waiting for a response.
@@ -1589,14 +1570,35 @@ export class FloatingApp {
             const top = rustResults[0];
             if (top?.type === 'url') {
                 await this.openUrl(top.value);
-                this.stopThinking();
             } else if (top?.type === 'path') {
                 await this.openPath(top.value);
-                this.stopThinking();
             } else if (top?.type === 'app') {
                 await this.launchApp(top.name);
-                this.stopThinking();
             } else {
+                // No actionable match — send to agent. Reset UI now.
+                // If a response is in progress, cancel it first
+                if (this.isWaitingForResponse) {
+                    this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
+                    this.isWaitingForResponse = false;
+                    this.stopThinking();
+                    this.elements.floatingStopBtn.style.display = 'none';
+                    const indicator = this.elements.responseText.querySelector('.streaming-indicator');
+                    if (indicator) indicator.remove();
+                }
+
+                this.elements.contentArea.classList.remove('visible');
+                this.toolSources = [];
+                this.toolUsages = [];
+                this._toolCallIds = new Set();
+                const sourcesEl2 = document.getElementById('toolSources');
+                if (sourcesEl2) sourcesEl2.remove();
+                const compactEl2 = document.getElementById('toolSourcesCompact');
+                if (compactEl2) compactEl2.remove();
+                await this.windowManager.resetHeightForNewMessage();
+                this.startThinking();
+                this.updateDatetimeVisibility();
+                this.elements.expandBtn.classList.remove('visible');
+
                 // No actionable match — send to agent
                 this.currentResponse = '';
                 this.elements.responseText.textContent = this.currentResponse;
