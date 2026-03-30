@@ -88,5 +88,11 @@ lto = true
 codegen-units = 1
 
 [[bin]]
+name = "kage"
+path = "src/main.rs"
+test = false
+
+[[bin]]
 name = "kage-computer-control-mcp"
 path = "src/bin/computer_control_mcp.rs"
+test = false

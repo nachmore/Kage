@@ -21,8 +21,9 @@ def run(label, cmd, cwd=ROOT):
         failed = True
 
 
-# Rust tests (skip the MCP binary which has known issues in test mode)
-run("Rust Tests", ["cargo", "test", "--lib", "--tests"])
+# Rust tests — lib + integration tests. Use -j 1 to avoid parallel compilation
+# exhausting memory (Tauri + deps are large). Binaries excluded via test=false.
+run("Rust Tests", ["cargo", "test", "-j", "1"])
 
 # JS tests — install deps if needed
 js_dir = os.path.join(ROOT, "ui", "tests")

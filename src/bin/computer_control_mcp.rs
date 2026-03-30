@@ -407,7 +407,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             };
             match accessibility::find_elements(&params) {
                 Ok(elems) => {
-                    let text = if elems.is_empty() {
+                    let text: String = if elems.is_empty() {
                         "No matching elements found.".to_string()
                     } else {
                         elems.iter().map(|e| e.to_text(0, 0)).collect::<Vec<_>>().join("\n")
@@ -596,7 +596,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let filter = args.get("title_filter").and_then(|v| v.as_str());
             match accessibility::list_accessible_windows(filter) {
                 Ok(wins) => {
-                    let text = if wins.is_empty() { "No windows found.".into() } else {
+                    let text = if wins.is_empty() { "No windows found.".to_string() } else {
                         wins.iter().map(|w| {
                             let b = w.bounds.map(|(x,y,ww,h)| format!(" ({}x{}@{},{})", ww, h, x, y)).unwrap_or_default();
                             format!("[window] \"{}\" pid={} process={}{}", w.title, w.process_id, w.process_name, b)

@@ -6,9 +6,8 @@ use log::{error, info, warn};
 use std::fs;
 use tauri::{Emitter, Manager, State};
 
-/// Prefix used to mark steering messages that should be hidden in the UI.
-/// Only the very first message in a conversation with this prefix is hidden.
-pub const STEERING_MSG_PREFIX: &str = "[KAGE_STEERING_IGNORE]";
+/// Re-export steering constants from auto_steering (the canonical location).
+pub use crate::auto_steering::{STEERING_MSG_PREFIX, BUILTIN_STEERING};
 
 /// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
@@ -90,9 +89,6 @@ async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::p
 
     std::process::exit(0);
 }
-
-/// Built-in steering document embedded at compile time.
-pub const BUILTIN_STEERING: &str = include_str!("../builtin_steering.md");
 
 /// Assemble the full steering content from builtin + user + auto sources.
 /// Returns the joined parts (without the STEERING_MSG_PREFIX wrapper).

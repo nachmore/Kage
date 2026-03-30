@@ -150,8 +150,8 @@ impl AcpClient {
 
         let steering_msg = format!(
             "{} {}",
-            crate::commands::system::STEERING_MSG_PREFIX,
-            crate::commands::system::BUILTIN_STEERING
+            crate::auto_steering::STEERING_MSG_PREFIX,
+            crate::auto_steering::BUILTIN_STEERING
         );
 
         self.streaming_accumulator.lock().unwrap().clear();

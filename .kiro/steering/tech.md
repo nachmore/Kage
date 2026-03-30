@@ -60,11 +60,14 @@ cargo build --bin kage-computer-control-mcp
 # Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
 
 # Testing
-cargo test                 # All Rust tests
-cargo test --test acp_client_test  # Specific Rust test
-cd ui/tests && npm test    # All JS tests (shared modules: theme, tool-utils, etc.)
-cd ui/tests && npm install # Install JS test deps (first time only)
-python scripts/test_all.py # Run ALL tests (Rust + JS) in one command
+cargo test -j 1             # All Rust tests (lib + integration, single-threaded build)
+cd ui/tests && npm test     # JS tests (shared modules: theme, tool-utils, etc.)
+cd ui/tests && npm install  # Install JS test deps (first time only)
+python scripts/test_all.py  # Run ALL tests (Rust + JS) in one command
+
+# Note: `cargo test` (without -j 1) may fail on machines with limited memory
+# because parallel compilation of Tauri + deps exhausts the paging file.
+# The -j 1 flag serializes compilation to avoid this.
 
 # Code Quality
 cargo check                # Check without building

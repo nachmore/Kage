@@ -8,10 +8,16 @@
 //! Triggers:
 //! - Every 5 user messages, but no more than once per hour
 //! - On application quit (bypasses the hourly cooldown)
-//!
-//! The extraction uses the ACP connection itself: we send a special prompt
-//! asking the model to analyze recent conversations and produce a structured
-//! preference document.
+
+/// Prefix used to mark steering messages that should be hidden in the UI.
+pub const STEERING_MSG_PREFIX: &str = "[KAGE_STEERING_IGNORE]";
+
+/// Built-in steering document embedded at compile time.
+pub const BUILTIN_STEERING: &str = include_str!("builtin_steering.md");
+
+// The extraction uses the ACP connection itself: we send a special prompt
+// asking the model to analyze recent conversations and produce a structured
+// preference document.
 
 use crate::acp_client::AcpClient;
 use crate::config::Config;
