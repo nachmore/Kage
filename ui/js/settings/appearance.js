@@ -255,7 +255,7 @@ class AppearanceSettingsModule extends SettingsModule {
 
             // Built-in themes (cannot be deleted)
             const builtins = [
-                { id: 'system', icon: '🖥️', name: 'System (Auto)', description: 'Follow OS preference' },
+                { id: 'system', icon: '🖥️', name: 'Kage (Auto Light / Dark)', description: 'Follows your OS theme' },
                 { id: 'light',  icon: '☀️', name: 'Kage Light', description: '' },
                 { id: 'dark',   icon: '🌙', name: 'Kage Dark', description: '' },
             ];

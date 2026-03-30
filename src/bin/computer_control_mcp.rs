@@ -46,9 +46,10 @@ fn win32_mouse_event(flags: u32, data: i32) {
 
 fn main() {
     // Log to file only — stdout/stderr are reserved for JSON-RPC
-    let log_dir = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".kiro")
+    // Store alongside the main kage log in %LOCALAPPDATA%/kage/logs/
+    let log_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
+        .join("kage")
         .join("logs");
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
         eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
