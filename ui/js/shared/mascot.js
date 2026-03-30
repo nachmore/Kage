@@ -414,10 +414,19 @@ export function createMascotController(container, opts = {}) {
     }
 
     function setActive(animDef, activeSize) {
-        state = 'active';
-        if (periodicTimer) clearTimeout(periodicTimer);
+        if (periodicTimer) { clearTimeout(periodicTimer); periodicTimer = null; }
         const useSize = activeSize || size;
         const sizeKey = animDef.frames.join('|') + '@' + useSize;
+
+        // Already playing this exact animation — nothing to do
+        if (state === 'active' && currentKey === sizeKey) return;
+
+        // Stop any existing loop intervals before starting a new one
+        for (const { anim: a } of anims.values()) {
+            if (a._loopInterval) { clearInterval(a._loopInterval); a._loopInterval = null; }
+        }
+
+        state = 'active';
         let entry;
         if (anims.has(sizeKey)) {
             entry = { key: sizeKey, ...anims.get(sizeKey) };
@@ -443,6 +452,9 @@ export function createMascotController(container, opts = {}) {
     }
 
     function setIdle(playTransition = true) {
+        // Already idle (or periodic which is transitioning to idle) — skip
+        if (state === 'idle' || state === 'periodic') return;
+
         // Stop any active loop
         for (const { anim } of anims.values()) {
             if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
