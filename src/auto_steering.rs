@@ -111,10 +111,8 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
     use std::collections::VecDeque;
 
     let home = dirs::home_dir().context("Failed to get home directory")?;
-    let jsonl_path = home
-        .join(".kage")
-        .join("sessions")
-        .join("cli")
+    let jsonl_path = crate::agent_presets::default_sessions_dir()
+        .unwrap_or_else(|| home.join(".kiro").join("sessions").join("cli"))
         .join(format!("{}.jsonl", session_id));
 
     if !jsonl_path.exists() {

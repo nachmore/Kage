@@ -20,7 +20,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(SCRIPT_DIR)
-SVG_PATH = os.path.join(SCRIPT_DIR, "kage-icon.svg")
+SVG_ICON = os.path.join(SCRIPT_DIR, "kage-icon-basic.svg")   # app icon (PNGs, .ico)
+SVG_NSIS = os.path.join(SCRIPT_DIR, "kage-icon.svg")          # NSIS installer images
 OUT_DIR = SCRIPT_DIR
 
 # Find Inkscape
@@ -114,7 +115,7 @@ def add_outline(img, color, radius=3):
 def gen_app_icons():
     """Generate PNG icons and .ico for the app."""
     print("Rendering SVG at 512px...")
-    hi_res = svg_to_pil(SVG_PATH, 512)
+    hi_res = svg_to_pil(SVG_ICON, 512)
     hi_res_outlined = add_outline(hi_res, OUTLINE_COLOR, radius=6)
 
     for filename, size in [("32x32.png", 32), ("128x128.png", 128), ("128x128@2x.png", 256)]:
@@ -168,7 +169,7 @@ def gen_nsis_sidebar():
         draw.line([(x, stripe_y), (x, stripe_y + 2)], fill=(r, g, b))
 
     # Mascot with outline — render at natural aspect ratio
-    icon = svg_to_pil(SVG_PATH, 400, square=False)
+    icon = svg_to_pil(SVG_NSIS, 400, square=False)
     icon = add_outline(icon, OUTLINE_COLOR, radius=4)
     icon_size = 80
     icon = icon.resize((icon_size, int(icon_size * icon.height / icon.width)), Image.LANCZOS)
@@ -201,10 +202,10 @@ def gen_nsis_sidebar():
 def gen_nsis_header():
     """NSIS header image — rendered at 2x (300x114) for quality. NSIS downscales as needed."""
     w, h = 300, 114
-    img = Image.new("RGB", (w, h), (240, 240, 240))
+    img = Image.new("RGB", (w, h), (255, 255, 255))
 
     # Mascot on the left — natural aspect ratio, sized to fit height
-    icon = svg_to_pil(SVG_PATH, 400, square=False)
+    icon = svg_to_pil(SVG_NSIS, 400, square=False)
     icon = add_outline(icon, OUTLINE_COLOR, radius=3)
     icon_h = 70
     icon = icon.resize((int(icon_h * icon.width / icon.height), icon_h), Image.LANCZOS)

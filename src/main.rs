@@ -3,6 +3,7 @@
 
 mod acp_client;
 mod activity_tracker;
+mod agent_presets;
 mod app_launcher;
 mod auto_steering;
 mod automation;

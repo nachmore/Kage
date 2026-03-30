@@ -47,7 +47,7 @@ pub struct Config {
     /// Additional store sources (name + URL pairs). Merged with the primary store.
     #[serde(default)]
     pub store_sources: Vec<StoreSource>,
-    /// Custom path to mcp.json. If empty, uses ~/.kage/settings/mcp.json.
+    /// Custom path to mcp.json. If empty, uses the agent preset path (e.g. ~/.kiro/settings/mcp.json).
     #[serde(default)]
     pub mcp_config_path: Option<String>,
     /// Automatically update installed extensions from the store
@@ -209,8 +209,8 @@ pub struct AgentConfig {
     /// Auto-compact threshold (0-100). When context usage >= this %, auto-send /compact. 0 = disabled.
     #[serde(default = "default_auto_compact_threshold")]
     pub auto_compact_threshold: u32,
-    /// Custom sessions directory. If unset, auto-detected from spawn_command
-    /// (kiro-cli → ~/.kiro/sessions/cli, kage-cli → ~/.kage/sessions/cli).
+    /// Custom sessions directory. If unset, uses the agent preset path
+    /// (e.g. ~/.kiro/sessions/cli for Kiro).
     #[serde(default)]
     pub sessions_directory: Option<String>,
 }

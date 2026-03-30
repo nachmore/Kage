@@ -48,7 +48,7 @@ fn main() {
     // Log to file only — stdout/stderr are reserved for JSON-RPC
     let log_dir = dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".kage")
+        .join(".kiro")
         .join("logs");
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
         eprintln!("Failed to create log dir {:?}: {}", log_dir, e);

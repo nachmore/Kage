@@ -1,6 +1,6 @@
 # Icons
 
-Application icons generated from `kage-icon.svg` with the teal outline (`#38B2AC`).
+Application icons generated from `kage-icon-basic.svg` (app icon) and `kage-icon.svg` (NSIS installer images) with the teal outline (`#38B2AC`).
 
 ## Generated files
 

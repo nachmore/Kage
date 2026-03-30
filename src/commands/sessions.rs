@@ -48,58 +48,16 @@ pub struct SessionData {
 }
 
 /// Resolve the sessions directory from config.
-/// Priority: 1) explicit sessions_directory, 2) auto-detect from spawn_command, 3) probe common paths
+/// Priority: 1) explicit sessions_directory, 2) agent preset, 3) probe common paths
 fn get_sessions_dir_from_config(config: &crate::config::Config) -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-
-    // 1) Explicit override
-    if let Some(ref dir) = config.acp.agent.sessions_directory {
-        let p = PathBuf::from(dir);
-        if p.is_absolute() {
-            return Ok(p);
-        }
-        return Ok(home.join(dir));
-    }
-
-    // 2) Auto-detect from spawn_command — kiro-cli → ~/.kiro/sessions/cli
-    if let crate::config::AcpMode::Local { ref spawn_command } = config.acp.mode {
-        let cmd_lower = spawn_command.to_lowercase();
-        if cmd_lower.contains("kiro-cli") || cmd_lower.contains("kiro_cli") {
-            let dir = home.join(".kiro").join("sessions").join("cli");
-            if dir.exists() { return Ok(dir); }
-        }
-        // Dev builds use chat_cli as the binary name
-        if cmd_lower.contains("chat_cli") {
-            let dir = home.join(".kiro").join("sessions").join("cli");
-            if dir.exists() { return Ok(dir); }
-        }
-    }
-
-    // 3) Probe common paths
-    let candidates = [
-        home.join(".kiro").join("sessions").join("cli"),
-        home.join(".kage").join("sessions").join("cli"),
-    ];
-    for dir in &candidates {
-        if dir.exists() {
-            return Ok(dir.clone());
-        }
-    }
-
-    // Default to kiro path
-    Ok(home.join(".kiro").join("sessions").join("cli"))
+    crate::agent_presets::resolve_sessions_dir(config)
+        .ok_or_else(|| "Failed to get home directory".to_string())
 }
 
 /// Fallback for callers without config access — probes common paths
 fn get_sessions_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or_else(|| "Failed to get home directory".to_string())?;
-    for dir in [
-        home.join(".kiro").join("sessions").join("cli"),
-        home.join(".kage").join("sessions").join("cli"),
-    ] {
-        if dir.exists() { return Ok(dir); }
-    }
-    Ok(home.join(".kiro").join("sessions").join("cli"))
+    crate::agent_presets::default_sessions_dir()
+        .ok_or_else(|| "Failed to get home directory".to_string())
 }
 
 fn get_title_cache_path() -> Result<PathBuf, String> {
@@ -278,8 +236,8 @@ pub fn start_session_watcher(
     use notify::{Watcher, RecursiveMode, Event, EventKind};
     use tauri::Emitter;
 
-    let sessions_dir = match dirs::home_dir() {
-        Some(home) => home.join(".kage").join("sessions").join("cli"),
+    let sessions_dir = match crate::agent_presets::default_sessions_dir() {
+        Some(dir) => dir,
         None => {
             log::warn!("Cannot start session watcher: no home directory");
             return;

@@ -1,5 +1,6 @@
 // Library exports for testing and external use
 
+pub mod agent_presets;
 pub mod config;
 pub mod acp_client;
 pub mod activity_tracker;

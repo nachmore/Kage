@@ -38,8 +38,11 @@ pub fn ensure_registered() {
         return;
     };
 
-    let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kage").join("settings"),
+    let config_dir = match crate::agent_presets::default_mcp_json_path() {
+        Some(p) => match p.parent() {
+            Some(dir) => dir.to_path_buf(),
+            None => { warn!("Cannot determine settings dir for mcp.json"); return; }
+        },
         None => { warn!("Cannot determine home directory for mcp.json"); return; }
     };
     if let Err(e) = std::fs::create_dir_all(&config_dir) {
@@ -102,11 +105,10 @@ pub fn ensure_registered() {
 
 /// Check if the computer-control MCP server is currently registered.
 pub fn is_registered() -> bool {
-    let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kage").join("settings"),
+    let mcp_json_path = match crate::agent_presets::default_mcp_json_path() {
+        Some(p) => p,
         None => return false,
     };
-    let mcp_json_path = config_dir.join("mcp.json");
     if !mcp_json_path.exists() { return false; }
 
     let config: serde_json::Value = std::fs::read_to_string(&mcp_json_path)
@@ -122,11 +124,10 @@ pub fn is_registered() -> bool {
 /// Remove the computer-control MCP server from mcp.json.
 /// Preserves all other entries.
 pub fn unregister() {
-    let config_dir = match dirs::home_dir() {
-        Some(h) => h.join(".kage").join("settings"),
+    let mcp_json_path = match crate::agent_presets::default_mcp_json_path() {
+        Some(p) => p,
         None => return,
     };
-    let mcp_json_path = config_dir.join("mcp.json");
     if !mcp_json_path.exists() { return; }
 
     let mut config: serde_json::Value = match std::fs::read_to_string(&mcp_json_path) {
@@ -148,7 +149,7 @@ pub fn unregister() {
 
 /// Get the default mcp.json path.
 pub fn default_mcp_json_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".kage").join("settings").join("mcp.json"))
+    crate::agent_presets::default_mcp_json_path()
 }
 
 /// Read the full mcp.json content as a JSON value.

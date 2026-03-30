@@ -1,6 +1,6 @@
 {
   "productName": "Kage",
-  "version": "0.2.0",
+  "version": "0.9.0",
   "identifier": "com.kage.app",
   "build": {
     "beforeDevCommand": "python ../../scripts/dev_server.py",

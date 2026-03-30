@@ -1,5 +1,7 @@
 # Changelog
 
+## v0.9.0
+
 ## v0.2.0 — Initial Release
 
 Welcome to Kage! Here's what's included in this first release:
