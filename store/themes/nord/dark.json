@@ -15,6 +15,11 @@
     "kage-text": "#D8DEE9",
     "kage-text-bright": "#ECEFF4",
     "kage-text-muted": "#7B88A1",
-    "kage-section-accent": "#A3BE8C"
+    "kage-section-accent": "#A3BE8C",
+    "kage-link": "#88C0D0",
+    "kage-link-visited": "#8FBCBB",
+    "kage-link-hover": "#A3D4E0",
+    "kage-mascot-outline": "#88C0D0",
+    "kage-mascot-invert": "0"
   }
 }

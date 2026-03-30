@@ -14,6 +14,9 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const LogicalSize = window.__TAURI__.dpi.LogicalSize;
 
+    // Apply theme (theme-global.js is loaded as a regular script in the HTML)
+    if (window.kageTheme) kageTheme.init();
+
     // Render mascot icon
     const mascotEl = document.getElementById('inlineAssistMascot');
     if (mascotEl) createMascot({ size: 24 }).then(svg => mascotEl.appendChild(svg));

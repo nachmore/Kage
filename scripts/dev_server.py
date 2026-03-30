@@ -177,6 +177,7 @@ MOCK_CATALOG = [
     {"id": "focus-tracker", "name": "Focus Tracker", "type": "extension", "version": "1.3.2", "author": "kage", "description": "Track app usage, context switches, and focus streaks. Get daily/weekly/monthly reports with AI insights.", "icon": "📊", "tags": ["focus", "productivity", "screen time", "activity", "tracker", "heatmap"]},
     {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "tags": ["dark", "light", "blue", "minimal"]},
     {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
+    {"id": "kiro-ish-theme", "name": "Kiro-ish", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Teal-accented theme with cool, calming tones. Inspired by the Kiro mascot palette.", "icon": "🐱", "tags": ["dark", "light", "purple", "kiro", "teal"]},
 ]
 
 

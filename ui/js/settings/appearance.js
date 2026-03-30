@@ -168,7 +168,15 @@ class AppearanceSettingsModule extends SettingsModule {
             if (fontSizeValue) fontSizeValue.textContent = (config.ui.font_size || 14) + 'px';
         }
 
-        this.applyTheme(config.ui.theme || 'system');
+        this.toggleDateTimeFormats();
+
+        // Apply theme via the global settings theme function (defined in settings.html)
+        if (typeof applySettingsTheme === 'function') {
+            applySettingsTheme(config.ui.theme || 'system');
+        }
+
+        // Load theme list now that the hidden input has the correct value
+        this.loadInstalledThemes();
     }
 
     save(config) {
@@ -197,8 +205,10 @@ class AppearanceSettingsModule extends SettingsModule {
         config.ui.window_start_position = document.getElementById('windowStartPosition')?.value || 'center';
         config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14');
 
-        // Apply immediately
-        this.applyTheme(config.ui.theme);
+        // Apply immediately via the global settings theme function
+        if (typeof applySettingsTheme === 'function') {
+            applySettingsTheme(config.ui.theme);
+        }
     }
 
     initialize() {
@@ -228,19 +238,6 @@ class AppearanceSettingsModule extends SettingsModule {
                 window.__TAURI__.core.invoke('open_store_window', { tab: 'themes' });
             }
         });
-
-        // Load installed themes into the select and the list
-        this.loadInstalledThemes();
-
-        // Listen for system theme changes
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        this.themeChangeHandler = (e) => {
-            const currentTheme = document.getElementById('theme')?.value;
-            if (currentTheme === 'system') {
-                document.body.classList.toggle('dark-theme', e.matches);
-            }
-        };
-        mediaQuery.addEventListener('change', this.themeChangeHandler);
     }
 
     async loadInstalledThemes() {
@@ -251,10 +248,8 @@ class AppearanceSettingsModule extends SettingsModule {
             const themes = await invoke('list_themes');
             const themeList = document.getElementById('themeList');
             const themeInput = document.getElementById('theme');
-            const config = await invoke('get_config');
-            const activeThemeId = config.ui?.theme || 'system';
-
-            if (themeInput) themeInput.value = activeThemeId;
+            // The hidden input is the source of truth for the current selection
+            const activeThemeId = themeInput?.value || 'system';
 
             if (!themeList) return;
 
@@ -323,9 +318,12 @@ class AppearanceSettingsModule extends SettingsModule {
     async _useTheme(themeId) {
         const themeInput = document.getElementById('theme');
         if (themeInput) themeInput.value = themeId;
-        // Use the global saveSettings() from manager.js
         if (typeof saveSettings === 'function') {
             saveSettings();
+        }
+        // Apply custom theme colors immediately in settings window
+        if (typeof refreshSettingsTheme === 'function') {
+            refreshSettingsTheme(themeId);
         }
         // Refresh the list to update active state
         this.loadInstalledThemes();
@@ -360,31 +358,10 @@ class AppearanceSettingsModule extends SettingsModule {
         if (dateRow) dateRow.style.display = showDate ? '' : 'none';
     }
 
-    applyTheme(theme) {
-        const builtins = ['system', 'dark', 'light'];
-        if (theme === 'dark') {
-            document.body.classList.add('dark-theme');
-        } else if (theme === 'light') {
-            document.body.classList.remove('dark-theme');
-        } else if (!builtins.includes(theme)) {
-            // Custom theme — follow OS preference for dark/light class
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            document.body.classList.toggle('dark-theme', isDark);
-        } else {
-            // system
-            const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            document.body.classList.toggle('dark-theme', isDark);
-        }
-    }
-
     validate() {
         return { valid: true };
     }
 
     destroy() {
-        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-        if (this.themeChangeHandler) {
-            mediaQuery.removeEventListener('change', this.themeChangeHandler);
-        }
     }
 }

@@ -487,7 +487,7 @@ window.addEventListener('DOMContentLoaded', async () => {
  * Global functions for UI
  */
 function saveSettings() {
-    settingsManager.save();
+    return settingsManager.save();
 }
 
 async function saveAndClose() {

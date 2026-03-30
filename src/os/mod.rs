@@ -75,6 +75,45 @@ pub use hotkey::CapturedHotkey;
 pub use icon::extract_icon_base64;
 pub use window_list::{list_windows, focus_window, get_app_icon};
 
+/// Detect whether the OS is using dark mode.
+/// Returns true for dark, false for light.
+pub fn is_dark_mode() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        // Read AppsUseLightTheme from the registry (0 = dark, 1 = light)
+        use winreg::enums::HKEY_CURRENT_USER;
+        use winreg::RegKey;
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        match hkcu.open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize") {
+            Ok(key) => {
+                let val: u32 = key.get_value("AppsUseLightTheme").unwrap_or(1);
+                val == 0
+            }
+            Err(_) => false,
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // macOS: `defaults read -g AppleInterfaceStyle` returns "Dark" in dark mode
+        std::process::Command::new("defaults")
+            .args(["read", "-g", "AppleInterfaceStyle"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().eq_ignore_ascii_case("dark"))
+            .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // GNOME/GTK: check gsettings color-scheme
+        std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains("dark"))
+            .unwrap_or(false)
+    }
+}
+
 /// Get the system fonts directory.
 /// Windows: %WINDIR%\Fonts, macOS/Linux: dirs::font_dir()
 pub fn fonts_dir() -> Option<std::path::PathBuf> {

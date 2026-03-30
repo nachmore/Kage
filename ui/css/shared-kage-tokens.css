@@ -35,7 +35,7 @@
     --kage-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 
     /* Mascot */
-    --kage-mascot-outline: #38B2AC;
+    --kage-mascot-outline: #319795;  /* matches --kage-accent */
     --kage-mascot-invert: 0;
 }
 
@@ -54,5 +54,5 @@ body.light-theme {
     --kage-link: #2B6CB0;
     --kage-link-visited: #2C7A7B;
     --kage-link-hover: #319795;
-    --kage-mascot-outline: #38B2AC;
+    --kage-mascot-outline: #319795;  /* matches --kage-accent */
 }

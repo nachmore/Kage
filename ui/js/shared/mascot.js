@@ -33,7 +33,9 @@ export function isTerminatorMode() { return _terminatorMode; }
  */
 export function getMascotThemeSettings() {
     const style = getComputedStyle(document.documentElement);
-    const outlineColor = style.getPropertyValue('--kage-mascot-outline').trim() || '#38B2AC';
+    const outlineColor = style.getPropertyValue('--kage-mascot-outline').trim()
+        || style.getPropertyValue('--kage-accent').trim()
+        || '#319795';
     const invertVal = style.getPropertyValue('--kage-mascot-invert').trim();
     const invert = invertVal === '1' || invertVal === 'true';
     return { outlineColor, invert };

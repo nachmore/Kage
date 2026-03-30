@@ -1,6 +1,10 @@
 // Theme management — config-aware with system/dark/light support + theme extensions
+//
+// OS dark mode is detected via the Rust backend (get_os_dark_mode) since
+// WebView2's prefers-color-scheme media query is unreliable on Windows.
 
 let currentThemeSetting = 'system';
+let cachedOsDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches; // fallback until backend responds
 const BUILTIN_THEMES = ['system', 'dark', 'light'];
 
 function isCustomTheme(setting) {
@@ -10,8 +14,8 @@ function isCustomTheme(setting) {
 function resolveTheme(setting) {
     if (setting === 'dark') return true;
     if (setting === 'light') return false;
-    // "system" or custom themes — follow OS preference for dark/light class
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // "system" or custom themes — follow OS preference
+    return cachedOsDarkMode;
 }
 
 export function applyTheme(setting) {
@@ -19,7 +23,9 @@ export function applyTheme(setting) {
         currentThemeSetting = setting;
     }
     const isDark = resolveTheme(currentThemeSetting);
+    console.log(`[theme] applyTheme: setting=${currentThemeSetting}, isDark=${isDark}, osDark=${cachedOsDarkMode}`);
     document.body.classList.toggle('dark-theme', isDark);
+    document.body.classList.toggle('light-theme', !isDark);
 }
 
 /**
@@ -27,7 +33,6 @@ export function applyTheme(setting) {
  */
 function clearCustomThemeColors() {
     const root = document.documentElement;
-    // Remove all --kage-* custom properties that were set inline
     for (const prop of Array.from(root.style)) {
         if (prop.startsWith('--kage-')) {
             root.style.removeProperty(prop);
@@ -37,7 +42,6 @@ function clearCustomThemeColors() {
 
 /**
  * Apply CSS variables from a theme extension's color map.
- * @param {Object} colors - key/value map, e.g. { "kage-accent": "#E8853D" }
  */
 function applyCustomThemeColors(colors) {
     if (!colors || typeof colors !== 'object') return;
@@ -48,11 +52,16 @@ function applyCustomThemeColors(colors) {
 }
 
 export function initThemeListener() {
-    // React to OS theme changes (only matters when setting is "system" or custom)
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    // React to OS theme changes — re-query backend since media query is unreliable
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
         if (currentThemeSetting === 'system' || isCustomTheme(currentThemeSetting)) {
+            // Refresh OS dark mode from backend
+            if (_lastInvoke) {
+                try {
+                    cachedOsDarkMode = await _lastInvoke('get_os_dark_mode');
+                } catch { /* keep cached value */ }
+            }
             applyTheme();
-            // Re-apply custom theme colors for the new variant if needed
             if (isCustomTheme(currentThemeSetting) && _lastInvoke) {
                 applyThemeExtensionColors(_lastInvoke, currentThemeSetting);
             }
@@ -69,12 +78,17 @@ async function applyThemeExtensionColors(invoke, themeId) {
     try {
         const isDark = resolveTheme(themeId);
         const variant = isDark ? 'dark' : 'light';
+        console.log(`[theme] Loading custom theme colors: id=${themeId}, variant=${variant}`);
         const colors = await invoke('load_theme_colors', { themeId, variant });
         if (colors && typeof colors === 'object') {
+            const keys = Object.keys(colors);
+            console.log(`[theme] Applied ${keys.length} custom CSS vars for '${themeId}':`, keys.slice(0, 5).join(', '), keys.length > 5 ? '...' : '');
             applyCustomThemeColors(colors);
+        } else {
+            console.warn(`[theme] load_theme_colors returned null/empty for '${themeId}' (${variant})`);
         }
     } catch (e) {
-        console.warn(`Failed to load theme colors for '${themeId}':`, e);
+        console.warn(`[theme] Failed to load theme colors for '${themeId}':`, e);
     }
 }
 
@@ -86,14 +100,21 @@ export async function loadAndApplyTheme(invoke) {
     try {
         const config = await invoke('get_config');
         const theme = config.ui?.theme || 'system';
+        console.log(`[theme] loadAndApplyTheme: config theme=${theme}`);
 
-        // Always clear custom theme colors first
+        // Query OS dark mode from the backend (reliable, unlike prefers-color-scheme)
+        try {
+            cachedOsDarkMode = await invoke('get_os_dark_mode');
+            console.log(`[theme] OS dark mode from backend: ${cachedOsDarkMode}`);
+        } catch (e) {
+            console.warn(`[theme] get_os_dark_mode failed, using cached=${cachedOsDarkMode}:`, e);
+        }
+
         clearCustomThemeColors();
-
         applyTheme(theme);
 
-        // If it's a custom theme extension, load and apply its CSS variables
         if (isCustomTheme(theme)) {
+            console.log(`[theme] Custom theme detected: ${theme}`);
             await applyThemeExtensionColors(invoke, theme);
         }
 
@@ -113,7 +134,7 @@ export async function loadAndApplyTheme(invoke) {
 }
 
 let _dateTimeTimer = null;
-let _dateTimeUi = null; // cached UI config for resume
+let _dateTimeUi = null;
 
 function applyDateTime(ui) {
     const container = document.getElementById('datetimeDisplay');
@@ -169,7 +190,6 @@ function applyDateTime(ui) {
 
     _stopDateTimeTimer();
     update();
-    // Only schedule updates if the page is visible
     if (!document.hidden) {
         scheduleNext();
     }
@@ -179,13 +199,11 @@ function _stopDateTimeTimer() {
     if (_dateTimeTimer) { clearTimeout(_dateTimeTimer); _dateTimeTimer = null; }
 }
 
-// Pause timer when window is hidden, resume when shown
 document.addEventListener('visibilitychange', () => {
     if (!_dateTimeUi) return;
     if (document.hidden) {
         _stopDateTimeTimer();
     } else {
-        // Re-apply to update the display immediately and restart the timer
         applyDateTime(_dateTimeUi);
     }
 });
@@ -206,7 +224,6 @@ function formatDateTime(date, fmt) {
     const Y = date.getFullYear();
     const dow = date.getDay();
 
-    // Replace longest tokens first to avoid partial matches
     return fmt
         .replace('dddd', daysFull[dow])
         .replace('ddd', days[dow])

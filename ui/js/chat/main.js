@@ -75,12 +75,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         if (newTerminator !== isTerminator) {
             isTerminator = newTerminator;
             setTerminatorMode(isTerminator);
-            refreshSidebarMascot();
-            // Re-render all assistant message avatars
-            document.querySelectorAll('.message.assistant .message-avatar').forEach(el => {
-                el.innerHTML = mascotHTML({ size: 18 });
-            });
         }
+        // Always refresh mascot — theme change may affect outline color
+        await refreshSidebarMascot();
     });
 
     // Listen for extension install/uninstall

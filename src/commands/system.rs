@@ -486,6 +486,12 @@ pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
     }))
 }
 
+/// Detect whether the OS is using dark mode.
+#[tauri::command]
+pub async fn get_os_dark_mode() -> bool {
+    crate::os::is_dark_mode()
+}
+
 /// Register all global hotkeys from config. Unregisters everything first.
 /// This is the single source of truth for hotkey registration — called from:
 /// - App startup (main.rs)
@@ -494,7 +500,9 @@ pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
 /// - After hotkey test (try_register_hotkey)
 pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+    use tauri::Emitter;
 
+    info!("Registering all hotkeys...");
     let _ = app.global_shortcut().unregister_all();
 
     let state: tauri::State<'_, AppState> = app.state();
@@ -505,13 +513,13 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     let voice_hk = config.get_voice_hotkey_string();
     drop(config);
 
-    // 1. Main hotkey — toggle floating window
+    // --- Main hotkey: toggle floating window (unique behavior) ---
     if let Some(floating) = app.get_webview_window("floating") {
         match app.global_shortcut().on_shortcut(
             main_hk.as_str(),
             move |_app, _shortcut, event| {
                 if event.state != ShortcutState::Pressed { return; }
-                info!("Hotkey triggered");
+                info!("Hotkey triggered: main ({})", _shortcut);
                 crate::commands::window::toggle_floating_window(&floating);
             },
         ) {
@@ -520,37 +528,14 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
         }
     }
 
-    // 2. Clipboard history hotkey
-    if let Some(ref cb) = cb_hk {
-        if let Some(floating) = app.get_webview_window("floating") {
-            let app_handle = app.clone();
-            match app.global_shortcut().on_shortcut(
-                cb.as_str(),
-                move |_app, _shortcut, event| {
-                    if event.state != ShortcutState::Pressed { return; }
-                    info!("Clipboard hotkey triggered");
-                    crate::commands::window::show_floating_at_mouse(&floating);
-                    let handle = app_handle.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(150));
-                        let _ = handle.emit("clipboard_history_mode", ());
-                    });
-                },
-            ) {
-                Ok(_) => info!("✅ Registered clipboard hotkey: {}", cb),
-                Err(e) => warn!("❌ Failed to register clipboard hotkey {}: {}", cb, e),
-            }
-        }
-    }
-
-    // 3. Inline assist hotkey
+    // --- Inline assist hotkey: capture selection + show assist (unique behavior) ---
     if let Some(ref ia) = ia_hk {
         let ia_handle = app.clone();
         match app.global_shortcut().on_shortcut(
             ia.as_str(),
             move |_app, _shortcut, event| {
                 if event.state != ShortcutState::Pressed { return; }
-                info!("Inline assist hotkey triggered");
+                info!("Hotkey triggered: inline-assist ({})", _shortcut);
                 let source_info = crate::os::window_list::get_foreground_window_info();
                 let capture_token = crate::os::clipboard::begin_selection_capture();
                 let cursor_pos = crate::os::cursor::get_cursor_position().unwrap_or((500, 500));
@@ -565,31 +550,48 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                 });
             },
         ) {
-            Ok(_) => info!("✅ Registered inline assist hotkey: {}", ia),
-            Err(e) => warn!("❌ Failed to register inline assist hotkey {}: {}", ia, e),
+            Ok(_) => info!("✅ Registered inline-assist hotkey: {}", ia),
+            Err(e) => warn!("❌ Failed to register inline-assist hotkey {}: {}", ia, e),
         }
+    } else {
+        info!("ℹ️ No inline-assist hotkey configured");
     }
 
-    // 4. Voice input hotkey — show floating + start speech
-    if let Some(ref vk) = voice_hk {
-        if let Some(floating) = app.get_webview_window("floating") {
-            let app_handle = app.clone();
-            match app.global_shortcut().on_shortcut(
-                vk.as_str(),
-                move |_app, _shortcut, event| {
-                    if event.state != ShortcutState::Pressed { return; }
-                    info!("Voice hotkey triggered");
-                    crate::commands::window::show_floating_at_mouse(&floating);
-                    let handle = app_handle.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(200));
-                        let _ = handle.emit("voice_mode", ());
-                    });
-                },
-            ) {
-                Ok(_) => info!("✅ Registered voice hotkey: {}", vk),
-                Err(e) => warn!("❌ Failed to register voice hotkey {}: {}", vk, e),
+    // --- Event-based hotkeys: show floating at mouse, then emit a frontend event ---
+    // To add a new hotkey of this type: add a config getter and an entry here.
+    let event_hotkeys: Vec<(&str, Option<String>, &str, u64)> = vec![
+        // (name,        hotkey_string, event_name,              delay_ms)
+        ("clipboard",    cb_hk,         "clipboard_history_mode", 150),
+        ("voice",        voice_hk,      "voice_mode",             200),
+    ];
+
+    for (name, hk_opt, event_name, delay_ms) in event_hotkeys {
+        match hk_opt {
+            Some(ref hk) => {
+                if let Some(floating) = app.get_webview_window("floating") {
+                    let app_handle = app.clone();
+                    let evt = event_name.to_string();
+                    let label = name.to_string();
+                    match app.global_shortcut().on_shortcut(
+                        hk.as_str(),
+                        move |_app, _shortcut, event| {
+                            if event.state != ShortcutState::Pressed { return; }
+                            info!("Hotkey triggered: {} ({})", label, _shortcut);
+                            crate::commands::window::show_floating_at_mouse(&floating);
+                            let handle = app_handle.clone();
+                            let evt = evt.clone();
+                            std::thread::spawn(move || {
+                                std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+                                let _ = handle.emit(&evt, ());
+                            });
+                        },
+                    ) {
+                        Ok(_) => info!("✅ Registered {} hotkey: {}", name, hk),
+                        Err(e) => warn!("❌ Failed to register {} hotkey {}: {}", name, hk, e),
+                    }
+                }
             }
+            None => info!("ℹ️ No {} hotkey configured", name),
         }
     }
 }

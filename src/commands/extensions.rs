@@ -88,9 +88,16 @@ pub async fn load_theme_colors(
     theme_id: String,
     variant: String,
 ) -> Result<serde_json::Value, AppError> {
+    info!("load_theme_colors: id='{}', variant='{}'", theme_id, variant);
     match extensions::load_theme_colors(&theme_id, &variant, None) {
-        Ok(Some(colors)) => Ok(colors),
-        Ok(None) => Ok(serde_json::json!(null)),
+        Ok(Some(colors)) => {
+            info!("load_theme_colors: found colors for '{}'", theme_id);
+            Ok(colors)
+        }
+        Ok(None) => {
+            warn!("load_theme_colors: no colors found for '{}' ({})", theme_id, variant);
+            Ok(serde_json::json!(null))
+        }
         Err(e) => {
             error!("Failed to load theme colors for '{}': {}", theme_id, e);
             Err(format!("Failed to load theme: {}", e).into())

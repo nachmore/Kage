@@ -657,6 +657,7 @@ fn main() {
             commands::cancel_hotkey_capture,
             commands::try_register_hotkey,
             commands::get_app_info,
+            commands::get_os_dark_mode,
             commands::open_welcome_window,
             commands::complete_first_run,
             commands::is_first_run,

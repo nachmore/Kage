@@ -29,8 +29,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         if (newTerminator !== isTerminator) {
             isTerminator = newTerminator;
             setTerminatorMode(isTerminator);
-            await refreshFloatingMascot();
         }
+        // Always refresh mascot — theme change may affect outline color
+        await refreshFloatingMascot();
     });
 
     const app = new FloatingApp(invoke, appWindow, listen);

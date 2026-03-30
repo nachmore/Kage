@@ -379,6 +379,7 @@ pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&Pat
     // Check user themes first
     if let Ok(user_dir) = user_item_dir("themes") {
         let theme_dir = user_dir.join(theme_id);
+        log::info!("load_theme_colors: checking user dir {:?}", theme_dir);
         if let Some(colors) = try_load_theme_variant(&theme_dir, variant)? {
             return Ok(Some(colors));
         }
@@ -387,11 +388,13 @@ pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&Pat
     // Then bundled
     if let Some(dir) = bundled_dir {
         let theme_dir = dir.join(theme_id);
+        log::info!("load_theme_colors: checking bundled dir {:?}", theme_dir);
         if let Some(colors) = try_load_theme_variant(&theme_dir, variant)? {
             return Ok(Some(colors));
         }
     }
 
+    log::warn!("load_theme_colors: theme '{}' ({}) not found in any directory", theme_id, variant);
     Ok(None)
 }
 
