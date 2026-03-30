@@ -74,7 +74,12 @@ fn main() {
     let _instance_lock = match single_instance::try_acquire(is_restart) {
         Ok(lock) => lock,
         Err(e) => {
-            error!("{}", e);
+            // Another instance is running — signal it to show the sessions UI
+            info!("Another instance detected, signaling it to show sessions UI");
+            single_instance::signal_running_instance();
+            // Small delay to ensure the TCP send completes before we exit
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            info!("{}", e);
             std::process::exit(0);
         }
     };
@@ -372,6 +377,23 @@ fn main() {
             });
 
             info!("=== Setup Complete ===");
+
+            // Start IPC listener for second-instance signals
+            single_instance::start_ipc_listener(app.handle().clone());
+
+            // Listen for show-sessions event (triggered by second instance)
+            {
+                let app_handle = app.handle().clone();
+                app.listen("show-sessions", move |_| {
+                    info!("show-sessions event received, opening chat window");
+                    let handle = app_handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = commands::window::open_chat_window(handle).await {
+                            log::error!("Failed to open chat window from IPC signal: {}", e);
+                        }
+                    });
+                });
+            }
 
             // Start automation scheduler
             {

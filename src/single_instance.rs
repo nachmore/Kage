@@ -3,11 +3,25 @@
 //! Both debug and release builds use the same lock file in the shared
 //! config directory (`kage/`), so only one instance can run
 //! regardless of build profile.
+//!
+//! When a second instance detects the lock is held, it signals the running
+//! instance to show the sessions UI via a localhost TCP connection, then exits.
 
 use anyhow::{Context, Result};
 use log::info;
 use std::fs::{self, File};
 use std::path::PathBuf;
+
+/// The IPC command sent by a second instance to tell the running one to show up.
+const SHOW_COMMAND: &[u8] = b"show\n";
+
+/// File that stores the IPC port the running instance is listening on.
+fn ipc_port_file() -> Result<PathBuf> {
+    let dir = dirs::config_dir()
+        .context("Failed to get config directory")?
+        .join("kage");
+    Ok(dir.join("ipc-port"))
+}
 
 /// Holds the lock file handle. The OS lock is released when this is dropped
 /// (or when the process exits/crashes).
@@ -19,6 +33,10 @@ pub struct InstanceLock {
 impl Drop for InstanceLock {
     fn drop(&mut self) {
         info!("Releasing single-instance lock: {:?}", self.path);
+        // Clean up the IPC port file
+        if let Ok(port_file) = ipc_port_file() {
+            let _ = fs::remove_file(port_file);
+        }
     }
 }
 
@@ -96,7 +114,96 @@ pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
     );
 }
 
-// --- Platform-specific locking ---
+/// Signal the already-running instance to show the sessions UI.
+/// Called by the second instance before it exits.
+pub fn signal_running_instance() {
+    info!("Signaling running instance to show sessions UI...");
+
+    let port = match ipc_port_file().ok().and_then(|p| fs::read_to_string(p).ok()) {
+        Some(s) => match s.trim().parse::<u16>() {
+            Ok(port) => port,
+            Err(_) => {
+                log::warn!("Invalid IPC port file content");
+                return;
+            }
+        },
+        None => {
+            log::warn!("No IPC port file found — running instance may not support signaling");
+            return;
+        }
+    };
+
+    match std::net::TcpStream::connect(("127.0.0.1", port)) {
+        Ok(mut stream) => {
+            use std::io::Write;
+            let _ = stream.write_all(SHOW_COMMAND);
+            let _ = stream.flush();
+            // Give the listener time to read before we drop the connection
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            info!("Sent show command to running instance on port {}", port);
+        }
+        Err(e) => {
+            log::warn!("Failed to connect to running instance on port {}: {}", port, e);
+        }
+    }
+}
+
+/// Start the IPC listener that receives signals from new instances.
+/// Binds to a random localhost port, writes the port to a file, and
+/// emits a `show-sessions` Tauri event when a "show" command is received.
+pub fn start_ipc_listener(app_handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        use std::io::Read;
+        use tauri::Emitter;
+
+        let listener = match std::net::TcpListener::bind("127.0.0.1:0") {
+            Ok(l) => l,
+            Err(e) => {
+                log::warn!("Failed to start IPC listener: {}", e);
+                return;
+            }
+        };
+
+        let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
+        info!("IPC listener started on 127.0.0.1:{}", port);
+
+        // Write the port to a file so the second instance can find it
+        if let Ok(port_file) = ipc_port_file() {
+            let _ = fs::write(&port_file, port.to_string());
+        }
+
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    // Only accept connections from localhost
+                    if let Ok(addr) = stream.peer_addr() {
+                        if !addr.ip().is_loopback() {
+                            log::warn!("Rejected non-loopback IPC connection from {}", addr);
+                            continue;
+                        }
+                    }
+
+                    let mut buf = [0u8; 256];
+                    match stream.read(&mut buf) {
+                        Ok(n) if n > 0 => {
+                            let cmd = String::from_utf8_lossy(&buf[..n]);
+                            let cmd = cmd.trim();
+                            info!("IPC received command: {:?}", cmd);
+                            if cmd == "show" {
+                                info!("Showing sessions UI (signaled by another instance)");
+                                let _ = app_handle.emit("show-sessions", ());
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Err(e) => log::warn!("IPC accept error: {}", e),
+            }
+        }
+    });
+}
+
+// --- Platform-specific helpers ---
 
 /// Check if the lock file contains a PID of a process that's no longer running.
 fn is_lock_stale(lock_path: &std::path::Path) -> bool {
