@@ -24,6 +24,14 @@ class CalendarExtSettingsModule extends SettingsModule {
                 <button class="setting-button" id="calendarTestBtn">🔄 Test Calendar Access</button>
                 <span class="setting-description" id="calendarTestStatus" style="margin-left:8px;"></span>
             </div>
+            <div class="setting-row" style="margin-top:16px;">
+                <div class="setting-label">Launcher Commands</div>
+                <div class="setting-description" style="line-height:1.8;">
+                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal</code> or <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">meetings</code> — show upcoming events<br>
+                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal tomorrow</code> — events for a specific day<br>
+                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal-refresh</code> — force refresh calendar data from Outlook
+                </div>
+            </div>
         `;
     }
 
