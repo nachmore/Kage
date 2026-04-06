@@ -175,11 +175,11 @@ class ShortcutsSettingsModule extends SettingsModule {
                 .shortcut-item { padding: 16px; border-bottom: 1px solid var(--kage-border-subtle); display: flex; justify-content: space-between; align-items: flex-start; background: var(--kage-bg-input); }
                 .shortcut-item:last-child { border-bottom: none; }
                 .shortcut-item:hover { background: var(--kage-bg-elevated); }
-                .shortcut-info { flex: 1; }
+                .shortcut-info { flex: 1; min-width: 0; }
                 .shortcut-name { font-size: 14px; font-weight: 500; color: var(--kage-text-bright); margin-bottom: 4px; }
                 .shortcut-trigger { display: inline-block; padding: 2px 8px; background: var(--kage-accent); color: #ffffff; border-radius: 3px; font-size: 12px; font-family: 'Courier New', monospace; margin-bottom: 8px; }
-                .shortcut-details { font-size: 12px; color: var(--kage-text-muted); line-height: 1.6; }
-                .shortcut-actions { display: flex; gap: 8px; }
+                .shortcut-details { font-size: 12px; color: var(--kage-text-muted); line-height: 1.6; overflow-wrap: break-word; word-break: break-all; }
+                .shortcut-actions { display: flex; gap: 8px; flex-shrink: 0; }
                 .shortcut-action-btn { padding: 4px 12px; background: transparent; border: 1px solid var(--kage-border); border-radius: 2px; color: var(--kage-text); font-size: 12px; cursor: pointer; transition: all 0.2s; }
                 .shortcut-action-btn:hover { background: var(--kage-border); border-color: var(--kage-accent); }
                 .shortcut-action-btn.delete:hover { background: #c0392b; border-color: #c0392b; color: #ffffff; }
