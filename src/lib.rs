@@ -6,6 +6,7 @@ pub mod config;
 pub mod acp_client;
 pub mod activity_tracker;
 pub mod app_launcher;
+pub mod app_log;
 pub mod auto_steering;
 pub mod computer_control;
 pub mod error;

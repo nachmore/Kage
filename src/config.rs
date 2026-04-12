@@ -313,6 +313,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_log_buffer_size() -> usize {
+    1000
+}
+
 fn default_inline_assist_hotkey() -> Option<HotkeyConfig> {
     Some(HotkeyConfig {
         modifiers: vec!["Ctrl".to_string(), "Shift".to_string()],
@@ -340,6 +344,9 @@ pub struct SystemConfig {
     /// Include the source window context (app name, title) when sending messages.
     #[serde(default = "default_true")]
     pub screen_context: bool,
+    /// Maximum number of app log entries to keep in the ring buffer.
+    #[serde(default = "default_log_buffer_size")]
+    pub log_buffer_size: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -634,6 +641,7 @@ impl Default for Config {
                 capture_selection: true,
                 show_notifications: true,
                 screen_context: true,
+                log_buffer_size: 1000,
             },
             shortcuts: vec![],
             debug_mode: false,

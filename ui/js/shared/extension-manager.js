@@ -6,6 +6,8 @@
 
 const BUNDLED_EXT_PATH = 'extensions';
 
+import { createExtensionLogger } from './kage-log.js';
+
 export class ExtensionManager {
     constructor(invoke) {
         this.invoke = invoke;
@@ -72,7 +74,7 @@ export class ExtensionManager {
 
         const ext = { manifest, basePath, searchProvider: null, userInstalled: false };
 
-        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest) };
+        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest), log: createExtensionLogger(id) };
 
         if (manifest.contributes?.searchProvider) {
             try {
@@ -157,7 +159,7 @@ export class ExtensionManager {
 
         const ext = { manifest, basePath: null, searchProvider: null, userInstalled: true };
 
-        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest) };
+        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest), log: createExtensionLogger(id) };
 
         // Load search provider via read_extension_file
         if (manifest.contributes?.searchProvider) {

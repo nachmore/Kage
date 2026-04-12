@@ -405,13 +405,16 @@ pub async fn resize_floating_window(
 
 
 #[tauri::command]
-pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>) -> Result<(), AppError> {
-    info!("Opening settings window (section: {:?})", section);
+pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>, sub_section: Option<String>) -> Result<(), AppError> {
+    info!("Opening settings window (section: {:?}, sub: {:?})", section, sub_section);
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
         let _ = window.set_focus();
         if let Some(ref s) = section {
             let _ = window.emit("navigate_settings_section", s);
+        }
+        if let Some(ref sub) = sub_section {
+            let _ = window.emit("navigate_settings_subsection", sub);
         }
     }
     Ok(())

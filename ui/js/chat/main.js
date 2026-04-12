@@ -7,10 +7,12 @@ import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown
 import { createMascotController, createMascot, getMascotThemeSettings, setTerminatorMode, mascotHTML } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
+import { interceptConsole } from '../shared/kage-log.js';
 
 let app = null;
 
 waitForTauri(async ({ invoke, appWindow, listen }) => {
+    interceptConsole('chat');
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);

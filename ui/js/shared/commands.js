@@ -138,6 +138,15 @@ const LOCAL_COMMANDS = [
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             }
         }
+    },
+    {
+        name: 'logs',
+        description: 'View application logs',
+        icon: '📋',
+        execute: async (invoke, appWindow) => {
+            await invoke('open_settings_window', { section: 'about', subSection: 'logging' });
+            await appWindow.hide();
+        }
     }
 ];
 

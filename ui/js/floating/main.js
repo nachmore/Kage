@@ -6,6 +6,7 @@ import { initLinkHandler } from '../shared/link-handler.js';
 import { createMascotController, getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
+import { interceptConsole } from '../shared/kage-log.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -13,6 +14,7 @@ const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}
 waitForTauri(async ({ invoke, appWindow, listen }) => {
     _ts('Tauri ready');
 
+    interceptConsole('floating');
     initMarkdown();
     initThemeListener();
     initLinkHandler(invoke);

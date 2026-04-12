@@ -177,6 +177,15 @@
                         switchSection(section);
                     }
                 });
+                window.__TAURI__.event.listen('navigate_settings_subsection', (event) => {
+                    const sub = event.payload;
+                    if (sub) {
+                        // Small delay to let the section switch render first
+                        setTimeout(() => {
+                            document.dispatchEvent(new CustomEvent('settings-subsection', { detail: sub }));
+                        }, 100);
+                    }
+                });
             });
         })();
     </script>
@@ -185,6 +194,23 @@
     
     <!-- Load all settings modules -->
     <script src="js/settings/base.js"></script>
+    <script>
+        // Intercept console for settings window logging
+        (function() {
+            const invoke = () => window.__TAURI__?.core?.invoke;
+            function fmt(v) {
+                if (v === null || v === undefined) return String(v);
+                if (v instanceof Error) return v.message + '\n' + (v.stack || '');
+                if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
+                return String(v);
+            }
+            const orig = { log: console.log.bind(console), warn: console.warn.bind(console), error: console.error.bind(console), debug: console.debug.bind(console) };
+            console.log   = (...a) => { orig.log(...a);   const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'info',  source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
+            console.warn  = (...a) => { orig.warn(...a);  const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'warn',  source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
+            console.error = (...a) => { orig.error(...a); const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'error', source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
+            console.debug = (...a) => { orig.debug(...a); const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'debug', source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
+        })();
+    </script>
     <script src="js/settings/hotkey.js"></script>
     <script src="js/settings/connection.js"></script>
     <script src="js/settings/appearance.js"></script>

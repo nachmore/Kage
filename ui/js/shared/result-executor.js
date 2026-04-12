@@ -8,6 +8,7 @@
  */
 
 import { buildShortcutCommand } from './shortcuts.js';
+import { kageLog } from './kage-log.js';
 import { executeCommand } from './commands.js';
 import { recordSelection } from './search-engine.js';
 
@@ -137,6 +138,7 @@ export async function executeShortcutCommand(command, ctx) {
         return { handled: true };
     }
     if (command.type === 'open_url') {
+        kageLog.info('shortcuts', 'Open URL: ' + command.url);
         await invoke('open_url', { url: command.url });
         return { handled: true, action: 'hide' };
     }

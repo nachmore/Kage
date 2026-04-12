@@ -5,6 +5,7 @@ mod acp_client;
 mod activity_tracker;
 mod agent_presets;
 mod app_launcher;
+mod app_log;
 mod auto_steering;
 mod automation;
 mod commands;
@@ -206,6 +207,13 @@ fn main() {
 
     info!("Configuration loaded");
     if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
+
+    // Initialize the app log ring buffer
+    if let Err(e) = app_log::init(config.system.log_buffer_size) {
+        warn!("Failed to initialize app log: {}", e);
+    } else {
+        app_log::log("info", "system", "App log initialized");
+    }
 
     let acp_client = match &config.acp.mode {
         crate::config::AcpMode::Local { spawn_command } => {
@@ -786,6 +794,10 @@ fn main() {
             commands::inline_assist_apply,
             commands::send_inline_assist,
             commands::execute_macro,
+            commands::app_log_write,
+            commands::app_log_get_entries,
+            commands::app_log_clear,
+            commands::app_log_get_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

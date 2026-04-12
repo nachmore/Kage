@@ -31,6 +31,9 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
             let _ = child.wait();
         }
     }
+
+    // Flush app log to disk
+    crate::app_log::flush();
 }
 
 /// Run the async portion of shutdown (steering + disconnect) then exit.
@@ -172,6 +175,9 @@ pub async fn save_config(
 
     let mut state_config = state.config.lock().unwrap();
     *state_config = config.clone();
+
+    // Update app log buffer size if changed
+    crate::app_log::set_max_size(config.system.log_buffer_size);
 
     info!("Configuration saved successfully");
 
@@ -1303,4 +1309,34 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
     }
 
     agents
+}
+
+// ---------------------------------------------------------------------------
+// App Log commands
+// ---------------------------------------------------------------------------
+
+/// Write a log entry from the frontend.
+#[tauri::command]
+pub async fn app_log_write(level: String, source: String, msg: String) -> Result<(), AppError> {
+    crate::app_log::log(&level, &source, &msg);
+    Ok(())
+}
+
+/// Get all log entries.
+#[tauri::command]
+pub async fn app_log_get_entries() -> Result<Vec<crate::app_log::LogEntry>, AppError> {
+    Ok(crate::app_log::get_entries())
+}
+
+/// Clear all log entries.
+#[tauri::command]
+pub async fn app_log_clear() -> Result<(), AppError> {
+    crate::app_log::clear().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Get the log directory path (for "Open Logs Folder").
+#[tauri::command]
+pub async fn app_log_get_dir() -> Result<String, AppError> {
+    Ok(crate::app_log::log_dir_string())
 }
