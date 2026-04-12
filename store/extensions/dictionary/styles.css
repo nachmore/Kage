@@ -47,9 +47,8 @@
     color: var(--kage-text);
     line-height: 1.4;
     padding-left: 24px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .dict-example {
@@ -57,9 +56,8 @@
     color: var(--kage-text-secondary, #999);
     font-style: italic;
     padding-left: 24px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .dict-syn {
@@ -81,4 +79,12 @@
 
 .dict-suggest-text strong {
     color: var(--kage-accent);
+}
+
+/* Allow suggestion items containing dictionary results to expand for word-wrapped text */
+.suggestion-item:has(.dict-result),
+.app-suggestion-item:has(.dict-result),
+.chat-suggestion-item:has(.dict-result) {
+    overflow: visible;
+    align-items: flex-start;
 }
