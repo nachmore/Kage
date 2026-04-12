@@ -6,10 +6,31 @@ use std::process::Command;
 use super::process::spawn_detached_impl;
 
 pub fn open_url_impl(url: &str) -> Result<()> {
-    log::debug!("[open_url] cmd /c start (detached): {}", url);
-    spawn_detached_impl(Command::new("cmd").args(["/C", "start", "", url]))
-        .context("Failed to open URL")?;
-    Ok(())
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::core::PCWSTR;
+
+    log::debug!("[open_url] ShellExecuteW: {}", url);
+
+    let verb: Vec<u16> = std::ffi::OsStr::new("open").encode_wide().chain(std::iter::once(0)).collect();
+    let file: Vec<u16> = std::ffi::OsStr::new(url).encode_wide().chain(std::iter::once(0)).collect();
+
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            PCWSTR(verb.as_ptr()),
+            PCWSTR(file.as_ptr()),
+            PCWSTR(std::ptr::null()),
+            PCWSTR(std::ptr::null()),
+            windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
+        )
+    };
+
+    if result.0 as usize > 32 {
+        Ok(())
+    } else {
+        anyhow::bail!("ShellExecuteW failed with code {}", result.0 as usize)
+    }
 }
 
 pub fn open_path_impl(path: &str) -> Result<()> {
