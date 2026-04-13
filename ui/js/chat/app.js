@@ -2307,6 +2307,7 @@ export class ChatApp {
         const gen = this._searchGeneration;
         const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts);
         if (gen !== this._searchGeneration) return;
+        this._searchCompletedGen = gen;
         if (results.length > 0) {
             this.currentSuggestions = results;
             this.suggestionIndex = 0;
@@ -2408,12 +2409,14 @@ export class ChatApp {
     }
 
     async handleEnterKey() {
-        // Discard any in-flight suggestion search so we don't use stale matches.
-        // When typing fast, the async search from the last input event may not
-        // have resolved yet, leaving currentSuggestions reflecting a partial query.
-        this._searchGeneration = (this._searchGeneration || 0) + 1;
-        this.currentSuggestions = [];
-        this.suggestionIndex = -1;
+        // If an async search is still in-flight (started but not yet resolved),
+        // discard it and clear stale suggestions so we fall through to direct
+        // shortcut/command matching on the actual input value.
+        if ((this._searchGeneration || 0) !== (this._searchCompletedGen || 0)) {
+            this._searchGeneration = (this._searchGeneration || 0) + 1;
+            this.currentSuggestions = [];
+            this.suggestionIndex = -1;
+        }
 
         const message = this.elements.chatInput.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();

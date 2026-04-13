@@ -1162,6 +1162,7 @@ export class FloatingApp {
         this._searchGeneration++;
         const gen = this._searchGeneration;
         this.searchTimeout = setTimeout(async () => {
+            this.searchTimeout = null; // Mark debounce as fired
             // Check for clipboard history trigger
             if (isClipboardTrigger(query)) {
                 const filter = getClipboardFilter(query);
