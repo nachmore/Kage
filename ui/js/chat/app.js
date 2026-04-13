@@ -2408,6 +2408,13 @@ export class ChatApp {
     }
 
     async handleEnterKey() {
+        // Discard any in-flight suggestion search so we don't use stale matches.
+        // When typing fast, the async search from the last input event may not
+        // have resolved yet, leaving currentSuggestions reflecting a partial query.
+        this._searchGeneration = (this._searchGeneration || 0) + 1;
+        this.currentSuggestions = [];
+        this.suggestionIndex = -1;
+
         const message = this.elements.chatInput.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
         const hasSelection = this.currentSuggestions.length > 0 && this.suggestionIndex >= 0;

@@ -1433,6 +1433,18 @@ export class FloatingApp {
     }
 
     async handleEnterKey() {
+        // Cancel any pending debounced search so we don't use stale suggestions.
+        // When typing fast, the last input event's debounce may not have fired yet,
+        // meaning currentMatches reflects an older, partial query.
+        if (this.searchTimeout) {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = null;
+            // Stale suggestions — clear them so handleEnterAction falls through
+            // to direct shortcut/command matching on the actual input value.
+            this.currentMatches = [];
+            this.selectedIndex = -1;
+        }
+
         const message = this.elements.input.value.trim();
         const hasAttachments = this.attachmentManager.hasAttachments();
         const hasSelection = this.currentMatches.length > 0 && this.selectedIndex >= 0;
