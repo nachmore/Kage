@@ -13,7 +13,7 @@ export default class MathSearchProvider {
     }
 
     match(query) {
-        const mathResult = evaluateMath(query, this.config.precision || 0);
+        const mathResult = evaluateMath(query, this.config.precision ?? 2);
         if (!mathResult) return [];
 
         let display = mathResult.display;
@@ -70,10 +70,14 @@ function evaluateMath(input, precision = 0) {
         if (typeof result !== 'number' && !window.math.isBigNumber(result)) return null;
         const num = typeof result === 'number' ? result : result.toNumber();
         if (!isFinite(num)) return null;
-        if (num === parseFloat(input.trim())) return null;
+        // Skip if the input is just a plain number (no actual calculation).
+        // Use strict Number() instead of parseFloat() — parseFloat("1/1") returns 1
+        // which would incorrectly suppress "1/1 = 1".
+        const inputAsNum = Number(input.trim());
+        if (!isNaN(inputAsNum) && num === inputAsNum) return null;
 
         let display;
-        if (precision > 0) {
+        if (precision >= 0) {
             display = num.toFixed(precision);
         } else {
             display = String(parseFloat(num.toPrecision(15)));
