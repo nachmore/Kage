@@ -45,6 +45,9 @@ export class FloatingApp {
         this.extensionManager = new ExtensionManager(invoke);
         this.lastSelection = null;
         this._compacting = false;
+        this._messageHistory = [];   // shell-style input history
+        this._historyIndex = -1;     // -1 = not browsing history
+        this._historySaved = '';      // stash current input when entering history
         
         this.elements = {};
     }
@@ -1153,6 +1156,12 @@ export class FloatingApp {
         
         // Reset tab cycle state when user types
         this._tabCycleActive = false;
+
+        // Reset history browsing when user types new content
+        if (this._historyIndex >= 0) {
+            this._historyIndex = -1;
+            this._historySaved = '';
+        }
         
         // Dismiss banner as soon as user starts typing — it's served its purpose
         if (query.length > 0) this.dismissBanner();
@@ -1385,6 +1394,19 @@ export class FloatingApp {
                 updateSelection(this.elements.appSuggestions, this.selectedIndex);
             }
         } else if (event.key === 'ArrowDown') {
+            // History navigation: if browsing history, go forward
+            if (this._historyIndex >= 0 && this.currentMatches.length === 0) {
+                event.preventDefault();
+                this._historyIndex--;
+                if (this._historyIndex < 0) {
+                    // Back to the original input
+                    this.elements.input.value = this._historySaved;
+                    this._historySaved = '';
+                } else {
+                    this.elements.input.value = this._messageHistory[this._historyIndex];
+                }
+                return;
+            }
             const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
                 // Only navigate suggestions if cursor is on the last line of the textarea
@@ -1400,6 +1422,20 @@ export class FloatingApp {
             }
             // When no suggestions or not on last line, let default behavior handle cursor movement
         } else if (event.key === 'ArrowUp') {
+            // History navigation: if input is empty (or already browsing) and no suggestions
+            if (this._messageHistory.length > 0 && this.currentMatches.length === 0) {
+                const inputVal = this.elements.input.value;
+                const isEmpty = inputVal.trim() === '' || this._historyIndex >= 0;
+                if (isEmpty && this._historyIndex < this._messageHistory.length - 1) {
+                    event.preventDefault();
+                    if (this._historyIndex < 0) {
+                        this._historySaved = inputVal; // stash whatever was typed
+                    }
+                    this._historyIndex++;
+                    this.elements.input.value = this._messageHistory[this._historyIndex];
+                    return;
+                }
+            }
             const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
                 // Only navigate suggestions if cursor is on the first line of the textarea
@@ -1516,6 +1552,14 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message, options = {}) {
+        // Track message in shell-style history (skip duplicates of the last entry)
+        if (message.trim() && (this._messageHistory.length === 0 || this._messageHistory[0] !== message.trim())) {
+            this._messageHistory.unshift(message.trim());
+            if (this._messageHistory.length > 50) this._messageHistory.pop();
+        }
+        this._historyIndex = -1;
+        this._historySaved = '';
+
         // Mark that this message originates from the floating window
         this.invoke('set_notification_source', { source: 'floating' }).catch(() => {});
 
