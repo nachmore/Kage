@@ -1,9 +1,12 @@
+import { initCache, getEvents } from './cache.js';
+
 /**
  * Calendar Tool Provider — exposes calendar data to the LLM agent.
  */
 export default class CalendarToolProvider {
     initialize(context) {
         this.invoke = context.invoke;
+        initCache(context.invoke);
         this.config = context.config;
     }
 
@@ -46,7 +49,7 @@ export default class CalendarToolProvider {
     async _listAppointments(params) {
         const hoursAhead = params.hours_ahead ?? this.config?.lookahead_hours ?? 8;
         try {
-            const events = await this.invoke('get_calendar_events', { hoursAhead });
+            const events = await getEvents({ hours: hoursAhead });
             return { result: { appointments: this._mapEvents(events), count: events?.length || 0 } };
         } catch (e) {
             return { error: `Failed to fetch calendar events: ${e.message || e}` };

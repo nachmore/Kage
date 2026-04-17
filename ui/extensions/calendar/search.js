@@ -1,11 +1,11 @@
+import { initCache, getEvents, invalidate } from './cache.js';
+
 /**
  * Calendar search provider — shows upcoming meetings for >cal / >meetings queries.
  * Also manages the next-meeting overlay bar in the floating window.
  */
 export default class CalendarSearchProvider {
     constructor() {
-        this._events = [];
-        this._lastFetch = 0;
         this._overlayInterval = null;
         this._config = {};
         this._dismissedIds = new Set(); // Track all dismissed event IDs
@@ -13,6 +13,7 @@ export default class CalendarSearchProvider {
 
     async initialize(context) {
         this._invoke = context.invoke;
+        initCache(context.invoke);
         this._config = context.config || {};
         console.log('[Calendar] Extension initialized, config:', JSON.stringify(this._config));
         // Start overlay polling if enabled
@@ -320,21 +321,10 @@ export default class CalendarSearchProvider {
     // --- Helpers ---
 
     async _fetchEvents(forceRefresh = false) {
-        const now = Date.now();
-        // Cache for 30 minutes (overlay polls every minute but reuses cached data)
-        if (!forceRefresh && now - this._lastFetch < 1_800_000 && this._events.length > 0) {
-            return this._events;
-        }
-        try {
-            const hours = this._config.lookahead_hours || 8;
-            this._events = await this._invoke('get_calendar_events', { hours });
-            this._lastFetch = now;
-            // Clear dismissed events on refresh
-            this._dismissedIds.clear();
-        } catch (e) {
-            console.warn('[Calendar] Failed to fetch events:', e);
-        }
-        return this._events;
+        const hours = this._config.lookahead_hours || 8;
+        const events = await getEvents({ hours, force: forceRefresh });
+        if (forceRefresh) this._dismissedIds.clear();
+        return events;
     }
 
     /**

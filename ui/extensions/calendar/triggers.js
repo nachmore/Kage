@@ -1,9 +1,12 @@
+import { initCache, getEvents } from './cache.js';
+
 /**
  * Calendar trigger provider — emits signals for meeting events.
  */
 export default class CalendarTriggerProvider {
     initialize(context) {
         this.invoke = context.invoke;
+        initCache(context.invoke);
         this._interval = null;
         this._lastNotified = new Set();
         this._startPolling();
@@ -30,7 +33,7 @@ export default class CalendarTriggerProvider {
     async _checkMeetings() {
         if (!this.invoke) return;
         try {
-            const events = await this.invoke('get_calendar_events', { hours: 1 });
+            const events = await getEvents({ hours: 1 });
             const now = new Date();
             for (const e of events) {
                 const start = new Date(e.start_time);

@@ -16,7 +16,8 @@
 // This is a known issue (see SO #42457282).
 //
 // PowerShell overhead is ~300ms for startup, but the actual Outlook query is instant.
-// Results are cached for 2 minutes on the JS side to avoid repeated calls.
+// Results are cached on the JS side (shared cache in cache.js, expires at :25/:55
+// each hour) to avoid repeated calls.
 //
 // DEBUGGING: A standalone PowerShell version of this query lives in
 // scripts/outlook_calendar.ps1 — keep it in sync when changing the query logic here.
