@@ -531,8 +531,26 @@ export class FloatingApp {
     setupVisibilityTracking() {
         this._windowFocused = true; // assume focused at startup
 
+        // --- Pause CSS animations when hidden to stop GPU compositing ---
+        // WebView2 keeps processing infinite CSS animations even on hidden windows,
+        // which causes the shared GPU process to burn CPU continuously.
+        if (!document.getElementById('kage-anim-pause-style')) {
+            const s = document.createElement('style');
+            s.id = 'kage-anim-pause-style';
+            s.textContent = '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
+            document.head.appendChild(s);
+        }
+        // Window starts hidden — pause immediately
+        document.documentElement.classList.add('animations-paused');
+        // Also catch visibility changes (belt-and-suspenders with focus/blur)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) document.documentElement.classList.add('animations-paused');
+            else document.documentElement.classList.remove('animations-paused');
+        });
+
         this.appWindow.listen('tauri://focus', async () => {
             this._windowFocused = true;
+            document.documentElement.classList.remove('animations-paused');
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
@@ -658,6 +676,9 @@ export class FloatingApp {
             // Hide response quick actions — if user didn't use them, they're stale
             const responseActions = document.getElementById('responseActionsContainer');
             if (responseActions) responseActions.style.display = 'none';
+
+            // Pause animations to stop GPU compositing while hidden
+            document.documentElement.classList.add('animations-paused');
         });
     }
 

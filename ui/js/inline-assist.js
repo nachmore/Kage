@@ -360,4 +360,29 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
             setTimeout(() => appWindow.hide(), 100);
         }
     });
+
+    // --- Pause CSS animations when hidden to stop GPU compositing ---
+    // WebView2 keeps processing infinite CSS animations (ghost-float, spin, etc.)
+    // even on hidden windows, which causes the shared GPU process to burn 2%+ CPU.
+    function pauseAnimations() {
+        document.documentElement.classList.add('animations-paused');
+    }
+    function resumeAnimations() {
+        document.documentElement.classList.remove('animations-paused');
+    }
+
+    // Inject a style rule that pauses ALL animations when the class is set
+    const pauseStyle = document.createElement('style');
+    pauseStyle.textContent = '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
+    document.head.appendChild(pauseStyle);
+
+    // Window starts hidden — pause immediately
+    pauseAnimations();
+
+    // Resume on show, pause on hide
+    await appWindow.listen('tauri://focus', () => resumeAnimations());
+    await appWindow.listen('tauri://blur', () => pauseAnimations());
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) pauseAnimations(); else resumeAnimations();
+    });
 })();
