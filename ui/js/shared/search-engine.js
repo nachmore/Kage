@@ -256,18 +256,20 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
 
     // --- Async sources (fire in parallel, flush each as it resolves) ---
 
-    const asyncTasks = [];
+    const asyncTasks = []; // { name: string, promise: Promise<array> }
 
     // Extension async search
     if (_extensionManager) {
-        asyncTasks.push(
-            _extensionManager.matchAllAsync(query).catch(() => [])
-        );
+        asyncTasks.push({
+            name: 'extensions',
+            promise: _extensionManager.matchAllAsync(query).catch(() => [])
+        });
     }
 
     // Rust-side search (apps, URLs, paths, system commands)
-    asyncTasks.push(
-        invoke('handle_floating_input', { input: query })
+    asyncTasks.push({
+        name: 'apps',
+        promise: invoke('handle_floating_input', { input: query })
             .then(rustJson => {
                 const rustResults = JSON.parse(rustJson);
                 const mapped = [];
@@ -285,7 +287,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                 return mapped;
             })
             .catch(() => [])
-    );
+    });
 
     // File search — conditional
     const trimmedQuery = query.trim();
@@ -297,8 +299,9 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             ? trimmedQuery.replace(/^>?find\s+/i, '').trim()
             : trimmedQuery;
         if (fileQuery.length >= 2) {
-            asyncTasks.push(
-                invoke('search_files', { query: fileQuery, maxResults: 8 })
+            asyncTasks.push({
+                name: 'searching files',
+                promise: invoke('search_files', { query: fileQuery, maxResults: 8 })
                     .then(fileResults => {
                         const mapped = [];
                         for (const f of fileResults) {
@@ -320,32 +323,35 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                         return mapped;
                     })
                     .catch(e => { console.warn('[Search] File search failed:', e); return []; })
-            );
+            });
         }
     }
 
+    // History promises (unnamed — fast, not worth labeling)
+    const historyEntries = historyPromises.map(p => ({ name: null, promise: p }));
+
     // Flush each async batch as it resolves (progressive rendering)
     if (onPartial) {
-        const allPromises = [...asyncTasks, ...historyPromises];
-        let resolved = 0;
-        const total = allPromises.length;
-        for (const p of allPromises) {
-            p.then(batch => {
-                resolved++;
+        const allEntries = [...asyncTasks, ...historyEntries];
+        const allPromises = allEntries.map(e => e.promise);
+        const pending = new Set(asyncTasks.map(t => t.name).filter(Boolean));
+
+        for (const entry of allEntries) {
+            entry.promise.then(batch => {
+                if (entry.name) pending.delete(entry.name);
                 if (Array.isArray(batch) && batch.length > 0) {
                     results.push(...batch);
-                    onPartial(_applyFrecency([...results], query), { done: resolved >= total });
-                } else if (resolved >= total) {
-                    // All done but this batch was empty — still notify done
-                    onPartial(_applyFrecency([...results], query), { done: true });
                 }
+                const done = pending.size === 0;
+                onPartial(_applyFrecency([...results], query), { done, pending: [...pending] });
             });
         }
         // Still await all for the final return value
         await Promise.all(allPromises);
     } else {
         // Legacy path: wait for everything, return once
-        const allAsync = await Promise.all([...asyncTasks, ...historyPromises]);
+        const allPromises = [...asyncTasks.map(t => t.promise), ...historyPromises];
+        const allAsync = await Promise.all(allPromises);
         for (const batch of allAsync) {
             if (Array.isArray(batch)) results.push(...batch);
         }

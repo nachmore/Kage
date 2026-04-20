@@ -1206,7 +1206,7 @@ export class FloatingApp {
             if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial, { done }) => {
+            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial, { done, pending }) => {
                 // Progressive rendering: show results as they arrive
                 if (gen !== this._searchGeneration) return; // stale
                 if (partial.length > 0) {
@@ -1217,15 +1217,25 @@ export class FloatingApp {
                         () => this.windowManager.resizeWindow()
                     );
                 }
-                // Show/hide loading indicator
+                // Show/hide loading indicator with provider names
                 const existing = this.elements.appSuggestions.querySelector('.suggestions-loading');
                 if (done) {
                     if (existing) existing.remove();
-                } else if (!existing) {
-                    const hint = document.createElement('div');
-                    hint.className = 'suggestions-hint suggestions-loading';
-                    hint.textContent = 'Loading more results\u2026';
-                    this.elements.appSuggestions.appendChild(hint);
+                } else {
+                    let label = 'Loading more results';
+                    if (pending && pending.length > 0) {
+                        const shown = pending.slice(0, 2).join(', ');
+                        label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+                    }
+                    label += '\u2026';
+                    if (existing) {
+                        existing.textContent = label;
+                    } else {
+                        const hint = document.createElement('div');
+                        hint.className = 'suggestions-hint suggestions-loading';
+                        hint.textContent = label;
+                        this.elements.appSuggestions.appendChild(hint);
+                    }
                 }
                 this.windowManager.resizeWindow();
             });

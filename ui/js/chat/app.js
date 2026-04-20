@@ -2305,23 +2305,33 @@ export class ChatApp {
 
         this._searchGeneration = (this._searchGeneration || 0) + 1;
         const gen = this._searchGeneration;
-        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial, { done }) => {
+        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial, { done, pending }) => {
             if (gen !== this._searchGeneration) return;
             if (partial.length > 0) {
                 this.currentSuggestions = partial;
                 this.suggestionIndex = 0;
                 this.renderSuggestions();
             }
-            // Show/hide loading indicator
+            // Show/hide loading indicator with provider names
             const container = this.elements.chatSuggestions;
             const existing = container.querySelector('.suggestions-loading');
             if (done) {
                 if (existing) existing.remove();
-            } else if (!existing && container.classList.contains('visible')) {
-                const hint = document.createElement('div');
-                hint.className = 'suggestions-hint suggestions-loading';
-                hint.textContent = 'Loading more results\u2026';
-                container.appendChild(hint);
+            } else if (container.classList.contains('visible')) {
+                let label = 'Loading more results';
+                if (pending && pending.length > 0) {
+                    const shown = pending.slice(0, 2).join(', ');
+                    label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+                }
+                label += '\u2026';
+                if (existing) {
+                    existing.textContent = label;
+                } else {
+                    const hint = document.createElement('div');
+                    hint.className = 'suggestions-hint suggestions-loading';
+                    hint.textContent = label;
+                    container.appendChild(hint);
+                }
             }
         });
         if (gen !== this._searchGeneration) return;
