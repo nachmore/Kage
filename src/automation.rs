@@ -50,6 +50,7 @@ impl AutomationScheduler {
     /// Start the scheduler loop. Call from a tokio::spawn.
     pub async fn run(&self, mut signal_rx: mpsc::UnboundedReceiver<AutomationSignal>, app_handle: tauri::AppHandle) {
         self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+        crate::os::set_current_thread_name("automation");
         info!("[Automation] Scheduler started");
 
         let mut schedule_interval = tokio::time::interval(std::time::Duration::from_secs(30));

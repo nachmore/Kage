@@ -174,3 +174,11 @@ pub fn run_installer(path: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Set the current thread's name/description so it shows up in debuggers
+/// and in the thread dump diagnostic command. No-op on non-Windows.
+#[allow(unused)]
+pub fn set_current_thread_name(_name: &str) {
+    #[cfg(target_os = "windows")]
+    crate::os::windows::process::set_thread_name(_name);
+}

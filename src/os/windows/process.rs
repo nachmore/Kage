@@ -85,3 +85,15 @@ where
     info!("✅ Ctrl+C handler installed");
     Ok(())
 }
+
+/// Set the current thread's description (name) via Win32 SetThreadDescription.
+/// This makes the thread identifiable in debuggers and in our thread dump command.
+pub fn set_thread_name(name: &str) {
+    use windows::Win32::System::Threading::{GetCurrentThread, SetThreadDescription};
+    use windows::core::PCWSTR;
+
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        let _ = SetThreadDescription(GetCurrentThread(), PCWSTR(wide.as_ptr()));
+    }
+}

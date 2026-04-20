@@ -1340,3 +1340,174 @@ pub async fn app_log_clear() -> Result<(), AppError> {
 pub async fn app_log_get_dir() -> Result<String, AppError> {
     Ok(crate::app_log::log_dir_string())
 }
+
+/// Dump thread CPU usage info to the log for debugging high-CPU issues.
+/// Takes two snapshots 3 seconds apart to show which threads are actively
+/// burning CPU, plus cumulative totals. Available via tray menu in debug mode.
+#[tauri::command]
+pub async fn dump_thread_info() -> Result<String, AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        // Run in a blocking thread since we sleep for 3 seconds
+        let result = tauri::async_runtime::spawn_blocking(dump_thread_info_windows).await;
+        match result {
+            Ok(output) => Ok(output),
+            Err(e) => Ok(format!("Thread dump task failed: {}", e)),
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok("Thread dump not implemented on this platform".to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn dump_thread_info_windows() -> String {
+    use std::fmt::Write;
+
+    let pid = std::process::id();
+    let mut output = String::new();
+    let _ = writeln!(output, "=== Thread Dump for PID {} ===", pid);
+
+    // First snapshot
+    let snap1 = snapshot_threads(pid);
+    if snap1.is_empty() {
+        let _ = writeln!(output, "Failed to snapshot threads");
+        return output;
+    }
+
+    let _ = writeln!(output, "Sampling {} threads for 3 seconds...", snap1.len());
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    // Second snapshot
+    let snap2 = snapshot_threads(pid);
+
+    // Compute deltas
+    let mut deltas: Vec<(u32, f64, f64, f64, f64, f64, f64, String)> = Vec::new();
+    // (tid, delta_total, delta_user, delta_kernel, cum_total, cum_user, cum_kernel, name)
+    for (tid, total2, user2, kernel2, name) in &snap2 {
+        if let Some((_, total1, user1, kernel1, _)) = snap1.iter().find(|(t, _, _, _, _)| t == tid) {
+            let dt = total2 - total1;
+            let du = user2 - user1;
+            let dk = kernel2 - kernel1;
+            deltas.push((*tid, dt, du, dk, *total2, *user2, *kernel2, name.clone()));
+        }
+    }
+
+    // Sort by delta descending
+    deltas.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Active threads (delta > 0)
+    let active: Vec<_> = deltas.iter().filter(|d| d.1 > 10.0).collect();
+    if active.is_empty() {
+        let _ = writeln!(output, "No threads used significant CPU in the 3s sample window.");
+    } else {
+        let _ = writeln!(output, "\n--- Active threads (CPU used in last 3s) ---");
+        let _ = writeln!(output, "{:<8} {:<22} {:>10} {:>10} {:>10}  {:>12} {:>12} {:>12}", 
+            "TID", "Name", "Δ Total", "Δ User", "Δ Kernel", "Cum Total", "Cum User", "Cum Kernel");
+        let _ = writeln!(output, "{}", "-".repeat(105));
+        for (tid, dt, du, dk, ct, cu, ck, name) in &active {
+            let pct = dt / 3000.0 * 100.0; // % of one core
+            let note = if pct > 80.0 { " ← SPINNING" }
+                else if pct > 30.0 { " ← HOT" }
+                else { "" };
+            let display_name = if name.is_empty() { "-" } else { name.as_str() };
+            let _ = writeln!(output, "{:<8} {:<22} {:>9.0}ms {:>9.0}ms {:>9.0}ms  {:>11.0}ms {:>11.0}ms {:>11.0}ms  ({:.0}% core){}",
+                tid, display_name, dt, du, dk, ct, cu, ck, pct, note);
+        }
+    }
+
+    // Top 10 by cumulative total
+    let _ = writeln!(output, "\n--- All threads by cumulative CPU (top 10) ---");
+    let _ = writeln!(output, "{:<8} {:<22} {:>12} {:>12} {:>12}", "TID", "Name", "Total(ms)", "User(ms)", "Kernel(ms)");
+    let _ = writeln!(output, "{}", "-".repeat(72));
+    let mut by_cum = deltas.clone();
+    by_cum.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+    for (tid, _, _, _, ct, cu, ck, name) in by_cum.iter().take(10) {
+        let display_name = if name.is_empty() { "-" } else { name.as_str() };
+        let _ = writeln!(output, "{:<8} {:<22} {:>12.0} {:>12.0} {:>12.0}", tid, display_name, ct, cu, ck);
+    }
+
+    let _ = writeln!(output, "\n=== End Thread Dump ===");
+
+    // Log it
+    for line in output.lines() {
+        info!("[ThreadDump] {}", line);
+    }
+
+    output
+}
+
+#[cfg(target_os = "windows")]
+fn snapshot_threads(pid: u32) -> Vec<(u32, f64, f64, f64, String)> {
+    use windows::Win32::System::Diagnostics::ToolHelp::*;
+    use windows::Win32::System::Threading::*;
+    use windows::Win32::Foundation::*;
+
+    let mut threads = Vec::new();
+
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+    let snapshot = match snapshot {
+        Ok(h) => h,
+        Err(e) => {
+            error!("Failed to create thread snapshot: {}", e);
+            return threads;
+        }
+    };
+
+    let mut entry = THREADENTRY32 {
+        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
+        ..Default::default()
+    };
+
+    unsafe {
+        if Thread32First(snapshot, &mut entry).is_ok() {
+            loop {
+                if entry.th32OwnerProcessID == pid {
+                    if let Ok(handle) = OpenThread(
+                        THREAD_QUERY_INFORMATION | THREAD_QUERY_LIMITED_INFORMATION,
+                        false,
+                        entry.th32ThreadID,
+                    ) {
+                        let mut creation = FILETIME::default();
+                        let mut exit = FILETIME::default();
+                        let mut kernel = FILETIME::default();
+                        let mut user = FILETIME::default();
+
+                        if GetThreadTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user).is_ok() {
+                            let kernel_ms = filetime_to_ms(&kernel);
+                            let user_ms = filetime_to_ms(&user);
+
+                            // Try to read the thread description (name)
+                            let name = GetThreadDescription(handle)
+                                .ok()
+                                .and_then(|pwstr| {
+                                    let s = pwstr.to_string().ok().unwrap_or_default();
+                                    if s.is_empty() { None } else { Some(s) }
+                                })
+                                .unwrap_or_default();
+
+                            threads.push((entry.th32ThreadID, kernel_ms + user_ms, user_ms, kernel_ms, name));
+                        }
+                        let _ = CloseHandle(handle);
+                    }
+                }
+
+                entry.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
+                if Thread32Next(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+
+    threads
+}
+
+#[cfg(target_os = "windows")]
+fn filetime_to_ms(ft: &windows::Win32::Foundation::FILETIME) -> f64 {
+    let ticks = ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64);
+    // FILETIME is in 100-nanosecond intervals
+    ticks as f64 / 10_000.0
+}

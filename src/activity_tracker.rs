@@ -147,6 +147,7 @@ pub async fn stop_tracker(state: &Arc<ActivityTrackerState>) {
 }
 
 async fn poll_loop(state: Arc<ActivityTrackerState>) {
+    crate::os::set_current_thread_name("activity-tracker");
     let mut last_process = String::new();
     let mut last_poll = std::time::Instant::now();
 

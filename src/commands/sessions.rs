@@ -249,7 +249,7 @@ pub fn start_session_watcher(
         let _ = fs::create_dir_all(&sessions_dir);
     }
 
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name("session-watcher".into()).spawn(move || {
         // Debounce: ignore events within 2s of the last invalidation
         let last_invalidation = std::sync::Mutex::new(std::time::Instant::now()
             - std::time::Duration::from_secs(10));
@@ -320,7 +320,7 @@ pub fn start_session_watcher(
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3600));
         }
-    });
+    }).expect("Failed to spawn session-watcher thread");
 }
 
 #[tauri::command]

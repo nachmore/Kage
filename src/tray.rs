@@ -20,10 +20,11 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
         let test_update = MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
         let test_update_avail = MenuItemBuilder::with_id("test-update-available", "Test Update Available").build(app)?;
         let test_first_run = MenuItemBuilder::with_id("test-first-run", "Show First Run").build(app)?;
+        let dump_threads = MenuItemBuilder::with_id("dump-threads", "Dump Threads").build(app)?;
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &inspect_floating, &reload, &test_banner, &test_update, &test_update_avail, &test_first_run])
+            .items(&[&inspect, &inspect_floating, &reload, &test_banner, &test_update, &test_update_avail, &test_first_run, &dump_threads])
             .separator()
             .item(&quit)
             .build()?
@@ -109,6 +110,15 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                         let _ = floating.set_focus();
                     }
                     let _ = app_handle_inner.emit("update_available", "99.0.0");
+                }
+                "dump-threads" => {
+                    info!("Dumping thread info...");
+                    tauri::async_runtime::spawn(async {
+                        match crate::commands::system::dump_thread_info().await {
+                            Ok(output) => info!("Thread dump complete:\n{}", output),
+                            Err(e) => log::error!("Thread dump failed: {}", e),
+                        }
+                    });
                 }
                 "quit" => {
                     info!("Application quit requested");

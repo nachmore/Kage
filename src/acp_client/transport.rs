@@ -183,7 +183,7 @@ impl AcpTransport {
         let connected = self.connected.clone();
         let last_activity = self.last_activity.clone();
 
-        thread::spawn(move || {
+        thread::Builder::new().name("acp-reader".into()).spawn(move || {
             let mut reader: Box<dyn BufRead + Send> = match source {
                 ReaderSource::Pipe(r) => Box::new(r),
                 ReaderSource::Tcp(r) => Box::new(r),
@@ -260,7 +260,7 @@ impl AcpTransport {
             }
 
             info!("Reader thread exiting");
-        });
+        }).expect("Failed to spawn acp-reader thread");
     }
 
     // --- I/O ---

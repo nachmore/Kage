@@ -198,6 +198,7 @@ pub fn start_update_loop(
     let acp_client_for_idle = acp_client;
 
     tauri::async_runtime::spawn(async move {
+        crate::os::set_current_thread_name("updater-check");
         // Initial delay — let the app finish starting
         tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
@@ -288,6 +289,7 @@ pub fn start_update_loop(
 
     // Separate loop: check if idle and update is ready → install
     tauri::async_runtime::spawn(async move {
+        crate::os::set_current_thread_name("updater-idle");
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
 

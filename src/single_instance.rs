@@ -152,7 +152,7 @@ pub fn signal_running_instance() {
 /// Binds to a random localhost port, writes the port to a file, and
 /// emits a `show-sessions` Tauri event when a "show" command is received.
 pub fn start_ipc_listener(app_handle: tauri::AppHandle) {
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name("ipc-listener".into()).spawn(move || {
         use std::io::Read;
         use tauri::Emitter;
 
@@ -200,7 +200,7 @@ pub fn start_ipc_listener(app_handle: tauri::AppHandle) {
                 Err(e) => log::warn!("IPC accept error: {}", e),
             }
         }
-    });
+    }).expect("Failed to spawn ipc-listener thread");
 }
 
 // --- Platform-specific helpers ---

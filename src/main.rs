@@ -497,6 +497,7 @@ fn main() {
                 let state: tauri::State<'_, AppState> = app.state();
                 let launcher = state.app_launcher.clone();
                 tauri::async_runtime::spawn(async move {
+                    crate::os::set_current_thread_name("app-launcher");
                     // Initial scan — do the heavy work outside the lock
                     match tauri::async_runtime::spawn_blocking(AppLauncher::build_registry).await {
                         Ok(Ok(registry)) => {
@@ -798,6 +799,7 @@ fn main() {
             commands::app_log_get_entries,
             commands::app_log_clear,
             commands::app_log_get_dir,
+            commands::dump_thread_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
