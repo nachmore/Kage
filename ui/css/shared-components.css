@@ -1165,6 +1165,15 @@ body.dark-theme .hint-key {
     color: #938F9B;
 }
 
+.suggestions-loading {
+    animation: suggestions-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes suggestions-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
 body.dark-theme .suggestion-list,
 body.dark-theme .app-suggestions,
 body.dark-theme .chat-suggestions {

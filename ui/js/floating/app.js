@@ -1206,7 +1206,7 @@ export class FloatingApp {
             if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial) => {
+            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial, { done }) => {
                 // Progressive rendering: show results as they arrive
                 if (gen !== this._searchGeneration) return; // stale
                 if (partial.length > 0) {
@@ -1217,9 +1217,23 @@ export class FloatingApp {
                         () => this.windowManager.resizeWindow()
                     );
                 }
+                // Show/hide loading indicator
+                const existing = this.elements.appSuggestions.querySelector('.suggestions-loading');
+                if (done) {
+                    if (existing) existing.remove();
+                } else if (!existing) {
+                    const hint = document.createElement('div');
+                    hint.className = 'suggestions-hint suggestions-loading';
+                    hint.textContent = 'Loading more results\u2026';
+                    this.elements.appSuggestions.appendChild(hint);
+                }
+                this.windowManager.resizeWindow();
             });
             // Discard stale results — a newer search was started while this one was in-flight
             if (gen !== this._searchGeneration) return;
+            // Remove loading indicator — all providers have resolved
+            const loadingHint = this.elements.appSuggestions.querySelector('.suggestions-loading');
+            if (loadingHint) loadingHint.remove();
             if (results.length > 0) {
                 this.selectedIndex = renderUnifiedResults(
                     results,

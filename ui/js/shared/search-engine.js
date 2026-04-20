@@ -251,7 +251,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
 
     // --- Flush sync results immediately if callback provided ---
     if (onPartial && results.length > 0) {
-        onPartial(_applyFrecency([...results], query));
+        onPartial(_applyFrecency([...results], query), { done: false });
     }
 
     // --- Async sources (fire in parallel, flush each as it resolves) ---
@@ -327,11 +327,17 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     // Flush each async batch as it resolves (progressive rendering)
     if (onPartial) {
         const allPromises = [...asyncTasks, ...historyPromises];
+        let resolved = 0;
+        const total = allPromises.length;
         for (const p of allPromises) {
             p.then(batch => {
+                resolved++;
                 if (Array.isArray(batch) && batch.length > 0) {
                     results.push(...batch);
-                    onPartial(_applyFrecency([...results], query));
+                    onPartial(_applyFrecency([...results], query), { done: resolved >= total });
+                } else if (resolved >= total) {
+                    // All done but this batch was empty — still notify done
+                    onPartial(_applyFrecency([...results], query), { done: true });
                 }
             });
         }

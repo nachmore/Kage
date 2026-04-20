@@ -2305,15 +2305,29 @@ export class ChatApp {
 
         this._searchGeneration = (this._searchGeneration || 0) + 1;
         const gen = this._searchGeneration;
-        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial) => {
+        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial, { done }) => {
             if (gen !== this._searchGeneration) return;
             if (partial.length > 0) {
                 this.currentSuggestions = partial;
                 this.suggestionIndex = 0;
                 this.renderSuggestions();
             }
+            // Show/hide loading indicator
+            const container = this.elements.chatSuggestions;
+            const existing = container.querySelector('.suggestions-loading');
+            if (done) {
+                if (existing) existing.remove();
+            } else if (!existing && container.classList.contains('visible')) {
+                const hint = document.createElement('div');
+                hint.className = 'suggestions-hint suggestions-loading';
+                hint.textContent = 'Loading more results\u2026';
+                container.appendChild(hint);
+            }
         });
         if (gen !== this._searchGeneration) return;
+        // Remove loading indicator — all providers have resolved
+        const loadingEl = this.elements.chatSuggestions.querySelector('.suggestions-loading');
+        if (loadingEl) loadingEl.remove();
         this._searchCompletedGen = gen;
         if (results.length > 0) {
             this.currentSuggestions = results;
