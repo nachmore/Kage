@@ -110,7 +110,7 @@ export function getExtensionManager() {
 
 // --- Unified search ---
 
-export async function unifiedSearch(query, invoke, shortcuts) {
+export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     if (!query) return [];
 
     const results = [];
@@ -249,7 +249,12 @@ export async function unifiedSearch(query, invoke, shortcuts) {
         }
     }
 
-    // --- Async sources (fire in parallel) ---
+    // --- Flush sync results immediately if callback provided ---
+    if (onPartial && results.length > 0) {
+        onPartial(_applyFrecency([...results], query));
+    }
+
+    // --- Async sources (fire in parallel, flush each as it resolves) ---
 
     const asyncTasks = [];
 
@@ -319,10 +324,25 @@ export async function unifiedSearch(query, invoke, shortcuts) {
         }
     }
 
-    // Await all async sources + history promises in parallel
-    const allAsync = await Promise.all([...asyncTasks, ...historyPromises]);
-    for (const batch of allAsync) {
-        if (Array.isArray(batch)) results.push(...batch);
+    // Flush each async batch as it resolves (progressive rendering)
+    if (onPartial) {
+        const allPromises = [...asyncTasks, ...historyPromises];
+        for (const p of allPromises) {
+            p.then(batch => {
+                if (Array.isArray(batch) && batch.length > 0) {
+                    results.push(...batch);
+                    onPartial(_applyFrecency([...results], query));
+                }
+            });
+        }
+        // Still await all for the final return value
+        await Promise.all(allPromises);
+    } else {
+        // Legacy path: wait for everything, return once
+        const allAsync = await Promise.all([...asyncTasks, ...historyPromises]);
+        for (const batch of allAsync) {
+            if (Array.isArray(batch)) results.push(...batch);
+        }
     }
 
     return _applyFrecency(results, query);

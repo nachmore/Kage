@@ -1206,7 +1206,18 @@ export class FloatingApp {
             if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts);
+            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial) => {
+                // Progressive rendering: show results as they arrive
+                if (gen !== this._searchGeneration) return; // stale
+                if (partial.length > 0) {
+                    this.selectedIndex = renderUnifiedResults(
+                        partial,
+                        this.elements.appSuggestions,
+                        this.currentMatches,
+                        () => this.windowManager.resizeWindow()
+                    );
+                }
+            });
             // Discard stale results — a newer search was started while this one was in-flight
             if (gen !== this._searchGeneration) return;
             if (results.length > 0) {

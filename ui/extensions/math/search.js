@@ -41,41 +41,53 @@ export default class MathSearchProvider {
     destroy() {}
 }
 
-// --- Core evaluation logic (moved from math-eval.js) ---
+// --- Core evaluation logic ---
 
-function looksLikeMath(input) {
+/**
+ * Cache the last input that failed evaluation so we can skip re-evaluating
+ * when the user is just appending characters to something already invalid.
+ */
+let _lastFailedPrefix = '';
+
+/**
+ * Cheap regex pre-filter: reject input that clearly isn't math.
+ * Intentionally generous — false positives are fine since evaluate() is
+ * the real validator.
+ */
+function couldBeMath(input) {
     const trimmed = input.trim();
     if (!trimmed || trimmed.length === 0) return false;
     if (!/\d/.test(trimmed)) return false;
+    if (/^[a-z]{3,}(\s+[a-z]{3,})+$/i.test(trimmed)) return false;
     if (/^\d[\d.,]*\s*[a-z]+\s+(to|in)\s+[a-z]+$/i.test(trimmed)) return true;
-    if (!/[+\-*\/\^%()!]|[a-z]+\s*\(/i.test(trimmed)) return false;
-    if (/[a-z]{3,}\s+[a-z]{3,}/i.test(trimmed)) return false;
+    if (/[+\-*\/\^%()!]|[a-z]+\s*\(/i.test(trimmed)) return true;
     return true;
 }
 
 function evaluateMath(input, precision = 0) {
-    if (!looksLikeMath(input)) return null;
+    const trimmed = input.trim();
+    if (!couldBeMath(trimmed)) return null;
     if (!window.math) return null;
+    if (_lastFailedPrefix && trimmed.startsWith(_lastFailedPrefix)) return null;
     try {
-        const result = window.math.evaluate(input.trim());
+        const result = window.math.evaluate(trimmed);
 
         if (result && typeof result === 'object' && result.units) {
             const num = result.toNumber();
             if (!isFinite(num)) return null;
             const unitName = result.toString().replace(/^[\d.\-]+\s*/, '');
             const display = `${parseFloat(num.toFixed(2))} ${unitName}`;
+            _lastFailedPrefix = '';
             return { result: num, display };
         }
 
         if (typeof result !== 'number' && !window.math.isBigNumber(result)) return null;
         const num = typeof result === 'number' ? result : result.toNumber();
         if (!isFinite(num)) return null;
-        // Skip if the input is just a plain number (no actual calculation).
-        // Use strict Number() instead of parseFloat() — parseFloat("1/1") returns 1
-        // which would incorrectly suppress "1/1 = 1".
-        const inputAsNum = Number(input.trim());
+        const inputAsNum = Number(trimmed);
         if (!isNaN(inputAsNum) && num === inputAsNum) return null;
 
+        _lastFailedPrefix = '';
         let display;
         if (precision >= 0) {
             display = num.toFixed(precision);
@@ -84,6 +96,7 @@ function evaluateMath(input, precision = 0) {
         }
         return { result: num, display };
     } catch {
+        _lastFailedPrefix = trimmed;
         return null;
     }
 }

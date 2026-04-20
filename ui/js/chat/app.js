@@ -2305,7 +2305,14 @@ export class ChatApp {
 
         this._searchGeneration = (this._searchGeneration || 0) + 1;
         const gen = this._searchGeneration;
-        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts);
+        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial) => {
+            if (gen !== this._searchGeneration) return;
+            if (partial.length > 0) {
+                this.currentSuggestions = partial;
+                this.suggestionIndex = 0;
+                this.renderSuggestions();
+            }
+        });
         if (gen !== this._searchGeneration) return;
         this._searchCompletedGen = gen;
         if (results.length > 0) {
