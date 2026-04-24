@@ -46,7 +46,7 @@ pub struct AppState {
     /// Activity tracker for focus/screen time reports
     pub activity_tracker: Arc<crate::activity_tracker::ActivityTrackerState>,
     /// Automation signal sender (for extensions to emit signals)
-    pub automation_signal_tx: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<crate::automation::AutomationSignal>>>>,
+    pub automation_signal_tx: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::Sender<crate::automation::AutomationSignal>>>>,
 }
 
 #[derive(Debug, Clone)]

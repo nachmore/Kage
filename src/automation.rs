@@ -19,10 +19,15 @@ pub struct AutomationSignal {
     pub data: Option<serde_json::Value>,
 }
 
+/// Max number of signals the scheduler will buffer before applying backpressure.
+/// A misbehaving extension flooding signals faster than the scheduler can consume
+/// them will have the oldest/newest dropped rather than ballooning memory.
+const SIGNAL_CHANNEL_CAPACITY: usize = 256;
+
 /// Manages automation scheduling and signal dispatch.
 pub struct AutomationScheduler {
     /// Channel to send signals into the scheduler
-    signal_tx: mpsc::UnboundedSender<AutomationSignal>,
+    signal_tx: mpsc::Sender<AutomationSignal>,
     /// Shared config reference
     config: Arc<Mutex<crate::config::Config>>,
     /// Track last run times for schedule-based automations
@@ -32,8 +37,8 @@ pub struct AutomationScheduler {
 }
 
 impl AutomationScheduler {
-    pub fn new(config: Arc<Mutex<crate::config::Config>>) -> (Self, mpsc::UnboundedReceiver<AutomationSignal>) {
-        let (tx, rx) = mpsc::unbounded_channel();
+    pub fn new(config: Arc<Mutex<crate::config::Config>>) -> (Self, mpsc::Receiver<AutomationSignal>) {
+        let (tx, rx) = mpsc::channel(SIGNAL_CHANNEL_CAPACITY);
         (AutomationScheduler {
             signal_tx: tx,
             config,
@@ -43,12 +48,12 @@ impl AutomationScheduler {
     }
 
     /// Get a sender handle for emitting signals (clone-friendly).
-    pub fn signal_sender(&self) -> mpsc::UnboundedSender<AutomationSignal> {
+    pub fn signal_sender(&self) -> mpsc::Sender<AutomationSignal> {
         self.signal_tx.clone()
     }
 
     /// Start the scheduler loop. Call from a tokio::spawn.
-    pub async fn run(&self, mut signal_rx: mpsc::UnboundedReceiver<AutomationSignal>, app_handle: tauri::AppHandle) {
+    pub async fn run(&self, mut signal_rx: mpsc::Receiver<AutomationSignal>, app_handle: tauri::AppHandle) {
         self.running.store(true, std::sync::atomic::Ordering::SeqCst);
         crate::os::set_current_thread_name("automation");
         info!("[Automation] Scheduler started");
@@ -247,7 +252,17 @@ pub async fn emit_automation_signal(
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<(), String> {
     if let Some(ref tx) = *state.automation_signal_tx.lock().unwrap() {
-        let _ = tx.send(AutomationSignal { name, data });
+        // Use try_send so a flood of signals from a misbehaving extension drops
+        // rather than blocking the Tauri IPC thread or growing memory.
+        match tx.try_send(AutomationSignal { name: name.clone(), data }) {
+            Ok(_) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                log::warn!("[Automation] Signal channel full, dropping signal '{}'", name);
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                log::debug!("[Automation] Signal channel closed, ignoring '{}'", name);
+            }
+        }
     }
     Ok(())
 }
