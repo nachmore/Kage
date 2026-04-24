@@ -309,6 +309,7 @@
     import { HotkeyPicker } from './js/shared/hotkey-picker.js';
     import { createMascotController, getMascotThemeSettings } from './js/shared/mascot.js';
     import { ANIMATIONS } from './js/shared/mascot-animations.js';
+    import { escapeHtml } from './js/shared/tool-utils.js';
 
     function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
@@ -378,14 +379,14 @@
                 if (agents.length > 0) {
                     detectedAgent = agents[0];
                     const versionHtml = detectedAgent.version
-                        ? `<div class="agent-detected-version">${detectedAgent.version}</div>`
+                        ? `<div class="agent-detected-version">${escapeHtml(detectedAgent.version)}</div>`
                         : '';
                     container.innerHTML = `
                         <div class="agent-detected">
                             <div class="agent-detected-icon">✅</div>
                             <div class="agent-detected-status">Agent found</div>
-                            <div class="agent-detected-name">${detectedAgent.name}</div>
-                            <div class="agent-detected-path">${detectedAgent.path}</div>
+                            <div class="agent-detected-name">${escapeHtml(detectedAgent.name || '')}</div>
+                            <div class="agent-detected-path">${escapeHtml(detectedAgent.path || '')}</div>
                             ${versionHtml}
                             <button class="agent-manual-link" id="wShowManual">Configure manually</button>
                         </div>`;
@@ -409,7 +410,7 @@
                 const container = document.getElementById('wAgentAutoDetect');
                 container.innerHTML = `
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-bottom:16px;">
-                        <span style="font-size:12px;color:#938F9B;">✅ ${detectedAgent.name} found</span>
+                        <span style="font-size:12px;color:#938F9B;">✅ ${escapeHtml(detectedAgent.name || '')} found</span>
                         <button class="agent-manual-link" id="wUseDetected" style="margin:0;">Use auto-detected</button>
                     </div>`;
                 document.getElementById('wUseDetected').addEventListener('click', switchToDetected);
@@ -426,14 +427,14 @@
             // Restore the full detected agent card
             const container = document.getElementById('wAgentAutoDetect');
             const versionHtml = detectedAgent.version
-                ? `<div class="agent-detected-version">${detectedAgent.version}</div>`
+                ? `<div class="agent-detected-version">${escapeHtml(detectedAgent.version)}</div>`
                 : '';
             container.innerHTML = `
                 <div class="agent-detected">
                     <div class="agent-detected-icon">✅</div>
                     <div class="agent-detected-status">Agent found</div>
-                    <div class="agent-detected-name">${detectedAgent.name}</div>
-                    <div class="agent-detected-path">${detectedAgent.path}</div>
+                    <div class="agent-detected-name">${escapeHtml(detectedAgent.name || '')}</div>
+                    <div class="agent-detected-path">${escapeHtml(detectedAgent.path || '')}</div>
                     ${versionHtml}
                     <button class="agent-manual-link" id="wShowManual">Configure manually</button>
                 </div>`;
@@ -520,10 +521,10 @@
                     const checked = document.getElementById('ext-cb-' + ext._idx)?.checked ?? true;
                     html += `<label class="ext-item" onclick="event.stopPropagation()">
                         <input type="checkbox" id="ext-cb-${ext._idx}" ${checked ? 'checked' : ''}>
-                        <div class="ext-icon">${icon}</div>
+                        <div class="ext-icon">${escapeHtml(icon)}</div>
                         <div class="ext-info">
-                            <div class="ext-name">${ext.name || ext.id}</div>
-                            <div class="ext-desc">${ext.description || ''}</div>
+                            <div class="ext-name">${escapeHtml(ext.name || ext.id || '')}</div>
+                            <div class="ext-desc">${escapeHtml(ext.description || '')}</div>
                         </div>
                     </label>`;
                 }
@@ -537,10 +538,10 @@
                     const checked = document.getElementById('ext-cb-' + ext._idx)?.checked ?? true;
                     html += `<label class="ext-item" onclick="event.stopPropagation()">
                         <input type="checkbox" id="ext-cb-${ext._idx}" ${checked ? 'checked' : ''}>
-                        <div class="ext-icon">${icon}</div>
+                        <div class="ext-icon">${escapeHtml(icon)}</div>
                         <div class="ext-info">
-                            <div class="ext-name">${ext.name || ext.id}</div>
-                            <div class="ext-desc">${ext.description || ''}</div>
+                            <div class="ext-name">${escapeHtml(ext.name || ext.id || '')}</div>
+                            <div class="ext-desc">${escapeHtml(ext.description || '')}</div>
                         </div>
                     </label>`;
                 }
