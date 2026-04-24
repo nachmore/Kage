@@ -339,3 +339,56 @@ describe('failed-prefix caching', () => {
     evalSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Incremental typing simulation (keystroke-by-keystroke)
+// ---------------------------------------------------------------------------
+describe('incremental typing', () => {
+  it('evaluates 22/10 after typing keystroke by keystroke', () => {
+    // Simulates: 2 → 22 → 22/ → 22/1 → 22/10
+    expect(evaluateMath('2')).toBeNull();   // plain number
+    expect(evaluateMath('22')).toBeNull();  // plain number
+    expect(evaluateMath('22/')).toBeNull(); // incomplete — should NOT poison cache
+    const r = evaluateMath('22/1');
+    expect(r).not.toBeNull();
+    expect(r.result).toBe(22);
+    const r2 = evaluateMath('22/10');
+    expect(r2).not.toBeNull();
+    expect(r2.result).toBeCloseTo(2.2);
+  });
+
+  it('evaluates 10*12 after typing keystroke by keystroke', () => {
+    expect(evaluateMath('1')).toBeNull();
+    expect(evaluateMath('10')).toBeNull();
+    expect(evaluateMath('10*')).toBeNull();
+    const r = evaluateMath('10*1');
+    expect(r).not.toBeNull();
+    expect(r.result).toBe(10);
+    const r2 = evaluateMath('10*12');
+    expect(r2).not.toBeNull();
+    expect(r2.result).toBe(120);
+  });
+
+  it('evaluates 5+3 after typing keystroke by keystroke', () => {
+    expect(evaluateMath('5')).toBeNull();
+    expect(evaluateMath('5+')).toBeNull();
+    const r = evaluateMath('5+3');
+    expect(r).not.toBeNull();
+    expect(r.result).toBe(8);
+  });
+
+  it('evaluates (2+3)*4 after typing keystroke by keystroke', () => {
+    expect(evaluateMath('(')).toBeNull();
+    expect(evaluateMath('(2')).toBeNull();
+    expect(evaluateMath('(2+')).toBeNull();
+    expect(evaluateMath('(2+3')).toBeNull();
+    // (2+3) is a valid expression = 5
+    const r1 = evaluateMath('(2+3)');
+    expect(r1).not.toBeNull();
+    expect(r1.result).toBe(5);
+    expect(evaluateMath('(2+3)*')).toBeNull();
+    const r = evaluateMath('(2+3)*4');
+    expect(r).not.toBeNull();
+    expect(r.result).toBe(20);
+  });
+});

@@ -85,7 +85,12 @@ export function evaluateMath(input, precision = 0) {
         }
         return { result: numResult, display };
     } catch {
-        _lastFailedPrefix = trimmed;
+        // Only cache if the input has no math operators — it's clearly not
+        // a math expression (e.g. "1 2 3"). Don't cache partial expressions
+        // like "22/" or "(2" where adding more characters could make it valid.
+        if (!/[+\-*\/\^%(,)!]/.test(trimmed)) {
+            _lastFailedPrefix = trimmed;
+        }
         return null;
     }
 }
