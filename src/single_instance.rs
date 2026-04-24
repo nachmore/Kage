@@ -72,10 +72,21 @@ pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
 
         match try_lock_file(&file)? {
             true => {
-                // Got the lock — write our PID
-                use std::io::Write;
+                // Got the lock atomically. Rewrite the PID under the lock so
+                // future staleness checks see our PID, not the previous owner's.
+                // NOTE: we deliberately do NOT delete+recreate the file on a
+                // stale override, because that introduces a TOCTOU window where
+                // two processes could each create and lock their own copies.
+                // Holding the OS-level lock on the same inode/file is the only
+                // race-free acquisition point.
+                use std::io::{Seek, SeekFrom, Write};
                 let mut f = &file;
+                let _ = f.seek(SeekFrom::Start(0));
+                // Truncate to zero via set_len so we don't leave residue from
+                // a longer previous PID string.
+                let _ = file.set_len(0);
                 let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
+                let _ = f.flush();
                 info!("Single-instance lock acquired: {:?}", lock_path);
                 return Ok(InstanceLock { _file: file, path: lock_path });
             }
@@ -86,24 +97,19 @@ pub fn try_acquire(wait: bool) -> Result<InstanceLock> {
             }
         }
 
-        // Lock is held — check if stale
-        if is_lock_stale(&lock_path) {
-            info!("Stale lock detected, overriding...");
-            drop(file);
-            let _ = fs::remove_file(&lock_path);
-            let file = File::options()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&lock_path)
-                .with_context(|| format!("Failed to recreate lock file: {:?}", lock_path))?;
-            if try_lock_file(&file)? {
-                use std::io::Write;
-                let mut f = &file;
-                let _ = f.write_all(format!("{}", std::process::id()).as_bytes());
-                info!("Single-instance lock acquired (after stale override): {:?}", lock_path);
-                return Ok(InstanceLock { _file: file, path: lock_path });
-            }
+        // Lock is held by someone else. A stale file on disk without a live
+        // holder is rare: the OS releases advisory locks on process death, so
+        // if `try_lock_file` returned false, *some* process is holding it
+        // right now. We still log staleness for diagnostics, but we do NOT
+        // delete and recreate the file — that would open a TOCTOU race where
+        // two instances could both end up with exclusive locks on their own
+        // freshly-created files. Just loop and retry.
+        if attempt == 0 && is_lock_stale(&lock_path) {
+            info!(
+                "Lock file PID no longer running, but OS lock is still held; \
+                 will retry normally ({:?})",
+                lock_path
+            );
         }
     }
 
