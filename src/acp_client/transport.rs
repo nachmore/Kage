@@ -62,9 +62,9 @@ impl AcpTransport {
     }
 
     /// Set the notification handler. Called by the background reader for all notifications.
-    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + 'static>(&self, handler: F) {
+    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
         let mut h = self.notification_handler.lock().unwrap();
-        *h = Some(Box::new(handler));
+        *h = Some(Arc::new(handler));
     }
 
     // --- Connection ---
@@ -251,10 +251,16 @@ impl AcpTransport {
                     if debug {
                         info!("[READER] Notification: {}", val.get("method").unwrap());
                     }
-                    if let Ok(handler) = notification_handler.lock() {
-                        if let Some(ref cb) = *handler {
-                            cb(val);
-                        }
+                    // Clone the handler Arc out and drop the mutex guard BEFORE
+                    // invoking. Holding the lock across the callback would cause
+                    // deadlocks whenever the callback re-acquires a lock that
+                    // the main thread holds while waiting in send_request.
+                    let handler_arc = match notification_handler.lock() {
+                        Ok(guard) => guard.as_ref().cloned(),
+                        Err(_) => None,
+                    };
+                    if let Some(cb) = handler_arc {
+                        cb(val);
                     }
                 }
             }

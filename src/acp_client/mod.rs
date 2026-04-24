@@ -63,7 +63,7 @@ impl AcpClient {
         self.transport.tcp_writer.clone()
     }
 
-    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + 'static>(&self, handler: F) {
+    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
         self.transport.set_notification_handler(handler);
     }
 

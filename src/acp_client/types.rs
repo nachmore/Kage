@@ -59,5 +59,11 @@ pub enum AcpConnectionMode {
     Remote { host: String, port: u16 },
 }
 
-/// Callback type for handling notifications from the background reader
-pub type NotificationHandler = Arc<Mutex<Option<Box<dyn Fn(serde_json::Value) + Send>>>>;
+/// Callback type for handling notifications from the background reader.
+/// The outer `Arc<Mutex<Option<_>>>` lets us swap the handler at runtime.
+/// The inner `Arc<dyn Fn ... + Send + Sync>` is cloned out of the mutex before
+/// invocation so the reader thread never holds this lock across the callback —
+/// that would cause deadlocks whenever the callback re-acquires a lock that
+/// the main thread holds while waiting for a response.
+pub type NotificationHandler =
+    Arc<Mutex<Option<Arc<dyn Fn(serde_json::Value) + Send + Sync>>>>;
