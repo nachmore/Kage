@@ -120,6 +120,12 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+// Soft cap per cache — a user's machine typically has a few hundred unique
+// executables, but we don't want pathological growth from long-running
+// sessions or oddball apps. When we hit the cap we drop the entire table so
+// next lookup re-extracts. Simpler than LRU; icons are cheap to regenerate.
+const ICON_CACHE_MAX: usize = 512;
+
 // Cache icons by executable path — same exe always has the same icon
 static ICON_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Option<String>>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -136,6 +142,16 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
 
     let mut cache = ICON_CACHE.lock().unwrap();
     let mut name_cache = ICON_BY_NAME.lock().unwrap();
+
+    // Bound both caches before inserting new entries this pass.
+    if cache.len() >= ICON_CACHE_MAX {
+        log::debug!("ICON_CACHE hit cap ({}), clearing", cache.len());
+        cache.clear();
+    }
+    if name_cache.len() >= ICON_CACHE_MAX {
+        log::debug!("ICON_BY_NAME hit cap ({}), clearing", name_cache.len());
+        name_cache.clear();
+    }
 
     for (win, exe_path) in &mut state.windows {
         if exe_path.is_empty() { continue; }
