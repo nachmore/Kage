@@ -88,8 +88,10 @@ def _prune_old_log_entries(log_path, max_age_hours=24):
                     kept.append(line)  # Keep unparseable lines
         with open(log_path, "w", encoding="utf-8") as f:
             f.writelines(kept)
-    except Exception:
-        pass  # Non-fatal — just skip pruning
+    except Exception as e:
+        # Non-fatal — just skip pruning. Log to stderr (not logger, since logger
+        # may not be configured yet at the point this runs).
+        print(f"[pocket_tts] log prune failed: {e}", file=sys.stderr)
 
 
 def dbg(msg):

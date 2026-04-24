@@ -18,9 +18,15 @@ if "--check" in sys.argv:
 
 
 def port_in_use(port):
-    """Quick check if a port is already bound."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("127.0.0.1", port)) == 0
+    """Quick check if a port is already bound. Returns False on socket errors
+    so a transient network stack hiccup doesn't crash startup."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(1.0)
+            return s.connect_ex(("127.0.0.1", port)) == 0
+    except OSError as e:
+        print(f"Warning: port check failed ({e}); assuming free")
+        return False
 
 
 def kill_port_owner(port):
