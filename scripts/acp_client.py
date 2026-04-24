@@ -21,7 +21,17 @@ from acp import spawn_agent_process, text_block, PROTOCOL_VERSION
 from acp.connection import StreamDirection, StreamEvent
 from acp.interfaces import Client
 
-DEFAULT_COMMAND = r"C:\Users\nachmano\AppData\Local\Toolbox\bin\kage-cli.exe"
+def _default_cli_command() -> str:
+    """Resolve the default kage-cli command: env override → PATH lookup → bare name."""
+    env = os.environ.get("KAGE_CLI_PATH")
+    if env:
+        return env
+    import shutil
+    found = shutil.which("kage-cli") or shutil.which("kage-cli.exe")
+    return found or "kage-cli"
+
+
+DEFAULT_COMMAND = _default_cli_command()
 DEFAULT_ARGS = ["acp"]
 
 # ANSI colours

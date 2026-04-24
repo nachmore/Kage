@@ -24,22 +24,38 @@ SVG_ICON = os.path.join(SCRIPT_DIR, "kage-icon-basic.svg")   # app icon (PNGs, .
 SVG_NSIS = os.path.join(SCRIPT_DIR, "kage-icon.svg")          # NSIS installer images
 OUT_DIR = SCRIPT_DIR
 
-# Find Inkscape
-INKSCAPE = None
-for p in [
+# Find Inkscape. Honour KAGE_INKSCAPE env var, then PATH, then common install locations.
+import shutil as _shutil
+
+_candidates = []
+_env_inkscape = os.environ.get("KAGE_INKSCAPE")
+if _env_inkscape:
+    _candidates.append(_env_inkscape)
+_path_inkscape = _shutil.which("inkscape")
+if _path_inkscape:
+    _candidates.append(_path_inkscape)
+_candidates.extend([
     r"C:\Program Files\Inkscape\bin\inkscape.exe",
     r"C:\Program Files (x86)\Inkscape\bin\inkscape.exe",
-    "inkscape",
-]:
+    "/Applications/Inkscape.app/Contents/MacOS/inkscape",
+    "/usr/bin/inkscape",
+    "/usr/local/bin/inkscape",
+])
+
+INKSCAPE = None
+for p in _candidates:
     try:
         subprocess.run([p, "--version"], capture_output=True, check=True)
         INKSCAPE = p
         break
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError):
         continue
 
 if not INKSCAPE:
-    raise RuntimeError("Inkscape not found. Install it or add it to PATH.")
+    raise RuntimeError(
+        "Inkscape not found. Install it and ensure it is on PATH, "
+        "or set the KAGE_INKSCAPE environment variable."
+    )
 
 # Theme colors (must match shared-kage-tokens.css)
 OUTLINE_COLOR = (56, 178, 172)   # #38B2AC  --kage-mascot-outline
