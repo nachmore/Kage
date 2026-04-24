@@ -834,8 +834,19 @@ pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::ca
 /// Get calendar events for a specific date (YYYY-MM-DD).
 #[tauri::command]
 pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
-    // Basic validation
-    if date.len() != 10 || date.chars().filter(|c| *c == '-').count() != 2 {
+    // Strict YYYY-MM-DD validation. The date is interpolated into a PowerShell
+    // command on Windows, so anything more permissive is an injection vector.
+    if date.len() != 10 {
+        return Err("Invalid date format. Use YYYY-MM-DD.".into());
+    }
+    let bytes = date.as_bytes();
+    let ok = bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit() && bytes[3].is_ascii_digit()
+        && bytes[4] == b'-'
+        && bytes[5].is_ascii_digit() && bytes[6].is_ascii_digit()
+        && bytes[7] == b'-'
+        && bytes[8].is_ascii_digit() && bytes[9].is_ascii_digit();
+    if !ok {
         return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
     Ok(tauri::async_runtime::spawn_blocking(move || {

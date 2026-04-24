@@ -35,11 +35,34 @@ pub fn get_upcoming_events_impl(hours: u32) -> Vec<CalendarEvent> {
 }
 
 pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
+    // Reject anything that isn't a strict YYYY-MM-DD date. The date string is
+    // interpolated into a double-quoted PowerShell literal below; without this
+    // gate a value like `2024-01-01"; Get-Process; "` would break out and
+    // execute arbitrary PowerShell.
+    if !is_strict_iso_date(date) {
+        warn!("[calendar] rejected non-ISO date: {:?}", date);
+        return vec![];
+    }
     let time_range = format!(
         "$start = [DateTime]::Parse(\"{date}\"); $end = $start.AddDays(1)",
         date = date,
     );
     run_on_sta(move || query_outlook(&time_range, &format!("date {}", time_range)))
+}
+
+/// Strict YYYY-MM-DD check. No surrogate pairs, only ASCII digits and dashes,
+/// matches exactly the expected shape. Deliberately does NOT use chrono — we
+/// want to reject *syntactically* weird inputs before PowerShell sees them,
+/// even if they'd parse as a date.
+fn is_strict_iso_date(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() != 10 { return false; }
+    let is_digit = |b: u8| b.is_ascii_digit();
+    is_digit(bytes[0]) && is_digit(bytes[1]) && is_digit(bytes[2]) && is_digit(bytes[3])
+        && bytes[4] == b'-'
+        && is_digit(bytes[5]) && is_digit(bytes[6])
+        && bytes[7] == b'-'
+        && is_digit(bytes[8]) && is_digit(bytes[9])
 }
 
 /// Spawn a closure on a dedicated thread (needed for COM/STA) and wait for the result.
