@@ -111,24 +111,29 @@ impl ToolPolicy {
         // Policy is "allow" — check grant conditions
         match self.grant_type.as_str() {
             "always" => {
-                // Check 30-day staleness
+                // Check 30-day staleness. If the stored timestamp is in the
+                // future (clock skew), treat the grant as suspicious and
+                // re-prompt rather than silently honouring it forever.
                 if let Ok(last) = chrono::DateTime::parse_from_rfc3339(&self.last_seen) {
-                    let days = (chrono::Utc::now() - last.with_timezone(&chrono::Utc)).num_days();
-                    if days > 30 {
-                        return "ask"; // stale — re-prompt
+                    let delta = chrono::Utc::now() - last.with_timezone(&chrono::Utc);
+                    if delta < chrono::Duration::zero() || delta.num_days() > 30 {
+                        return "ask";
                     }
                 }
                 "allow"
             }
             "24h" => {
-                // Check if granted_at is within 24 hours
+                // Check if granted_at is within 24 hours AND not in the future.
+                // A negative delta would previously satisfy `hours < 24` and
+                // keep the permission indefinitely-granted whenever the clock
+                // was ever set forward and then corrected back.
                 if let Ok(granted) = chrono::DateTime::parse_from_rfc3339(&self.granted_at) {
-                    let hours = (chrono::Utc::now() - granted.with_timezone(&chrono::Utc)).num_hours();
-                    if hours < 24 {
+                    let delta = chrono::Utc::now() - granted.with_timezone(&chrono::Utc);
+                    if delta >= chrono::Duration::zero() && delta.num_hours() < 24 {
                         return "allow";
                     }
                 }
-                "ask" // expired
+                "ask" // expired or future-dated
             }
             _ => {
                 // "once" — already consumed, back to ask
