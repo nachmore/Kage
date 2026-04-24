@@ -389,6 +389,67 @@ fn compute_file_hash(path: &Path) -> Option<String> {
     Some(format!("{:016x}", hash))
 }
 
+/// Reject relative paths that would escape the root (contain `..`, absolute, or have prefixes).
+/// Returns the normalized relative form, or an error reason.
+fn validate_rel_path(rel: &str) -> Result<String, String> {
+    if rel.is_empty() {
+        return Err("empty path".to_string());
+    }
+    let p = Path::new(rel);
+    if p.is_absolute() {
+        return Err("absolute paths are not allowed".to_string());
+    }
+    for comp in p.components() {
+        match comp {
+            std::path::Component::ParentDir => {
+                return Err("'..' components are not allowed".to_string());
+            }
+            std::path::Component::Prefix(_) | std::path::Component::RootDir => {
+                return Err("path prefixes/root are not allowed".to_string());
+            }
+            _ => {}
+        }
+    }
+    Ok(rel.replace('/', std::path::MAIN_SEPARATOR_STR))
+}
+
+/// Confirm that `candidate` resolves to a path inside `root`. Works for paths that
+/// may not yet exist by canonicalizing the deepest existing ancestor. Symlinks
+/// that point outside are rejected.
+fn ensure_within_root(root: &Path, candidate: &Path) -> Result<(), String> {
+    let root_canon = match root.canonicalize() {
+        Ok(p) => p,
+        Err(_) => root.to_path_buf(),
+    };
+    // Walk up to find the nearest existing ancestor, then canonicalize that and
+    // append the remaining components without following further symlinks.
+    let mut existing = candidate.to_path_buf();
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    while !existing.exists() {
+        match existing.file_name() {
+            Some(name) => tail.push(name.to_os_string()),
+            None => break,
+        }
+        if !existing.pop() {
+            break;
+        }
+    }
+    let anchor = existing.canonicalize().unwrap_or(existing);
+    let mut resolved = anchor;
+    for name in tail.into_iter().rev() {
+        resolved.push(name);
+    }
+    if resolved.starts_with(&root_canon) {
+        Ok(())
+    } else {
+        Err(format!(
+            "path '{}' escapes root '{}'",
+            resolved.display(),
+            root_canon.display()
+        ))
+    }
+}
+
 /// Execute a folder organization plan. Public for MCP binary access.
 pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutionResult {
     let mut completed = 0;
@@ -397,8 +458,15 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
     let mut rollback = Vec::new();
 
     for op in operations {
-        // Normalize forward slashes to OS separator for cross-platform compatibility
-        let from_normalized = op.from.replace('/', std::path::MAIN_SEPARATOR_STR);
+        // Validate the source relative path — reject .., absolute, prefixes.
+        let from_normalized = match validate_rel_path(&op.from) {
+            Ok(n) => n,
+            Err(e) => {
+                errors.push(format!("'{}': invalid source path ({})", op.from, e));
+                failed += 1;
+                continue;
+            }
+        };
         let from_abs = root.join(&from_normalized);
 
         // If exact path doesn't exist, resolve via normalized whitespace lookup.
@@ -410,6 +478,13 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
             resolve_normalized_path(root, &from_normalized).unwrap_or(from_abs)
         };
 
+        // Defence-in-depth: ensure resolved source sits inside the root (symlink-safe).
+        if let Err(e) = ensure_within_root(root, &from_abs) {
+            errors.push(format!("'{}': refused ({})", op.from, e));
+            failed += 1;
+            continue;
+        }
+
         match op.action.as_str() {
             "move" | "rename" => {
                 let to_rel = match &op.to {
@@ -420,7 +495,20 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                         continue;
                     }
                 };
-                let to_abs = root.join(to_rel.replace('/', std::path::MAIN_SEPARATOR_STR));
+                let to_normalized = match validate_rel_path(to_rel) {
+                    Ok(n) => n,
+                    Err(e) => {
+                        errors.push(format!("'{}': invalid destination ({})", to_rel, e));
+                        failed += 1;
+                        continue;
+                    }
+                };
+                let to_abs = root.join(&to_normalized);
+                if let Err(e) = ensure_within_root(root, &to_abs) {
+                    errors.push(format!("'{}': destination refused ({})", to_rel, e));
+                    failed += 1;
+                    continue;
+                }
 
                 // Create parent directories
                 if let Some(parent) = to_abs.parent() {
@@ -503,7 +591,8 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                     .unwrap_or_else(|| op.from.clone());
                 let trash_dest = trash_dir.join(&file_name);
 
-                // If a file with the same name already exists in trash, add a suffix
+                // If a file with the same name already exists in trash, add a timestamp
+                // plus a counter suffix to avoid collisions within the same second.
                 let trash_dest = if trash_dest.exists() {
                     let stem = Path::new(&file_name).file_stem()
                         .map(|s| s.to_string_lossy().to_string())
@@ -512,7 +601,17 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                         .map(|e| format!(".{}", e.to_string_lossy()))
                         .unwrap_or_default();
                     let ts = chrono::Local::now().format("%Y%m%d%H%M%S");
-                    trash_dir.join(format!("{}_{}{}", stem, ts, ext))
+                    let mut candidate = trash_dir.join(format!("{}_{}{}", stem, ts, ext));
+                    let mut counter: u32 = 1;
+                    while candidate.exists() {
+                        candidate = trash_dir.join(format!("{}_{}_{}{}", stem, ts, counter, ext));
+                        counter += 1;
+                        if counter > 10_000 {
+                            // Extremely unlikely; bail out of the loop with the last candidate.
+                            break;
+                        }
+                    }
+                    candidate
                 } else {
                     trash_dest
                 };

@@ -270,14 +270,17 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<()> {
 /// Returns the path to the extracted directory.
 pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
     use std::io;
+    use std::path::Component;
 
     let file = fs::File::open(zip_path)
         .context("Failed to open zip file")?;
     let mut archive = zip::ZipArchive::new(file)
         .context("Failed to read zip archive")?;
 
+    // Make sure the target exists so we can canonicalize it once up-front.
+    fs::create_dir_all(target_dir).ok();
     let canonical_target = target_dir.canonicalize()
-        .unwrap_or_else(|_| target_dir.clone());
+        .with_context(|| format!("Failed to canonicalize target {}", target_dir.display()))?;
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)
@@ -287,38 +290,82 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
             .context("Zip entry has invalid path (possible Zip Slip attack)")?
             .to_owned();
 
+        // Reject absolute paths, prefixes, and any `..` components up front. This
+        // defends against bugs in `enclosed_name` as well as symlink-based attacks.
+        for comp in entry_path.components() {
+            match comp {
+                Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
+                    anyhow::bail!(
+                        "Zip Slip: entry '{}' contains forbidden path component",
+                        entry_path.display()
+                    );
+                }
+                _ => {}
+            }
+        }
+
         let out_path = target_dir.join(&entry_path);
 
-        // Zip Slip protection: ensure the resolved path is within the target directory
-        let canonical_out = if out_path.exists() {
-            out_path.canonicalize()?
-        } else {
-            // For new files, canonicalize the parent and append the filename
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent)?;
-                parent.canonicalize()?.join(out_path.file_name().unwrap_or_default())
-            } else {
-                out_path.clone()
+        // Build the canonical resolved path by canonicalizing the deepest existing
+        // ancestor (to resolve any symlinks in the target) and appending the
+        // remaining components verbatim. Never call canonicalize on `out_path`
+        // itself until we've confirmed containment — that would follow a
+        // malicious symlink to somewhere else.
+        let mut anchor = out_path.clone();
+        let mut tail: Vec<std::ffi::OsString> = Vec::new();
+        while !anchor.exists() {
+            match anchor.file_name() {
+                Some(name) => tail.push(name.to_os_string()),
+                None => break,
             }
-        };
+            if !anchor.pop() {
+                break;
+            }
+        }
+        let anchor_canon = anchor
+            .canonicalize()
+            .unwrap_or(anchor);
+        let mut resolved = anchor_canon;
+        for name in tail.into_iter().rev() {
+            resolved.push(name);
+        }
 
-        if !canonical_out.starts_with(&canonical_target) {
+        if !resolved.starts_with(&canonical_target) {
             anyhow::bail!(
                 "Zip Slip detected: entry '{}' would extract outside target directory",
                 entry_path.display()
             );
         }
 
-        if entry.is_dir() {
-            fs::create_dir_all(&out_path)?;
-        } else {
-            if let Some(parent) = out_path.parent() {
-                fs::create_dir_all(parent)?;
+        // Never write through a symlink that already exists at the destination.
+        if let Ok(meta) = fs::symlink_metadata(&resolved) {
+            if meta.file_type().is_symlink() {
+                anyhow::bail!(
+                    "Zip Slip: refusing to write through existing symlink at '{}'",
+                    resolved.display()
+                );
             }
-            let mut outfile = fs::File::create(&out_path)
-                .with_context(|| format!("Failed to create file: {}", out_path.display()))?;
+        }
+
+        if entry.is_dir() {
+            fs::create_dir_all(&resolved)?;
+        } else {
+            if let Some(parent) = resolved.parent() {
+                fs::create_dir_all(parent)?;
+                // Reject symlinked parent directories that could redirect writes.
+                if let Ok(meta) = fs::symlink_metadata(parent) {
+                    if meta.file_type().is_symlink() {
+                        anyhow::bail!(
+                            "Zip Slip: refusing to extract into symlinked directory '{}'",
+                            parent.display()
+                        );
+                    }
+                }
+            }
+            let mut outfile = fs::File::create(&resolved)
+                .with_context(|| format!("Failed to create file: {}", resolved.display()))?;
             io::copy(&mut entry, &mut outfile)
-                .with_context(|| format!("Failed to write file: {}", out_path.display()))?;
+                .with_context(|| format!("Failed to write file: {}", resolved.display()))?;
         }
     }
 
