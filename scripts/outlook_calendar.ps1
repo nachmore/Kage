@@ -118,4 +118,15 @@ try {
     Write-Host "  - Outlook must be installed (desktop version, not just web)" -ForegroundColor DarkGray
     Write-Host "  - Outlook must have been opened at least once to set up the profile" -ForegroundColor DarkGray
     Write-Host "  - If using New Outlook, COM automation may not be available" -ForegroundColor DarkGray
+} finally {
+    # Release COM objects in reverse order of creation. Without this, the
+    # Outlook process can stay pinned in memory after the script exits, and
+    # repeated runs leak marshalling resources.
+    foreach ($comObj in @($restricted, $items, $cal, $ns, $ol)) {
+        if ($null -ne $comObj) {
+            try { [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($comObj) } catch {}
+        }
+    }
+    [GC]::Collect()
+    [GC]::WaitForPendingFinalizers()
 }
