@@ -468,8 +468,13 @@ export function createMascotController(container, opts = {}) {
         }
     }
 
+    let _destroyed = false;
+    let _preloadTimer = null;
+
     function destroy() {
+        _destroyed = true;
         if (periodicTimer) clearTimeout(periodicTimer);
+        if (_preloadTimer) { clearTimeout(_preloadTimer); _preloadTimer = null; }
         for (const { anim } of anims.values()) {
             anim.stop();
             if (anim._loopInterval) clearInterval(anim._loopInterval);
@@ -536,8 +541,12 @@ export function createMascotController(container, opts = {}) {
     }
 
     Promise.all([...allFrames].map(preloadImg)).then(() => {
+        if (_destroyed) return;
         if (periodic) {
-            setTimeout(() => { if (state === 'idle') playPeriodic(); }, 500);
+            _preloadTimer = setTimeout(() => {
+                _preloadTimer = null;
+                if (!_destroyed && state === 'idle') playPeriodic();
+            }, 500);
         }
     });
 
