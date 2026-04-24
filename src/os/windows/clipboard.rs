@@ -12,6 +12,8 @@ extern "system" {
     fn GlobalAlloc(flags: u32, bytes: usize) -> *mut std::ffi::c_void;
     fn GlobalLock(hmem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
     fn GlobalUnlock(hmem: *mut std::ffi::c_void) -> i32;
+    fn GlobalSize(hmem: *mut std::ffi::c_void) -> usize;
+    fn GlobalFree(hmem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
     fn GetClipboardSequenceNumber() -> u32;
     fn SendInput(count: u32, inputs: *const WinInput, size: i32) -> u32;
     fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
@@ -35,11 +37,19 @@ pub fn read_clipboard_impl() -> Option<String> {
         if OpenClipboard(ptr::null_mut()) == 0 { return None; }
         let handle = GetClipboardData(CF_UNICODETEXT);
         if handle.is_null() { CloseClipboard(); return None; }
-        let ptr = GlobalLock(handle) as *const u16;
-        if ptr.is_null() { CloseClipboard(); return None; }
-        let mut len = 0;
-        while *ptr.add(len) != 0 { len += 1; }
-        let slice = std::slice::from_raw_parts(ptr, len);
+        // Cap the read at the allocated size reported by GlobalSize. Clipboard
+        // data from other processes is untrusted — a missing null terminator
+        // would otherwise let us walk off the end of the buffer.
+        let max_u16 = {
+            let bytes = GlobalSize(handle);
+            if bytes == 0 { CloseClipboard(); return None; }
+            bytes / std::mem::size_of::<u16>()
+        };
+        let p = GlobalLock(handle) as *const u16;
+        if p.is_null() { CloseClipboard(); return None; }
+        let mut len = 0usize;
+        while len < max_u16 && *p.add(len) != 0 { len += 1; }
+        let slice = std::slice::from_raw_parts(p, len);
         let text = String::from_utf16_lossy(slice);
         GlobalUnlock(handle);
         CloseClipboard();
@@ -54,13 +64,21 @@ pub fn write_clipboard_impl(text: &str) {
         if OpenClipboard(ptr::null_mut()) == 0 { return; }
         EmptyClipboard();
         let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-        if !hmem.is_null() {
-            let dest = GlobalLock(hmem) as *mut u16;
-            if !dest.is_null() {
-                ptr::copy_nonoverlapping(wide.as_ptr(), dest, wide.len());
-                GlobalUnlock(hmem);
-                SetClipboardData(CF_UNICODETEXT, hmem);
-            }
+        if hmem.is_null() {
+            CloseClipboard();
+            return;
+        }
+        let dest = GlobalLock(hmem) as *mut u16;
+        if dest.is_null() {
+            GlobalFree(hmem);
+            CloseClipboard();
+            return;
+        }
+        ptr::copy_nonoverlapping(wide.as_ptr(), dest, wide.len());
+        GlobalUnlock(hmem);
+        // On success, the system owns hmem. On failure we must free it ourselves.
+        if SetClipboardData(CF_UNICODETEXT, hmem).is_null() {
+            GlobalFree(hmem);
         }
         CloseClipboard();
     }

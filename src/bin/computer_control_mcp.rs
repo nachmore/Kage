@@ -3,7 +3,7 @@
 //! Speaks MCP (JSON-RPC over stdio) and provides accessibility-based
 //! desktop automation tools. Spawned by kage-cli as an MCP server.
 
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
 use kage::os::accessibility;
 
@@ -80,17 +80,58 @@ fn main() {
     // Send initialize response capabilities
     // The MCP host will send an initialize request first
 
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => break,
-        };
-        if line.trim().is_empty() { continue; }
+    // Read length-capped lines directly from a BufReader so a malicious or buggy
+    // host cannot OOM us with a single gigantic line.
+    const MAX_LINE_BYTES: usize = 4 * 1024 * 1024; // 4 MiB per JSON-RPC message
+    let mut reader = std::io::BufReader::new(stdin.lock());
+    let mut line_buf = String::new();
 
-        let request: serde_json::Value = match serde_json::from_str(&line) {
+    loop {
+        line_buf.clear();
+        // Use take() on the underlying reader to bound how much we'll read for
+        // a single line. If the cap is hit before a newline, we flush the
+        // oversized data and emit an error response.
+        let mut bounded = (&mut reader).take((MAX_LINE_BYTES + 1) as u64);
+        let n = match bounded.read_line(&mut line_buf) {
+            Ok(0) => break, // EOF
+            Ok(n) => n,
+            Err(e) => {
+                log::warn!("stdin read error: {}", e);
+                break;
+            }
+        };
+
+        if n > MAX_LINE_BYTES {
+            // Drain the rest of the oversized line so we resync on the next newline.
+            let mut discard = String::new();
+            let _ = reader.read_line(&mut discard);
+            let err = json_rpc_error(
+                &serde_json::Value::Null,
+                -32700,
+                "Parse error: message exceeds size limit",
+            );
+            let mut out = stdout.lock();
+            let _ = writeln!(out, "{}", err);
+            let _ = out.flush();
+            continue;
+        }
+
+        if line_buf.trim().is_empty() { continue; }
+
+        let request: serde_json::Value = match serde_json::from_str(&line_buf) {
             Ok(v) => v,
             Err(e) => {
                 log::warn!("Invalid JSON: {}", e);
+                // Respond with a JSON-RPC parse error so the client doesn't hang
+                // waiting for a response. ID is unknown, so null per spec.
+                let err = json_rpc_error(
+                    &serde_json::Value::Null,
+                    -32700,
+                    &format!("Parse error: {}", e),
+                );
+                let mut out = stdout.lock();
+                let _ = writeln!(out, "{}", err);
+                let _ = out.flush();
                 continue;
             }
         };

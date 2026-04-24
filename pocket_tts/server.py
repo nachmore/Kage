@@ -21,6 +21,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import struct
 import sys
 import threading
@@ -162,6 +163,21 @@ def _auto_export_safetensors(voice_name, state):
         logger.warning("Failed to auto-export '%s': %s", voice_name, e)
 
 
+def _is_safe_voice_name(name):
+    """Local voice names must be a simple identifier. Rejects anything with
+    path separators, `..`, control chars, or shell metacharacters so that
+    `os.path.join(dir, name)` can't escape the voices directory."""
+    if not isinstance(name, str) or not name:
+        return False
+    if len(name) > 128:
+        return False
+    # Allow letters, digits, underscore, dash, dot (for e.g. alpha-variants).
+    # Explicitly disallow leading dot (would hide files) and `..`.
+    if name.startswith(".") or ".." in name:
+        return False
+    return re.match(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$", name) is not None
+
+
 def get_voice_state(voice_name):
     """Get or create a cached voice state for the given voice.
 
@@ -171,6 +187,9 @@ def get_voice_state(voice_name):
       3. User safetensors in voices dir (fast)
       4. User .wav in voices dir (slow, then auto-export)
       5. Built-in voice name (slow, then auto-export)
+
+    URL loading (hf://, http(s)://) is disabled by default; set the
+    POCKET_TTS_ALLOW_URL_VOICES=1 environment variable to re-enable it.
     """
     if voice_name in voice_states:
         return voice_states[voice_name]
@@ -178,39 +197,56 @@ def get_voice_state(voice_name):
     if model is None:
         return None
 
+    # Classify the request up-front.
+    is_url = isinstance(voice_name, str) and (
+        voice_name.startswith("hf://")
+        or voice_name.startswith("http://")
+        or voice_name.startswith("https://")
+    )
+
+    if is_url:
+        if os.environ.get("POCKET_TTS_ALLOW_URL_VOICES", "0") != "1":
+            logger.warning("URL voice loading is disabled: %s", voice_name)
+            return None
+    else:
+        if not _is_safe_voice_name(voice_name):
+            logger.warning("Rejected unsafe voice name: %r", voice_name)
+            return None
+
     try:
         state = None
         needs_export = False
 
-        # 1. Check auto-exported cache
-        cache_path = os.path.join(get_cache_dir(), f"{voice_name}.safetensors")
-        if os.path.isfile(cache_path):
-            logger.info("Loading voice from cache: %s", voice_name)
-            state = model.get_state_for_audio_prompt(cache_path)
+        if not is_url:
+            # 1. Check auto-exported cache
+            cache_path = os.path.join(get_cache_dir(), f"{voice_name}.safetensors")
+            if os.path.isfile(cache_path):
+                logger.info("Loading voice from cache: %s", voice_name)
+                state = model.get_state_for_audio_prompt(cache_path)
 
-        # 2. Check user safetensors
-        if state is None:
-            user_st = os.path.join(get_custom_voices_dir(), f"{voice_name}.safetensors")
-            if os.path.isfile(user_st):
-                logger.info("Loading voice from user safetensors: %s", voice_name)
-                state = model.get_state_for_audio_prompt(user_st)
+            # 2. Check user safetensors
+            if state is None:
+                user_st = os.path.join(get_custom_voices_dir(), f"{voice_name}.safetensors")
+                if os.path.isfile(user_st):
+                    logger.info("Loading voice from user safetensors: %s", voice_name)
+                    state = model.get_state_for_audio_prompt(user_st)
 
-        # 3. Check user .wav
-        if state is None:
-            wav_path = os.path.join(get_custom_voices_dir(), f"{voice_name}.wav")
-            if os.path.isfile(wav_path):
-                logger.info("Loading voice from wav: %s", voice_name)
-                state = model.get_state_for_audio_prompt(wav_path)
-                needs_export = True
+            # 3. Check user .wav
+            if state is None:
+                wav_path = os.path.join(get_custom_voices_dir(), f"{voice_name}.wav")
+                if os.path.isfile(wav_path):
+                    logger.info("Loading voice from wav: %s", voice_name)
+                    state = model.get_state_for_audio_prompt(wav_path)
+                    needs_export = True
 
-        # 4. HuggingFace or HTTP URL
-        if state is None and (voice_name.startswith("hf://") or voice_name.startswith("http")):
+        # 4. HuggingFace or HTTP URL — gated above
+        if state is None and is_url:
             logger.info("Loading voice from URL: %s", voice_name)
             state = model.get_state_for_audio_prompt(voice_name)
             needs_export = True
 
         # 5. Built-in voice
-        if state is None and voice_name in BUILTIN_VOICES:
+        if state is None and not is_url and voice_name in BUILTIN_VOICES:
             logger.info("Loading built-in voice: %s", voice_name)
             state = model.get_state_for_audio_prompt(voice_name)
             needs_export = True
