@@ -189,6 +189,17 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
 function _doRender(markdown, targetElement, streaming) {
     _lastRenderTime.set(targetElement, Date.now());
 
+    // Guard against raw HTML documents being passed in as "markdown". marked.js
+    // passes HTML through verbatim, so a response that starts with `<!DOCTYPE>`,
+    // `<html>`, `<body>`, `<script>`, or `<style>` would inject those tags into
+    // the page. Wrap them in an html code fence so they render as source.
+    if (typeof markdown === 'string') {
+        const head = markdown.trimStart().slice(0, 200).toLowerCase();
+        if (/^<(!doctype|html[\s>]|body[\s>]|head[\s>]|script[\s>]|style[\s>])/.test(head)) {
+            markdown = '```html\n' + markdown + '\n```';
+        }
+    }
+
     // During streaming, if we detect an incomplete automation_plan block,
     // don't render it as raw code — the app's handleMessageChunk will render
     // the task list incrementally. Just show nothing for the plan portion.

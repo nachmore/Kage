@@ -268,7 +268,13 @@ function addExtensionSidebarItem(id, icon, label) {
     item.dataset.section = id;
     item.dataset.extSidebar = 'true'; // mark as dynamic extension item
     item.onclick = () => switchSection(id);
-    item.innerHTML = `<span class="sidebar-item-icon">${icon}</span><span>${label}</span>`;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'sidebar-item-icon';
+    iconSpan.textContent = icon;
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = label;
+    item.appendChild(iconSpan);
+    item.appendChild(labelSpan);
 
     // Insert alphabetically among other dynamic extension items
     const extItems = [...section.querySelectorAll('.sidebar-item[data-ext-sidebar="true"]')];

@@ -1788,7 +1788,7 @@ export class ChatApp {
                 renderMarkdown(beforeFence, contentDiv, true);
             } else {
                 const friendlyName = getExtensionToolFriendlyName(info.extension, info.tool, this.extensionManager);
-                contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${friendlyName}...</div>`;
+                contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
             }
         }
     }

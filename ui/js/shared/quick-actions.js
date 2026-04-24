@@ -252,7 +252,14 @@ export function renderQuickActionChips(actions, container, onAction) {
         const chip = document.createElement('button');
         chip.className = 'quick-action-chip';
         chip.title = action.label;
-        chip.innerHTML = `<span class="quick-action-icon">${action.icon || '⚡'}</span><span class="quick-action-label">${action.label}</span>`;
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'quick-action-icon';
+        iconSpan.textContent = action.icon || '⚡';
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'quick-action-label';
+        labelSpan.textContent = action.label;
+        chip.appendChild(iconSpan);
+        chip.appendChild(labelSpan);
         chip.addEventListener('click', () => onAction(action.prompt));
         container.appendChild(chip);
     }

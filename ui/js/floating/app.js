@@ -1983,7 +1983,7 @@ export class FloatingApp {
         } else {
             // Nothing before the fence — show a loading indicator with friendly name
             const friendlyName = getExtensionToolFriendlyName(info.extension, info.tool, this.extensionManager);
-            this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${friendlyName}...</div>`;
+            this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
     }
 
@@ -2293,7 +2293,14 @@ export class FloatingApp {
                     const chip = document.createElement('button');
                     chip.className = 'quick-action-chip';
                     chip.title = action.label;
-                    chip.innerHTML = `<span class="quick-action-icon">${action.icon || '⚡'}</span><span class="quick-action-label">${action.label}</span>`;
+                    const iconSpan = document.createElement('span');
+                    iconSpan.className = 'quick-action-icon';
+                    iconSpan.textContent = action.icon || '⚡';
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'quick-action-label';
+                    labelSpan.textContent = action.label;
+                    chip.appendChild(iconSpan);
+                    chip.appendChild(labelSpan);
                     chip.addEventListener('click', () => {
                         const prompt = action.prompt.replace(/\{text\}/g, responseText);
                         container.style.display = 'none';
