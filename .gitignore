@@ -30,3 +30,13 @@ ui/tests/package-lock.json
 # Python cache
 __pycache__/
 *.pyc
+
+# Logs and local app data
+*.log
+logs/
+
+# User config / secrets — never commit real values
+config.json
+.env
+.env.*
+!.env.example
