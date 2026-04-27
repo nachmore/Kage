@@ -21,6 +21,7 @@ pub const BUILTIN_STEERING: &str = include_str!("builtin_steering.md");
 
 use crate::acp_client::AcpClient;
 use crate::config::Config;
+use crate::lock_ext::LockExt;
 use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::fs;
@@ -242,7 +243,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     };
 
     // Reset the streaming accumulator — we'll read the full response from it
-    client.streaming_accumulator.lock().unwrap().clear();
+    client.streaming_accumulator.lock_or_recover().clear();
 
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
@@ -269,7 +270,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     }
 
     // Read the accumulated response
-    let result = client.streaming_accumulator.lock().unwrap().clone();
+    let result = client.streaming_accumulator.lock_or_recover().clone();
 
     if result.trim().is_empty() {
         warn!("Auto-steering extraction returned empty result");
@@ -325,7 +326,7 @@ pub fn maybe_generate_steering(
     // Spawn a background task so we don't block the message flow
     tauri::async_runtime::spawn(async move {
         {
-            let config = config.lock().unwrap();
+            let config = config.lock_or_recover();
             if !config.acp.agent.auto_steering_enabled {
                 return;
             }
@@ -468,7 +469,7 @@ mod tests {
         MESSAGE_COUNTER.store(0, Ordering::Relaxed);
         MESSAGES_SINCE_GENERATION.store(0, Ordering::Relaxed);
         // Reset the last generation time so cooldown doesn't block
-        *LAST_GENERATION.lock().unwrap() = None;
+        *LAST_GENERATION.lock_or_recover() = None;
 
         // Should not trigger until threshold (UPDATE_INTERVAL_MESSAGES = 5)
         for _ in 0..UPDATE_INTERVAL_MESSAGES - 1 {

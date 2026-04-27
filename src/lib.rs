@@ -11,9 +11,11 @@ pub mod auto_steering;
 pub mod computer_control;
 pub mod error;
 pub mod extensions;
+pub mod lock_ext;
 pub mod logger;
 pub mod mcp_registration;
 pub mod os;
+pub mod panic_handler;
 pub mod process_manager;
 
 // Tauri-dependent modules — excluded from test compilation because

@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::lock_ext::LockExt;
+
 /// How often to poll the foreground window (in seconds)
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 5;
 
@@ -118,7 +120,7 @@ pub async fn start_tracker(state: &Arc<ActivityTrackerState>, poll_interval: Opt
     }
 
     if let Some(interval) = poll_interval {
-        *state.poll_interval_secs.lock().unwrap() = interval.max(2);
+        *state.poll_interval_secs.lock_or_recover() = interval.max(2);
     }
 
     // Open DB
@@ -127,7 +129,7 @@ pub async fn start_tracker(state: &Arc<ActivityTrackerState>, poll_interval: Opt
     *state.db.lock().await = Some(conn);
 
     state.running.store(true, Ordering::Relaxed);
-    info!("[ActivityTracker] Started (poll every {}s)", state.poll_interval_secs.lock().unwrap());
+    info!("[ActivityTracker] Started (poll every {}s)", state.poll_interval_secs.lock_or_recover());
 
     // Spawn background poller
     let state_clone = Arc::clone(state);
@@ -152,7 +154,7 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
     let mut last_poll = std::time::Instant::now();
 
     while state.running.load(Ordering::Relaxed) {
-        let interval = *state.poll_interval_secs.lock().unwrap();
+        let interval = *state.poll_interval_secs.lock_or_recover();
         tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
 
         if !state.running.load(Ordering::Relaxed) { break; }
@@ -322,7 +324,7 @@ pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Resu
     let mut longest_streak_app = String::new();
     let mut current_streak: u64 = 0;
     let mut current_app = String::new();
-    let poll_interval = *state.poll_interval_secs.lock().unwrap();
+    let poll_interval = *state.poll_interval_secs.lock_or_recover();
 
     for p in &processes {
         if *p == current_app {

@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::lock_ext::LockExt;
 use crate::os;
 use crate::process_manager::ProcessManager;
 use super::types::{AcpConnectionMode, AcpResponse, NotificationHandler};
@@ -58,12 +59,12 @@ impl AcpTransport {
     }
 
     pub fn is_connected(&self) -> bool {
-        *self.connected.lock().unwrap()
+        *self.connected.lock_or_recover()
     }
 
     /// Set the notification handler. Called by the background reader for all notifications.
     pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
-        let mut h = self.notification_handler.lock().unwrap();
+        let mut h = self.notification_handler.lock_or_recover();
         *h = Some(Arc::new(handler));
     }
 
@@ -109,12 +110,12 @@ impl AcpTransport {
                 stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
                 let write_clone = stream.try_clone()?;
-                *self.tcp_writer.lock().unwrap() = Some(write_clone);
+                *self.tcp_writer.lock_or_recover() = Some(write_clone);
 
                 let read_clone = stream.try_clone()?;
                 self.start_reader_thread(ReaderSource::Tcp(BufReader::new(read_clone)));
 
-                *self.connected.lock().unwrap() = true;
+                *self.connected.lock_or_recover() = true;
                 info!("Connected to kage-cli at {}", addr);
                 Ok(())
             }
@@ -156,18 +157,18 @@ impl AcpTransport {
         let stdout = child.stdout.take().context("No stdout")?;
 
         {
-            let mut pm = self.process_manager.lock().unwrap();
+            let mut pm = self.process_manager.lock_or_recover();
             if let Err(e) = pm.store_process(child) {
                 warn!("Failed to store spawned process: {}", e);
             }
         }
 
         let stdin_arc = Arc::new(Mutex::new(stdin));
-        *self.pipe_stdin.lock().unwrap() = Some(stdin_arc);
+        *self.pipe_stdin.lock_or_recover() = Some(stdin_arc);
 
         self.start_reader_thread(ReaderSource::Pipe(BufReader::new(stdout)));
 
-        *self.connected.lock().unwrap() = true;
+        *self.connected.lock_or_recover() = true;
         info!("Local process spawned, reader thread started");
         Ok(())
     }
@@ -176,7 +177,7 @@ impl AcpTransport {
 
     fn start_reader_thread(&self, source: ReaderSource) {
         let (response_tx, response_rx) = mpsc::channel();
-        *self.response_rx.lock().unwrap() = Some(response_rx);
+        *self.response_rx.lock_or_recover() = Some(response_rx);
 
         let notification_handler = self.notification_handler.clone();
         let debug_mode = self.debug_mode.clone();
@@ -194,7 +195,7 @@ impl AcpTransport {
                 match reader.read_line(&mut line) {
                     Ok(0) => {
                         warn!("Reader: stream closed (EOF)");
-                        *connected.lock().unwrap() = false;
+                        *connected.lock_or_recover() = false;
                         break;
                     }
                     Ok(_) => {}
@@ -205,7 +206,7 @@ impl AcpTransport {
                             continue;
                         }
                         error!("Reader: error: {}", e);
-                        *connected.lock().unwrap() = false;
+                        *connected.lock_or_recover() = false;
                         break;
                     }
                 }
@@ -215,7 +216,7 @@ impl AcpTransport {
                     continue;
                 }
 
-                let debug = *debug_mode.lock().unwrap();
+                let debug = *debug_mode.lock_or_recover();
                 if debug {
                     let display: String = trimmed.chars().take(200).collect();
                     info!("[READER] {}", display);
@@ -234,7 +235,7 @@ impl AcpTransport {
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_millis() as u64;
-                    *last_activity.lock().unwrap() = now;
+                    *last_activity.lock_or_recover() = now;
                 }
 
                 let has_method = val.get("method").and_then(|m| m.as_str()).is_some();
@@ -249,7 +250,12 @@ impl AcpTransport {
                     }
                 } else if has_method {
                     if debug {
-                        info!("[READER] Notification: {}", val.get("method").unwrap());
+                        info!(
+                            "[READER] Notification: {}",
+                            val.get("method")
+                                .and_then(|m| m.as_str())
+                                .unwrap_or("<unknown>")
+                        );
                     }
                     // Clone the handler Arc out and drop the mutex guard BEFORE
                     // invoking. Holding the lock across the callback would cause
@@ -257,7 +263,10 @@ impl AcpTransport {
                     // the main thread holds while waiting in send_request.
                     let handler_arc = match notification_handler.lock() {
                         Ok(guard) => guard.as_ref().cloned(),
-                        Err(_) => None,
+                        Err(poisoned) => {
+                            log::warn!("Notification handler mutex poisoned — recovering");
+                            poisoned.into_inner().as_ref().cloned()
+                        }
                     };
                     if let Some(cb) = handler_arc {
                         cb(val);
@@ -274,7 +283,7 @@ impl AcpTransport {
     /// Send a JSON-RPC request and wait for the response.
     pub fn send_request(&self, request: &super::types::AcpRequest) -> Result<AcpResponse> {
         let request_json = serde_json::to_string(request)?;
-        let debug = *self.debug_mode.lock().unwrap();
+        let debug = *self.debug_mode.lock_or_recover();
 
         if debug {
             info!("[SEND] {} id={:?}", request.method, request.id);
@@ -285,7 +294,7 @@ impl AcpTransport {
 
         self.write_line(&request_json)?;
 
-        let rx_guard = self.response_rx.lock().unwrap();
+        let rx_guard = self.response_rx.lock_or_recover();
         let rx = rx_guard.as_ref().context("No reader thread (not connected)")?;
 
         let idle_timeout = Duration::from_secs(60);
@@ -295,7 +304,7 @@ impl AcpTransport {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
-        *self.last_activity.lock().unwrap() = start_ms;
+        *self.last_activity.lock_or_recover() = start_ms;
 
         loop {
             match rx.recv_timeout(poll_interval) {
@@ -306,7 +315,7 @@ impl AcpTransport {
                     return Ok(response);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    let last = *self.last_activity.lock().unwrap();
+                    let last = *self.last_activity.lock_or_recover();
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -318,7 +327,7 @@ impl AcpTransport {
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    *self.connected.lock().unwrap() = false;
+                    *self.connected.lock_or_recover() = false;
                     anyhow::bail!("Connection lost while waiting for response")
                 }
             }
@@ -327,15 +336,17 @@ impl AcpTransport {
 
     /// Write a line to the ACP server (pipe stdin or TCP)
     pub fn write_line(&self, line: &str) -> Result<()> {
-        if let Ok(guard) = self.pipe_stdin.lock() {
+        {
+            let guard = self.pipe_stdin.lock_or_recover();
             if let Some(ref stdin_arc) = *guard {
-                let mut stdin = stdin_arc.lock().unwrap();
+                let mut stdin = stdin_arc.lock_or_recover();
                 writeln!(stdin, "{}", line)?;
                 stdin.flush()?;
                 return Ok(());
             }
         }
-        if let Ok(guard) = self.tcp_writer.lock() {
+        {
+            let guard = self.tcp_writer.lock_or_recover();
             if let Some(ref stream) = *guard {
                 let mut writer = stream.try_clone()?;
                 writeln!(writer, "{}", line)?;
@@ -349,21 +360,21 @@ impl AcpTransport {
     /// Disconnect from the ACP server.
     pub fn disconnect(&self) {
         info!("Disconnecting from ACP server");
-        *self.connected.lock().unwrap() = false;
-        *self.pipe_stdin.lock().unwrap() = None;
-        *self.tcp_writer.lock().unwrap() = None;
-        let mut pm = self.process_manager.lock().unwrap();
+        *self.connected.lock_or_recover() = false;
+        *self.pipe_stdin.lock_or_recover() = None;
+        *self.tcp_writer.lock_or_recover() = None;
+        let mut pm = self.process_manager.lock_or_recover();
         pm.terminate();
     }
 
     /// Full teardown: disconnect, kill process, reset response channel.
     pub fn force_disconnect(&self) {
         info!("Force-disconnecting ACP (full teardown)");
-        *self.connected.lock().unwrap() = false;
-        *self.response_rx.lock().unwrap() = None;
-        *self.pipe_stdin.lock().unwrap() = None;
-        *self.tcp_writer.lock().unwrap() = None;
-        let mut pm = self.process_manager.lock().unwrap();
+        *self.connected.lock_or_recover() = false;
+        *self.response_rx.lock_or_recover() = None;
+        *self.pipe_stdin.lock_or_recover() = None;
+        *self.tcp_writer.lock_or_recover() = None;
+        let mut pm = self.process_manager.lock_or_recover();
         pm.terminate();
     }
 }

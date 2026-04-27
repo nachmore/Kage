@@ -8,6 +8,7 @@ use std::time::Instant;
 
 use super::AcpClient;
 use super::types::{AcpRequest, format_acp_error};
+use crate::lock_ext::LockExt;
 
 /// Track when we last injected a timestamp into a user message.
 /// Refreshed every 15 minutes to keep the agent's sense of time current.
@@ -48,7 +49,7 @@ impl AcpClient {
         }
 
         info!("ACP initialized successfully");
-        *self.initialized.lock().unwrap() = true;
+        *self.initialized.lock_or_recover() = true;
         Ok(())
     }
 
@@ -58,7 +59,7 @@ impl AcpClient {
         info!("Creating new ACP session");
 
         {
-            let init = self.initialized.lock().unwrap();
+            let init = self.initialized.lock_or_recover();
             if !*init {
                 drop(init);
                 self.initialize()?;
@@ -97,7 +98,7 @@ impl AcpClient {
         }
 
         info!("Session created: {}", session_id);
-        *self.session_id.lock().unwrap() = Some(session_id.clone());
+        *self.session_id.lock_or_recover() = Some(session_id.clone());
         Ok((session_id, models_list))
     }
 
@@ -105,7 +106,7 @@ impl AcpClient {
         info!("Loading existing ACP session: {}", session_id);
 
         {
-            let init = self.initialized.lock().unwrap();
+            let init = self.initialized.lock_or_recover();
             if !*init {
                 drop(init);
                 self.initialize()?;
@@ -136,7 +137,7 @@ impl AcpClient {
         }
 
         info!("Session loaded: {}", session_id);
-        *self.session_id.lock().unwrap() = Some(session_id.to_string());
+        *self.session_id.lock_or_recover() = Some(session_id.to_string());
         Ok(session_id.to_string())
     }
 
@@ -154,7 +155,7 @@ impl AcpClient {
             crate::auto_steering::BUILTIN_STEERING
         );
 
-        self.streaming_accumulator.lock().unwrap().clear();
+        self.streaming_accumulator.lock_or_recover().clear();
 
         let request = AcpRequest {
             jsonrpc: "2.0".to_string(),
@@ -178,9 +179,9 @@ impl AcpClient {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
 
-        let debug = *self.transport.debug_mode.lock().unwrap();
+        let debug = *self.transport.debug_mode.lock_or_recover();
 
-        self.streaming_accumulator.lock().unwrap().clear();
+        self.streaming_accumulator.lock_or_recover().clear();
 
         if debug {
             info!("[CHAT] Sending message ({} chars): {}", content.chars().count(), content);
@@ -189,7 +190,7 @@ impl AcpClient {
         }
 
         let session_id = {
-            let guard = self.session_id.lock().unwrap();
+            let guard = self.session_id.lock_or_recover();
             if let Some(ref id) = *guard {
                 id.clone()
             } else {
@@ -204,14 +205,14 @@ impl AcpClient {
 
         // Periodically inject current timestamp so the agent's sense of time stays fresh
         {
-            let mut last = LAST_TIMESTAMP_INJECTION.lock().unwrap();
+            let mut last = LAST_TIMESTAMP_INJECTION.lock_or_recover();
             let elapsed = last.map(|t| t.elapsed().as_secs()).unwrap_or(u64::MAX);
             if elapsed >= TIMESTAMP_REFRESH_SECS {
                 let now = chrono::Local::now();
                 let today = now.format("%Y-%m-%d").to_string();
                 let time = now.format("%H:%M").to_string();
 
-                let mut last_date = LAST_TIMESTAMP_DATE.lock().unwrap();
+                let mut last_date = LAST_TIMESTAMP_DATE.lock_or_recover();
                 let ts = if *last_date == today {
                     // Same day — just the time
                     format!("[Current time: {}]", time)
@@ -368,7 +369,7 @@ impl AcpClient {
     /// through the normal streaming notification handler.
     pub fn invoke_subagent(&self, query: &str) -> Result<()> {
         let session_id = {
-            let guard = self.session_id.lock().unwrap();
+            let guard = self.session_id.lock_or_recover();
             if let Some(ref id) = *guard {
                 id.clone()
             } else {
@@ -382,7 +383,7 @@ impl AcpClient {
         info!("Invoking sub-agent with query: {}", &query[..query.len().min(100)]);
 
         // Reset the streaming accumulator for this sub-agent's response
-        self.streaming_accumulator.lock().unwrap().clear();
+        self.streaming_accumulator.lock_or_recover().clear();
 
         let command = serde_json::json!({
             "command": "invoke_subagents",
@@ -418,7 +419,7 @@ impl AcpClient {
         }
 
         // Get the accumulated response from the sub-agent
-        let result = self.streaming_accumulator.lock().unwrap().clone();
+        let result = self.streaming_accumulator.lock_or_recover().clone();
         info!("Sub-agent completed ({} chars)", result.len());
         Ok(())
     }

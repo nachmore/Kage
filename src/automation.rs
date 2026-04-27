@@ -6,6 +6,7 @@
 //! - Battery-aware throttling
 
 use crate::config::{AutomationTrigger, AutomationPowerConfig, MacroConfig};
+use crate::lock_ext::LockExt;
 use crate::os::power::{PowerState, get_power_state};
 use log::{info, debug};
 use std::sync::{Arc, Mutex};
@@ -83,7 +84,7 @@ impl AutomationScheduler {
     /// Check all schedule-based automations and fire any that are due.
     async fn check_schedules(&self, app_handle: &tauri::AppHandle) {
         let (macros, power_config) = {
-            let config = self.config.lock().unwrap();
+            let config = self.config.lock_or_recover();
             (config.macros.clone(), config.automation_power.clone())
         };
 
@@ -103,7 +104,7 @@ impl AutomationScheduler {
                 let effective_interval = (interval_secs as f32 * multiplier) as i64;
 
                 let should_run = {
-                    let last_runs = self.last_runs.lock().unwrap();
+                    let last_runs = self.last_runs.lock_or_recover();
                     match last_runs.get(&mac.name) {
                         Some(last) => (now - *last).num_seconds() >= effective_interval,
                         None => true,
@@ -115,7 +116,7 @@ impl AutomationScheduler {
                     if !check_time_constraint(interval, &now) { continue; }
 
                     info!("[Automation] Schedule trigger firing: {}", mac.name);
-                    self.last_runs.lock().unwrap().insert(mac.name.clone(), now);
+                    self.last_runs.lock_or_recover().insert(mac.name.clone(), now);
                     fire_automation(app_handle, mac, None);
                 }
             }
@@ -125,7 +126,7 @@ impl AutomationScheduler {
     /// Handle an incoming signal and fire matching automations.
     async fn handle_signal(&self, signal: &AutomationSignal, app_handle: &tauri::AppHandle) {
         let (macros, power_config) = {
-            let config = self.config.lock().unwrap();
+            let config = self.config.lock_or_recover();
             (config.macros.clone(), config.automation_power.clone())
         };
 
@@ -251,7 +252,7 @@ pub async fn emit_automation_signal(
     data: Option<serde_json::Value>,
     state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<(), String> {
-    if let Some(ref tx) = *state.automation_signal_tx.lock().unwrap() {
+    if let Some(ref tx) = *state.automation_signal_tx.lock_or_recover() {
         // Use try_send so a flood of signals from a misbehaving extension drops
         // rather than blocking the Tauri IPC thread or growing memory.
         match tx.try_send(AutomationSignal { name: name.clone(), data }) {

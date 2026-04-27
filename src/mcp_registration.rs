@@ -70,7 +70,19 @@ pub fn ensure_registered() {
         config["mcpServers"] = serde_json::json!({});
     }
 
-    let servers = config["mcpServers"].as_object_mut().unwrap();
+    // Defensive: if mcpServers exists but isn't an object (e.g. a user
+    // hand-edited mcp.json into invalid shape), replace it rather than panic.
+    let servers = match config["mcpServers"].as_object_mut() {
+        Some(obj) => obj,
+        None => {
+            warn!("mcpServers in mcp.json is not a JSON object — overwriting with empty object");
+            config["mcpServers"] = serde_json::json!({});
+            match config["mcpServers"].as_object_mut() {
+                Some(obj) => obj,
+                None => return, // Truly can't happen, but we refuse to panic
+            }
+        }
+    };
 
     // Check if our entry already exists and is up to date
     if let Some(existing) = servers.get(MCP_SERVER_KEY) {

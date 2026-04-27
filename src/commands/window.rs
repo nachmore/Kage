@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::lock_ext::LockExt;
 use crate::os;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, WebviewWindow};
@@ -89,7 +90,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
 
     let is_showing = !window.is_visible().unwrap_or(true);
 
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     let capture_enabled = config.system.capture_selection;
     let start_pos = config.ui.window_start_position.clone();
     let last_x = config.ui.last_window_x;
@@ -118,7 +119,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 if start_pos == "remember" {
                     if let Ok(pos) = window.outer_position() {
                         let state: tauri::State<'_, crate::state::AppState> = app.state();
-                        let mut config = state.config.lock().unwrap();
+                        let mut config = state.config.lock_or_recover();
                         config.ui.last_window_x = Some(pos.x);
                         config.ui.last_window_y = Some(pos.y);
                         let _ = config.save();
@@ -132,7 +133,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
             } else {
                 // Restore saved launcher size if enabled
                 {
-                    let config = state.config.lock().unwrap();
+                    let config = state.config.lock_or_recover();
                     if config.ui.remember_launcher_size {
                         if let (Some(w), Some(h)) = (config.ui.launcher_width, config.ui.launcher_height) {
                             let scale = window.scale_factor().unwrap_or(1.0);
@@ -326,7 +327,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 
     if let Some(window) = app.get_webview_window("main") {
         let state: tauri::State<'_, crate::state::AppState> = app.state();
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         let saved_w = config.ui.chat_window_width;
         let saved_h = config.ui.chat_window_height;
         let saved_x = config.ui.chat_window_x;
@@ -509,7 +510,7 @@ pub async fn save_window_position(
     x: i32,
     y: i32,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
     config.save().map_err(|e| format!("Failed to save window position: {}", e))?;
@@ -524,7 +525,7 @@ pub async fn save_chat_window_geometry(
     x: i32,
     y: i32,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.ui.chat_window_width = width;
     config.ui.chat_window_height = height;
     config.ui.chat_window_x = Some(x);

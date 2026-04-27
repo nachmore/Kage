@@ -18,6 +18,7 @@ use anyhow::Result;
 use log::info;
 use std::sync::{Arc, Mutex};
 
+use crate::lock_ext::LockExt;
 use crate::process_manager::ProcessManager;
 
 /// Maximum size for the streaming accumulator (10 MB).
@@ -48,7 +49,7 @@ impl AcpClient {
     // --- Delegated transport accessors ---
 
     pub fn set_debug_mode(&self, enabled: bool) {
-        *self.transport.debug_mode.lock().unwrap() = enabled;
+        *self.transport.debug_mode.lock_or_recover() = enabled;
     }
 
     pub fn get_process_manager(&self) -> Arc<Mutex<ProcessManager>> {
@@ -86,18 +87,18 @@ impl AcpClient {
     // --- Session state ---
 
     pub fn get_session_id(&self) -> Option<String> {
-        self.session_id.lock().unwrap().clone()
+        self.session_id.lock_or_recover().clone()
     }
 
     pub fn set_session_id(&self, session_id: Option<String>) {
-        *self.session_id.lock().unwrap() = session_id;
+        *self.session_id.lock_or_recover() = session_id;
     }
 
     // --- Connection lifecycle (used by session.rs recovery) ---
 
     pub(crate) fn force_disconnect(&self) {
         self.transport.force_disconnect();
-        *self.initialized.lock().unwrap() = false;
+        *self.initialized.lock_or_recover() = false;
     }
 
     pub(crate) fn restart_connection(&self) -> Result<()> {
@@ -115,14 +116,20 @@ impl AcpClient {
     /// Returns true if we waited, false if compaction wasn't active.
     pub fn wait_for_compaction(&self) -> bool {
         let (lock, cvar) = &*self.compacting;
-        let compacting = lock.lock().unwrap();
+        let compacting = lock.lock_or_recover();
         if !*compacting {
             return false;
         }
         info!("Waiting for compaction to finish before sending prompt...");
         // Wait up to 60 seconds for compaction to complete
         let timeout = std::time::Duration::from_secs(60);
-        let result = cvar.wait_timeout_while(compacting, timeout, |c| *c).unwrap();
+        let result = match cvar.wait_timeout_while(compacting, timeout, |c| *c) {
+            Ok(r) => r,
+            Err(poisoned) => {
+                log::warn!("Compaction condvar poisoned — recovering");
+                poisoned.into_inner()
+            }
+        };
         if result.1.timed_out() {
             log::warn!("Compaction wait timed out after 60s — sending anyway");
         } else {

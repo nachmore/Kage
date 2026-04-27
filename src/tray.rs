@@ -36,14 +36,23 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             .build()?
     };
 
-    // Load tray icon — use 128px source so Windows can downscale crisply at any DPI
+    // Load tray icon — use 128px source so Windows can downscale crisply at any DPI.
+    // If decoding fails for some reason (corrupted asset), fall back to the window
+    // icon, or as a last-ditch skip setting an icon rather than panicking.
     let icon_bytes = include_bytes!("../icons/128x128.png");
     let icon = tauri::image::Image::from_bytes(icon_bytes)
-        .unwrap_or_else(|_| app.default_window_icon().cloned().unwrap());
+        .ok()
+        .or_else(|| app.default_window_icon().cloned());
+    if icon.is_none() {
+        log::warn!("No tray icon available — using system default");
+    }
 
     let app_handle = app.handle().clone();
-    TrayIconBuilder::with_id("main-tray")
-        .icon(icon)
+    let mut tray_builder = TrayIconBuilder::with_id("main-tray");
+    if let Some(icon) = icon {
+        tray_builder = tray_builder.icon(icon);
+    }
+    tray_builder
         .menu(&menu)
         .on_menu_event(move |app_handle_inner, event| {
             info!("System tray menu item clicked: {}", event.id().as_ref());

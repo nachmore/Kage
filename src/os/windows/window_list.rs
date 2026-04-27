@@ -1,5 +1,6 @@
 // Windows window enumeration using Win32 API
 
+use crate::lock_ext::LockExt;
 use crate::os::window_list::WindowInfo;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
@@ -140,8 +141,8 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
         EnumWindows(enum_callback, &mut state as *mut EnumState as isize);
     }
 
-    let mut cache = ICON_CACHE.lock().unwrap();
-    let mut name_cache = ICON_BY_NAME.lock().unwrap();
+    let mut cache = ICON_CACHE.lock_or_recover();
+    let mut name_cache = ICON_BY_NAME.lock_or_recover();
 
     // Bound both caches before inserting new entries this pass.
     if cache.len() >= ICON_CACHE_MAX {
@@ -174,7 +175,7 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
 /// Returns the base64 data URI if found, or None.
 /// If the cache is empty, triggers a window enumeration to populate it.
 pub fn get_icon_by_process_name(name: &str) -> Option<String> {
-    let cache = ICON_BY_NAME.lock().unwrap();
+    let cache = ICON_BY_NAME.lock_or_recover();
     if let Some(icon) = cache.get(&name.to_lowercase()) {
         return Some(icon.clone());
     }
@@ -185,7 +186,7 @@ pub fn get_icon_by_process_name(name: &str) -> Option<String> {
     if is_empty {
         // Prime the cache by enumerating windows (populates both ICON_CACHE and ICON_BY_NAME)
         let _ = list_windows_impl();
-        let cache = ICON_BY_NAME.lock().unwrap();
+        let cache = ICON_BY_NAME.lock_or_recover();
         return cache.get(&name.to_lowercase()).cloned();
     }
 

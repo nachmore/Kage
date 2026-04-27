@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 
+use crate::lock_ext::LockExt;
 use crate::os;
 
 /// Manages spawned CLI processes with cleanup on exit
@@ -107,7 +108,7 @@ impl ProcessManager {
             .context("Failed to write PID file")?;
         
         self.pid = Some(pid);
-        *self.child.lock().unwrap() = Some(child);
+        *self.child.lock_or_recover() = Some(child);
         
         info!("✅ Process registered for cleanup (PID: {})", pid);
         Ok(())
@@ -120,7 +121,7 @@ impl ProcessManager {
 
     /// Terminate the managed process
     pub fn terminate(&mut self) {
-        if let Some(mut child) = self.child.lock().unwrap().take() {
+        if let Some(mut child) = self.child.lock_or_recover().take() {
             let pid = child.id();
             info!("Terminating spawned process (PID: {})", pid);
             

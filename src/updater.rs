@@ -6,6 +6,7 @@
 //! Update URLs are compiled in from [package.metadata.update] in Cargo.toml.
 
 use crate::config::Config;
+use crate::lock_ext::LockExt;
 use anyhow::{Context, Result};
 use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -206,7 +207,7 @@ pub fn start_update_loop(
 
         loop {
             let (auto_check, should_check, silent_update) = {
-                let cfg = config.lock().unwrap();
+                let cfg = config.lock_or_recover();
                 let auto = cfg.updates.auto_check;
                 let should = if !auto {
                     false
@@ -302,7 +303,7 @@ pub fn start_update_loop(
             }
 
             let silent = {
-                let cfg = config_for_idle.lock().unwrap();
+                let cfg = config_for_idle.lock_or_recover();
                 cfg.updates.silent_update
             };
             if !silent {

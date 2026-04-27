@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::error::AppError;
+use crate::lock_ext::LockExt;
 use crate::os;
 use crate::state::AppState;
 use log::{error, info, warn};
@@ -24,7 +25,7 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
 
     // Kill pocket-tts server if running
     if let Some(state) = app.try_state::<AppState>() {
-        let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+        let mut tts_proc = state.pocket_tts_process.lock_or_recover();
         if let Some(mut child) = tts_proc.take() {
             info!("Stopping pocket-tts server on shutdown");
             let _ = child.kill();
@@ -157,7 +158,7 @@ pub fn format_steering_message(parts: &[String]) -> String {
 
 #[tauri::command]
 pub async fn get_config(state: State<'_, AppState>) -> Result<Config, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(config.clone())
 }
 
@@ -173,7 +174,7 @@ pub async fn save_config(
         format!("Failed to save configuration: {}", e)
     })?;
 
-    let mut state_config = state.config.lock().unwrap();
+    let mut state_config = state.config.lock_or_recover();
     *state_config = config.clone();
 
     // Update app log buffer size if changed
@@ -248,8 +249,9 @@ pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), 
         arr.truncate(MAX_SHORTCUT_HISTORY);
     }
 
-    let dir = path.parent().unwrap();
-    let _ = fs::create_dir_all(dir);
+    if let Some(dir) = path.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
     Ok(fs::write(&path, serde_json::to_string_pretty(&history).unwrap_or_default())
         .map_err(|e| format!("Failed to save shortcut history: {}", e))?)
 }
@@ -279,7 +281,7 @@ pub async fn update_tool_policy(
 ) -> Result<(), AppError> {
     let gt = grant_type.unwrap_or_else(|| "once".to_string());
     info!("Updating tool policy: {} -> {} (grant: {})", tool_title, policy, gt);
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     let timestamp = chrono::Utc::now().to_rfc3339();
     if let Some(tool) = config
         .tool_permissions
@@ -302,7 +304,7 @@ pub async fn remove_tool_permission(
     tool_title: String,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config
         .tool_permissions
         .tools
@@ -320,7 +322,7 @@ pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
 
 #[tauri::command]
 pub async fn is_terminator_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(config.tool_permissions.terminator_mode)
 }
 
@@ -364,7 +366,7 @@ pub async fn complete_first_run(
     enable_computer_control: bool,
     enable_personalization: bool,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
     if auto_update {
@@ -420,7 +422,7 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(!config.first_run_completed)
 }
 
@@ -508,7 +510,7 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     let _ = app.global_shortcut().unregister_all();
 
     let state: tauri::State<'_, AppState> = app.state();
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     let main_hk = config.get_hotkey_string();
     let cb_hk = config.get_clipboard_hotkey_string();
     let ia_hk = config.get_inline_assist_hotkey_string();
@@ -617,7 +619,7 @@ pub async fn try_register_hotkey(
     // Check for conflicts with other hotkey slots
     {
         let state: tauri::State<'_, AppState> = app.state();
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         let main_hk = config.get_hotkey_string();
         let cb_hk = config.get_clipboard_hotkey_string();
         let ia_hk = config.get_inline_assist_hotkey_string();
@@ -919,7 +921,7 @@ pub struct UserInfo {
 pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, AppError> {
     // Return cached user info if available
     {
-        let cached = state.user_info_cache.lock().unwrap();
+        let cached = state.user_info_cache.lock_or_recover();
         if let Some(ref info) = *cached {
             return Ok(info.clone());
         }
@@ -928,7 +930,7 @@ pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, AppEr
     // Compute and cache
     let info = compute_user_info();
     {
-        let mut cached = state.user_info_cache.lock().unwrap();
+        let mut cached = state.user_info_cache.lock_or_recover();
         *cached = Some(info.clone());
     }
     Ok(info)
@@ -997,7 +999,7 @@ pub fn compute_user_info() -> UserInfo {
 /// Returns None if no steering content is available.
 #[tauri::command]
 pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     let parts = assemble_steering_parts(&config);
     Ok(Some(format_steering_message(&parts)))
 }
@@ -1101,13 +1103,13 @@ pub async fn download_and_install_update(
 
 #[tauri::command]
 pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(crate::updater::was_just_updated(&config))
 }
 
 #[tauri::command]
 pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     crate::updater::clear_update_flag(&mut config);
     Ok(config.save().map_err(|e| format!("Failed to save: {}", e))?)
 }

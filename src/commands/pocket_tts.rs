@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::lock_ext::LockExt;
 use crate::state::AppState;
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -113,7 +114,7 @@ pub fn get_server_script_path() -> std::path::PathBuf {
 #[tauri::command]
 pub async fn pocket_tts_check_install(state: State<'_, AppState>) -> Result<PocketTtsStatus, AppError> {
     let (port, python_path) = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         let pp = config.pocket_tts.python_path.clone().or_else(find_python);
         (config.pocket_tts.port, pp)
     };
@@ -141,7 +142,7 @@ pub async fn pocket_tts_install(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<String, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     let python = config
         .pocket_tts
         .python_path
@@ -152,7 +153,7 @@ pub async fn pocket_tts_install(
 
     // Check if an install is already running
     {
-        let proc = state.pocket_tts_install_process.lock().unwrap();
+        let proc = state.pocket_tts_install_process.lock_or_recover();
         if proc.is_some() {
             return Err("Installation already in progress".into());
         }
@@ -174,7 +175,7 @@ pub async fn pocket_tts_install(
 
     // Store the child process so it can be cancelled
     {
-        let mut proc = state.pocket_tts_install_process.lock().unwrap();
+        let mut proc = state.pocket_tts_install_process.lock_or_recover();
         *proc = Some(child);
     }
 
@@ -214,7 +215,7 @@ pub async fn pocket_tts_install(
 
         // Wait for the process to exit
         let exit_status = {
-            let mut proc = install_proc.lock().unwrap();
+            let mut proc = install_proc.lock_or_recover();
             if let Some(ref mut child) = *proc {
                 child.wait().ok()
             } else {
@@ -225,7 +226,7 @@ pub async fn pocket_tts_install(
 
         // Clear the install process
         {
-            let mut proc = install_proc.lock().unwrap();
+            let mut proc = install_proc.lock_or_recover();
             *proc = None;
         }
 
@@ -259,7 +260,7 @@ pub async fn pocket_tts_install(
 
 #[tauri::command]
 pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<String, AppError> {
-    let mut proc = state.pocket_tts_install_process.lock().unwrap();
+    let mut proc = state.pocket_tts_install_process.lock_or_recover();
     if let Some(mut child) = proc.take() {
         info!("Cancelling pocket-tts installation");
         let _ = child.kill();
@@ -273,7 +274,7 @@ pub async fn pocket_tts_cancel_install(state: State<'_, AppState>) -> Result<Str
 #[tauri::command]
 pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppError> {
     let (port, voice, temp, eos_threshold, python) = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         (
             config.pocket_tts.port,
             config.pocket_tts.voice.clone(),
@@ -314,7 +315,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppE
         .stderr(Stdio::piped());
 
     // Pass --debug when Kage is in debug mode
-    if state.config.lock().unwrap().debug_mode {
+    if state.config.lock_or_recover().debug_mode {
         cmd.arg("--debug");
     }
 
@@ -376,7 +377,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppE
                 info!("pocket-tts server started successfully");
 
                 // Store the PID for cleanup
-                let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+                let mut tts_proc = state.pocket_tts_process.lock_or_recover();
                 *tts_proc = Some(child);
 
                 Ok("Server started successfully".to_string())
@@ -388,14 +389,14 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppE
             Err(_) => {
                 warn!("Timeout waiting for pocket-tts server — it may still be loading the model");
                 // Keep it running, it might just be slow
-                let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+                let mut tts_proc = state.pocket_tts_process.lock_or_recover();
                 *tts_proc = Some(child);
                 Ok("Server starting (model still loading...)".to_string())
             }
         }
     } else {
         // No stdout — just store the process and hope for the best
-        let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+        let mut tts_proc = state.pocket_tts_process.lock_or_recover();
         *tts_proc = Some(child);
         Ok("Server started (no output capture)".to_string())
     }
@@ -403,7 +404,7 @@ pub async fn pocket_tts_start(state: State<'_, AppState>) -> Result<String, AppE
 
 #[tauri::command]
 pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, AppError> {
-    let mut tts_proc = state.pocket_tts_process.lock().unwrap();
+    let mut tts_proc = state.pocket_tts_process.lock_or_recover();
     if let Some(mut child) = tts_proc.take() {
         info!("Stopping pocket-tts server");
         let _ = child.kill();
@@ -417,7 +418,7 @@ pub async fn pocket_tts_stop(state: State<'_, AppState>) -> Result<String, AppEr
 #[tauri::command]
 pub async fn pocket_tts_voices(state: State<'_, AppState>) -> Result<serde_json::Value, AppError> {
     let port = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         config.pocket_tts.port
     };
 
@@ -454,7 +455,7 @@ pub async fn pocket_tts_test(
     state: State<'_, AppState>,
 ) -> Result<String, AppError> {
     let port = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         config.pocket_tts.port
     };
 

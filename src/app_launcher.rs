@@ -26,6 +26,15 @@ impl AppLauncher {
         })
     }
 
+    /// Infallible constructor — returns an empty launcher with no registered apps.
+    /// Used as a last-ditch fallback to avoid panicking during startup if the
+    /// normal constructor ever starts returning errors.
+    pub fn empty() -> Self {
+        Self {
+            app_registry: HashMap::new(),
+        }
+    }
+
     /// Build a new application registry by scanning the system.
     /// This is the expensive part (registry reads, icon extraction, etc.)
     /// and does not require `&self`, so it can run without holding the lock.

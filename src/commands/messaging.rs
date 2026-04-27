@@ -1,4 +1,5 @@
 use crate::error::{AppError, ErrorKind};
+use crate::lock_ext::LockExt;
 use crate::state::AppState;
 use log::{info, warn, error};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
@@ -50,7 +51,7 @@ pub fn setup_notification_handler(
                 if let Some(kind) = update.get("sessionUpdate").and_then(|v| v.as_str()) {
                     if kind == "agent_message_chunk" {
                         if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
-                            let mut acc = accumulated.lock().unwrap();
+                            let mut acc = accumulated.lock_or_recover();
                             if acc.len() < crate::acp_client::MAX_ACCUMULATOR_SIZE {
                                 let remaining = crate::acp_client::MAX_ACCUMULATOR_SIZE - acc.len();
                                 if text.len() <= remaining {
@@ -115,7 +116,7 @@ pub fn setup_notification_handler(
                     .and_then(|t| t.as_str())
                 {
                     let (lock, cvar) = &*compacting;
-                    let mut is_compacting = lock.lock().unwrap();
+                    let mut is_compacting = lock.lock_or_recover();
                     match status {
                         "started" => {
                             info!("Compaction started — gating outgoing prompts");
@@ -237,13 +238,13 @@ fn handle_permission_notification(
     };
 
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let mut config_guard = config.lock().unwrap();
+    let mut config_guard = config.lock_or_recover();
 
     let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
     if let Some(tool) = existing {
         // Update last_seen in memory — throttle disk writes to at most once per 60s
         tool.last_seen = timestamp;
-        let mut last_save = last_config_save.lock().unwrap();
+        let mut last_save = last_config_save.lock_or_recover();
         if last_save.elapsed() >= std::time::Duration::from_secs(60) {
             if let Err(e) = config_guard.save() {
                 warn!("Failed to save config (periodic): {}", e);
@@ -262,7 +263,7 @@ fn handle_permission_notification(
         if let Err(e) = config_guard.save() {
             warn!("Failed to save config (new tool): {}", e);
         }
-        *last_config_save.lock().unwrap() = std::time::Instant::now();
+        *last_config_save.lock_or_recover() = std::time::Instant::now();
     }
 
     let policy = if config_guard.tool_permissions.terminator_mode || config_guard.tool_permissions.trust_all {
@@ -750,7 +751,7 @@ pub async fn execute_automation_plan(
             // Invoke the sub-agent
             match client.invoke_subagent(&query) {
                 Ok(()) => {
-                    let result = client.streaming_accumulator.lock().unwrap().clone();
+                    let result = client.streaming_accumulator.lock_or_recover().clone();
                     info!("Step {}/{} completed: {} chars", step_num, total_steps, result.len());
 
                     // Check if the sub-agent reported a failure in its response text.
@@ -910,7 +911,7 @@ pub async fn send_extension_tool_steering(
         hasher.finish()
     };
     {
-        let mut last = state.last_tool_steering_hash.lock().unwrap();
+        let mut last = state.last_tool_steering_hash.lock_or_recover();
         if *last == hash {
             return Ok(());
         }
@@ -1021,7 +1022,7 @@ pub async fn send_inline_assist(
         }
 
         // Clear the accumulator so we can track this response
-        client.streaming_accumulator.lock().unwrap().clear();
+        client.streaming_accumulator.lock_or_recover().clear();
 
         if let Err(e) = client.send_chat_streaming(&message, None) {
             let _ = app.emit("inline_assist_error", format!("Failed: {}", e));
@@ -1030,7 +1031,7 @@ pub async fn send_inline_assist(
 
         // The response is accumulated by the notification handler.
         // Read the final result from the accumulator.
-        let result = client.streaming_accumulator.lock().unwrap().clone();
+        let result = client.streaming_accumulator.lock_or_recover().clone();
         if result.trim().is_empty() {
             let _ = app.emit("inline_assist_error", "Empty response");
         } else {
@@ -1086,11 +1087,11 @@ pub async fn execute_macro(
                             return Err(format!("Step {}: Unable to connect: {}", i + 1, e));
                         }
                     }
-                    client.streaming_accumulator.lock().unwrap().clear();
+                    client.streaming_accumulator.lock_or_recover().clear();
                     if let Err(e) = client.send_chat_streaming(&full_prompt, None) {
                         return Err(format!("Step {} failed: {}", i + 1, e));
                     }
-                    let result = client.streaming_accumulator.lock().unwrap().clone();
+                    let result = client.streaming_accumulator.lock_or_recover().clone();
                     if result.trim().is_empty() {
                         return Err(format!("Step {} returned empty result", i + 1));
                     }

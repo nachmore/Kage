@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 
+use crate::lock_ext::LockExt;
+
 // ---------------------------------------------------------------------------
 // Element ID registry
 // ---------------------------------------------------------------------------
@@ -14,15 +16,14 @@ static REGISTRY: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(|| Mutex:
 /// Register a native element handle (stored as an opaque u64) and return an ephemeral ID.
 pub fn register_element(native_handle: u64) -> String {
     let id = format!("e{}", ID_COUNTER.fetch_add(1, Ordering::Relaxed));
-    REGISTRY.lock().unwrap().insert(id.clone(), native_handle);
+    REGISTRY.lock_or_recover().insert(id.clone(), native_handle);
     id
 }
 
 /// Resolve an ephemeral ID back to its native handle.
 pub fn resolve_element(eid: &str) -> Result<u64, String> {
     REGISTRY
-        .lock()
-        .unwrap()
+        .lock_or_recover()
         .get(eid)
         .copied()
         .ok_or_else(|| {
@@ -36,7 +37,7 @@ pub fn resolve_element(eid: &str) -> Result<u64, String> {
 
 /// Clear all registered IDs. Call before building a new tree snapshot.
 pub fn clear_registry() {
-    REGISTRY.lock().unwrap().clear();
+    REGISTRY.lock_or_recover().clear();
 }
 
 // ---------------------------------------------------------------------------

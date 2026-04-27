@@ -14,9 +14,11 @@ mod computer_control;
 mod config;
 mod error;
 mod extensions;
+mod lock_ext;
 mod logger;
 mod mcp_registration;
 mod os;
+mod panic_handler;
 mod process_manager;
 mod single_instance;
 mod state;
@@ -26,6 +28,7 @@ mod updater;
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
 use config::Config;
+use lock_ext::LockExt;
 use log::{error, info, warn};
 use process_manager::ProcessManager;
 use state::AppState;
@@ -60,6 +63,10 @@ fn main() {
 
     #[cfg(all(windows, debug_assertions))]
     attach_parent_console();
+
+    // Install the panic hook as early as possible so any panic during startup
+    // still gets captured into crash.log.
+    panic_handler::install();
 
     // Initialize logger first
     if let Err(e) = logger::init_logger() {
@@ -127,17 +134,12 @@ fn main() {
         .and_then(|i| args.get(i + 1).cloned())
         .or_else(|| {
             // Also check the last-session.txt file (written by the updater before exit)
-            dirs::config_dir()
-                .map(|d| d.join("kage").join("last-session.txt"))
-                .and_then(|p| std::fs::read_to_string(&p).ok())
-                .map(|s| {
-                    // Clean up the file after reading
-                    let _ = std::fs::remove_file(
-                        dirs::config_dir().unwrap().join("kage").join("last-session.txt")
-                    );
-                    s.trim().to_string()
-                })
-                .filter(|s| !s.is_empty())
+            let path = dirs::config_dir()?.join("kage").join("last-session.txt");
+            let contents = std::fs::read_to_string(&path).ok()?;
+            // Clean up the file after reading
+            let _ = std::fs::remove_file(&path);
+            let trimmed = contents.trim().to_string();
+            if trimmed.is_empty() { None } else { Some(trimmed) }
         });
 
     if debug_mode {
@@ -243,10 +245,21 @@ fn main() {
     let process_manager = acp_client.get_process_manager();
     process_manager::install_signal_handlers(process_manager);
 
+    // AppLauncher::new() is currently infallible (returns Ok(empty)) but we
+    // handle the Err path defensively: if it ever becomes fallible, we fall
+    // back to an empty launcher rather than crashing the whole app. The
+    // background scan later populates the registry regardless.
     let app_launcher = AppLauncher::new().unwrap_or_else(|e| {
         error!("Failed to initialize app launcher: {}", e);
         eprintln!("Failed to initialize app launcher: {}", e);
-        AppLauncher::new().unwrap()
+        AppLauncher::new().unwrap_or_else(|e2| {
+            error!("AppLauncher fallback also failed: {} — continuing without app launcher registry", e2);
+            // If even the fallback fails, build a zero-initialized launcher
+            // by reusing the no-op path. This can't actually happen with the
+            // current implementation (new() just returns an empty HashMap)
+            // but we refuse to panic here either way.
+            AppLauncher::empty()
+        })
     });
     info!("App launcher initialized (scan deferred to background)");
     if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
@@ -304,7 +317,9 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                window.hide().unwrap();
+                if let Err(e) = window.hide() {
+                    log::warn!("Failed to hide window on close: {}", e);
+                }
                 api.prevent_close();
             }
         })
@@ -332,11 +347,16 @@ fn main() {
                 );
             }
 
-            // Configure floating window
-            let floating_window = app.get_webview_window("floating").unwrap();
-            let _ = floating_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-            #[cfg(target_os = "windows")]
-            let _ = floating_window.set_shadow(false);
+            // Configure floating window. If the floating window isn't
+            // available, something is very wrong with the webview setup —
+            // log loudly but let setup continue so other windows still work.
+            if let Some(floating_window) = app.get_webview_window("floating") {
+                let _ = floating_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+                #[cfg(target_os = "windows")]
+                let _ = floating_window.set_shadow(false);
+            } else {
+                error!("Floating window not found during setup — UI will be limited");
+            }
 
             // Configure context-menu window
             if let Some(ctx_menu) = app.get_webview_window("context-menu") {
@@ -374,7 +394,7 @@ fn main() {
                     Err(_) => return,
                 };
 
-                let mut snapshot = last_hotkey_snapshot.lock().unwrap();
+                let mut snapshot = last_hotkey_snapshot.lock_or_recover();
                 if snapshot.0 == new_main && snapshot.1 == new_cb && snapshot.2 == new_ia {
                     return; // No hotkey changes
                 }
@@ -411,7 +431,7 @@ fn main() {
                 let app_handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
-                    *signal_tx_arc.lock().unwrap() = Some(scheduler.signal_sender());
+                    *signal_tx_arc.lock_or_recover() = Some(scheduler.signal_sender());
                     scheduler.run(signal_rx, app_handle).await;
                 });
             }
@@ -442,7 +462,7 @@ fn main() {
                 let tts_proc = state.pocket_tts_process.clone();
                 tauri::async_runtime::spawn(async move {
                     let (port, voice, temp, eos_threshold, python) = {
-                        let config = config_arc.lock().unwrap();
+                        let config = config_arc.lock_or_recover();
                         (
                             config.pocket_tts.port,
                             config.pocket_tts.voice.clone(),
@@ -472,7 +492,7 @@ fn main() {
                     match cmd.spawn() {
                         Ok(child) => {
                             info!("Pocket TTS server auto-started (PID: {})", child.id());
-                            let mut proc = tts_proc.lock().unwrap();
+                            let mut proc = tts_proc.lock_or_recover();
                             *proc = Some(child);
                         }
                         Err(e) => {
@@ -542,7 +562,7 @@ fn main() {
                     }
                     info!("Creating default session on launch...");
                     let cwd = {
-                        let cfg = config_arc.lock().unwrap();
+                        let cfg = config_arc.lock_or_recover();
                         cfg.acp.agent.working_directory.clone()
                     };
                     match client.create_session(cwd) {
@@ -569,7 +589,7 @@ fn main() {
                             // Apply default model BEFORE steering (fast round-trip, don't block on LLM)
                             {
                                 let default_model = {
-                                    let cfg = config_arc.lock().unwrap();
+                                    let cfg = config_arc.lock_or_recover();
                                     cfg.acp.agent.default_model.clone()
                                 };
                                 if let Some(ref model) = default_model {
@@ -594,7 +614,7 @@ fn main() {
 
                             // Send steering content as the first hidden message
                             let steering_msg = {
-                                let cfg = config_arc.lock().unwrap();
+                                let cfg = config_arc.lock_or_recover();
                                 crate::commands::system::format_steering_message(
                                     &crate::commands::system::assemble_steering_parts(&cfg)
                                 )
@@ -751,6 +771,8 @@ fn main() {
             commands::load_theme_colors,
             commands::install_extension_from_path,
             commands::uninstall_extension,
+            commands::remove_extension_grant,
+            commands::commit_extension_install,
             commands::open_store_window,
             commands::store_get_catalog,
             commands::store_get_detail,

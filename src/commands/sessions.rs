@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::lock_ext::LockExt;
 use crate::state::AppState;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -288,7 +289,7 @@ pub fn start_session_watcher(
 
                 // Debounce
                 {
-                    let mut last = last_invalidation.lock().unwrap();
+                    let mut last = last_invalidation.lock_or_recover();
                     if last.elapsed() < std::time::Duration::from_secs(2) {
                         return;
                     }
@@ -334,7 +335,7 @@ pub async fn list_sessions(
 
     // Serve from cache unless invalidated by the file watcher or a force refresh
     if !force {
-        let cache = state.session_cache.lock().unwrap();
+        let cache = state.session_cache.lock_or_recover();
         if let Some(ref cached) = *cache {
             let sessions = paginate(&cached.sessions, limit, offset);
             info!("Found {} sessions (returning {} from cache, offset {})",
@@ -344,13 +345,13 @@ pub async fn list_sessions(
     }
 
     // Scan and cache
-    let config = state.config.lock().unwrap().clone();
+    let config = state.config.lock_or_recover().clone();
     let all_sessions = scan_sessions_with_config(&config)?;
     let total = all_sessions.len();
 
     // Store in cache
     {
-        let mut cache = state.session_cache.lock().unwrap();
+        let mut cache = state.session_cache.lock_or_recover();
         *cache = Some(SessionCache {
             sessions: all_sessions.clone(),
         });
@@ -471,7 +472,7 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
 
 #[tauri::command]
 pub async fn load_session(session_id: String, state: State<'_, AppState>) -> Result<SessionData, AppError> {
-    let config = state.config.lock().unwrap().clone();
+    let config = state.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
@@ -558,7 +559,7 @@ pub async fn load_session(session_id: String, state: State<'_, AppState>) -> Res
 /// Get the sessions directory path
 #[tauri::command]
 pub async fn get_sessions_directory(state: State<'_, AppState>) -> Result<String, AppError> {
-    let config = state.config.lock().unwrap().clone();
+    let config = state.config.lock_or_recover().clone();
     let dir = get_sessions_dir_from_config(&config)?;
     Ok(dir.to_string_lossy().to_string())
 }
@@ -566,7 +567,7 @@ pub async fn get_sessions_directory(state: State<'_, AppState>) -> Result<String
 /// Open the session's JSON file in the system file explorer
 #[tauri::command]
 pub async fn reveal_session_file(session_id: String, state: State<'_, AppState>) -> Result<(), AppError> {
-    let config = state.config.lock().unwrap().clone();
+    let config = state.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
 
@@ -585,7 +586,7 @@ pub async fn reveal_session_file(session_id: String, state: State<'_, AppState>)
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
 pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> Result<(), AppError> {
-    let config = state.config.lock().unwrap().clone();
+    let config = state.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
 
     for ext in &["json", "jsonl", "lock"] {
@@ -611,7 +612,7 @@ pub async fn delete_session(session_id: String, state: State<'_, AppState>) -> R
 
     // Invalidate session list cache
     {
-        let mut cache = state.session_cache.lock().unwrap();
+        let mut cache = state.session_cache.lock_or_recover();
         *cache = None;
     }
 
@@ -658,7 +659,7 @@ pub async fn switch_acp_session(
 
             // Read the cwd from the session's .json metadata file
             let cwd = {
-                let config = state.config.lock().unwrap().clone();
+                let config = state.config.lock_or_recover().clone();
                 let sessions_dir = get_sessions_dir_from_config(&config)?;
                 let json_path = sessions_dir.join(format!("{}.json", id));
                 if json_path.exists() {
@@ -682,7 +683,7 @@ pub async fn switch_acp_session(
         None => {
             info!("Creating new session");
             let cwd = {
-                let cfg = state.config.lock().unwrap();
+                let cfg = state.config.lock_or_recover();
                 cfg.acp.agent.working_directory.clone()
             };
             let (new_session_id, models_json) = client_guard
@@ -699,7 +700,7 @@ pub async fn switch_acp_session(
             }
 
             // Apply default model if configured
-            let cfg = state.config.lock().unwrap();
+            let cfg = state.config.lock_or_recover();
             if let Some(ref default_model) = cfg.acp.agent.default_model {
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);
@@ -732,7 +733,7 @@ pub async fn switch_acp_session(
 
             // Invalidate session list cache (new session was created)
             {
-                let mut cache = state.session_cache.lock().unwrap();
+                let mut cache = state.session_cache.lock_or_recover();
                 *cache = None;
             }
 
@@ -810,7 +811,7 @@ pub async fn rename_session(
 
     // Invalidate session list cache
     {
-        let mut session_cache = state.session_cache.lock().unwrap();
+        let mut session_cache = state.session_cache.lock_or_recover();
         *session_cache = None;
     }
 
