@@ -22,6 +22,7 @@ mod os;
 mod panic_handler;
 mod process_manager;
 mod single_instance;
+mod startup;
 mod state;
 mod tray;
 mod updater;
@@ -55,8 +56,7 @@ fn main() {
     #[cfg(target_os = "windows")]
     {
         let args: Vec<String> = std::env::args().collect();
-        if args.len() >= 2 && args[1] == "/capture-hotkey" {
-            let timeout: u64 = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(10000);
+        if let Some(timeout) = startup::detect_capture_hotkey_subcommand(&args) {
             os::windows::hotkey_capture::run_capture_helper(timeout);
             return;
         }
@@ -78,9 +78,11 @@ fn main() {
     info!("=== Kage Starting ===");
     let startup_t0 = std::time::Instant::now();
 
+    let args: Vec<String> = std::env::args().collect();
+    let flags = startup::CliFlags::parse(&args);
+
     // Enforce single instance across all builds (debug + release)
-    let is_restart = std::env::args().any(|arg| arg == "--restart" || arg == "/restart");
-    let _instance_lock = match single_instance::try_acquire(is_restart) {
+    let _instance_lock = match single_instance::try_acquire(flags.is_restart) {
         Ok(lock) => lock,
         Err(e) => {
             // Another instance is running — signal it to show the sessions UI
@@ -94,54 +96,33 @@ fn main() {
     };
 
     // On restart, wait for the old process to fully release WebView2/Tauri resources
-    if is_restart {
+    if flags.is_restart {
         info!("Restart mode: waiting for previous instance resources to release...");
-        // WebView2 can take several seconds to release its user data directory lock
-        for i in 0..20 {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            // Check if the WebView2 user data dir is unlockable
-            let webview_dir = dirs::data_local_dir()
-                .unwrap_or_default()
-                .join("kage")
-                .join("EBWebView");
-            if webview_dir.exists() {
-                // Try to create a temp file in the dir — if it works, the lock is released
-                let test_path = webview_dir.join(".restart-test");
-                match std::fs::File::create(&test_path) {
-                    Ok(_) => {
-                        let _ = std::fs::remove_file(&test_path);
-                        info!("WebView2 resources released after {}ms", (i + 1) * 500);
-                        break;
-                    }
-                    Err(_) => {
-                        if i % 4 == 0 {
-                            info!("Still waiting for WebView2 lock... ({}s)", (i + 1) / 2);
-                        }
-                    }
+        if let Some(webview_dir) = startup::webview_user_data_dir() {
+            match startup::wait_for_webview_release(
+                &webview_dir,
+                20,
+                std::time::Duration::from_millis(500),
+                std::thread::sleep,
+            ) {
+                startup::WebviewWaitResult::NotPresent => { /* first run, nothing to wait for */ }
+                startup::WebviewWaitResult::Released { waited_ms } => {
+                    info!("WebView2 resources released after {}ms", waited_ms);
                 }
-            } else {
-                break; // No WebView2 dir yet — first run
+                startup::WebviewWaitResult::TimedOut { waited_ms } => {
+                    warn!("WebView2 lock still held after {}ms — continuing anyway", waited_ms);
+                }
             }
         }
     }
 
-    let args: Vec<String> = std::env::args().collect();
-    let dev_mode = args.iter().any(|arg| arg == "/dev" || arg == "--dev");
-    let debug_mode = args.iter().any(|arg| arg == "/debug" || arg == "--debug");
+    let dev_mode = flags.dev_mode;
+    let debug_mode = flags.debug_mode;
 
     // Check for session resume after update — clean up last-session.txt
-    let _resume_session_id: Option<String> = args.iter()
-        .position(|arg| arg == "/resume-session" || arg == "--resume-session")
-        .and_then(|i| args.get(i + 1).cloned())
-        .or_else(|| {
-            // Also check the last-session.txt file (written by the updater before exit)
-            let path = dirs::config_dir()?.join("kage").join("last-session.txt");
-            let contents = std::fs::read_to_string(&path).ok()?;
-            // Clean up the file after reading
-            let _ = std::fs::remove_file(&path);
-            let trimmed = contents.trim().to_string();
-            if trimmed.is_empty() { None } else { Some(trimmed) }
-        });
+    let _resume_session_id: Option<String> = dirs::config_dir()
+        .map(|d| d.join("kage"))
+        .and_then(|cfg_dir| startup::resolve_resume_session_id(&args, &cfg_dir));
 
     if debug_mode {
         println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
@@ -218,28 +199,9 @@ fn main() {
         app_log::log("info", "system", "App log initialized");
     }
 
-    let acp_client = match &config.acp.mode {
-        crate::config::AcpMode::Local { spawn_command } => {
-            info!("ACP Mode: Local with spawn command: {}", spawn_command);
-            AcpClient::new(acp_client::AcpConnectionMode::Local {
-                spawn_command: spawn_command.clone(),
-            })
-        }
-        crate::config::AcpMode::Remote {
-            host,
-            port,
-            timeout_ms,
-        } => {
-            info!(
-                "ACP Mode: Remote at {}:{} (timeout: {}ms)",
-                host, port, timeout_ms
-            );
-            AcpClient::new(acp_client::AcpConnectionMode::Remote {
-                host: host.clone(),
-                port: *port,
-            })
-        }
-    };
+    let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&config.acp.mode);
+    info!("{}", acp_mode_desc);
+    let acp_client = AcpClient::new(acp_connection_mode);
 
     acp_client.set_debug_mode(config.debug_mode);
 

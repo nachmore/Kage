@@ -18,6 +18,7 @@ pub mod mcp_registration;
 pub mod os;
 pub mod panic_handler;
 pub mod process_manager;
+pub mod startup;
 
 // Tauri-dependent modules — excluded from test compilation because
 // Tauri's type system doesn't support --test mode.
