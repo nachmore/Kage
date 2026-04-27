@@ -68,3 +68,205 @@ fn test_extension_manifest_with_contributes() {
     let themes = contrib.themes.unwrap();
     assert!(themes.dark.is_some() || themes.light.is_some());
 }
+
+// ---------------------------------------------------------------------------
+// extract_zip — security-critical path-traversal defenses
+// ---------------------------------------------------------------------------
+//
+// These tests build small zip archives in a temp dir and verify that
+// extract_zip either succeeds (preserving the intended contents) or
+// bails out with a Zip Slip error. Each malicious case is spelled out
+// so a future change can't silently loosen the guard.
+
+use std::io::Write;
+use std::path::PathBuf;
+use uuid::Uuid;
+use zip::write::SimpleFileOptions;
+
+struct ScopedTempDir(PathBuf);
+impl ScopedTempDir {
+    fn path(&self) -> &std::path::Path { &self.0 }
+}
+impl Drop for ScopedTempDir {
+    fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+}
+fn tmpdir() -> ScopedTempDir {
+    let dir = std::env::temp_dir().join(format!("kage-ext-test-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    ScopedTempDir(dir)
+}
+
+/// Build a zip archive with the given entries and return its path.
+/// `entries` maps relative names to file contents. An empty string
+/// means "directory entry" — created only if name ends with '/'.
+fn build_zip(dir: &std::path::Path, entries: &[(&str, &[u8])]) -> PathBuf {
+    let zip_path = dir.join(format!("test-{}.zip", Uuid::new_v4()));
+    let file = std::fs::File::create(&zip_path).unwrap();
+    let mut zip = zip::ZipWriter::new(file);
+    let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    for (name, data) in entries {
+        if name.ends_with('/') {
+            zip.add_directory(*name, opts).unwrap();
+        } else {
+            zip.start_file(*name, opts).unwrap();
+            zip.write_all(data).unwrap();
+        }
+    }
+    zip.finish().unwrap();
+    zip_path
+}
+
+#[test]
+fn extract_zip_writes_nested_files_successfully() {
+    let tmp = tmpdir();
+    let zip_path = build_zip(tmp.path(), &[
+        ("manifest.json", br#"{"id":"t","name":"T","version":"0.1.0","type":"extension"}"#),
+        ("search.js", b"export default class {}"),
+        ("assets/icon.svg", b"<svg/>"),
+    ]);
+    let target = tmp.path().join("extracted");
+
+    extensions::extract_zip(&zip_path, &target).expect("extract");
+
+    assert!(target.join("manifest.json").is_file());
+    assert!(target.join("search.js").is_file());
+    assert!(target.join("assets").is_dir());
+    assert!(target.join("assets/icon.svg").is_file());
+    let manifest = std::fs::read_to_string(target.join("manifest.json")).unwrap();
+    assert!(manifest.contains("\"id\":\"t\""));
+}
+
+#[test]
+fn extract_zip_rejects_parent_traversal() {
+    let tmp = tmpdir();
+    // Classic zip slip: an entry whose path escapes the target dir.
+    let zip_path = build_zip(tmp.path(), &[
+        ("../evil.js", b"owned"),
+    ]);
+    let target = tmp.path().join("extracted");
+
+    let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
+    let msg = format!("{}", err);
+    assert!(
+        msg.contains("Zip Slip") || msg.contains("forbidden path"),
+        "expected Zip Slip rejection, got: {}",
+        msg
+    );
+
+    // And of course the file must NOT exist outside the target.
+    assert!(!tmp.path().join("evil.js").exists());
+}
+
+#[test]
+fn extract_zip_rejects_deep_parent_traversal() {
+    let tmp = tmpdir();
+    let zip_path = build_zip(tmp.path(), &[
+        ("ok.js", b"safe"),
+        ("../../../../../../../etc/passwd", b"pwned"),
+    ]);
+    let target = tmp.path().join("extracted");
+
+    let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
+    assert!(format!("{}", err).to_lowercase().contains("zip slip"));
+}
+
+#[test]
+fn extract_zip_creates_target_if_missing() {
+    let tmp = tmpdir();
+    let zip_path = build_zip(tmp.path(), &[("a.txt", b"hello")]);
+    // Deeply-nested target that doesn't exist yet.
+    let target = tmp.path().join("does/not/exist/yet");
+
+    extensions::extract_zip(&zip_path, &target).expect("extract creates target");
+
+    assert!(target.join("a.txt").is_file());
+    assert_eq!(std::fs::read_to_string(target.join("a.txt")).unwrap(), "hello");
+}
+
+#[test]
+fn extract_zip_into_existing_target_overlays_files() {
+    let tmp = tmpdir();
+    let target = tmp.path().join("existing");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::write(target.join("old.txt"), "pre-existing").unwrap();
+
+    let zip_path = build_zip(tmp.path(), &[("new.txt", b"fresh")]);
+    extensions::extract_zip(&zip_path, &target).expect("extract overlay");
+
+    // New file is present, pre-existing file is untouched (extract_zip
+    // doesn't clear the target — that's the caller's job).
+    assert_eq!(std::fs::read_to_string(target.join("new.txt")).unwrap(), "fresh");
+    assert_eq!(std::fs::read_to_string(target.join("old.txt")).unwrap(), "pre-existing");
+}
+
+#[test]
+fn extract_zip_handles_directory_entries() {
+    let tmp = tmpdir();
+    let zip_path = build_zip(tmp.path(), &[
+        ("nested/", b""),
+        ("nested/deeply/", b""),
+        ("nested/deeply/file.txt", b"data"),
+    ]);
+    let target = tmp.path().join("out");
+    extensions::extract_zip(&zip_path, &target).expect("extract");
+
+    assert!(target.join("nested").is_dir());
+    assert!(target.join("nested/deeply").is_dir());
+    assert!(target.join("nested/deeply/file.txt").is_file());
+}
+
+// ---------------------------------------------------------------------------
+// Manifest validation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn manifest_rejects_missing_required_id() {
+    let json = r#"{ "name": "X", "version": "1.0.0", "type": "extension" }"#;
+    let result: Result<extensions::ExtensionManifest, _> = serde_json::from_str(json);
+    assert!(result.is_err(), "expected deserialization to fail without id");
+}
+
+#[test]
+fn manifest_rejects_missing_required_version() {
+    let json = r#"{ "id": "x", "name": "X", "type": "extension" }"#;
+    let result: Result<extensions::ExtensionManifest, _> = serde_json::from_str(json);
+    assert!(result.is_err(), "expected deserialization to fail without version");
+}
+
+#[test]
+fn manifest_accepts_widgets_contribution() {
+    let json = r#"{
+        "id": "calendar",
+        "name": "Calendar",
+        "version": "1.0.0",
+        "type": "extension",
+        "contributes": {
+            "widgets": [
+                { "id": "next-meeting", "slot": "floating-bottom", "module": "./widget.js" }
+            ]
+        }
+    }"#;
+    let manifest: extensions::ExtensionManifest = serde_json::from_str(json).unwrap();
+    let widgets = manifest.contributes.unwrap().widgets.unwrap_or_default();
+    assert_eq!(widgets.len(), 1);
+    assert_eq!(widgets[0].id, "next-meeting");
+    assert_eq!(widgets[0].slot, "floating-bottom");
+    assert_eq!(widgets[0].module, "./widget.js");
+}
+
+#[test]
+fn manifest_accepts_unknown_top_level_fields() {
+    // Forward-compatibility: a manifest from a future version of Kage
+    // with extra fields should still deserialize, not blow up.
+    let json = r#"{
+        "id": "future-ext",
+        "name": "Future Ext",
+        "version": "1.0.0",
+        "type": "extension",
+        "_future_field": {"anything": [1, 2, 3]},
+        "another": "unknown"
+    }"#;
+    let manifest: extensions::ExtensionManifest = serde_json::from_str(json).unwrap();
+    assert_eq!(manifest.id, "future-ext");
+}
