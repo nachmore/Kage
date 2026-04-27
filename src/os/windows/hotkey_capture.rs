@@ -337,3 +337,121 @@ pub fn cancel_capture() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Pure-helper coverage for the Windows hotkey capture module.
+    //! The low-level Win32 hook itself can't be unit-tested (it runs
+    //! inside a message pump), but the VK mapping and modifier
+    //! classification are deterministic and worth locking in.
+
+    use super::*;
+
+    #[test]
+    fn vk_to_key_name_letters() {
+        assert_eq!(vk_to_key_name(0x41), "A");
+        assert_eq!(vk_to_key_name(0x5A), "Z");
+        // Middle of the range
+        assert_eq!(vk_to_key_name(0x4B), "K");
+    }
+
+    #[test]
+    fn vk_to_key_name_digits() {
+        assert_eq!(vk_to_key_name(0x30), "0");
+        assert_eq!(vk_to_key_name(0x35), "5");
+        assert_eq!(vk_to_key_name(0x39), "9");
+    }
+
+    #[test]
+    fn vk_to_key_name_function_keys() {
+        assert_eq!(vk_to_key_name(0x70), "F1");
+        assert_eq!(vk_to_key_name(0x74), "F5");
+        assert_eq!(vk_to_key_name(0x7B), "F12");
+    }
+
+    #[test]
+    fn vk_to_key_name_navigation_cluster() {
+        assert_eq!(vk_to_key_name(0x25), "Left");
+        assert_eq!(vk_to_key_name(0x26), "Up");
+        assert_eq!(vk_to_key_name(0x27), "Right");
+        assert_eq!(vk_to_key_name(0x28), "Down");
+        assert_eq!(vk_to_key_name(0x24), "Home");
+        assert_eq!(vk_to_key_name(0x23), "End");
+        assert_eq!(vk_to_key_name(0x21), "PageUp");
+        assert_eq!(vk_to_key_name(0x22), "PageDown");
+    }
+
+    #[test]
+    fn vk_to_key_name_numpad_distinct_from_digits() {
+        // Numpad keys prefixed with "Num" so config can distinguish them
+        // from the main-row digits. Critical for users who bind hotkeys
+        // to numpad-specific keys.
+        assert_eq!(vk_to_key_name(0x60), "Num0");
+        assert_eq!(vk_to_key_name(0x65), "Num5");
+        assert_eq!(vk_to_key_name(0x69), "Num9");
+        assert_eq!(vk_to_key_name(0x6A), "NumMultiply");
+        assert_eq!(vk_to_key_name(0x6B), "NumAdd");
+        assert_eq!(vk_to_key_name(0x6D), "NumSubtract");
+        assert_eq!(vk_to_key_name(0x6E), "NumDecimal");
+        assert_eq!(vk_to_key_name(0x6F), "NumDivide");
+    }
+
+    #[test]
+    fn vk_to_key_name_punctuation() {
+        assert_eq!(vk_to_key_name(0xBA), ";");
+        assert_eq!(vk_to_key_name(0xBB), "=");
+        assert_eq!(vk_to_key_name(0xBC), ",");
+        assert_eq!(vk_to_key_name(0xBD), "-");
+        assert_eq!(vk_to_key_name(0xBE), ".");
+        assert_eq!(vk_to_key_name(0xBF), "/");
+        assert_eq!(vk_to_key_name(0xC0), "`");
+        assert_eq!(vk_to_key_name(0xDB), "[");
+        assert_eq!(vk_to_key_name(0xDC), "\\");
+        assert_eq!(vk_to_key_name(0xDD), "]");
+        assert_eq!(vk_to_key_name(0xDE), "'");
+    }
+
+    #[test]
+    fn vk_to_key_name_special_keys() {
+        assert_eq!(vk_to_key_name(0x08), "Backspace");
+        assert_eq!(vk_to_key_name(0x09), "Tab");
+        assert_eq!(vk_to_key_name(0x0D), "Enter");
+        assert_eq!(vk_to_key_name(0x1B), "Escape");
+        assert_eq!(vk_to_key_name(0x20), "Space");
+        assert_eq!(vk_to_key_name(0x2D), "Insert");
+        assert_eq!(vk_to_key_name(0x2E), "Delete");
+    }
+
+    #[test]
+    fn vk_to_key_name_unknown_falls_back_to_hex() {
+        // Anything not in the lookup table should still yield a unique
+        // string (VK_HH) so an unmapped key doesn't silently merge with
+        // another one at the config layer.
+        assert_eq!(vk_to_key_name(0xFF), "VK_FF");
+        assert_eq!(vk_to_key_name(0x01), "VK_01");
+        assert_eq!(vk_to_key_name(0x0A), "VK_0A");
+    }
+
+    #[test]
+    fn is_modifier_covers_all_sides() {
+        // Generic plus left/right variants for shift, ctrl, alt, win.
+        for vk in [
+            VK_LSHIFT, VK_RSHIFT, VK_SHIFT,
+            VK_LCONTROL, VK_RCONTROL, VK_CONTROL,
+            VK_LMENU, VK_RMENU, VK_MENU,
+            VK_LWIN, VK_RWIN,
+        ] {
+            assert!(is_modifier(vk), "expected {:#X} to be a modifier", vk);
+        }
+    }
+
+    #[test]
+    fn is_modifier_rejects_non_modifiers() {
+        // Regular letters, digits, arrows, function keys are NOT modifiers.
+        assert!(!is_modifier(0x41)); // A
+        assert!(!is_modifier(0x30)); // 0
+        assert!(!is_modifier(0x70)); // F1
+        assert!(!is_modifier(0x20)); // Space
+        assert!(!is_modifier(0x25)); // Left arrow
+    }
+}

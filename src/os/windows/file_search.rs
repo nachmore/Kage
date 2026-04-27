@@ -13,49 +13,7 @@ use crate::os::file_search::FileSearchResult;
 
 /// Search the Windows Search Index for files matching the query.
 pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResult> {
-    // Defence in depth against SQL-LIKE/COM injection via the ItemName filter.
-    //
-    // The query is placed into a PowerShell string, which is then placed into
-    // an OLE DB SQL command as a LIKE pattern literal, which is then matched
-    // against the Windows Search Index. Each layer has different metacharacters:
-    //
-    //   - PowerShell: single quote ends the string literal
-    //   - SQL LIKE:   `%` and `_` are wildcards; `[...]` is a character class
-    //   - user intent: `*` and `?` should be glob wildcards (mapped to `%`/`_`)
-    //
-    // We:
-    //   1. Escape `%`, `_`, `[`, and `\` in the raw query so the user can't inject
-    //      SQL wildcards or character classes. `\` is the LIKE ESCAPE char below.
-    //   2. Translate glob wildcards `*` → `%`, `?` → `_`.
-    //   3. Escape PowerShell single quote by doubling it (`''`).
-    //   4. Strip control characters that could confuse the parser.
-    //   5. Cap the length so a 10 MB query can't DOS PowerShell.
-    const MAX_QUERY_LEN: usize = 256;
-    let trimmed: String = query
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(MAX_QUERY_LEN)
-        .collect();
-
-    // Step 1: escape SQL LIKE metacharacters (use `\` as ESCAPE in the SQL below).
-    let mut sql_escaped = String::with_capacity(trimmed.len() + 8);
-    for ch in trimmed.chars() {
-        match ch {
-            '\\' | '%' | '_' | '[' => { sql_escaped.push('\\'); sql_escaped.push(ch); }
-            _ => sql_escaped.push(ch),
-        }
-    }
-
-    // Step 2: translate user wildcards AFTER escaping so they're preserved.
-    let has_wildcard = sql_escaped.contains('*') || sql_escaped.contains('?');
-    let sql_pattern: String = if has_wildcard {
-        sql_escaped.replace('*', "%").replace('?', "_")
-    } else {
-        format!("%{}%", sql_escaped)
-    };
-
-    // Step 3: escape PowerShell single quote for the surrounding SQL string literal.
-    let ps_pattern = sql_pattern.replace('\'', "''");
+    let ps_pattern = sanitize_query_to_like_pattern(query);
 
     let ps_script = format!(
         r#"
@@ -140,4 +98,180 @@ struct PsSearchResult {
     size: u64,
     #[serde(default)]
     modified: String,
+}
+
+
+/// Turn a user-supplied query string into a fully-sanitized SQL LIKE
+/// pattern that's safe to splice into a PowerShell single-quoted string
+/// literal and executed via OLE DB against the Windows Search Index.
+///
+/// Defence in depth against SQL-LIKE and COM-string injection:
+///   1. Strip control characters that could confuse the parser.
+///   2. Cap at 256 chars so a pathological input can't DOS PowerShell.
+///   3. Escape SQL LIKE metacharacters (`%`, `_`, `[`, `\`) with the
+///      `\` escape so user input can't inject wildcards or character
+///      classes. The outer SQL uses `ESCAPE '\'` to honor this.
+///   4. Translate user glob wildcards (`*` → `%`, `?` → `_`) AFTER
+///      step 3 so they're preserved while literal `%`/`_` are not.
+///   5. Wrap plain queries in `%...%` so bare words are treated as
+///      substring matches.
+///   6. Double single quotes so the pattern is safe inside a
+///      PowerShell single-quoted string literal.
+///
+/// Exposed for testing; production callers should go through
+/// `search_files_impl` which also runs the search.
+pub(crate) fn sanitize_query_to_like_pattern(query: &str) -> String {
+    const MAX_QUERY_LEN: usize = 256;
+    let trimmed: String = query
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(MAX_QUERY_LEN)
+        .collect();
+
+    // Step 1: escape SQL LIKE metacharacters (use `\` as ESCAPE in the SQL).
+    let mut sql_escaped = String::with_capacity(trimmed.len() + 8);
+    for ch in trimmed.chars() {
+        match ch {
+            '\\' | '%' | '_' | '[' => {
+                sql_escaped.push('\\');
+                sql_escaped.push(ch);
+            }
+            _ => sql_escaped.push(ch),
+        }
+    }
+
+    // Step 2: translate user wildcards AFTER escaping so they're preserved.
+    let has_wildcard = sql_escaped.contains('*') || sql_escaped.contains('?');
+    let sql_pattern: String = if has_wildcard {
+        sql_escaped.replace('*', "%").replace('?', "_")
+    } else {
+        format!("%{}%", sql_escaped)
+    };
+
+    // Step 3: escape PowerShell single quote for the surrounding string literal.
+    sql_pattern.replace('\'', "''")
+}
+
+#[cfg(test)]
+mod tests {
+    //! The sanitizer is security-critical: user input flows through
+    //! PowerShell → OLE DB → Windows Search SQL. Each test here pins
+    //! down a specific injection or encoding edge case.
+
+    use super::sanitize_query_to_like_pattern as s;
+
+    #[test]
+    fn plain_word_wraps_in_substring_pattern() {
+        assert_eq!(s("hello"), "%hello%");
+    }
+
+    #[test]
+    fn empty_input_becomes_match_everything() {
+        // Empty query wraps to "%%" which matches any file. We treat
+        // that as acceptable because an empty query is also a
+        // no-results case in practice (search doesn't fire).
+        assert_eq!(s(""), "%%");
+    }
+
+    #[test]
+    fn glob_star_maps_to_sql_percent() {
+        assert_eq!(s("*.rs"), "%.rs");
+        assert_eq!(s("foo*bar"), "foo%bar");
+        assert_eq!(s("*"), "%");
+    }
+
+    #[test]
+    fn glob_question_maps_to_sql_underscore() {
+        assert_eq!(s("?.rs"), "_.rs");
+        assert_eq!(s("f?o"), "f_o");
+    }
+
+    #[test]
+    fn literal_percent_is_escaped_not_treated_as_wildcard() {
+        // Without escaping, 50% match would match anything starting
+        // with "50". We need the literal to be preserved so the SQL
+        // LIKE with ESCAPE '\' matches a real percent sign only.
+        let out = s("50%");
+        assert!(out.contains(r"\%"), "expected escape of %, got {}", out);
+        // Because it contained no glob wildcards, it's still wrapped.
+        assert!(out.starts_with('%') && out.ends_with('%'));
+    }
+
+    #[test]
+    fn literal_underscore_is_escaped() {
+        let out = s("foo_bar");
+        assert!(out.contains(r"\_"), "expected escape of _, got {}", out);
+    }
+
+    #[test]
+    fn literal_bracket_is_escaped_to_prevent_char_class() {
+        // Without escaping, [abc] would match any of a/b/c in LIKE.
+        let out = s("[abc]");
+        assert!(out.contains(r"\["), "expected escape of [, got {}", out);
+    }
+
+    #[test]
+    fn backslash_is_escaped_to_preserve_escape_semantics() {
+        // `\` is the SQL LIKE ESCAPE character. A bare `\` from user
+        // input has to be doubled or the next metachar becomes a
+        // literal.
+        let out = s(r"a\b");
+        // The raw backslash becomes `\\` so the SQL parser sees one
+        // escaped backslash (= literal `\`). Our output is the PS
+        // string, so we expect `\\` in the middle.
+        assert!(out.contains(r"\\"), "expected escaped backslash, got {}", out);
+    }
+
+    #[test]
+    fn single_quote_is_doubled_for_powershell() {
+        // Without doubling, a single quote would end the PS string
+        // literal and anything after would execute as code. 1 of the
+        // worst kinds of injection available here.
+        assert_eq!(s("O'Reilly"), "%O''Reilly%");
+    }
+
+    #[test]
+    fn control_characters_are_stripped() {
+        assert_eq!(s("hello\nworld"), "%helloworld%");
+        assert_eq!(s("tab\there"), "%tabhere%");
+        assert_eq!(s("null\0inside"), "%nullinside%");
+    }
+
+    #[test]
+    fn length_is_capped_at_256_chars() {
+        let input: String = "a".repeat(500);
+        let out = s(&input);
+        // 256 'a's plus the two wrapping '%' characters.
+        assert_eq!(out.len(), 258);
+        assert!(out.starts_with('%') && out.ends_with('%'));
+    }
+
+    #[test]
+    fn mixed_wildcards_and_escaped_literals() {
+        // Users can type "foo*bar_baz" — star is glob, underscore is
+        // literal. After sanitize: star → %, underscore → \_, and
+        // no outer wrapping because a wildcard is present.
+        let out = s("foo*bar_baz");
+        assert_eq!(out, r"foo%bar\_baz");
+    }
+
+    #[test]
+    fn injection_attempts_are_declawed() {
+        // The classic LIKE injection: %' OR 1=1 --
+        let out = s("%' OR 1=1 --");
+        // The % is escaped, the ' is doubled. No SQL can escape.
+        assert!(out.contains(r"\%"), "missing escape: {}", out);
+        assert!(out.contains("''"), "missing doubled quote: {}", out);
+        // No single unescaped quote should remain — every `'` is part
+        // of a `''` doubled pair. Scanning once to verify.
+        let mut last_was_quote = false;
+        for ch in out.chars() {
+            if ch == '\'' {
+                last_was_quote = !last_was_quote;
+            } else if last_was_quote {
+                panic!("found unescaped quote followed by {:?} in {}", ch, out);
+            }
+        }
+        assert!(!last_was_quote, "trailing unescaped quote in {}", out);
+    }
 }

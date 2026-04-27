@@ -308,3 +308,141 @@ struct RawOutlookEvent {
     #[serde(default)]
     body: String,
 }
+
+
+#[cfg(test)]
+mod tests {
+    //! Coverage for the pure helpers: date format validation and the
+    //! PowerShell JSON sanitizer. Both are defensive layers against
+    //! untrusted Outlook data / malformed PS output, worth locking in.
+
+    use super::{is_strict_iso_date, sanitize_ps_json};
+
+    // ---- is_strict_iso_date ------------------------------------------------
+
+    #[test]
+    fn iso_date_accepts_valid_shape() {
+        assert!(is_strict_iso_date("2026-04-27"));
+        assert!(is_strict_iso_date("1999-01-01"));
+        assert!(is_strict_iso_date("2000-12-31"));
+    }
+
+    #[test]
+    fn iso_date_rejects_wrong_length() {
+        assert!(!is_strict_iso_date(""));
+        assert!(!is_strict_iso_date("2026-04-2"));
+        assert!(!is_strict_iso_date("2026-04-277"));
+        assert!(!is_strict_iso_date("26-04-27"));
+    }
+
+    #[test]
+    fn iso_date_rejects_non_digit_in_digit_positions() {
+        assert!(!is_strict_iso_date("2O26-04-27")); // O not 0
+        assert!(!is_strict_iso_date("abcd-04-27"));
+    }
+
+    #[test]
+    fn iso_date_rejects_wrong_separator() {
+        assert!(!is_strict_iso_date("2026/04/27"));
+        assert!(!is_strict_iso_date("2026.04.27"));
+        assert!(!is_strict_iso_date("2026 04 27"));
+    }
+
+    #[test]
+    fn iso_date_rejects_non_ascii() {
+        // Unicode digits look like digits but aren't ASCII.
+        assert!(!is_strict_iso_date("٢٠٢٦-٠٤-٢٧"));
+    }
+
+    #[test]
+    fn iso_date_rejects_injection_attempts() {
+        // This is the whole point: don't let a crafted date reach PS.
+        assert!(!is_strict_iso_date("2026-04-27; rm -rf /"));
+        assert!(!is_strict_iso_date("' OR 1=1"));
+        assert!(!is_strict_iso_date("$(whoami)"));
+    }
+
+    // ---- sanitize_ps_json --------------------------------------------------
+
+    #[test]
+    fn sanitize_passes_plain_json_unchanged() {
+        let input = r#"{"id": "abc", "subject": "Hello"}"#;
+        assert_eq!(sanitize_ps_json(input), input);
+    }
+
+    #[test]
+    fn sanitize_escapes_literal_newline_inside_string() {
+        // PowerShell sometimes emits a raw \n inside a JSON string literal
+        // when the field value has a line break. That breaks standard JSON
+        // parsers — sanitize should convert to \\n.
+        let input = "{\"body\": \"line1\nline2\"}";
+        let out = sanitize_ps_json(input);
+        assert!(out.contains("line1\\nline2"), "got {}", out);
+        // And the output should actually parse as JSON.
+        let parsed: serde_json::Value = serde_json::from_str(&out).expect("parseable");
+        assert_eq!(parsed["body"], "line1\nline2");
+    }
+
+    #[test]
+    fn sanitize_escapes_carriage_return_and_tab() {
+        let input = "{\"t\": \"a\tb\", \"r\": \"c\rd\"}";
+        let out = sanitize_ps_json(input);
+        assert!(out.contains("a\\tb"));
+        assert!(out.contains("c\\rd"));
+        let parsed: serde_json::Value = serde_json::from_str(&out).expect("parseable");
+        assert_eq!(parsed["t"], "a\tb");
+        assert_eq!(parsed["r"], "c\rd");
+    }
+
+    #[test]
+    fn sanitize_escapes_other_control_chars_as_unicode() {
+        // Bell character (\u0007) should be unicode-escaped.
+        let input = "{\"x\": \"hi\u{0007}there\"}";
+        let out = sanitize_ps_json(input);
+        assert!(out.contains(r"\u0007"), "got {}", out);
+    }
+
+    #[test]
+    fn sanitize_does_not_touch_already_escaped_sequences() {
+        // An already-valid JSON string "line1\nline2" should be untouched.
+        let input = r#"{"body": "line1\nline2"}"#;
+        let out = sanitize_ps_json(input);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn sanitize_does_not_touch_control_chars_outside_strings() {
+        // Control chars between tokens (whitespace) are JSON-legal.
+        let input = "{\n  \"a\": 1\n}";
+        let out = sanitize_ps_json(input);
+        assert_eq!(out, input);
+    }
+
+    #[test]
+    fn sanitize_preserves_quote_after_escape() {
+        // In the string "foo\"bar", the escaped quote must not close
+        // the string. The sanitizer needs to see the backslash and
+        // pass the quote through.
+        let input = r#"{"s": "foo\"bar"}"#;
+        let out = sanitize_ps_json(input);
+        assert_eq!(out, input);
+        let _parsed: serde_json::Value = serde_json::from_str(&out).expect("parseable");
+    }
+
+    #[test]
+    fn sanitize_handles_empty_input() {
+        assert_eq!(sanitize_ps_json(""), "");
+    }
+
+    #[test]
+    fn sanitize_handles_json_arrays() {
+        // Outlook events come back as an array; sanitize shouldn't
+        // break array syntax.
+        let input = "[{\"id\": \"1\"}, {\"id\": \"2\nhm\"}]";
+        let out = sanitize_ps_json(input);
+        let parsed: serde_json::Value = serde_json::from_str(&out).expect("parseable");
+        assert!(parsed.is_array());
+        assert_eq!(parsed[0]["id"], "1");
+        assert_eq!(parsed[1]["id"], "2\nhm");
+    }
+}
