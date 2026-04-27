@@ -115,7 +115,10 @@ export function getToolFriendlyName(title) {
  */
 export function getExtensionToolFriendlyName(extensionId, toolName, extensionManager) {
     if (extensionId && toolName && extensionManager) {
-        const defs = extensionManager.getToolDefinitions();
+        // Synchronous cache read — the ExtensionManager keeps tool
+        // definitions pre-fetched. If you need the freshest data, await
+        // extensionManager.getToolDefinitions() before calling this.
+        const defs = extensionManager.getToolDefinitionsCached?.() || [];
         const extDef = defs.find(d => d.extensionId === extensionId);
         if (extDef?.tools) {
             const tool = extDef.tools.find(t => t.name === toolName);

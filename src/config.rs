@@ -29,6 +29,12 @@ pub struct Config {
     /// Enable/disable state for extensions, themes, and command packs keyed by ID.
     #[serde(default)]
     pub extension_states: HashMap<String, bool>,
+    /// Capabilities granted by the user to each installed extension. Missing
+    /// entry means "no grant recorded" and the extension gets zero
+    /// capabilities — it can run but every invoke() will be rejected.
+    /// See ui/js/shared/extension-permissions.js for the capability list.
+    #[serde(default)]
+    pub extension_grants: HashMap<String, ExtensionGrant>,
     /// Pocket TTS configuration (local neural TTS via kyutai-labs/pocket-tts)
     #[serde(default)]
     pub pocket_tts: PocketTtsConfig,
@@ -96,6 +102,23 @@ fn default_policy() -> String {
 
 fn default_grant_type() -> String {
     "once".to_string()
+}
+
+/// A user-approved capability grant for an installed extension.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExtensionGrant {
+    /// Capabilities the user approved at install or upgrade time.
+    /// See ui/js/shared/extension-permissions.js for the authoritative list.
+    #[serde(default)]
+    pub granted: Vec<String>,
+    /// Version of the extension manifest at the time of approval. If the
+    /// extension updates and requests a larger capability set, the runtime
+    /// drops the new caps until the user re-approves.
+    #[serde(default)]
+    pub approved_version: String,
+    /// ISO 8601 timestamp of the approval.
+    #[serde(default)]
+    pub approved_at: String,
 }
 
 impl ToolPolicy {
@@ -656,6 +679,7 @@ impl Default for Config {
             quick_actions: QuickActionsConfig::default(),
             extensions: HashMap::new(),
             extension_states: HashMap::new(),
+            extension_grants: HashMap::new(),
             pocket_tts: PocketTtsConfig::default(),
             clipboard_hotkey: None,
             inline_assist_hotkey: Some(HotkeyConfig {

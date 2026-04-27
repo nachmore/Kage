@@ -190,13 +190,34 @@ body.dark-theme .selection-checkbox {
 
 /* Clipboard mode — hide overlays to keep the clipboard list clean */
 body.clipboard-mode .extension-bar,
+body.clipboard-mode .ext-widget-slot,
 body.clipboard-mode .floating-banner {
     display: none !important;
 }
 
-/* Extension Bar — generic persistent bar above the input (used by timer, calendar, reminders, etc.) */
+/* Extension widget slots.
+ * Widgets mount into these slots via the ExtensionManager.setWidgetSlot()
+ * contract. We keep them flush with no padding so widgets render in
+ * their own styling; empty slots take up no layout. */
+.ext-widget-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.ext-widget-slot:empty { display: none; }
+.ext-widget {
+    display: block;
+    animation: fadeIn 120ms ease-out;
+}
+
+/* Extension Bar — generic persistent bar above the input (used by timer, calendar, reminders, etc.).
+ * Default is `display: flex` because visibility is now driven by the widget
+ * itself: the extension's `render()` returns null when it has nothing to show,
+ * and the host's _renderWidget hides the host div in that case. When render()
+ * returns HTML, the host clears the inline display override so the CSS class
+ * kicks in — so we need the class to show the bar, not hide it. */
 .extension-bar {
-    display: none;
+    display: flex;
     align-items: center;
     gap: 8px;
     padding: 6px 12px;

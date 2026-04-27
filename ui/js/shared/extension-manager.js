@@ -1,19 +1,57 @@
 /**
- * Extension Manager — discovers, loads, and coordinates extensions.
- * Loads bundled extensions from ui/extensions/ and user-installed extensions
- * via the Rust backend (read_extension_file command).
+ * Extension Manager — discovers extensions and runs their search /
+ * tool / trigger providers inside sandboxed iframes.
+ *
+ * Security model (see docs/SECURITY_MODEL.md):
+ *   - Every extension's search/tool/trigger provider code runs inside a
+ *     sandboxed iframe with no access to window.__TAURI__ or the parent
+ *     DOM. All Tauri IPC goes through the ExtensionSandboxHost bridge,
+ *     which enforces capability permissions authoritatively.
+ *   - Extensions are granted capabilities at install time by the user.
+ *     The manifest declares which capabilities the extension requests;
+ *     the grant is stored in config and consulted here at load time.
+ *   - Contribution points that still need host DOM access (settings
+ *     modules, widgets, toolbar buttons, message formatters, custom
+ *     renderResult) remain in the trusted path for now. The sandbox
+ *     roll-out is tracked in docs/EXTENSIONS.md and will land in a
+ *     follow-up.
  */
 
 const BUNDLED_EXT_PATH = 'extensions';
 
-import { createExtensionLogger } from './kage-log.js';
+/**
+ * Allow-list of vendor libraries an extension may declare in its
+ * `sandboxVendor` manifest array. Keys are the names extensions use;
+ * values are workspace-relative URLs that the host fetches.
+ *
+ * Extensions CAN'T name arbitrary paths — they can only opt into
+ * libraries we've pre-approved. Add entries here with care: every
+ * declared vendor lib is loaded into the sandbox iframe of any
+ * extension that names it, and runs with the same (null-origin)
+ * privileges as the extension itself.
+ */
+const SANDBOX_VENDOR_ALLOWLIST = {
+    // mathjs — sets `window.math`. Used by the built-in math extension.
+    math: 'vendor/lib/math.js',
+};
+
+import { normalizePermissions } from './extension-permissions.js';
+import { ExtensionSandboxPool } from './extension-sandbox-host.js';
+import { sanitizeExtensionHtml, findExtActions } from './extension-html-sanitizer.js';
 
 export class ExtensionManager {
+    /**
+     * @param {Function} invoke - the raw Tauri invoke (the host, not the
+     *   extension, will use it after permission checks).
+     */
     constructor(invoke) {
         this.invoke = invoke;
         /** @type {Map<string, LoadedExtension>} */
         this.extensions = new Map();
         this._configCache = null;
+        this._pool = new ExtensionSandboxPool(invoke);
+        /** Synchronous snapshot of tool definitions; refreshed by getToolDefinitions(). */
+        this._toolDefsCache = [];
     }
 
     /**
@@ -61,6 +99,14 @@ export class ExtensionManager {
         }
 
         console.log(`ExtensionManager: ${this.extensions.size} extensions loaded`);
+
+        // Prime caches so synchronous callers can read latest state
+        // without incurring a round-trip per render.
+        try { await this.getToolDefinitions(); } catch (e) { console.warn('Tool-defs prime failed:', e); }
+        try { await this._refreshToolbarButtons(); } catch (e) { console.warn('Toolbar prime failed:', e); }
+
+        // Mount widgets contributed by any loaded extensions.
+        try { await this._mountAllWidgets(); } catch (e) { console.warn('Widget mount failed:', e); }
     }
 
     async _loadBundledExtension(id) {
@@ -72,68 +118,311 @@ export class ExtensionManager {
         const states = this._configCache?.extension_states || {};
         if (states[id] === false) return;
 
-        const ext = { manifest, basePath, searchProvider: null, userInstalled: false };
+        const capabilities = this._resolveGrantedCapabilities(manifest, true);
+        const ext = {
+            manifest,
+            basePath,
+            userInstalled: false,
+            capabilities,
+            sandbox: null,
+        };
 
-        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest), log: createExtensionLogger(id) };
-
-        if (manifest.contributes?.searchProvider) {
+        const sources = await this._fetchProviderSourcesBundled(basePath, manifest);
+        const sharedSources = sources.sharedSources;
+        delete sources.sharedSources;
+        const vendorSources = await this._fetchVendorSources(manifest);
+        if (this._hasSandboxedProvider(sources)) {
             try {
-                const mod = await import(`../../${basePath}/${manifest.contributes.searchProvider}`);
-                ext.searchProvider = new mod.default();
-                ext.searchProvider.initialize(context);
+                ext.sandbox = await this._pool.load({
+                    extensionId: id,
+                    capabilities,
+                    config: this._getExtensionConfig(id, manifest),
+                    sources,
+                    sharedSources,
+                    vendorSources,
+                });
             } catch (e) {
-                console.warn(`Failed to load search provider for '${id}':`, e);
+                console.warn(`Sandbox boot failed for '${id}':`, e);
             }
         }
 
-        // Load toolbar buttons
-        if (manifest.contributes?.toolbarButtons) {
-            try {
-                const mod = await import(`../../${basePath}/${manifest.contributes.toolbarButtons}`);
-                ext.toolbarProvider = new mod.default();
-                ext.toolbarProvider.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load toolbar buttons for '${id}':`, e);
-            }
-        }
-
-        // Load message formatters
-        if (manifest.contributes?.messageFormatters) {
-            try {
-                const mod = await import(`../../${basePath}/${manifest.contributes.messageFormatters}`);
-                ext.messageFormatter = new mod.default();
-                ext.messageFormatter.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load message formatters for '${id}':`, e);
-            }
-        }
-
-        // Load tool provider
-        if (manifest.contributes?.toolProvider) {
-            try {
-                const mod = await import(`../../${basePath}/${manifest.contributes.toolProvider}`);
-                ext.toolProvider = new mod.default();
-                ext.toolProvider.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load tool provider for '${id}':`, e);
-            }
-        }
-
-        // Load trigger provider
-        if (manifest.contributes?.triggerProvider) {
-            try {
-                const mod = await import(`../../${basePath}/${manifest.contributes.triggerProvider}`);
-                ext.triggerProvider = new mod.default();
-                ext.triggerProvider.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load trigger provider for '${id}':`, e);
-            }
-        }
-
-        // Load CSS
+        // Load CSS (still host-side — it's scoped to the parent DOM)
         this._loadBundledCss(id, basePath, manifest);
 
         this.extensions.set(id, ext);
+    }
+
+    async _loadUserExtension(item) {
+        const id = item.manifest.id;
+        const manifest = item.manifest;
+
+        const states = this._configCache?.extension_states || {};
+        if (states[id] === false) return;
+
+        const capabilities = this._resolveGrantedCapabilities(manifest, false);
+        const ext = {
+            manifest,
+            basePath: null,
+            userInstalled: true,
+            capabilities,
+            sandbox: null,
+        };
+
+        const sources = await this._fetchProviderSourcesUser(id, manifest);
+        const sharedSources = sources.sharedSources;
+        delete sources.sharedSources;
+        const vendorSources = await this._fetchVendorSources(manifest);
+        if (this._hasSandboxedProvider(sources)) {
+            try {
+                ext.sandbox = await this._pool.load({
+                    extensionId: id,
+                    capabilities,
+                    config: this._getExtensionConfig(id, manifest),
+                    sources,
+                    sharedSources,
+                    vendorSources,
+                });
+            } catch (e) {
+                console.warn(`Sandbox boot failed for user extension '${id}':`, e);
+            }
+        }
+
+        await this._loadUserCss(id, manifest);
+
+        this.extensions.set(id, ext);
+    }
+
+    // --- Sources -----------------------------------------------------------
+
+    _hasSandboxedProvider(sources) {
+        return !!(
+            sources.searchProvider ||
+            sources.toolProvider ||
+            sources.triggerProvider ||
+            sources.toolbarProvider ||
+            sources.messageFormatter ||
+            (sources.widgets && Object.keys(sources.widgets).length > 0)
+        );
+    }
+
+    async _fetchProviderSourcesBundled(basePath, manifest) {
+        const out = {};
+        const c = manifest.contributes || {};
+        if (c.searchProvider)
+            out.searchProvider = await this._fetchTextBundled(basePath, c.searchProvider);
+        if (c.toolProvider)
+            out.toolProvider = await this._fetchTextBundled(basePath, c.toolProvider);
+        if (c.triggerProvider)
+            out.triggerProvider = await this._fetchTextBundled(basePath, c.triggerProvider);
+        if (c.toolbarButtons)
+            out.toolbarProvider = await this._fetchTextBundled(basePath, c.toolbarButtons);
+        if (c.messageFormatters)
+            out.messageFormatter = await this._fetchTextBundled(basePath, c.messageFormatters);
+        if (Array.isArray(c.widgets) && c.widgets.length) {
+            out.widgets = {};
+            for (const w of c.widgets) {
+                if (!w?.id || !w?.module) continue;
+                out.widgets[w.id] = await this._fetchTextBundled(basePath, w.module);
+            }
+        }
+        out.sharedSources = await this._fetchSharedSources(out, basePath, null);
+        return out;
+    }
+
+    async _fetchProviderSourcesUser(id, manifest) {
+        const out = {};
+        const c = manifest.contributes || {};
+        if (c.searchProvider)
+            out.searchProvider = await this._fetchTextUser(id, c.searchProvider);
+        if (c.toolProvider)
+            out.toolProvider = await this._fetchTextUser(id, c.toolProvider);
+        if (c.triggerProvider)
+            out.triggerProvider = await this._fetchTextUser(id, c.triggerProvider);
+        if (c.toolbarButtons)
+            out.toolbarProvider = await this._fetchTextUser(id, c.toolbarButtons);
+        if (c.messageFormatters)
+            out.messageFormatter = await this._fetchTextUser(id, c.messageFormatters);
+        if (Array.isArray(c.widgets) && c.widgets.length) {
+            out.widgets = {};
+            for (const w of c.widgets) {
+                if (!w?.id || !w?.module) continue;
+                out.widgets[w.id] = await this._fetchTextUser(id, w.module);
+            }
+        }
+        out.sharedSources = await this._fetchSharedSources(out, null, id);
+        return out;
+    }
+
+    /**
+     * Walk every fetched provider source looking for `import ... from './...'`
+     * statements. Recursively fetch those files too so the sandbox can
+     * wire them up as shared blob URLs (see runtime.js :
+     * registerSharedModules).
+     *
+     * Note: this is a deliberately dumb regex-based discovery. It does
+     * NOT handle dynamic `import()` expressions or conditional imports.
+     * Extensions that need those should keep all their JS in a single
+     * file or declare them explicitly later.
+     *
+     * @param {object} sources - the sources bag accumulated so far
+     * @param {string | null} basePath - bundled base path (if bundled)
+     * @param {string | null} extensionId - user extension id (if user)
+     * @returns {Promise<object>} flat map of { "./rel/path.js": sourceText }
+     */
+    async _fetchSharedSources(sources, basePath, extensionId) {
+        const collected = new Map();
+        const queue = [];
+
+        const scan = (src) => {
+            if (typeof src !== 'string') return;
+            // Matches both `import X from './x.js'` and `import './x.js'`.
+            const re = /\bimport\s+(?:[^'"]+?\s+from\s+)?['"](\.{1,2}\/[^'"]+?)['"]/g;
+            let m;
+            while ((m = re.exec(src)) !== null) {
+                const rel = m[1];
+                if (!collected.has(rel) && !queue.includes(rel)) queue.push(rel);
+            }
+        };
+
+        // Seed queue from the entry-point provider sources.
+        for (const [kind, val] of Object.entries(sources)) {
+            if (kind === 'widgets' && val && typeof val === 'object') {
+                for (const s of Object.values(val)) scan(s);
+            } else {
+                scan(val);
+            }
+        }
+
+        // Breadth-first resolve — shared modules can import each other.
+        while (queue.length) {
+            const rel = queue.shift();
+            if (collected.has(rel)) continue;
+            const text = basePath !== null
+                ? await this._fetchTextBundled(basePath, rel)
+                : await this._fetchTextUser(extensionId, rel);
+            if (text == null) continue;
+            collected.set(rel, text);
+            scan(text);
+        }
+
+        if (collected.size === 0) return undefined;
+        const out = {};
+        for (const [k, v] of collected) out[k] = v;
+        return out;
+    }
+
+    /**
+     * Fetch vendor libraries declared by the extension in
+     * `manifest.sandboxVendor` (an array of allow-listed basenames).
+     *
+     * Vendor libs are non-ES-module UMD/IIFE bundles (like mathjs) that
+     * set globals when run. The sandbox runtime injects them via a
+     * `<script>` tag before loading provider code so providers can rely
+     * on those globals.
+     *
+     * Only a small allow-list is accepted — we never load arbitrary
+     * paths that the extension names, because that would be a path
+     * traversal vector. Unknown names are dropped with a warning.
+     *
+     * @returns {Promise<Record<string,string> | undefined>}
+     *   Map of allow-list name → source text, or undefined if none.
+     */
+    async _fetchVendorSources(manifest) {
+        const list = Array.isArray(manifest?.sandboxVendor) ? manifest.sandboxVendor : null;
+        if (!list || list.length === 0) return undefined;
+        const out = {};
+        for (const name of list) {
+            if (typeof name !== 'string') continue;
+            const url = SANDBOX_VENDOR_ALLOWLIST[name];
+            if (!url) {
+                console.warn(`Extension '${manifest.id}': unknown sandboxVendor '${name}', ignored`);
+                continue;
+            }
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) {
+                    console.warn(`Failed to fetch vendor '${name}' from ${url}: HTTP ${resp.status}`);
+                    continue;
+                }
+                out[name] = await resp.text();
+            } catch (e) {
+                console.warn(`Failed to fetch vendor '${name}':`, e);
+            }
+        }
+        return Object.keys(out).length ? out : undefined;
+    }
+
+    async _fetchTextBundled(basePath, relPath) {
+        const url = `${basePath}/${relPath.replace('./', '')}`;
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.text();
+        } catch (e) {
+            console.warn(`Failed to fetch '${url}':`, e);
+            return null;
+        }
+    }
+
+    async _fetchTextUser(id, relPath) {
+        try {
+            return await this.invoke('read_extension_file', {
+                extensionId: id,
+                kind: 'extension',
+                filePath: relPath.replace('./', ''),
+            });
+        } catch (e) {
+            console.warn(`Failed to read user extension file '${id}/${relPath}':`, e);
+            return null;
+        }
+    }
+
+    // --- Capabilities ------------------------------------------------------
+
+    /**
+     * Compute the capabilities actually granted to this extension.
+     *
+     * Grant flow:
+     *   1. Manifest declares requested capabilities in `permissions[]`.
+     *   2. At install time the user approves that set (or uninstalls).
+     *   3. We store the approved set in config under
+     *      `extension_grants[<id>]` alongside the manifest version that
+     *      was approved. If the manifest later requests more caps, we
+     *      drop the extras until the user re-approves.
+     *
+     * Bundled extensions are ingested with an implicit grant of exactly
+     * what the bundled manifest requests — there's no install step, the
+     * user approves by installing Kage itself.
+     *
+     * @returns {string[]}
+     */
+    _resolveGrantedCapabilities(manifest, bundled) {
+        const id = manifest.id;
+        const requested = normalizePermissions(manifest.permissions, id);
+
+        if (bundled) {
+            // Bundled = shipped with the app = implicit grant.
+            return requested;
+        }
+
+        const grants = this._configCache?.extension_grants || {};
+        const record = grants[id];
+        if (!record) {
+            // User-installed extension without a grant record. This shouldn't
+            // happen if install went through the permission prompt, but
+            // handle it defensively: grant nothing and log loudly.
+            console.warn(
+                `Extension '${id}': no user grant recorded, running with no capabilities. ` +
+                `The extension may be broken until it is reinstalled.`,
+            );
+            return [];
+        }
+
+        // Intersect: the user's grant is authoritative. If the extension
+        // is updated to request new capabilities, we drop the extras
+        // until the user approves them.
+        const grantedSet = new Set(normalizePermissions(record.granted, id));
+        return requested.filter(cap => grantedSet.has(cap));
     }
 
     _loadBundledCss(id, basePath, manifest) {
@@ -148,96 +437,6 @@ export class ExtensionManager {
             link.dataset.extCss = id;
             document.head.appendChild(link);
         }
-    }
-
-    async _loadUserExtension(item) {
-        const id = item.manifest.id;
-        const manifest = item.manifest;
-
-        const states = this._configCache?.extension_states || {};
-        if (states[id] === false) return;
-
-        const ext = { manifest, basePath: null, searchProvider: null, userInstalled: true };
-
-        const context = { invoke: this.invoke, config: this._getExtensionConfig(id, manifest), log: createExtensionLogger(id) };
-
-        // Load search provider via read_extension_file
-        if (manifest.contributes?.searchProvider) {
-            try {
-                const jsCode = await this.invoke('read_extension_file', {
-                    extensionId: id,
-                    kind: 'extension',
-                    filePath: manifest.contributes.searchProvider.replace('./', ''),
-                });
-                const blob = new Blob([jsCode], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                const mod = await import(blobUrl);
-                URL.revokeObjectURL(blobUrl);
-                ext.searchProvider = new mod.default();
-                ext.searchProvider.initialize(context);
-            } catch (e) {
-                console.warn(`Failed to load search provider for user extension '${id}':`, e);
-            }
-        }
-
-        // Load toolbar buttons
-        if (manifest.contributes?.toolbarButtons) {
-            try {
-                const jsCode = await this.invoke('read_extension_file', {
-                    extensionId: id, kind: 'extension',
-                    filePath: manifest.contributes.toolbarButtons.replace('./', ''),
-                });
-                const blob = new Blob([jsCode], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                const mod = await import(blobUrl);
-                URL.revokeObjectURL(blobUrl);
-                ext.toolbarProvider = new mod.default();
-                ext.toolbarProvider.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load toolbar buttons for user extension '${id}':`, e);
-            }
-        }
-
-        // Load message formatters
-        if (manifest.contributes?.messageFormatters) {
-            try {
-                const jsCode = await this.invoke('read_extension_file', {
-                    extensionId: id, kind: 'extension',
-                    filePath: manifest.contributes.messageFormatters.replace('./', ''),
-                });
-                const blob = new Blob([jsCode], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                const mod = await import(blobUrl);
-                URL.revokeObjectURL(blobUrl);
-                ext.messageFormatter = new mod.default();
-                ext.messageFormatter.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load message formatters for user extension '${id}':`, e);
-            }
-        }
-
-        // Load tool provider
-        if (manifest.contributes?.toolProvider) {
-            try {
-                const jsCode = await this.invoke('read_extension_file', {
-                    extensionId: id, kind: 'extension',
-                    filePath: manifest.contributes.toolProvider.replace('./', ''),
-                });
-                const blob = new Blob([jsCode], { type: 'application/javascript' });
-                const blobUrl = URL.createObjectURL(blob);
-                const mod = await import(blobUrl);
-                URL.revokeObjectURL(blobUrl);
-                ext.toolProvider = new mod.default();
-                ext.toolProvider.initialize?.(context);
-            } catch (e) {
-                console.warn(`Failed to load tool provider for user extension '${id}':`, e);
-            }
-        }
-
-        // Load CSS
-        await this._loadUserCss(id, manifest);
-
-        this.extensions.set(id, ext);
     }
 
     async _loadUserCss(id, manifest) {
@@ -291,227 +490,213 @@ export class ExtensionManager {
         return null;
     }
 
-    matchAll(query) {
-        // > prefix is reserved for built-in commands — never sent to extensions
-        if (query.trim().startsWith('>')) return [];
-        const results = [];
-        const lowerQuery = query.trim().toLowerCase();
-        for (const [id, ext] of this.extensions) {
-            if (!ext.searchProvider) continue;
-            if (!this._isEnabled(id)) continue;
-            // Keyword gating: if extension has a non-empty trigger, only match when query starts with it
-            const trigger = this._getExtensionTrigger(id, ext.manifest);
-            if (trigger && !lowerQuery.startsWith(trigger)) continue;
-            try {
-                const matches = ext.searchProvider.match(query);
-                for (const m of matches) {
-                    m._extensionId = id; // stamp with owning extension
-                    results.push(m);
-                }
-            } catch (e) {
-                console.warn(`Search error in '${id}':`, e);
-            }
-        }
-        return results;
-    }
+    // --- Search dispatch ---------------------------------------------------
 
-    async matchAllAsync(query) {
-        // > prefix is reserved for built-in commands — never sent to extensions
-        if (query.trim().startsWith('>')) return [];
-        const results = [];
-        const promises = [];
+    /**
+     * Synchronous match, fan out to all extensions. The sandbox RPC is
+     * async, so the "sync" match() becomes async too — the caller can
+     * await it or treat the promise as a stream-of-results batch.
+     *
+     * Returns a Promise that resolves to an array of SearchResult, each
+     * stamped with `_extensionId`.
+     */
+    async matchAll(query) {
+        if (query.trim().startsWith('>')) return []; // > prefix reserved for built-ins
         const lowerQuery = query.trim().toLowerCase();
+        const promises = [];
         for (const [id, ext] of this.extensions) {
-            if (!ext.searchProvider?.matchAsync) continue;
+            if (!ext.sandbox?.hasSearch) continue;
             if (!this._isEnabled(id)) continue;
-            // Keyword gating: if extension has a non-empty trigger, only match when query starts with it
             const trigger = this._getExtensionTrigger(id, ext.manifest);
             if (trigger && !lowerQuery.startsWith(trigger)) continue;
             promises.push(
-                ext.searchProvider.matchAsync(query)
-                    .then(matches => {
-                        for (const m of matches) {
-                            m._extensionId = id;
-                            results.push(m);
-                        }
-                    })
-                    .catch(e => console.warn(`Async search error in '${id}':`, e))
+                ext.sandbox.call('match', { query })
+                    .then(matches => (matches || []).map(m => ({ ...m, _extensionId: id })))
+                    .catch(e => {
+                        console.warn(`match() in '${id}' failed:`, e);
+                        return [];
+                    }),
             );
         }
-        await Promise.all(promises);
-        return results;
+        const results = await Promise.all(promises);
+        return results.flat();
     }
 
-    executeResult(result) {
-        const id = result._extensionId;
-        if (id) {
-            const ext = this.extensions.get(id);
-            if (ext?.searchProvider) {
-                try { return ext.searchProvider.execute(result); } catch {}
-            }
+    async matchAllAsync(query) {
+        if (query.trim().startsWith('>')) return [];
+        const lowerQuery = query.trim().toLowerCase();
+        const promises = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.sandbox?.hasSearch) continue;
+            if (!this._isEnabled(id)) continue;
+            const trigger = this._getExtensionTrigger(id, ext.manifest);
+            if (trigger && !lowerQuery.startsWith(trigger)) continue;
+            promises.push(
+                ext.sandbox.call('matchAsync', { query })
+                    .then(matches => (matches || []).map(m => ({ ...m, _extensionId: id })))
+                    .catch(e => {
+                        console.warn(`matchAsync() in '${id}' failed:`, e);
+                        return [];
+                    }),
+            );
         }
-        return null;
+        const results = await Promise.all(promises);
+        return results.flat();
     }
 
+    async executeResult(result) {
+        const id = result?._extensionId;
+        if (!id) return null;
+        const ext = this.extensions.get(id);
+        if (!ext?.sandbox?.hasSearch) return null;
+        try {
+            // Strip the host-only stamp before sending; the extension never needs it.
+            const { _extensionId: _ignore, ...clean } = result;
+            return await ext.sandbox.call('execute', { result: clean });
+        } catch (e) {
+            console.warn(`execute() in '${id}' failed:`, e);
+            return null;
+        }
+    }
+
+    /**
+     * Custom render hook. Asks the sandbox for a custom HTML string;
+     * host sanitizes and injects. Returns true if the extension handled
+     * rendering, false to fall back to the default renderer.
+     *
+     * This must stay synchronous to match the existing call site, so we
+     * keep a per-result cache warmed by `prefetchCustomRender()`. Use
+     * that async method in the code path that produces results before
+     * rendering — see search-unified.js.
+     */
     renderResult(result, element) {
-        const id = result._extensionId;
-        if (id) {
-            const ext = this.extensions.get(id);
-            if (ext?.searchProvider?.renderResult) {
-                try { ext.searchProvider.renderResult(result, element); return true; } catch {}
+        const id = result?._extensionId;
+        if (!id) return false;
+        const ext = this.extensions.get(id);
+        if (!ext?.sandbox?.hasSearch) return false;
+        const cached = this._customRenderCache?.get(result.id);
+        if (!cached) return false;
+        // Result rows are structural — use rich sanitization so the
+        // extension can lay out its own row (icon + label + buttons).
+        const frag = sanitizeExtensionHtml(cached.html, 'rich');
+        if (cached.className) element.classList.add(...cached.className.split(/\s+/).filter(Boolean));
+        element.appendChild(frag);
+        this._wireExtActionsFor(id, element);
+        return true;
+    }
+
+    /**
+     * Pre-warm the custom-render cache for a batch of results. Called
+     * once per render pass before we start building suggestion DOM.
+     *
+     * Cache has a soft cap to prevent unbounded growth as users type
+     * many different queries. When the cap is hit, we drop the oldest
+     * half. Pure map-order LRU — simple and good enough for this scale.
+     */
+    async prefetchCustomRender(results) {
+        if (!this._customRenderCache) this._customRenderCache = new Map();
+        const CAP = 200;
+        if (this._customRenderCache.size >= CAP) {
+            const toDrop = Math.floor(CAP / 2);
+            let i = 0;
+            for (const key of this._customRenderCache.keys()) {
+                if (i++ >= toDrop) break;
+                this._customRenderCache.delete(key);
             }
         }
-        return false;
+        const tasks = [];
+        for (const r of results) {
+            const id = r?._extensionId;
+            if (!id) continue;
+            const ext = this.extensions.get(id);
+            if (!ext?.sandbox?.hasSearch) continue;
+            if (!r.id) continue;
+            if (this._customRenderCache.has(r.id)) {
+                // Re-insert at the tail so recently-used entries survive
+                // the next eviction pass.
+                const v = this._customRenderCache.get(r.id);
+                this._customRenderCache.delete(r.id);
+                this._customRenderCache.set(r.id, v);
+                continue;
+            }
+            // Strip host-only stamp.
+            const { _extensionId: _ig, ...clean } = r;
+            tasks.push(
+                ext.sandbox.call('renderCustom', { result: clean })
+                    .then(out => {
+                        if (out && typeof out.html === 'string') {
+                            this._customRenderCache.set(r.id, out);
+                        }
+                    })
+                    .catch(() => { /* null/throw → fall back to default */ }),
+            );
+        }
+        if (tasks.length) await Promise.all(tasks);
     }
+
+    // --- Config updates ----------------------------------------------------
 
     async onConfigUpdate() {
         try {
             this._configCache = await this.invoke('get_config');
         } catch { return; }
+        // Invalidate caches whose contents depend on extension config.
+        this._customRenderCache?.clear();
+        this._toolbarButtonsCache = null;
         for (const [id, ext] of this.extensions) {
             const config = this._getExtensionConfig(id, ext.manifest);
-            if (ext.searchProvider?.onConfigUpdate) {
-                try { ext.searchProvider.onConfigUpdate(config); } catch (e) {
-                    console.warn(`Config update error in '${id}':`, e);
-                }
+            if (ext.sandbox) {
+                await ext.sandbox.updateConfig(config);
             }
-            if (ext.toolbarProvider?.onConfigUpdate) {
-                try { ext.toolbarProvider.onConfigUpdate(config); } catch (e) {
-                    console.warn(`Toolbar config update error in '${id}':`, e);
-                }
-            }
-            if (ext.messageFormatter?.onConfigUpdate) {
-                try { ext.messageFormatter.onConfigUpdate(config); } catch (e) {
-                    console.warn(`Formatter config update error in '${id}':`, e);
-                }
-            }
-            if (ext.toolProvider?.onConfigUpdate) {
-                try { ext.toolProvider.onConfigUpdate(config); } catch (e) {
-                    console.warn(`Tool provider config update error in '${id}':`, e);
+        }
+        // If enabled-states changed, unmount widgets of newly-disabled
+        // extensions and (re-)mount widgets of newly-enabled ones. The
+        // sandbox itself stays loaded either way so re-enable is
+        // instant.
+        if (this._widgetInstances) {
+            for (const [key, ctrl] of this._widgetInstances) {
+                if (!this._isEnabled(ctrl.extensionId)) {
+                    // Unmount just this widget, not the whole extension.
+                    ctrl.destroyed = true;
+                    if (ctrl.timer) clearInterval(ctrl.timer);
+                    try { ctrl.host.remove(); } catch {}
+                    this._widgetInstances.delete(key);
                 }
             }
         }
-    }
-
-    /**
-     * Get all toolbar button definitions from loaded extensions.
-     * @returns {Array<{id, icon, tooltip, onClick, extensionId}>}
-     */
-    getToolbarButtons() {
-        const buttons = [];
         for (const [id, ext] of this.extensions) {
-            if (!ext.toolbarProvider) continue;
             if (!this._isEnabled(id)) continue;
-            try {
-                const defs = ext.toolbarProvider.getButtons();
-                if (Array.isArray(defs)) {
-                    for (const btn of defs) {
-                        buttons.push({ ...btn, extensionId: id });
-                    }
+            if (!Array.isArray(ext.manifest.contributes?.widgets)) continue;
+            for (const w of ext.manifest.contributes.widgets) {
+                if (!w?.id || !w?.slot) continue;
+                const key = `${id}:${w.id}`;
+                if (this._widgetInstances?.has(key)) continue; // already mounted
+                try { await this._mountWidget(id, ext, w); } catch (e) {
+                    console.warn(`Failed to remount widget '${key}':`, e);
                 }
-            } catch (e) {
-                console.warn(`getButtons error in '${id}':`, e);
             }
         }
-        return buttons;
+        // Tool definitions may change when config updates (e.g. a tool
+        // is enabled/disabled). Refresh the cache.
+        try { await this.getToolDefinitions(); } catch {}
+        try { await this._refreshToolbarButtons(); } catch {}
     }
+
+    // --- Tool providers ----------------------------------------------------
 
     /**
-     * Run all message formatters on a rendered message container.
-     * Called after markdown rendering is complete.
-     * @param {HTMLElement} container - The rendered message content element
-     * @param {object} context - { role: 'user'|'assistant', streaming: boolean }
+     * Fetch tool definitions from all extensions that expose a tool
+     * provider. The result is cached in `_toolDefsCache` so synchronous
+     * call sites (`getToolDefinitionsCached`) can surface the latest
+     * snapshot without hitting the sandbox on every render.
      */
-    formatMessage(container, context) {
-        for (const [id, ext] of this.extensions) {
-            if (!ext.messageFormatter) continue;
-            if (!this._isEnabled(id)) continue;
-            try {
-                ext.messageFormatter.format(container, context);
-            } catch (e) {
-                console.warn(`Message formatter error in '${id}':`, e);
-            }
-        }
-    }
-
-    getLoadedExtensions() {
-        return Array.from(this.extensions.values()).map(ext => ext.manifest);
-    }
-
-    /**
-     * Reload extensions — discovers newly installed extensions without restarting.
-     * Existing extensions are kept; only new ones are loaded.
-     */
-    async reload() {
-        try {
-            this._configCache = await this.invoke('get_config');
-        } catch { return; }
-
-        // Unload extensions that are no longer installed or were disabled
-        try {
-            const userExts = await this.invoke('list_extensions');
-            const installedIds = new Set(userExts.map(e => e.manifest.id));
-            const states = this._configCache?.extension_states || {};
-
-            for (const [id, ext] of this.extensions) {
-                // Keep bundled extensions
-                if (!ext.userInstalled) continue;
-                // Unload if no longer installed or disabled
-                if (!installedIds.has(id) || states[id] === false) {
-                    this._unloadExtension(id, ext);
-                }
-            }
-
-            // Load newly installed or updated extensions
-            for (const item of userExts) {
-                if (!item.enabled) continue;
-                const existing = this.extensions.get(item.manifest.id);
-                if (existing) {
-                    // Check if version changed — if so, tear down and reload
-                    if (existing.manifest?.version === item.manifest.version) continue;
-                    console.log(`ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`);
-                    this._unloadExtension(item.manifest.id, existing);
-                }
-                try {
-                    await this._loadUserExtension(item);
-                    console.log(`ExtensionManager: hot-loaded '${item.manifest.id}'`);
-                } catch (e) {
-                    console.warn(`Failed to hot-load extension '${item.manifest.id}':`, e);
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to reload extensions:', e);
-        }
-    }
-
-    /**
-     * Unload a single extension — destroy providers, remove CSS, remove from map.
-     */
-    _unloadExtension(id, ext) {
-        console.log(`ExtensionManager: unloading '${id}'`);
-        try { ext.searchProvider?.destroy?.(); } catch {}
-        try { ext.toolbarProvider?.destroy?.(); } catch {}
-        try { ext.messageFormatter?.destroy?.(); } catch {}
-        try { ext.toolProvider?.destroy?.(); } catch {}
-
-        // Remove injected CSS
-        document.querySelectorAll(`[data-ext-css="${id}"]`).forEach(el => el.remove());
-
-        this.extensions.delete(id);
-    }
-
-    /**
-     * Collect tool definitions from all enabled extensions with tool providers.
-     * Returns an array of { extensionId, extensionName, extensionIcon, tools[] }
-     * where each tool has { name, description, parameters }.
-     */
-    getToolDefinitions() {
+    async getToolDefinitions() {
         const result = [];
         for (const [id, ext] of this.extensions) {
-            if (!ext.toolProvider) continue;
+            if (!ext.sandbox?.hasTools) continue;
             if (!this._isEnabled(id)) continue;
             try {
-                const tools = ext.toolProvider.getTools();
+                const tools = await ext.sandbox.call('getTools', {});
                 if (Array.isArray(tools) && tools.length > 0) {
                     result.push({
                         extensionId: id,
@@ -521,51 +706,63 @@ export class ExtensionManager {
                     });
                 }
             } catch (e) {
-                console.warn(`getTools error in '${id}':`, e);
+                console.warn(`getTools() in '${id}' failed:`, e);
             }
         }
+        this._toolDefsCache = result;
         return result;
     }
 
     /**
-     * Execute an extension tool call. Returns { result, error } with a timeout.
-     * Default timeout is 5s, but tools can declare a longer timeout via getToolTimeout().
-     * @param {string} extensionId
-     * @param {string} toolName
-     * @param {object} params
-     * @returns {Promise<{result?: any, error?: string}>}
+     * Snapshot of the last known tool definitions. Synchronous. Callers
+     * that need the freshest data should `await getToolDefinitions()`
+     * first and then read this.
      */
+    getToolDefinitionsCached() {
+        return this._toolDefsCache || [];
+    }
+
     async executeExtensionTool(extensionId, toolName, params = {}) {
         const ext = this.extensions.get(extensionId);
-        if (!ext?.toolProvider) {
+        if (!ext?.sandbox?.hasTools) {
             return { error: `Extension '${extensionId}' not found or has no tool provider` };
         }
         if (!this._isEnabled(extensionId)) {
             return { error: `Extension '${extensionId}' is disabled` };
         }
 
-        // Allow tool providers to declare custom timeouts per tool
+        // Tool providers can declare a custom timeout per tool. We honor it
+        // up to a sensible upper bound so a misbehaving extension can't
+        // stall the agent indefinitely.
         let timeoutMs = 5000;
-        if (typeof ext.toolProvider.getToolTimeout === 'function') {
-            timeoutMs = ext.toolProvider.getToolTimeout(toolName) || timeoutMs;
-        }
         try {
-            const resultPromise = ext.toolProvider.execute(toolName, params);
-            const timeoutPromise = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error(`Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`)), timeoutMs)
-            );
-            return await Promise.race([resultPromise, timeoutPromise]);
+            const declared = await ext.sandbox.call('getToolTimeout', { toolName });
+            if (typeof declared === 'number' && declared > 0) {
+                timeoutMs = Math.min(declared, 60_000);
+            }
+        } catch { /* non-fatal */ }
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(
+                `Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`,
+            )), timeoutMs),
+        );
+        try {
+            return await Promise.race([
+                ext.sandbox.call('executeTool', { toolName, params }),
+                timeoutPromise,
+            ]);
         } catch (e) {
-            return { error: e.message || String(e) };
+            return { error: e?.message || String(e) };
         }
     }
 
     /**
-     * Build the steering text block describing available extension tools.
-     * This is injected into the agent's system prompt so it knows what tools exist.
+     * Steering text describing available extension tools to the LLM.
+     * Resolves to the empty string if no extensions expose tools.
      */
-    buildToolSteeringBlock() {
-        const defs = this.getToolDefinitions();
+    async buildToolSteeringBlock() {
+        const defs = await this.getToolDefinitions();
         if (defs.length === 0) return '';
 
         let block = '<extension_tools>\n';
@@ -595,7 +792,6 @@ export class ExtensionManager {
 
         block += '</extension_tools>\n\n';
 
-        // Suggested actions format — agent can emit clickable action hints
         block += '<suggested_actions_format>\n';
         block += 'When your response presents options or asks the user what to do next, ';
         block += 'you can emit a hidden actions block at the END of your response. ';
@@ -614,17 +810,15 @@ export class ExtensionManager {
         return block;
     }
 
-    /**
-     * Get trigger definitions from all loaded extensions.
-     * Returns an array of { extensionId, extensionName, extensionIcon, triggers: [...] }
-     */
-    getTriggerDefinitions() {
+    // --- Trigger providers -------------------------------------------------
+
+    async getTriggerDefinitions() {
         const defs = [];
         for (const [id, ext] of this.extensions) {
-            if (!ext.triggerProvider) continue;
+            if (!ext.sandbox?.hasTriggers) continue;
             try {
-                const triggers = ext.triggerProvider.getTriggers?.() || [];
-                if (triggers.length > 0) {
+                const triggers = await ext.sandbox.call('getTriggers', {});
+                if (Array.isArray(triggers) && triggers.length > 0) {
                     defs.push({
                         extensionId: id,
                         extensionName: ext.manifest.name,
@@ -633,9 +827,414 @@ export class ExtensionManager {
                     });
                 }
             } catch (e) {
-                console.warn(`Failed to get triggers from '${id}':`, e);
+                console.warn(`getTriggers() in '${id}' failed:`, e);
             }
         }
         return defs;
+    }
+
+    // --- Lifecycle ---------------------------------------------------------
+
+    getLoadedExtensions() {
+        return Array.from(this.extensions.values()).map(ext => ({
+            ...ext.manifest,
+            _capabilities: ext.capabilities,
+        }));
+    }
+
+    /**
+     * Hot-reload: discover newly installed extensions and tear down
+     * ones that were uninstalled/disabled. Bundled ones are never
+     * unloaded since they ship with the app.
+     */
+    async reload() {
+        try {
+            this._configCache = await this.invoke('get_config');
+        } catch { return; }
+
+        try {
+            const userExts = await this.invoke('list_extensions');
+            const installedIds = new Set(userExts.map(e => e.manifest.id));
+            const states = this._configCache?.extension_states || {};
+
+            for (const [id, ext] of this.extensions) {
+                if (!ext.userInstalled) continue;
+                if (!installedIds.has(id) || states[id] === false) {
+                    this._unloadExtension(id);
+                }
+            }
+
+            for (const item of userExts) {
+                if (!item.enabled) continue;
+                const existing = this.extensions.get(item.manifest.id);
+                if (existing) {
+                    if (existing.manifest?.version === item.manifest.version) continue;
+                    console.log(`ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`);
+                    this._unloadExtension(item.manifest.id);
+                }
+                try {
+                    await this._loadUserExtension(item);
+                    // Mount any widgets this extension contributes.
+                    if (Array.isArray(item.manifest.contributes?.widgets)) {
+                        const ext = this.extensions.get(item.manifest.id);
+                        if (ext) {
+                            for (const w of item.manifest.contributes.widgets) {
+                                if (!w?.id || !w?.slot) continue;
+                                await this._mountWidget(item.manifest.id, ext, w);
+                            }
+                        }
+                    }
+                    console.log(`ExtensionManager: hot-loaded '${item.manifest.id}'`);
+                } catch (e) {
+                    console.warn(`Failed to hot-load extension '${item.manifest.id}':`, e);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to reload extensions:', e);
+        }
+    }
+
+    _unloadExtension(id) {
+        console.log(`ExtensionManager: unloading '${id}'`);
+        this._unmountWidgetsFor(id);
+        this._pool.unload(id);
+        document.querySelectorAll(`[data-ext-css="${id}"]`).forEach(el => el.remove());
+        this.extensions.delete(id);
+    }
+
+    // --- Widgets -----------------------------------------------------------
+
+    /**
+     * Map from slot name ("floating-bottom", "floating-status") to its
+     * host container. The floating/chat windows call
+     * `setWidgetSlot(slot, el)` once on startup; widgets mount into the
+     * registered slots only. If a slot isn't registered, its widgets
+     * simply aren't rendered in that window.
+     */
+    setWidgetSlot(slotName, element) {
+        if (!this._widgetSlots) this._widgetSlots = new Map();
+        this._widgetSlots.set(slotName, element);
+        // If widgets were already mounted to a pending queue, flush them
+        // now that the slot exists.
+        if (this._pendingWidgetMounts?.has(slotName)) {
+            const pending = this._pendingWidgetMounts.get(slotName);
+            this._pendingWidgetMounts.delete(slotName);
+            pending.forEach(fn => { try { fn(); } catch {} });
+        }
+    }
+
+    async _mountAllWidgets() {
+        if (!this._widgetInstances) this._widgetInstances = new Map(); // key: extId + ':' + widgetId
+        for (const [extId, ext] of this.extensions) {
+            if (!this._isEnabled(extId)) continue;
+            if (!Array.isArray(ext.manifest.contributes?.widgets)) continue;
+            for (const w of ext.manifest.contributes.widgets) {
+                if (!w?.id || !w?.slot) continue;
+                await this._mountWidget(extId, ext, w);
+            }
+        }
+    }
+
+    async _mountWidget(extId, ext, widgetManifest) {
+        const key = `${extId}:${widgetManifest.id}`;
+        if (this._widgetInstances.has(key)) return;
+        if (!ext.sandbox?.widgetIds?.includes(widgetManifest.id)) {
+            // Extension declared the widget in the manifest but the
+            // sandbox didn't actually load it (e.g. import error).
+            console.warn(`Widget '${key}' declared but not loaded in sandbox — skipping mount`);
+            return;
+        }
+
+        const host = document.createElement('div');
+        host.className = `ext-widget ext-widget-${widgetManifest.slot}`;
+        host.dataset.extWidgetKey = key;
+
+        const controller = {
+            extensionId: extId,
+            widgetId: widgetManifest.id,
+            slot: widgetManifest.slot,
+            host,
+            timer: null,
+            destroyed: false,
+            refreshIntervalMs: 0,
+        };
+        this._widgetInstances.set(key, controller);
+
+        // Attach to slot (or queue if slot not yet registered).
+        const slotEl = this._widgetSlots?.get(widgetManifest.slot);
+        if (slotEl) {
+            slotEl.appendChild(host);
+        } else {
+            if (!this._pendingWidgetMounts) this._pendingWidgetMounts = new Map();
+            const queue = this._pendingWidgetMounts.get(widgetManifest.slot) || [];
+            queue.push(() => {
+                const newSlot = this._widgetSlots.get(widgetManifest.slot);
+                if (newSlot) newSlot.appendChild(host);
+            });
+            this._pendingWidgetMounts.set(widgetManifest.slot, queue);
+        }
+
+        // Fetch the extension's refresh interval and do an initial render.
+        try {
+            const ms = await ext.sandbox.call('getWidgetRefreshInterval', { widgetId: widgetManifest.id });
+            const n = Number(ms);
+            if (Number.isFinite(n) && n > 0) {
+                // Clamp to sensible bounds: >= 1 second (so the extension
+                // can't DoS the UI with a 1ms re-render loop), <= 24h.
+                controller.refreshIntervalMs = Math.max(1_000, Math.min(n, 24 * 3600 * 1000));
+            } else {
+                controller.refreshIntervalMs = 0;
+            }
+        } catch {
+            controller.refreshIntervalMs = 0;
+        }
+
+        // Between the awaits above and the setInterval below, the
+        // extension may have been unloaded (_unmountWidgetsFor flipped
+        // `destroyed` and tried to clearInterval on a still-null timer).
+        // Bail out here so we don't schedule an orphan interval.
+        if (controller.destroyed) return;
+
+        await this._renderWidget(controller);
+
+        if (controller.destroyed) return;
+
+        if (controller.refreshIntervalMs > 0) {
+            controller.timer = setInterval(
+                () => this._renderWidget(controller),
+                controller.refreshIntervalMs,
+            );
+        }
+    }
+
+    async _renderWidget(controller) {
+        if (controller.destroyed) return;
+        const ext = this.extensions.get(controller.extensionId);
+        if (!ext?.sandbox) return;
+        try {
+            const out = await ext.sandbox.call('renderWidget', { widgetId: controller.widgetId });
+            // Bail if we were unmounted while the RPC was in flight —
+            // writing to a detached host is harmless but the listeners
+            // we'd wire up would never fire anyway.
+            if (controller.destroyed) return;
+            if (!out || typeof out.html !== 'string') {
+                // Nothing to render → hide the host so it takes up no layout.
+                controller.host.innerHTML = '';
+                controller.host.style.display = 'none';
+                return;
+            }
+            const frag = sanitizeExtensionHtml(out.html, 'rich');
+            controller.host.innerHTML = '';
+            if (out.className) {
+                controller.host.className = `ext-widget ext-widget-${controller.slot} ${out.className}`;
+            }
+            controller.host.style.display = '';
+            controller.host.appendChild(frag);
+
+            // Wire declared action buttons. We enumerate all
+            // data-ext-action elements in the widget and match by
+            // action id — avoids having to escape arbitrary ids inside
+            // a CSS attribute selector.
+            if (Array.isArray(out.actions)) {
+                const actionMap = new Map();
+                for (const a of out.actions) {
+                    if (!a?.id) continue;
+                    actionMap.set(a.id, a.rpc || a.id);
+                }
+                if (actionMap.size > 0) {
+                    const nodes = controller.host.querySelectorAll('[data-ext-action]');
+                    for (const btn of nodes) {
+                        const aid = btn.getAttribute('data-ext-action');
+                        if (!actionMap.has(aid)) continue;
+                        if (btn.__kageExtAction) continue;
+                        btn.__kageExtAction = true;
+                        const rpc = actionMap.get(aid);
+                        btn.addEventListener('click', (ev) => {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            this._runWidgetAction(controller, rpc);
+                        });
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn(`widget render for '${controller.extensionId}:${controller.widgetId}' failed:`, e);
+        }
+    }
+
+    async _runWidgetAction(controller, actionId) {
+        const ext = this.extensions.get(controller.extensionId);
+        if (!ext?.sandbox) return;
+        try {
+            const out = await ext.sandbox.call('onWidgetAction', {
+                widgetId: controller.widgetId,
+                actionId,
+                context: {},
+            });
+            // If the action returns an immediate re-render request, do it.
+            if (out?.rerender) {
+                await this._renderWidget(controller);
+            }
+        } catch (e) {
+            console.warn(`widget action '${actionId}' in '${controller.extensionId}' failed:`, e);
+        }
+    }
+
+    _unmountWidgetsFor(extensionId) {
+        if (!this._widgetInstances) return;
+        for (const [key, ctrl] of this._widgetInstances) {
+            if (ctrl.extensionId !== extensionId) continue;
+            ctrl.destroyed = true;
+            if (ctrl.timer) clearInterval(ctrl.timer);
+            try { ctrl.host.remove(); } catch {}
+            this._widgetInstances.delete(key);
+        }
+    }
+
+    /**
+     * Refresh the cached list of toolbar buttons from all enabled
+     * extensions that expose a toolbar provider. Call after init and on
+     * config updates; readers use the synchronous `getToolbarButtons()`.
+     */
+    async _refreshToolbarButtons() {
+        const out = [];
+        for (const [id, ext] of this.extensions) {
+            if (!ext.sandbox?.hasToolbar) continue;
+            if (!this._isEnabled(id)) continue;
+            try {
+                const defs = await ext.sandbox.call('getToolbarButtons', {});
+                if (Array.isArray(defs)) {
+                    for (const d of defs) {
+                        if (!d?.id) continue;
+                        out.push({
+                            extensionId: id,
+                            id: String(d.id),
+                            icon: String(d.icon || '🧩'),
+                            tooltip: String(d.tooltip || ''),
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn(`toolbar getButtons() in '${id}' failed:`, e);
+            }
+        }
+        this._toolbarButtonsCache = out;
+        return out;
+    }
+
+    /**
+     * Synchronous snapshot of toolbar buttons. The cache is primed by
+     * `initialize()` and refreshed on config change.
+     */
+    getToolbarButtons() {
+        if (!this._toolbarButtonsCache) return [];
+        return this._toolbarButtonsCache.map(b => ({
+            ...b,
+            // The onClick callback bridges to the sandbox RPC. The call
+            // site provides the current chat context (input + messages).
+            onClick: (ctx) => this.runToolbarClick(b.extensionId, b.id, ctx),
+        }));
+    }
+
+    /**
+     * Execute a toolbar button click. `ctx` carries the current chat
+     * input and messages so the extension can make an informed decision
+     * without DOM access. Returns a host effect the caller should
+     * apply (set input, send message, etc.) or null.
+     */
+    async runToolbarClick(extensionId, buttonId, ctx = {}) {
+        const ext = this.extensions.get(extensionId);
+        if (!ext?.sandbox?.hasToolbar) return null;
+        try {
+            // Marshal ctx so extensions can't reach back into live DOM
+            // via functions accidentally passed in.
+            const safeCtx = {
+                input: typeof ctx.input === 'string' ? ctx.input : '',
+                messages: Array.isArray(ctx.messages)
+                    ? ctx.messages.map(m => ({
+                        role: String(m?.role || ''),
+                        content: typeof m?.content === 'string' ? m.content : '',
+                    }))
+                    : [],
+            };
+            const out = await ext.sandbox.call('onToolbarClick', {
+                buttonId,
+                context: safeCtx,
+            });
+            return (out && typeof out === 'object') ? out : null;
+        } catch (e) {
+            console.warn(`toolbar onClick in '${extensionId}' failed:`, e);
+            return null;
+        }
+    }
+
+    // --- Message formatter -------------------------------------------------
+
+    /**
+     * Run all enabled extension message formatters against the rendered
+     * container. Each formatter receives the container's innerHTML and
+     * returns either a replacement string (sanitized and applied) or
+     * null to leave the content unchanged. During streaming we skip
+     * formatters that haven't opted into live formatting.
+     */
+    async formatMessage(container, context) {
+        if (!container || !this.extensions?.size) return;
+        const ctx = {
+            streaming: !!context?.streaming,
+            role: String(context?.role || ''),
+        };
+        for (const [id, ext] of this.extensions) {
+            if (!ext.sandbox?.hasFormatter) continue;
+            if (!this._isEnabled(id)) continue;
+            // Skip streaming calls unless the extension explicitly
+            // opted in. Most formatters return null during streaming,
+            // so round-tripping per chunk is wasted work.
+            if (ctx.streaming && !ext.sandbox.formatterOptsInStreaming) continue;
+            try {
+                const out = await ext.sandbox.call('formatMessage', {
+                    html: container.innerHTML,
+                    context: ctx,
+                });
+                if (out && typeof out.html === 'string') {
+                    const frag = sanitizeExtensionHtml(out.html, 'rich');
+                    // Replace the container's children with the sanitized
+                    // fragment. We use replaceChildren so existing
+                    // listeners on the container itself are preserved.
+                    container.replaceChildren();
+                    container.appendChild(frag);
+                    // Wire any declared extension actions in the new DOM.
+                    this._wireExtActionsFor(id, container);
+                }
+            } catch (e) {
+                console.warn(`message formatter in '${id}' failed:`, e);
+            }
+        }
+    }
+
+    // --- Shared: wire data-ext-action buttons in sanitized HTML -----------
+
+    _wireExtActionsFor(extensionId, root) {
+        const hits = findExtActions(root);
+        for (const { element, actionId } of hits) {
+            // Defensive: prevent double-wiring when the same container is
+            // re-formatted multiple times during streaming.
+            if (element.__kageExtAction) continue;
+            element.__kageExtAction = true;
+            element.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const ext = this.extensions.get(extensionId);
+                if (!ext?.sandbox) return;
+                // Custom-render actions are for result-row buttons: they
+                // all flow through onWidgetAction-style RPC because we
+                // don't yet have a `onRenderAction` — in Commit C we route
+                // them through the search provider's execute() with a
+                // synthetic result carrying { action: actionId }.
+                ext.sandbox.call('onResultAction', {
+                    actionId,
+                    resultId: root.dataset?.extResultId || null,
+                }).catch(e => console.warn(`onResultAction '${actionId}' failed:`, e));
+            });
+        }
     }
 }

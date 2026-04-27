@@ -8,6 +8,13 @@
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <script src="js/shared/theme-global.js"></script>
+    <script type="module">
+        // Expose the install-time permission prompt as a window-global so
+        // the non-module store script below can reach it. See
+        // docs/SECURITY_MODEL.md for the full trust model.
+        import { showPermissionPrompt } from './js/shared/permission-prompt.js';
+        window.__kageShowPermissionPrompt = showPermissionPrompt;
+    </script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -375,7 +382,7 @@
         installedMap = new Map();
         try {
             const exts = await invoke('list_extensions');
-            exts.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'extension', hasSettings: !!e.manifest.contributes?.settingsModule }));
+            exts.forEach(e => installedMap.set(e.manifest.id, { version: e.manifest.version, kind: 'extension', hasSettings: !!e.manifest.contributes?.settingsProvider }));
         } catch {}
         try {
             const themes = await invoke('list_themes');
@@ -565,13 +572,100 @@
         if (footer) footer.innerHTML = `<span class="store-card-btn installed" style="opacity:0.7;">${label}</span>`;
     }
 
+    /**
+     * Shared install orchestration: stage (download + extract), prompt the user
+     * for capability approval, either commit (writes grant + emits changed)
+     * or roll back (uninstall). `stager` is a function that takes no args and
+     * returns a Promise<InstalledItem> from the chosen Tauri command
+     * (store_install, install_extension_from_path, install_bundled_package).
+     *
+     * For updates: we fetch the prior grant first so the prompt can mark
+     * already-approved caps differently from new ones, and flag the
+     * modal as an upgrade. When the updated manifest requests the same
+     * capability set as before and the approval is implicit-same, we
+     * skip the prompt and commit directly — no user friction for
+     * routine updates that don't expand the capability surface.
+     */
+    async function runStagedInstall(stager, { onSuccess } = {}) {
+        const invoke = window.__TAURI__.core.invoke;
+        const prompt = window.__kageShowPermissionPrompt;
+        if (!prompt) throw new Error('permission prompt not loaded');
+
+        // Pre-fetch current config so we can detect upgrades.
+        let priorGrant = null;
+        try {
+            const cfg = await invoke('get_config');
+            // We can't know the extension id until staging completes, so
+            // capture the whole grants map once and look up by id below.
+            priorGrant = cfg?.extension_grants || {};
+        } catch {
+            priorGrant = {};
+        }
+
+        const item = await stager();
+        const manifest = item?.manifest;
+        if (!manifest?.id) {
+            throw new Error('install returned no manifest');
+        }
+
+        const existing = priorGrant[manifest.id] || null;
+        const previouslyGranted = Array.isArray(existing?.granted) ? existing.granted : [];
+        const isUpgrade = !!existing;
+
+        // Requested capabilities per manifest (normalized). If the update
+        // asks for exactly the same set (or a subset of) what was
+        // previously approved, skip the re-prompt — this is a no-change
+        // update.
+        const requested = Array.isArray(manifest.permissions) ? manifest.permissions : [];
+        const grantedSet = new Set(previouslyGranted);
+        const expandsCaps = requested.some(cap => !grantedSet.has(cap));
+
+        let decision;
+        if (isUpgrade && !expandsCaps) {
+            // Auto-approve: no capability expansion, user already said yes.
+            decision = { approved: true, granted: requested };
+        } else {
+            decision = await prompt(manifest, {
+                isUpgrade,
+                previouslyGranted,
+            });
+        }
+
+        if (!decision.approved) {
+            // Roll back: the staged files are on disk but nothing has
+            // loaded the extension yet (commit was never called, so no
+            // extensions_changed fired). Uninstall to remove them.
+            try {
+                await invoke('uninstall_extension', { id: manifest.id, kind: manifest.type || 'extension' });
+            } catch (e) {
+                console.warn('Rollback uninstall failed:', e);
+            }
+            return { cancelled: true };
+        }
+
+        await invoke('commit_extension_install', {
+            extensionId: manifest.id,
+            granted: decision.granted,
+            approvedVersion: manifest.version || '',
+        });
+        if (onSuccess) await onSuccess();
+        return { cancelled: false, item };
+    }
+
     async function installFromStore(id) {
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Installing…');
         try {
-            await invoke('store_install', { id });
-            await refreshInstalled();
-            renderTab();
+            const result = await runStagedInstall(
+                () => invoke('store_install', { id }),
+                { onSuccess: async () => { await refreshInstalled(); } },
+            );
+            if (result.cancelled) {
+                // Revert the busy label immediately
+                renderTab();
+            } else {
+                renderTab();
+            }
         } catch (e) {
             alert('Install failed: ' + e);
             renderTab();
@@ -582,9 +676,14 @@
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Updating…');
         try {
-            await invoke('store_install', { id });
-            await refreshInstalled();
+            const result = await runStagedInstall(
+                () => invoke('store_install', { id }),
+                { onSuccess: async () => { await refreshInstalled(); } },
+            );
             renderTab();
+            if (result.cancelled) {
+                // Nothing else to do — rollback already happened.
+            }
         } catch (e) {
             alert('Update failed: ' + e);
             renderTab();
@@ -595,8 +694,10 @@
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Reinstalling…');
         try {
-            await invoke('store_install', { id });
-            await refreshInstalled();
+            await runStagedInstall(
+                () => invoke('store_install', { id }),
+                { onSuccess: async () => { await refreshInstalled(); } },
+            );
             renderTab();
         } catch (e) {
             alert('Reinstall failed: ' + e);

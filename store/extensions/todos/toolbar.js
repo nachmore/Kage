@@ -1,72 +1,92 @@
 /**
- * Todos & Reminders toolbar button — injects a task summary into the chat.
+ * Todos toolbar provider (sandboxed).
+ * Shows a task summary as an ephemeral chat bubble on click.
  */
+const STORAGE_KEY = 'kage-todos';
+
 export default class TodosToolbarProvider {
     initialize(context) {
         this.config = context.config || {};
         this.invoke = context.invoke;
-        this._todos = [];
-        this._ready = this._loadTodos();
     }
 
-    onConfigUpdate(config) {
-        this.config = config || {};
+    onConfigUpdate(config) { this.config = config || {}; }
+
+    getButtons() {
+        // Icon is a single character (emoji) — the sandbox contract
+        // doesn't allow SVG passthrough because the host renders it as
+        // text content rather than HTML.
+        return [{
+            id: 'todos-summary',
+            icon: '✅',
+            tooltip: 'Show task summary',
+        }];
     }
+
+    async onClick(buttonId, _ctx) {
+        if (buttonId !== 'todos-summary') return {};
+        const todos = await this._loadTodos();
+        const stats = this._getStats(todos);
+        const html = this._renderSummary(todos, stats);
+        return {
+            host: {
+                type: 'show_ephemeral_message',
+                tag: 'summary',
+                title: '📋 Task Summary',
+                html,
+            },
+        };
+    }
+
+    destroy() {}
+
+    // --- Internals ---
 
     async _loadTodos() {
         try {
-            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
-            if (!invoke) return;
-            const raw = await invoke('load_extension_data', { key: 'kage-todos' });
-            this._todos = raw ? JSON.parse(raw) : [];
+            const raw = await this.invoke('load_extension_data', { key: STORAGE_KEY });
+            return raw ? JSON.parse(raw) : [];
         } catch {
-            this._todos = [];
+            return [];
         }
-    }
-
-    _getTodos() {
-        return this._todos;
     }
 
     _getStats(todos) {
         const total = todos.length;
         const complete = todos.filter(t => t.status === 'complete').length;
         const pending = total - complete;
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
+        const now = new Date(); now.setHours(0, 0, 0, 0);
         const overdue = todos.filter(t => {
             if (!t.dueDate || t.status === 'complete') return false;
-            const parts = t.dueDate.split('-');
-            const due = parts.length === 3
-                ? new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]))
-                : new Date(t.dueDate);
-            return due < now;
+            const d = this._parseDue(t.dueDate);
+            return d && d < now;
         }).length;
         return { total, complete, pending, overdue };
     }
 
-    _formatSummary(todos, stats) {
-        if (stats.total === 0) return '📋 **No tasks yet.** Type `todo+ buy milk` or `todo+ buy milk due:friday` in the floating window.';
+    _parseDue(due) {
+        if (!due) return null;
+        const parts = due.split('-');
+        if (parts.length === 3) {
+            return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        }
+        const d = new Date(due);
+        return isNaN(d) ? null : d;
+    }
 
-        const lines = [];
-        lines.push(`📋 **Tasks** — ${stats.complete}/${stats.total} done${stats.overdue > 0 ? `, ⚠️ ${stats.overdue} overdue` : ''}`);
-        lines.push('');
+    _renderSummary(todos, stats) {
+        if (stats.total === 0) {
+            return '<p>No tasks yet. Type <code>todo+ buy milk</code> in the floating window to add one.</p>';
+        }
 
-        const pending = todos.filter(t => t.status !== 'complete');
+        const now = new Date(); now.setHours(0, 0, 0, 0);
+        const priorityOrder = { high: 0, medium: 1, low: 2, '': 3 };
+        const pending = todos.filter(t => t.status !== 'complete').slice();
         const completed = todos.filter(t => t.status === 'complete');
 
-        const priorityOrder = { high: 0, medium: 1, low: 2, '': 3 };
-        const now = new Date();
-        now.setHours(0, 0, 0, 0);
-
         pending.sort((a, b) => {
-            const parseDue = (d) => {
-                if (!d) return null;
-                const p = d.split('-');
-                return p.length === 3 ? new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2])) : new Date(d);
-            };
-            const aDue = parseDue(a.dueDate);
-            const bDue = parseDue(b.dueDate);
+            const aDue = this._parseDue(a.dueDate);
+            const bDue = this._parseDue(b.dueDate);
             const aOverdue = aDue && aDue < now ? 0 : 1;
             const bOverdue = bDue && bDue < now ? 0 : 1;
             if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -77,66 +97,41 @@ export default class TodosToolbarProvider {
             return 0;
         });
 
+        const lines = [];
+        lines.push(
+            `<p><strong>${stats.complete}/${stats.total}</strong> done` +
+            (stats.overdue > 0 ? `, <span style="color:#e25">⚠ ${stats.overdue} overdue</span>` : '') +
+            '</p>',
+        );
+
         if (pending.length > 0) {
+            lines.push('<ul>');
             for (const t of pending) {
-                const due = t.dueDate ? ` (due ${t.dueDate})` : '';
-                const dueParts = t.dueDate ? t.dueDate.split('-') : null;
-                const dueDate = dueParts && dueParts.length === 3
-                    ? new Date(parseInt(dueParts[0]), parseInt(dueParts[1]) - 1, parseInt(dueParts[2]))
-                    : (t.dueDate ? new Date(t.dueDate) : null);
-                const overdue = dueDate && dueDate < now ? ' ⚠️' : '';
-                const pri = t.priority === 'high' ? ' 🔴' : t.priority === 'medium' ? ' 🟡' : '';
-                const cat = t.category ? ` [${t.category}]` : '';
-                lines.push(`- [ ] ${t.text}${pri}${cat}${due}${overdue}`);
+                const d = this._parseDue(t.dueDate);
+                const overdue = d && d < now;
+                const due = t.dueDate ? ` <small>(due ${escape(t.dueDate)}${overdue ? ' ⚠' : ''})</small>` : '';
+                const pri = t.priority === 'high' ? ' 🔴'
+                          : t.priority === 'medium' ? ' 🟡' : '';
+                const cat = t.category ? ` <small>[${escape(t.category)}]</small>` : '';
+                lines.push(`<li>${escape(t.text)}${pri}${cat}${due}</li>`);
             }
+            lines.push('</ul>');
         }
 
         if (completed.length > 0 && this.config?.show_completed !== false) {
-            if (pending.length > 0) lines.push('');
             const shown = completed.slice(0, 5);
-            for (const t of shown) lines.push(`- [x] ~~${t.text}~~`);
-            if (completed.length > 5) lines.push(`- *...and ${completed.length - 5} more completed*`);
+            lines.push('<p style="margin-top:8px;"><small>Recently completed:</small></p><ul>');
+            for (const t of shown) lines.push(`<li><s>${escape(t.text)}</s></li>`);
+            if (completed.length > 5) {
+                lines.push(`<li><small>…and ${completed.length - 5} more</small></li>`);
+            }
+            lines.push('</ul>');
         }
 
-        return lines.join('\n');
+        return lines.join('');
     }
+}
 
-    getButtons() {
-        const todos = this._getTodos();
-        const stats = this._getStats(todos);
-        const pendingLabel = stats.pending > 0 ? ` (${stats.pending})` : '';
-        const icon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`;
-
-        return [{
-            id: 'todos-summary',
-            icon,
-            tooltip: `Tasks${pendingLabel} — click to show summary`,
-            onClick: (ctx) => {
-                const summary = this._formatSummary(todos, stats);
-                const messagesArea = document.querySelector('.messages-area');
-                if (messagesArea) this._injectSummaryBubble(messagesArea, summary);
-            },
-        }];
-    }
-
-    _injectSummaryBubble(container, markdown) {
-        container.querySelectorAll('.todos-summary-bubble').forEach(el => el.remove());
-        const bubble = document.createElement('div');
-        bubble.className = 'todos-summary-bubble';
-        const rendered = typeof marked !== 'undefined' && marked.parse
-            ? marked.parse(markdown) : markdown.replace(/\n/g, '<br>');
-        bubble.innerHTML = `
-            <div class="todos-summary-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                <span>Task Summary</span>
-                <button class="todos-summary-close" title="Dismiss">✕</button>
-            </div>
-            <div class="todos-summary-body">${rendered}</div>
-        `;
-        bubble.querySelector('.todos-summary-close').addEventListener('click', () => bubble.remove());
-        container.appendChild(bubble);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    destroy() {}
+function escape(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

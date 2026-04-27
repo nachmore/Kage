@@ -7,6 +7,8 @@
   "icon": "✅",
   "author": "kage",
 
+  "permissions": ["storage", "automation"],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "default_category": { "type": "string", "default": "" },
@@ -18,9 +20,16 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js",
+    "settingsProvider": "./settings.js",
     "toolbarButtons": "./toolbar.js",
     "triggerProvider": "./triggers.js",
+    "widgets": [
+      {
+        "id": "due-reminder",
+        "slot": "floating-bottom",
+        "module": "./widget.js"
+      }
+    ],
     "css": ["./styles.css"]
   }
 }

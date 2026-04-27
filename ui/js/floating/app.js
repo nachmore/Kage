@@ -172,6 +172,13 @@ export class FloatingApp {
             // Enable app-icon rendering in markdown
             setAppIconInvoke(this.invoke);
 
+            // Register extension widget slots so widgets can mount into
+            // them as the ExtensionManager loads.
+            const bottomSlot = document.getElementById('extWidgetSlotBottom');
+            const statusSlot = document.getElementById('extWidgetSlotStatus');
+            if (bottomSlot) this.extensionManager.setWidgetSlot('floating-bottom', bottomSlot);
+            if (statusSlot) this.extensionManager.setWidgetSlot('floating-status', statusSlot);
+
             // Load extensions in the background — not needed for basic input/response
             this.extensionManager.initialize().then(() => {
                 _ts('Extensions initialized (background)');
@@ -579,7 +586,7 @@ export class FloatingApp {
                     this.clearSuggestions();
                     const results = await unifiedSearch(query, this.invoke, this.shortcuts);
                     if (results.length > 0) {
-                        this.selectedIndex = renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                        this.selectedIndex = await renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
                     }
                 } else {
                     this.clearSuggestions();
@@ -818,22 +825,63 @@ export class FloatingApp {
             const el = document.createElement('button');
             el.className = 'floating-toolbar-btn ext-toolbar-btn';
             el.title = btn.tooltip || btn.id;
-            el.innerHTML = typeof btn.icon === 'string' && btn.icon.startsWith('<')
-                ? btn.icon
-                : `<span style="font-size:14px;">${btn.icon || '🔧'}</span>`;
-            el.addEventListener('click', () => {
+            // Plain text/emoji only — sanitizer already strips anything
+            // dangerous out of declared icons, but since the icon string
+            // flows through the declarative toolbar contract we play it
+            // safe and treat it as text.
+            el.textContent = typeof btn.icon === 'string' ? btn.icon : '🔧';
+            el.addEventListener('click', async () => {
                 try {
-                    btn.onClick?.({
-                        invoke: this.invoke,
-                        getInput: () => this.elements.input?.value || '',
-                        setInput: (v) => { if (this.elements.input) this.elements.input.value = v; },
-                        getMessages: () => [],
-                    });
+                    const ctx = {
+                        input: this.elements.input?.value || '',
+                        messages: [],
+                    };
+                    const out = await btn.onClick(ctx);
+                    if (out && out.host) this._runToolbarHostEffect(out.host);
                 } catch (e) {
                     console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
                 }
             });
             container.appendChild(el);
+        }
+    }
+
+    /**
+     * Apply a host effect returned from an extension toolbar click.
+     * Mirrors the chat window's implementation with the floating input.
+     */
+    _runToolbarHostEffect(host) {
+        if (!host || typeof host !== 'object') return;
+        switch (host.type) {
+            case 'set_chat_input': {
+                const v = String(host.value ?? '');
+                if (this.elements.input) {
+                    this.elements.input.value = v;
+                    this.elements.input.focus();
+                    this.elements.input.dispatchEvent(new Event('input'));
+                }
+                break;
+            }
+            case 'append_chat_input': {
+                const v = String(host.value ?? '');
+                if (this.elements.input) {
+                    const cur = this.elements.input.value || '';
+                    const sep = cur && !cur.endsWith(' ') ? ' ' : '';
+                    this.elements.input.value = cur + sep + v;
+                    this.elements.input.focus();
+                    this.elements.input.dispatchEvent(new Event('input'));
+                }
+                break;
+            }
+            case 'show_ephemeral_message':
+                // Floating window has no messages area; log and drop so
+                // extensions can tell the difference between unsupported
+                // contexts and silent failure.
+                console.info('[Floating] Ignoring show_ephemeral_message host effect — only supported in chat window');
+                break;
+            default:
+                console.warn('[Floating] Unknown toolbar host effect:', host.type);
+                break;
         }
     }
 
@@ -1206,11 +1254,11 @@ export class FloatingApp {
             if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, (partial, { done, pending }) => {
+            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, async (partial, { done, pending }) => {
                 // Progressive rendering: show results as they arrive
                 if (gen !== this._searchGeneration) return; // stale
                 if (partial.length > 0) {
-                    this.selectedIndex = renderUnifiedResults(
+                    this.selectedIndex = await renderUnifiedResults(
                         partial,
                         this.elements.appSuggestions,
                         this.currentMatches,
@@ -1245,7 +1293,7 @@ export class FloatingApp {
             const loadingHint = this.elements.appSuggestions.querySelector('.suggestions-loading');
             if (loadingHint) loadingHint.remove();
             if (results.length > 0) {
-                this.selectedIndex = renderUnifiedResults(
+                this.selectedIndex = await renderUnifiedResults(
                     results,
                     this.elements.appSuggestions,
                     this.currentMatches,
@@ -1949,7 +1997,7 @@ export class FloatingApp {
      * Called after extensions are loaded and after config updates.
      */
     async _sendExtensionToolSteering() {
-        const block = this.extensionManager.buildToolSteeringBlock();
+        const block = await this.extensionManager.buildToolSteeringBlock();
         if (!block) return;
         try {
             await this.invoke('send_extension_tool_steering', { toolSteering: block });
@@ -1992,7 +2040,7 @@ export class FloatingApp {
      */
     _getExtensionIcon(extensionId) {
         if (!extensionId || !this.extensionManager) return '🧩';
-        const defs = this.extensionManager.getToolDefinitions();
+        const defs = this.extensionManager.getToolDefinitionsCached?.() || [];
         const def = defs.find(d => d.extensionId === extensionId);
         return def?.extensionIcon || '🧩';
     }
@@ -2017,7 +2065,7 @@ export class FloatingApp {
         this.renderSources();
 
         // Check permission policy — skip if the tool has built-in confirmation UI
-        const toolDefs = this.extensionManager.getToolDefinitions();
+        const toolDefs = await this.extensionManager.getToolDefinitions();
         const extDef = toolDefs.find(d => d.extensionId === extension);
         const toolDef = extDef?.tools?.find(t => t.name === tool);
         const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;

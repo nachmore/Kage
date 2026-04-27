@@ -1,45 +1,230 @@
 # Security Model
 
+## The trust boundary
+
+Kage treats every extension as untrusted. That includes extensions
+bundled with the app — the same sandbox, permission grant, and IPC
+enforcement apply to bundled and user-installed extensions alike.
+
+The first-party UI (HTML/JS/CSS shipped inside the binary) is trusted.
+Everything else, including every extension's search / tool / trigger
+provider, runs in an isolated iframe with no access to Tauri.
+
+## How extensions are sandboxed
+
+Each extension's provider code is loaded into its own iframe using
+`sandbox="allow-scripts"`. Without `allow-same-origin`, the iframe gets
+a **unique null origin**, which means:
+
+- No `window.__TAURI__` global — Tauri's API is not injected.
+- No access to the parent window, its cookies, or its localStorage.
+- No access to any other extension's iframe.
+- All IPC with the host goes through a single `MessagePort` opened
+  during a handshake, and that channel is the only way the extension
+  can reach the outside world.
+
+The host (`ui/js/shared/extension-sandbox-host.js`) authoritatively
+enforces the capability check on every `invoke()` request arriving
+over the port. The extension cannot spoof its identity — the host
+created the iframe, so the host knows which extension owns which
+port.
+
+### Source loading
+
+Extension JavaScript is fetched by the **host** (via
+`read_extension_file` for user extensions, or a local `fetch` for
+bundled ones). The host passes the resulting source text to the
+sandbox through the message port, where it's imported via a blob URL
+local to the iframe. The sandbox never makes a network request to
+the host's origin — it only imports from blob URLs it received.
+
+### Vendor libraries (allow-listed UMD/IIFE)
+
+Some extensions depend on a non-ESM library that sets globals (e.g.
+mathjs → `window.math`). Extensions declare these in their manifest
+via `sandboxVendor`, but the names are resolved against a fixed
+allow-list in `extension-manager.js` — extensions can't name
+arbitrary paths. The host fetches the pre-bundled file and passes
+the source text to the sandbox, which evaluates it via an inline
+`<script>` tag before any provider module loads. See
+`docs/EXTENSIONS.md#vendor-libraries` for the current allow-list.
+
+The trust model is the same as for provider code: the vendor runs
+inside the null-origin iframe, so even a compromised vendor can't
+touch Tauri. The host never downloads vendors from the network at
+runtime — they ship with the app.
+
+### Which contribution points are sandboxed today
+
+| Contribution point     | In sandbox?        |
+|------------------------|--------------------|
+| Search provider        | ✅ Yes             |
+| Tool provider          | ✅ Yes             |
+| Trigger provider       | ✅ Yes             |
+| Settings provider      | ✅ Yes — declarative schema; see EXTENSIONS.md |
+| Toolbar button         | ✅ Yes — declarative button definitions with RPC on-click handlers |
+| Message formatter      | ✅ Yes — host hands the rendered HTML to the sandbox; sandbox returns replacement HTML which is sanitized before injection |
+| Widget                 | ✅ Yes — widget returns HTML + action declarations on a refresh interval the extension controls |
+| Custom `renderResult`  | ✅ Yes — sandbox returns sanitized HTML for individual result rows |
+
+The disabled contribution points don't break an extension's install or
+its other providers; they just don't execute. Extensions that relied
+on them should expect those features to be inert until follow-up
+commits land.
+
+## Capabilities and the install-time grant
+
+Every Tauri IPC command reachable from an extension is mapped to
+exactly one **capability**, or to `null` if it's never callable from
+an extension (examples: `save_config`, `quit_app`,
+`execute_system_command`, `update_tool_policy`). The complete map
+lives in
+[`ui/js/shared/extension-permissions.js`](../ui/js/shared/extension-permissions.js).
+
+An extension's manifest declares the capabilities it needs:
+
+```json
+{
+  "id": "my-extension",
+  "permissions": ["storage", "shell"]
+}
+```
+
+At install time, the user sees the declared set in a modal listing
+each capability's icon, label, and description. The user either
+approves the whole set or cancels; there is no partial approval
+today.
+
+### Install flow
+
+1. User clicks **Install** in the store.
+2. `store_install` downloads the archive, extracts it to the user
+   extension directory, and enables the extension in config — but
+   does **not** emit `extensions_changed`, so the loader doesn't
+   pick it up yet.
+3. The frontend reads the installed manifest and opens the
+   permission prompt.
+4. If the user approves: `commit_extension_install` saves the
+   grant record and emits `extensions_changed`, which fires the
+   loader and the sandbox boots with the approved capability set.
+5. If the user cancels: `uninstall_extension` rolls back, and
+   nothing ever got loaded.
+
+The same flow is used for `install_extension_from_path` (local zip
+or directory) and `install_bundled_package` (first-run wizard).
+There is no install path that skips the prompt.
+
+### Grant persistence
+
+Grants are stored in config under `extension_grants[<id>]`:
+
+```json
+{
+  "extension_grants": {
+    "todos": {
+      "granted": ["storage", "automation"],
+      "approved_version": "1.0.0",
+      "approved_at": "2026-04-26T12:34:56Z"
+    }
+  }
+}
+```
+
+The `approved_version` field lets the runtime notice when an
+extension has been updated. If the new manifest requests more
+capabilities than the grant covers, the runtime silently drops the
+extras until the user re-approves — the extension loads but those
+invocations fail with a clear capability-missing error.
+
+Uninstalling an extension clears its grant.
+
+### Capability reference
+
+See [`EXTENSIONS.md`](./EXTENSIONS.md) for the authoritative list
+with per-capability descriptions. Summary:
+
+`storage` · `clipboard` · `shell` · `filesystem` · `window` ·
+`windows` · `notifications` · `calendar` · `session` · `agent` ·
+`activity` · `automation` · `tts`
+
 ## Content Security Policy (CSP)
 
-The Tauri webview runs with `"csp": null` (CSP disabled). This is an intentional
-design decision, not an oversight.
+The Tauri webview runs with `"csp": null` (CSP disabled). The
+security boundary is the extension sandbox and capability grant,
+not webview CSP.
 
 ### Why CSP is disabled
 
-Kage's webview does not load external web content. All content sources are:
+Kage's first-party UI does not load external web content. All
+content sources are:
 
-- **Agent responses** — from the trusted ACP backend (kage-cli), rendered as markdown
-- **Local UI** — HTML/JS/CSS bundled into the binary at compile time
-- **Extensions** — installed from a controlled store or local directories
-- **Agent-produced JS** — intentionally executed in a sandboxed eval context
+- **Agent responses** — from the trusted ACP backend (kage-cli),
+  rendered as markdown.
+- **Local UI** — HTML/JS/CSS bundled into the binary.
+- **Extensions** — loaded into sandboxed iframes subject to the
+  permission system above.
+- **Agent-produced JS** — run in a controlled eval context.
 
-In a typical web application, CSP prevents cross-site scripting (XSS) where
-untrusted user input is injected into the page. In Kage:
+A strict CSP would block legitimate features (inline styles for
+theming, eval for agent-produced JS, vendor libraries) without
+adding protection given the sandbox is doing the heavy lifting.
 
-1. There are no untrusted content sources — no web browsing, no external URLs
-2. The agent already has more power through its tool access (file I/O, shell
-   commands, computer control) than any injected script could gain via the
-   Tauri IPC bridge
-3. The real security boundary is the **tool permission system** — users are
-   prompted before the agent executes any tool
-4. A strict CSP would break legitimate features (inline styles for theming,
-   eval for agent-produced JS, vendor libraries)
+### When to revisit CSP
 
-### When to revisit
+- If the first-party webview ever starts loading external URLs.
+- If untrusted third-party content is rendered in the main webview
+  rather than an iframe.
+- A stricter CSP on just the sandbox iframe's host document could
+  be added as belt-and-braces without much downside.
 
-CSP should be reconsidered if any of these change:
+## Defense in depth
 
-- The webview loads external URLs (link previews, web content rendering)
-- Untrusted third-party content is rendered in the webview
-- The extension system allows arbitrary HTML/JS from unknown sources
+Even with the sandbox doing most of the work, these additional
+mitigations are in place:
 
-### Defense in depth
+- Markdown rendering sanitizes HTML document markers (`<!`,
+  `<html>`) to prevent raw-HTML passthrough.
+- Tool permissions require explicit user approval before the
+  agent executes any ACP tool call.
+- The computer-control MCP server is opt-in.
+- Zip extraction defends against Zip Slip attacks, including
+  symlink-based variants.
+- Panic hook writes `crash.log` with backtrace for post-incident
+  review.
+- Mutex poisoning is recovered gracefully (`lock_or_recover`)
+  so one thread's panic doesn't cascade.
 
-Even without CSP, the following mitigations are in place:
+## Summary of current guarantees
 
-- Markdown rendering sanitizes HTML document markers (`<!`, `<html>`) to prevent
-  raw HTML passthrough (see steering rule in `structure.md`)
-- Tool permissions require explicit user approval before execution
-- The computer-control MCP server is opt-in (enabled during first-run setup)
-- Extension installation requires user action
+| Threat                                                | Status | Notes |
+|-------------------------------------------------------|--------|-------|
+| Extension calls an IPC command it didn't declare      | ✅ Blocked | Host-side capability check at the bridge. |
+| Extension calls a "never allowed" command             | ✅ Blocked | Forbidden list in `extension-permissions.js`. |
+| Extension reaches `window.__TAURI__` to bypass check  | ✅ Blocked | Iframe has null origin, no Tauri global. |
+| Extension reads files outside its directory           | ✅ Blocked | `read_extension_file` is path-bounded. |
+| New Tauri command silently exposed to extensions      | ✅ Blocked | Missing from table = blocked. |
+| Extension installs without user approving its caps    | ✅ Blocked | Install is two-phase; no grant = no load. |
+| Extension updates silently expand capabilities        | ✅ Blocked | Extras dropped until user re-approves. |
+| Zip Slip during extension install                     | ✅ Blocked | Canonical-path + symlink checks. |
+| Malicious markdown injecting script tags              | ✅ Blocked | Rendering pipeline strips document markers. |
+| DOM-touching extension misuses settings-module access | ⚠ Trusted path | Tracked for migration. See "Which contribution points are sandboxed". |
+
+## Known gaps being worked on
+
+All first-class extension contribution points now run inside the
+sandbox. Host HTML that extensions emit (widgets, custom result
+rendering, message formatters, settings info blocks) is sanitized
+through a narrow allow-list (see
+`ui/js/shared/extension-html-sanitizer.js`). Action buttons route
+back to the sandbox through declared RPC names rather than live
+closures.
+
+Future improvements being considered, none blocking:
+
+- **Content-Security-Policy header on the sandbox iframe itself**,
+  belt-and-braces beyond the sanitizer.
+- **Per-widget refresh budgets** so a misbehaving widget can't
+  thrash the CPU. Today widgets declare their own interval and
+  the host trusts it within a lower bound.
+- **Fine-grained capability grants** — let users approve a subset
+  of the requested capabilities instead of all-or-nothing.

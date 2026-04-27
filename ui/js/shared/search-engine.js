@@ -118,9 +118,15 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     // --- Synchronous matchers (fast, no I/O) ---
 
     // Extension sync search providers
+    // NOTE: sandbox RPC is async, so matchAll() is now a Promise even
+    // though the extension's own match() is still synchronous.
     if (_extensionManager) {
-        const extResults = _extensionManager.matchAll(query);
-        results.push(...extResults);
+        try {
+            const extResults = await _extensionManager.matchAll(query);
+            results.push(...extResults);
+        } catch (e) {
+            console.warn('extension matchAll failed:', e);
+        }
     }
 
     // > commands

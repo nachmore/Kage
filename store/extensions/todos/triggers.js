@@ -16,9 +16,8 @@ export default class TodosTriggerProvider {
 
     async _loadTodos() {
         try {
-            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
-            if (!invoke) return;
-            const raw = await invoke('load_extension_data', { key: 'kage-todos' });
+            if (!this.invoke) return;
+            const raw = await this.invoke('load_extension_data', { key: 'kage-todos' });
             this._todos = raw ? JSON.parse(raw) : [];
         } catch {
             this._todos = [];

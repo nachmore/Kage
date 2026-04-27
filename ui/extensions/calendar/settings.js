@@ -1,72 +1,79 @@
 /**
- * Calendar Extension Settings Module
+ * Calendar settings provider (sandboxed).
  */
-class CalendarExtSettingsModule extends SettingsModule {
-    constructor() {
-        super('calendar', 'Calendar', '📅');
-        this.description = 'Type "cal" or "meetings" to see upcoming events.';
+export default class CalendarSettingsProvider {
+    initialize(context) {
+        this.config = context.config || {};
+        this.invoke = context.invoke;
     }
 
-    renderContent() {
-        return `
-            ${this.createCheckboxRow(
-                'Show next meeting overlay',
-                'Display the next upcoming meeting above the input with a join button.',
-                'calendarShowOverlay',
-                true
-            )}
-            <div class="dialog-field" style="margin-top:12px;">
-                <label style="font-size:13px;font-weight:500;">Lookahead (hours)</label>
-                <input type="number" id="calendarLookahead" class="setting-input" min="1" max="72" value="8" style="width:80px;">
-                <div class="setting-description" style="margin-top:4px;">How far ahead to look for meetings (1–72 hours).</div>
-            </div>
-            <div class="setting-row" style="margin-top:12px;">
-                <button class="setting-button" id="calendarTestBtn">🔄 Test Calendar Access</button>
-                <span class="setting-description" id="calendarTestStatus" style="margin-left:8px;"></span>
-            </div>
-            <div class="setting-row" style="margin-top:16px;">
-                <div class="setting-label">Launcher Commands</div>
-                <div class="setting-description" style="line-height:1.8;">
-                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal</code> or <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">meetings</code> — show upcoming events<br>
-                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal tomorrow</code> — events for a specific day<br>
-                    <code style="background:var(--kage-bg-input);padding:2px 6px;border-radius:3px;">cal-refresh</code> — force refresh calendar data from Outlook
-                </div>
-            </div>
-        `;
+    onConfigUpdate(config) {
+        this.config = config || {};
     }
 
-    initialize() {
-        document.getElementById('calendarTestBtn')?.addEventListener('click', async () => {
-            const status = document.getElementById('calendarTestStatus');
-            if (status) status.textContent = '⏳ Checking...';
+    getSettings() {
+        return {
+            description: 'Type "cal" or "meetings" to see upcoming events.',
+            sections: [
+                {
+                    controls: [
+                        {
+                            type: 'checkbox',
+                            id: 'show_overlay',
+                            label: 'Show next meeting overlay',
+                            description: 'Display the next upcoming meeting above the input with a join button.',
+                            default: true,
+                        },
+                        {
+                            type: 'number',
+                            id: 'lookahead_hours',
+                            label: 'Lookahead (hours)',
+                            description: 'How far ahead to look for meetings (1–72 hours).',
+                            default: 8,
+                            min: 1,
+                            max: 72,
+                            maxWidth: 80,
+                        },
+                        {
+                            type: 'action',
+                            id: 'test',
+                            label: '🔄 Test Calendar Access',
+                            action: 'test',
+                        },
+                        {
+                            type: 'info',
+                            label: 'Launcher Commands',
+                            html: '<code>cal</code> or <code>meetings</code> — show upcoming events<br>'
+                                + '<code>cal tomorrow</code> — events for a specific day<br>'
+                                + '<code>cal-refresh</code> — force refresh calendar data from Outlook',
+                        },
+                    ],
+                },
+            ],
+        };
+    }
+
+    validate(values) {
+        const hours = Number(values.lookahead_hours);
+        if (!Number.isFinite(hours) || hours < 1 || hours > 72) {
+            return { valid: false, error: 'Lookahead must be between 1 and 72 hours' };
+        }
+        return { valid: true };
+    }
+
+    async runAction(action, values) {
+        if (action === 'test') {
             try {
-                const invoke = window.__TAURI__.core.invoke;
-                const hours = parseInt(document.getElementById('calendarLookahead')?.value || '8', 10);
-                const events = await invoke('get_calendar_events', { hours });
-                if (status) status.textContent = `✅ Found ${events.length} event${events.length !== 1 ? 's' : ''} in the next ${hours} hours`;
+                const hours = Number(values.lookahead_hours) || 8;
+                const events = await this.invoke('get_calendar_events', { hours });
+                const count = events?.length || 0;
+                return {
+                    status: `✅ Found ${count} event${count === 1 ? '' : 's'} in the next ${hours} hour${hours === 1 ? '' : 's'}`,
+                };
             } catch (e) {
-                if (status) status.textContent = '❌ ' + e;
+                return { status: `❌ ${e?.message || e}` };
             }
-        });
+        }
+        return {};
     }
-
-    load(config) {
-        const extConfig = config.extensions?.calendar || {};
-        const overlay = document.getElementById('calendarShowOverlay');
-        if (overlay) overlay.checked = extConfig.show_overlay !== false;
-        const lookahead = document.getElementById('calendarLookahead');
-        if (lookahead) lookahead.value = extConfig.lookahead_hours || 8;
-    }
-
-    save(config) {
-        if (!config.extensions) config.extensions = {};
-        config.extensions.calendar = config.extensions.calendar || {};
-        config.extensions.calendar.show_overlay = document.getElementById('calendarShowOverlay')?.checked ?? true;
-        config.extensions.calendar.lookahead_hours = Math.min(72, Math.max(1, parseInt(document.getElementById('calendarLookahead')?.value || '8', 10)));
-    }
-
-    validate() { return { valid: true }; }
 }
-
-// Expose to global scope for dynamic script loading
-window.CalendarExtSettingsModule = CalendarExtSettingsModule;

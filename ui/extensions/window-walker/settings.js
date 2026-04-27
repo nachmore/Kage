@@ -1,67 +1,71 @@
 /**
- * Window Walker Settings Module.
- * Reads/writes config from config.extensions['window-walker'].
+ * Window Walker settings provider (sandboxed).
+ *
+ * Stored config uses `trigger` with a trailing space (that's the
+ * activation delimiter). The UI shows it trimmed to avoid exposing
+ * that implementation detail to the user.
  */
-class WindowWalkerExtSettingsModule extends SettingsModule {
-    constructor() {
-        super('window-walker', 'Window Walker', '🪟');
-        this.description = 'Quickly switch between open windows. Type the trigger keyword to list and filter windows.';
+export default class WindowWalkerSettingsProvider {
+    initialize(context) {
+        this.config = context.config || {};
     }
 
-    renderContent() {
-        return `
-            ${this.createControlRow(
-                'Trigger keyword',
-                'Type this in the floating window to activate window search.',
-                '<input type="text" class="setting-input" id="wwTrigger" style="max-width:120px;" placeholder="w">'
-            )}
-
-            ${this.createCheckboxRow(
-                'Show window icons',
-                'Extract and display application icons next to each window. Disable for faster results on slower machines.',
-                'wwShowIcons',
-                true
-            )}
-
-            ${this.createCheckboxRow(
-                'Hide minimized windows',
-                'Exclude minimized windows from the list.',
-                'wwHideMinimized',
-                false
-            )}
-        `;
+    onConfigUpdate(config) {
+        this.config = config || {};
     }
 
-    render() { return this.renderContent(); }
-
-    load(config) {
-        const c = (config.extensions && config.extensions['window-walker']) || {};
-        const trigger = document.getElementById('wwTrigger');
-        // Display without trailing space — it's added automatically
-        if (trigger) trigger.value = (c.trigger ?? 'w ').trim();
-        const icons = document.getElementById('wwShowIcons');
-        if (icons) icons.checked = c.show_icons !== false;
-        const hideMin = document.getElementById('wwHideMinimized');
-        if (hideMin) hideMin.checked = c.hide_minimized === true;
-    }
-
-    save(config) {
-        if (!config.extensions) config.extensions = {};
-        // Trim user input and append space — the space is the activation delimiter
-        const raw = document.getElementById('wwTrigger')?.value?.trim() || 'w';
-        config.extensions['window-walker'] = {
-            trigger: raw + ' ',
-            show_icons: document.getElementById('wwShowIcons')?.checked ?? true,
-            hide_minimized: document.getElementById('wwHideMinimized')?.checked ?? false,
+    getSettings() {
+        const storedTrigger = (this.config.trigger ?? 'w ').replace(/\s+$/, '');
+        return {
+            description: 'Quickly switch between open windows. Type the trigger keyword to list and filter windows.',
+            sections: [
+                {
+                    controls: [
+                        {
+                            type: 'text',
+                            id: 'trigger',
+                            label: 'Trigger keyword',
+                            description: 'Type this in the floating window to activate window search. (A trailing space is added automatically.)',
+                            default: storedTrigger,
+                            placeholder: 'w',
+                            maxWidth: 120,
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'show_icons',
+                            label: 'Show window icons',
+                            description: 'Extract and display application icons next to each window. Disable for faster results on slower machines.',
+                            default: true,
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'hide_minimized',
+                            label: 'Hide minimized windows',
+                            description: 'Exclude minimized windows from the list.',
+                            default: false,
+                        },
+                    ],
+                },
+            ],
         };
     }
 
-    validate() {
-        const trigger = document.getElementById('wwTrigger')?.value;
-        if (!trigger || trigger.length === 0) {
+    validate(values) {
+        const trigger = String(values.trigger || '').trim();
+        if (!trigger) {
             return { valid: false, error: 'Trigger keyword cannot be empty' };
         }
         return { valid: true };
     }
+
+    /**
+     * Re-apply the trailing-space invariant. The search provider uses
+     * a startsWith check against `config.trigger`, so the trigger needs
+     * to include the activation delimiter. We hide that from the user
+     * in the settings UI and re-add it here at save time.
+     */
+    normalize(values) {
+        const trigger = String(values.trigger || '').trim() + ' ';
+        return { values: { ...values, trigger } };
+    }
 }
-window.WindowWalkerExtSettingsModule = WindowWalkerExtSettingsModule;

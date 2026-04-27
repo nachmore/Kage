@@ -14,6 +14,7 @@ import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
+import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
@@ -1748,7 +1749,7 @@ export class ChatApp {
      */
     _getExtensionIcon(extensionId) {
         if (!extensionId || !this.extensionManager) return '🧩';
-        const defs = this.extensionManager.getToolDefinitions();
+        const defs = this.extensionManager.getToolDefinitionsCached?.() || [];
         const def = defs.find(d => d.extensionId === extensionId);
         return def?.extensionIcon || '🧩';
     }
@@ -1757,7 +1758,7 @@ export class ChatApp {
      * Send extension tool definitions to the agent as a steering message.
      */
     async _sendExtensionToolSteering() {
-        const block = this.extensionManager.buildToolSteeringBlock();
+        const block = await this.extensionManager.buildToolSteeringBlock();
         if (!block) return;
         try {
             await this.invoke('send_extension_tool_steering', { toolSteering: block });
@@ -1813,7 +1814,7 @@ export class ChatApp {
         this.renderSourcesInMessage(contentDiv);
 
         // Check permission policy — skip if the tool has built-in confirmation UI
-        const toolDefs = this.extensionManager.getToolDefinitions();
+        const toolDefs = await this.extensionManager.getToolDefinitions();
         const extDef = toolDefs.find(d => d.extensionId === extension);
         const toolDef = extDef?.tools?.find(t => t.name === tool);
         const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;
@@ -2348,7 +2349,7 @@ export class ChatApp {
         }
     }
 
-    renderSuggestions() {
+    async renderSuggestions() {
         const container = this.elements.chatSuggestions;
         container.innerHTML = '';
 
@@ -2358,6 +2359,11 @@ export class ChatApp {
         }
 
         const extMgr = getExtensionManager();
+        // Prime the custom-render cache so the synchronous renderResult()
+        // calls below can resolve from cache.
+        if (extMgr?.prefetchCustomRender) {
+            try { await extMgr.prefetchCustomRender(this.currentSuggestions); } catch {}
+        }
 
         this.currentSuggestions.forEach((cmd, index) => {
             const item = document.createElement('div');
@@ -2701,11 +2707,15 @@ export class ChatApp {
 
     /**
      * Render extension-contributed toolbar buttons into the chat toolbar.
+     *
+     * Sandboxed contract: each button's onClick is a host-side function
+     * that round-trips to the sandbox with the current chat state and
+     * may return a host effect describing what the host should do
+     * (replace the input text, send a message, or show a notice).
      */
     renderExtensionToolbarButtons() {
         if (!this.extensionManager) return;
         const buttons = this.extensionManager.getToolbarButtons();
-        if (buttons.length === 0) return;
 
         const toolbarLeft = document.querySelector('.chat-toolbar-left');
         if (!toolbarLeft) return;
@@ -2713,26 +2723,126 @@ export class ChatApp {
         // Remove any previously rendered extension buttons
         toolbarLeft.querySelectorAll('.ext-toolbar-btn').forEach(el => el.remove());
 
+        if (buttons.length === 0) return;
+
         for (const btn of buttons) {
             const el = document.createElement('button');
             el.className = 'chat-toolbar-btn ext-toolbar-btn';
             el.title = btn.tooltip || btn.id;
-            el.innerHTML = typeof btn.icon === 'string' && btn.icon.startsWith('<')
-                ? btn.icon  // SVG string
-                : `<span style="font-size:16px;">${btn.icon || '🔧'}</span>`;
-            el.addEventListener('click', () => {
+            // Icons are plain text/emoji — no SVG passthrough from
+            // extensions, since they can always use emoji + a tooltip.
+            const iconText = typeof btn.icon === 'string' ? btn.icon : '🔧';
+            el.textContent = iconText;
+            el.addEventListener('click', async () => {
                 try {
-                    btn.onClick?.({
-                        invoke: this.invoke,
-                        getInput: () => this.elements.chatInput?.value || '',
-                        setInput: (v) => { if (this.elements.chatInput) this.elements.chatInput.value = v; },
-                        getMessages: () => this.messages || [],
-                    });
+                    const ctx = {
+                        input: this.elements.chatInput?.value || '',
+                        messages: (this.messages || []).map(m => ({
+                            role: m?.role || '',
+                            content: typeof m?.content === 'string' ? m.content : '',
+                        })),
+                    };
+                    const out = await btn.onClick(ctx);
+                    if (out && out.host) {
+                        // Stamp the origin so the host effect handler can
+                        // scope ephemeral bubbles / side effects to the
+                        // right extension.
+                        out.host.extensionId = btn.extensionId;
+                        this._runToolbarHostEffect(out.host);
+                    }
                 } catch (e) {
                     console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
                 }
             });
             toolbarLeft.appendChild(el);
         }
+    }
+
+    /**
+     * Apply a host effect returned from a toolbar-button RPC.
+     * Contract mirrors the settings-page effects, narrowed to things
+     * that make sense from a chat-toolbar click.
+     */
+    _runToolbarHostEffect(host) {
+        if (!host || typeof host !== 'object') return;
+        switch (host.type) {
+            case 'set_chat_input': {
+                const v = String(host.value ?? '');
+                if (this.elements.chatInput) {
+                    this.elements.chatInput.value = v;
+                    this.elements.chatInput.focus();
+                    // Trigger input event so autogrow + suggestions update.
+                    this.elements.chatInput.dispatchEvent(new Event('input'));
+                }
+                break;
+            }
+            case 'append_chat_input': {
+                const v = String(host.value ?? '');
+                if (this.elements.chatInput) {
+                    const cur = this.elements.chatInput.value || '';
+                    const sep = cur && !cur.endsWith(' ') ? ' ' : '';
+                    this.elements.chatInput.value = cur + sep + v;
+                    this.elements.chatInput.focus();
+                    this.elements.chatInput.dispatchEvent(new Event('input'));
+                }
+                break;
+            }
+            case 'show_ephemeral_message': {
+                // Render a sanitized ephemeral bubble in the messages area.
+                // Extensions use this for summaries/status that don't
+                // need to live in session history.
+                this._renderEphemeralMessage(host);
+                break;
+            }
+            default:
+                console.warn('[Chat] Unknown toolbar host effect:', host.type);
+                break;
+        }
+    }
+
+    /**
+     * Render an ephemeral (non-persisted) message bubble from an
+     * extension. The HTML is sanitized with the rich policy; the bubble
+     * is tagged so subsequent ephemeral messages from the same extension
+     * replace the previous one rather than piling up.
+     */
+    _renderEphemeralMessage(host) {
+        const messagesArea = document.querySelector('.messages-area')
+                          || document.querySelector('.chat-messages');
+        if (!messagesArea) return;
+
+        const tag = String(host.tag || 'default');
+        const extensionId = String(host.extensionId || 'unknown');
+        const selector = `.ext-ephemeral-bubble[data-ext-bubble="${extensionId}:${tag}"]`;
+        messagesArea.querySelectorAll(selector).forEach(el => el.remove());
+
+        const bubble = document.createElement('div');
+        bubble.className = 'ext-ephemeral-bubble';
+        bubble.setAttribute('data-ext-bubble', `${extensionId}:${tag}`);
+
+        const title = host.title ? String(host.title) : '';
+        if (title) {
+            const header = document.createElement('div');
+            header.className = 'ext-ephemeral-header';
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = title;
+            header.appendChild(titleSpan);
+            const close = document.createElement('button');
+            close.className = 'ext-ephemeral-close';
+            close.textContent = '✕';
+            close.title = 'Dismiss';
+            close.addEventListener('click', () => bubble.remove());
+            header.appendChild(close);
+            bubble.appendChild(header);
+        }
+
+        const body = document.createElement('div');
+        body.className = 'ext-ephemeral-body';
+        const frag = sanitizeExtensionHtmlStatic(String(host.html || ''), 'rich');
+        body.appendChild(frag);
+        bubble.appendChild(body);
+
+        messagesArea.appendChild(bubble);
+        messagesArea.scrollTop = messagesArea.scrollHeight;
     }
 }

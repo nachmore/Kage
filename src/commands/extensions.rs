@@ -2,6 +2,7 @@
 
 use crate::error::AppError;
 use crate::extensions;
+use crate::lock_ext::LockExt;
 use crate::state::AppState;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
@@ -12,19 +13,19 @@ use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(extensions::discover_items("extension", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(extensions::discover_items("theme", None, &config.extension_states))
 }
 
 #[tauri::command]
 pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(extensions::discover_items("commands", None, &config.extension_states))
 }
 
@@ -37,7 +38,7 @@ pub async fn get_extension_config(
     id: String,
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.lock_or_recover();
     Ok(config.extensions.get(&id).cloned().unwrap_or(serde_json::json!({})))
 }
 
@@ -48,7 +49,7 @@ pub async fn save_extension_config(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.extensions.insert(id.clone(), value);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Saved extension config for '{}'", id);
@@ -69,7 +70,7 @@ pub async fn set_extension_enabled(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.extension_states.insert(id.clone(), enabled);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
@@ -149,11 +150,15 @@ pub async fn read_extension_file(
 // Install / Uninstall
 // ---------------------------------------------------------------------------
 
+/// Stage a manual install from a local zip or directory path.
+/// Like `store_install`, this does NOT emit `extensions_changed` — the
+/// caller must show the permission prompt and call
+/// `commit_extension_install` before the extension will load.
 #[tauri::command]
 pub async fn install_extension_from_path(
     source_path: String,
     state: State<'_, AppState>,
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let source = std::path::PathBuf::from(&source_path);
 
@@ -167,15 +172,12 @@ pub async fn install_extension_from_path(
             .map_err(|e| format!("Installation failed: {}", e))?
     };
 
-    // Auto-enable
-    let mut config = state.config.lock().unwrap();
+    // Mark enabled so the commit step can flip the grant and load it.
+    let mut config = state.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
-        error!("Failed to emit extensions_changed: {}", e);
-    }
     Ok(item)
 }
 
@@ -190,9 +192,10 @@ pub async fn uninstall_extension(
         .map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.extension_states.remove(&id);
     config.extensions.remove(&id);
+    config.extension_grants.remove(&id);
     let _ = config.save();
     drop(config);
 
@@ -257,7 +260,7 @@ pub async fn save_store_url(
     url: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.store_url = url.filter(|s| !s.is_empty());
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Store URL updated");
@@ -315,7 +318,7 @@ pub async fn store_get_catalog(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
     let (primary_url, sources) = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         let primary = resolve_store_url(&config, state.dev_mode);
         let sources = config.store_sources.clone();
         (primary, sources)
@@ -425,7 +428,7 @@ pub async fn store_get_detail(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         resolve_store_url(&config, state.dev_mode)
     };
 
@@ -448,6 +451,13 @@ pub async fn store_get_detail(
     Ok(body)
 }
 
+/// Stage an install from the store. The extension files are written to
+/// disk and `extension_states` is set to enabled, but `extensions_changed`
+/// is NOT emitted yet, so nothing loads the extension's code. The caller
+/// (frontend) shows a permission prompt based on the returned manifest;
+/// on approval it calls `commit_extension_install` which records the
+/// grant and emits the event. On rejection it calls `uninstall_extension`
+/// to roll back.
 #[tauri::command]
 pub async fn store_install(
     id: String,
@@ -455,7 +465,7 @@ pub async fn store_install(
     app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let base_url = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         resolve_store_url(&config, state.dev_mode)
     };
 
@@ -465,7 +475,45 @@ pub async fn store_install(
 
     validate_store_url(&base_url)?;
 
-    store_install_inner(&base_url, &id, &state, &app).await.map_err(AppError::from)
+    store_install_inner(&base_url, &id, &state, &app, false)
+        .await
+        .map_err(AppError::from)
+}
+
+/// Finalize a staged install: save the user-approved capability grant and
+/// emit `extensions_changed` so the loader picks it up.
+///
+/// Call this only after the user has approved the extension's capability
+/// set via the install-time permission prompt. Granting without user
+/// consent is a direct security violation.
+#[tauri::command]
+pub async fn commit_extension_install(
+    extension_id: String,
+    granted: Vec<String>,
+    approved_version: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    let mut config = state.config.lock_or_recover();
+    let record = crate::config::ExtensionGrant {
+        granted,
+        approved_version,
+        approved_at: chrono::Utc::now().to_rfc3339(),
+    };
+    info!(
+        "Committing install for '{}': capabilities {:?}",
+        extension_id, record.granted
+    );
+    config.extension_grants.insert(extension_id.clone(), record);
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+    drop(config);
+
+    if let Err(e) = app.emit("extensions_changed", ()) {
+        error!("Failed to emit extensions_changed: {}", e);
+    }
+    Ok(())
 }
 
 /// Check for updates to installed extensions and optionally auto-install them.
@@ -476,7 +524,7 @@ pub async fn check_extension_updates(
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         resolve_store_url(&config, state.dev_mode)
     };
 
@@ -489,7 +537,7 @@ pub async fn check_extension_updates(
     // Gather all installed items
     let mut installed: Vec<(String, String, String)> = Vec::new(); // (id, version, kind)
     let states = {
-        let config = state.config.lock().unwrap();
+        let config = state.config.lock_or_recover();
         config.extension_states.clone()
     };
 
@@ -547,8 +595,12 @@ pub async fn check_extension_updates(
             if let (Some(local), Some(remote)) = (local_sv, remote_sv) {
                 if remote > local {
                     info!("Extension '{}' has update: {} -> {}", id, local_version, remote_version);
-                    // Install the update (store_install handles download + extract)
-                    match store_install_inner(&base_url, id, &state, &app).await {
+                    // Install the update in place. The existing capability
+                    // grant is preserved; if the updated manifest requests
+                    // more capabilities, the runtime drops them until the
+                    // user re-approves. We do emit here because auto-update
+                    // is an in-place refresh of already-approved software.
+                    match store_install_inner(&base_url, id, &state, &app, true).await {
                         Ok(_) => {
                             updated += 1;
                             info!("Updated extension '{}' to {}", id, remote_version);
@@ -563,7 +615,7 @@ pub async fn check_extension_updates(
     }
 
     // Update the last check timestamp
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.last_extension_update_check = Some(chrono::Utc::now().to_rfc3339());
     let _ = config.save();
     drop(config);
@@ -572,11 +624,17 @@ pub async fn check_extension_updates(
 }
 
 /// Inner install logic reused by both store_install and check_extension_updates.
+/// The `emit_changed` flag controls whether we fire the `extensions_changed`
+/// event. Installs initiated by the user are staged without emitting so the
+/// frontend can show an install-time permission prompt before loading the
+/// extension. If the user approves, the frontend calls
+/// `commit_extension_install`, which saves the grant and emits.
 async fn store_install_inner(
     base_url: &str,
     id: &str,
     state: &State<'_, AppState>,
     app: &tauri::AppHandle,
+    emit_changed: bool,
 ) -> Result<extensions::InstalledItem, String> {
     let url = format!("{}/store/catalog/{}/download", base_url, id);
     let zip_path = std::env::temp_dir().join(format!("kage-download-{}.zip", id));
@@ -601,13 +659,15 @@ async fn store_install_inner(
 
     let _ = std::fs::remove_file(&zip_path);
 
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
-        error!("Failed to emit extensions_changed: {}", e);
+    if emit_changed {
+        if let Err(e) = app.emit("extensions_changed", ()) {
+            error!("Failed to emit extensions_changed: {}", e);
+        }
     }
 
     Ok(item)
@@ -723,12 +783,15 @@ fn bundled_packages_dir() -> Option<std::path::PathBuf> {
 }
 
 /// Install an extension from the bundled packages directory.
-/// Used by the first-run wizard to install recommended extensions without network access.
+/// Used by the first-run wizard to install recommended extensions without
+/// network access. Like `store_install`, this is a staged install: the
+/// caller must show the permission prompt and call
+/// `commit_extension_install` before the extension will load.
 #[tauri::command]
 pub async fn install_bundled_package(
     id: String,
     state: State<'_, AppState>,
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let packages_dir = bundled_packages_dir()
         .ok_or_else(|| AppError::from("Bundled packages directory not found"))?;
@@ -748,14 +811,30 @@ pub async fn install_bundled_package(
     let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| AppError::from(format!("Failed to install bundled package '{}': {}", id, e)))?;
 
-    let mut config = state.config.lock().unwrap();
+    let mut config = state.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
-        error!("Failed to emit extensions_changed: {}", e);
-    }
-
     Ok(item)
+}
+
+// ---------------------------------------------------------------------------
+// Extension capability grants
+// ---------------------------------------------------------------------------
+
+/// Remove a recorded grant (e.g. when uninstalling an extension).
+#[tauri::command]
+pub async fn remove_extension_grant(
+    extension_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
+    let mut config = state.config.lock_or_recover();
+    if config.extension_grants.remove(&extension_id).is_some() {
+        info!("Removed capability grant for '{}'", extension_id);
+        config
+            .save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+    }
+    Ok(())
 }

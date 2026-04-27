@@ -7,6 +7,8 @@
   "icon": "⏱️",
   "author": "kage",
 
+  "permissions": [],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "notify_on_complete": { "type": "boolean", "default": true },
@@ -19,13 +21,6 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js",
-    "widgets": [
-      {
-        "id": "timer-bar",
-        "slot": "floating-bottom",
-        "module": "./timer-bar.js"
-      }
-    ]
+    "settingsProvider": "./settings.js"
   }
 }

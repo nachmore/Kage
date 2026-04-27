@@ -240,6 +240,53 @@ body.light-theme .setting-section-label { background: #e8e8e8; }
 }
 .ext-section-header span { flex: 1; }
 
+/* Capability badges shown under the extension description */
+.ext-capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 16px;
+    padding: 8px 10px;
+    background: var(--kage-surface, #2A2530);
+    border: 1px solid var(--kage-border, #3a3640);
+    border-radius: 6px;
+}
+.ext-capabilities-none {
+    color: var(--kage-text-muted);
+    font-size: 12px;
+}
+.ext-capability-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--kage-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352F3D);
+    border: 1px solid var(--kage-border, #3a3640);
+    border-radius: 12px;
+    cursor: help;
+    user-select: none;
+}
+.ext-capabilities-legacy {
+    font-size: 11px;
+    color: #d9a05b;
+    margin: 4px 0 12px;
+    padding: 6px 10px;
+    background: rgba(217, 160, 91, 0.08);
+    border-left: 3px solid #d9a05b;
+    border-radius: 3px;
+}
+body.light-theme .ext-capabilities {
+    background: #f5f5f5;
+    border-color: #ddd;
+}
+body.light-theme .ext-capability-pill {
+    background: #ffffff;
+    border-color: #ccc;
+    color: #222;
+}
+
 /* Keycap badges (VSCode-style) */
 .keycap-preview {
     display: inline-flex;

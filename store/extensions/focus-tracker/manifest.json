@@ -7,6 +7,8 @@
   "icon": "📊",
   "author": "kage",
 
+  "permissions": ["activity"],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "trigger": { "type": "string", "default": "focus" },
@@ -19,7 +21,7 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js",
+    "settingsProvider": "./settings.js",
     "css": ["./styles.css"]
   }
 }

@@ -40,6 +40,12 @@ pub struct ExtensionManifest {
     pub config: Option<serde_json::Value>,
     #[serde(default)]
     pub contributes: Option<ExtensionContributes>,
+    /// Capabilities this extension is requesting. See docs/EXTENSIONS.md
+    /// for the full list. When the field is absent, the frontend falls back
+    /// to a legacy-safe default — bundled extensions get a broad set,
+    /// user-installed ones get `storage` only.
+    #[serde(default)]
+    pub permissions: Option<Vec<String>>,
     /// For command packs: the commands themselves
     #[serde(default)]
     pub commands: Option<Vec<serde_json::Value>>,
@@ -50,6 +56,11 @@ pub struct ExtensionManifest {
 pub struct ExtensionContributes {
     #[serde(default)]
     pub search_provider: Option<String>,
+    /// Declarative settings provider (sandboxed). Use this for all new
+    /// extensions. The legacy `settings_module` field is kept for reading
+    /// old manifests but is no longer loaded.
+    #[serde(default)]
+    pub settings_provider: Option<String>,
     #[serde(default)]
     pub settings_module: Option<String>,
     #[serde(default)]

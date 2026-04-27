@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<!-- This document is loaded inside a sandboxed iframe by the host. It MUST
+     NOT reference window.__TAURI__ or any host-side globals — the sandbox
+     iframe deliberately has no access to those, and the host bridge is the
+     only way to talk back. Keep this file minimal; the real logic lives in
+     extension-sandbox/runtime.js. -->
+<title>Kage Extension Sandbox</title>
+<style>html,body{margin:0;padding:0;background:transparent;}</style>
+</head>
+<body>
+<script type="module" src="js/extension-sandbox/runtime.js"></script>
+</body>
+</html>

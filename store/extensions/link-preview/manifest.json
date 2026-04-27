@@ -7,6 +7,8 @@
   "icon": "🔗",
   "author": "kage",
 
+  "permissions": ["shell"],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "max_previews": { "type": "number", "default": 5 }
@@ -14,7 +16,7 @@
 
   "contributes": {
     "messageFormatters": "./formatter.js",
-    "settingsModule": "./settings.js",
+    "settingsProvider": "./settings.js",
     "css": ["./styles.css"]
   }
 }

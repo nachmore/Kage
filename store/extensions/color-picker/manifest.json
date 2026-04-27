@@ -7,6 +7,8 @@
   "icon": "🎨",
   "author": "kage",
 
+  "permissions": [],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "copy_format": { "type": "string", "default": "all" }
@@ -14,6 +16,6 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js"
+    "settingsProvider": "./settings.js"
   }
 }

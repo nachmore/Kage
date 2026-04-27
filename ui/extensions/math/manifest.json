@@ -7,6 +7,10 @@
   "icon": "🧮",
   "author": "kage",
 
+  "permissions": [],
+
+  "sandboxVendor": ["math"],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "precision": { "type": "number", "default": 0 },
@@ -16,6 +20,6 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js"
+    "settingsProvider": "./settings.js"
   }
 }

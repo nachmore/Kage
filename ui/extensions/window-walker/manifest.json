@@ -7,6 +7,8 @@
   "icon": "🪟",
   "author": "kage",
 
+  "permissions": ["windows"],
+
   "config": {
     "enabled": { "type": "boolean", "default": true },
     "trigger": { "type": "string", "default": "w " }
@@ -14,6 +16,6 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js"
+    "settingsProvider": "./settings.js"
   }
 }

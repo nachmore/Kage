@@ -64,8 +64,12 @@ function _renderItem(r, index, extMgr) {
 /**
  * Render unified search results with smooth diffing.
  * Reuses existing DOM nodes when possible, animates additions/removals.
+ *
+ * Now async: extensions can contribute custom render HTML, which we
+ * prefetch from the sandbox before building DOM so `renderResult()` can
+ * stay synchronous.
  */
-export function renderUnifiedResults(results, container, currentMatches, resizeWindow) {
+export async function renderUnifiedResults(results, container, currentMatches, resizeWindow) {
     currentMatches.length = 0;
 
     if (!results.length) {
@@ -76,6 +80,12 @@ export function renderUnifiedResults(results, container, currentMatches, resizeW
     }
 
     const extMgr = getExtensionManager();
+    // Prime the custom-render cache so renderResult() below is
+    // synchronous. If the sandbox isn't ready or the extension doesn't
+    // implement renderCustom, this is a no-op.
+    if (extMgr?.prefetchCustomRender) {
+        try { await extMgr.prefetchCustomRender(results); } catch {}
+    }
     const newKeys = results.map(r => _resultKey(r));
 
     // Build map of existing items by key

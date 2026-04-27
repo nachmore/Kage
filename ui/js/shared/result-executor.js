@@ -35,7 +35,7 @@ export async function executeResult(result, query, ctx) {
 
     // Extension-provided results — delegate to extension
     if (result._extensionId && extensionManager) {
-        const action = extensionManager.executeResult(result);
+        const action = await extensionManager.executeResult(result);
         if (action) {
             if (action.type === 'copy') {
                 if (ctx.onCopy) await ctx.onCopy(action.value);

@@ -101,7 +101,7 @@ class AutomationsSettingsModule extends SettingsModule {
             if (invoke) {
                 this._signals = await invoke('list_automation_signals');
                 if (window._extensionManager) {
-                    const extTriggers = window._extensionManager.getTriggerDefinitions?.() || [];
+                    const extTriggers = (await window._extensionManager.getTriggerDefinitions?.()) || [];
                     for (const ext of extTriggers) {
                         for (const t of ext.triggers) {
                             this._signals.push({ name: t.name, description: t.description, source: ext.extensionName, icon: t.icon || ext.extensionIcon });

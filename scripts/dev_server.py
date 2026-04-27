@@ -88,6 +88,14 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        # The extension sandbox iframe has `sandbox="allow-scripts"` with no
+        # `allow-same-origin`, so it gets a *null* origin. In tauri prod
+        # builds, assets are served via a custom protocol that doesn't
+        # enforce CORS the same way. In dev mode we have a real HTTP server,
+        # and null-origin iframes loading `<script type="module">` from it
+        # hit the CORS wall — so we advertise `*` on every dev response.
+        # This is dev-only; the file-serving origin here is localhost.
+        self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
 
     def do_GET(self):

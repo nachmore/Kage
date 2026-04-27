@@ -21,23 +21,20 @@ export default class TodosSearchProvider {
         this.todos = [];
         this._loadFailed = false;
         this._ready = this._load();
-        // Check for due reminders on startup
-        this._ready.then(() => setTimeout(() => this._checkDueReminders(), 1000));
-        // Re-check when window regains focus (covers case where app was open overnight)
-        window.addEventListener('focus', () => this._checkDueReminders());
     }
 
     onConfigUpdate(config) {
         this.config = config || {};
     }
 
+    destroy() {}
+
     // --- Persistence via file (through Tauri IPC) ---
 
     async _load() {
         try {
-            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
-            if (!invoke) { this.todos = []; return; }
-            const raw = await invoke('load_extension_data', { key: STORAGE_KEY });
+            if (!this.invoke) { this.todos = []; return; }
+            const raw = await this.invoke('load_extension_data', { key: STORAGE_KEY });
             this.todos = raw ? JSON.parse(raw) : [];
             this._loadFailed = false;
         } catch (e) {
@@ -53,9 +50,8 @@ export default class TodosSearchProvider {
             return;
         }
         try {
-            const invoke = this.invoke || window.__TAURI__?.core?.invoke;
-            if (!invoke) return;
-            await invoke('save_extension_data', { key: STORAGE_KEY, data: JSON.stringify(this.todos) });
+            if (!this.invoke) return;
+            await this.invoke('save_extension_data', { key: STORAGE_KEY, data: JSON.stringify(this.todos) });
         } catch (e) {
             console.error('Todos: failed to save', e);
         }
@@ -219,108 +215,16 @@ export default class TodosSearchProvider {
     }
 
     // --- Due-date reminder banner ---
+    //
+    // The banner is now owned by widget.js (the due-reminder widget).
+    // Search provider keeps the polling loop so newly-added items
+    // showing `due:today` update the widget's view quickly; the widget
+    // itself also polls every 5 minutes as a fallback.
 
     _checkDueReminders() {
-        // Data is already in memory from initial load; no need to re-read
-        console.log('[Todos] _checkDueReminders: config.show_due_banner =', this.config.show_due_banner, 'todos count =', this.todos.length);
-        if (this.config.show_due_banner === false) return;
-        const due = this.todos.filter(t => this._isDueTodayOrOverdue(t));
-        console.log('[Todos] Due today/overdue items:', due.length, due.map(t => `${t.text} (due:${t.dueDate} status:${t.status})`));
-        if (due.length === 0) return;
-        this._dueItems = due;
-        this._dueIndex = 0;
-        this._mountReminderBar();
-    }
-
-    _mountReminderBar() {
-        let attempts = 0;
-        const tryMount = () => {
-            attempts++;
-            const inputContainer = document.querySelector('.input-container');
-            console.log('[Todos] _mountReminderBar attempt', attempts, ': inputContainer =', !!inputContainer, 'dueItems =', this._dueItems?.length);
-            if (!inputContainer) {
-                if (attempts < 10) setTimeout(tryMount, 500);
-                else console.warn('[Todos] Gave up mounting reminder bar — no .input-container found');
-                return;
-            }
-
-            let bar = document.getElementById('reminderBar');
-            if (bar) bar.remove();
-            if (!this._dueItems || this._dueItems.length === 0) return;
-
-            bar = document.createElement('div');
-            bar.id = 'reminderBar';
-            bar.className = 'extension-bar reminder-bar';
-            bar.innerHTML = `
-                <span class="extension-bar-icon">🔔</span>
-                <span class="extension-bar-text reminder-bar-text" id="reminderBarText" style="flex:1;font-size:13px;font-weight:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-                <div class="extension-bar-controls">
-                    <span class="reminder-bar-counter" id="reminderBarCounter"></span>
-                    <button class="extension-bar-btn" id="reminderPrev" title="Previous">◀</button>
-                    <button class="extension-bar-btn" id="reminderNext" title="Next">▶</button>
-                    <button class="extension-bar-btn" id="reminderDone" title="Mark done">✓</button>
-                    <button class="extension-bar-btn" id="reminderDismiss" title="Dismiss">✕</button>
-                </div>
-            `;
-            // Prevent buttons from stealing focus (which triggers window blur → hide)
-            bar.querySelectorAll('button').forEach(btn => {
-                btn.addEventListener('mousedown', e => e.preventDefault());
-            });
-            inputContainer.parentNode.insertBefore(bar, inputContainer);
-            bar.style.display = 'flex';
-            this._updateReminderBar();
-
-            document.getElementById('reminderPrev').onclick = () => {
-                this._dueIndex = (this._dueIndex - 1 + this._dueItems.length) % this._dueItems.length;
-                this._updateReminderBar();
-            };
-            document.getElementById('reminderNext').onclick = () => {
-                this._dueIndex = (this._dueIndex + 1) % this._dueItems.length;
-                this._updateReminderBar();
-            };
-            document.getElementById('reminderDone').onclick = () => {
-                const item = this._dueItems[this._dueIndex];
-                if (item) {
-                    item.status = 'complete';
-                    const orig = this.todos.find(t => t.id === item.id);
-                    if (orig) orig.status = 'complete';
-                    this._save();
-                }
-                this._dueItems.splice(this._dueIndex, 1);
-                if (this._dueItems.length === 0) {
-                    bar.remove();
-                    document.dispatchEvent(new CustomEvent('kage-resize-request'));
-                } else {
-                    this._dueIndex = this._dueIndex % this._dueItems.length;
-                    this._updateReminderBar();
-                }
-            };
-            document.getElementById('reminderDismiss').onclick = () => {
-                bar.remove();
-                this._dueItems = [];
-                document.dispatchEvent(new CustomEvent('kage-resize-request'));
-            };
-
-            document.dispatchEvent(new CustomEvent('kage-resize-request'));
-        };
-        tryMount();
-    }
-
-    _updateReminderBar() {
-        if (!this._dueItems || this._dueItems.length === 0) return;
-        const item = this._dueItems[this._dueIndex];
-        if (!item) return;
-        const textEl = document.getElementById('reminderBarText');
-        const counterEl = document.getElementById('reminderBarCounter');
-        const dueLabel = this._formatDateDisplay(item.dueDate);
-        if (textEl) textEl.textContent = `${item.text} ${dueLabel}`;
-        if (counterEl) counterEl.textContent = `${this._dueIndex + 1}/${this._dueItems.length}`;
-        const hide = this._dueItems.length <= 1;
-        const prevBtn = document.getElementById('reminderPrev');
-        const nextBtn = document.getElementById('reminderNext');
-        if (prevBtn) prevBtn.style.display = hide ? 'none' : '';
-        if (nextBtn) nextBtn.style.display = hide ? 'none' : '';
-        if (counterEl) counterEl.style.display = hide ? 'none' : '';
+        // Nothing to do here anymore — the widget handles rendering.
+        // Kept as a no-op so existing call sites (e.g. after adding a
+        // new todo with a due date) don't break.
     }
 
     // --- Search matching ---

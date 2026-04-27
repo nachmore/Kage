@@ -1,141 +1,135 @@
 /**
- * Todos & Reminders Settings Module
+ * Todos & Reminders settings provider (sandboxed).
  */
-class TodosExtSettingsModule extends SettingsModule {
-    constructor() {
-        super('todos', 'Todos & Reminders', '✅');
-        this.description = 'Task manager with reminders. Type "todo+ <task>" to add, "todo+ <task> due:<date>" for a reminder, "todos" to view list.';
+const STORAGE_KEY = 'kage-todos';
+
+export default class TodosSettingsProvider {
+    initialize(context) {
+        this.config = context.config || {};
+        this.invoke = context.invoke;
     }
 
-    renderContent() {
-        return `
-            <div class="setting-section-label">Display</div>
+    onConfigUpdate(config) { this.config = config || {}; }
 
-            ${this.createControlRow(
-                'Default Category',
-                'New todos get this category unless overridden with #tag.',
-                '<input type="text" class="setting-input" id="todosDefaultCategory" placeholder="e.g. work, personal" style="max-width:200px;">'
-            )}
-            ${this.createControlRow(
-                'Sort By',
-                'How to order todos in the list.',
-                `<select class="setting-input" id="todosSortBy" style="max-width:200px;">
-                    <option value="created">Newest first</option>
-                    <option value="due">Due date</option>
-                    <option value="priority">Priority</option>
-                    <option value="status">Status</option>
-                </select>`
-            )}
-            ${this.createCheckboxRow(
-                'Show Completed',
-                'Display completed todos in the main list.',
-                'todosShowCompleted',
-                true
-            )}
-            <div class="setting-section-label">Behavior</div>
-
-            ${this.createCheckboxRow(
-                'Confirm Delete',
-                'Ask for confirmation before deleting a todo.',
-                'todosConfirmDelete',
-                true
-            )}
-            ${this.createCheckboxRow(
-                'Show Due Reminder Banner',
-                'Show a banner in the floating window when reminders are due today or overdue.',
-                'todosShowDueBanner',
-                true
-            )}
-            <div class="setting-section-label">Data</div>
-
-            <div class="setting-row">
-                <div class="setting-description">Export or clear all your todos and reminders.</div>
-                <div class="setting-control" style="display:flex;gap:8px;margin-top:6px;">
-                    <button class="setting-button" id="todosExport">Export JSON</button>
-                    <button class="setting-button" id="todosImport">Import JSON</button>
-                    <button class="setting-button danger" id="todosClearAll">Clear All</button>
-                </div>
-            </div>
-        `;
-    }
-
-    render() { return this.renderContent(); }
-
-    initialize() {
-        document.getElementById('todosExport')?.addEventListener('click', () => this._export());
-        document.getElementById('todosImport')?.addEventListener('click', () => this._import());
-        document.getElementById('todosClearAll')?.addEventListener('click', () => this._clearAll());
-    }
-
-    load(config) {
-        const ext = (config.extensions && config.extensions['todos']) || {};
-        const cat = document.getElementById('todosDefaultCategory');
-        const sort = document.getElementById('todosSortBy');
-        const show = document.getElementById('todosShowCompleted');
-        const confirm = document.getElementById('todosConfirmDelete');
-        const banner = document.getElementById('todosShowDueBanner');
-        if (cat) cat.value = ext.default_category || '';
-        if (sort) sort.value = ext.sort_by || 'created';
-        if (show) show.checked = ext.show_completed !== false;
-        if (confirm) confirm.checked = ext.confirm_delete !== false;
-        if (banner) banner.checked = ext.show_due_banner !== false;
-    }
-
-    save(config) {
-        if (!config.extensions) config.extensions = {};
-        config.extensions['todos'] = {
-            default_category: document.getElementById('todosDefaultCategory')?.value || '',
-            sort_by: document.getElementById('todosSortBy')?.value || 'created',
-            show_completed: document.getElementById('todosShowCompleted')?.checked ?? true,
-            confirm_delete: document.getElementById('todosConfirmDelete')?.checked ?? true,
-            show_due_banner: document.getElementById('todosShowDueBanner')?.checked ?? true,
+    getSettings() {
+        return {
+            description: 'Task manager with reminders. Type "todo+ <task>" to add, "todo+ <task> due:<date>" for a reminder, "todos" to view list.',
+            sections: [
+                {
+                    label: 'Display',
+                    controls: [
+                        {
+                            type: 'text',
+                            id: 'default_category',
+                            label: 'Default Category',
+                            description: 'New todos get this category unless overridden with #tag.',
+                            default: '',
+                            placeholder: 'e.g. work, personal',
+                            maxWidth: 200,
+                        },
+                        {
+                            type: 'select',
+                            id: 'sort_by',
+                            label: 'Sort By',
+                            description: 'How to order todos in the list.',
+                            default: 'created',
+                            maxWidth: 200,
+                            options: [
+                                { value: 'created', label: 'Newest first' },
+                                { value: 'due', label: 'Due date' },
+                                { value: 'priority', label: 'Priority' },
+                                { value: 'status', label: 'Status' },
+                            ],
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'show_completed',
+                            label: 'Show Completed',
+                            description: 'Display completed todos in the main list.',
+                            default: true,
+                        },
+                    ],
+                },
+                {
+                    label: 'Behavior',
+                    controls: [
+                        {
+                            type: 'checkbox',
+                            id: 'confirm_delete',
+                            label: 'Confirm Delete',
+                            description: 'Ask for confirmation before deleting a todo.',
+                            default: true,
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'show_due_banner',
+                            label: 'Show Due Reminder Banner',
+                            description: 'Show a banner in the floating window when reminders are due today or overdue.',
+                            default: true,
+                        },
+                    ],
+                },
+                {
+                    label: 'Data',
+                    controls: [
+                        {
+                            type: 'info',
+                            html: 'Export or clear all your todos and reminders.',
+                        },
+                        { type: 'action', id: 'export',   label: 'Export JSON', action: 'export' },
+                        { type: 'action', id: 'import',   label: 'Import JSON', action: 'import' },
+                        { type: 'action', id: 'clearAll', label: 'Clear All',   action: 'clear_all', variant: 'danger',
+                          confirm: 'Delete ALL todos and reminders? This cannot be undone.' },
+                    ],
+                },
+            ],
         };
     }
 
-    validate() { return { valid: true }; }
-
-    _export() {
-        const invoke = window.__TAURI__?.core?.invoke;
-        if (!invoke) return;
-        invoke('load_extension_data', { key: 'kage-todos' }).then(raw => {
-            const data = raw || '[]';
-            const blob = new Blob([data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'kage-todos.json'; a.click();
-            URL.revokeObjectURL(url);
-        }).catch(e => console.error('Todos export failed:', e));
-    }
-
-    _import() {
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = '.json';
-        input.onchange = async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
+    async runAction(action, _values) {
+        if (action === 'export') {
             try {
-                const text = await file.text();
-                const data = JSON.parse(text);
-                if (!Array.isArray(data)) throw new Error('Invalid format');
-                const invoke = window.__TAURI__?.core?.invoke;
-                if (!invoke) throw new Error('Tauri not available');
-                await invoke('save_extension_data', { key: 'kage-todos', data: JSON.stringify(data) });
-                alert(`Imported ${data.length} todos.`);
-            } catch (err) { alert('Failed to import: ' + err.message); }
-        };
-        input.click();
+                const raw = await this.invoke('load_extension_data', { key: STORAGE_KEY });
+                const data = raw || '[]';
+                return {
+                    host: {
+                        type: 'download',
+                        filename: 'kage-todos.json',
+                        content: data,
+                        mime: 'application/json',
+                    },
+                    status: '✅ Exported',
+                };
+            } catch (e) {
+                return { status: `❌ Export failed: ${e?.message || e}` };
+            }
+        }
+        if (action === 'import') {
+            return { host: { type: 'pick_file', accept: '.json', action: 'import' } };
+        }
+        if (action === 'clear_all') {
+            try {
+                await this.invoke('delete_extension_data', { key: STORAGE_KEY });
+                return { status: '✅ All todos and reminders cleared.' };
+            } catch (e) {
+                return { status: `❌ ${e?.message || e}` };
+            }
+        }
+        return {};
     }
 
-    _clearAll() {
-        if (!confirm('Delete ALL todos and reminders? This cannot be undone.')) return;
-        const invoke = window.__TAURI__?.core?.invoke;
-        if (!invoke) return;
-        invoke('delete_extension_data', { key: 'kage-todos' }).then(() => {
-            alert('All todos and reminders cleared.');
-        }).catch(e => console.error('Failed to clear todos:', e));
+    async onFileSelected(params) {
+        if (params.action !== 'import') return {};
+        try {
+            const data = JSON.parse(params.content);
+            if (!Array.isArray(data)) throw new Error('Invalid format (expected JSON array)');
+            await this.invoke('save_extension_data', {
+                key: STORAGE_KEY,
+                data: JSON.stringify(data),
+            });
+            return { status: `✅ Imported ${data.length} todos.` };
+        } catch (e) {
+            return { status: `❌ Import failed: ${e?.message || e}` };
+        }
     }
-
-    destroy() {}
 }
-
-window.TodosExtSettingsModule = TodosExtSettingsModule;

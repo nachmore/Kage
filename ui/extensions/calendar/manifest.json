@@ -7,6 +7,8 @@
   "icon": "📅",
   "author": "kage",
 
+  "permissions": ["calendar", "shell", "automation"],
+
   "config": {
     "enabled": { "type": "boolean", "default": false },
     "show_overlay": { "type": "boolean", "default": true },
@@ -15,8 +17,15 @@
 
   "contributes": {
     "searchProvider": "./search.js",
-    "settingsModule": "./settings.js",
+    "settingsProvider": "./settings.js",
     "toolProvider": "./tools.js",
-    "triggerProvider": "./triggers.js"
+    "triggerProvider": "./triggers.js",
+    "widgets": [
+      {
+        "id": "next-meeting",
+        "slot": "floating-bottom",
+        "module": "./widget.js"
+      }
+    ]
   }
 }

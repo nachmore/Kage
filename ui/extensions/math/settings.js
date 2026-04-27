@@ -1,52 +1,59 @@
 /**
- * Math Settings Module — extension version.
- * Reads/writes config from config.extensions['math'].
+ * Math settings provider (sandboxed).
+ *
+ * Runs inside the extension sandbox iframe. Returns a declarative schema;
+ * the host renders and wires everything up. No DOM access from here.
  */
-class MathExtSettingsModule extends SettingsModule {
-    constructor() {
-        super('math', 'Math', '🧮');
-        this.description = 'Evaluate math expressions directly in the input bar without sending them to the agent.';
+export default class MathSettingsProvider {
+    initialize(context) {
+        this.config = context.config || {};
     }
 
-    renderContent() {
-        return `
-            ${this.createControlRow(
-                'Decimal Precision',
-                'Number of decimal places to display (-1 = auto, 0 = integer)',
-                '<input type="number" class="setting-input" id="mathPrecision" min="-1" max="15" value="2">'
-            )}
-            ${this.createCheckboxRow('Auto-copy Result', 'Automatically copy the answer to clipboard when pressing Enter', 'mathAutoCopy', true)}
-            ${this.createCheckboxRow('Use Thousands Separator', 'Format large numbers with commas (e.g. 1,000,000)', 'mathThousandsSeparator', false)}
-        `;
+    onConfigUpdate(config) {
+        this.config = config || {};
     }
 
-    render() { return this.renderContent(); }
-
-    load(config) {
-        const math = (config.extensions && config.extensions['math']) || {};
-        const precision = document.getElementById('mathPrecision');
-        const autoCopy = document.getElementById('mathAutoCopy');
-        const thousands = document.getElementById('mathThousandsSeparator');
-        if (precision) precision.value = math.precision ?? 2;
-        if (autoCopy) autoCopy.checked = math.auto_copy !== false;
-        if (thousands) thousands.checked = math.thousands_separator === true;
-    }
-
-    save(config) {
-        if (!config.extensions) config.extensions = {};
-        config.extensions['math'] = {
-            precision: parseInt(document.getElementById('mathPrecision')?.value ?? '2'),
-            auto_copy: document.getElementById('mathAutoCopy')?.checked ?? true,
-            thousands_separator: document.getElementById('mathThousandsSeparator')?.checked ?? false,
+    getSettings() {
+        return {
+            description: 'Evaluate math expressions directly in the input bar without sending them to the agent.',
+            sections: [
+                {
+                    controls: [
+                        {
+                            type: 'number',
+                            id: 'precision',
+                            label: 'Decimal Precision',
+                            description: 'Number of decimal places to display (-1 = auto, 0 = integer)',
+                            default: 2,
+                            min: -1,
+                            max: 15,
+                            maxWidth: 80,
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'auto_copy',
+                            label: 'Auto-copy Result',
+                            description: 'Automatically copy the answer to clipboard when pressing Enter',
+                            default: true,
+                        },
+                        {
+                            type: 'checkbox',
+                            id: 'thousands_separator',
+                            label: 'Use Thousands Separator',
+                            description: 'Format large numbers with commas (e.g. 1,000,000)',
+                            default: false,
+                        },
+                    ],
+                },
+            ],
         };
     }
 
-    validate() {
-        const precision = parseInt(document.getElementById('mathPrecision')?.value ?? '-1');
-        if (precision < -1 || precision > 15) {
+    validate(values) {
+        const p = Number(values.precision);
+        if (!Number.isFinite(p) || p < -1 || p > 15) {
             return { valid: false, error: 'Math precision must be between -1 and 15' };
         }
         return { valid: true };
     }
 }
-window.MathExtSettingsModule = MathExtSettingsModule;

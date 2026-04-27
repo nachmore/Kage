@@ -310,6 +310,7 @@
     import { createMascotController, getMascotThemeSettings } from './js/shared/mascot.js';
     import { ANIMATIONS } from './js/shared/mascot-animations.js';
     import { escapeHtml } from './js/shared/tool-utils.js';
+    import { showPermissionPrompt } from './js/shared/permission-prompt.js';
 
     function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
@@ -616,7 +617,30 @@
                             deselectedBundled.push(ext.id);
                         }
                     } else if (checked && !alreadyInstalled.has(ext.id)) {
-                        try { await invoke('install_bundled_package', { id: ext.id }); } catch (e) { console.warn('Failed to install ' + ext.id, e); }
+                        try {
+                            // Stage install, prompt for permissions, commit
+                            // or roll back based on user's decision.
+                            const item = await invoke('install_bundled_package', { id: ext.id });
+                            const manifest = item?.manifest;
+                            if (manifest?.id) {
+                                const decision = await showPermissionPrompt(manifest);
+                                if (decision.approved) {
+                                    await invoke('commit_extension_install', {
+                                        extensionId: manifest.id,
+                                        granted: decision.granted,
+                                        approvedVersion: manifest.version || '',
+                                    });
+                                } else {
+                                    // Rollback: user said no, remove the files.
+                                    try {
+                                        await invoke('uninstall_extension', {
+                                            id: manifest.id,
+                                            kind: manifest.type || 'extension',
+                                        });
+                                    } catch (e) { console.warn('Rollback failed:', e); }
+                                }
+                            }
+                        } catch (e) { console.warn('Failed to install ' + ext.id, e); }
                     }
                 }
                 // Disable deselected bundled extensions

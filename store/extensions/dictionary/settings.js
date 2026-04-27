@@ -1,10 +1,9 @@
 /**
- * Dictionary Settings Module — extension settings page.
- * Reads/writes config from config.extensions['dictionary'].
+ * Dictionary settings provider (sandboxed).
  */
 
-// Top languages from FreeDictionaryAPI.com (sorted by word count)
 const LANGUAGES = [
+    { code: 'auto', name: 'Auto-detect' },
     { code: 'en', name: 'English' },
     { code: 'la', name: 'Latin' },
     { code: 'es', name: 'Spanish' },
@@ -37,68 +36,46 @@ const LANGUAGES = [
     { code: 'id', name: 'Indonesian' },
 ];
 
-class DictionaryExtSettingsModule extends SettingsModule {
-    constructor() {
-        super('dictionary', 'Dictionary', '📖');
-        this.description = 'Look up word definitions, spelling corrections, and pronunciation. Powered by FreeDictionaryAPI.com (Wiktionary data).';
-    }
+export default class DictionarySettingsProvider {
+    initialize(context) { this.config = context.config || {}; }
+    onConfigUpdate(config) { this.config = config || {}; }
 
-    renderContent() {
-        const options = '<option value="auto">Auto-detect</option>' + LANGUAGES.map(l =>
-            `<option value="${l.code}">${l.name}</option>`
-        ).join('');
-
-        return `
-            ${this.createControlRow(
-                'Trigger Keyword',
-                'Type this keyword followed by a space to activate dictionary lookup (e.g. "dict hello"). Leave empty to look up any typed word.',
-                '<input type="text" class="setting-input" id="dictTrigger" placeholder="dict" value="dict" style="width: 100px;">'
-            )}
-            ${this.createControlRow(
-                'Language',
-                'Dictionary language for lookups. Auto-detect uses tinyld to identify the language. Supports 250+ languages via FreeDictionaryAPI.com.',
-                `<select class="setting-input" id="dictLanguage">${options}</select>`
-            )}
-            ${this.createCheckboxRow('Show Pronunciation', 'Display IPA pronunciation when available', 'dictShowPronunciation', true)}
-            ${this.createCheckboxRow('Show Examples', 'Display usage examples when available', 'dictShowExamples', true)}
-            ${this.createCheckboxRow('Show Synonyms', 'Display synonyms when available', 'dictShowSynonyms', true)}
-            <div class="setting-row" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
-                Data sourced from <a href="https://en.wiktionary.org/" target="_blank" style="color: var(--kage-accent);">Wiktionary</a>
-                via <a href="https://freedictionaryapi.com/" target="_blank" style="color: var(--kage-accent);">FreeDictionaryAPI.com</a>
-                under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" style="color: var(--kage-accent);">CC BY-SA 4.0</a>.
-                Spelling suggestions by <a href="https://www.datamuse.com/" target="_blank" style="color: var(--kage-accent);">Datamuse</a>.
-            </div>
-        `;
-    }
-
-    render() { return this.renderContent(); }
-
-    load(config) {
-        const ext = (config.extensions && config.extensions['dictionary']) || {};
-        const trigger = document.getElementById('dictTrigger');
-        const lang = document.getElementById('dictLanguage');
-        const pron = document.getElementById('dictShowPronunciation');
-        const examples = document.getElementById('dictShowExamples');
-        const syn = document.getElementById('dictShowSynonyms');
-        if (trigger) trigger.value = ext.trigger ?? 'dict';
-        if (lang) lang.value = ext.language || 'auto';
-        if (pron) pron.checked = ext.show_pronunciation !== false;
-        if (examples) examples.checked = ext.show_examples !== false;
-        if (syn) syn.checked = ext.show_synonyms !== false;
-    }
-
-    save(config) {
-        if (!config.extensions) config.extensions = {};
-        config.extensions['dictionary'] = {
-            trigger: document.getElementById('dictTrigger')?.value ?? 'dict',
-            language: document.getElementById('dictLanguage')?.value || 'auto',
-            show_pronunciation: document.getElementById('dictShowPronunciation')?.checked ?? true,
-            show_examples: document.getElementById('dictShowExamples')?.checked ?? true,
-            show_synonyms: document.getElementById('dictShowSynonyms')?.checked ?? true,
+    getSettings() {
+        return {
+            description: 'Look up word definitions, spelling corrections, and pronunciation. Powered by FreeDictionaryAPI.com (Wiktionary data).',
+            sections: [
+                {
+                    controls: [
+                        {
+                            type: 'text',
+                            id: 'trigger',
+                            label: 'Trigger Keyword',
+                            description: 'Type this keyword followed by a space to activate dictionary lookup (e.g. "dict hello"). Leave empty to look up any typed word.',
+                            default: 'dict',
+                            placeholder: 'dict',
+                            maxWidth: 100,
+                        },
+                        {
+                            type: 'select',
+                            id: 'language',
+                            label: 'Language',
+                            description: 'Dictionary language for lookups. Auto-detect uses tinyld to identify the language. Supports 250+ languages via FreeDictionaryAPI.com.',
+                            default: 'auto',
+                            options: LANGUAGES.map(l => ({ value: l.code, label: l.name })),
+                        },
+                        { type: 'checkbox', id: 'show_pronunciation', label: 'Show Pronunciation', description: 'Display IPA pronunciation when available', default: true },
+                        { type: 'checkbox', id: 'show_examples',      label: 'Show Examples',       description: 'Display usage examples when available', default: true },
+                        { type: 'checkbox', id: 'show_synonyms',      label: 'Show Synonyms',       description: 'Display synonyms when available', default: true },
+                        {
+                            type: 'info',
+                            html: 'Data sourced from <a href="https://en.wiktionary.org/" target="_blank">Wiktionary</a> '
+                                + 'via <a href="https://freedictionaryapi.com/" target="_blank">FreeDictionaryAPI.com</a> '
+                                + 'under <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank">CC BY-SA 4.0</a>. '
+                                + 'Spelling suggestions by <a href="https://www.datamuse.com/" target="_blank">Datamuse</a>.',
+                        },
+                    ],
+                },
+            ],
         };
     }
-
-    validate() { return { valid: true }; }
 }
-
-window.DictionaryExtSettingsModule = DictionaryExtSettingsModule;
