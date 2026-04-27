@@ -3,6 +3,7 @@
 // Pure modules — always available, including in test mode
 pub mod agent_presets;
 pub mod config;
+pub mod config_migrations;
 pub mod acp_client;
 pub mod activity_tracker;
 pub mod app_launcher;

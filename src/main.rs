@@ -12,6 +12,7 @@ mod commands;
 #[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary, not this one
 mod computer_control;
 mod config;
+mod config_migrations;
 mod error;
 mod extensions;
 mod lock_ext;

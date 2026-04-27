@@ -4,8 +4,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::config_migrations;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_config_version")]
     pub version: u32,
     pub hotkey: HotkeyConfig,
     pub acp: AcpConfig,
@@ -102,6 +105,10 @@ fn default_policy() -> String {
 
 fn default_grant_type() -> String {
     "once".to_string()
+}
+
+fn default_config_version() -> u32 {
+    config_migrations::CURRENT_VERSION
 }
 
 /// A user-approved capability grant for an installed extension.
@@ -625,7 +632,7 @@ impl Default for PocketTtsConfig {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: config_migrations::CURRENT_VERSION,
             hotkey: HotkeyConfig {
                 modifiers: vec!["Alt".to_string()],
                 key: "Space".to_string(),
@@ -704,7 +711,7 @@ impl Config {
 
     pub fn load() -> Result<Self> {
         let config_path = Self::get_config_path()?;
-        
+
         if !config_path.exists() {
             let config = Self::default();
             config.save()?;
@@ -714,20 +721,94 @@ impl Config {
         let metadata = fs::metadata(&config_path)
             .context("Failed to read config file metadata")?;
         if metadata.len() > Self::MAX_CONFIG_SIZE {
-            anyhow::bail!(
-                "Config file is too large ({} bytes, max {}). It may be corrupted.",
-                metadata.len(),
-                Self::MAX_CONFIG_SIZE
+            // Too-large config is almost certainly corrupted (maybe a
+            // truncated write that got padded, or a log file written to
+            // the wrong place). Back it up and reset rather than
+            // refusing to start — the user's session can continue.
+            log::warn!(
+                "Config file is {} bytes (max {}); treating as corrupt",
+                metadata.len(), Self::MAX_CONFIG_SIZE
             );
+            Self::backup_corrupt(&config_path, "oversized");
+            let config = Self::default();
+            config.save()?;
+            return Ok(config);
         }
-        
+
         let content = fs::read_to_string(&config_path)
             .context("Failed to read config file")?;
-        
-        let config: Config = serde_json::from_str(&content)
-            .context("Failed to parse config file")?;
-        
+
+        // Parse to a generic Value first so we can run migrations on the
+        // JSON representation before it hits the strongly-typed struct.
+        // This means a field rename or restructure in a migration doesn't
+        // have to also pass through the current struct's shape.
+        let raw: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("Config file is not valid JSON ({}); backing up and resetting", e);
+                Self::backup_corrupt(&config_path, "invalid-json");
+                let config = Self::default();
+                config.save()?;
+                return Ok(config);
+            }
+        };
+
+        let migrated = match config_migrations::migrate(raw) {
+            Ok(v) => v,
+            Err(e) => {
+                // Two cases land here:
+                //   1. Version is newer than we understand — preserve the
+                //      file, start with defaults *without* overwriting.
+                //   2. Version is too old to migrate — back up and reset.
+                let msg = format!("{}", e);
+                if msg.contains("newer") {
+                    log::warn!(
+                        "Config is from a newer build ({}); running with defaults without overwriting the file",
+                        e
+                    );
+                    return Ok(Self::default());
+                }
+                log::warn!("Config migration failed ({}); backing up and resetting", e);
+                Self::backup_corrupt(&config_path, "migration-failed");
+                let config = Self::default();
+                config.save()?;
+                return Ok(config);
+            }
+        };
+
+        let config: Config = match serde_json::from_value(migrated) {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("Post-migration config did not match current schema ({}); backing up and resetting", e);
+                Self::backup_corrupt(&config_path, "schema-mismatch");
+                let config = Self::default();
+                config.save()?;
+                return Ok(config);
+            }
+        };
+
+        // If migrations bumped the version, persist the upgrade so we
+        // don't rerun them every launch.
+        if config.version < config_migrations::CURRENT_VERSION {
+            let mut upgraded = config.clone();
+            upgraded.version = config_migrations::CURRENT_VERSION;
+            let _ = upgraded.save();
+            return Ok(upgraded);
+        }
+
         Ok(config)
+    }
+
+    /// Copy a bad config file aside so the user can inspect it later.
+    /// Best-effort: failure to back up does not block the reset path.
+    fn backup_corrupt(path: &std::path::Path, reason: &str) {
+        let ts = chrono::Utc::now().format("%Y%m%dT%H%M%S");
+        let backup = path.with_extension(format!("json.corrupt-{}-{}.bak", reason, ts));
+        if let Err(e) = fs::copy(path, &backup) {
+            log::warn!("Failed to back up corrupt config to {:?}: {}", backup, e);
+        } else {
+            log::info!("Backed up corrupt config to {:?}", backup);
+        }
     }
     
     pub fn save(&self) -> Result<()> {
