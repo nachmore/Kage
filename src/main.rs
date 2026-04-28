@@ -21,6 +21,7 @@ mod mcp_registration;
 mod os;
 mod panic_handler;
 mod process_manager;
+mod setup;
 mod single_instance;
 mod startup;
 mod state;
@@ -30,13 +31,10 @@ mod updater;
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
 use config::Config;
-use lock_ext::LockExt;
 use log::{error, info, warn};
 use process_manager::ProcessManager;
 use state::AppState;
 use std::sync::Arc;
-use tauri::Manager;
-use tauri::Listener;
 use tokio::sync::Mutex;
 
 /// In debug builds on Windows, attach to the parent console (if any) so that
@@ -96,25 +94,7 @@ fn main() {
     };
 
     // On restart, wait for the old process to fully release WebView2/Tauri resources
-    if flags.is_restart {
-        info!("Restart mode: waiting for previous instance resources to release...");
-        if let Some(webview_dir) = startup::webview_user_data_dir() {
-            match startup::wait_for_webview_release(
-                &webview_dir,
-                20,
-                std::time::Duration::from_millis(500),
-                std::thread::sleep,
-            ) {
-                startup::WebviewWaitResult::NotPresent => { /* first run, nothing to wait for */ }
-                startup::WebviewWaitResult::Released { waited_ms } => {
-                    info!("WebView2 resources released after {}ms", waited_ms);
-                }
-                startup::WebviewWaitResult::TimedOut { waited_ms } => {
-                    warn!("WebView2 lock still held after {}ms — continuing anyway", waited_ms);
-                }
-            }
-        }
-    }
+    startup::wait_for_previous_instance_if_restart(flags.is_restart);
 
     let dev_mode = flags.dev_mode;
     let debug_mode = flags.debug_mode;
@@ -141,53 +121,9 @@ fn main() {
     // when this process exits (even on crash). This prevents orphaned
     // TTS servers, ACP CLI processes, etc.
     #[cfg(target_os = "windows")]
-    {
-        use windows::Win32::System::JobObjects::*;
-        use windows::Win32::System::Threading::GetCurrentProcess;
-        use windows::core::PCWSTR;
+    os::windows::process::install_kill_on_exit_job();
 
-        unsafe {
-            match CreateJobObjectW(None, PCWSTR::null()) {
-                Ok(job) => {
-                    let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-                    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-                        | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-                    let set_ok = SetInformationJobObject(
-                        job,
-                        JobObjectExtendedLimitInformation,
-                        &info as *const _ as *const _,
-                        std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-                    );
-                    if set_ok.is_ok() {
-                        let current = GetCurrentProcess();
-                        match AssignProcessToJobObject(job, current) {
-                            Ok(_) => info!("✅ Job Object created — child processes will be killed on exit"),
-                            Err(e) => warn!("Failed to assign process to Job Object: {}", e),
-                        }
-                    } else {
-                        warn!("Failed to configure Job Object");
-                    }
-                    // The job handle must stay open for the lifetime of the process.
-                    // HANDLE is Copy with no Drop impl, so it won't be auto-closed
-                    // when it goes out of scope — exactly what we want. The OS keeps
-                    // the Job Object alive (and its KILL_ON_JOB_CLOSE policy active)
-                    // as long as the handle isn't explicitly closed via CloseHandle.
-                    let _ = job;
-                }
-                Err(e) => warn!("Failed to create Job Object: {}", e),
-            }
-        }
-    }
-
-    let mut config = Config::load().unwrap_or_else(|e| {
-        error!("Failed to load config, using defaults: {}", e);
-        eprintln!("Failed to load config, using defaults: {}", e);
-        Config::default()
-    });
-
-    if debug_mode {
-        config.debug_mode = true;
-    }
+    let config = startup::load_config_with_overrides(debug_mode, Config::load);
 
     info!("Configuration loaded");
     if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
@@ -280,10 +216,7 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if let Err(e) = window.hide() {
-                    log::warn!("Failed to hide window on close: {}", e);
-                }
-                api.prevent_close();
+                setup::handle_window_close(window, api);
             }
         })
         .setup(move |app| {
@@ -310,62 +243,14 @@ fn main() {
                 );
             }
 
-            // Configure floating window. If the floating window isn't
-            // available, something is very wrong with the webview setup —
-            // log loudly but let setup continue so other windows still work.
-            if let Some(floating_window) = app.get_webview_window("floating") {
-                let _ = floating_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-                #[cfg(target_os = "windows")]
-                let _ = floating_window.set_shadow(false);
-            } else {
-                error!("Floating window not found during setup — UI will be limited");
-            }
-
-            // Configure context-menu window
-            if let Some(ctx_menu) = app.get_webview_window("context-menu") {
-                let _ = ctx_menu.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-                #[cfg(target_os = "windows")]
-                let _ = ctx_menu.set_shadow(false);
-            }
-
-            // Configure inline-assist window
-            if let Some(ia_win) = app.get_webview_window("inline-assist") {
-                let _ = ia_win.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
-                #[cfg(target_os = "windows")]
-                let _ = ia_win.set_shadow(false);
-            }
+            // Configure floating / context-menu / inline-assist windows for transparency.
+            setup::configure_transparent_windows(app);
 
             // Register all global hotkeys from config
             commands::system::register_all_hotkeys(app.handle());
 
             // Hot-reload hotkeys when config changes
-            let hotkey_app = app.handle().clone();
-            let hotkey_config = app.state::<AppState>().config.clone();
-            let last_hotkey_snapshot: Arc<std::sync::Mutex<(String, Option<String>, Option<String>)>> = {
-                let main = config.get_hotkey_string();
-                let cb = config.get_clipboard_hotkey_string();
-                let ia = config.get_inline_assist_hotkey_string();
-                Arc::new(std::sync::Mutex::new((main, cb, ia)))
-            };
-            app.listen("config_updated", move |_| {
-                let (new_main, new_cb, new_ia) = match hotkey_config.try_lock() {
-                    Ok(config) => (
-                        config.get_hotkey_string(),
-                        config.get_clipboard_hotkey_string(),
-                        config.get_inline_assist_hotkey_string(),
-                    ),
-                    Err(_) => return,
-                };
-
-                let mut snapshot = last_hotkey_snapshot.lock_or_recover();
-                if snapshot.0 == new_main && snapshot.1 == new_cb && snapshot.2 == new_ia {
-                    return; // No hotkey changes
-                }
-
-                info!("Hotkeys changed — re-registering all");
-                commands::system::register_all_hotkeys(&hotkey_app);
-                *snapshot = (new_main, new_cb, new_ia);
-            });
+            setup::install_hotkey_hot_reload(app, &config);
 
             info!("=== Setup Complete ===");
 
@@ -373,251 +258,32 @@ fn main() {
             single_instance::start_ipc_listener(app.handle().clone());
 
             // Listen for show-sessions event (triggered by second instance)
-            {
-                let app_handle = app.handle().clone();
-                app.listen("show-sessions", move |_| {
-                    info!("show-sessions event received, opening chat window");
-                    let handle = app_handle.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if let Err(e) = commands::window::open_chat_window(handle).await {
-                            log::error!("Failed to open chat window from IPC signal: {}", e);
-                        }
-                    });
-                });
-            }
+            setup::install_show_sessions_listener(app);
 
             // Start automation scheduler
-            {
-                let state: tauri::State<'_, AppState> = app.state();
-                let config_arc = state.config.clone();
-                let signal_tx_arc = state.automation_signal_tx.clone();
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
-                    *signal_tx_arc.lock_or_recover() = Some(scheduler.signal_sender());
-                    scheduler.run(signal_rx, app_handle).await;
-                });
-            }
+            setup::spawn_automation_scheduler(app);
 
-            // Watchdog: if the frontend doesn't signal ready within 15 seconds,
-            // the webview likely failed to load (e.g. WebView2 "resource in use").
-            // Exit early rather than running headless.
-            {
-                let ready_flag = app.state::<AppState>().frontend_ready.clone();
-                let app_handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(15));
-                    if !ready_flag.load(std::sync::atomic::Ordering::Acquire) {
-                        error!("❌ Frontend did not become ready within 15 seconds — webview may have failed to load.");
-                        error!("   This usually means another process is holding the WebView2 user data folder.");
-                        error!("   Try closing other instances or killing stale WebView2 processes.");
-                        // Exit the app — no point running without a UI
-                        app_handle.exit(1);
-                    }
-                });
-            }
+            // Watchdog: exit early if the frontend doesn't become ready.
+            setup::spawn_frontend_watchdog(app);
 
             // Auto-start Pocket TTS server if configured
-            if config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed {
-                info!("Pocket TTS auto-start enabled, spawning server in background");
-                let state: tauri::State<'_, AppState> = app.state();
-                let config_arc = state.config.clone();
-                let tts_proc = state.pocket_tts_process.clone();
-                tauri::async_runtime::spawn(async move {
-                    let (port, voice, temp, eos_threshold, python) = {
-                        let config = config_arc.lock_or_recover();
-                        (
-                            config.pocket_tts.port,
-                            config.pocket_tts.voice.clone(),
-                            config.pocket_tts.temp,
-                            config.pocket_tts.eos_threshold,
-                            config.pocket_tts.python_path.clone()
-                                .unwrap_or_else(|| "python".to_string()),
-                        )
-                    };
-
-                    let script_path = commands::pocket_tts::get_server_script_path();
-                    if !script_path.exists() {
-                        warn!("Pocket TTS server script not found, skipping auto-start");
-                        return;
-                    }
-
-                    let mut cmd = std::process::Command::new(&python);
-                    cmd.arg(script_path.to_str().unwrap_or(""))
-                        .args(["--port", &port.to_string()])
-                        .args(["--voice", &voice])
-                        .args(["--temp", &temp.to_string()])
-                        .args(["--eos-threshold", &eos_threshold.to_string()])
-                        .stdout(std::process::Stdio::piped())
-                        .stderr(std::process::Stdio::piped());
-                    commands::pocket_tts::configure_no_window(&mut cmd);
-
-                    match cmd.spawn() {
-                        Ok(child) => {
-                            info!("Pocket TTS server auto-started (PID: {})", child.id());
-                            let mut proc = tts_proc.lock_or_recover();
-                            *proc = Some(child);
-                        }
-                        Err(e) => {
-                            warn!("Failed to auto-start Pocket TTS server: {}", e);
-                        }
-                    }
-                });
-            }
+            setup::maybe_autostart_pocket_tts(app, &config);
 
             // Watch the sessions directory for external changes (e.g., kage-cli creating sessions)
-            {
-                let state: tauri::State<'_, AppState> = app.state();
-                commands::sessions::start_session_watcher(
-                    state.session_cache.clone(),
-                    app.handle().clone(),
-                );
-            }
+            setup::start_session_watcher(app);
 
             // Background app registry scan (deferred from startup for speed)
             // and periodic refresh every hour so the list stays current.
-            {
-                let state: tauri::State<'_, AppState> = app.state();
-                let launcher = state.app_launcher.clone();
-                tauri::async_runtime::spawn(async move {
-                    crate::os::set_current_thread_name("app-launcher");
-                    // Initial scan — do the heavy work outside the lock
-                    match tauri::async_runtime::spawn_blocking(AppLauncher::build_registry).await {
-                        Ok(Ok(registry)) => {
-                            launcher.lock().await.apply_registry(registry);
-                        }
-                        Ok(Err(e)) => log::error!("Background app scan failed: {}", e),
-                        Err(e) => log::error!("Background app scan task failed: {}", e),
-                    }
-                    // Periodic refresh every hour
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
-                    interval.tick().await; // consume the immediate first tick
-                    loop {
-                        interval.tick().await;
-                        log::info!("Periodic app registry refresh");
-                        // Scan outside the lock so find_app calls aren't blocked
-                        match tauri::async_runtime::spawn_blocking(AppLauncher::build_registry).await {
-                            Ok(Ok(registry)) => {
-                                launcher.lock().await.apply_registry(registry);
-                            }
-                            Ok(Err(e)) => log::error!("Periodic app scan failed: {}", e),
-                            Err(e) => log::error!("Periodic app scan task failed: {}", e),
-                        }
-                    }
-                });
-            }
+            setup::spawn_app_registry_scan(app);
 
             // Start default session on launch if configured
-            if config.acp.agent.start_session_on_launch {
-                info!("start_session_on_launch enabled, spawning background session init");
-                let state: tauri::State<'_, AppState> = app.state();
-                let acp_client = state.acp_client.clone();
-                let floating_session = state.floating_session_id.clone();
-                let config_arc = state.config.clone();
-                let models_arc = state.available_models.clone();
-
-                tauri::async_runtime::spawn(async move {
-                    let client = acp_client.lock().await;
-                    info!("Connecting ACP client on launch...");
-                    if let Err(e) = client.connect() {
-                        error!("Failed to connect on launch: {}", e);
-                        return;
-                    }
-                    info!("Creating default session on launch...");
-                    let cwd = {
-                        let cfg = config_arc.lock_or_recover();
-                        cfg.acp.agent.working_directory.clone()
-                    };
-                    match client.create_session(cwd) {
-                        Ok((session_id, models_json)) => {
-                            info!("Default session created on launch: {}", session_id);
-                            if let Ok(mut fs) = floating_session.lock() {
-                                *fs = Some(session_id.clone());
-                            }
-
-                            // Store available models
-                            let models_value = serde_json::Value::Array(models_json);
-                            match serde_json::from_value::<Vec<crate::state::AcpModel>>(models_value.clone()) {
-                                Ok(parsed) => {
-                                    info!("Storing {} models from session", parsed.len());
-                                    if let Ok(mut m) = models_arc.lock() {
-                                        *m = parsed;
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to parse models: {}. Raw: {}", e, models_value);
-                                }
-                            }
-
-                            // Apply default model BEFORE steering (fast round-trip, don't block on LLM)
-                            {
-                                let default_model = {
-                                    let cfg = config_arc.lock_or_recover();
-                                    cfg.acp.agent.default_model.clone()
-                                };
-                                if let Some(ref model) = default_model {
-                                    if !model.is_empty() {
-                                        info!("Applying default model: {}", model);
-                                        let request = crate::acp_client::AcpRequest {
-                                            jsonrpc: "2.0".to_string(),
-                                            id: serde_json::json!(4),
-                                            method: "_kage.dev/commands/execute".to_string(),
-                                            params: serde_json::json!({
-                                                "sessionId": session_id,
-                                                "command": { "command": "model", "args": { "modelName": model } }
-                                            }),
-                                        };
-                                        match client.send_request(&request) {
-                                            Ok(_) => info!("Default model applied: {}", model),
-                                            Err(e) => error!("Failed to apply default model: {}", e),
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Send steering content as the first hidden message
-                            let steering_msg = {
-                                let cfg = config_arc.lock_or_recover();
-                                crate::commands::system::format_steering_message(
-                                    &crate::commands::system::assemble_steering_parts(&cfg)
-                                )
-                            };
-
-                            {
-                                info!("Sending steering message ({} chars)", steering_msg.len());
-                                if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
-                                    error!("Failed to send steering message: {}", e);
-                                }
-                            }
-
-                        }
-                        Err(e) => error!("Failed to create default session on launch: {}", e),
-                    }
-                });
-            }
+            setup::maybe_spawn_default_session(app, &config);
 
             // Start the auto-update background loop
-            {
-                let state: tauri::State<'_, AppState> = app.state();
-                updater::start_update_loop(
-                    state.updater.clone(),
-                    state.config.clone(),
-                    app.handle().clone(),
-                    state.floating_session_id.clone(),
-                    state.acp_client.clone(),
-                );
-            }
+            setup::start_updater(app);
 
             // Show welcome window on first run
-            if !config.first_run_completed {
-                info!("First run detected, showing welcome window");
-                let app_handle = app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    // Small delay to let the app finish initializing
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                    let _ = commands::system::open_welcome_window(app_handle).await;
-                });
-            }
+            setup::maybe_show_welcome_window(app.handle(), config.first_run_completed);
 
             Ok(())
         })

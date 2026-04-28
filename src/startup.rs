@@ -157,3 +157,64 @@ pub fn wait_for_webview_release<F: FnMut(std::time::Duration)>(
 pub fn webview_user_data_dir() -> Option<PathBuf> {
     Some(dirs::data_local_dir()?.join("kage").join("EBWebView"))
 }
+
+
+// -------------------------------------------------------------------
+// Post-config helpers
+// -------------------------------------------------------------------
+
+/// Load the on-disk config, applying CLI overrides. On load failure
+/// this falls back to `Config::default()` and emits a warning so the
+/// app can still start. Returns the final Config the app should use.
+///
+/// Extracted from main() so we can cover the override-merge logic
+/// with a unit test. The actual I/O (Config::load) is injected via
+/// the `loader` closure so tests can drive the fallback path without
+/// touching dirs::config_dir().
+pub fn load_config_with_overrides<F>(debug_mode: bool, loader: F) -> crate::config::Config
+where
+    F: FnOnce() -> anyhow::Result<crate::config::Config>,
+{
+    let mut config = loader().unwrap_or_else(|e| {
+        log::error!("Failed to load config, using defaults: {}", e);
+        eprintln!("Failed to load config, using defaults: {}", e);
+        crate::config::Config::default()
+    });
+    // A --debug CLI flag should force debug-mode on even when the
+    // persisted config has it off. We never flip it off based on CLI
+    // absence — that would toggle away a user preference.
+    if debug_mode {
+        config.debug_mode = true;
+    }
+    config
+}
+
+
+/// If the app was launched with `--restart`, poll the WebView2 user
+/// data directory until the previous process releases its lock.
+/// Silent no-op on first run or when we're not restarting.
+///
+/// Extracted so main() can call one line. The testable piece
+/// (`wait_for_webview_release`) is above; this wraps it with the
+/// real filesystem and sleep.
+pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
+    if !is_restart {
+        return;
+    }
+    log::info!("Restart mode: waiting for previous instance resources to release...");
+    let Some(webview_dir) = webview_user_data_dir() else { return };
+    match wait_for_webview_release(
+        &webview_dir,
+        20,
+        std::time::Duration::from_millis(500),
+        std::thread::sleep,
+    ) {
+        WebviewWaitResult::NotPresent => {}
+        WebviewWaitResult::Released { waited_ms } => {
+            log::info!("WebView2 resources released after {}ms", waited_ms);
+        }
+        WebviewWaitResult::TimedOut { waited_ms } => {
+            log::warn!("WebView2 lock still held after {}ms — continuing anyway", waited_ms);
+        }
+    }
+}

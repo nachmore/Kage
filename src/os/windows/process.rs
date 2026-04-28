@@ -97,3 +97,58 @@ pub fn set_thread_name(name: &str) {
         let _ = SetThreadDescription(GetCurrentThread(), PCWSTR(wide.as_ptr()));
     }
 }
+
+
+/// Create a Windows Job Object with KILL_ON_JOB_CLOSE and assign this
+/// process to it. Any child process we spawn (TTS server, ACP CLI,
+/// etc.) is implicitly added to the same job and gets killed when
+/// this process exits — even on crash, force-kill from Task Manager,
+/// or debugger detach. Without this, children can outlive their
+/// parent and show up as orphaned processes.
+///
+/// The returned handle must stay alive for the lifetime of the
+/// process. HANDLE is Copy with no Drop impl so it doesn't auto-close
+/// when the local goes out of scope — which is what we want. The OS
+/// holds the Job Object open (and its kill-on-close policy active)
+/// as long as at least one handle remains unclosed.
+///
+/// Errors are logged but never propagated: if we can't create the
+/// job, the app still runs; we just lose the orphan-cleanup guarantee.
+pub fn install_kill_on_exit_job() {
+    use windows::Win32::System::JobObjects::*;
+    use windows::Win32::System::Threading::GetCurrentProcess;
+    use windows::core::PCWSTR;
+
+    unsafe {
+        let job = match CreateJobObjectW(None, PCWSTR::null()) {
+            Ok(j) => j,
+            Err(e) => {
+                warn!("Failed to create Job Object: {}", e);
+                return;
+            }
+        };
+
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        info.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+        let set_ok = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if set_ok.is_err() {
+            warn!("Failed to configure Job Object");
+            return;
+        }
+
+        let current = GetCurrentProcess();
+        match AssignProcessToJobObject(job, current) {
+            Ok(_) => info!("✅ Job Object created — child processes will be killed on exit"),
+            Err(e) => warn!("Failed to assign process to Job Object: {}", e),
+        }
+        // Deliberately leak the handle — see doc comment.
+        let _ = job;
+    }
+}

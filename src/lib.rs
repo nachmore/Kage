@@ -27,6 +27,8 @@ pub mod automation;
 #[cfg(not(test))]
 pub mod commands;
 #[cfg(not(test))]
+pub mod setup;
+#[cfg(not(test))]
 pub mod single_instance;
 #[cfg(not(test))]
 pub mod state;
