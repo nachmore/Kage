@@ -186,6 +186,13 @@ mitigations are in place:
   `<html>`) to prevent raw-HTML passthrough.
 - Tool permissions require explicit user approval before the
   agent executes any ACP tool call.
+- Tool permission events (grants, denials, revokes, expiries, and
+  terminator-mode toggles) are recorded to
+  `<config_dir>/kage/permission-audit.jsonl`. The log is
+  **deliberately not tamper-evident** — it lives under the user's
+  config directory with normal write permissions. Use it to
+  spot-check recent activity, not for forensic audit. The settings
+  page exposes a viewer and a "clear log" action.
 - The computer-control MCP server is opt-in.
 - Zip extraction defends against Zip Slip attacks, including
   symlink-based variants.

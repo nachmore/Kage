@@ -17,6 +17,7 @@ pub mod logger;
 pub mod mcp_registration;
 pub mod os;
 pub mod panic_handler;
+pub mod permission_audit;
 pub mod process_manager;
 pub mod startup;
 

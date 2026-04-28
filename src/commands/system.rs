@@ -174,11 +174,26 @@ pub async fn save_config(
         format!("Failed to save configuration: {}", e)
     })?;
 
-    let mut state_config = state.config.lock_or_recover();
-    *state_config = config.clone();
+    // Capture the prior terminator-mode state BEFORE the swap so we
+    // can audit the transition. Done while we hold the lock to avoid
+    // racing with another save.
+    let prior_terminator = {
+        let mut state_config = state.config.lock_or_recover();
+        let prior = state_config.tool_permissions.terminator_mode;
+        *state_config = config.clone();
+        prior
+    };
 
     // Update app log buffer size if changed
     crate::app_log::set_max_size(config.system.log_buffer_size);
+
+    if prior_terminator != config.tool_permissions.terminator_mode {
+        crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+            crate::permission_audit::AuditEvent::TerminatorModeChanged {
+                enabled: config.tool_permissions.terminator_mode,
+            },
+        ));
+    }
 
     info!("Configuration saved successfully");
 
@@ -283,19 +298,56 @@ pub async fn update_tool_policy(
     info!("Updating tool policy: {} -> {} (grant: {})", tool_title, policy, gt);
     let mut config = state.config.lock_or_recover();
     let timestamp = chrono::Utc::now().to_rfc3339();
+
+    // Capture the prior state so the audit log can say "you changed
+    // from allow/always to deny" etc. We emit BEFORE the struct is
+    // mutated so a crash mid-write doesn't leave us logging the
+    // wrong transition.
+    let prior = config
+        .tool_permissions
+        .tools
+        .iter()
+        .find(|t| t.title == tool_title)
+        .map(|t| (t.policy.clone(), t.grant_type.clone()));
+
     if let Some(tool) = config
         .tool_permissions
         .tools
         .iter_mut()
         .find(|t| t.title == tool_title)
     {
-        tool.policy = policy;
-        tool.grant_type = gt;
+        tool.policy = policy.clone();
+        tool.grant_type = gt.clone();
         tool.granted_at = timestamp;
     }
     config
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
+    drop(config);
+
+    // Log the transition. "allow" is a grant; "deny" or "ask" is a
+    // revoke-style change when the prior policy was "allow".
+    let event = match policy.as_str() {
+        "allow" => crate::permission_audit::AuditEvent::Granted {
+            tool: tool_title,
+            grant_type: gt,
+            session_id: None,
+            args_preview: None,
+        },
+        _ => {
+            if let Some((prior_policy, prior_gt)) = prior.filter(|(p, _)| p == "allow") {
+                crate::permission_audit::AuditEvent::Revoked {
+                    tool: tool_title,
+                    prior_policy,
+                    prior_grant_type: Some(prior_gt),
+                }
+            } else {
+                // Transitioning from ask→deny or ask→ask; not interesting.
+                return Ok(());
+            }
+        }
+    };
+    crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(event));
     Ok(())
 }
 
@@ -305,6 +357,16 @@ pub async fn remove_tool_permission(
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
     let mut config = state.config.lock_or_recover();
+
+    // Snapshot the policy we're about to drop so we can log what was
+    // revoked, not just that something was.
+    let prior = config
+        .tool_permissions
+        .tools
+        .iter()
+        .find(|t| t.title == tool_title)
+        .map(|t| (t.policy.clone(), t.grant_type.clone()));
+
     config
         .tool_permissions
         .tools
@@ -312,6 +374,17 @@ pub async fn remove_tool_permission(
     config
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
+    drop(config);
+
+    if let Some((prior_policy, prior_gt)) = prior {
+        crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+            crate::permission_audit::AuditEvent::Revoked {
+                tool: tool_title,
+                prior_policy,
+                prior_grant_type: Some(prior_gt),
+            },
+        ));
+    }
     Ok(())
 }
 
@@ -1523,4 +1596,38 @@ fn filetime_to_ms(ft: &windows::Win32::Foundation::FILETIME) -> f64 {
     let ticks = ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64);
     // FILETIME is in 100-nanosecond intervals
     ticks as f64 / 10_000.0
+}
+
+
+// --- Permission audit log commands ---
+
+/// Read the most recent `limit` entries from the permission audit log,
+/// newest-first. `limit` is clamped to 1..=2000 so a misbehaving UI
+/// can't ask for an enormous slice.
+#[tauri::command]
+pub async fn get_permission_audit_log(
+    limit: Option<usize>,
+) -> Result<Vec<crate::permission_audit::AuditEntry>, AppError> {
+    let n = limit.unwrap_or(500).clamp(1, 2000);
+    Ok(crate::permission_audit::read_recent_default(n))
+}
+
+/// Clear the permission audit log. Intended for the "Clear log" button
+/// in settings. Not destructive beyond the log itself — permissions
+/// and grants are untouched.
+#[tauri::command]
+pub async fn clear_permission_audit_log() -> Result<(), AppError> {
+    crate::permission_audit::clear_default()
+        .map_err(|e| format!("Failed to clear audit log: {}", e))?;
+    Ok(())
+}
+
+/// Return the filesystem path to the audit log so the UI can show it
+/// to the user (e.g. "stored at: ~/.../permission-audit.jsonl") and
+/// link to "open in file explorer".
+#[tauri::command]
+pub async fn get_permission_audit_log_path() -> Result<String, AppError> {
+    Ok(crate::permission_audit::default_log_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default())
 }

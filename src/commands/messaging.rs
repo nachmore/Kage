@@ -434,6 +434,38 @@ pub async fn send_permission_response(
         config.save().map_err(|e| AppError::internal(format!("Save: {}", e)))?;
     }
 
+    // Audit log: record the user's decision. We classify option_id into
+    // our event kinds; unrecognised strings are recorded as Denied with
+    // the raw option_id in the tool field so the UI still shows them.
+    let session_id = state.acp_client.lock().await.get_session_id();
+    let audit_event = match option_id.as_str() {
+        "allow_once" => crate::permission_audit::AuditEvent::Granted {
+            tool: tool_title.clone(),
+            grant_type: "once".to_string(),
+            session_id,
+            args_preview: None,
+        },
+        "allow_24h" => crate::permission_audit::AuditEvent::Granted {
+            tool: tool_title.clone(),
+            grant_type: "24h".to_string(),
+            session_id,
+            args_preview: None,
+        },
+        "allow_always" => crate::permission_audit::AuditEvent::Granted {
+            tool: tool_title.clone(),
+            grant_type: "always".to_string(),
+            session_id,
+            args_preview: None,
+        },
+        _ => crate::permission_audit::AuditEvent::Denied {
+            tool: tool_title.clone(),
+            session_id,
+        },
+    };
+    crate::permission_audit::append(
+        &crate::permission_audit::AuditEntry::now(audit_event),
+    );
+
     if let Ok(mut pending) = state.pending_permission.lock() {
         *pending = None;
     }

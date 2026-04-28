@@ -20,6 +20,7 @@ mod logger;
 mod mcp_registration;
 mod os;
 mod panic_handler;
+mod permission_audit;
 mod process_manager;
 mod setup;
 mod single_instance;
@@ -308,6 +309,9 @@ fn main() {
             commands::send_permission_response,
             commands::remove_tool_permission,
             commands::update_tool_policy,
+            commands::get_permission_audit_log,
+            commands::clear_permission_audit_log,
+            commands::get_permission_audit_log_path,
             commands::is_dev_mode,
             commands::is_terminator_mode,
             commands::open_devtools,

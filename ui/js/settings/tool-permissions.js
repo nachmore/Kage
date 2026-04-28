@@ -25,6 +25,30 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">Reset All Permissions</button>
             </div>
 
+            <div class="setting-section-label" style="margin-top: 32px;">📜 Audit Log</div>
+            <div class="setting-row">
+                <div class="setting-label">Permission History</div>
+                <div class="setting-description">
+                    Every permission grant, denial, revoke, expiry, and terminator-mode toggle is recorded here. The log is stored locally in plain JSON and can be tampered with — use it to spot-check recent activity, not for forensic audit.
+                </div>
+                <div class="audit-log-controls" style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+                    <select id="auditLogFilter" class="agent-tool-select" style="min-width:140px;">
+                        <option value="all">All events</option>
+                        <option value="granted">Granted</option>
+                        <option value="denied">Denied</option>
+                        <option value="revoked">Revoked</option>
+                        <option value="expired">Expired</option>
+                        <option value="terminator_mode_changed">Terminator mode</option>
+                    </select>
+                    <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">Refresh</button>
+                    <button id="auditLogClearBtn" class="reset-permissions-btn">Clear log</button>
+                    <span id="auditLogPath" style="flex:1; text-align:right; font-size:11px; color:#938f9b; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                </div>
+                <div class="audit-log-list" id="auditLogList" style="margin-top: 8px; max-height: 320px; overflow-y: auto; border:1px solid #3a3640; border-radius:6px; background:#1a1720;">
+                    <div class="tools-empty">Loading…</div>
+                </div>
+            </div>
+
             <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">⚠️ Danger Zone</div>
             <div class="setting-row terminator-row">
                 <div class="terminator-header">
@@ -99,6 +123,43 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 }
             });
         }
+
+        // Audit log: filter, refresh, and clear controls.
+        const filterEl = document.getElementById('auditLogFilter');
+        if (filterEl) {
+            filterEl.addEventListener('change', () => this.renderAuditLog());
+        }
+        const refreshBtn = document.getElementById('auditLogRefreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.loadAuditLog());
+        }
+        const clearBtn = document.getElementById('auditLogClearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
+                if (!confirm('Clear the permission audit log? This cannot be undone. Permissions themselves are NOT affected.')) return;
+                try {
+                    await window.__TAURI__.core.invoke('clear_permission_audit_log');
+                    this.auditEntries = [];
+                    this.renderAuditLog();
+                } catch (e) {
+                    console.error('Failed to clear audit log:', e);
+                }
+            });
+        }
+        // Show the on-disk path as a hint.
+        (async () => {
+            try {
+                const p = await window.__TAURI__.core.invoke('get_permission_audit_log_path');
+                const pathEl = document.getElementById('auditLogPath');
+                if (pathEl && p) {
+                    pathEl.textContent = p;
+                    pathEl.title = p;
+                }
+            } catch {}
+        })();
+
+        // Initial load.
+        this.loadAuditLog();
     }
 
     load(config) {
@@ -192,6 +253,100 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 console.error('Failed to remove tool:', error);
             }
         }
+    }
+
+    async loadAuditLog() {
+        try {
+            const entries = await window.__TAURI__.core.invoke('get_permission_audit_log', { limit: 500 });
+            this.auditEntries = Array.isArray(entries) ? entries : [];
+        } catch (e) {
+            console.error('Failed to load audit log:', e);
+            this.auditEntries = [];
+        }
+        this.renderAuditLog();
+    }
+
+    renderAuditLog() {
+        const list = document.getElementById('auditLogList');
+        if (!list) return;
+        const entries = this.auditEntries || [];
+        const filter = (document.getElementById('auditLogFilter')?.value) || 'all';
+
+        const filtered = filter === 'all'
+            ? entries
+            : entries.filter(e => e.event === filter);
+
+        if (filtered.length === 0) {
+            list.innerHTML = `<div class="tools-empty" style="padding:14px; text-align:center; color:#938f9b;">
+                ${entries.length === 0 ? 'No audit entries yet. Events will appear here as the AI requests tools.' : 'No entries match the current filter.'}
+            </div>`;
+            return;
+        }
+
+        list.innerHTML = filtered.map(entry => this._renderAuditRow(entry)).join('');
+    }
+
+    _renderAuditRow(entry) {
+        // Pluck the event-kind field (serde adds it as `event`) and
+        // format timestamp/summary defensively — a malformed entry
+        // should render as something debuggable, not crash the UI.
+        const when = entry.at
+            ? new Date(entry.at).toLocaleString(undefined, {
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
+            })
+            : '(unknown time)';
+        const kind = entry.event || 'unknown';
+
+        let icon = '📝';
+        let summary = '';
+        let meta = '';
+
+        switch (kind) {
+            case 'granted':
+                icon = '✅';
+                summary = `Granted <strong>${escapeHtml(entry.tool || '?')}</strong> (${escapeHtml(entry.grant_type || '?')})`;
+                if (entry.session_id) meta = `session ${escapeHtml(entry.session_id.slice(0, 8))}`;
+                if (entry.args_preview) {
+                    meta += (meta ? ' · ' : '') + `<code>${escapeHtml(entry.args_preview.slice(0, 140))}</code>`;
+                }
+                break;
+            case 'denied':
+                icon = '⛔';
+                summary = `Denied <strong>${escapeHtml(entry.tool || '?')}</strong>`;
+                if (entry.session_id) meta = `session ${escapeHtml(entry.session_id.slice(0, 8))}`;
+                break;
+            case 'revoked':
+                icon = '🗑️';
+                summary = `Revoked <strong>${escapeHtml(entry.tool || '?')}</strong>`;
+                if (entry.prior_policy) meta = `was ${escapeHtml(entry.prior_policy)}`;
+                if (entry.prior_grant_type) meta += (meta ? ' ' : '') + `(${escapeHtml(entry.prior_grant_type)})`;
+                break;
+            case 'expired':
+                icon = '⏳';
+                summary = `Expired <strong>${escapeHtml(entry.tool || '?')}</strong>`;
+                if (entry.prior_grant_type) meta = `was ${escapeHtml(entry.prior_grant_type)}`;
+                break;
+            case 'terminator_mode_changed':
+                icon = entry.enabled ? '⚠️' : '🛡️';
+                summary = entry.enabled ? '<strong>Terminator mode enabled</strong>' : 'Terminator mode disabled';
+                break;
+            default:
+                icon = '❔';
+                summary = `Unknown event: ${escapeHtml(kind)}`;
+                try { meta = escapeHtml(JSON.stringify(entry)); } catch {}
+        }
+
+        return `
+            <div class="audit-log-row">
+                <div class="audit-log-icon">${icon}</div>
+                <div class="audit-log-body">
+                    <div class="audit-log-summary">${summary}</div>
+                    ${meta ? `<div class="audit-log-meta">${meta}</div>` : ''}
+                </div>
+                <div class="audit-log-time" title="${escapeHtml(entry.at || '')}">${escapeHtml(when)}</div>
+            </div>
+        `;
     }
 }
 
@@ -354,6 +509,43 @@ toolPermStyle.textContent = `
     }
     .terminator-text {
         flex: 1;
+    }
+
+    .audit-log-row {
+        display: grid;
+        grid-template-columns: 24px 1fr auto;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid #2b2b2b;
+        align-items: center;
+    }
+    .audit-log-row:last-child {
+        border-bottom: none;
+    }
+    .audit-log-icon {
+        font-size: 16px;
+        text-align: center;
+    }
+    .audit-log-summary {
+        font-size: 13px;
+        color: var(--kage-text-primary, #e5e7eb);
+    }
+    .audit-log-meta {
+        font-size: 11px;
+        color: var(--kage-text-secondary, #938f9b);
+        margin-top: 2px;
+    }
+    .audit-log-meta code {
+        background: #2a252f;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 11px;
+    }
+    .audit-log-time {
+        font-size: 11px;
+        color: var(--kage-text-secondary, #938f9b);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
     }
 `;
 document.head.appendChild(toolPermStyle);
