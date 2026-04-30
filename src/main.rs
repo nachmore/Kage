@@ -103,9 +103,16 @@ fn main() {
     // In dev mode, enable Rust backtraces on panic unless the user has
     // already set RUST_BACKTRACE explicitly (e.g. to "full"). This means
     // `cargo tauri dev -- /dev` always produces useful panic traces.
-    if dev_mode && std::env::var_os("RUST_BACKTRACE").is_none() {
-        // SAFETY: called before any threads are spawned that read this var.
-        std::env::set_var("RUST_BACKTRACE", "1");
+    // RUST_LIB_BACKTRACE controls backtraces captured by std::backtrace
+    // on Error types (e.g. anyhow), as opposed to panics.
+    if dev_mode {
+        // SAFETY: called before any threads are spawned that read these vars.
+        if std::env::var_os("RUST_BACKTRACE").is_none() {
+            std::env::set_var("RUST_BACKTRACE", "1");
+        }
+        if std::env::var_os("RUST_LIB_BACKTRACE").is_none() {
+            std::env::set_var("RUST_LIB_BACKTRACE", "1");
+        }
     }
 
     // Check for session resume after update — clean up last-session.txt
