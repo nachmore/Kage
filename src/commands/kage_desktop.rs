@@ -3,11 +3,74 @@
 //! Loads conversations from .chat files in the Kage Desktop data directory.
 //! Uses workspace-sessions for the session index (titles, dates) and
 //! .chat files for the full conversation content.
+//!
+//! # Caching
+//!
+//! Session enumeration functions (`kage_desktop_sessions` and
+//! `kage_desktop_chat_sessions`) parse a potentially large number of JSON
+//! files on every call. Without a cache, opening the chat window stalls for
+//! users with many sessions. We cache parsed results per file, keyed by
+//! `(mtime, size)`. Cache lookups are purely stat-based, so we pick up new
+//! and modified sessions without needing a file watcher on an external
+//! directory. See `KageDesktopCache`.
 
 use crate::error::AppError;
+use crate::lock_ext::LockExt;
 use log::info;
 use serde::Serialize;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
+
+// ---------------------------------------------------------------------------
+// Per-file cache for session metadata
+// ---------------------------------------------------------------------------
+
+/// Fingerprint identifying a particular version of a file on disk. If either
+/// the modification time or the size changes we treat the cached parse as
+/// stale and re-read the file.
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct FileFingerprint {
+    mtime: SystemTime,
+    size: u64,
+}
+
+fn fingerprint(md: &std::fs::Metadata) -> Option<FileFingerprint> {
+    let mtime = md.modified().ok()?;
+    Some(FileFingerprint { mtime, size: md.len() })
+}
+
+/// Cached parse result for a single session file.
+#[derive(Clone)]
+struct CachedSession {
+    fp: FileFingerprint,
+    session: KageDesktopSession,
+}
+
+/// In-memory cache for parsed Kage Desktop sessions. Two independent maps —
+/// one for the JSON `workspace-sessions/*` files and one for the `.chat`
+/// files under the hash directories — because they produce the same output
+/// shape but come from different scan roots.
+///
+/// Cache entries are keyed by absolute file path. Stale-file eviction
+/// happens inside each scan: files not seen in the current walk are
+/// dropped. This keeps the cache from growing unbounded as the user deletes
+/// old sessions.
+#[derive(Default)]
+pub struct KageDesktopCache {
+    workspace_sessions: Mutex<HashMap<PathBuf, CachedSession>>,
+    chat_files: Mutex<HashMap<PathBuf, CachedSession>>,
+}
+
+impl KageDesktopCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Short type alias used across Tauri command signatures.
+pub type KageDesktopCacheHandle = Arc<KageDesktopCache>;
 
 /// Get the Kage Desktop globalStorage directory.
 fn kage_desktop_data_dir() -> Option<PathBuf> {
@@ -30,7 +93,7 @@ pub struct KageDesktopWorkspace {
     pub session_count: usize,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct KageDesktopSession {
     pub id: String,
     pub title: String,
@@ -90,23 +153,46 @@ pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppE
 pub async fn kage_desktop_sessions(
     workspace_encoded: Option<String>,
     limit: Option<usize>,
+    state: tauri::State<'_, crate::state::AppState>,
 ) -> Result<Vec<KageDesktopSession>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     let limit = limit.unwrap_or(50);
+    let cache = state.kage_desktop_cache.clone();
 
-    let mut sessions = Vec::new();
+    // Run the scan + JSON parse on the blocking pool — both are file I/O
+    // heavy and synchronous.
+    tokio::task::spawn_blocking(move || {
+        scan_workspace_sessions(&ws_dir, workspace_encoded.as_deref(), limit, &cache)
+    })
+    .await
+    .map_err(|e| format!("Scan task failed: {}", e))?
+}
 
-    let dirs_to_scan: Vec<(String, PathBuf)> = if let Some(ref enc) = workspace_encoded {
-        vec![(enc.clone(), ws_dir.join(enc))]
+/// Blocking scan of `workspace-sessions/*/*.json`. Returns already-sorted,
+/// already-truncated results. Uses the per-file cache to skip re-parsing
+/// files whose (mtime, size) fingerprint matches a previous scan.
+fn scan_workspace_sessions(
+    ws_dir: &Path,
+    workspace_encoded: Option<&str>,
+    limit: usize,
+    cache: &KageDesktopCache,
+) -> Result<Vec<KageDesktopSession>, AppError> {
+    if !ws_dir.exists() { return Ok(Vec::new()); }
+
+    let dirs_to_scan: Vec<(String, PathBuf)> = if let Some(enc) = workspace_encoded {
+        vec![(enc.to_string(), ws_dir.join(enc))]
     } else {
-        std::fs::read_dir(&ws_dir).map_err(|e| e.to_string())?
+        std::fs::read_dir(ws_dir).map_err(|e| e.to_string())?
             .flatten()
             .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
             .map(|e| (e.file_name().to_string_lossy().to_string(), e.path()))
             .collect()
     };
 
+    // Collect all (path, fingerprint, workspace name, encoded) tuples first so
+    // we can consult the cache without holding its lock across file I/O.
+    let mut seen_files: Vec<(PathBuf, FileFingerprint, String, String)> = Vec::new();
     for (encoded, dir) in &dirs_to_scan {
         let ws_name = base64_decode_path(encoded).unwrap_or_else(|| encoded.clone());
         let Ok(entries) = std::fs::read_dir(dir) else { continue };
@@ -114,43 +200,88 @@ pub async fn kage_desktop_sessions(
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().map(|e| e != "json").unwrap_or(true) { continue; }
+            let Ok(md) = entry.metadata() else { continue };
+            let Some(fp) = fingerprint(&md) else { continue };
+            seen_files.push((path, fp, ws_name.clone(), encoded.clone()));
+        }
+    }
 
-            let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    // Fast path: check cache hits under a single short lock.
+    let mut sessions: Vec<KageDesktopSession> = Vec::with_capacity(seen_files.len());
+    let mut misses: Vec<(PathBuf, FileFingerprint, String, String)> = Vec::new();
+    let seen_keys: std::collections::HashSet<PathBuf> =
+        seen_files.iter().map(|(p, _, _, _)| p.clone()).collect();
+    {
+        let mut guard = cache.workspace_sessions.lock_or_recover();
+        // Evict entries for files that no longer exist.
+        guard.retain(|k, _| seen_keys.contains(k));
+        for (path, fp, ws_name, encoded) in seen_files {
+            match guard.get(&path) {
+                Some(cached) if cached.fp == fp => sessions.push(cached.session.clone()),
+                _ => misses.push((path, fp, ws_name, encoded)),
+            }
+        }
+    }
 
-            // Quick parse — just get title and history count
-            let content = match std::fs::read_to_string(&path) { Ok(c) => c, Err(_) => continue };
-            let json: serde_json::Value = match serde_json::from_str(&content) { Ok(v) => v, Err(_) => continue };
+    // Slow path: parse missed/changed files without holding the cache lock.
+    let mut fresh: Vec<(PathBuf, CachedSession)> = Vec::with_capacity(misses.len());
+    for (path, fp, ws_name, encoded) in misses {
+        let Some(session) = parse_workspace_session(&path, &ws_name, &encoded) else { continue };
+        fresh.push((path, CachedSession { fp, session: session.clone() }));
+        sessions.push(session);
+    }
 
-            let history_count = json.get("history").and_then(|h| h.as_array()).map(|a| a.len()).unwrap_or(0);
-            // Skip empty sessions
-            if history_count == 0 { continue; }
-
-            let title = json.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled").to_string();
-            let title = if title.len() > 80 { format!("{}...", &title[..77]) } else { title };
-
-            let session_type = json.get("sessionType").and_then(|t| t.as_str()).unwrap_or("").to_string();
-            let model = json.get("selectedModel").and_then(|m| m.as_str())
-                .or_else(|| json.get("defaultModelTitle").and_then(|m| m.as_str()))
-                .unwrap_or("").to_string();
-
-            let updated_at = entry.metadata().and_then(|m| m.modified()).ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                    .map(|dt| dt.to_rfc3339()).unwrap_or_default())
-                .unwrap_or_default();
-
-            sessions.push(KageDesktopSession {
-                id, title, workspace: ws_name.clone(), workspace_encoded: encoded.clone(),
-                updated_at, message_count: history_count, session_type, model,
-                file_path: path.to_string_lossy().to_string(),
-                workflow_id: None,
-            });
+    // Re-insert fresh parses under a single lock scope.
+    if !fresh.is_empty() {
+        let mut guard = cache.workspace_sessions.lock_or_recover();
+        for (path, entry) in fresh {
+            guard.insert(path, entry);
         }
     }
 
     sessions.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     sessions.truncate(limit);
     Ok(sessions)
+}
+
+/// Parse a single `workspace-sessions/*/<id>.json` file into a
+/// `KageDesktopSession`. Returns `None` if the file is unreadable,
+/// unparseable, or represents an empty session that should be skipped.
+fn parse_workspace_session(path: &Path, ws_name: &str, encoded: &str) -> Option<KageDesktopSession> {
+    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+
+    let content = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+
+    let history_count = json.get("history").and_then(|h| h.as_array()).map(|a| a.len()).unwrap_or(0);
+    if history_count == 0 { return None; }
+
+    let title = json.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled").to_string();
+    let title = if title.len() > 80 { format!("{}...", &title[..77]) } else { title };
+
+    let session_type = json.get("sessionType").and_then(|t| t.as_str()).unwrap_or("").to_string();
+    let model = json.get("selectedModel").and_then(|m| m.as_str())
+        .or_else(|| json.get("defaultModelTitle").and_then(|m| m.as_str()))
+        .unwrap_or("").to_string();
+
+    let updated_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+            .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+        .unwrap_or_default();
+
+    Some(KageDesktopSession {
+        id,
+        title,
+        workspace: ws_name.to_string(),
+        workspace_encoded: encoded.to_string(),
+        updated_at,
+        message_count: history_count,
+        session_type,
+        model,
+        file_path: path.to_string_lossy().to_string(),
+        workflow_id: None,
+    })
 }
 
 #[tauri::command]
@@ -319,7 +450,10 @@ fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
 }
 
 #[tauri::command]
-pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppError> {
+pub async fn kage_desktop_delete_session(
+    file_path: String,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() { return Err("File not found".into()); }
     // Safety: only delete .json files in the kage.kageagent directory
@@ -328,6 +462,16 @@ pub async fn kage_desktop_delete_session(file_path: String) -> Result<(), AppErr
         return Err("Invalid file path".into());
     }
     std::fs::remove_file(path).map_err(|e| format!("Delete failed: {}", e))?;
+
+    // Evict the deleted file from both caches so the next list call doesn't
+    // surface a stale entry (mtime-based invalidation alone can't catch a
+    // delete — the file is gone, there's nothing to re-stat).
+    {
+        let cache = &state.kage_desktop_cache;
+        cache.workspace_sessions.lock_or_recover().remove(path);
+        cache.chat_files.lock_or_recover().remove(path);
+    }
+
     info!("Deleted Kage Desktop session: {}", file_path);
     Ok(())
 }
@@ -385,13 +529,31 @@ pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDe
 
 /// List .chat files from hash directories as additional sessions.
 #[tauri::command]
-pub async fn kage_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<KageDesktopSession>, AppError> {
+pub async fn kage_desktop_chat_sessions(
+    limit: Option<usize>,
+    state: tauri::State<'_, crate::state::AppState>,
+) -> Result<Vec<KageDesktopSession>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let limit = limit.unwrap_or(50);
-    let mut sessions = Vec::new();
+    let cache = state.kage_desktop_cache.clone();
 
-    // Find hash directories (32-char hex names)
-    let entries = std::fs::read_dir(&base).map_err(|e| e.to_string())?;
+    tokio::task::spawn_blocking(move || scan_chat_sessions(&base, limit, &cache))
+        .await
+        .map_err(|e| format!("Scan task failed: {}", e))?
+}
+
+/// Blocking scan of `<base>/<hash>/*.chat`. Uses the per-file cache to
+/// avoid re-reading + re-parsing files whose (mtime, size) fingerprint
+/// matches a previous scan.
+fn scan_chat_sessions(
+    base: &Path,
+    limit: usize,
+    cache: &KageDesktopCache,
+) -> Result<Vec<KageDesktopSession>, AppError> {
+    // Walk the hash directories and build the list of `.chat` files we
+    // currently see on disk.
+    let mut seen_files: Vec<(PathBuf, FileFingerprint, String)> = Vec::new();
+    let entries = std::fs::read_dir(base).map_err(|e| e.to_string())?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.len() != 32 || !name.chars().all(|c| c.is_ascii_hexdigit()) { continue; }
@@ -402,84 +564,40 @@ pub async fn kage_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kage
         for file in files.flatten() {
             let path = file.path();
             if path.extension().map(|e| e != "chat").unwrap_or(true) { continue; }
+            let Ok(md) = file.metadata() else { continue };
+            let Some(fp) = fingerprint(&md) else { continue };
+            seen_files.push((path, fp, name.clone()));
+        }
+    }
 
-            let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    // Check cache hits under a short lock.
+    let mut sessions: Vec<KageDesktopSession> = Vec::with_capacity(seen_files.len());
+    let mut misses: Vec<(PathBuf, FileFingerprint, String)> = Vec::new();
+    let seen_keys: std::collections::HashSet<PathBuf> =
+        seen_files.iter().map(|(p, _, _)| p.clone()).collect();
+    {
+        let mut guard = cache.chat_files.lock_or_recover();
+        guard.retain(|k, _| seen_keys.contains(k));
+        for (path, fp, hash) in seen_files {
+            match guard.get(&path) {
+                Some(cached) if cached.fp == fp => sessions.push(cached.session.clone()),
+                _ => misses.push((path, fp, hash)),
+            }
+        }
+    }
 
-            // Only read the first 50KB — enough for metadata and first few messages
-            let content = match read_file_head(&path, 50_000) { Some(c) => c, None => continue };
-            // Try to parse — may be truncated, so wrap in a recovery
-            let json: serde_json::Value = match serde_json::from_str(&content) {
-                Ok(v) => v,
-                Err(_) => {
-                    // Truncated JSON — try to get metadata from the beginning
-                    // Fall back to file metadata for date
-                    let updated_at = file.metadata().and_then(|m| m.modified()).ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                            .map(|dt| dt.to_rfc3339()).unwrap_or_default())
-                        .unwrap_or_default();
-                    sessions.push(KageDesktopSession {
-                        id, title: "Untitled".into(),
-                        workspace: name.clone(), workspace_encoded: name.clone(),
-                        updated_at, message_count: 0, session_type: "chat".into(),
-                        model: String::new(), file_path: path.to_string_lossy().to_string(),
-                        workflow_id: None,
-                    });
-                    continue;
-                }
-            };
+    // Parse missed files without holding the cache lock.
+    let mut fresh: Vec<(PathBuf, CachedSession)> = Vec::with_capacity(misses.len());
+    for (path, fp, hash) in misses {
+        let Some(session) = parse_chat_session(&path, &hash) else { continue };
+        fresh.push((path, CachedSession { fp, session: session.clone() }));
+        sessions.push(session);
+    }
 
-            let chat = match json.get("chat").and_then(|c| c.as_array()) { Some(c) => c, None => continue };
-            if chat.is_empty() { continue; }
-
-            // Find the first real user message for the title
-            let title = chat.iter()
-                .filter(|m| m.get("role").and_then(|r| r.as_str()) == Some("human"))
-                .filter_map(|m| m.get("content").and_then(|c| c.as_str()))
-                .filter_map(|c| {
-                    // Use the same extraction logic as the message renderer
-                    let extracted = extract_user_text_from_chat(c);
-                    if extracted.is_empty() { None } else { Some(extracted) }
-                })
-                .next()
-                .map(|c| {
-                    let t: String = c.chars().take(80).collect();
-                    // Clean up any JSON artifacts or newlines
-                    let t = t.replace('\n', " ").replace('\r', " ");
-                    if c.len() > 80 { format!("{}...", t.trim()) } else { t.trim().to_string() }
-                })
-                .unwrap_or_else(|| "Untitled".to_string());
-
-            let message_count = chat.len();
-            let model = json.get("metadata").and_then(|m| m.get("modelId")).and_then(|m| m.as_str()).unwrap_or("").to_string();
-            let workflow_id = json.get("metadata").and_then(|m| m.get("workflowId")).and_then(|w| w.as_str()).map(|s| s.to_string());
-
-            let start_time = json.get("metadata").and_then(|m| m.get("startTime")).and_then(|t| t.as_i64()).unwrap_or(0);
-            let end_time = json.get("metadata").and_then(|m| m.get("endTime")).and_then(|t| t.as_i64()).unwrap_or(start_time);
-            let updated_at = if end_time > 0 {
-                chrono::DateTime::from_timestamp(end_time / 1000, 0)
-                    .map(|dt| dt.to_rfc3339()).unwrap_or_default()
-            } else if start_time > 0 {
-                chrono::DateTime::from_timestamp(start_time / 1000, 0)
-                    .map(|dt| dt.to_rfc3339()).unwrap_or_default()
-            } else {
-                file.metadata().and_then(|m| m.modified()).ok()
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                        .map(|dt| dt.to_rfc3339()).unwrap_or_default())
-                    .unwrap_or_default()
-            };
-
-            sessions.push(KageDesktopSession {
-                id, title,
-                workspace: name.clone(),
-                workspace_encoded: name.clone(),
-                updated_at, message_count,
-                session_type: "chat".to_string(),
-                model,
-                file_path: path.to_string_lossy().to_string(),
-                workflow_id,
-            });
+    if !fresh.is_empty() {
+        let mut guard = cache.chat_files.lock_or_recover();
+        for (path, entry) in fresh {
+            guard.insert(path, entry);
         }
     }
 
@@ -507,6 +625,94 @@ pub async fn kage_desktop_chat_sessions(limit: Option<usize>) -> Result<Vec<Kage
     deduped.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
     deduped.truncate(limit);
     Ok(deduped)
+}
+
+/// Parse a single `.chat` file (partial JSON is tolerated and falls back to
+/// filesystem metadata for timestamps). Returns `None` if the file is
+/// empty or can't be opened at all.
+fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession> {
+    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+
+    // Only read the first 50KB — enough for metadata and first few messages
+    let content = read_file_head(path, 50_000)?;
+
+    // Try to parse — may be truncated, so wrap in a recovery
+    let json: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => {
+            // Truncated JSON — fall back to file metadata for date
+            let updated_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                    .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+                .unwrap_or_default();
+            return Some(KageDesktopSession {
+                id,
+                title: "Untitled".into(),
+                workspace: hash_dir.to_string(),
+                workspace_encoded: hash_dir.to_string(),
+                updated_at,
+                message_count: 0,
+                session_type: "chat".into(),
+                model: String::new(),
+                file_path: path.to_string_lossy().to_string(),
+                workflow_id: None,
+            });
+        }
+    };
+
+    let chat = json.get("chat").and_then(|c| c.as_array())?;
+    if chat.is_empty() { return None; }
+
+    // Find the first real user message for the title
+    let title = chat.iter()
+        .filter(|m| m.get("role").and_then(|r| r.as_str()) == Some("human"))
+        .filter_map(|m| m.get("content").and_then(|c| c.as_str()))
+        .filter_map(|c| {
+            // Use the same extraction logic as the message renderer
+            let extracted = extract_user_text_from_chat(c);
+            if extracted.is_empty() { None } else { Some(extracted) }
+        })
+        .next()
+        .map(|c| {
+            let t: String = c.chars().take(80).collect();
+            let t = t.replace('\n', " ").replace('\r', " ");
+            if c.len() > 80 { format!("{}...", t.trim()) } else { t.trim().to_string() }
+        })
+        .unwrap_or_else(|| "Untitled".to_string());
+
+    let message_count = chat.len();
+    let model = json.get("metadata").and_then(|m| m.get("modelId")).and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let workflow_id = json.get("metadata").and_then(|m| m.get("workflowId")).and_then(|w| w.as_str()).map(|s| s.to_string());
+
+    let start_time = json.get("metadata").and_then(|m| m.get("startTime")).and_then(|t| t.as_i64()).unwrap_or(0);
+    let end_time = json.get("metadata").and_then(|m| m.get("endTime")).and_then(|t| t.as_i64()).unwrap_or(start_time);
+    let updated_at = if end_time > 0 {
+        chrono::DateTime::from_timestamp(end_time / 1000, 0)
+            .map(|dt| dt.to_rfc3339()).unwrap_or_default()
+    } else if start_time > 0 {
+        chrono::DateTime::from_timestamp(start_time / 1000, 0)
+            .map(|dt| dt.to_rfc3339()).unwrap_or_default()
+    } else {
+        std::fs::metadata(path).and_then(|m| m.modified()).ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+            .unwrap_or_default()
+    };
+
+    Some(KageDesktopSession {
+        id,
+        title,
+        workspace: hash_dir.to_string(),
+        workspace_encoded: hash_dir.to_string(),
+        updated_at,
+        message_count,
+        session_type: "chat".to_string(),
+        model,
+        file_path: path.to_string_lossy().to_string(),
+        workflow_id,
+    })
 }
 
 // ---------------------------------------------------------------------------

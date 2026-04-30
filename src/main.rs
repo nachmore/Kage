@@ -100,6 +100,14 @@ fn main() {
     let dev_mode = flags.dev_mode;
     let debug_mode = flags.debug_mode;
 
+    // In dev mode, enable Rust backtraces on panic unless the user has
+    // already set RUST_BACKTRACE explicitly (e.g. to "full"). This means
+    // `cargo tauri dev -- /dev` always produces useful panic traces.
+    if dev_mode && std::env::var_os("RUST_BACKTRACE").is_none() {
+        // SAFETY: called before any threads are spawned that read this var.
+        std::env::set_var("RUST_BACKTRACE", "1");
+    }
+
     // Check for session resume after update — clean up last-session.txt
     let _resume_session_id: Option<String> = dirs::config_dir()
         .map(|d| d.join("kage"))
@@ -213,6 +221,7 @@ fn main() {
             last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
             frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
+            kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
             automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
         })
         .on_window_event(|window, event| {
