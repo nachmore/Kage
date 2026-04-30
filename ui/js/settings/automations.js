@@ -409,7 +409,12 @@ class AutomationsSettingsModule extends SettingsModule {
             if (!invoke || !listen) return;
             const prompt = `<role>You write ultra-concise automation summaries.</role>\n<automation>${JSON.stringify({ steps: auto.steps.map(s => ({ type: s.step_type, prompt: s.prompt, find: s.find, replace: s.replace, transform: s.transform, condition: s.condition, script: s.script || undefined })), output: auto.output })}</automation>\n<task>Summarize the OUTCOME of this automation in one short sentence. Do NOT mention the name "${auto.name}" or the trigger — the user can already see both. Focus only on what the steps produce. Be concise. No markdown.</task>`;
             let response = '';
-            const unlisten = await listen('message_chunk', (event) => { response = event.payload; });
+            const unlisten = await listen('message_chunk', (event) => {
+                const delta = (event.payload && typeof event.payload === 'object')
+                    ? (event.payload.text || '')
+                    : String(event.payload || '');
+                response += delta;
+            });
             const done = new Promise(resolve => { listen('message_complete', () => resolve()).then(fn => { done._ul = fn; }); });
             await invoke('send_message_streaming', { message: prompt, attachments: null });
             await done;

@@ -653,7 +653,10 @@ class ShortcutsSettingsModule extends SettingsModule {
             // Collect streamed response
             let response = '';
             const unlisten = await listen('message_chunk', (event) => {
-                response = event.payload;
+                const delta = (event.payload && typeof event.payload === 'object')
+                    ? (event.payload.text || '')
+                    : String(event.payload || '');
+                response += delta;
                 statusEl.textContent = 'Receiving...';
             });
 

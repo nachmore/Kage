@@ -130,7 +130,10 @@ export function createScriptEditor(container, opts = {}) {
 
                 let response = '';
                 const unlisten = await listen('message_chunk', (event) => {
-                    response = event.payload;
+                    const delta = (event.payload && typeof event.payload === 'object')
+                        ? (event.payload.text || '')
+                        : String(event.payload || '');
+                    response += delta;
                     if (aiStatus) aiStatus.textContent = 'Receiving...';
                 });
                 const completionPromise = new Promise((resolve) => {

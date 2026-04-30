@@ -1799,8 +1799,14 @@ export class FloatingApp {
 
     handleMessageChunk(event) {
         if (!this.isWaitingForResponse) return;
-        
-        this.currentResponse = event.payload;
+
+        // Payload is `{ text: <delta> }` — the Rust side ships only the new
+        // fragment to avoid O(n²) IPC traffic on long responses. Append it to
+        // our local accumulator.
+        const delta = (event.payload && typeof event.payload === 'object')
+            ? (event.payload.text || '')
+            : String(event.payload || '');
+        if (delta) this.currentResponse = (this.currentResponse || '') + delta;
         
         if (this.currentResponse && this.currentResponse.trim().length > 0) {
             this.elements.loadingDots.classList.remove('visible');

@@ -1476,7 +1476,13 @@ export class ChatApp {
     handleMessageChunk(event) {
         if (!this.isWaitingForResponse || !this.currentStreamingMessage) return;
 
-        this.currentStreamingContent = event.payload;
+        // Payload is `{ text: <delta> }` — the Rust side ships only the new
+        // fragment to avoid O(n²) IPC traffic on long responses. Append it to
+        // our local accumulator.
+        const delta = (event.payload && typeof event.payload === 'object')
+            ? (event.payload.text || '')
+            : String(event.payload || '');
+        if (delta) this.currentStreamingContent = (this.currentStreamingContent || '') + delta;
         this.hideTypingIndicator();
 
         // Detect complete automation plan during streaming and execute immediately

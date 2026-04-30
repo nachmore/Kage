@@ -51,17 +51,38 @@ pub fn setup_notification_handler(
                 if let Some(kind) = update.get("sessionUpdate").and_then(|v| v.as_str()) {
                     if kind == "agent_message_chunk" {
                         if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
-                            let mut acc = accumulated.lock_or_recover();
-                            if acc.len() < crate::acp_client::MAX_ACCUMULATOR_SIZE {
-                                let remaining = crate::acp_client::MAX_ACCUMULATOR_SIZE - acc.len();
-                                if text.len() <= remaining {
-                                    acc.push_str(text);
+                            // Delta that will actually be emitted to the UI. Usually the
+                            // full text, but truncated if the accumulator is near the cap.
+                            let emitted: &str = {
+                                let mut acc = accumulated.lock_or_recover();
+                                if acc.len() >= crate::acp_client::MAX_ACCUMULATOR_SIZE {
+                                    ""
                                 } else {
-                                    acc.push_str(&text[..remaining]);
-                                    log::warn!("Streaming accumulator hit {}MB cap — truncating", crate::acp_client::MAX_ACCUMULATOR_SIZE / (1024 * 1024));
+                                    let remaining = crate::acp_client::MAX_ACCUMULATOR_SIZE - acc.len();
+                                    if text.len() <= remaining {
+                                        acc.push_str(text);
+                                        text
+                                    } else {
+                                        let slice = &text[..remaining];
+                                        acc.push_str(slice);
+                                        log::warn!(
+                                            "Streaming accumulator hit {}MB cap — truncating",
+                                            crate::acp_client::MAX_ACCUMULATOR_SIZE / (1024 * 1024)
+                                        );
+                                        slice
+                                    }
                                 }
+                            };
+                            if !emitted.is_empty() {
+                                // Emit only the delta. The frontend maintains its own
+                                // accumulator by appending `text` on each chunk. This avoids
+                                // the O(n²) IPC cost of shipping the full accumulator every
+                                // chunk, which was causing multi-GB allocations on long responses.
+                                let _ = app_handle.emit(
+                                    "message_chunk",
+                                    serde_json::json!({ "text": emitted }),
+                                );
                             }
-                            let _ = app_handle.emit("message_chunk", acc.clone());
                         }
                         return;
                     }
