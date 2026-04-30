@@ -3,16 +3,23 @@
 //!
 //! Data is stored in a SQLite database in the user's config directory.
 //! The tracker runs as a background tokio task, controlled via start/stop.
+//!
+//! # Concurrency
+//!
+//! The DB connection lives behind a `std::sync::Mutex` (not `tokio::sync::Mutex`)
+//! because all SQLite operations are synchronous/blocking. The lock is never held
+//! across an `.await`. Actual DB work (inserts, queries) runs inside
+//! `tokio::task::spawn_blocking` so the async scheduler keeps running while
+//! SQLite does disk I/O.
 
 use anyhow::{Context, Result};
 use chrono::{Datelike, Local, NaiveDate, Duration as ChronoDuration};
-use log::{info, debug};
+use log::{info, debug, warn};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::lock_ext::LockExt;
 
@@ -64,8 +71,11 @@ pub struct SiteUsage {
 
 pub struct ActivityTrackerState {
     running: AtomicBool,
+    /// SQLite connection. Guarded by a sync mutex because all rusqlite calls
+    /// are blocking — we never want to hold this across an `.await`. DB work
+    /// happens inside `spawn_blocking`, not on the async scheduler.
     db: Mutex<Option<Connection>>,
-    poll_interval_secs: std::sync::Mutex<u64>,
+    poll_interval_secs: Mutex<u64>,
 }
 
 impl ActivityTrackerState {
@@ -73,7 +83,7 @@ impl ActivityTrackerState {
         Self {
             running: AtomicBool::new(false),
             db: Mutex::new(None),
-            poll_interval_secs: std::sync::Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
+            poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
         }
     }
 
@@ -123,10 +133,16 @@ pub async fn start_tracker(state: &Arc<ActivityTrackerState>, poll_interval: Opt
         *state.poll_interval_secs.lock_or_recover() = interval.max(2);
     }
 
-    // Open DB
-    let conn = Connection::open(db_path()).context("Failed to open activity database")?;
-    init_db(&conn)?;
-    *state.db.lock().await = Some(conn);
+    // Open + init DB on the blocking pool (file I/O + schema create).
+    let conn = tokio::task::spawn_blocking(|| -> Result<Connection> {
+        let conn = Connection::open(db_path()).context("Failed to open activity database")?;
+        init_db(&conn)?;
+        Ok(conn)
+    })
+    .await
+    .context("DB init task panicked")??;
+
+    *state.db.lock_or_recover() = Some(conn);
 
     state.running.store(true, Ordering::Relaxed);
     info!("[ActivityTracker] Started (poll every {}s)", state.poll_interval_secs.lock_or_recover());
@@ -175,14 +191,29 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
 
         debug!("[ActivityTracker] Active: {} ({})", process, title);
 
-        // Record to DB
-        let db_guard = state.db.lock().await;
-        if let Some(ref conn) = *db_guard {
-            let timestamp = Local::now().to_rfc3339();
-            let _ = conn.execute(
-                "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params![timestamp, process, title, elapsed_secs],
-            );
+        // Record to DB on the blocking pool so SQLite's disk I/O doesn't
+        // stall the async scheduler. The lock is a std::sync::Mutex and is
+        // only held for the duration of the insert.
+        let state_for_insert = Arc::clone(&state);
+        let process_for_insert = process.clone();
+        let title_for_insert = title;
+        let insert_result = tokio::task::spawn_blocking(move || {
+            let guard = state_for_insert.db.lock_or_recover();
+            if let Some(ref conn) = *guard {
+                let timestamp = Local::now().to_rfc3339();
+                conn.execute(
+                    "INSERT INTO activity_log (timestamp, process_name, window_title, duration_secs) VALUES (?1, ?2, ?3, ?4)",
+                    rusqlite::params![timestamp, process_for_insert, title_for_insert, elapsed_secs],
+                )?;
+            }
+            Ok::<(), rusqlite::Error>(())
+        })
+        .await;
+
+        if let Err(e) = insert_result {
+            warn!("[ActivityTracker] insert task panicked: {}", e);
+        } else if let Ok(Err(e)) = insert_result {
+            warn!("[ActivityTracker] insert failed: {}", e);
         }
 
         if process != last_process {
@@ -196,7 +227,19 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
 // ---------------------------------------------------------------------------
 
 pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Result<ActivityReport> {
-    let db_guard = state.db.lock().await;
+    let state = Arc::clone(state);
+    let period = period.to_string();
+
+    // Reports walk the whole table and can do non-trivial work — run on the
+    // blocking pool so we don't stall the async runtime.
+    tokio::task::spawn_blocking(move || build_report(&state, &period))
+        .await
+        .context("Report task panicked")?
+}
+
+/// Blocking report builder. Runs inside `spawn_blocking` from `get_report`.
+fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityReport> {
+    let db_guard = state.db.lock_or_recover();
     let conn = db_guard.as_ref().context("Activity tracker not started")?;
 
     let now = Local::now();
@@ -210,7 +253,7 @@ pub async fn get_report(state: &Arc<ActivityTrackerState>, period: &str) -> Resu
             let start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap_or(now.date_naive());
             (start, "This Month".to_string())
         }
-        "all" | _ => {
+        _ => {
             let start = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
             (start, "All Time".to_string())
         }
