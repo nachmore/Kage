@@ -60,7 +60,7 @@ impl AcpClient {
         self.transport.pipe_stdin.clone()
     }
 
-    pub fn get_tcp_writer(&self) -> Arc<Mutex<Option<std::net::TcpStream>>> {
+    pub fn get_tcp_writer(&self) -> Arc<Mutex<Option<Arc<Mutex<std::net::TcpStream>>>>> {
         self.transport.tcp_writer.clone()
     }
 

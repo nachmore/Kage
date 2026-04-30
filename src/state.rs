@@ -10,7 +10,7 @@ pub struct AppState {
     pub config: Arc<std::sync::Mutex<Config>>,
     pub app_launcher: Arc<Mutex<AppLauncher>>,
     pub pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    pub tcp_writer: Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    pub tcp_writer: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::net::TcpStream>>>>>,
     pub dev_mode: bool,
     /// The session ID used by the floating window (persists across session switches)
     pub floating_session_id: Arc<std::sync::Mutex<Option<String>>>,

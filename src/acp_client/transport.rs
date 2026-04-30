@@ -26,8 +26,15 @@ pub struct AcpTransport {
     mode: AcpConnectionMode,
     /// Write handle for pipe stdin
     pub pipe_stdin: Arc<Mutex<Option<Arc<Mutex<ChildStdin>>>>>,
-    /// Write handle for TCP
-    pub tcp_writer: Arc<Mutex<Option<TcpStream>>>,
+    /// Write handle for TCP.
+    ///
+    /// The inner `Arc<Mutex<TcpStream>>` mirrors the `pipe_stdin` layout: the
+    /// outer mutex guards replacement of the handle (connect/disconnect), the
+    /// inner mutex serializes the actual write+flush. Nesting them this way
+    /// lets writers briefly hold the outer lock, clone the inner `Arc`, drop
+    /// the outer guard, then write through the inner mutex — without calling
+    /// `TcpStream::try_clone()` on every send (which dup's an OS handle).
+    pub tcp_writer: Arc<Mutex<Option<Arc<Mutex<TcpStream>>>>>,
     /// Channel to receive responses from the background reader
     response_rx: Arc<Mutex<Option<mpsc::Receiver<AcpResponse>>>>,
     /// Notification handler called by the background reader thread
@@ -110,7 +117,7 @@ impl AcpTransport {
                 stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 
                 let write_clone = stream.try_clone()?;
-                *self.tcp_writer.lock_or_recover() = Some(write_clone);
+                *self.tcp_writer.lock_or_recover() = Some(Arc::new(Mutex::new(write_clone)));
 
                 let read_clone = stream.try_clone()?;
                 self.start_reader_thread(ReaderSource::Tcp(BufReader::new(read_clone)));
@@ -334,26 +341,38 @@ impl AcpTransport {
         }
     }
 
-    /// Write a line to the ACP server (pipe stdin or TCP)
+    /// Write a line to the ACP server (pipe stdin or TCP).
+    ///
+    /// For both transports we clone the inner `Arc` out under a brief outer-lock
+    /// scope, drop the outer guard, then hold only the inner write mutex for the
+    /// `writeln!` + `flush`. This keeps the outer lock contention-free for
+    /// readers (connect/disconnect) and avoids the per-write `TcpStream::try_clone`
+    /// that was previously burning a kernel handle allocation on every message.
     pub fn write_line(&self, line: &str) -> Result<()> {
-        {
+        // Pipe first
+        let stdin_arc = {
             let guard = self.pipe_stdin.lock_or_recover();
-            if let Some(ref stdin_arc) = *guard {
-                let mut stdin = stdin_arc.lock_or_recover();
-                writeln!(stdin, "{}", line)?;
-                stdin.flush()?;
-                return Ok(());
-            }
+            guard.as_ref().cloned()
+        };
+        if let Some(stdin_arc) = stdin_arc {
+            let mut stdin = stdin_arc.lock_or_recover();
+            writeln!(stdin, "{}", line)?;
+            stdin.flush()?;
+            return Ok(());
         }
-        {
+
+        // Fall back to TCP
+        let tcp_arc = {
             let guard = self.tcp_writer.lock_or_recover();
-            if let Some(ref stream) = *guard {
-                let mut writer = stream.try_clone()?;
-                writeln!(writer, "{}", line)?;
-                writer.flush()?;
-                return Ok(());
-            }
+            guard.as_ref().cloned()
+        };
+        if let Some(tcp_arc) = tcp_arc {
+            let mut writer = tcp_arc.lock_or_recover();
+            writeln!(writer, "{}", line)?;
+            writer.flush()?;
+            return Ok(());
         }
+
         anyhow::bail!("No write handle available")
     }
 

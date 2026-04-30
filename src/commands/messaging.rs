@@ -13,7 +13,7 @@ pub fn setup_notification_handler(
     app: &tauri::AppHandle,
     state_config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pipe_stdin: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>>,
     slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
     pending_permission: std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
 ) {
@@ -178,7 +178,7 @@ pub fn setup_notification_handler(
 /// Tries pipe_stdin first; falls back to tcp_writer.
 fn write_raw_json(
     pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
-    tcp_writer: &std::sync::Mutex<Option<std::net::TcpStream>>,
+    tcp_writer: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>,
     json: &str,
 ) -> Result<(), AppError> {
     use std::io::Write;
@@ -195,11 +195,15 @@ fn write_raw_json(
         return Ok(());
     }
 
-    // Fall back to TCP
-    let guard = tcp_writer.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-    if let Some(ref stream) = *guard {
-        let mut ws: std::net::TcpStream = stream.try_clone().map_err(|e| AppError::connection_lost(format!("Clone: {}", e)))?;
-        drop(guard);
+    // Fall back to TCP. Clone the inner Arc under the outer lock, drop the
+    // outer guard, then hold only the inner write mutex for the actual I/O.
+    // This avoids the old `TcpStream::try_clone()` per-write overhead.
+    let tcp_arc: Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>> = {
+        let guard = tcp_writer.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+        guard.as_ref().cloned()
+    };
+    if let Some(arc) = tcp_arc {
+        let mut ws = arc.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         writeln!(ws, "{}", json).map_err(|e| AppError::connection_lost(format!("Write: {}", e)))?;
         ws.flush().map_err(|e| AppError::connection_lost(format!("Flush: {}", e)))?;
         return Ok(());
@@ -212,7 +216,7 @@ fn write_raw_json(
 /// Silently ignores errors (used in fire-and-forget contexts like the notification handler).
 fn write_raw_json_silent(
     pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
-    tcp_writer: &std::sync::Mutex<Option<std::net::TcpStream>>,
+    tcp_writer: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>,
     value: &serde_json::Value,
 ) {
     if let Ok(json) = serde_json::to_string(value) {
@@ -228,7 +232,7 @@ fn handle_permission_notification(
     app_handle: &tauri::AppHandle,
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pipe_stdin: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::net::TcpStream>>>,
+    tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>>,
     pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
     tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     last_config_save: &std::sync::Arc<std::sync::Mutex<std::time::Instant>>,
