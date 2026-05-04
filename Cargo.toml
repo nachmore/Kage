@@ -78,6 +78,7 @@ nix = { version = "0.31", features = ["signal"] }
 signal-hook = "0.4"
 
 [dev-dependencies]
+tempfile = "3"
 
 [build-dependencies]
 tauri-build = { version = "2.5", features = [] }

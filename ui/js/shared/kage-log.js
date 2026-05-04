@@ -8,6 +8,17 @@
  *
  * For extensions, use createExtensionLogger(extensionId) which auto-prefixes
  * the source with "ext:<id>".
+ *
+ * # IPC volume
+ *
+ * Every `_write` call turns into a Tauri invoke, so this module is careful
+ * about what it forwards. The explicit `kageLog.debug/info/warn/error` API
+ * sends everything the caller asked for. The auto-intercepting
+ * `interceptConsole()` used by the floating and chat windows defaults to
+ * forwarding only `warn` and `error` — `console.log` and `console.debug`
+ * are left in the DevTools console but not mirrored to the backend. This
+ * keeps per-keystroke paths (extension search, theme reapply, etc.) from
+ * flooding the backend log writer.
  */
 
 const invoke = () => window.__TAURI__?.core?.invoke;
@@ -23,7 +34,8 @@ function _write(level, source, msg) {
 }
 
 /**
- * Main log API — used by app code with explicit source tags.
+ * Main log API — used by app code with explicit source tags. Always forwards
+ * every call (the caller opted in explicitly).
  */
 export const kageLog = {
     debug(source, ...args) { _write('debug', source, args.map(_fmt).join(' ')); },
@@ -34,6 +46,7 @@ export const kageLog = {
 
 /**
  * Create a logger scoped to an extension. Source is auto-set to "ext:<id>".
+ * Extensions are expected to use this sparingly — see the note above.
  */
 export function createExtensionLogger(extensionId) {
     const src = `ext:${extensionId}`;
@@ -46,13 +59,22 @@ export function createExtensionLogger(extensionId) {
 }
 
 /**
- * Intercept console.log/warn/error and mirror to the app log.
- * Original console methods still fire (always, not just debug builds)
- * so browser DevTools remain useful.
+ * Intercept console methods and mirror them to the app log. Original console
+ * methods still fire so browser DevTools remain useful.
  *
- * @param {string} source - source tag for intercepted messages (e.g. "floating", "chat")
+ * By default only `warn` and `error` are forwarded — mirroring every
+ * `console.log` call turns per-keystroke code paths (theme changes, search,
+ * extension chatter) into a flood of IPC round-trips to Rust, which in turn
+ * queues disk writes. Callers that want full capture (e.g. the settings UI
+ * toggling a "verbose logging" preference) can pass `{ levels: 'all' }`.
+ *
+ * @param {string} source - source tag for intercepted messages (e.g. "floating")
+ * @param {object} [opts]
+ * @param {'warn-error'|'all'} [opts.levels='warn-error'] - which levels to mirror
  */
-export function interceptConsole(source) {
+export function interceptConsole(source, opts = {}) {
+    const levels = opts.levels === 'all' ? 'all' : 'warn-error';
+
     const orig = {
         log:   console.log.bind(console),
         warn:  console.warn.bind(console),
@@ -60,10 +82,7 @@ export function interceptConsole(source) {
         debug: console.debug.bind(console),
     };
 
-    console.log = (...args) => {
-        orig.log(...args);
-        _write('info', source, args.map(_fmt).join(' '));
-    };
+    // warn/error are always forwarded — they're the actionable signals.
     console.warn = (...args) => {
         orig.warn(...args);
         _write('warn', source, args.map(_fmt).join(' '));
@@ -72,10 +91,20 @@ export function interceptConsole(source) {
         orig.error(...args);
         _write('error', source, args.map(_fmt).join(' '));
     };
-    console.debug = (...args) => {
-        orig.debug(...args);
-        _write('debug', source, args.map(_fmt).join(' '));
-    };
+
+    if (levels === 'all') {
+        // Verbose mode: mirror info + debug too. Opt-in only.
+        console.log = (...args) => {
+            orig.log(...args);
+            _write('info', source, args.map(_fmt).join(' '));
+        };
+        console.debug = (...args) => {
+            orig.debug(...args);
+            _write('debug', source, args.map(_fmt).join(' '));
+        };
+    }
+    // In 'warn-error' mode, leave console.log and console.debug untouched so
+    // DevTools-only chatter stays DevTools-only.
 }
 
 /** Format a value for log output. */
