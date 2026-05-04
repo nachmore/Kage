@@ -382,6 +382,12 @@ pub struct SystemConfig {
     /// Maximum number of app log entries to keep in the ring buffer.
     #[serde(default = "default_log_buffer_size")]
     pub log_buffer_size: usize,
+    /// Mirror every frontend `console.log` / `console.debug` to the app log.
+    /// Off by default — only `console.warn` / `console.error` are forwarded.
+    /// Enable for verbose troubleshooting; the setting is heavy on IPC and
+    /// disk I/O so it's not suitable for steady-state use.
+    #[serde(default)]
+    pub verbose_frontend_logging: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -677,6 +683,7 @@ impl Default for Config {
                 show_notifications: true,
                 screen_context: true,
                 log_buffer_size: 1000,
+                verbose_frontend_logging: false,
             },
             shortcuts: vec![],
             debug_mode: false,

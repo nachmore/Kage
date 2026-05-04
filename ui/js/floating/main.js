@@ -6,7 +6,7 @@ import { initLinkHandler } from '../shared/link-handler.js';
 import { createMascotController, getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
-import { interceptConsole } from '../shared/kage-log.js';
+import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -14,7 +14,15 @@ const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}
 waitForTauri(async ({ invoke, appWindow, listen }) => {
     _ts('Tauri ready');
 
-    interceptConsole('floating');
+    // Read the "Log all messages" preference before intercepting console so
+    // we honour the saved toggle from the About > Logging settings panel.
+    // Safe to default to quiet on any read failure.
+    let verboseLogs = false;
+    try {
+        const cfg = await invoke('get_config');
+        verboseLogs = !!cfg?.system?.verbose_frontend_logging;
+    } catch {}
+    interceptConsole('floating', { verbose: verboseLogs });
     initMarkdown();
     initThemeListener();
     initLinkHandler(invoke);
@@ -24,6 +32,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // Re-apply theme and opacity when config changes
     listen('config_updated', async () => {
         await loadAndApplyTheme(invoke);
+
+        // Pick up changes to the verbose-logging toggle live so the user
+        // doesn't have to restart anything.
+        try {
+            const cfg = await invoke('get_config');
+            setVerboseConsoleCapture(!!cfg?.system?.verbose_frontend_logging);
+        } catch {}
 
         // Refresh terminator mode (may have been toggled in settings)
         let newTerminator = false;

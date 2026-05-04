@@ -7,12 +7,20 @@ import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown
 import { createMascotController, createMascot, getMascotThemeSettings, setTerminatorMode, mascotHTML } from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
-import { interceptConsole } from '../shared/kage-log.js';
+import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 
 let app = null;
 
 waitForTauri(async ({ invoke, appWindow, listen }) => {
-    interceptConsole('chat');
+    // Read the "Log all messages" preference before intercepting console so
+    // we honour the saved toggle from the About > Logging settings panel.
+    // Safe to default to quiet on any read failure.
+    let verboseLogs = false;
+    try {
+        const cfg = await invoke('get_config');
+        verboseLogs = !!cfg?.system?.verbose_frontend_logging;
+    } catch {}
+    interceptConsole('chat', { verbose: verboseLogs });
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);
@@ -70,6 +78,13 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             app.renderExtensionToolbarButtons();
         }
         if (app?.loadShortcuts) app.loadShortcuts();
+
+        // Pick up changes to the verbose-logging toggle live so the user
+        // doesn't have to restart anything.
+        try {
+            const cfg = await invoke('get_config');
+            setVerboseConsoleCapture(!!cfg?.system?.verbose_frontend_logging);
+        } catch {}
 
         // Refresh terminator mode (may have been toggled in settings)
         let newTerminator = false;

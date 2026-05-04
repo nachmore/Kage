@@ -48,6 +48,15 @@ class AboutSettingsModule extends SettingsModule {
                                 <input type="number" id="logBufferSize" class="setting-input" min="100" max="50000" step="100" style="width:120px;">
                             </div>
                         </div>
+                        <div class="setting-row">
+                            <div class="setting-label">Log all messages</div>
+                            <div class="setting-checkbox-row">
+                                <label class="kage-checkbox">
+                                    <input type="checkbox" id="verboseFrontendLogging">
+                                </label>
+                                <div class="setting-description">Include informational messages, not just warnings and errors. Note: this can make Kage run slower if you have extensions that log a lot of messages.</div>
+                            </div>
+                        </div>
                         <div class="about-log-toolbar">
                             <select id="logFilterLevel" class="setting-input" style="width:auto;min-width:90px;">
                                 <option value="all">All levels</option>
@@ -273,16 +282,22 @@ class AboutSettingsModule extends SettingsModule {
     load(config) {
         const input = document.getElementById('logBufferSize');
         if (input) input.value = config?.system?.log_buffer_size || 1000;
+        const verbose = document.getElementById('verboseFrontendLogging');
+        if (verbose) verbose.checked = !!config?.system?.verbose_frontend_logging;
     }
 
     save(config) {
         const input = document.getElementById('logBufferSize');
+        if (!config.system) config.system = {};
         if (input) {
             const val = parseInt(input.value, 10);
             if (!isNaN(val) && val >= 100) {
-                if (!config.system) config.system = {};
                 config.system.log_buffer_size = val;
             }
+        }
+        const verbose = document.getElementById('verboseFrontendLogging');
+        if (verbose) {
+            config.system.verbose_frontend_logging = !!verbose.checked;
         }
     }
 

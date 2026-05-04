@@ -19,9 +19,21 @@
  * are left in the DevTools console but not mirrored to the backend. This
  * keeps per-keystroke paths (extension search, theme reapply, etc.) from
  * flooding the backend log writer.
+ *
+ * Callers can flip this at runtime via `setVerboseConsoleCapture(true|false)`
+ * (wired to the "Log all messages" setting in About > Logging). The flag
+ * is read fresh on every console call, so a toggle takes effect immediately
+ * without tearing down the interception.
  */
 
 const invoke = () => window.__TAURI__?.core?.invoke;
+
+/**
+ * Runtime flag: when true, `console.log` and `console.debug` are mirrored
+ * to the app log. Kept in a module-level variable so callers can flip it
+ * without reinstalling the interception.
+ */
+let _verboseConsoleCapture = false;
 
 /**
  * Send a log entry to the Rust backend.
@@ -62,18 +74,17 @@ export function createExtensionLogger(extensionId) {
  * Intercept console methods and mirror them to the app log. Original console
  * methods still fire so browser DevTools remain useful.
  *
- * By default only `warn` and `error` are forwarded — mirroring every
- * `console.log` call turns per-keystroke code paths (theme changes, search,
- * extension chatter) into a flood of IPC round-trips to Rust, which in turn
- * queues disk writes. Callers that want full capture (e.g. the settings UI
- * toggling a "verbose logging" preference) can pass `{ levels: 'all' }`.
+ * `warn` and `error` are always forwarded — they're the actionable signals.
+ * `log` and `debug` are only forwarded when verbose capture is enabled
+ * (see `setVerboseConsoleCapture`). The check is re-read on every call so
+ * the setting takes effect live.
  *
  * @param {string} source - source tag for intercepted messages (e.g. "floating")
  * @param {object} [opts]
- * @param {'warn-error'|'all'} [opts.levels='warn-error'] - which levels to mirror
+ * @param {boolean} [opts.verbose=false] - initial value of the verbose flag
  */
 export function interceptConsole(source, opts = {}) {
-    const levels = opts.levels === 'all' ? 'all' : 'warn-error';
+    _verboseConsoleCapture = !!opts.verbose;
 
     const orig = {
         log:   console.log.bind(console),
@@ -82,7 +93,6 @@ export function interceptConsole(source, opts = {}) {
         debug: console.debug.bind(console),
     };
 
-    // warn/error are always forwarded — they're the actionable signals.
     console.warn = (...args) => {
         orig.warn(...args);
         _write('warn', source, args.map(_fmt).join(' '));
@@ -91,20 +101,26 @@ export function interceptConsole(source, opts = {}) {
         orig.error(...args);
         _write('error', source, args.map(_fmt).join(' '));
     };
+    console.log = (...args) => {
+        orig.log(...args);
+        if (_verboseConsoleCapture) _write('info', source, args.map(_fmt).join(' '));
+    };
+    console.debug = (...args) => {
+        orig.debug(...args);
+        if (_verboseConsoleCapture) _write('debug', source, args.map(_fmt).join(' '));
+    };
+}
 
-    if (levels === 'all') {
-        // Verbose mode: mirror info + debug too. Opt-in only.
-        console.log = (...args) => {
-            orig.log(...args);
-            _write('info', source, args.map(_fmt).join(' '));
-        };
-        console.debug = (...args) => {
-            orig.debug(...args);
-            _write('debug', source, args.map(_fmt).join(' '));
-        };
-    }
-    // In 'warn-error' mode, leave console.log and console.debug untouched so
-    // DevTools-only chatter stays DevTools-only.
+/**
+ * Flip verbose console capture on or off at runtime. When true, every
+ * `console.log` and `console.debug` is mirrored to the backend app log;
+ * when false (the default), only `warn` and `error` are mirrored.
+ *
+ * Intended to be called by the settings module when the user toggles the
+ * "Log all messages" checkbox, and on startup once config is loaded.
+ */
+export function setVerboseConsoleCapture(enabled) {
+    _verboseConsoleCapture = !!enabled;
 }
 
 /** Format a value for log output. */
