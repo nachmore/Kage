@@ -34,6 +34,10 @@ let hostPort = null;
 /** @type {any} */
 let extensionConfig = {};
 
+/** Cache of vendor sources provided at init time. Used by runSandboxed()
+ *  to inject allow-listed libraries into per-call Workers. */
+let vendorSourcesCache = {};
+
 /** RPC id → { resolve, reject } for outbound invoke() calls. */
 const pendingInvokes = new Map();
 let nextInvokeId = 1;
@@ -91,7 +95,238 @@ function buildContext() {
         warn:  (...a) => log('warn', ...a),
         error: (...a) => log('error', ...a),
     };
-    return { invoke, config: extensionConfig, log: extLog };
+    return { invoke, config: extensionConfig, log: extLog, runSandboxed };
+}
+
+/**
+ * Pool of long-lived Workers used by `runSandboxed`. Keyed by the
+ * sorted vendor-list signature so calls with the same vendor set
+ * reuse the same worker (and its parsed vendor libraries).
+ *
+ * @type {Map<string, { worker: Worker, inflight: null | {
+ *   resolve: Function, reject: Function, timer: any, deadline: number,
+ * }, queue: Array<{
+ *   resolve: Function, reject: Function, data: any, deadline: number,
+ * }>, vendorList: string[] }>}
+ */
+const sandboxedWorkerPool = new Map();
+
+function sandboxedWorkerKey(vendorList) {
+    return vendorList.slice().sort().join('|');
+}
+
+/**
+ * Spawn a Worker for a given vendor set. The worker receives a
+ * bootstrap that loads vendor libraries once at startup and then
+ * listens for a stream of tasks. Each task carries its own serialized
+ * run function plus data.
+ */
+function spawnSandboxedWorker(vendorList) {
+    const parts = [];
+    for (const name of vendorList) {
+        const src = vendorSourcesCache?.[name];
+        if (typeof src === 'string' && src) parts.push(src);
+    }
+
+    // One-time bootstrap: build __lib, then respond to a stream of
+    // { id, runSrc, data } tasks. runSrc is evaluated lazily per task
+    // — for repeat calls with the same run fn we still re-eval the
+    // source inside the worker (cheap, microseconds), but the vendor
+    // parse cost is paid once per worker lifetime.
+    const bootstrap = `
+        (function(){
+            "use strict";
+            var __vendorNames = ${JSON.stringify(vendorList)};
+            var __lib = {};
+            for (var i = 0; i < __vendorNames.length; i++) {
+                var n = __vendorNames[i];
+                if (typeof self[n] !== 'undefined') __lib[n] = self[n];
+            }
+            self.onmessage = async function(ev) {
+                var msg = ev.data || {};
+                var id = msg.id;
+                try {
+                    // eslint-disable-next-line no-new-func
+                    var __run = (0, eval)('(' + msg.runSrc + ')');
+                    var out = await __run(msg.data, __lib);
+                    self.postMessage({ id: id, ok: true, result: out });
+                } catch (e) {
+                    self.postMessage({ id: id, ok: false, error: String(e && e.message || e) });
+                }
+            };
+        })();
+    `;
+    parts.push(bootstrap);
+
+    const blob = new Blob(parts, { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    try {
+        return { worker: new Worker(url), url };
+    } catch (e) {
+        URL.revokeObjectURL(url);
+        throw e;
+    }
+}
+
+/**
+ * Ensure a worker entry exists for the given vendor set. Spawns a
+ * fresh worker if there isn't one (or the previous was terminated).
+ * Wires onmessage/onerror to drain the inflight task.
+ */
+function ensureSandboxedWorker(vendorList) {
+    const key = sandboxedWorkerKey(vendorList);
+    let entry = sandboxedWorkerPool.get(key);
+    if (entry && entry.worker) return entry;
+
+    const { worker, url } = spawnSandboxedWorker(vendorList);
+    entry = { worker, url, vendorList: vendorList.slice(), inflight: null, queue: [] };
+
+    const finishInflight = (ok, payload) => {
+        const cur = entry.inflight;
+        if (!cur) return;
+        clearTimeout(cur.timer);
+        entry.inflight = null;
+        if (ok) cur.resolve(payload);
+        else cur.reject(payload);
+        pumpSandboxedQueue(entry);
+    };
+
+    worker.onmessage = (ev) => {
+        const { id, ok, result, error } = ev.data || {};
+        const cur = entry.inflight;
+        // Ignore messages that don't match the current inflight id.
+        // They can arrive from a worker we just replaced after a timeout.
+        if (!cur || cur.id !== id) return;
+        finishInflight(ok, ok ? result : new Error(error || 'runSandboxed: worker error'));
+    };
+    worker.onerror = (ev) => {
+        // The worker has crashed. Kill it (so its entry is dropped from
+        // the pool) and reject the inflight task. Queued tasks will be
+        // served by a fresh worker.
+        const cur = entry.inflight;
+        const err = new Error(`runSandboxed: ${ev?.message || 'worker error'}`);
+        if (cur) {
+            clearTimeout(cur.timer);
+            entry.inflight = null;
+            cur.reject(err);
+        }
+        const pending = entry.queue.splice(0);
+        killSandboxedWorker(entry);
+        if (pending.length > 0) {
+            const fresh = ensureSandboxedWorker(entry.vendorList);
+            fresh.queue.push(...pending);
+            pumpSandboxedQueue(fresh);
+        }
+    };
+
+    sandboxedWorkerPool.set(key, entry);
+    return entry;
+}
+
+function killSandboxedWorker(entry) {
+    const key = sandboxedWorkerKey(entry.vendorList);
+    try { entry.worker.terminate(); } catch {}
+    try { URL.revokeObjectURL(entry.url); } catch {}
+    entry.worker = null;
+    // Only remove if we're still the registered entry (guard against
+    // races where a new worker has already replaced us).
+    if (sandboxedWorkerPool.get(key) === entry) {
+        sandboxedWorkerPool.delete(key);
+    }
+}
+
+let nextSandboxedTaskId = 1;
+
+function pumpSandboxedQueue(entry) {
+    if (!entry.worker || entry.inflight) return;
+    const next = entry.queue.shift();
+    if (!next) return;
+
+    const id = nextSandboxedTaskId++;
+    const timer = setTimeout(() => {
+        // Timeout: terminate the worker, reject this task. The worker
+        // might be mid-compute on an uncancellable synchronous path,
+        // so we can't recover it — kill it and let the next task
+        // spawn a fresh one.
+        const cur = entry.inflight;
+        if (!cur || cur.id !== id) return;
+        entry.inflight = null;
+        killSandboxedWorker(entry);
+        cur.reject(new Error(`runSandboxed: timed out after ${next.deadline}ms`));
+        // Reschedule queued tasks against a fresh worker.
+        if (entry.queue.length > 0) {
+            const fresh = ensureSandboxedWorker(entry.vendorList);
+            fresh.queue.push(...entry.queue);
+            entry.queue = [];
+            pumpSandboxedQueue(fresh);
+        }
+    }, next.deadline);
+
+    entry.inflight = { id, resolve: next.resolve, reject: next.reject, timer, deadline: next.deadline };
+    try {
+        entry.worker.postMessage({ id, runSrc: next.runSrc, data: next.data });
+    } catch (e) {
+        clearTimeout(timer);
+        entry.inflight = null;
+        next.reject(new Error(`runSandboxed: failed to post data: ${e?.message || e}`));
+        pumpSandboxedQueue(entry);
+    }
+}
+
+/**
+ * Run a pure-compute function inside a long-lived pooled Web Worker
+ * with a hard per-call timeout. On timeout the worker is terminated
+ * and respawned — so extensions can't wedge the sandbox iframe with
+ * accidental long-running work (e.g. mathjs evaluating `2^2^2^2^2`).
+ *
+ * Intended for CPU-bound work only — the Worker has no bridge back to
+ * the host, no `invoke()`, no network. Pass all inputs via `data` and
+ * collect the result as a serializable value.
+ *
+ * Workers are pooled by the sorted `vendor` list, so repeated calls
+ * with the same vendor set reuse the same worker and avoid paying the
+ * vendor-parse cost on every invocation. Calls serialize: if a worker
+ * is busy, subsequent calls queue and run in order.
+ *
+ * @param {object} opts
+ * @param {(data:any, lib:Record<string,any>) => any} opts.run
+ *   Function executed inside the Worker. Receives the `data` argument
+ *   and a `lib` object whose keys are the requested vendor names mapped
+ *   to whatever global that vendor exposes (e.g. `lib.math` → mathjs).
+ *   Must be self-contained: it is serialized via `Function.toString()`,
+ *   so closures over outer variables won't survive. May return a value
+ *   (sync) or a thenable (async).
+ * @param {string[]} [opts.vendor]
+ *   Names of allow-listed vendor libraries injected into the worker,
+ *   taken from the extension's manifest `sandboxVendor` list.
+ * @param {any} [opts.data]
+ *   Structured-cloneable input handed to `run`.
+ * @param {number} [opts.timeoutMs=1000]
+ *   Hard deadline. On timeout the Worker is terminated and respawned;
+ *   the promise rejects with `Error('runSandboxed: timed out after Nms')`.
+ * @returns {Promise<any>}
+ */
+function runSandboxed({ run, vendor, data, timeoutMs } = {}) {
+    if (typeof run !== 'function') {
+        return Promise.reject(new Error('runSandboxed: run must be a function'));
+    }
+    const deadline = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 1000;
+    const vendorList = Array.isArray(vendor)
+        ? vendor.filter(v => typeof v === 'string')
+        : [];
+    const runSrc = run.toString();
+
+    let entry;
+    try {
+        entry = ensureSandboxedWorker(vendorList);
+    } catch (e) {
+        return Promise.reject(new Error(`runSandboxed: failed to spawn worker: ${e?.message || e}`));
+    }
+
+    return new Promise((resolve, reject) => {
+        entry.queue.push({ runSrc, data, deadline, resolve, reject });
+        pumpSandboxedQueue(entry);
+    });
 }
 
 // --- Provider loading -------------------------------------------------------
@@ -146,54 +381,32 @@ async function importFromSource(sourceText, kind) {
     // Build a blob URL we own so module specifier resolution stays local.
     const blob = new Blob([rewritten], { type: 'application/javascript' });
     const url = URL.createObjectURL(blob);
-    try {
-        const mod = await import(/* @vite-ignore */ url);
-        if (!mod?.default) {
-            throw new Error(`${kind}: module has no default export`);
-        }
-        return mod.default;
-    } finally {
-        URL.revokeObjectURL(url);
+    // We deliberately DON'T revoke this URL after the import resolves.
+    // Revoking while the engine still holds a reference to the module
+    // (for dynamic source-map fetches, debugger stepping, or late child
+    // import resolution in throttled iframes) races with Blink's same-
+    // origin check and produces the "Unsafe attempt to load URL ..."
+    // warning in the console. Blob URLs are cheap and die with the
+    // sandbox iframe when it's torn down, so leaking them for the
+    // lifetime of the extension is fine.
+    const mod = await import(/* @vite-ignore */ url);
+    if (!mod?.default) {
+        throw new Error(`${kind}: module has no default export`);
     }
-}
-
-/**
- * Synchronously evaluate allow-listed vendor libraries (UMD/IIFE) in
- * the sandbox window. Each source string is attached via
- * `script.textContent` so no network fetch happens (important: this
- * iframe has no fetch permission anyway — we'd be stuck if it did).
- *
- * Called BEFORE `registerSharedModules` / provider import so any
- * globals set by the vendor (e.g. `window.math`) are visible to
- * downstream modules.
- *
- * Note: these scripts run non-module, so `import`/`export` statements
- * inside them would be a syntax error. That's fine for UMD and IIFE
- * bundles, which is all we allow here.
- *
- * @param {Record<string,string>} vendorSources
- */
-function injectVendorScripts(vendorSources) {
-    if (!vendorSources || typeof vendorSources !== 'object') return;
-    for (const [name, src] of Object.entries(vendorSources)) {
-        if (typeof src !== 'string' || !src) continue;
-        try {
-            const script = document.createElement('script');
-            script.textContent = src;
-            document.head.appendChild(script);
-        } catch (e) {
-            log('error', `failed to inject vendor '${name}': ${e?.message || e}`);
-        }
-    }
+    return mod.default;
 }
 
 /**
  * Build blob URLs for every shared module BEFORE loading any provider.
- * Shared modules can import each other. We do two passes:
- *   1. Build a stub blob URL for each path (no rewrite), populating
- *      the blob map so all specifiers are resolvable.
- *   2. Rebuild any module whose source contains relative imports,
- *      now that the blob map is complete. Replace the stub URLs.
+ * Shared modules can import each other, so we can't just process them
+ * in source order — `a.js` might import `./b.js` before we've seen
+ * `b.js`. We do two passes:
+ *   1. Build an initial blob URL for each path, populating the blob
+ *      map so all specifiers are resolvable.
+ *   2. For modules that use relative imports, rewrite them (now that
+ *      every sibling has a known blob URL) and replace the pass-1 URL.
+ * Modules without relative imports keep their pass-1 URL and are
+ * never rebuilt.
  */
 function registerSharedModules(sharedSources) {
     if (!sharedSources || typeof sharedSources !== 'object') return;
@@ -206,9 +419,9 @@ function registerSharedModules(sharedSources) {
         sharedModuleBlobs.set(relPath, URL.createObjectURL(blob));
     }
 
-    // Pass 2: rewrite modules that use relative imports, now that the
-    // blob map is fully populated. Revoke the Pass-1 URL before
-    // replacing so we don't leak Blob memory.
+    // Pass 2: for each module that imports siblings relatively, rebuild
+    // the blob with rewritten specifiers. Revoke the pass-1 URL first
+    // so we don't leak its backing Blob.
     for (const [relPath, src] of rawEntries) {
         if (!/import\s.*['"]\.{1,2}\//.test(src)) continue;
         const rewritten = rewriteRelativeImports(src);
@@ -222,14 +435,10 @@ function registerSharedModules(sharedSources) {
 
 async function initExtension(init) {
     extensionConfig = init.config || {};
+    vendorSourcesCache = init.vendorSources || {};
 
     const context = buildContext();
     const sources = init.sources || {};
-
-    // Vendor libs (UMD/IIFE, e.g. mathjs) must run first so any globals
-    // they set are available to provider modules that depend on them
-    // (e.g. window.math for the math extension).
-    injectVendorScripts(init.vendorSources || {});
 
     // Shared modules (e.g. extensions/calendar/cache.js) come in a
     // separate bag keyed by their relative path. We build blob URLs

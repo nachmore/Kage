@@ -99,7 +99,13 @@ export class ExtensionSandbox {
         iframe.dataset.extensionId = this.extensionId;
         iframe.setAttribute('sandbox', 'allow-scripts');
         iframe.setAttribute('aria-hidden', 'true');
-        iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden;pointer-events:none;';
+        // We position offscreen rather than using visibility:hidden or
+        // width/height:0, because Chromium throttles timers and task
+        // scheduling in frames that never intersect the viewport. A
+        // zero-sized hidden iframe would run the extension sandbox at a
+        // crawl (observed: 1-second setTimeouts firing after 3+ seconds
+        // during rapid keystrokes), causing RPCs to time out.
+        iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
         this._iframe = iframe;
         this._container.appendChild(iframe);
         // Set src *after* appendChild so there's exactly one 'load' event
@@ -367,7 +373,14 @@ export class ExtensionSandboxPool {
             el = document.createElement('div');
             el.id = 'kage-extension-sandboxes';
             el.setAttribute('aria-hidden', 'true');
-            el.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:hidden;pointer-events:none;';
+            // Sized to hold the 1px-tall sandbox iframes non-clipped so
+            // Chromium doesn't apply intersection-throttling to them. We
+            // keep the container positioned off the visible layout, with
+            // opacity:0 so it never paints. (A 0x0 overflow:hidden
+            // container clips the child iframes to zero rendered area,
+            // which Chromium treats as backgrounded — timers get
+            // throttled and RPCs time out during rapid input.)
+            el.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
             document.body.appendChild(el);
         }
         this._container = el;

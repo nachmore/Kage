@@ -173,11 +173,10 @@ assist, the shortcut executor, and more. See
 
 ## Vendor libraries
 
-Some extensions need a UMD/IIFE library (e.g. mathjs) that sets
-globals on the sandbox window. Because the sandbox has no network
-access, these can't be loaded from a CDN; and because they're not ES
-modules, they can't be `import`ed from a blob URL. Instead, extensions
-opt in via the `sandboxVendor` manifest field:
+Some extensions need a UMD/IIFE library (e.g. mathjs) that exposes a
+global. Because the sandbox has no network access, these can't be
+loaded from a CDN. Extensions declare what they need via the
+`sandboxVendor` manifest field:
 
 ```json
 {
@@ -192,19 +191,21 @@ Only libraries we've vetted and pre-bundled with the app are
 available — extensions can't name arbitrary paths. Today the
 allow-list contains:
 
-| Name   | Global set        | File                  |
-|--------|-------------------|-----------------------|
-| `math` | `window.math` (mathjs) | `ui/vendor/lib/math.js` |
+| Name   | Global set          | File                    |
+|--------|---------------------|-------------------------|
+| `math` | `self.math` (mathjs) | `ui/vendor/lib/math.js` |
 
 If you need a vendor library that isn't on the list, open a PR
 adding it. Third-party extensions currently can't add their own
 vendor libs — only built-in extensions ship vendor bundles.
 
-At sandbox init, the host fetches each named file and hands the
-source text to the runtime, which evaluates it via an inline
-`<script>` tag before any provider module loads. The global set by
-the library is then visible to provider code for the lifetime of the
-sandbox.
+At sandbox init, the host fetches each named file and caches its
+source text. The libraries are **not loaded into the sandbox
+iframe** — they're available to the [`runSandboxed` Worker
+helper](#terminable-compute-with-runsandboxed), which injects them
+into per-call Workers so the library runs on a thread that can be
+terminated. Running vendor libraries in-thread would freeze the
+whole sandbox on pathological inputs (e.g. mathjs on `2^2^2^2^2`).
 
 ### Which contribution points run in the sandbox
 
@@ -241,6 +242,73 @@ the remaining gaps.
   but it's the sandbox's own empty document — writes have no
   visible effect.
 
+## Terminable compute with `runSandboxed`
+
+JavaScript in the sandbox iframe is single-threaded. If your
+extension runs a synchronous computation that takes seconds —
+think `math.evaluate('2^2^2^2^2')`, a deep regex backtrack, or a
+large parse — the whole iframe freezes, and because sandbox
+iframes share an agent cluster in Chromium, sibling extensions
+freeze too. `setTimeout` can't cancel sync work, so any in-flight
+RPCs from the host to any extension hit their 10s timeout and log
+scary warnings.
+
+To protect against this, `context.runSandboxed` runs a function
+inside a fresh Web Worker with a hard timeout. If the work
+exceeds the deadline the Worker is terminated and the promise
+rejects. The Worker has no host bridge (no `invoke`, no network),
+so it's intended purely for CPU-bound work; feed it inputs via
+`data`, collect the result as a serializable value.
+
+```js
+const result = await context.runSandboxed({
+    vendor: ['math'],
+    data: { expression: query },
+    timeoutMs: 1000,
+    run: (data, lib) => lib.math.evaluate(data.expression),
+});
+```
+
+### API
+
+| Option      | Type                                | Description |
+|-------------|-------------------------------------|-------------|
+| `run`       | `(data, lib) => any`                | Required. Serialized via `Function.toString()`, so it must be self-contained — no closures over outer variables. May return sync or async. |
+| `vendor`    | `string[]`                          | Names from your manifest's `sandboxVendor` list. The Worker imports each named library before `run` executes, and `lib[name]` exposes the global the library set (e.g. `lib.math` for mathjs). |
+| `data`      | any structured-cloneable            | Input passed as the first argument to `run`. |
+| `timeoutMs` | `number`                            | Default `1000`. On timeout the Worker is terminated and the promise rejects. |
+
+### When the promise rejects
+
+| Cause                       | Error message                                          |
+|-----------------------------|--------------------------------------------------------|
+| Exceeded `timeoutMs`        | `runSandboxed: timed out after Nms`                    |
+| `run` threw inside Worker   | `<the thrown error's message>`                         |
+| `data` not structured-cloneable | `runSandboxed: failed to post data: ...`           |
+| Worker script failed to parse | `runSandboxed: <worker error message>`                |
+
+### Constraints
+
+- `run` runs in a Worker, so **no DOM, no `context.invoke`, no
+  `window.__TAURI__`, no import, no network**. If you need host
+  IO, do it in the provider, then pass raw inputs into
+  `runSandboxed` for the expensive step.
+- `run` is serialized via `toString()`. Captured variables won't
+  survive — always pass them through `data`. Anonymous arrow
+  functions work; methods and bound functions don't.
+- The return value is postMessaged back, so it must be
+  structured-cloneable. Plain objects, arrays, numbers, strings
+  are fine; BigNumber instances from mathjs aren't — convert to
+  a number or string first.
+- One Worker per call. Workers spin up in a few ms on modern
+  Chromium, so per-keystroke use (e.g. a search provider's
+  `match`) is fine. If you find yourself calling this thousands
+  of times per second, do your own pooling.
+- Vendor libraries you reference in `vendor` must already be
+  declared in your manifest's `sandboxVendor` list. Names not
+  declared at install time are silently dropped — the Worker
+  just won't have that global.
+
 ## Search Provider API
 
 A search provider is an ES module that default-exports a class:
@@ -249,9 +317,11 @@ A search provider is an ES module that default-exports a class:
 export default class MySearchProvider {
     /**
      * Called once when the extension loads.
-     * @param {object} context - { invoke, config }
-     *   invoke: Tauri invoke function for IPC
+     * @param {object} context - { invoke, config, log, runSandboxed }
+     *   invoke: Tauri invoke function for IPC (host enforces capabilities)
      *   config: The extension's config object (from manifest defaults or user overrides)
+     *   log: Structured logger routing to the main Kage log ({ debug, info, warn, error })
+     *   runSandboxed: Terminable compute helper (see "Terminable compute" above)
      */
     initialize(context) {
         this.config = context.config;

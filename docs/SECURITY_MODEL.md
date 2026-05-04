@@ -40,17 +40,20 @@ the host's origin — it only imports from blob URLs it received.
 
 ### Vendor libraries (allow-listed UMD/IIFE)
 
-Some extensions depend on a non-ESM library that sets globals (e.g.
-mathjs → `window.math`). Extensions declare these in their manifest
-via `sandboxVendor`, but the names are resolved against a fixed
+Some extensions depend on a non-ESM library that exposes a global
+(e.g. mathjs). Extensions declare these in their manifest via
+`sandboxVendor`, but the names are resolved against a fixed
 allow-list in `extension-manager.js` — extensions can't name
 arbitrary paths. The host fetches the pre-bundled file and passes
-the source text to the sandbox, which evaluates it via an inline
-`<script>` tag before any provider module loads. See
+the source text to the sandbox runtime, which caches it and makes
+it available to `runSandboxed` — the helper that spawns a
+terminable Web Worker for extension compute. Vendor libraries are
+not loaded into the sandbox iframe itself, so a runaway vendor
+call can always be killed by terminating the Worker. See
 `docs/EXTENSIONS.md#vendor-libraries` for the current allow-list.
 
 The trust model is the same as for provider code: the vendor runs
-inside the null-origin iframe, so even a compromised vendor can't
+inside the null-origin Worker, so even a compromised vendor can't
 touch Tauri. The host never downloads vendors from the network at
 runtime — they ship with the app.
 

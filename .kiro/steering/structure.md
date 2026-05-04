@@ -65,7 +65,7 @@ kage/
 │   │   ├── shared/       # Shared modules (used by both floating + chat windows)
 │   │   │   ├── markdown.js, theme.js, commands.js, speech.js, shortcuts.js
 │   │   │   ├── attachments.js, streaming-utils.js, tool-utils.js, notify.js
-│   │   │   ├── extension-manager.js, math-eval.js, timer-sounds.js, hotkey-picker.js
+│   │   │   ├── extension-manager.js, timer-sounds.js, hotkey-picker.js
 │   │   │   ├── link-handler.js, quick-actions.js, result-executor.js
 │   │   │   └── rtl.js, search-engine.js, tts-streamer.js, network.js
 │   │   ├── floating/     # Floating window modules

@@ -1,19 +1,26 @@
 /**
- * Math Calculator search provider — extracted from math-eval.js.
- * Uses window.math (mathjs) for evaluation.
+ * Math Calculator search provider.
+ *
+ * mathjs evaluation is delegated to a freshly-spawned Worker per call
+ * via `context.runSandboxed`, with a 1s hard timeout. mathjs can be
+ * tricked into running for a very long time on inputs like `2^2^2^2^2`
+ * or `1000!` in bignumber mode; running it in-thread freezes the whole
+ * sandbox iframe (and siblings on the same agent cluster), so we run
+ * it out-of-thread where we can terminate it.
  */
 
 export default class MathSearchProvider {
     initialize(context) {
         this.config = context.config || {};
+        this._runSandboxed = context.runSandboxed;
     }
 
     onConfigUpdate(config) {
         this.config = config || {};
     }
 
-    match(query) {
-        const mathResult = evaluateMath(query, this.config.precision ?? 2);
+    async match(query) {
+        const mathResult = await evaluateMath(this._runSandboxed, query, this.config.precision ?? 2);
         if (!mathResult) return [];
 
         let display = mathResult.display;
@@ -64,44 +71,69 @@ function couldBeMath(input) {
     return true;
 }
 
-function evaluateMath(input, precision = 0) {
+async function evaluateMath(runSandboxed, input, precision = 0) {
     const trimmed = input.trim();
     if (!couldBeMath(trimmed)) return null;
-    if (!window.math) return null;
+    if (typeof runSandboxed !== 'function') return null;
     if (_lastFailedPrefix && trimmed.startsWith(_lastFailedPrefix)) return null;
+
+    let serialized;
     try {
-        const result = window.math.evaluate(trimmed);
-
-        if (result && typeof result === 'object' && result.units) {
-            const num = result.toNumber();
-            if (!isFinite(num)) return null;
-            const unitName = result.toString().replace(/^[\d.\-]+\s*/, '');
-            const display = `${parseFloat(num.toFixed(2))} ${unitName}`;
-            _lastFailedPrefix = '';
-            return { result: num, display };
-        }
-
-        if (typeof result !== 'number' && !window.math.isBigNumber(result)) return null;
-        const num = typeof result === 'number' ? result : result.toNumber();
-        if (!isFinite(num)) return null;
-        const inputAsNum = Number(trimmed);
-        if (!isNaN(inputAsNum) && num === inputAsNum) return null;
-
-        _lastFailedPrefix = '';
-        let display;
-        if (precision >= 0) {
-            display = num.toFixed(precision);
-        } else {
-            display = String(parseFloat(num.toPrecision(15)));
-        }
-        return { result: num, display };
-    } catch {
-        // Only cache if the input has no math operators — it's clearly not
-        // a math expression (e.g. "1 2 3"). Don't cache partial expressions
-        // like "22/" or "(2" where adding more characters could make it valid.
+        serialized = await runSandboxed({
+            vendor: ['math'],
+            data: { expression: trimmed },
+            timeoutMs: 1000,
+            // Runs inside a Worker. No closures over outer state — inputs
+            // arrive via `data`, vendor globals via `lib`.
+            run: (data, lib) => {
+                const math = lib.math;
+                const result = math.evaluate(data.expression);
+                if (result && typeof result === 'object' && result.units) {
+                    const num = result.toNumber();
+                    if (!isFinite(num)) return { kind: 'invalid' };
+                    const unitName = result.toString().replace(/^[\d.\-]+\s*/, '');
+                    return { kind: 'unit', num, unitName };
+                }
+                if (typeof result === 'number') {
+                    return { kind: 'number', num: result };
+                }
+                if (math.isBigNumber && math.isBigNumber(result)) {
+                    return { kind: 'number', num: result.toNumber() };
+                }
+                return { kind: 'invalid' };
+            },
+        });
+    } catch (e) {
+        // Timeout, worker crash, or evaluation error. Treat the input as
+        // "not math" and — if it has no operators — cache so we don't
+        // re-try on every keystroke. Partial expressions like "22/" or
+        // "(2" might become valid as the user keeps typing; don't cache
+        // those.
         if (!/[+\-*\/\^%(,)!]/.test(trimmed)) {
             _lastFailedPrefix = trimmed;
         }
         return null;
     }
+
+    if (!serialized || serialized.kind === 'invalid') return null;
+
+    if (serialized.kind === 'unit') {
+        _lastFailedPrefix = '';
+        const display = `${parseFloat(serialized.num.toFixed(2))} ${serialized.unitName}`;
+        return { result: serialized.num, display };
+    }
+
+    const num = serialized.num;
+    if (!isFinite(num)) return null;
+    const inputAsNum = Number(trimmed);
+    if (!isNaN(inputAsNum) && num === inputAsNum) return null;
+
+    _lastFailedPrefix = '';
+    let display;
+    if (precision >= 0) {
+        display = num.toFixed(precision);
+    } else {
+        display = String(parseFloat(num.toPrecision(15)));
+    }
+    return { result: num, display };
 }
