@@ -27,6 +27,36 @@
  *     back to the host rather than silently killing the iframe.
  */
 
+// When a developer opens DevTools on the sandbox iframe, two classes of
+// error appear in the console that are NOT caused by our code:
+//
+//   1. "Cannot read properties of undefined (reading 'plugins')" — the
+//      WebView2 inspector injects a probe script on DevTools attach
+//      that reads navigator.plugins. In a null-origin sandboxed frame
+//      the object it probes is undefined and the probe throws.
+//
+//   2. "Unsafe attempt to load URL http://.../extension-sandbox.html
+//      from frame with URL http://.../extension-sandbox.html. Domains,
+//      protocols and ports must match." — the DevTools inspector asks
+//      the frame for its own document source for the Source panel.
+//      Because the sandboxed frame has a null origin, Blink treats the
+//      fetch of its own document URL as cross-origin and warns.
+//
+// Both are harmless. Extensions boot and run normally. Leave a banner
+// so the next person who opens DevTools doesn't spend an afternoon
+// chasing ghosts. Non-sandbox browsing never sees these: the errors
+// only fire while an inspector is attached to the sandbox frame.
+// eslint-disable-next-line no-console
+console.info(
+    '%c[kage sandbox]%c Two benign WebView2 DevTools warnings expected in this frame: ' +
+    '"Cannot read properties of undefined (reading \'plugins\')" and ' +
+    '"Unsafe attempt to load URL ... from frame with URL ...". ' +
+    'Both are injected by the inspector against this null-origin frame and ' +
+    'do not affect extension behaviour. See ui/js/extension-sandbox/runtime.js for details.',
+    'color:#888;font-weight:bold',
+    'color:inherit',
+);
+
 // --- Host handshake ---------------------------------------------------------
 
 /** @type {MessagePort | null} */

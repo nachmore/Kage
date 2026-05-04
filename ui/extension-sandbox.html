@@ -11,13 +11,12 @@
      only way to talk back. Keep this file minimal; the real logic lives in
      extension-sandbox/runtime.js.
 
-     NOTE: When DevTools is attached you'll see three "Cannot read
-     properties of undefined (reading 'plugins')" errors in this frame at
-     <anonymous>:5. Those are thrown by scripts the WebView2 inspector
-     injects into each sandbox iframe on attach (they read navigator
-     properties that are undefined in a null-origin sandboxed frame).
-     They're not ours and they don't affect extension behaviour —
-     extensions continue to boot and run normally after the error. -->
+     Note on DevTools console noise: when DevTools is attached to a
+     sandboxed iframe you'll see "Cannot read properties of undefined
+     (reading 'plugins')" errors and "Unsafe attempt to load URL ..."
+     warnings. Both are injected by the WebView2 inspector and have no
+     effect on extension behaviour. The sandbox runtime logs a [kage
+     sandbox] banner at boot explaining them in more detail. -->
 <title>Kage Extension Sandbox</title>
 <style>html,body{margin:0;padding:0;background:transparent;}</style>
 </head>
