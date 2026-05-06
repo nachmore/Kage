@@ -5,10 +5,10 @@
 //! subsequent `.lock().unwrap()` panics the caller too, cascading the failure.
 //!
 //! `LockExt` recovers the inner guard instead of panicking, logging a warning
-//! on the first recovery so operators still get a signal in `kage.log`. For
-//! long-running desktop daemons this is almost always what we want: a transient
-//! panic somewhere shouldn't take down every background task that touches the
-//! same state.
+//! on the first recovery so operators still get a signal in the log file.
+//! For long-running desktop daemons this is almost always what we want: a
+//! transient panic somewhere shouldn't take down every background task that
+//! touches the same state.
 //!
 //! If you genuinely need "panic on poison" semantics (e.g. the poisoned state
 //! is actually invalid), keep using `.lock().unwrap()` explicitly.

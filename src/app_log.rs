@@ -370,8 +370,17 @@ fn truncate_msg(msg: &str) -> String {
 /// backed up, the disk copy is dropped (in-memory ring still has it) and
 /// `DROPPED_COUNT` is incremented.
 pub fn log(level: &str, source: &str, msg: &str) {
+    let ts = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    log_with_ts(&ts, level, source, msg);
+}
+
+/// Like `log`, but uses a caller-supplied timestamp instead of "now". Used
+/// by the `log` crate adapter to drain its pre-init buffer with the
+/// timestamps the entries originally carried, so replay doesn't squash
+/// boot-time events into one moment.
+pub fn log_with_ts(ts: &str, level: &str, source: &str, msg: &str) {
     let entry = LogEntry {
-        ts: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        ts: ts.to_string(),
         level: level.to_string(),
         source: source.to_string(),
         msg: truncate_msg(msg),
@@ -437,6 +446,13 @@ pub fn clear() -> Result<()> {
         let _ = tx.send(WriterMsg::Clear);
     }
     Ok(())
+}
+
+/// True once `init` has run. Used by the `log` crate adapter to decide
+/// whether it can call `log` directly or needs to buffer the entry until
+/// the writer thread is up.
+pub fn is_initialized() -> bool {
+    APP_LOG.get().is_some() && WRITER_TX.get().is_some()
 }
 
 /// Update the max buffer size (e.g. when config changes).
@@ -678,6 +694,44 @@ mod tests {
         assert!(path.exists());
         let cur = fs::read_to_string(&path).unwrap();
         assert!(cur.contains("rotate-me"));
+
+        drop(tx);
+        handle.join().unwrap();
+    }
+
+    #[test]
+    fn log_with_ts_preserves_caller_supplied_timestamp() {
+        // The `log` crate adapter buffers pre-init entries and drains them
+        // through log_with_ts so the on-disk timestamps match when each
+        // entry was actually emitted. Regress against future refactors that
+        // might "helpfully" overwrite the supplied ts with Utc::now().
+        let entry_ts = "2025-01-15T08:30:45.123Z";
+
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("app.jsonl");
+
+        let (tx, rx) = mpsc::sync_channel::<WriterMsg>(16);
+        let path_clone = path.clone();
+        let handle = thread::spawn(move || writer_loop(rx, path_clone));
+
+        // Drive the writer through the same WriterMsg::Entry path log_with_ts
+        // uses. We can't call log_with_ts directly because it routes through
+        // the global APP_LOG/WRITER_TX, which other tests already populate.
+        let entry = LogEntry {
+            ts: entry_ts.to_string(),
+            level: "info".to_string(),
+            source: "test".to_string(),
+            msg: "boot-time event".to_string(),
+        };
+        tx.send(WriterMsg::Entry(entry)).unwrap();
+
+        let (ack_tx, ack_rx) = mpsc::sync_channel::<()>(1);
+        tx.send(WriterMsg::Flush(ack_tx)).unwrap();
+        ack_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+
+        let contents = fs::read_to_string(&path).unwrap();
+        let parsed: LogEntry = serde_json::from_str(contents.trim()).unwrap();
+        assert_eq!(parsed.ts, entry_ts, "writer must preserve entry ts verbatim");
 
         drop(tx);
         handle.join().unwrap();

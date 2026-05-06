@@ -59,11 +59,13 @@ Debug logs are printed with timestamps:
 
 ## Log File Location
 
-Logs are also written to a file regardless of debug mode. The location varies by platform:
+Logs are also written to a JSONL file regardless of debug mode. One entry
+per line, each carrying a timestamp, level, source tag, and message. The
+location varies by platform:
 
-- **Windows**: `%LOCALAPPDATA%\kage\logs\kage.log`
-- **macOS**: `~/Library/Application Support/kage/logs/kage.log`
-- **Linux**: `~/.local/share/kage/logs/kage.log`
+- **Windows**: `%LOCALAPPDATA%\kage\logs\app.jsonl`
+- **macOS**: `~/Library/Application Support/kage/logs/app.jsonl`
+- **Linux**: `~/.local/share/kage/logs/app.jsonl`
 
 ## Use Cases
 
