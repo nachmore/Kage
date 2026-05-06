@@ -2,10 +2,10 @@
 import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
-import { escapeHtml, stripKageTags, getToolFriendlyName, getExtensionToolFriendlyName } from '../shared/tool-utils.js';
+import { escapeHtml, stripKageTags, getToolFriendlyName } from '../shared/tool-utils.js';
 import { mascotHTML } from '../shared/mascot.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -16,6 +16,7 @@ import { getActionsForText, renderQuickActionChips } from '../shared/quick-actio
 import { setupRtlDetection } from '../shared/rtl.js';
 import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
 import { getConfig } from '../shared/config-cache.js';
+import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
@@ -63,8 +64,41 @@ export class ChatApp {
         this._showSpeakBtn = false;
         this._showTranslateBtn = false;
 
+        // Per-message DOM target the controller renders into; set when a chunk
+        // hits the chat for the first time and consumed by renderIndicator.
+        this._extensionToolContentDiv = null;
+
+        const app = this;
+        this.extensionToolController = new ExtensionToolController({
+            invoke,
+            get extensionManager() { return app.extensionManager; },
+            permissionModal: { showForExtensionTool: (...args) => window.ChatPermissions.showForExtensionTool(...args) },
+            addToolUsage: (entry) => {
+                if (!app._toolCallIds) app._toolCallIds = new Set();
+                if (app._toolCallIds.has(entry.toolCallId)) return;
+                app._toolCallIds.add(entry.toolCallId);
+                app.toolUsages.push(entry);
+                if (app._extensionToolContentDiv) {
+                    app.renderSourcesInMessage(app._extensionToolContentDiv);
+                }
+            },
+            renderIndicator: (info) => app._renderExtensionToolIndicator(info, app._extensionToolContentDiv),
+            onExecuteStart: () => {},
+            onExecuteEnd: () => {},
+            onWaitForFollowup: () => {
+                app.isWaitingForResponse = true;
+                app.showTypingIndicator();
+            },
+            resetAccumulator: () => { app.currentStreamingContent = ''; },
+        });
+
         this.elements = {};
     }
+
+    get _extensionToolCallHandled() { return this.extensionToolController.handled; }
+    set _extensionToolCallHandled(v) { this.extensionToolController.handled = v; }
+    get _extensionToolExecuting() { return this.extensionToolController.executing; }
+    set _extensionToolExecuting(v) { this.extensionToolController.executing = v; }
 
     async init() {
         initMarkdown();
@@ -87,7 +121,7 @@ export class ChatApp {
         await loadFrecency(this.invoke);
 
         // Send extension tool definitions to the agent as steering
-        this._sendExtensionToolSteering();
+        this.extensionToolController.sendSteering();
 
         // Load sessions in background — don't block init
         this.loadSessions();
@@ -1528,31 +1562,17 @@ export class ChatApp {
         // If automation plan is running, don't overwrite the plan UI
         if (this._automationPlanStarted) return;
 
-        // Detect extension tool calls in streaming text
-        if (!this._extensionToolCallHandled) {
-            const toolCall = detectExtensionToolCall(this.currentStreamingContent);
-            if (toolCall) {
-                this._extensionToolCallHandled = true;
-                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                this._handleExtensionToolCall(toolCall, contentDiv);
-                return;
-            }
-
-            const partial = detectExtensionToolCallIncremental(this.currentStreamingContent);
-            if (partial) {
-                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                this._renderExtensionToolIndicator(partial, contentDiv);
-                this.scrollToBottom();
-                return;
-            }
-        } else if (!this._extensionToolExecuting) {
-            if (!this.currentStreamingContent.includes('```extension_tool_call')) {
-                this._extensionToolCallHandled = false;
-            }
+        // Detect extension tool calls in streaming text. The controller renders
+        // through _renderExtensionToolIndicator (host adapter) which needs the
+        // current message's content div — stash it before invoking.
+        this._extensionToolContentDiv = this.currentStreamingMessage.querySelector('.message-content');
+        if (this.extensionToolController.maybeHandleChunk(this.currentStreamingContent).handled) {
+            this.scrollToBottom();
+            return;
         }
 
         // If extension tool is executing, don't overwrite the indicator
-        if (this._extensionToolExecuting) return;
+        if (this.extensionToolController.shouldSkipChunkRender()) return;
 
         const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
         renderMarkdown(this.currentStreamingContent, contentDiv, true);
@@ -1586,18 +1606,10 @@ export class ChatApp {
             // If automation plan is running, don't overwrite the plan UI
             if (this._automationPlanStarted) return;
 
-            // If extension tool is executing, the response will come as a follow-up
-            if (this._extensionToolExecuting || this._extensionToolCallHandled) return;
-
-            // Check for extension tool call in the completed response (fallback if not caught during streaming)
-            if (!this._extensionToolCallHandled) {
-                const toolCall = detectExtensionToolCall(this.currentStreamingContent);
-                if (toolCall) {
-                    this._extensionToolCallHandled = true;
-                    const contentDiv = this.currentStreamingMessage?.querySelector('.message-content');
-                    this._handleExtensionToolCall(toolCall, contentDiv);
-                    return;
-                }
+            // Extension tool fence: mid-execution, mid-stream, or fallback-detected here.
+            this._extensionToolContentDiv = this.currentStreamingMessage?.querySelector('.message-content') || null;
+            if (this.extensionToolController.maybeHandleComplete(this.currentStreamingContent).handled) {
+                return;
             }
 
             this.hideTypingIndicator();
@@ -1775,153 +1787,19 @@ export class ChatApp {
         }
 
     /**
-     * Get the icon for an extension by ID.
-     */
-    _getExtensionIcon(extensionId) {
-        if (!extensionId || !this.extensionManager) return '🧩';
-        const defs = this.extensionManager.getToolDefinitionsCached?.() || [];
-        const def = defs.find(d => d.extensionId === extensionId);
-        return def?.extensionIcon || '🧩';
-    }
-
-    /**
-     * Send extension tool definitions to the agent as a steering message.
-     */
-    async _sendExtensionToolSteering() {
-        const block = await this.extensionManager.buildToolSteeringBlock();
-        if (!block) return;
-        try {
-            await this.invoke('send_extension_tool_steering', { toolSteering: block });
-        } catch (e) {
-            console.warn('Failed to send extension tool steering:', e);
-        }
-    }
-
-    /**
-     * Render a loading indicator for an extension tool call.
+     * Render a loading indicator for an extension tool call into the per-message div.
+     * Window-specific DOM — wired into the ExtensionToolController via host adapter.
+     * Tool-usage tracking is handled by the controller before this fires.
      */
     _renderExtensionToolIndicator(info, contentDiv) {
-        if (info.extension && info.tool) {
-            const toolTitle = `ext:${info.extension}/${info.tool}`;
-            const toolCallId = `ext-${info.extension}-${info.tool}`;
-            if (!this._toolCallIds) this._toolCallIds = new Set();
-            if (!this._toolCallIds.has(toolCallId)) {
-                this._toolCallIds.add(toolCallId);
-                this.toolUsages.push({ toolCallId, title: toolTitle, kind: 'extension' });
-            }
-            this.renderSourcesInMessage(contentDiv);
+        if (!contentDiv) return;
+        const beforeFence = (this.currentStreamingContent || '').split('```extension_tool_call')[0].trim();
+        if (beforeFence) {
+            renderMarkdown(beforeFence, contentDiv, true);
+        } else {
+            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(info.extension, info.tool);
+            contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
-
-        // Show any text before the fence, but hide the fence itself
-        if (contentDiv) {
-            const beforeFence = (this.currentStreamingContent || '').split('```extension_tool_call')[0].trim();
-            if (beforeFence) {
-                renderMarkdown(beforeFence, contentDiv, true);
-            } else {
-                const friendlyName = getExtensionToolFriendlyName(info.extension, info.tool, this.extensionManager);
-                contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
-            }
-        }
-    }
-
-    /**
-     * Handle a detected extension tool call in the chat window.
-     */
-    async _handleExtensionToolCall(toolCall, contentDiv) {
-        const { extension, tool, params } = toolCall;
-        const icon = this._getExtensionIcon(extension);
-        const toolTitle = `ext:${extension}/${tool}`;
-
-        console.log(`Extension tool call: ${extension}/${tool}`, params);
-
-        // Track as a standard tool usage
-        const extToolCallId = `ext-${extension}-${tool}`;
-        if (!this._toolCallIds) this._toolCallIds = new Set();
-        if (!this._toolCallIds.has(extToolCallId)) {
-            this._toolCallIds.add(extToolCallId);
-            this.toolUsages.push({ toolCallId: extToolCallId, title: toolTitle, kind: 'extension' });
-        }
-        this.renderSourcesInMessage(contentDiv);
-
-        // Check permission policy — skip if the tool has built-in confirmation UI
-        const toolDefs = await this.extensionManager.getToolDefinitions();
-        const extDef = toolDefs.find(d => d.extensionId === extension);
-        const toolDef = extDef?.tools?.find(t => t.name === tool);
-        const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;
-
-        let policy = hasBuiltInConfirmation ? 'allow' : undefined;
-        if (!policy) {
-            try {
-                policy = await this.invoke('check_extension_tool_permission', {
-                    extensionId: extension,
-                    toolName: tool,
-                });
-            } catch (e) {
-                console.error('Failed to check extension tool permission:', e);
-                policy = 'ask';
-            }
-        }
-
-        if (policy === 'deny') {
-            this._extensionToolExecuting = false;
-            this._extensionToolCallHandled = false;
-            try {
-                await this.invoke('extension_tool_response', {
-                    extensionId: extension,
-                    toolName: tool,
-                    resultJson: JSON.stringify('Permission denied by user policy'),
-                    success: false,
-                });
-            } catch (e) {
-                console.error('Failed to send denial:', e);
-            }
-            return;
-        }
-
-        if (policy === 'ask') {
-            const allowed = await window.ChatPermissions.showForExtensionTool(extension, tool, icon);
-            if (!allowed) {
-                this._extensionToolExecuting = false;
-                this._extensionToolCallHandled = false;
-                try {
-                    await this.invoke('extension_tool_response', {
-                        extensionId: extension,
-                        toolName: tool,
-                        resultJson: JSON.stringify('Permission denied by user'),
-                        success: false,
-                    });
-                } catch (e) {
-                    console.error('Failed to send denial:', e);
-                }
-                return;
-            }
-        }
-
-        this._extensionToolExecuting = true;
-
-        const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
-        const success = !result.error;
-        const resultJson = JSON.stringify(success ? result.result : result.error);
-
-        try {
-            await this.invoke('extension_tool_response', {
-                extensionId: extension,
-                toolName: tool,
-                resultJson,
-                success,
-            });
-        } catch (e) {
-            console.error('Failed to send extension tool response:', e);
-        }
-
-        this._extensionToolExecuting = false;
-        // Reset state for the follow-up response. Clear currentResponse so the old
-        // extension_tool_call fence doesn't get re-detected when chunks arrive.
-        this.currentResponse = '';
-        this._extensionToolCallHandled = false;
-        this.isWaitingForResponse = true;
-        // Show typing indicator while waiting for the agent's follow-up response
-        this.showTypingIndicator();
     }
 
     /**

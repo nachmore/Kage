@@ -4,7 +4,7 @@ import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, detectExtensionToolCall, detectExtensionToolCallIncremental, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -16,9 +16,10 @@ import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcut
 import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
-import { escapeHtml, getToolFriendlyName, getExtensionToolFriendlyName } from '../shared/tool-utils.js';
+import { escapeHtml, getToolFriendlyName } from '../shared/tool-utils.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
+import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -44,6 +45,38 @@ export class FloatingApp {
         this._promptGeneration = 0; // incremented each time we send a user message
         this.attachmentManager = new AttachmentManager();
         this.extensionManager = new ExtensionManager(invoke);
+        this.extensionToolController = new ExtensionToolController({
+            invoke,
+            extensionManager: this.extensionManager,
+            permissionModal: { showForExtensionTool: (...args) => window.PermissionModal.showForExtensionTool(...args) },
+            addToolUsage: (entry) => {
+                if (!this._toolCallIds) this._toolCallIds = new Set();
+                if (this._toolCallIds.has(entry.toolCallId)) return;
+                this._toolCallIds.add(entry.toolCallId);
+                this.toolUsages.push(entry);
+                this.renderSources();
+            },
+            renderIndicator: (info) => this._renderExtensionToolIndicator(info),
+            onExecuteStart: () => {
+                // Hide stop button while tool is executing — the tool may show its own UI
+                // (e.g. folder plan confirmation with Run/Cancel buttons)
+                this.stopThinking();
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                // Ensure content area is visible for tool UI, and resize after a tick
+                // to accommodate any confirmation UI the tool renders
+                this.elements.contentArea.classList.add('visible');
+                setTimeout(() => this.windowManager.resizeWindow(), 100);
+            },
+            onExecuteEnd: () => {},
+            onWaitForFollowup: () => {
+                // Show thinking dots while waiting for the agent's follow-up response
+                this.isWaitingForResponse = true;
+                this.startThinking();
+                this.updateDatetimeVisibility();
+            },
+            resetAccumulator: () => { this.currentResponse = ''; },
+        });
         this.lastSelection = null;
         this._compacting = false;
         this._messageHistory = [];   // shell-style input history
@@ -52,6 +85,11 @@ export class FloatingApp {
         
         this.elements = {};
     }
+
+    get _extensionToolCallHandled() { return this.extensionToolController.handled; }
+    set _extensionToolCallHandled(v) { this.extensionToolController.handled = v; }
+    get _extensionToolExecuting() { return this.extensionToolController.executing; }
+    set _extensionToolExecuting(v) { this.extensionToolController.executing = v; }
 
     async init() {
             const _t0 = performance.now();
@@ -184,7 +222,7 @@ export class FloatingApp {
             this.extensionManager.initialize().then(() => {
                 _ts('Extensions initialized (background)');
                 setExtensionManager(this.extensionManager);
-                this._sendExtensionToolSteering();
+                this.extensionToolController.sendSteering();
                 if (this._onExtensionsReady) this._onExtensionsReady();
                 _ts('Extension steering sent (background)');
             }).catch(e => {
@@ -1852,33 +1890,13 @@ export class FloatingApp {
         if (this._automationPlanStarted) return;
 
         // Detect extension tool calls in streaming text
-        if (!this._extensionToolCallHandled) {
-            const toolCall = detectExtensionToolCall(this.currentResponse);
-            if (toolCall) {
-                console.log('[Floating] Extension tool call detected in chunk:', toolCall.extension, toolCall.tool);
-                this._extensionToolCallHandled = true;
-                this._handleExtensionToolCall(toolCall);
-                return;
-            }
-
-            // Show loading indicator while fence is being streamed
-            const partial = detectExtensionToolCallIncremental(this.currentResponse);
-            if (partial) {
-                this._renderExtensionToolIndicator(partial);
-                this.windowManager.resizeWindow();
-                return;
-            }
-        } else if (!this._extensionToolExecuting) {
-            // Tool call was handled and execution finished — if the new accumulated
-            // text no longer contains the fence, the accumulator was reset for the
-            // follow-up response. Clear the flag so rendering proceeds normally.
-            if (!this.currentResponse.includes('```extension_tool_call')) {
-                this._extensionToolCallHandled = false;
-            }
+        if (this.extensionToolController.maybeHandleChunk(this.currentResponse).handled) {
+            this.windowManager.resizeWindow();
+            return;
         }
 
         // If extension tool is executing, don't overwrite the indicator
-        if (this._extensionToolExecuting) return;
+        if (this.extensionToolController.shouldSkipChunkRender()) return;
         
         renderMarkdown(this.currentResponse, this.elements.responseText, true);
 
@@ -1923,21 +1941,10 @@ export class FloatingApp {
             // If automation plan is running, don't overwrite the plan UI
             if (this._automationPlanStarted) return;
 
-            // If extension tool is executing, the response will come as a follow-up
-            if (this._extensionToolExecuting || this._extensionToolCallHandled) {
-                console.log('[Floating] handleMessageComplete: skipping (extensionToolExecuting=%s, extensionToolCallHandled=%s)', this._extensionToolExecuting, this._extensionToolCallHandled);
+            // Extension tool fence: either mid-execution, or handled mid-stream,
+            // or detected here as a fallback. Controller takes over either way.
+            if (this.extensionToolController.maybeHandleComplete(this.currentResponse).handled) {
                 return;
-            }
-
-            // Check for extension tool call in the completed response (fallback if not caught during streaming)
-            if (!this._extensionToolCallHandled) {
-                const toolCall = detectExtensionToolCall(this.currentResponse);
-                console.log('[Floating] handleMessageComplete fallback detection:', toolCall ? `${toolCall.extension}/${toolCall.tool}` : 'null', 'responseLen:', this.currentResponse.length, 'hasFence:', this.currentResponse.includes('```extension_tool_call'));
-                if (toolCall) {
-                    this._extensionToolCallHandled = true;
-                    this._handleExtensionToolCall(toolCall);
-                    return;
-                }
             }
 
             this.stopThinking();
@@ -2000,170 +2007,18 @@ export class FloatingApp {
         }
 
     /**
-     * Send extension tool definitions to the agent as a steering message.
-     * Called after extensions are loaded and after config updates.
-     */
-    async _sendExtensionToolSteering() {
-        const block = await this.extensionManager.buildToolSteeringBlock();
-        if (!block) return;
-        try {
-            await this.invoke('send_extension_tool_steering', { toolSteering: block });
-        } catch (e) {
-            console.warn('Failed to send extension tool steering:', e);
-        }
-    }
-
-    /**
-     * Render a loading indicator while an extension tool call is being streamed or executed.
-     * Clears the response area so the incomplete fence isn't shown as a code block,
-     * and keeps the thinking dots visible.
+     * Render a loading indicator while an extension tool call is being streamed.
+     * Window-specific DOM — wired into the ExtensionToolController via host adapter.
+     * Tool-usage tracking is handled by the controller before this fires.
      */
     _renderExtensionToolIndicator(info) {
-        // Only add to tool usages if we have the full extension/tool name
-        if (info.extension && info.tool) {
-            const toolTitle = `ext:${info.extension}/${info.tool}`;
-            const toolCallId = `ext-${info.extension}-${info.tool}`;
-            if (!this._toolCallIds) this._toolCallIds = new Set();
-            if (!this._toolCallIds.has(toolCallId)) {
-                this._toolCallIds.add(toolCallId);
-                this.toolUsages.push({ toolCallId, title: toolTitle, kind: 'extension' });
-            }
-            this.renderSources();
-        }
-
-        // Show any text before the fence, but hide the fence itself
         const beforeFence = this.currentResponse.split('```extension_tool_call')[0].trim();
         if (beforeFence) {
             renderMarkdown(beforeFence, this.elements.responseText, true);
         } else {
-            // Nothing before the fence — show a loading indicator with friendly name
-            const friendlyName = getExtensionToolFriendlyName(info.extension, info.tool, this.extensionManager);
+            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(info.extension, info.tool);
             this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
-    }
-
-    /**
-     * Get the icon for an extension by ID.
-     */
-    _getExtensionIcon(extensionId) {
-        if (!extensionId || !this.extensionManager) return '🧩';
-        const defs = this.extensionManager.getToolDefinitionsCached?.() || [];
-        const def = defs.find(d => d.extensionId === extensionId);
-        return def?.extensionIcon || '🧩';
-    }
-
-    /**
-     * Handle a detected extension tool call: check permissions, execute, send result back.
-     */
-    async _handleExtensionToolCall(toolCall) {
-        const { extension, tool, params } = toolCall;
-        const icon = this._getExtensionIcon(extension);
-        const toolTitle = `ext:${extension}/${tool}`;
-
-        console.log(`Extension tool call: ${extension}/${tool}`, params);
-
-        // Track as a standard tool usage
-        const extToolCallId = `ext-${extension}-${tool}`;
-        if (!this._toolCallIds) this._toolCallIds = new Set();
-        if (!this._toolCallIds.has(extToolCallId)) {
-            this._toolCallIds.add(extToolCallId);
-            this.toolUsages.push({ toolCallId: extToolCallId, title: toolTitle, kind: 'extension' });
-        }
-        this.renderSources();
-
-        // Check permission policy — skip if the tool has built-in confirmation UI
-        const toolDefs = await this.extensionManager.getToolDefinitions();
-        const extDef = toolDefs.find(d => d.extensionId === extension);
-        const toolDef = extDef?.tools?.find(t => t.name === tool);
-        const hasBuiltInConfirmation = toolDef?.hasBuiltInConfirmation === true;
-
-        let policy = hasBuiltInConfirmation ? 'allow' : undefined;
-        if (!policy) {
-            try {
-                policy = await this.invoke('check_extension_tool_permission', {
-                    extensionId: extension,
-                    toolName: tool,
-                });
-            } catch (e) {
-                console.error('Failed to check extension tool permission:', e);
-                policy = 'ask';
-            }
-        }
-
-        if (policy === 'deny') {
-            this._extensionToolExecuting = false;
-            this._extensionToolCallHandled = false;
-            try {
-                await this.invoke('extension_tool_response', {
-                    extensionId: extension,
-                    toolName: tool,
-                    resultJson: JSON.stringify('Permission denied by user policy'),
-                    success: false,
-                });
-            } catch (e) {
-                console.error('Failed to send denial:', e);
-            }
-            return;
-        }
-
-        if (policy === 'ask') {
-            const allowed = await window.PermissionModal.showForExtensionTool(extension, tool, icon);
-            if (!allowed) {
-                this._extensionToolExecuting = false;
-                this._extensionToolCallHandled = false;
-                try {
-                    await this.invoke('extension_tool_response', {
-                        extensionId: extension,
-                        toolName: tool,
-                        resultJson: JSON.stringify('Permission denied by user'),
-                        success: false,
-                    });
-                } catch (e) {
-                    console.error('Failed to send denial:', e);
-                }
-                return;
-            }
-        }
-
-        // Execute the tool
-        this._extensionToolExecuting = true;
-
-        // Hide stop button while tool is executing — the tool may show its own UI
-        // (e.g. folder plan confirmation with Run/Cancel buttons)
-        this.stopThinking();
-        this.elements.floatingStopBtn.style.display = 'none';
-        this.updateDatetimeVisibility();
-
-        // Ensure content area is visible for tool UI, and resize after a tick
-        // to accommodate any confirmation UI the tool renders
-        this.elements.contentArea.classList.add('visible');
-        setTimeout(() => this.windowManager.resizeWindow(), 100);
-
-        const result = await this.extensionManager.executeExtensionTool(extension, tool, params);
-        const success = !result.error;
-        const resultJson = JSON.stringify(success ? result.result : result.error);
-
-        try {
-            await this.invoke('extension_tool_response', {
-                extensionId: extension,
-                toolName: tool,
-                resultJson,
-                success,
-            });
-        } catch (e) {
-            console.error('Failed to send extension tool response:', e);
-        }
-
-        this._extensionToolExecuting = false;
-        // Reset state for the follow-up response. Clear currentResponse so the old
-        // extension_tool_call fence doesn't get re-detected when chunks arrive.
-        this.currentResponse = '';
-        this._extensionToolCallHandled = false;
-
-        // Show thinking dots while waiting for the agent's follow-up response
-        this.isWaitingForResponse = true;
-        this.startThinking();
-        this.updateDatetimeVisibility();
     }
 
     /**
