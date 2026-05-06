@@ -52,12 +52,12 @@ async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::p
     if let Some(state) = app.try_state::<AppState>() {
         let acp_client = state.acp_client.clone();
         let config = state.config.clone();
-        if let Ok(client) = acp_client.try_lock() {
-            if let Ok(config) = config.try_lock() {
-                crate::auto_steering::generate_steering_on_quit(&client, &config);
-            }
-            client.disconnect();
-        };
+        // The acp_client outer mutex is gone; this used to try_lock to avoid
+        // hanging on shutdown if a long prompt held it. We can just call.
+        if let Ok(config) = config.try_lock() {
+            crate::auto_steering::generate_steering_on_quit(&acp_client, &config);
+        }
+        acp_client.disconnect();
     }
 
     // Spawn new instance right before exit (if restarting)

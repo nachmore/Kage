@@ -630,8 +630,7 @@ pub async fn switch_acp_session(
     session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<String, AppError> {
-    let client = state.acp_client.clone();
-    let client_guard = client.lock().await;
+    let client_guard = state.acp_client.clone();
 
     // Ensure connected
     if !client_guard.is_connected() {
@@ -745,14 +744,11 @@ pub async fn switch_acp_session(
 pub async fn get_current_session_id(
     state: State<'_, AppState>,
 ) -> Result<Option<String>, AppError> {
-    // Use try_lock to avoid deadlocking when send_message_streaming holds the client lock
-    match state.acp_client.try_lock() {
-        Ok(client) => Ok(client.get_session_id()),
-        Err(_) => {
-            // Client is locked (likely mid-request) — return None rather than deadlocking
-            Ok(None)
-        }
-    }
+    // The pre-2026-05 codebase had this guarded by try_lock to avoid blocking
+    // behind in-flight prompts on the outer mutex. AcpClient is now an
+    // Arc<AcpClient> with internal locks scoped to the bits that need them,
+    // so this is just a read.
+    Ok(state.acp_client.get_session_id())
 }
 
 /// Get the floating window's session ID
@@ -781,8 +777,7 @@ pub async fn restore_floating_session(
     };
 
     if let Some(ref id) = floating_id {
-        let client = state.acp_client.lock().await;
-        client.set_session_id(Some(id.clone()));
+        state.acp_client.set_session_id(Some(id.clone()));
         info!("Restored floating session: {}", id);
     }
 

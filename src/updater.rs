@@ -191,7 +191,7 @@ pub fn start_update_loop(
     config: Arc<std::sync::Mutex<Config>>,
     app_handle: tauri::AppHandle,
     floating_session_id: Arc<std::sync::Mutex<Option<String>>>,
-    acp_client: Arc<tokio::sync::Mutex<crate::acp_client::AcpClient>>,
+    acp_client: Arc<crate::acp_client::AcpClient>,
 ) {
     let updater_for_idle = updater_state.clone();
     let config_for_idle = config.clone();
@@ -322,17 +322,15 @@ pub fn start_update_loop(
                         let _ = cfg.save();
                     }
 
-                    // Resolve session ID: prefer floating session, fall back to ACP client's current session
+                    // Resolve session ID: prefer floating session, fall back
+                    // to ACP client's current session. The ACP lookup is now
+                    // an unconditional read (the outer mutex used to require
+                    // try_lock to avoid blocking behind a long prompt).
                     let session_id = floating_session_for_idle
                         .lock()
                         .ok()
                         .and_then(|s| s.clone())
-                        .or_else(|| {
-                            acp_client_for_idle
-                                .try_lock()
-                                .ok()
-                                .and_then(|c| c.get_session_id())
-                        });
+                        .or_else(|| acp_client_for_idle.get_session_id());
 
                     if let Err(e) = run_installer_and_exit(installer, session_id.as_deref()) {
                         error!("Failed to run installer: {}", e);

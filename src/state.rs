@@ -6,7 +6,13 @@ use std::sync::atomic::AtomicBool;
 use tokio::sync::Mutex;
 
 pub struct AppState {
-    pub acp_client: Arc<Mutex<AcpClient>>,
+    /// AcpClient is internally synchronized — every method takes `&self` and
+    /// the type owns its own fine-grained locks (transport pending map,
+    /// session id, streaming accumulator, compacting condvar). Wrapping it
+    /// in an outer mutex would just serialize callers behind whatever
+    /// long-running prompt happened to hold the guard, which is what the
+    /// pre-2026-05 codebase did.
+    pub acp_client: Arc<AcpClient>,
     pub config: Arc<std::sync::Mutex<Config>>,
     pub app_launcher: Arc<Mutex<AppLauncher>>,
     pub pipe_stdin: Arc<std::sync::Mutex<Option<Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,

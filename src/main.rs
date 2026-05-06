@@ -187,7 +187,7 @@ fn main() {
     let config_for_setup = config.clone();
     let dev_mode_for_setup = dev_mode;
 
-    let acp_client_arc = Arc::new(Mutex::new(acp_client));
+    let acp_client_arc = Arc::new(acp_client);
     let config_arc = Arc::new(std::sync::Mutex::new(config));
     let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
     let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
@@ -246,11 +246,12 @@ fn main() {
             // Build system tray
             tray::setup_tray(app, dev_mode)?;
 
-            // Set up the ACP notification handler
+            // Set up the ACP notification handler. acp_for_handler is now a
+            // bare Arc<AcpClient> — no lock acquisition, no block_on inside
+            // .setup() that previously danced around tokio's runtime lifecycle.
             {
-                let client = tauri::async_runtime::block_on(acp_for_handler.lock());
                 commands::messaging::setup_notification_handler(
-                    &client,
+                    &acp_for_handler,
                     app.handle(),
                     config_for_handler,
                     pipe_stdin_for_handler,

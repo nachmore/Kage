@@ -365,7 +365,6 @@ pub async fn send_message_streaming(
     async_runtime::spawn_blocking(move || {
         let client_arc = client.clone();
         let config_arc = config.clone();
-        let client = async_runtime::block_on(client.lock());
 
         if !client.is_connected() {
             if let Err(e) = client.connect() {
@@ -424,8 +423,8 @@ pub async fn send_message_streaming(
 
         let _ = window_clone.emit("message_complete", ());
 
-        // Trigger auto-steering generation periodically
-        drop(client); // Release the lock before spawning background task
+        // Trigger auto-steering generation periodically. No lock to drop —
+        // the client is just an Arc<AcpClient> now.
         crate::auto_steering::maybe_generate_steering(client_arc, config_arc);
     });
 
@@ -462,7 +461,7 @@ pub async fn send_permission_response(
     // Audit log: record the user's decision. We classify option_id into
     // our event kinds; unrecognised strings are recorded as Denied with
     // the raw option_id in the tool field so the UI still shows them.
-    let session_id = state.acp_client.lock().await.get_session_id();
+    let session_id = state.acp_client.get_session_id();
     let audit_event = match option_id.as_str() {
         "allow_once" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
@@ -503,14 +502,12 @@ pub async fn send_permission_response(
 
 #[tauri::command]
 pub async fn check_connection(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let client = state.acp_client.lock().await;
-    Ok(client.is_connected())
+    Ok(state.acp_client.is_connected())
 }
 
 #[tauri::command]
 pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let client = state.acp_client.lock().await;
-    client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
+    state.acp_client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
     Ok(true)
 }
 
@@ -519,18 +516,10 @@ pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppErro
     // Signal automation plan loop to stop
     state.automation_plan_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
 
-    let session_id = {
-        let client = state.acp_client.try_lock()
-            .map_err(|_| "ACP client busy (streaming) — sending cancel directly".to_string());
-        match client {
-            Ok(c) => c.get_session_id(),
-            Err(_) => {
-                state.floating_session_id.lock().ok().and_then(|s| s.clone())
-            }
-        }
-    };
-
-    let session_id = session_id.ok_or_else(|| AppError::internal("No active session to cancel"))?;
+    // Direct read — the AcpClient is no longer wrapped in an outer mutex,
+    // so this never has to fall back to guessing the floating session id.
+    let session_id = state.acp_client.get_session_id()
+        .ok_or_else(|| AppError::internal("No active session to cancel"))?;
     info!("Sending session/cancel for session {}", session_id);
 
     let notification = serde_json::json!({
@@ -570,7 +559,6 @@ pub async fn open_chat_with_message(
         let window = main.clone();
 
         async_runtime::spawn_blocking(move || {
-            let client = async_runtime::block_on(client.lock());
             if !client.is_connected() {
                 if let Err(e) = client.connect() {
                     let _ = window.emit("message_error", format!("Unable to connect: {}", e));
@@ -641,7 +629,6 @@ pub async fn execute_slash_command(
     let client = state.acp_client.clone();
 
     let result = async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
         if !client.is_connected() {
             return Err("Not connected".to_string());
         }
@@ -691,7 +678,6 @@ pub async fn send_steering_message(
 
     let client = state.acp_client.clone();
     async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
         if client.is_connected() {
             if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
                 warn!("Failed to send auto-steering message: {}", e);
@@ -753,8 +739,6 @@ pub async fn execute_automation_plan(
     cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
 
     async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-
         if !client.is_connected() {
             if let Err(e) = client.connect() {
                 let _ = window.emit("automation_plan_error", format!("Unable to connect: {}", e));
@@ -911,8 +895,6 @@ pub async fn extension_tool_response(
     let client = state.acp_client.clone();
 
     async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-
         if !client.is_connected() {
             let _ = window.emit("message_error", "Not connected to agent".to_string());
             return;
@@ -976,7 +958,6 @@ pub async fn send_extension_tool_steering(
     let client = state.acp_client.clone();
 
     async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
         if !client.is_connected() {
             return;
         }
@@ -1065,8 +1046,6 @@ pub async fn send_inline_assist(
     let client = state.acp_client.clone();
 
     async_runtime::spawn_blocking(move || {
-        let client = async_runtime::block_on(client.lock());
-
         if !client.is_connected() {
             if let Err(e) = client.connect() {
                 let _ = app.emit("inline_assist_error", format!("Unable to connect: {}", e));
@@ -1134,7 +1113,6 @@ pub async fn execute_macro(
                         prompt
                     );
 
-                    let client = async_runtime::block_on(client.lock());
                     if !client.is_connected() {
                         if let Err(e) = client.connect() {
                             return Err(format!("Step {}: Unable to connect: {}", i + 1, e));

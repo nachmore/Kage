@@ -255,9 +255,8 @@ pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
     let models_arc = state.available_models.clone();
 
     tauri::async_runtime::spawn(async move {
-        let client = acp_client.lock().await;
         info!("Connecting ACP client on launch...");
-        if let Err(e) = client.connect() {
+        if let Err(e) = acp_client.connect() {
             error!("Failed to connect on launch: {}", e);
             return;
         }
@@ -268,7 +267,7 @@ pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
             cfg.acp.agent.working_directory.clone()
         };
 
-        let (session_id, models_json) = match client.create_session(cwd) {
+        let (session_id, models_json) = match acp_client.create_session(cwd) {
             Ok(v) => v,
             Err(e) => {
                 error!("Failed to create default session on launch: {}", e);
@@ -282,8 +281,8 @@ pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
         }
 
         store_available_models(models_json, &models_arc);
-        apply_default_model_if_any(&client, &config_arc, &session_id);
-        send_startup_steering(&client, &config_arc);
+        apply_default_model_if_any(&acp_client, &config_arc, &session_id);
+        send_startup_steering(&acp_client, &config_arc);
     });
 }
 

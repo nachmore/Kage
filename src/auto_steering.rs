@@ -312,7 +312,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 /// Called from the message completion handler. Triggers every 5 messages
 /// but no more than once per hour. On-exit generation bypasses the cooldown.
 pub fn maybe_generate_steering(
-    client: Arc<tokio::sync::Mutex<AcpClient>>,
+    client: Arc<AcpClient>,
     config: Arc<std::sync::Mutex<Config>>,
 ) {
     if !tick_message_counter() {
@@ -328,7 +328,6 @@ pub fn maybe_generate_steering(
             }
         }
 
-        let client = client.lock().await;
         if !client.is_connected() {
             return;
         }
