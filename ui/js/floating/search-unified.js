@@ -72,9 +72,30 @@ function _renderItem(r, index, extMgr) {
 export async function renderUnifiedResults(results, container, currentMatches, resizeWindow) {
     currentMatches.length = 0;
 
+    // Flex-collapse guard: when the suggestions dropdown becomes visible
+    // inside the speech-bubble's flex column, `.content-area` (the only
+    // flex:1 child) is what gives back space. Because `.content-area` has
+    // overflow-y: auto, its default min-height resolves to 0 per the flex
+    // spec — so the instant the dropdown appears (before the OS window has
+    // grown to fit the new total), content-area can collapse to zero.
+    // The calendar bar + input bar visually "jump up over the response"
+    // for ~150-250ms until the OS window animation catches up and releases
+    // the pressure. Lock content-area's current height during the transient
+    // and release it after the resize has had time to complete.
+    const contentArea = document.getElementById('contentArea');
+    const willToggleVisible = results.length > 0 && !container.classList.contains('visible');
+    if (willToggleVisible && contentArea?.classList.contains('visible')) {
+        const h = contentArea.offsetHeight;
+        if (h > 0) {
+            contentArea.style.minHeight = h + 'px';
+            contentArea.dataset.kageHeightLocked = '1';
+        }
+    }
+
     if (!results.length) {
         container.innerHTML = '';
         container.classList.remove('visible');
+        _releaseContentLock();
         resizeWindow();
         return -1;
     }
@@ -163,5 +184,29 @@ export async function renderUnifiedResults(results, container, currentMatches, r
     container.classList.add('visible');
     container.scrollTop = 0;
     resizeWindow();
+    // Release the content-area min-height lock after the OS window has had
+    // time to resize (debounce ~50ms + animation up to ~120ms + slack).
+    _scheduleContentLockRelease();
     return 0;
+}
+
+// --- Content-area min-height lock helpers (flex-collapse guard) ---
+
+let _releaseTimer = null;
+
+function _scheduleContentLockRelease() {
+    if (_releaseTimer) clearTimeout(_releaseTimer);
+    _releaseTimer = setTimeout(() => {
+        _releaseTimer = null;
+        _releaseContentLock();
+    }, 250);
+}
+
+function _releaseContentLock() {
+    if (_releaseTimer) { clearTimeout(_releaseTimer); _releaseTimer = null; }
+    const contentArea = document.getElementById('contentArea');
+    if (contentArea?.dataset.kageHeightLocked) {
+        contentArea.style.minHeight = '';
+        delete contentArea.dataset.kageHeightLocked;
+    }
 }

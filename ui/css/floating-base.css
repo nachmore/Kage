@@ -31,7 +31,12 @@ body {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    transition: height 0.3s ease-out;
+    /* No CSS height transition — the OS window is already animated smoothly
+     * from JS via WindowManager._animateResize() (rAF-driven). A CSS transition
+     * here fights with that: body follows the OS window instantly while the
+     * container lags, so the bottom-anchored stack (extension bar, input,
+     * toolbar) briefly floats up over the response content until the CSS
+     * transition catches up. */
 }
 
 @keyframes fadeIn {
