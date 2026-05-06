@@ -837,75 +837,30 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             tool_result_text(id, &text, false)
         }
         "pick_folder" => {
-            #[cfg(target_os = "windows")]
-            {
-                // Use Win32 IFileOpenDialog directly with the foreground window as owner
-                // so the dialog appears on top of the floating window.
-                let result = std::thread::spawn(|| -> Option<String> {
-                    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-                    use windows::Win32::UI::Shell::{IFileOpenDialog, FileOpenDialog, FOS_PICKFOLDERS, FOS_FORCEFILESYSTEM};
-                    use windows::Win32::System::Com::{CoInitializeEx, CoCreateInstance, CoUninitialize, CLSCTX_ALL, COINIT_APARTMENTTHREADED};
-
-                    unsafe {
-                        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-
-                        let dialog: IFileOpenDialog = match CoCreateInstance(&FileOpenDialog, None, CLSCTX_ALL) {
-                            Ok(d) => d,
-                            Err(e) => {
-                                log::error!("[pick_folder] Failed to create dialog: {}", e);
-                                CoUninitialize();
-                                return None;
-                            }
-                        };
-
-                        // Set folder picker mode
-                        if let Err(e) = dialog.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM) {
-                            log::error!("[pick_folder] SetOptions failed: {}", e);
-                            CoUninitialize();
-                            return None;
-                        }
-
-                        // Show with foreground window as owner
-                        let hwnd = GetForegroundWindow();
-                        let hr = dialog.Show(Some(hwnd));
-                        if hr.is_err() {
-                            // User cancelled or error
-                            CoUninitialize();
-                            return None;
-                        }
-
-                        let result = dialog.GetResult().ok().and_then(|item| {
-                            item.GetDisplayName(windows::Win32::UI::Shell::SIGDN_FILESYSPATH).ok().map(|name| {
-                                let path = name.to_string().unwrap_or_default();
-                                // Free the CoTaskMem string
-                                windows::Win32::System::Com::CoTaskMemFree(Some(name.as_ptr() as *const _));
-                                path
-                            })
-                        });
-
-                        CoUninitialize();
-                        result
-                    }
-                }).join().unwrap_or(None);
-
-                match result {
-                    Some(path) => {
-                        let path_str = path.replace('\\', "\\\\");
-                        tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
-                    }
-                    None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
+            // The previous Windows path hand-rolled IFileOpenDialog and did a
+            // manual CoTaskMemFree on a PWSTR that the windows crate already
+            // frees on drop — a guaranteed double-free that produced random
+            // crashes the second time the dialog was invoked. rfd uses the
+            // same IFileOpenDialog under the hood and gets the lifecycle
+            // right (CoInit, RAII for the COM interfaces, no manual frees).
+            // We spawn a fresh thread so the COM apartment doesn't leak into
+            // the stdio JSON-RPC loop.
+            //
+            // The old code passed GetForegroundWindow as the dialog parent
+            // to enforce z-order over the floating window. rfd doesn't expose
+            // a clean parent-by-HWND API in 0.15 without pulling in
+            // raw-window-handle plumbing, and an unowned dialog already
+            // steals focus on activation — if z-order issues surface in
+            // practice, a parent wrapper can be added back as a follow-up.
+            let result = std::thread::spawn(|| rfd::FileDialog::new().pick_folder())
+                .join()
+                .unwrap_or(None);
+            match result {
+                Some(path) => {
+                    let path_str = path.to_string_lossy().replace('\\', "\\\\");
+                    tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
                 }
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                let result = std::thread::spawn(|| rfd::FileDialog::new().pick_folder()).join().unwrap_or(None);
-                match result {
-                    Some(path) => {
-                        let path_str = path.to_string_lossy().replace('\\', "\\\\");
-                        tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
-                    }
-                    None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
-                }
+                None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
             }
         }
         "scan_folder" => {
