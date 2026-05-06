@@ -29,6 +29,20 @@ const BOOT_TIMEOUT_MS = 10_000;
 const RPC_TIMEOUT_MS = 10_000;
 
 /**
+ * Commands that read or write per-extension storage and therefore must be
+ * scoped to the calling extension's identity. The host force-injects
+ * `extension_id` into the args before forwarding; any value the sandbox
+ * supplied is overwritten. Backend rejects calls without a valid id, so a
+ * missing entry here would surface as a hard error rather than silent
+ * cross-extension access.
+ */
+const STORAGE_COMMANDS = new Set([
+    'save_extension_data',
+    'load_extension_data',
+    'delete_extension_data',
+]);
+
+/**
  * @typedef {object} SandboxSpec
  * @property {string} extensionId
  * @property {string[]} capabilities - normalized list of granted capabilities
@@ -328,8 +342,17 @@ export class ExtensionSandbox {
             return;
         }
 
+        // For storage commands, force-inject the extension's identity. The
+        // host owns the sandbox -> extension mapping (it created the
+        // iframe), so this is authoritative. Any extension_id the sandbox
+        // tried to supply is overwritten — sandboxes can't read or write
+        // another extension's data even if they know the key.
+        const forwardedArgs = STORAGE_COMMANDS.has(command)
+            ? { ...(args || {}), extension_id: this.extensionId }
+            : (args || {});
+
         try {
-            const result = await this._rawInvoke(command, args || {});
+            const result = await this._rawInvoke(command, forwardedArgs);
             this._port.postMessage({ type: 'invoke-response', id, result });
         } catch (e) {
             this._port.postMessage({

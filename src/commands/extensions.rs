@@ -696,13 +696,17 @@ async fn store_install_inner(
 // ---------------------------------------------------------------------------
 // Generic extension data persistence
 // ---------------------------------------------------------------------------
-// Stores extension data as JSON files in the user's config directory:
-//   <config_dir>/kage/extension-data/<name>.json
-// This is preferred over localStorage because it survives reinstalls,
-// WebView2 data resets, and is fully under our control.
+// Stores extension data as JSON files at:
+//   <config_dir>/kage/extension-data/<extension_id>/<key>.json
+//
+// The path-resolution and migration logic lives in src/extensions.rs so it
+// can be unit-tested directly (this module is gated under #[cfg(not(test))]
+// because of the tauri::command macros). The host JS bridge force-injects
+// extension_id from its own record before forwarding storage commands here,
+// so a sandboxed caller can't spoof a different extension's identity.
 
-/// Returns the directory for extension data files, creating it if needed.
-fn extension_data_dir() -> Result<std::path::PathBuf, String> {
+/// Returns the root extension-data directory, creating it if needed.
+fn extension_data_root() -> Result<std::path::PathBuf, String> {
     let dir = dirs::config_dir()
         .ok_or("No config directory")?
         .join("kage")
@@ -714,58 +718,52 @@ fn extension_data_dir() -> Result<std::path::PathBuf, String> {
     Ok(dir)
 }
 
-/// Validate that a data key is safe for use as a filename.
-fn validate_data_key(key: &str) -> Result<(), String> {
-    if key.is_empty() || key.len() > 128 {
-        return Err("Data key must be 1-128 characters".into());
-    }
-    // Allow alphanumeric, hyphens, underscores, dots
-    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
-        return Err("Data key contains invalid characters (allowed: a-z, 0-9, -, _, .)".into());
-    }
-    // Prevent path traversal
-    if key.contains("..") {
-        return Err("Data key must not contain '..'".into());
-    }
-    Ok(())
+/// Resolve the on-disk path for a given (extension_id, key).
+fn resolve_data_path(extension_id: &str, key: &str) -> Result<std::path::PathBuf, String> {
+    let root = extension_data_root()?;
+    extensions::resolve_extension_data_path(&root, extension_id, key)
+        .map_err(|e| format!("{}", e))
 }
 
 /// Save arbitrary JSON data for an extension.
-/// Stored at: <config_dir>/kage/extension-data/<key>.json
+/// Stored at: <config_dir>/kage/extension-data/<extension_id>/<key>.json
 #[tauri::command]
-pub async fn save_extension_data(key: String, data: String) -> Result<(), AppError> {
-    validate_data_key(&key)?;
-    let dir = extension_data_dir()?;
-    let path = dir.join(format!("{}.json", key));
+pub async fn save_extension_data(
+    extension_id: String,
+    key: String,
+    data: String,
+) -> Result<(), AppError> {
+    let path = resolve_data_path(&extension_id, &key)?;
     std::fs::write(&path, &data)
-        .map_err(|e| format!("Failed to save extension data '{}': {}", key, e))?;
+        .map_err(|e| format!("Failed to save extension data '{}/{}': {}", extension_id, key, e))?;
     Ok(())
 }
 
 /// Load JSON data for an extension. Returns null if the file doesn't exist.
-/// Read from: <config_dir>/kage/extension-data/<key>.json
 #[tauri::command]
-pub async fn load_extension_data(key: String) -> Result<Option<String>, AppError> {
-    validate_data_key(&key)?;
-    let dir = extension_data_dir()?;
-    let path = dir.join(format!("{}.json", key));
+pub async fn load_extension_data(
+    extension_id: String,
+    key: String,
+) -> Result<Option<String>, AppError> {
+    let path = resolve_data_path(&extension_id, &key)?;
     match std::fs::read_to_string(&path) {
         Ok(data) => Ok(Some(data)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("Failed to load extension data '{}': {}", key, e))?,
+        Err(e) => Err(format!("Failed to load extension data '{}/{}': {}", extension_id, key, e))?,
     }
 }
 
 /// Delete extension data file.
 #[tauri::command]
-pub async fn delete_extension_data(key: String) -> Result<(), AppError> {
-    validate_data_key(&key)?;
-    let dir = extension_data_dir()?;
-    let path = dir.join(format!("{}.json", key));
+pub async fn delete_extension_data(
+    extension_id: String,
+    key: String,
+) -> Result<(), AppError> {
+    let path = resolve_data_path(&extension_id, &key)?;
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!("Failed to delete extension data '{}': {}", key, e))?,
+        Err(e) => Err(format!("Failed to delete extension data '{}/{}': {}", extension_id, key, e))?,
     }
 }
 

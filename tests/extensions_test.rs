@@ -314,6 +314,49 @@ fn validate_id_rejects_path_traversal_attempts() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Per-extension data layout — namespacing + legacy migration
+// ---------------------------------------------------------------------------
+
+#[test]
+fn data_path_isolates_extensions_into_separate_subdirs() {
+    // Two different extensions storing under the same key must land at
+    // distinct paths. Pre-fix they collided in a flat directory and either
+    // could read/overwrite the other.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path();
+
+    let p_a = extensions::resolve_extension_data_path(root, "todos", "kage-todos")
+        .expect("extension a path resolves");
+    let p_b = extensions::resolve_extension_data_path(root, "color-picker", "kage-todos")
+        .expect("extension b path resolves");
+
+    assert_ne!(p_a, p_b, "same key under different extension ids must not collide");
+    assert!(p_a.starts_with(root.join("todos")), "path must live under its extension dir");
+    assert!(p_b.starts_with(root.join("color-picker")));
+    assert_eq!(p_a.file_name().and_then(|n| n.to_str()), Some("kage-todos.json"));
+}
+
+#[test]
+fn data_path_rejects_hostile_extension_id() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path();
+    // Path traversal in the extension_id slot must be rejected before any
+    // filesystem op runs.
+    assert!(extensions::resolve_extension_data_path(root, "../escape", "k").is_err());
+    assert!(extensions::resolve_extension_data_path(root, "", "k").is_err());
+    assert!(extensions::resolve_extension_data_path(root, "UPPER", "k").is_err());
+}
+
+#[test]
+fn data_path_rejects_hostile_data_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let root = dir.path();
+    assert!(extensions::resolve_extension_data_path(root, "todos", "..").is_err());
+    assert!(extensions::resolve_extension_data_path(root, "todos", "a/b").is_err());
+    assert!(extensions::resolve_extension_data_path(root, "todos", "").is_err());
+}
+
 #[test]
 fn validate_id_rejects_empty_oversized_uppercase_and_unicode() {
     assert!(extensions::validate_extension_id("").is_err(), "empty id");

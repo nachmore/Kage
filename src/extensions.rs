@@ -69,6 +69,49 @@ pub fn validate_extension_id(id: &str) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Per-extension data layout (used by save_extension_data / load_extension_data
+// / delete_extension_data Tauri commands)
+// ---------------------------------------------------------------------------
+//
+// Each entry lives at <root>/<extension_id>/<key>.json. The extension_id
+// scope is enforced by the JS sandbox host bridge — it overrides whatever
+// the sandboxed caller supplies — so an extension with the `storage`
+// capability can't read or write another extension's data.
+
+/// Validate that a data key is safe for use as a filename within an
+/// extension's data directory.
+pub fn validate_data_key(key: &str) -> Result<()> {
+    if key.is_empty() || key.len() > 128 {
+        anyhow::bail!("Data key must be 1-128 characters");
+    }
+    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        anyhow::bail!("Data key contains invalid characters (allowed: a-z, 0-9, -, _, .)");
+    }
+    if key.contains("..") {
+        anyhow::bail!("Data key must not contain '..'");
+    }
+    Ok(())
+}
+
+/// Resolve the per-extension data path under `root` for (extension_id, key).
+/// Validates both inputs, ensures the per-extension dir exists, and returns
+/// `<root>/<extension_id>/<key>.json`.
+pub fn resolve_extension_data_path(
+    root: &std::path::Path,
+    extension_id: &str,
+    key: &str,
+) -> Result<std::path::PathBuf> {
+    validate_extension_id(extension_id).context("Invalid extension id")?;
+    validate_data_key(key).context("Invalid data key")?;
+    let dir = root.join(extension_id);
+    if !dir.exists() {
+        fs::create_dir_all(&dir)
+            .with_context(|| format!("Failed to create extension data dir {:?}", dir))?;
+    }
+    Ok(dir.join(format!("{}.json", key)))
+}
+
+// ---------------------------------------------------------------------------
 // Manifest types
 // ---------------------------------------------------------------------------
 
