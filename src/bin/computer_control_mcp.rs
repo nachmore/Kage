@@ -8,40 +8,38 @@ use std::io::{self, BufRead, Read, Write};
 use kage::os::accessibility;
 
 // ---------------------------------------------------------------------------
-// Raw Win32 FFI for mouse events (avoids windows crate version conflicts)
+// Mouse SendInput helper. Uses the windows crate's INPUT/MOUSEINPUT — these
+// types have correct layout on every supported architecture, unlike a hand-
+// rolled MouseInput struct which would only work on x64 by accident of
+// padding. The crate version was previously avoided here under a "version
+// conflicts" comment that never quite held — both this binary and the lib
+// link the same windows crate, so we just enable the matching feature
+// (Win32_UI_Input_KeyboardAndMouse) and use what's there.
 // ---------------------------------------------------------------------------
 #[cfg(target_os = "windows")]
-const MOUSEEVENTF_LEFTDOWN: u32 = 0x0002;
-#[cfg(target_os = "windows")]
-const MOUSEEVENTF_LEFTUP: u32 = 0x0004;
-#[cfg(target_os = "windows")]
-const MOUSEEVENTF_WHEEL: u32 = 0x0800;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
+    MOUSEEVENTF_WHEEL, MOUSE_EVENT_FLAGS, MOUSEINPUT,
+};
 
 #[cfg(target_os = "windows")]
-#[repr(C)]
-struct MouseInput {
-    dx: i32, dy: i32, mouse_data: u32, flags: u32, time: u32, extra: usize,
-}
-
-#[cfg(target_os = "windows")]
-#[repr(C)]
-struct RawInput {
-    input_type: u32, // 0 = INPUT_MOUSE
-    mi: MouseInput,
-}
-
-#[cfg(target_os = "windows")]
-extern "system" {
-    fn SendInput(count: u32, inputs: *const RawInput, size: i32) -> u32;
-}
-
-#[cfg(target_os = "windows")]
-fn win32_mouse_event(flags: u32, data: i32) {
-    let input = RawInput {
-        input_type: 0, // INPUT_MOUSE
-        mi: MouseInput { dx: 0, dy: 0, mouse_data: data as u32, flags, time: 0, extra: 0 },
+fn win32_mouse_event(flags: MOUSE_EVENT_FLAGS, data: i32) {
+    let input = INPUT {
+        r#type: INPUT_MOUSE,
+        Anonymous: INPUT_0 {
+            mi: MOUSEINPUT {
+                dx: 0,
+                dy: 0,
+                mouseData: data as u32,
+                dwFlags: flags,
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
     };
-    unsafe { SendInput(1, &input, std::mem::size_of::<RawInput>() as i32); }
+    unsafe {
+        SendInput(&[input], std::mem::size_of::<INPUT>() as i32);
+    }
 }
 
 fn main() {

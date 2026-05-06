@@ -1,7 +1,23 @@
-// Windows clipboard operations using Win32 API
+// Windows clipboard operations using Win32 API.
+//
+// Clipboard data-exchange (OpenClipboard/GetClipboardData/GlobalAlloc/etc.)
+// is hand-rolled extern blocks because pulling in the matching `windows`
+// crate features would cost compile time without benefit — they're each
+// called from one place and the bindings are tiny. SendInput is different:
+// it lived in three copies across this file and the MCP binary, with
+// hand-rolled INPUT structs that worked on x64 only by accident of padding.
+// The windows-crate version is bundled with KEYBDINPUT/MOUSEINPUT/INPUT
+// types that are correct on every supported architecture, so we use the
+// crate version for SendInput specifically.
 
 use log::info;
 use std::ptr;
+
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+    KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC,
+    VIRTUAL_KEY,
+};
 
 extern "system" {
     fn OpenClipboard(hwnd: *mut std::ffi::c_void) -> i32;
@@ -15,22 +31,10 @@ extern "system" {
     fn GlobalSize(hmem: *mut std::ffi::c_void) -> usize;
     fn GlobalFree(hmem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
     fn GetClipboardSequenceNumber() -> u32;
-    fn SendInput(count: u32, inputs: *const WinInput, size: i32) -> u32;
-    fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
 }
 
 const CF_UNICODETEXT: u32 = 13;
 const GMEM_MOVEABLE: u32 = 0x0002;
-const MAPVK_VK_TO_VSC: u32 = 0;
-const INPUT_KEYBOARD: u32 = 1;
-const KEYEVENTF_KEYUP: u32 = 0x0002;
-const KEYEVENTF_SCANCODE: u32 = 0x0008;
-
-#[repr(C)]
-struct KbdInput { vk: u16, scan: u16, flags: u32, time: u32, extra: usize }
-
-#[repr(C)]
-struct WinInput { input_type: u32, ki: KbdInput, _pad: [u8; 8] }
 
 pub fn read_clipboard_impl() -> Option<String> {
     unsafe {
@@ -84,26 +88,40 @@ pub fn write_clipboard_impl(text: &str) {
     }
 }
 
-fn make_key(vk: u16, up: bool) -> WinInput {
+/// Build an INPUT for a virtual-key keystroke. `vk` is a Windows VK_*
+/// value; the scan code is looked up via MapVirtualKeyW so apps that
+/// inspect both fields see consistent state.
+fn make_key(vk: u16, up: bool) -> INPUT {
     let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as u16;
-    WinInput {
-        input_type: INPUT_KEYBOARD,
-        ki: KbdInput { vk, scan, flags: if up { KEYEVENTF_KEYUP } else { 0 }, time: 0, extra: 0 },
-        _pad: [0u8; 8],
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(vk),
+                wScan: scan,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) },
+                time: 0,
+                dwExtraInfo: 0,
+            },
+        },
     }
 }
 
-fn scan_input(scan: u16, up: bool) -> WinInput {
-    WinInput {
-        input_type: INPUT_KEYBOARD,
-        ki: KbdInput {
-            vk: 0,
-            scan,
-            flags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { 0 },
-            time: 0,
-            extra: 0,
+/// Build an INPUT for a scancode keystroke (used by Ctrl+C delivery so
+/// the keystroke is delivered the same way a physical key would be —
+/// some apps watch the scancode path and ignore VK-only events).
+fn scan_input(scan: u16, up: bool) -> INPUT {
+    INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(0),
+                wScan: scan,
+                dwFlags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) },
+                time: 0,
+                dwExtraInfo: 0,
+            },
         },
-        _pad: [0u8; 8],
     }
 }
 
@@ -113,7 +131,6 @@ fn scan_input(scan: u16, up: bool) -> WinInput {
 /// doesn't always clear the side-specific state, so apps that check
 /// GetAsyncKeyState(VK_LMENU) still see Alt as held.
 fn release_all_modifiers() {
-    let size = std::mem::size_of::<WinInput>() as i32;
     let releases = [
         make_key(0xA0, true), // VK_LSHIFT
         make_key(0xA1, true), // VK_RSHIFT
@@ -128,7 +145,7 @@ fn release_all_modifiers() {
         make_key(0x5C, true), // VK_RWIN
     ];
     unsafe {
-        SendInput(releases.len() as u32, releases.as_ptr(), size);
+        SendInput(&releases, std::mem::size_of::<INPUT>() as i32);
     }
     std::thread::sleep(std::time::Duration::from_millis(30));
 }
@@ -139,8 +156,6 @@ fn release_all_modifiers() {
 /// This is the shared setup for both synchronous (`capture_selection_impl`)
 /// and two-phase (`begin_selection_capture` / `finish_selection_capture`) capture.
 fn send_copy_keystroke() -> (Option<String>, u32) {
-    let size = std::mem::size_of::<WinInput>() as i32;
-
     unsafe {
         let original_clipboard = read_clipboard_impl();
         let seq_before = GetClipboardSequenceNumber();
@@ -154,7 +169,7 @@ fn send_copy_keystroke() -> (Option<String>, u32) {
             scan_input(0x2E, true),  // C up
             scan_input(0x1D, true),  // Ctrl up
         ];
-        let sent = SendInput(4, copy_keys.as_ptr(), size);
+        let sent = SendInput(&copy_keys, std::mem::size_of::<INPUT>() as i32);
         if sent != 4 {
             info!("[selection] SendInput failed: returned {}", sent);
         }
@@ -243,7 +258,6 @@ fn wait_for_clipboard_change(seq_before: u32, timeout_ms: u32) -> bool {
 pub fn simulate_paste_impl() {
     release_all_modifiers();
 
-    let size = std::mem::size_of::<WinInput>() as i32;
     // Ctrl down (scan 0x1D), V down (scan 0x2F), V up, Ctrl up
     let paste_keys = [
         scan_input(0x1D, false), // Ctrl down
@@ -252,6 +266,6 @@ pub fn simulate_paste_impl() {
         scan_input(0x1D, true),  // Ctrl up
     ];
     unsafe {
-        SendInput(4, paste_keys.as_ptr(), size);
+        SendInput(&paste_keys, std::mem::size_of::<INPUT>() as i32);
     }
 }
