@@ -14,3 +14,4 @@ pub mod startup;
 pub mod icon;
 pub mod window_list;
 pub mod accessibility;
+mod uia_worker;
