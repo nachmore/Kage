@@ -16,21 +16,30 @@ pub use transport::AcpTransport;
 
 use anyhow::Result;
 use log::info;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::lock_ext::LockExt;
 use crate::process_manager::ProcessManager;
 
-/// Maximum size for the streaming accumulator (10 MB).
-/// Prevents OOM if the server sends an unbounded response.
+/// Maximum size for any single session's streaming accumulator (10 MB).
+/// Prevents OOM if the server sends an unbounded response on a single session.
 pub const MAX_ACCUMULATOR_SIZE: usize = 10 * 1024 * 1024;
+
+/// Accumulated streaming text, keyed by session id. Each session has its own
+/// bucket so chunks for session A can't leak into session B if the user
+/// switches mid-stream (or auto_steering's hidden prompt overlaps with the
+/// user's prompt). The notification handler appends the chunk to the bucket
+/// matching its `params.sessionId`; helpers like auto_steering and the
+/// inline-assist command read+clear by the session id they sent to.
+pub type SessionAccumulators = Arc<Mutex<HashMap<String, String>>>;
 
 pub struct AcpClient {
     transport: AcpTransport,
     session_id: Arc<Mutex<Option<String>>>,
     initialized: Arc<Mutex<bool>>,
-    /// Accumulated streaming text (reset per message)
-    pub streaming_accumulator: Arc<Mutex<String>>,
+    /// Per-session accumulated streaming text. See SessionAccumulators.
+    pub streaming_accumulators: SessionAccumulators,
     /// True while the server is compacting context — outgoing prompts should wait
     pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
 }
@@ -41,9 +50,59 @@ impl AcpClient {
             transport: AcpTransport::new(mode),
             session_id: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
-            streaming_accumulator: Arc::new(Mutex::new(String::with_capacity(64 * 1024))),
+            streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
         }
+    }
+
+    // --- Per-session accumulator helpers ---
+
+    /// Append `text` to the bucket for `session_id`, capped at
+    /// MAX_ACCUMULATOR_SIZE. Returns the slice that was actually appended
+    /// (truncated if the cap was hit), so the notification handler can emit
+    /// the same delta it accumulated.
+    pub fn accumulate_chunk<'a>(&self, session_id: &str, text: &'a str) -> Option<&'a str> {
+        let mut map = self.streaming_accumulators.lock_or_recover();
+        let acc = map.entry(session_id.to_string())
+            .or_insert_with(|| String::with_capacity(64 * 1024));
+        if acc.len() >= MAX_ACCUMULATOR_SIZE {
+            return None;
+        }
+        let remaining = MAX_ACCUMULATOR_SIZE - acc.len();
+        if text.len() <= remaining {
+            acc.push_str(text);
+            Some(text)
+        } else {
+            let slice = &text[..remaining];
+            acc.push_str(slice);
+            log::warn!(
+                "Streaming accumulator for session {} hit {}MB cap — truncating",
+                session_id,
+                MAX_ACCUMULATOR_SIZE / (1024 * 1024)
+            );
+            Some(slice)
+        }
+    }
+
+    /// Read the bucket for `session_id` and remove it in one critical
+    /// section. Used by send-and-read flows (auto_steering, invoke_subagent,
+    /// inline_assist, execute_macro) which know exactly which session they
+    /// targeted and don't need the accumulator to outlive their call.
+    /// Returns an empty string if no bucket exists.
+    pub fn take_session_accumulator(&self, session_id: &str) -> String {
+        self.streaming_accumulators
+            .lock_or_recover()
+            .remove(session_id)
+            .unwrap_or_default()
+    }
+
+    /// Reset the bucket for `session_id` to empty. Called before send when
+    /// a caller wants to read the response back via take_session_accumulator
+    /// without contamination from a prior incomplete response.
+    pub fn reset_session_accumulator(&self, session_id: &str) {
+        self.streaming_accumulators
+            .lock_or_recover()
+            .remove(session_id);
     }
 
     // --- Delegated transport accessors ---

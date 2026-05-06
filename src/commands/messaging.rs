@@ -18,7 +18,6 @@ pub fn setup_notification_handler(
     let config = state_config;
     let slash_cmds = slash_commands;
     let pending_perm = pending_permission;
-    let accumulated = client.streaming_accumulator.clone();
     let compacting = client.compacting.clone();
     let client_for_handler = client.clone();
 
@@ -43,40 +42,67 @@ pub fn setup_notification_handler(
         }
 
         if method == "session/update" {
+            // Every session/update carries the session id it belongs to.
+            // Chunks for a session that isn't currently active are dropped
+            // from the UI emit — otherwise switching sessions mid-stream
+            // (or auto_steering's hidden prompt overlapping with the user's
+            // prompt) would leak the wrong tokens into the wrong UI bucket.
+            // Server-issued updates may legitimately omit sessionId for
+            // some kinds; in that case fall back to the current session.
+            let update_session_id = notification
+                .get("params")
+                .and_then(|p| p.get("sessionId"))
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            let current_session_id = client_for_handler.get_session_id();
+            let is_current = match (&update_session_id, &current_session_id) {
+                (Some(u), Some(c)) => u == c,
+                _ => true, // missing on either side — be permissive, see comment above
+            };
+
             if let Some(update) = notification.get("params").and_then(|p| p.get("update")) {
                 if let Some(kind) = update.get("sessionUpdate").and_then(|v| v.as_str()) {
                     if kind == "agent_message_chunk" {
                         if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
-                            // Delta that will actually be emitted to the UI. Usually the
-                            // full text, but truncated if the accumulator is near the cap.
-                            let emitted: &str = {
-                                let mut acc = accumulated.lock_or_recover();
-                                if acc.len() >= crate::acp_client::MAX_ACCUMULATOR_SIZE {
-                                    ""
-                                } else {
-                                    let remaining = crate::acp_client::MAX_ACCUMULATOR_SIZE - acc.len();
-                                    if text.len() <= remaining {
-                                        acc.push_str(text);
-                                        text
-                                    } else {
-                                        let slice = &text[..remaining];
-                                        acc.push_str(slice);
-                                        log::warn!(
-                                            "Streaming accumulator hit {}MB cap — truncating",
-                                            crate::acp_client::MAX_ACCUMULATOR_SIZE / (1024 * 1024)
+                            // Always accumulate into the *update's* session
+                            // bucket — that's the source of truth and helpers
+                            // like auto_steering read by the session id they
+                            // sent to. The current-session check below only
+                            // gates the UI emit.
+                            let acc_session = update_session_id
+                                .clone()
+                                .or_else(|| current_session_id.clone());
+                            let emitted_owned: Option<String> = if let Some(sid) = &acc_session {
+                                client_for_handler
+                                    .accumulate_chunk(sid, text)
+                                    .map(|s| s.to_string())
+                            } else {
+                                None
+                            };
+
+                            if is_current {
+                                if let Some(emitted) = emitted_owned {
+                                    if !emitted.is_empty() {
+                                        // Emit only the delta. The frontend
+                                        // maintains its own accumulator by
+                                        // appending `text` on each chunk —
+                                        // avoids the O(n²) IPC cost of
+                                        // shipping the full accumulator.
+                                        // sessionId is included so the UI
+                                        // can filter as belt-and-suspenders.
+                                        let _ = app_handle.emit(
+                                            "message_chunk",
+                                            serde_json::json!({
+                                                "text": emitted,
+                                                "sessionId": acc_session,
+                                            }),
                                         );
-                                        slice
                                     }
                                 }
-                            };
-                            if !emitted.is_empty() {
-                                // Emit only the delta. The frontend maintains its own
-                                // accumulator by appending `text` on each chunk. This avoids
-                                // the O(n²) IPC cost of shipping the full accumulator every
-                                // chunk, which was causing multi-GB allocations on long responses.
-                                let _ = app_handle.emit(
-                                    "message_chunk",
-                                    serde_json::json!({ "text": emitted }),
+                            } else {
+                                log::debug!(
+                                    "dropping message_chunk for non-current session {:?} (current is {:?})",
+                                    update_session_id, current_session_id
                                 );
                             }
                         }
@@ -92,7 +118,13 @@ pub fn setup_notification_handler(
                                 names.entry(call_id.to_string()).or_insert_with(|| title.to_string());
                             }
                         }
-                        let _ = app_handle.emit("tool_call_update", &notification);
+                        // Only forward tool-call updates for the active session.
+                        // A tool call belonging to a backgrounded session would
+                        // confuse the active session's UI (the floating window's
+                        // tool indicator would show another session's progress).
+                        if is_current {
+                            let _ = app_handle.emit("tool_call_update", &notification);
+                        }
                         return;
                     }
                 }
@@ -705,8 +737,7 @@ pub async fn execute_automation_plan(
 
             // Invoke the sub-agent
             match client.invoke_subagent(&query) {
-                Ok(()) => {
-                    let result = client.streaming_accumulator.lock_or_recover().clone();
+                Ok(result) => {
                     info!("Step {}/{} completed: {} chars", step_num, total_steps, result.len());
 
                     // Check if the sub-agent reported a failure in its response text.
@@ -971,17 +1002,22 @@ pub async fn send_inline_assist(
             }
         }
 
-        // Clear the accumulator so we can track this response
-        client.streaming_accumulator.lock_or_recover().clear();
-
+        // send_chat_streaming resets its own session bucket; once it
+        // returns, the response is available in that bucket.
         if let Err(e) = client.send_chat_streaming(&message, None) {
             let _ = app.emit("inline_assist_error", format!("Failed: {}", e));
             return;
         }
 
-        // The response is accumulated by the notification handler.
-        // Read the final result from the accumulator.
-        let result = client.streaming_accumulator.lock_or_recover().clone();
+        // Read the final result by the session id this prompt landed on.
+        let session_id = match client.get_session_id() {
+            Some(id) => id,
+            None => {
+                let _ = app.emit("inline_assist_error", "No active session after send");
+                return;
+            }
+        };
+        let result = client.take_session_accumulator(&session_id);
         if result.trim().is_empty() {
             let _ = app.emit("inline_assist_error", "Empty response");
         } else {
@@ -1036,11 +1072,12 @@ pub async fn execute_macro(
                             return Err(format!("Step {}: Unable to connect: {}", i + 1, e));
                         }
                     }
-                    client.streaming_accumulator.lock_or_recover().clear();
                     if let Err(e) = client.send_chat_streaming(&full_prompt, None) {
                         return Err(format!("Step {} failed: {}", i + 1, e));
                     }
-                    let result = client.streaming_accumulator.lock_or_recover().clone();
+                    let session_id = client.get_session_id()
+                        .ok_or_else(|| format!("Step {}: no active session", i + 1))?;
+                    let result = client.take_session_accumulator(&session_id);
                     if result.trim().is_empty() {
                         return Err(format!("Step {} returned empty result", i + 1));
                     }

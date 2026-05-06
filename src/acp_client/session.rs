@@ -143,7 +143,7 @@ impl AcpClient {
             crate::auto_steering::BUILTIN_STEERING
         );
 
-        self.streaming_accumulator.lock_or_recover().clear();
+        self.reset_session_accumulator(&session_id);
 
         let result = self.send_request(
             "session/prompt",
@@ -167,8 +167,6 @@ impl AcpClient {
 
         let debug = *self.transport.debug_mode.lock_or_recover();
 
-        self.streaming_accumulator.lock_or_recover().clear();
-
         if debug {
             info!("[CHAT] Sending message ({} chars): {}", content.chars().count(), content);
         } else {
@@ -186,6 +184,10 @@ impl AcpClient {
                 id
             }
         };
+
+        // Reset only this session's bucket — other sessions' in-flight
+        // accumulators (auto-steering, sub-agents) must not be wiped.
+        self.reset_session_accumulator(&session_id);
 
         let mut prompt: Vec<serde_json::Value> = Vec::new();
 
@@ -348,8 +350,11 @@ impl AcpClient {
 
     /// Invoke a sub-agent with a specific task query.
     /// The sub-agent runs in a fresh context and returns its result
-    /// through the normal streaming notification handler.
-    pub fn invoke_subagent(&self, query: &str) -> Result<()> {
+    /// through the normal streaming notification handler. Returns the
+    /// accumulated response text — the bucket is consumed, so the caller
+    /// gets the response as a value rather than reaching into the
+    /// accumulator map themselves.
+    pub fn invoke_subagent(&self, query: &str) -> Result<String> {
         let session_id = {
             let guard = self.session_id.lock_or_recover();
             if let Some(ref id) = *guard {
@@ -364,8 +369,8 @@ impl AcpClient {
 
         info!("Invoking sub-agent with query: {}", &query[..query.len().min(100)]);
 
-        // Reset the streaming accumulator for this sub-agent's response
-        self.streaming_accumulator.lock_or_recover().clear();
+        // Reset this session's bucket so we read just the sub-agent's reply
+        self.reset_session_accumulator(&session_id);
 
         let command = serde_json::json!({
             "command": "invoke_subagents",
@@ -396,9 +401,10 @@ impl AcpClient {
             }
         }
 
-        // Get the accumulated response from the sub-agent
-        let result = self.streaming_accumulator.lock_or_recover().clone();
+        // Get the accumulated response from the sub-agent and clear its
+        // bucket — this read is one-shot, no other caller wants it.
+        let result = self.take_session_accumulator(&session_id);
         info!("Sub-agent completed ({} chars)", result.len());
-        Ok(())
+        Ok(result)
     }
 }

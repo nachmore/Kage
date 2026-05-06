@@ -249,8 +249,8 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         )
     };
 
-    // Reset the streaming accumulator — we'll read the full response from it
-    client.streaming_accumulator.lock_or_recover().clear();
+    // Reset this session's accumulator so we read just the response below.
+    client.reset_session_accumulator(&session_id);
 
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
@@ -269,11 +269,14 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 
     if let Some(error) = response.error {
         warn!("Auto-steering extraction failed: {}", error.message);
+        // Drop the (possibly partial) accumulator so it doesn't bleed into
+        // the next read on the same session.
+        client.reset_session_accumulator(&session_id);
         return Ok(()); // Non-fatal
     }
 
-    // Read the accumulated response
-    let result = client.streaming_accumulator.lock_or_recover().clone();
+    // Read the accumulated response and clear its bucket.
+    let result = client.take_session_accumulator(&session_id);
 
     if result.trim().is_empty() {
         warn!("Auto-steering extraction returned empty result");

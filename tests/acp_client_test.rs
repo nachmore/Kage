@@ -1,4 +1,5 @@
 use kage::acp_client::types::*;
+use kage::acp_client::{AcpClient, AcpConnectionMode};
 
 #[test]
 fn test_acp_request_serialization() {
@@ -126,4 +127,81 @@ fn test_acp_response_skips_none_fields() {
     };
     let json_str = serde_json::to_string(&response).unwrap();
     assert!(!json_str.contains("error"));
+}
+
+// ---------------------------------------------------------------------------
+// Per-session streaming accumulator
+// ---------------------------------------------------------------------------
+//
+// Pre-fix the accumulator was a single global String. If a chunk arrived for
+// session A while session B was active in the UI, the bytes appended to the
+// shared buffer and rendered as if they were B's response. The rewrite keys
+// the accumulator by session id so distinct sessions never see each other's
+// bytes — tested here at the helper API surface, since spinning up the full
+// notification handler under unit tests is too noisy.
+
+fn fresh_client() -> AcpClient {
+    // We never call .connect() — the accumulator helpers don't touch the
+    // transport. AcpConnectionMode::Remote is just a placeholder.
+    AcpClient::new(AcpConnectionMode::Remote {
+        host: "127.0.0.1".to_string(),
+        port: 0,
+    })
+}
+
+#[test]
+fn accumulator_isolates_chunks_by_session_id() {
+    let client = fresh_client();
+
+    client.accumulate_chunk("session-A", "hello");
+    client.accumulate_chunk("session-B", "WORLD");
+    client.accumulate_chunk("session-A", " there");
+
+    assert_eq!(client.take_session_accumulator("session-A"), "hello there");
+    assert_eq!(client.take_session_accumulator("session-B"), "WORLD");
+    // Both buckets consumed.
+    assert_eq!(client.take_session_accumulator("session-A"), "");
+    assert_eq!(client.take_session_accumulator("session-B"), "");
+}
+
+#[test]
+fn reset_session_accumulator_only_affects_target_session() {
+    let client = fresh_client();
+    client.accumulate_chunk("a", "keep me");
+    client.accumulate_chunk("b", "wipe me");
+
+    client.reset_session_accumulator("b");
+
+    assert_eq!(client.take_session_accumulator("a"), "keep me");
+    assert_eq!(client.take_session_accumulator("b"), "");
+}
+
+#[test]
+fn accumulate_chunk_returns_truncated_slice_when_capacity_hit() {
+    use kage::acp_client::MAX_ACCUMULATOR_SIZE;
+    let client = fresh_client();
+    // Fill the bucket to one byte short of the cap.
+    let big = "x".repeat(MAX_ACCUMULATOR_SIZE - 1);
+    let r = client.accumulate_chunk("big", &big);
+    assert_eq!(r.map(|s| s.len()), Some(MAX_ACCUMULATOR_SIZE - 1));
+
+    // Next chunk only one byte fits; the rest is dropped, accumulate_chunk
+    // returns the truncated slice so the notification handler emits the
+    // same delta it accumulated.
+    let r2 = client.accumulate_chunk("big", "yz");
+    assert_eq!(r2, Some("y"));
+
+    // Past the cap, further chunks are entirely dropped.
+    let r3 = client.accumulate_chunk("big", "more");
+    assert!(r3.is_none(), "post-cap append must return None");
+
+    // Bucket holds exactly the cap.
+    let final_text = client.take_session_accumulator("big");
+    assert_eq!(final_text.len(), MAX_ACCUMULATOR_SIZE);
+}
+
+#[test]
+fn take_on_unknown_session_returns_empty_not_panic() {
+    let client = fresh_client();
+    assert_eq!(client.take_session_accumulator("never-existed"), "");
 }
