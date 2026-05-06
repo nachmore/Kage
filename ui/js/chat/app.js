@@ -1476,12 +1476,24 @@ export class ChatApp {
     handleMessageChunk(event) {
         if (!this.isWaitingForResponse || !this.currentStreamingMessage) return;
 
-        // Payload is `{ text: <delta> }` — the Rust side ships only the new
-        // fragment to avoid O(n²) IPC traffic on long responses. Append it to
-        // our local accumulator.
-        const delta = (event.payload && typeof event.payload === 'object')
-            ? (event.payload.text || '')
-            : String(event.payload || '');
+        // Belt-and-suspenders session filter. The backend already drops chunks
+        // whose sessionId doesn't match the ACP client's current session, but
+        // there's a brief window when the user switches sessions in this UI:
+        // we set `this.activeSessionId = B` and *then* await switch_acp_session.
+        // A chunk for A arriving in that window passes the backend's check
+        // (A is still current there) and would be appended to B's message
+        // here. Drop it instead — the chunk has already been accumulated on
+        // the backend so nothing is lost.
+        const payload = (event.payload && typeof event.payload === 'object') ? event.payload : null;
+        if (payload && payload.sessionId && this.activeSessionId
+            && payload.sessionId !== this.activeSessionId) {
+            return;
+        }
+
+        // Payload is `{ text: <delta>, sessionId }` — the Rust side ships only
+        // the new fragment to avoid O(n²) IPC traffic on long responses.
+        // Append it to our local accumulator.
+        const delta = payload ? (payload.text || '') : String(event.payload || '');
         if (delta) this.currentStreamingContent = (this.currentStreamingContent || '') + delta;
         this.hideTypingIndicator();
 
@@ -1707,6 +1719,17 @@ export class ChatApp {
         }
 
     handleToolCallUpdate(event) {
+            // Same race protection as handleMessageChunk: drop tool-call
+            // updates whose sessionId doesn't match the active session.
+            // tool_call_update emits the full ACP notification, so the
+            // session id lives at payload.params.sessionId rather than
+            // payload.sessionId.
+            const evtSessionId = event?.payload?.params?.sessionId;
+            if (evtSessionId && this.activeSessionId
+                && evtSessionId !== this.activeSessionId) {
+                return;
+            }
+
             const { updated, update } = processToolCallUpdate(event, this);
 
             // Flush any pending throttled markdown render so the user sees the
