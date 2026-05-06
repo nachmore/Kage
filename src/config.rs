@@ -818,20 +818,53 @@ impl Config {
         }
     }
     
+    /// Persist the config atomically: write to a sibling temp file in the
+    /// same directory, then rename over the destination. fs::rename is
+    /// atomic on POSIX and uses MoveFileExW with REPLACE_EXISTING on Windows
+    /// (effectively atomic for same-volume moves on NTFS), so a crash during
+    /// the write leaves either the old config intact or the new one fully
+    /// in place — never a half-written file. Tool permission policies,
+    /// hotkeys, and grants live in this file; truncating it via plain
+    /// fs::write meant a poorly-timed crash could lose all of them.
     pub fn save(&self) -> Result<()> {
         let config_path = Self::get_config_path()?;
-        
+        Self::save_to(self, &config_path)
+    }
+
+    /// Inner save — exposed so tests can drive the atomic-write logic
+    /// against a temp path without depending on the user's config dir.
+    pub fn save_to(&self, config_path: &std::path::Path) -> Result<()> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
                 .context("Failed to create config directory")?;
         }
-        
+
         let content = serde_json::to_string_pretty(self)
             .context("Failed to serialize config")?;
-        
-        fs::write(&config_path, content)
-            .context("Failed to write config file")?;
-        
+
+        // Sibling temp file so the rename is same-volume (cross-volume
+        // renames degrade to copy+delete, which loses atomicity). Include
+        // the PID so concurrent processes can't collide on the temp path.
+        let tmp_path = config_path.with_extension(format!("json.tmp.{}", std::process::id()));
+
+        // Write + flush, then close (drop) the file before renaming —
+        // Windows refuses to rename over an open handle.
+        {
+            use std::io::Write;
+            let mut f = fs::File::create(&tmp_path)
+                .with_context(|| format!("Failed to create temp config at {:?}", tmp_path))?;
+            f.write_all(content.as_bytes())
+                .context("Failed to write temp config")?;
+            f.sync_all()
+                .context("Failed to flush temp config to disk")?;
+        }
+
+        if let Err(e) = fs::rename(&tmp_path, config_path) {
+            // Best-effort cleanup so the temp file doesn't accumulate.
+            let _ = fs::remove_file(&tmp_path);
+            return Err(e).context("Failed to atomically replace config file");
+        }
+
         Ok(())
     }
     

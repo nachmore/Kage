@@ -520,17 +520,9 @@ pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppErro
     // so this never has to fall back to guessing the floating session id.
     let session_id = state.acp_client.get_session_id()
         .ok_or_else(|| AppError::internal("No active session to cancel"))?;
-    info!("Sending session/cancel for session {}", session_id);
 
-    let notification = serde_json::json!({
-        "jsonrpc": "2.0",
-        "method": "session/cancel",
-        "params": { "sessionId": session_id }
-    });
-    let json = serde_json::to_string(&notification)
-        .map_err(|e| AppError::new(ErrorKind::SerializeError, format!("{}", e)))?;
-
-    write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
+    state.acp_client.cancel_session(&session_id)
+        .map_err(|e| AppError::connection_lost(format!("Cancel failed: {}", e)))?;
 
     Ok(())
 }

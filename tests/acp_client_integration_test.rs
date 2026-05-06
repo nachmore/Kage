@@ -249,6 +249,27 @@ fn concurrent_requests_each_receive_their_own_response() {
 }
 
 #[test]
+fn cancel_session_writes_jsonrpc_notification_to_transport() {
+    // The client API hides JSON-RPC framing — callers shouldn't have to know
+    // method names or param shapes. Verify that cancel_session emits a
+    // well-formed session/cancel notification (no id, params.sessionId set).
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    client.cancel_session("session-abc").expect("cancel_session writes successfully");
+
+    let seen = server.wait_for_requests(1, Duration::from_secs(2));
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0]["method"], "session/cancel");
+    assert_eq!(seen[0]["params"]["sessionId"], "session-abc");
+    assert!(
+        seen[0].get("id").is_none() || seen[0]["id"].is_null(),
+        "session/cancel is a notification — must not carry an id"
+    );
+}
+
+#[test]
 fn unsolicited_response_is_dropped_not_delivered_to_next_request() {
     // Regression: an out-of-band response (id we never sent) used to land in
     // the shared mpsc channel and corrupt the next caller. Now it must be

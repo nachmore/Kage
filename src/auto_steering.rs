@@ -47,6 +47,13 @@ static MESSAGES_SINCE_GENERATION: AtomicU32 = AtomicU32::new(0);
 static LAST_GENERATION: std::sync::LazyLock<Mutex<Option<Instant>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 
+/// True if at least one user message has been sent since the last generation.
+/// Lets shutdown short-circuit the cancel-and-wait dance when there's nothing
+/// to summarize anyway.
+pub fn has_pending_messages() -> bool {
+    MESSAGES_SINCE_GENERATION.load(Ordering::Relaxed) > 0
+}
+
 /// Increment the message counter and return true if it's time to update.
 /// Requires both the message count threshold AND the cooldown to have elapsed.
 pub fn tick_message_counter() -> bool {

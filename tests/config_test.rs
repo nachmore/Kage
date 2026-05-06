@@ -161,3 +161,53 @@ fn test_config_migration_future_version_rejected() {
     let err = kage::config_migrations::migrate(payload).unwrap_err();
     assert!(format!("{}", err).contains("newer"));
 }
+
+#[test]
+fn save_to_atomic_writes_full_payload_and_leaves_no_temp_file() {
+    // Regression: pre-fix Config::save did a plain fs::write that truncated
+    // the file before writing — a crash in the middle would zero the user's
+    // config (losing every tool permission policy, hotkey, grant, etc.).
+    // Now save_to writes to a sibling temp file and atomically renames.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("config.json");
+
+    let mut config = Config::default();
+    config.hotkey.key = "F12".to_string();
+
+    config.save_to(&path).expect("save_to succeeds on a writable dir");
+
+    // The file is present and parses back to an equivalent config.
+    let raw = std::fs::read_to_string(&path).expect("config file exists");
+    let loaded: Config = serde_json::from_str(&raw).expect("valid json");
+    assert_eq!(loaded.hotkey.key, "F12");
+
+    // The temp sibling that the atomic write went through must not be
+    // left behind on the success path. (It would accumulate over time
+    // and a stale .tmp could survive a crash.)
+    let temp_glob = format!("config.json.tmp.{}", std::process::id());
+    assert!(
+        !dir.path().join(&temp_glob).exists(),
+        "temp file {:?} should have been renamed away on success",
+        temp_glob
+    );
+}
+
+#[test]
+fn save_to_overwriting_existing_file_replaces_atomically() {
+    // Repeated saves must replace the file cleanly — no append, no
+    // partial overlay, no leftover temp.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("config.json");
+
+    let mut a = Config::default();
+    a.hotkey.key = "First".to_string();
+    a.save_to(&path).expect("first save");
+
+    let mut b = Config::default();
+    b.hotkey.key = "Second".to_string();
+    b.save_to(&path).expect("second save replaces atomically");
+
+    let raw = std::fs::read_to_string(&path).expect("config file exists");
+    let loaded: Config = serde_json::from_str(&raw).expect("valid json");
+    assert_eq!(loaded.hotkey.key, "Second", "second save must fully replace first");
+}

@@ -87,6 +87,33 @@ impl AcpClient {
         self.transport.send_request(method, params)
     }
 
+    /// Send a JSON-RPC notification (no id, fire-and-forget). Used for
+    /// protocol messages that don't expect a response, like session/cancel.
+    /// The transport handles serialization and write framing; callers
+    /// supply the method name and params.
+    pub fn send_notification(&self, method: &str, params: serde_json::Value) -> Result<()> {
+        let notif = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        });
+        let line = serde_json::to_string(&notif)?;
+        self.transport.write_line(&line)
+    }
+
+    /// Cancel any in-flight prompt for the given session. The agent
+    /// (kage-cli) treats session/prompt as exclusive per session, so
+    /// shutdown paths and the user-facing Cancel button must clear that
+    /// lock before issuing a new prompt or letting the connection drop.
+    /// No-op if there's no current session.
+    pub fn cancel_session(&self, session_id: &str) -> Result<()> {
+        info!("Sending session/cancel for session {}", session_id);
+        self.send_notification(
+            "session/cancel",
+            serde_json::json!({ "sessionId": session_id }),
+        )
+    }
+
     // --- Session state ---
 
     pub fn get_session_id(&self) -> Option<String> {

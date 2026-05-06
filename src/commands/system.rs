@@ -52,11 +52,43 @@ async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::p
     if let Some(state) = app.try_state::<AppState>() {
         let acp_client = state.acp_client.clone();
         let config = state.config.clone();
-        // The acp_client outer mutex is gone; this used to try_lock to avoid
-        // hanging on shutdown if a long prompt held it. We can just call.
-        if let Ok(config) = config.try_lock() {
-            crate::auto_steering::generate_steering_on_quit(&acp_client, &config);
+
+        // Snapshot whether auto-steering will actually run before we pay any
+        // cancel-and-wait cost. If there's nothing to steer, quit can skip
+        // straight to disconnect.
+        let will_run_steering = if let Ok(cfg) = config.try_lock() {
+            cfg.acp.agent.auto_steering_enabled
+                && acp_client.is_connected()
+                && crate::auto_steering::has_pending_messages()
+        } else {
+            false
+        };
+
+        if will_run_steering {
+            // Cancel any in-flight prompt before issuing a new one. The agent
+            // (kage-cli) holds an internal "prompt in progress" lock that
+            // rejects any subsequent session/prompt — including the one
+            // auto_steering is about to send — until the active prompt
+            // finishes or is cancelled. Without this, on-quit steering races
+            // with the user's last prompt and the agent replies with
+            // "Prompt already in progress" instead of generating the doc.
+            if let Some(session_id) = acp_client.get_session_id() {
+                if let Err(e) = acp_client.cancel_session(&session_id) {
+                    warn!("Failed to send session/cancel on quit: {}", e);
+                } else {
+                    // Brief pause so the agent can release its prompt
+                    // lock before auto_steering issues a new prompt.
+                    // 150ms is plenty for a local stdio agent; kept
+                    // small so quit still feels instant.
+                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                }
+            }
+
+            if let Ok(config) = config.try_lock() {
+                crate::auto_steering::generate_steering_on_quit(&acp_client, &config);
+            }
         }
+
         acp_client.disconnect();
     }
 
@@ -169,28 +201,33 @@ pub async fn save_config(
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Saving configuration");
-    config.save().map_err(|e| {
-        error!("Failed to save config: {}", e);
-        format!("Failed to save configuration: {}", e)
-    })?;
 
-    // Capture the prior terminator-mode state BEFORE the swap so we
-    // can audit the transition. Done while we hold the lock to avoid
-    // racing with another save.
+    // Swap the in-memory state and persist under the same lock. Pre-fix the
+    // sequence was disk-write → lock → swap, which raced with concurrent
+    // saves (e.g. handle_permission_notification updating last_seen): the
+    // disk write could capture a stale view, get clobbered by an in-flight
+    // permission save, then the in-memory swap would proceed against an
+    // even staler picture. Lock-mutate-save-drop is the only correct order.
+    let new_terminator = config.tool_permissions.terminator_mode;
+    let new_log_buffer_size = config.system.log_buffer_size;
     let prior_terminator = {
         let mut state_config = state.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
-        *state_config = config.clone();
+        *state_config = config;
+        state_config.save().map_err(|e| {
+            error!("Failed to save config: {}", e);
+            format!("Failed to save configuration: {}", e)
+        })?;
         prior
     };
 
     // Update app log buffer size if changed
-    crate::app_log::set_max_size(config.system.log_buffer_size);
+    crate::app_log::set_max_size(new_log_buffer_size);
 
-    if prior_terminator != config.tool_permissions.terminator_mode {
+    if prior_terminator != new_terminator {
         crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
             crate::permission_audit::AuditEvent::TerminatorModeChanged {
-                enabled: config.tool_permissions.terminator_mode,
+                enabled: new_terminator,
             },
         ));
     }
