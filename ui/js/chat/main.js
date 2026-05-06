@@ -8,6 +8,7 @@ import { createMascotController, createMascot, getMascotThemeSettings, setTermin
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
+import { getConfig } from '../shared/config-cache.js';
 
 let app = null;
 
@@ -17,7 +18,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // Safe to default to quiet on any read failure.
     let verboseLogs = false;
     try {
-        const cfg = await invoke('get_config');
+        const cfg = await getConfig(invoke);
         verboseLogs = !!cfg?.system?.verbose_frontend_logging;
     } catch {}
     interceptConsole('chat', { verbose: verboseLogs });
@@ -82,7 +83,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         // Pick up changes to the verbose-logging toggle live so the user
         // doesn't have to restart anything.
         try {
-            const cfg = await invoke('get_config');
+            const cfg = await getConfig(invoke);
             setVerboseConsoleCapture(!!cfg?.system?.verbose_frontend_logging);
         } catch {}
 

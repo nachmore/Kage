@@ -18,6 +18,7 @@ import { executeResult as executeResultShared, executeShortcutCommand, handleEnt
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml, getToolFriendlyName, getExtensionToolFriendlyName } from '../shared/tool-utils.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
+import { getConfig } from '../shared/config-cache.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -437,7 +438,7 @@ export class FloatingApp {
                     // Show quick action chips based on text content
                     if (quickActionsContainer) {
                         try {
-                            const config = await this.invoke('get_config');
+                            const config = await getConfig(this.invoke);
                             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
                             const actions = await getActionsForText(this.lastSelection, qaConfig);
                             renderQuickActionChips(actions, quickActionsContainer, (promptTemplate) => {
@@ -600,7 +601,7 @@ export class FloatingApp {
                     setTimeout(() => this.elements.input.focus(), 50);
                 } else {
                     try {
-                        const config = await this.invoke('get_config');
+                        const config = await getConfig(this.invoke);
                         if (config.ui?.preserve_last_response === false) {
                             setTimeout(() => this.resetUI(), 50);
                         } else {
@@ -791,7 +792,7 @@ export class FloatingApp {
 
     async _updateToolbarVisibility() {
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             const show = config.ui?.show_floating_toolbar === true;
             if (this.elements.floatingToolbar) {
                 this.elements.floatingToolbar.style.display = show ? 'flex' : 'none';
@@ -959,7 +960,7 @@ export class FloatingApp {
 
     async loadShortcuts() {
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             this.shortcuts = config.shortcuts || [];
             console.log('Loaded shortcuts:', this.shortcuts);
         } catch (error) {
@@ -993,7 +994,7 @@ export class FloatingApp {
 
         let config = {};
         try {
-            const fullConfig = await this.invoke('get_config');
+            const fullConfig = await getConfig(this.invoke);
             config = (fullConfig.extensions && fullConfig.extensions['timer']) || {};
         } catch {}
 
@@ -1776,7 +1777,7 @@ export class FloatingApp {
 
                 // Prepend screen context (source window info) if available
                 try {
-                    const config = await this.invoke('get_config');
+                    const config = await getConfig(this.invoke);
                     if (config?.system?.screen_context) {
                         const sw = await this.invoke('get_source_window');
                         if (sw) {
@@ -2334,7 +2335,7 @@ export class FloatingApp {
         console.log('[QA] _showResponseActions called, text length:', responseText?.length);
         if (!responseText?.trim()) return;
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             if (!config.ui?.show_response_actions) return;
             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
             const actions = await getActionsForText(responseText, qaConfig);

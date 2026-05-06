@@ -1,3 +1,5 @@
+import { getConfig } from './config-cache.js';
+
 /**
  * Send a system notification using Tauri's notification plugin.
  * Checks permission and the show_notifications config setting.
@@ -8,7 +10,7 @@
  */
 export async function sendAppNotification(invoke, title, body, source) {
     try {
-        const config = await invoke('get_config');
+        const config = await getConfig(invoke);
         if (config.system?.show_notifications === false) return;
 
         const notif = window.__TAURI__?.notification;

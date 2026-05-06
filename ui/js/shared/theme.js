@@ -3,6 +3,8 @@
 // OS dark mode is detected via the Rust backend (get_os_dark_mode) since
 // WebView2's prefers-color-scheme media query is unreliable on Windows.
 
+import { getConfig } from './config-cache.js';
+
 let currentThemeSetting = 'system';
 let cachedOsDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches; // fallback until backend responds
 const BUILTIN_THEMES = ['system', 'dark', 'light'];
@@ -98,7 +100,7 @@ async function applyThemeExtensionColors(invoke, themeId) {
 export async function loadAndApplyTheme(invoke) {
     _lastInvoke = invoke;
     try {
-        const config = await invoke('get_config');
+        const config = await getConfig(invoke);
         const theme = config.ui?.theme || 'system';
         console.log(`[theme] loadAndApplyTheme: config theme=${theme}`);
 

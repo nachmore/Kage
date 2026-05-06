@@ -15,6 +15,7 @@ import { executeResult as executeResultShared, executeShortcutCommand, handleEnt
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
+import { getConfig } from '../shared/config-cache.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
@@ -486,7 +487,7 @@ export class ChatApp {
 
     async loadActionButtonConfig() {
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             this._showSpeakBtn = config.ui?.show_speech_button === true || config.pocket_tts?.enabled === true;
             this._showTranslateBtn = !!(config.quick_actions?.translate_language);
             this._translateLang = config.quick_actions?.translate_language || 'English';
@@ -507,7 +508,7 @@ export class ChatApp {
         const responseText = lastMsg?.content || '';
 
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             if (!config.ui?.show_response_actions) return;
             const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
             const actions = await getActionsForText(responseText || 'general text', qaConfig);
@@ -1456,7 +1457,7 @@ export class ChatApp {
                 const text = contentDiv.textContent || '';
                 if (!text.trim()) return;
                 try {
-                    const config = await this.invoke('get_config');
+                    const config = await getConfig(this.invoke);
                     const lang = config.quick_actions?.translate_language || 'English';
                     this.elements.chatInput.value = `Translate the following to ${lang}:\n\n${text.substring(0, 500)}`;
                     this.elements.chatInput.focus();
@@ -2317,7 +2318,7 @@ export class ChatApp {
 
     async loadShortcuts() {
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             this.shortcuts = config.shortcuts || [];
         } catch {
             this.shortcuts = [];
@@ -2633,7 +2634,7 @@ export class ChatApp {
     async maybeAutoCompact(percent) {
         if (this._isCompacting) return;
         try {
-            const config = await this.invoke('get_config');
+            const config = await getConfig(this.invoke);
             const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;
             if (threshold === 0 || percent < threshold) return;
         } catch { return; }
