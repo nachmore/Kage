@@ -2,10 +2,10 @@
 import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
 import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
-import { escapeHtml, stripKageTags, getToolFriendlyName } from '../shared/tool-utils.js';
+import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { mascotHTML } from '../shared/mascot.js';
-import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, getSessionResetMessage, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { isOnline, checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
+import { renderToolChipsHtml, renderSourceChipsHtml, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -18,6 +18,7 @@ import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
+import { MessageStreamController } from '../shared/message-stream-controller.js';
 
 /** Prefix used to identify steering messages that should be hidden in the UI */
 const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
@@ -135,6 +136,169 @@ export class ChatApp {
                 app.isWaitingForResponse = false;
                 app.updateInputState();
             },
+        });
+
+        this.messageStreamController = new MessageStreamController({
+            isWaiting: () => app.isWaitingForResponse && !!app.currentStreamingMessage,
+            // Belt-and-suspenders session filter: see comment in chunk handler
+            // for why this is needed in addition to the backend filter.
+            acceptSessionId: (sid) => !sid || !app.activeSessionId || sid === app.activeSessionId,
+            getAccumulator: () => app.currentStreamingContent,
+            appendToAccumulator: (delta) => { app.currentStreamingContent = (app.currentStreamingContent || '') + delta; },
+            resetAccumulator: () => { app.currentStreamingContent = ''; },
+            automationPlanController: this.automationPlanController,
+            extensionToolController: this.extensionToolController,
+            onChunkAppended: () => {
+                // Stash per-message DOM target the controllers need; chat
+                // re-resolves it every chunk because the streaming message
+                // element is held on `currentStreamingMessage`.
+                const cd = app.currentStreamingMessage?.querySelector('.message-content') || null;
+                app._automationContentDiv = cd;
+                app._extensionToolContentDiv = cd;
+                app.hideTypingIndicator();
+            },
+            bumpLayout: () => app.scrollToBottom(),
+            renderStreaming: (text) => {
+                const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                renderMarkdown(text, contentDiv, true);
+                const toolSpinner = contentDiv.querySelector('.tool-running-indicator');
+                if (toolSpinner) toolSpinner.remove();
+                let indicator = contentDiv.querySelector('.streaming-indicator');
+                if (!indicator) {
+                    indicator = document.createElement('span');
+                    indicator.className = 'streaming-indicator';
+                    indicator.textContent = '...';
+                    contentDiv.appendChild(indicator);
+                }
+                app.scrollToBottom();
+            },
+            feedTTS: (text) => { if (app.speech) app.speech.feedStreamingText(text); },
+            onCompleteHeader: () => {
+                markOnline();
+                app.isConnected = true;
+                app.updateConnectionStatus();
+            },
+            // Chat doesn't drop empty completes — it still needs to clean up
+            // the streaming message element. Always proceed.
+            dropEmptyComplete: () => false,
+            onBeforeFinalRender: () => {
+                app.hideTypingIndicator();
+                if (app.currentStreamingMessage) {
+                    const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                    const indicator = contentDiv?.querySelector('.streaming-indicator');
+                    if (indicator) indicator.remove();
+                    // Stash the contentDiv so the automation-plan fallback
+                    // controller knows where to render if it fires next.
+                    app._automationContentDiv = contentDiv;
+                }
+            },
+            renderFinal: (text) => {
+                if (!app.currentStreamingMessage) return;
+                const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                renderMarkdown(text, contentDiv);
+                if (app.toolSources.length > 0 || app.toolUsages.length > 0) {
+                    app.renderSourcesInMessage(contentDiv);
+                }
+                app.messages.push({ role: 'assistant', content: text });
+                app.currentStreamingMessage = null;
+            },
+            onAfterFinalRender: async (_text) => {
+                const finalContent = app.messages[app.messages.length - 1]?.content || '';
+                app.currentStreamingContent = '';
+                app.isWaitingForResponse = false;
+                app.updateInputState();
+                app.elements.chatInput.focus();
+                app.scrollToBottom();
+
+                if (app.speech && finalContent) {
+                    app.speech.finishStreamingText(finalContent);
+                    app.speech.speakResponse(finalContent);
+                }
+
+                app.loadSessions();
+                app.loadFloatingSessionId();
+
+                // Set timestamp on the message actions bar
+                if (app.elements.messagesArea.lastElementChild) {
+                    const msgEl = app.elements.messagesArea.querySelector('.message.agent:last-of-type');
+                    const ts = msgEl?.querySelector('.msg-timestamp');
+                    if (ts) {
+                        let label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        if (app._streamStartTime) {
+                            const durSecs = (Date.now() - app._streamStartTime) / 1000;
+                            label += ` (${app._formatDuration(durSecs)})`;
+                        }
+                        ts.textContent = label;
+                    }
+                }
+
+                app.showSuggestionChips();
+
+                try {
+                    if (app.isWaitingForResponse && !app._windowFocused) {
+                        const preview = finalContent.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
+                        await sendAppNotification(app.invoke, 'Kage', preview || 'Response ready', 'main');
+                    }
+                } catch { /* ignore */ }
+            },
+            onError: async (event, online) => {
+                app.hideTypingIndicator();
+                if (app.currentStreamingMessage) {
+                    app.currentStreamingMessage.remove();
+                    app.currentStreamingMessage = null;
+                }
+                app.isWaitingForResponse = false;
+                app.updateInputState();
+                app.elements.chatInput.focus();
+                if (!online) app.showError(OFFLINE_MESSAGE);
+                else app.showError('Error: ' + event.payload);
+                app.isConnected = online;
+                app.updateConnectionStatus();
+            },
+            onSessionReset: (event, msg) => {
+                app.hideTypingIndicator();
+                if (app.currentStreamingMessage) {
+                    app.currentStreamingMessage.remove();
+                    app.currentStreamingMessage = null;
+                }
+                const data = event.payload;
+                if (data?.reason === 'image_unsupported' && data.reconnected) {
+                    app.isConnected = true;
+                    app.updateConnectionStatus();
+                    app.showSessionResetMessage(msg);
+                } else {
+                    if (data?.reason === 'image_unsupported') {
+                        app.isConnected = false;
+                        app.updateConnectionStatus();
+                    }
+                    app.showError(msg);
+                }
+                app.isWaitingForResponse = false;
+                app.updateInputState();
+                app.elements.chatInput.focus();
+                app.loadSessions();
+            },
+            flushPendingMarkdown: () => {
+                if (app.currentStreamingMessage && app.currentStreamingContent) {
+                    const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                    if (contentDiv) renderMarkdown(app.currentStreamingContent, contentDiv);
+                }
+            },
+            showToolRunningSpinner: (friendly) => {
+                if (!app.currentStreamingMessage) return;
+                const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                if (!contentDiv) return;
+                let spinner = contentDiv.querySelector('.tool-running-indicator');
+                if (!spinner) {
+                    spinner = document.createElement('div');
+                    spinner.className = 'folder-plan-spinner-row tool-running-indicator';
+                    contentDiv.appendChild(spinner);
+                }
+                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
+            },
+            // Chat doesn't render sources inline during streaming — they're
+            // rendered once when the message completes.
+            onToolCallTracked: () => {},
         });
 
         this.elements = {};
@@ -1552,246 +1716,15 @@ export class ChatApp {
 
     // --- Streaming Handlers ---
 
-    handleMessageChunk(event) {
-        if (!this.isWaitingForResponse || !this.currentStreamingMessage) return;
+    handleMessageChunk(event) { return this.messageStreamController.handleChunk(event); }
 
-        // Belt-and-suspenders session filter. The backend already drops chunks
-        // whose sessionId doesn't match the ACP client's current session, but
-        // there's a brief window when the user switches sessions in this UI:
-        // we set `this.activeSessionId = B` and *then* await switch_acp_session.
-        // A chunk for A arriving in that window passes the backend's check
-        // (A is still current there) and would be appended to B's message
-        // here. Drop it instead — the chunk has already been accumulated on
-        // the backend so nothing is lost.
-        const payload = (event.payload && typeof event.payload === 'object') ? event.payload : null;
-        if (payload && payload.sessionId && this.activeSessionId
-            && payload.sessionId !== this.activeSessionId) {
-            return;
-        }
+    async handleMessageComplete() { return this.messageStreamController.handleComplete(); }
 
-        // Payload is `{ text: <delta>, sessionId }` — the Rust side ships only
-        // the new fragment to avoid O(n²) IPC traffic on long responses.
-        // Append it to our local accumulator.
-        const delta = payload ? (payload.text || '') : String(event.payload || '');
-        if (delta) this.currentStreamingContent = (this.currentStreamingContent || '') + delta;
-        this.hideTypingIndicator();
+    async handleMessageError(event) { return this.messageStreamController.handleError(event); }
 
-        // Detect complete or partial automation plan during streaming.
-        // Stash the per-message contentDiv before delegating — the controller
-        // will render through `renderTasks`/`appendReviewActions` host adapters.
-        this._automationContentDiv = this.currentStreamingMessage.querySelector('.message-content');
-        if (this.automationPlanController.tryHandleChunk(this.currentStreamingContent).handled) {
-            return;
-        }
+    handleSessionReset(event) { return this.messageStreamController.handleSessionReset(event); }
 
-        // Detect extension tool calls in streaming text. The controller renders
-        // through _renderExtensionToolIndicator (host adapter) which needs the
-        // current message's content div — stash it before invoking.
-        this._extensionToolContentDiv = this.currentStreamingMessage.querySelector('.message-content');
-        if (this.extensionToolController.maybeHandleChunk(this.currentStreamingContent).handled) {
-            this.scrollToBottom();
-            return;
-        }
-
-        // If extension tool is executing, don't overwrite the indicator
-        if (this.extensionToolController.shouldSkipChunkRender()) return;
-
-        const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-        renderMarkdown(this.currentStreamingContent, contentDiv, true);
-
-        // Remove tool-running spinner now that text is flowing
-        const toolSpinner = contentDiv.querySelector('.tool-running-indicator');
-        if (toolSpinner) toolSpinner.remove();
-
-        // Feed streaming text to TTS for sentence-chunked playback
-        if (this.speech) this.speech.feedStreamingText(this.currentStreamingContent);
-
-        let indicator = contentDiv.querySelector('.streaming-indicator');
-        if (!indicator) {
-            indicator = document.createElement('span');
-            indicator.className = 'streaming-indicator';
-            indicator.textContent = '...';
-            contentDiv.appendChild(indicator);
-        }
-
-        this.scrollToBottom();
-    }
-
-    async handleMessageComplete() {
-            if (!this.isWaitingForResponse) return;
-
-            // Successful response means we're online
-            markOnline();
-            this.isConnected = true;
-            this.updateConnectionStatus();
-
-            // If automation plan is running, don't overwrite the plan UI
-            if (this._automationPlanStarted) return;
-
-            // Extension tool fence: mid-execution, mid-stream, or fallback-detected here.
-            this._extensionToolContentDiv = this.currentStreamingMessage?.querySelector('.message-content') || null;
-            if (this.extensionToolController.maybeHandleComplete(this.currentStreamingContent).handled) {
-                return;
-            }
-
-            this.hideTypingIndicator();
-
-            if (this.currentStreamingMessage) {
-                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                const indicator = contentDiv.querySelector('.streaming-indicator');
-                if (indicator) indicator.remove();
-
-                // Check for automation plan in the response (fallback if not caught during streaming)
-                this._automationContentDiv = contentDiv;
-                if (this.automationPlanController.tryHandleCompleteFallback(this.currentStreamingContent).handled) {
-                    return;
-                }
-
-                renderMarkdown(this.currentStreamingContent, contentDiv);
-
-                if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
-                    this.renderSourcesInMessage(contentDiv);
-                }
-
-                this.messages.push({ role: 'assistant', content: this.currentStreamingContent });
-                this.currentStreamingMessage = null;
-            }
-
-            const finalContent = this.messages[this.messages.length - 1]?.content || '';
-            this.currentStreamingContent = '';
-            this.isWaitingForResponse = false;
-            this.updateInputState();
-            this.elements.chatInput.focus();
-            this.scrollToBottom();
-
-            // Read back response if speech was used
-            if (this.speech && finalContent) {
-                this.speech.finishStreamingText(finalContent);
-                this.speech.speakResponse(finalContent);
-            }
-
-            this.loadSessions();
-            this.loadFloatingSessionId();
-
-            // Set timestamp on the message actions bar
-            if (this.elements.messagesArea.lastElementChild) {
-                const msgEl = this.elements.messagesArea.querySelector('.message.agent:last-of-type');
-                const ts = msgEl?.querySelector('.msg-timestamp');
-                if (ts) {
-                    let label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    if (this._streamStartTime) {
-                        const durSecs = (Date.now() - this._streamStartTime) / 1000;
-                        label += ` (${this._formatDuration(durSecs)})`;
-                    }
-                    ts.textContent = label;
-                }
-            }
-
-            // Show suggestion chips
-            this.showSuggestionChips();
-
-            // Notify if window is not focused (user isn't looking at it).
-            // Only notify if this window initiated the message (isWaitingForResponse).
-            try {
-                if (this.isWaitingForResponse && !this._windowFocused) {
-                    const preview = (this.messages[this.messages.length - 1]?.content || '').substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                    await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'main');
-                }
-            } catch { /* ignore */ }
-        }
-
-    async handleMessageError(event) {
-        this.hideTypingIndicator();
-
-        if (this.currentStreamingMessage) {
-            this.currentStreamingMessage.remove();
-            this.currentStreamingMessage = null;
-        }
-
-        this.isWaitingForResponse = false;
-        this.updateInputState();
-        this.elements.chatInput.focus();
-
-        // Check if this is actually a network issue
-        const online = await checkOnError();
-        if (!online) {
-            this.showError(OFFLINE_MESSAGE);
-        } else {
-            this.showError('Error: ' + event.payload);
-        }
-        this.isConnected = online;
-        this.updateConnectionStatus();
-    }
-
-    handleSessionReset(event) {
-            this.hideTypingIndicator();
-
-            if (this.currentStreamingMessage) {
-                this.currentStreamingMessage.remove();
-                this.currentStreamingMessage = null;
-            }
-
-            const data = event.payload;
-            const msg = getSessionResetMessage(data);
-            if (data?.reason === 'image_unsupported' && data.reconnected) {
-                this.isConnected = true;
-                this.updateConnectionStatus();
-                this.showSessionResetMessage(msg);
-            } else {
-                if (data?.reason === 'image_unsupported') {
-                    this.isConnected = false;
-                    this.updateConnectionStatus();
-                }
-                this.showError(msg);
-            }
-
-            this.isWaitingForResponse = false;
-            this.updateInputState();
-            this.elements.chatInput.focus();
-            this.loadSessions();
-        }
-
-    handleToolCallUpdate(event) {
-            // Same race protection as handleMessageChunk: drop tool-call
-            // updates whose sessionId doesn't match the active session.
-            // tool_call_update emits the full ACP notification, so the
-            // session id lives at payload.params.sessionId rather than
-            // payload.sessionId.
-            const evtSessionId = event?.payload?.params?.sessionId;
-            if (evtSessionId && this.activeSessionId
-                && evtSessionId !== this.activeSessionId) {
-                return;
-            }
-
-            const { updated, update } = processToolCallUpdate(event, this);
-
-            // Flush any pending throttled markdown render so the user sees the
-            // full streamed text before a permission dialog appears
-            if (this.currentStreamingMessage && this.currentStreamingContent) {
-                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                if (contentDiv) {
-                    renderMarkdown(this.currentStreamingContent, contentDiv);
-                }
-            }
-
-            // Show a spinner while a tool is executing
-            if (update?.title && this.currentStreamingMessage) {
-                const contentDiv = this.currentStreamingMessage.querySelector('.message-content');
-                if (contentDiv) {
-                    const friendly = getToolFriendlyName(update.title);
-                    let spinner = contentDiv.querySelector('.tool-running-indicator');
-                    if (!spinner) {
-                        spinner = document.createElement('div');
-                        spinner.className = 'folder-plan-spinner-row tool-running-indicator';
-                        contentDiv.appendChild(spinner);
-                    }
-                    spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
-                }
-            }
-
-            // Chat app doesn't render sources inline during streaming —
-            // they're rendered when the message completes in renderSourcesInMessage()
-        }
+    handleToolCallUpdate(event) { return this.messageStreamController.handleToolCallUpdate(event); }
 
 
 

@@ -4,7 +4,7 @@ import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -16,11 +16,12 @@ import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcut
 import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
-import { escapeHtml, getToolFriendlyName } from '../shared/tool-utils.js';
-import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
+import { escapeHtml } from '../shared/tool-utils.js';
+import { isOnline, checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
+import { MessageStreamController } from '../shared/message-stream-controller.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -119,6 +120,156 @@ export class FloatingApp {
             onPlanFailed: (e) => {
                 this.showError('Automation failed: ' + e);
                 this.isWaitingForResponse = false;
+            },
+        });
+        this.messageStreamController = new MessageStreamController({
+            isWaiting: () => this.isWaitingForResponse,
+            acceptSessionId: () => true, // floating doesn't filter by session
+            getAccumulator: () => this.currentResponse,
+            appendToAccumulator: (delta) => { this.currentResponse = (this.currentResponse || '') + delta; },
+            resetAccumulator: () => { this.currentResponse = ''; },
+            automationPlanController: this.automationPlanController,
+            extensionToolController: this.extensionToolController,
+            onChunkAppended: (text) => {
+                if (text && text.trim().length > 0) {
+                    this.elements.loadingDots.classList.remove('visible');
+                    this.elements.mascotContainer.classList.remove('thinking');
+                    this.elements.contentArea.classList.add('visible');
+                    this.elements.expandBtn.classList.add('visible');
+                    // Transition compact sources to full (bottom) layout
+                    const compactEl = document.getElementById('toolSourcesCompact');
+                    if (compactEl) {
+                        compactEl.remove();
+                        if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
+                            this.renderSources();
+                        }
+                    }
+                }
+            },
+            bumpLayout: () => this.windowManager.resizeWindow(),
+            renderStreaming: (text) => {
+                renderMarkdown(text, this.elements.responseText, true);
+                const toolSpinner = this.elements.responseText.querySelector('.tool-running-indicator');
+                if (toolSpinner) toolSpinner.remove();
+                if (this.elements.responseText.lastChild) {
+                    let streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
+                    if (!streamingIndicator) {
+                        streamingIndicator = document.createElement('span');
+                        streamingIndicator.className = 'streaming-indicator';
+                        streamingIndicator.textContent = '...';
+                        this.elements.responseText.appendChild(streamingIndicator);
+                    }
+                }
+                this.windowManager.resizeWindow();
+            },
+            feedTTS: (text) => { if (this.speech) this.speech.feedStreamingText(text); },
+            onCompleteHeader: () => {
+                markOnline();
+                this._noBlurTools.clear();
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+            },
+            dropEmptyComplete: () => {
+                return !this.currentResponse || this.currentResponse.trim().length === 0;
+            },
+            onBeforeFinalRender: () => {
+                this.stopThinking();
+                this.computerControlActive = false;
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
+                if (streamingIndicator) streamingIndicator.remove();
+            },
+            // The floating window historically waited 50ms after message_complete
+            // to let trailing chunks flush before the final render — without this,
+            // the last few tokens were sometimes missing from the markdown.
+            waitForPendingChunks: () => new Promise(r => setTimeout(r, 50)),
+            renderFinal: (text) => {
+                renderMarkdown(text, this.elements.responseText);
+            },
+            onAfterFinalRender: async (text) => {
+                await this.windowManager.resizeWindow();
+                this.isWaitingForResponse = false;
+                this._showFloatingResponseActions();
+
+                const suggested = extractSuggestedActions(text);
+                if (suggested && suggested.actions.length > 0) {
+                    renderMarkdown(suggested.cleanText, this.elements.responseText);
+                    this._renderSuggestedActions(suggested.actions);
+                }
+                if (!suggested || suggested.actions.length === 0) {
+                    this._showResponseActions(text);
+                }
+
+                if (this.speech) {
+                    this.speech.finishStreamingText(text);
+                    this.speech.speakResponse(text);
+                }
+
+                this._refreshContextUsage();
+
+                try {
+                    if (!this._windowFocused && text) {
+                        const preview = text.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
+                        await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'floating');
+                    }
+                } catch { /* ignore */ }
+            },
+            onError: async (event, online) => {
+                if (!this.isWaitingForResponse) return;
+                this.isWaitingForResponse = false;
+                this.computerControlActive = false;
+                this._noBlurTools.clear();
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                if (!online) this.showError(OFFLINE_MESSAGE);
+                else this.showError('Error: ' + event.payload);
+            },
+            onSessionReset: (event, msg) => {
+                this.isWaitingForResponse = false;
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                this.showError(msg);
+            },
+            flushPendingMarkdown: () => {
+                if (this.currentResponse && this.currentResponse.trim().length > 0) {
+                    renderMarkdown(this.currentResponse, this.elements.responseText);
+                }
+            },
+            showToolRunningSpinner: (friendly) => {
+                let spinner = this.elements.responseText.querySelector('.tool-running-indicator');
+                if (!spinner) {
+                    spinner = document.createElement('div');
+                    spinner.className = 'folder-plan-spinner-row tool-running-indicator';
+                    this.elements.responseText.appendChild(spinner);
+                }
+                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
+                this.elements.contentArea.classList.add('visible');
+                this.windowManager.resizeWindow();
+            },
+            onToolCallTracked: (update, updated) => {
+                // Detect computer-control tool usage and keep window visible
+                if (update?.title) {
+                    const ccTools = ['screenshot', 'click', 'double_click', 'right_click',
+                        'move_mouse', 'drag', 'scroll', 'type_text', 'key_press',
+                        'key_press_confirmed', 'launch_app', 'wait', 'get_screen_size',
+                        'get_cursor_position'];
+                    if (ccTools.includes(update.title)) {
+                        this.computerControlActive = true;
+                    }
+                    // Tools that steal focus (show dialogs) — prevent blur-hide while running
+                    const noBlurToolNames = ['pick_folder'];
+                    if (noBlurToolNames.includes(update.title)) {
+                        this._noBlurTools.add(update.toolCallId);
+                    }
+                }
+                if (updated && (this.toolSources.length > 0 || this.toolUsages.length > 0)) {
+                    if (!this.currentResponse || this.currentResponse.trim().length === 0) {
+                        this.renderSourcesCompact();
+                    } else {
+                        this.renderSources();
+                    }
+                }
             },
         });
         this.lastSelection = null;
@@ -1878,152 +2029,9 @@ export class FloatingApp {
         }
     }
 
-    handleMessageChunk(event) {
-        if (!this.isWaitingForResponse) return;
+    handleMessageChunk(event) { return this.messageStreamController.handleChunk(event); }
 
-        // Payload is `{ text: <delta> }` — the Rust side ships only the new
-        // fragment to avoid O(n²) IPC traffic on long responses. Append it to
-        // our local accumulator.
-        const delta = (event.payload && typeof event.payload === 'object')
-            ? (event.payload.text || '')
-            : String(event.payload || '');
-        if (delta) this.currentResponse = (this.currentResponse || '') + delta;
-        
-        if (this.currentResponse && this.currentResponse.trim().length > 0) {
-            this.elements.loadingDots.classList.remove('visible');
-            this.elements.mascotContainer.classList.remove('thinking');
-            // Ensure content area is visible (safety net if something else hid it)
-            this.elements.contentArea.classList.add('visible');
-            this.elements.expandBtn.classList.add('visible');
-            
-            // Transition compact sources to full (bottom) layout
-            const compactEl = document.getElementById('toolSourcesCompact');
-            if (compactEl) {
-                compactEl.remove();
-                if (this.toolSources.length > 0 || this.toolUsages.length > 0) {
-                    this.renderSources();
-                }
-            }
-        }
-
-        // Detect complete or partial automation plan during streaming.
-        if (this.automationPlanController.tryHandleChunk(this.currentResponse).handled) {
-            return;
-        }
-
-        // Detect extension tool calls in streaming text
-        if (this.extensionToolController.maybeHandleChunk(this.currentResponse).handled) {
-            this.windowManager.resizeWindow();
-            return;
-        }
-
-        // If extension tool is executing, don't overwrite the indicator
-        if (this.extensionToolController.shouldSkipChunkRender()) return;
-        
-        renderMarkdown(this.currentResponse, this.elements.responseText, true);
-
-        // Remove tool-running spinner now that text is flowing
-        const toolSpinner = this.elements.responseText.querySelector('.tool-running-indicator');
-        if (toolSpinner) toolSpinner.remove();
-
-        // Feed streaming text to TTS for sentence-chunked playback
-        if (this.speech) this.speech.feedStreamingText(this.currentResponse);
-
-        if (this.elements.responseText.lastChild) {
-            let streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
-            if (!streamingIndicator) {
-                streamingIndicator = document.createElement('span');
-                streamingIndicator.className = 'streaming-indicator';
-                streamingIndicator.textContent = '...';
-                this.elements.responseText.appendChild(streamingIndicator);
-            }
-        }
-        
-        this.windowManager.resizeWindow();
-    }
-
-    async handleMessageComplete() {
-            if (!this.isWaitingForResponse) return;
-
-            // Successful response means we're online
-            markOnline();
-
-            // Clear no-blur tool tracking
-            this._noBlurTools.clear();
-
-            // Always hide stop button when a prompt completes — the agent is done generating
-            this.elements.floatingStopBtn.style.display = 'none';
-            this.updateDatetimeVisibility();
-
-            // Ignore stale completions (e.g., steering response arriving after user sent a message)
-            if (!this.currentResponse || this.currentResponse.trim().length === 0) {
-                return;
-            }
-
-            // If automation plan is running, don't overwrite the plan UI
-            if (this._automationPlanStarted) return;
-
-            // Extension tool fence: either mid-execution, or handled mid-stream,
-            // or detected here as a fallback. Controller takes over either way.
-            if (this.extensionToolController.maybeHandleComplete(this.currentResponse).handled) {
-                return;
-            }
-
-            this.stopThinking();
-            this.computerControlActive = false;
-            this.elements.floatingStopBtn.style.display = 'none';
-            // Restore datetime display
-            this.updateDatetimeVisibility();
-            const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
-            if (streamingIndicator) streamingIndicator.remove();
-
-            // Check for automation plan in the response (fallback if not caught during streaming)
-            if (this.automationPlanController.tryHandleCompleteFallback(this.currentResponse).handled) {
-                return;
-            }
-
-            // Wait a tick to ensure all pending message_chunk events have been processed
-            // before doing the final render. The message_complete event can arrive
-            // before the last few chunk events are dispatched.
-            await new Promise(r => setTimeout(r, 50));
-
-            renderMarkdown(this.currentResponse, this.elements.responseText);
-            await this.windowManager.resizeWindow();
-            this.isWaitingForResponse = false;
-
-            // Show response action buttons (copy, speak)
-            this._showFloatingResponseActions();
-
-            // Check for agent-suggested actions (hidden fence at end of response)
-            const suggested = extractSuggestedActions(this.currentResponse);
-            if (suggested && suggested.actions.length > 0) {
-                // Re-render without the suggested_actions fence
-                renderMarkdown(suggested.cleanText, this.elements.responseText);
-                this._renderSuggestedActions(suggested.actions);
-            }
-
-            // Show quick action chips — but skip if agent already provided suggested actions
-            if (!suggested || suggested.actions.length === 0) {
-                this._showResponseActions(this.currentResponse);
-            }
-
-            // Read back response if speech was used
-            if (this.speech) {
-                this.speech.finishStreamingText(this.currentResponse);
-                this.speech.speakResponse(this.currentResponse);
-            }
-
-            // Refresh context usage in toolbar
-            this._refreshContextUsage();
-
-            // Notify if window is not focused (user isn't looking at it)
-            try {
-                if (!this._windowFocused && this.currentResponse) {
-                    const preview = this.currentResponse.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                    await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'floating');
-                }
-            } catch { /* ignore */ }
-        }
+    async handleMessageComplete() { return this.messageStreamController.handleComplete(); }
 
     /**
      * Render a loading indicator while an extension tool call is being streamed.
@@ -2156,82 +2164,11 @@ export class FloatingApp {
         if (notice) notice.remove();
     }
 
-    async handleMessageError(event) {
-        if (!this.isWaitingForResponse) return;
-        
-        this.isWaitingForResponse = false;
-        this.computerControlActive = false;
-        this._noBlurTools.clear();
-        this.elements.floatingStopBtn.style.display = 'none';
-        this.updateDatetimeVisibility();
+    async handleMessageError(event) { return this.messageStreamController.handleError(event); }
 
-        // Check if this is actually a network issue
-        const online = await checkOnError();
-        if (!online) {
-            this.showError(OFFLINE_MESSAGE);
-        } else {
-            this.showError('Error: ' + event.payload);
-        }
-    }
+    handleSessionReset(event) { return this.messageStreamController.handleSessionReset(event); }
 
-    handleSessionReset(event) {
-            this.isWaitingForResponse = false;
-            this.elements.floatingStopBtn.style.display = 'none';
-            // Restore datetime display
-            this.updateDatetimeVisibility();
-            this.showError(getSessionResetMessage(event.payload));
-        }
-
-    handleToolCallUpdate(event) {
-            if (!this.isWaitingForResponse) return;
-            const { updated, update } = processToolCallUpdate(event, this);
-
-            // Flush any pending throttled markdown render so the user sees the
-            // full streamed text before a permission dialog or tool indicator appears
-            if (this.currentResponse && this.currentResponse.trim().length > 0) {
-                renderMarkdown(this.currentResponse, this.elements.responseText);
-            }
-
-            // Show a spinner while a tool is executing
-            if (update?.title) {
-                const friendly = getToolFriendlyName(update.title);
-                // Append spinner after any existing rendered text
-                let spinner = this.elements.responseText.querySelector('.tool-running-indicator');
-                if (!spinner) {
-                    spinner = document.createElement('div');
-                    spinner.className = 'folder-plan-spinner-row tool-running-indicator';
-                    this.elements.responseText.appendChild(spinner);
-                }
-                spinner.innerHTML = `<span class="folder-plan-spinner"></span> ${friendly}...`;
-                this.elements.contentArea.classList.add('visible');
-                this.windowManager.resizeWindow();
-            }
-
-            // Detect computer-control tool usage and keep window visible
-            if (update?.title) {
-                const ccTools = ['screenshot', 'click', 'double_click', 'right_click',
-                    'move_mouse', 'drag', 'scroll', 'type_text', 'key_press',
-                    'key_press_confirmed', 'launch_app', 'wait', 'get_screen_size',
-                    'get_cursor_position'];
-                if (ccTools.includes(update.title)) {
-                    this.computerControlActive = true;
-                }
-
-                // Tools that steal focus (show dialogs) — prevent blur-hide while running
-                const noBlurToolNames = ['pick_folder'];
-                if (noBlurToolNames.includes(update.title)) {
-                    this._noBlurTools.add(update.toolCallId);
-                }
-            }
-
-            if (updated && (this.toolSources.length > 0 || this.toolUsages.length > 0)) {
-                if (!this.currentResponse || this.currentResponse.trim().length === 0) {
-                    this.renderSourcesCompact();
-                } else {
-                    this.renderSources();
-                }
-            }
-        }
+    handleToolCallUpdate(event) { return this.messageStreamController.handleToolCallUpdate(event); }
 
 
 
