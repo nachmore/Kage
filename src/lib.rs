@@ -9,6 +9,7 @@ pub mod activity_tracker;
 pub mod app_launcher;
 pub mod app_log;
 pub mod auto_steering;
+pub mod chunk_batcher;
 pub mod computer_control;
 pub mod error;
 pub mod extensions;

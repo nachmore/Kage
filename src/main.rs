@@ -8,6 +8,7 @@ mod app_launcher;
 mod app_log;
 mod auto_steering;
 mod automation;
+mod chunk_batcher;
 mod commands;
 #[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary, not this one
 mod computer_control;

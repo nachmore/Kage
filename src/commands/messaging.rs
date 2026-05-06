@@ -27,6 +27,20 @@ pub fn setup_notification_handler(
     let tool_names: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
+    // Per-session pending deltas waiting to be flushed to the UI as
+    // batched message_chunk events. The notification handler appends here;
+    // a dedicated thread below drains the map every CHUNK_FLUSH_INTERVAL_MS
+    // and emits one event per non-empty bucket. With token-level streaming
+    // we used to fire one Tauri emit per token (hundreds-to-thousands per
+    // response, each costing a JSON serialize + IPC bridge + frontend
+    // handler invocation), and the WebView2 emitter has no backpressure —
+    // bursts pile up in Tauri's internal queue. Coalescing into ~60 fps
+    // batches drops the IPC roundtrip count by 1-2 orders of magnitude
+    // without changing the on-screen feel of streaming.
+    let pending_chunks: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    spawn_chunk_flush_thread(app_handle.clone(), pending_chunks.clone());
+
     // Throttle config saves for last_seen updates — at most once per 60s
     let last_config_save: std::sync::Arc<std::sync::Mutex<std::time::Instant>> =
         std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(60)));
@@ -83,20 +97,21 @@ pub fn setup_notification_handler(
                             if is_current {
                                 if let Some(emitted) = emitted_owned {
                                     if !emitted.is_empty() {
-                                        // Emit only the delta. The frontend
-                                        // maintains its own accumulator by
-                                        // appending `text` on each chunk —
-                                        // avoids the O(n²) IPC cost of
-                                        // shipping the full accumulator.
-                                        // sessionId is included so the UI
-                                        // can filter as belt-and-suspenders.
-                                        let _ = app_handle.emit(
-                                            "message_chunk",
-                                            serde_json::json!({
-                                                "text": emitted,
-                                                "sessionId": acc_session,
-                                            }),
-                                        );
+                                        // Append to the per-session pending
+                                        // buffer. The flush thread emits
+                                        // `message_chunk` events with this
+                                        // text every CHUNK_FLUSH_INTERVAL_MS,
+                                        // one per non-empty session bucket.
+                                        // The frontend appends `text` on
+                                        // each chunk to its local
+                                        // accumulator; sending a longer
+                                        // string per emit is strictly
+                                        // better than one-emit-per-token.
+                                        if let Some(sid) = acc_session {
+                                            if let Ok(mut map) = pending_chunks.lock() {
+                                                map.entry(sid).or_default().push_str(&emitted);
+                                            }
+                                        }
                                     }
                                 }
                             } else {
@@ -199,6 +214,50 @@ pub fn setup_notification_handler(
         info!("Unhandled notification: {}", method);
     });
 }
+
+/// How often the chunk-flush thread wakes up to drain the pending-chunks
+/// map and emit batched `message_chunk` events. ~60 fps — slower than
+/// human chunk-perception, fast enough that streaming text doesn't feel
+/// stuttery. Anything below 10ms invites IPC backpressure with no
+/// user-visible benefit; above ~33ms (30 fps) the streaming starts to
+/// feel laggy.
+const CHUNK_FLUSH_INTERVAL_MS: u64 = 16;
+
+/// Background thread that drains `pending_chunks` every
+/// CHUNK_FLUSH_INTERVAL_MS and emits one `message_chunk` event per non-
+/// empty session bucket. Replaces the pre-fix one-emit-per-token path,
+/// which fired hundreds-to-thousands of IPC roundtrips per response.
+///
+/// The thread runs for the AcpClient's lifetime — it's a single OS thread
+/// (`acp-chunk-flush`) doing a HashMap drain + 0..N emits per cycle, so
+/// the always-on cost is negligible. Exit is by `app_handle.emit` returning
+/// an error after the app shuts down; we log and break.
+fn spawn_chunk_flush_thread(
+    app_handle: tauri::AppHandle,
+    pending: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+) {
+    let _ = std::thread::Builder::new()
+        .name("acp-chunk-flush".into())
+        .spawn(move || {
+            let interval = std::time::Duration::from_millis(CHUNK_FLUSH_INTERVAL_MS);
+            loop {
+                std::thread::sleep(interval);
+                let alive = crate::chunk_batcher::drain_and_emit_pending(&pending, |session_id, text| {
+                    let payload = serde_json::json!({
+                        "text": text,
+                        "sessionId": session_id,
+                    });
+                    app_handle
+                        .emit("message_chunk", payload)
+                        .map_err(|e| format!("{}", e))
+                });
+                if !alive {
+                    return;
+                }
+            }
+        });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
