@@ -704,16 +704,14 @@ pub async fn switch_acp_session(
             if let Some(ref default_model) = cfg.acp.agent.default_model {
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);
-                    let request = crate::acp_client::AcpRequest {
-                        jsonrpc: "2.0".to_string(),
-                        id: serde_json::json!(4),
-                        method: "_kage.dev/commands/execute".to_string(),
-                        params: serde_json::json!({
+                    let result = client_guard.send_request(
+                        "_kage.dev/commands/execute",
+                        serde_json::json!({
                             "sessionId": new_session_id,
                             "command": { "command": "model", "args": { "modelName": default_model } }
                         }),
-                    };
-                    match client_guard.send_request(&request) {
+                    );
+                    match result {
                         Ok(_) => info!("Default model applied: {}", default_model),
                         Err(e) => error!("Failed to apply default model: {}", e),
                     }

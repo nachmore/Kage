@@ -8,7 +8,7 @@
 mod common;
 
 use common::mock_tcp_server::{MockAcpServer, MockResponder, Reply};
-use kage::acp_client::{AcpClient, AcpConnectionMode, AcpRequest};
+use kage::acp_client::{AcpClient, AcpConnectionMode};
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -45,22 +45,17 @@ fn request_receives_matching_response_by_id() {
     let client = client_for(server.port);
     client.connect().expect("connect");
 
-    let req = AcpRequest {
-        jsonrpc: "2.0".to_string(),
-        id: json!("req-init-7"),
-        method: "initialize".to_string(),
-        params: json!({}),
-    };
-    let resp = client.send_request(&req).expect("send_request");
-    assert_eq!(resp.id, json!("req-init-7"), "response must echo the request id");
+    let resp = client.send_request("initialize", json!({})).expect("send_request");
     let result = resp.result.expect("expected a result, not an error");
     assert_eq!(result["agent"], "mock");
 
-    // The server should have recorded exactly the request we sent.
+    // The server should have recorded exactly the request we sent. The
+    // transport allocates the id internally, but every line must carry one.
     let seen = server.wait_for_requests(1, Duration::from_secs(2));
     assert_eq!(seen.len(), 1);
     assert_eq!(seen[0]["method"], "initialize");
-    assert_eq!(seen[0]["id"], json!("req-init-7"));
+    assert!(seen[0]["id"].is_number(), "id must be a number, got: {:?}", seen[0]["id"]);
+    assert_eq!(seen[0]["id"], resp.id, "server must echo the same id we sent");
 }
 
 #[test]
@@ -74,13 +69,8 @@ fn error_response_is_surfaced_by_send_request() {
     let client = client_for(server.port);
     client.connect().expect("connect");
 
-    let req = AcpRequest {
-        jsonrpc: "2.0".to_string(),
-        id: json!(42),
-        method: "session/new".to_string(),
-        params: json!({}),
-    };
-    let resp = client.send_request(&req).expect("send_request returns Ok(response) for JSON-RPC errors");
+    let resp = client.send_request("session/new", json!({}))
+        .expect("send_request returns Ok(response) for JSON-RPC errors");
     assert!(resp.error.is_some(), "expected error field populated");
     assert!(resp.result.is_none(), "result must be None when error is present");
     let err = resp.error.unwrap();
@@ -222,16 +212,65 @@ fn connection_drops_when_server_goes_away() {
     // a system call. What we *can* assert is that sending a request
     // against a dropped server returns an error rather than hanging
     // indefinitely.
-    let req = AcpRequest {
-        jsonrpc: "2.0".to_string(),
-        id: json!(1),
-        method: "anything".to_string(),
-        params: json!({}),
-    };
-    let result = client.send_request(&req);
+    let result = client.send_request("anything", json!({}));
     assert!(
         result.is_err(),
         "send_request should fail after server drop, got: {:?}",
         result
     );
+}
+
+#[test]
+fn concurrent_requests_each_receive_their_own_response() {
+    // Regression: prior to the pending-map rewrite, the reader funneled all
+    // responses into a single mpsc channel and `send_request` returned the
+    // first one off it without checking the id. Two callers in flight at
+    // once would silently swap responses. Now each caller has its own inbox
+    // keyed by an internally-allocated id, so both must get the right reply.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("method.a", Reply::Ok(json!({ "tag": "A" }))),
+            ("method.b", Reply::Ok(json!({ "tag": "B" }))),
+        ],
+    });
+    let client = Arc::new(client_for(server.port));
+    client.connect().expect("connect");
+
+    let c1 = client.clone();
+    let h1 = std::thread::spawn(move || c1.send_request("method.a", json!({})));
+    let c2 = client.clone();
+    let h2 = std::thread::spawn(move || c2.send_request("method.b", json!({})));
+
+    let r1 = h1.join().unwrap().expect("method.a should succeed");
+    let r2 = h2.join().unwrap().expect("method.b should succeed");
+
+    assert_eq!(r1.result.unwrap()["tag"], "A");
+    assert_eq!(r2.result.unwrap()["tag"], "B");
+}
+
+#[test]
+fn unsolicited_response_is_dropped_not_delivered_to_next_request() {
+    // Regression: an out-of-band response (id we never sent) used to land in
+    // the shared mpsc channel and corrupt the next caller. Now it must be
+    // logged and dropped, leaving the legitimate request to still receive
+    // its own reply.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![("ping", Reply::Ok(json!({ "ok": true })))],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    // Inject a response with an id that no one is waiting on.
+    server.push_notification(json!({
+        "jsonrpc": "2.0",
+        "id": 999_999,
+        "result": { "tag": "stray" }
+    }));
+
+    // Give the reader a beat to process the stray line.
+    std::thread::sleep(Duration::from_millis(100));
+
+    let resp = client.send_request("ping", json!({})).expect("ping should succeed");
+    assert_eq!(resp.result.unwrap()["ok"], true,
+        "subsequent legitimate request must not be served the stray response");
 }

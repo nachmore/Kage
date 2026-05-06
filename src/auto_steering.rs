@@ -252,17 +252,13 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         prompt_with_existing
     );
 
-    let request = crate::acp_client::AcpRequest {
-        jsonrpc: "2.0".to_string(),
-        id: serde_json::json!(99),
-        method: "session/prompt".to_string(),
-        params: serde_json::json!({
+    let response = client.send_request(
+        "session/prompt",
+        serde_json::json!({
             "sessionId": session_id,
             "prompt": [{ "type": "text", "text": steering_prompt }]
         }),
-    };
-
-    let response = client.send_request(&request)?;
+    )?;
 
     if let Some(error) = response.error {
         warn!("Auto-steering extraction failed: {}", error.message);

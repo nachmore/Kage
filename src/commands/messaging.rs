@@ -648,17 +648,13 @@ pub async fn execute_slash_command(
         let session_id = client.get_session_id().ok_or("No active session")?;
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
-        let request = crate::acp_client::AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(3),
-            method: "_kage.dev/commands/execute".to_string(),
-            params: serde_json::json!({
+        let response = client.send_request(
+            "_kage.dev/commands/execute",
+            serde_json::json!({
                 "sessionId": session_id,
                 "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
             }),
-        };
-
-        let response = client.send_request(&request).map_err(|e| format!("Command failed: {}", e))?;
+        ).map_err(|e| format!("Command failed: {}", e))?;
         if let Some(error) = response.error {
             return Err(format!("{} (code: {})", error.message, error.code));
         }

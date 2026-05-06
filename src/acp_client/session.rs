@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use super::AcpClient;
-use super::types::{AcpRequest, format_acp_error};
+use super::types::format_acp_error;
 use crate::lock_ext::LockExt;
 
 /// Track when we last injected a timestamp into a user message.
@@ -25,11 +25,9 @@ impl AcpClient {
     pub fn initialize(&self) -> Result<()> {
         info!("Initializing ACP connection");
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(0),
-            method: "initialize".to_string(),
-            params: serde_json::json!({
+        let response = self.send_request(
+            "initialize",
+            serde_json::json!({
                 "protocolVersion": 1,
                 "clientCapabilities": {
                     "fs": { "readTextFile": true, "writeTextFile": true },
@@ -41,9 +39,7 @@ impl AcpClient {
                     "version": "0.1.0"
                 }
             }),
-        };
-
-        let response = self.send_request(&request)?;
+        )?;
         if let Some(error) = response.error {
             anyhow::bail!("Initialize failed: {}", format_acp_error(&error));
         }
@@ -73,14 +69,10 @@ impl AcpClient {
                 .unwrap_or_else(|| "/".to_string())
         });
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(1),
-            method: "session/new".to_string(),
-            params: serde_json::json!({ "cwd": cwd, "mcpServers": [] }),
-        };
-
-        let response = self.send_request(&request)?;
+        let response = self.send_request(
+            "session/new",
+            serde_json::json!({ "cwd": cwd, "mcpServers": [] }),
+        )?;
         if let Some(error) = response.error {
             anyhow::bail!("Session creation failed: {}", format_acp_error(&error));
         }
@@ -120,18 +112,14 @@ impl AcpClient {
                 .unwrap_or_else(|| "/".to_string())
         });
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(1),
-            method: "session/load".to_string(),
-            params: serde_json::json!({
+        let response = self.send_request(
+            "session/load",
+            serde_json::json!({
                 "sessionId": session_id,
                 "cwd": cwd,
                 "mcpServers": []
             }),
-        };
-
-        let response = self.send_request(&request)?;
+        )?;
         if let Some(error) = response.error {
             anyhow::bail!("Session load failed: {}", format_acp_error(&error));
         }
@@ -157,17 +145,15 @@ impl AcpClient {
 
         self.streaming_accumulator.lock_or_recover().clear();
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(98),
-            method: "session/prompt".to_string(),
-            params: serde_json::json!({
+        let result = self.send_request(
+            "session/prompt",
+            serde_json::json!({
                 "sessionId": session_id,
                 "prompt": [{ "type": "text", "text": steering_msg }]
             }),
-        };
+        );
 
-        match self.send_request(&request) {
+        match result {
             Ok(_) => info!("Built-in steering sent to session {}", session_id),
             Err(e) => warn!("Failed to send built-in steering: {}", e),
         }
@@ -238,17 +224,13 @@ impl AcpClient {
             prompt.push(serde_json::json!({ "type": "text", "text": "" }));
         }
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(2),
-            method: "session/prompt".to_string(),
-            params: serde_json::json!({
+        let response = self.send_request(
+            "session/prompt",
+            serde_json::json!({
                 "sessionId": session_id,
                 "prompt": prompt
             }),
-        };
-
-        let response = self.send_request(&request)?;
+        )?;
 
         if let Some(error) = response.error {
             let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");
@@ -394,20 +376,16 @@ impl AcpClient {
             }
         });
 
-        let request = AcpRequest {
-            jsonrpc: "2.0".to_string(),
-            id: serde_json::json!(2),
-            method: "session/prompt".to_string(),
-            params: serde_json::json!({
+        let response = self.send_request(
+            "session/prompt",
+            serde_json::json!({
                 "sessionId": session_id,
                 "prompt": [{
                     "type": "text",
                     "text": serde_json::to_string(&command).unwrap_or_default()
                 }]
             }),
-        };
-
-        let response = self.send_request(&request)?;
+        )?;
 
         if let Some(error) = response.error {
             let detail = error.data.as_ref().and_then(|d| d.as_str()).unwrap_or("");

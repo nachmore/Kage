@@ -316,16 +316,14 @@ fn apply_default_model_if_any(
         return;
     };
     info!("Applying default model: {}", model);
-    let request = crate::acp_client::AcpRequest {
-        jsonrpc: "2.0".to_string(),
-        id: serde_json::json!(4),
-        method: "_kage.dev/commands/execute".to_string(),
-        params: serde_json::json!({
+    let result = client.send_request(
+        "_kage.dev/commands/execute",
+        serde_json::json!({
             "sessionId": session_id,
             "command": { "command": "model", "args": { "modelName": model } }
         }),
-    };
-    match client.send_request(&request) {
+    );
+    match result {
         Ok(_) => info!("Default model applied: {}", model),
         Err(e) => error!("Failed to apply default model: {}", e),
     }

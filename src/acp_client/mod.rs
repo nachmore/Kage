@@ -80,8 +80,11 @@ impl AcpClient {
         self.transport.disconnect();
     }
 
-    pub fn send_request(&self, request: &AcpRequest) -> Result<AcpResponse> {
-        self.transport.send_request(request)
+    /// Send a JSON-RPC request and wait for its matching response. The
+    /// transport allocates the id internally — callers don't choose ids,
+    /// which is what makes cross-request response delivery impossible.
+    pub fn send_request(&self, method: &str, params: serde_json::Value) -> Result<AcpResponse> {
+        self.transport.send_request(method, params)
     }
 
     // --- Session state ---
