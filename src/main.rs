@@ -179,11 +179,6 @@ fn main() {
     info!("App launcher initialized (scan deferred to background)");
     if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
 
-    let pipe_stdin_handle = acp_client.get_pipe_stdin();
-    let tcp_writer_handle = acp_client.get_tcp_writer();
-
-    let pipe_stdin_for_handler = pipe_stdin_handle.clone();
-    let tcp_writer_for_handler = tcp_writer_handle.clone();
     let config_for_setup = config.clone();
     let dev_mode_for_setup = dev_mode;
 
@@ -209,8 +204,6 @@ fn main() {
             acp_client: acp_client_arc,
             config: config_arc,
             app_launcher: Arc::new(Mutex::new(app_launcher)),
-            pipe_stdin: pipe_stdin_handle,
-            tcp_writer: tcp_writer_handle,
             dev_mode,
             floating_session_id: Arc::new(std::sync::Mutex::new(None)),
             pending_permission: pending_permission_arc,
@@ -246,20 +239,17 @@ fn main() {
             // Build system tray
             tray::setup_tray(app, dev_mode)?;
 
-            // Set up the ACP notification handler. acp_for_handler is now a
-            // bare Arc<AcpClient> — no lock acquisition, no block_on inside
-            // .setup() that previously danced around tokio's runtime lifecycle.
-            {
-                commands::messaging::setup_notification_handler(
-                    &acp_for_handler,
-                    app.handle(),
-                    config_for_handler,
-                    pipe_stdin_for_handler,
-                    tcp_writer_for_handler,
-                    slash_cmds_for_handler,
-                    pending_perm_for_handler,
-                );
-            }
+            // Set up the ACP notification handler. The handler captures an
+            // Arc<AcpClient> so it can issue protocol replies (permission
+            // responses, etc.) through the typed client API instead of
+            // hand-building JSON-RPC out-of-band.
+            commands::messaging::setup_notification_handler(
+                acp_for_handler,
+                app.handle(),
+                config_for_handler,
+                slash_cmds_for_handler,
+                pending_perm_for_handler,
+            );
 
             // Configure floating / context-menu / inline-assist windows for transparency.
             setup::configure_transparent_windows(app);

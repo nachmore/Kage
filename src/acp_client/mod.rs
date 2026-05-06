@@ -56,14 +56,6 @@ impl AcpClient {
         self.transport.process_manager.clone()
     }
 
-    pub fn get_pipe_stdin(&self) -> Arc<Mutex<Option<Arc<Mutex<std::process::ChildStdin>>>>> {
-        self.transport.pipe_stdin.clone()
-    }
-
-    pub fn get_tcp_writer(&self) -> Arc<Mutex<Option<Arc<Mutex<std::net::TcpStream>>>>> {
-        self.transport.tcp_writer.clone()
-    }
-
     pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
         self.transport.set_notification_handler(handler);
     }
@@ -112,6 +104,30 @@ impl AcpClient {
             "session/cancel",
             serde_json::json!({ "sessionId": session_id }),
         )
+    }
+
+    /// Reply to a session/request_permission notification. The agent waits
+    /// for a JSON-RPC *response* keyed to the original request id; this is
+    /// not a notification — but it doesn't go through send_request because
+    /// we're answering, not asking. We write the wire-formatted response
+    /// directly through the transport, bypassing the pending-request map.
+    ///
+    /// `option_id` is one of the protocol-defined choices: "allow_once",
+    /// "allow_24h", "allow_always", "reject_once". The agent rejects
+    /// anything else. We pass the string through rather than enforcing
+    /// here because the set may grow over the protocol's lifetime.
+    pub fn send_permission_response(
+        &self,
+        request_id: &serde_json::Value,
+        option_id: &str,
+    ) -> Result<()> {
+        let response = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
+        });
+        let line = serde_json::to_string(&response)?;
+        self.transport.write_line(&line)
     }
 
     // --- Session state ---

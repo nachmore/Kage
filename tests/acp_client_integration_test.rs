@@ -249,6 +249,28 @@ fn concurrent_requests_each_receive_their_own_response() {
 }
 
 #[test]
+fn send_permission_response_writes_jsonrpc_response_keyed_to_request_id() {
+    // Permission replies are JSON-RPC *responses* (not notifications) — they
+    // echo the original request id and carry a result object the agent
+    // expects in a specific shape: { outcome: { outcome: "selected", optionId: "..." } }.
+    // Verify both the framing and the option-id pass-through.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let request_id = json!("perm-req-42");
+    client.send_permission_response(&request_id, "allow_24h")
+        .expect("send_permission_response writes successfully");
+
+    let seen = server.wait_for_requests(1, Duration::from_secs(2));
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0]["id"], request_id, "response must echo the original request id");
+    assert!(seen[0].get("method").is_none(), "responses don't carry a method");
+    assert_eq!(seen[0]["result"]["outcome"]["outcome"], "selected");
+    assert_eq!(seen[0]["result"]["outcome"]["optionId"], "allow_24h");
+}
+
+#[test]
 fn cancel_session_writes_jsonrpc_notification_to_transport() {
     // The client API hides JSON-RPC framing — callers shouldn't have to know
     // method names or param shapes. Verify that cancel_session emits a

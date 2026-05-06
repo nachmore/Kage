@@ -31,8 +31,8 @@ enum ReaderSource {
 /// the background reader thread, and raw line-based I/O.
 pub struct AcpTransport {
     mode: AcpConnectionMode,
-    /// Write handle for pipe stdin
-    pub pipe_stdin: Arc<Mutex<Option<Arc<Mutex<ChildStdin>>>>>,
+    /// Write handle for pipe stdin.
+    pipe_stdin: Arc<Mutex<Option<Arc<Mutex<ChildStdin>>>>>,
     /// Write handle for TCP.
     ///
     /// The inner `Arc<Mutex<TcpStream>>` mirrors the `pipe_stdin` layout: the
@@ -41,7 +41,7 @@ pub struct AcpTransport {
     /// lets writers briefly hold the outer lock, clone the inner `Arc`, drop
     /// the outer guard, then write through the inner mutex — without calling
     /// `TcpStream::try_clone()` on every send (which dup's an OS handle).
-    pub tcp_writer: Arc<Mutex<Option<Arc<Mutex<TcpStream>>>>>,
+    tcp_writer: Arc<Mutex<Option<Arc<Mutex<TcpStream>>>>>,
     /// Monotonic request-id allocator. Every outbound request gets a fresh id
     /// from this counter so two callers can never collide. JSON-RPC ids are
     /// strings or numbers; we send them as numbers and the matching response

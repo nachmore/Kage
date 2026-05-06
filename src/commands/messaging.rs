@@ -1,4 +1,4 @@
-use crate::error::{AppError, ErrorKind};
+use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::state::AppState;
 use log::{info, warn, error};
@@ -7,24 +7,20 @@ use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 /// Set up the notification handler on the ACP client.
 /// This should be called once after the client is created.
 /// The handler dispatches all ACP notifications to the appropriate Tauri events.
-#[allow(clippy::too_many_arguments)]
 pub fn setup_notification_handler(
-    client: &crate::acp_client::AcpClient,
+    client: std::sync::Arc<crate::acp_client::AcpClient>,
     app: &tauri::AppHandle,
     state_config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    pipe_stdin: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    tcp_writer: std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>>,
     slash_commands: std::sync::Arc<std::sync::Mutex<Vec<crate::state::SlashCommand>>>,
     pending_permission: std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
 ) {
     let app_handle = app.clone();
     let config = state_config;
-    let pipe_stdin = pipe_stdin;
-    let tcp_writer = tcp_writer;
     let slash_cmds = slash_commands;
     let pending_perm = pending_permission;
     let accumulated = client.streaming_accumulator.clone();
     let compacting = client.compacting.clone();
+    let client_for_handler = client.clone();
 
     // Map toolCallId → first tool name (e.g. "write") from the initial tool_call update.
     // The permission request arrives later with a descriptive title (e.g. "Creating hello.txt")
@@ -41,7 +37,7 @@ pub fn setup_notification_handler(
 
         if method == "session/request_permission" {
             handle_permission_notification(
-                &notification, &app_handle, &config, &pipe_stdin, &tcp_writer, &pending_perm, &tool_names, &last_config_save,
+                &notification, &app_handle, &config, &client_for_handler, &pending_perm, &tool_names, &last_config_save,
             );
             return;
         }
@@ -171,68 +167,12 @@ pub fn setup_notification_handler(
         info!("Unhandled notification: {}", method);
     });
 }
-/// Write a JSON string directly to the ACP pipe/TCP transport, bypassing the
-/// AcpClient lock. This is used for permission responses and cancellation
-/// signals that must be sent while `send_message_streaming` holds the client lock.
-///
-/// Tries pipe_stdin first; falls back to tcp_writer.
-fn write_raw_json(
-    pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
-    tcp_writer: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>,
-    json: &str,
-) -> Result<(), AppError> {
-    use std::io::Write;
-
-    // Try pipe first
-    let stdin_arc: Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>> = {
-        let guard = pipe_stdin.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-        guard.as_ref().map(|a| a.clone())
-    };
-    if let Some(arc) = stdin_arc {
-        let mut stdin = arc.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-        writeln!(stdin, "{}", json).map_err(|e| AppError::connection_lost(format!("Write: {}", e)))?;
-        stdin.flush().map_err(|e| AppError::connection_lost(format!("Flush: {}", e)))?;
-        return Ok(());
-    }
-
-    // Fall back to TCP. Clone the inner Arc under the outer lock, drop the
-    // outer guard, then hold only the inner write mutex for the actual I/O.
-    // This avoids the old `TcpStream::try_clone()` per-write overhead.
-    let tcp_arc: Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>> = {
-        let guard = tcp_writer.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-        guard.as_ref().cloned()
-    };
-    if let Some(arc) = tcp_arc {
-        let mut ws = arc.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-        writeln!(ws, "{}", json).map_err(|e| AppError::connection_lost(format!("Write: {}", e)))?;
-        ws.flush().map_err(|e| AppError::connection_lost(format!("Flush: {}", e)))?;
-        return Ok(());
-    }
-
-    Err(AppError::connection_lost("No write handle available"))
-}
-
-/// Convenience: serialize a JSON value and write it via `write_raw_json`.
-/// Silently ignores errors (used in fire-and-forget contexts like the notification handler).
-fn write_raw_json_silent(
-    pipe_stdin: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>,
-    tcp_writer: &std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>,
-    value: &serde_json::Value,
-) {
-    if let Ok(json) = serde_json::to_string(value) {
-        if let Err(e) = write_raw_json(pipe_stdin, tcp_writer, &json) {
-            warn!("Failed to write raw JSON to transport: {}", e);
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn handle_permission_notification(
     notification: &serde_json::Value,
     app_handle: &tauri::AppHandle,
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    pipe_stdin: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::process::ChildStdin>>>>>,
-    tcp_writer: &std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<std::net::TcpStream>>>>>,
+    client: &crate::acp_client::AcpClient,
     pending_perm: &std::sync::Arc<std::sync::Mutex<Option<crate::state::PendingPermission>>>,
     tool_names: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     last_config_save: &std::sync::Arc<std::sync::Mutex<std::time::Instant>>,
@@ -303,12 +243,9 @@ fn handle_permission_notification(
 
     let send_response = |option_id: &str| {
         if let Some(request_id) = notification.get("id") {
-            let response = serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
-            });
-            write_raw_json_silent(pipe_stdin, tcp_writer, &response);
+            if let Err(e) = client.send_permission_response(request_id, option_id) {
+                warn!("Failed to send auto permission response: {}", e);
+            }
         }
     };
 
@@ -441,14 +378,8 @@ pub async fn send_permission_response(
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
-    let response = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": { "outcome": { "outcome": "selected", "optionId": option_id } }
-    });
-    let json = serde_json::to_string(&response).map_err(|e| AppError::new(ErrorKind::SerializeError, format!("{}", e)))?;
-
-    write_raw_json(&state.pipe_stdin, &state.tcp_writer, &json)?;
+    state.acp_client.send_permission_response(&request_id, &option_id)
+        .map_err(|e| AppError::connection_lost(format!("Permission response failed: {}", e)))?;
 
     if option_id == "allow_always" {
         let mut config = state.config.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
@@ -578,14 +509,9 @@ pub async fn dismiss_pending_permission(
     };
 
     if let Some(perm) = pending {
-        let response = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": perm.request_id,
-            "result": { "outcome": { "outcome": "selected", "optionId": "reject_once" } }
-        });
-
-        // Write directly via pipe/tcp handles to avoid deadlock with send_message_streaming
-        write_raw_json_silent(&state.pipe_stdin, &state.tcp_writer, &response);
+        if let Err(e) = state.acp_client.send_permission_response(&perm.request_id, "reject_once") {
+            warn!("Failed to dismiss pending permission: {}", e);
+        }
 
         if let Ok(mut guard) = state.pending_permission.lock() {
             *guard = None;
