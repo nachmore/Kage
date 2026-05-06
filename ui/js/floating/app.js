@@ -4,7 +4,7 @@ import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
 import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
 import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { processToolCallUpdate, renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, getSessionResetMessage, extractSuggestedActions } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
@@ -20,6 +20,7 @@ import { escapeHtml, getToolFriendlyName } from '../shared/tool-utils.js';
 import { isOnline, checkOnline, checkOnError, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
+import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
@@ -77,6 +78,49 @@ export class FloatingApp {
             },
             resetAccumulator: () => { this.currentResponse = ''; },
         });
+        this.automationPlanController = new AutomationPlanController({
+            invoke,
+            listen,
+            renderTasks: (tasks) => {
+                const wrapper = createTaskPlanElement(tasks);
+                this.elements.responseText.innerHTML = '';
+                this.elements.responseText.appendChild(wrapper);
+                this.elements.contentArea.classList.add('visible');
+                this.elements.expandBtn.classList.add('visible');
+                this.windowManager.resizeWindow();
+            },
+            appendReviewActions: (bar) => {
+                this.elements.responseText.appendChild(bar);
+            },
+            onPlanReadyForReview: () => {
+                this.stopThinking();
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.updateDatetimeVisibility();
+                this.isWaitingForResponse = false;
+                this.windowManager.resizeWindow();
+                // Focus input so the user can type to revise the plan.
+                this.elements.input.focus();
+            },
+            onPlanExecutionStart: async () => {
+                this.isWaitingForResponse = true;
+                this.elements.floatingStopBtn.style.display = '';
+                this.updateDatetimeVisibility();
+                await this.windowManager.resizeWindow();
+            },
+            onPlanComplete: async () => {
+                this.isWaitingForResponse = false;
+                this.elements.floatingStopBtn.style.display = 'none';
+                this.stopThinking();
+                this.computerControlActive = false;
+                this.updateDatetimeVisibility();
+                this._showFloatingResponseActions();
+                await this.windowManager.resizeWindow();
+            },
+            onPlanFailed: (e) => {
+                this.showError('Automation failed: ' + e);
+                this.isWaitingForResponse = false;
+            },
+        });
         this.lastSelection = null;
         this._compacting = false;
         this._messageHistory = [];   // shell-style input history
@@ -90,6 +134,14 @@ export class FloatingApp {
     set _extensionToolCallHandled(v) { this.extensionToolController.handled = v; }
     get _extensionToolExecuting() { return this.extensionToolController.executing; }
     set _extensionToolExecuting(v) { this.extensionToolController.executing = v; }
+
+    get _automationPlanStarted() { return this.automationPlanController.started; }
+    set _automationPlanStarted(v) { this.automationPlanController.started = v; }
+    get _automationPlan() { return this.automationPlanController.plan; }
+    get _automationStatuses() { return this.automationPlanController.statuses; }
+    get _automationCleanup() { return this.automationPlanController.cleanup; }
+    get _pendingPlanRevision() { return this.automationPlanController.pendingRevision; }
+    set _pendingPlanRevision(v) { this.automationPlanController.pendingRevision = v; }
 
     async init() {
             const _t0 = performance.now();
@@ -787,15 +839,8 @@ export class FloatingApp {
         if (!this.isWaitingForResponse) return;
 
         // If an automation plan is running, stop it gracefully
-        if (this._automationPlanStarted && this._automationStatuses) {
-            for (const [step, status] of Object.entries(this._automationStatuses)) {
-                if (status === 'running') {
-                    this._automationStatuses[step] = 'stopped';
-                }
-            }
-            this._renderAutomationPlan();
-            if (this._automationCleanup) this._automationCleanup();
-            this._automationPlanStarted = false;
+        if (this._automationPlanStarted) {
+            this.automationPlanController.stopGracefully();
             this.computerControlActive = false;
         }
 
@@ -1695,8 +1740,8 @@ export class FloatingApp {
 
         // If a plan is pending review, send the message as a revision request
         if (this._pendingPlanRevision) {
-            this._pendingPlanRevision = null;
-            this._automationPlanStarted = false;
+            this.automationPlanController.reset();
+            this.extensionToolController.reset();
             // Reset UI for the new response
             this.elements.input.value = '';
             this.elements.input.style.height = 'auto';
@@ -1704,8 +1749,6 @@ export class FloatingApp {
             this.elements.responseText.textContent = '';
             this.elements.contentArea.classList.add('visible');
             this.isWaitingForResponse = true;
-            this._extensionToolCallHandled = false;
-            this._extensionToolExecuting = false;
             this._promptGeneration++;
             this.startThinking();
             this.updateDatetimeVisibility();
@@ -1805,9 +1848,8 @@ export class FloatingApp {
                 this.elements.contentArea.classList.add('visible');
                 this.elements.expandBtn.classList.add('visible');
                 this.isWaitingForResponse = true;
-                this._extensionToolCallHandled = false;
-                this._extensionToolExecuting = false;
-                this._automationPlanStarted = false;
+                this.extensionToolController.reset();
+                this.automationPlanController.reset();
                 this._promptGeneration++;
                 const gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
@@ -1864,30 +1906,10 @@ export class FloatingApp {
             }
         }
 
-        // Detect complete automation plan during streaming — show for review
-        if (!this._automationPlanStarted) {
-            const completePlan = detectAutomationPlan(this.currentResponse);
-            if (completePlan) {
-                this._automationPlanStarted = true;
-                this._showPlanForReview(completePlan);
-                return;
-            }
-
-            // Show tasks incrementally as they stream in
-            const partialPlan = detectAutomationPlanIncremental(this.currentResponse);
-            if (partialPlan) {
-                this._automationPlan = partialPlan;
-                this._automationStatuses = {};
-                this._automationResults = {};
-                for (const s of partialPlan) this._automationStatuses[s.step] = 'pending';
-                this._renderAutomationPlan();
-                this.windowManager.resizeWindow();
-                return;
-            }
+        // Detect complete or partial automation plan during streaming.
+        if (this.automationPlanController.tryHandleChunk(this.currentResponse).handled) {
+            return;
         }
-
-        // If automation plan is running, don't overwrite the plan UI
-        if (this._automationPlanStarted) return;
 
         // Detect extension tool calls in streaming text
         if (this.extensionToolController.maybeHandleChunk(this.currentResponse).handled) {
@@ -1956,10 +1978,7 @@ export class FloatingApp {
             if (streamingIndicator) streamingIndicator.remove();
 
             // Check for automation plan in the response (fallback if not caught during streaming)
-            const plan = detectAutomationPlan(this.currentResponse);
-            if (plan && !this._automationPlanStarted) {
-                this._automationPlanStarted = true;
-                this._showPlanForReview(plan);
+            if (this.automationPlanController.tryHandleCompleteFallback(this.currentResponse).handled) {
                 return;
             }
 
@@ -2019,133 +2038,6 @@ export class FloatingApp {
             const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(info.extension, info.tool);
             this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
-    }
-
-    /**
-     * Show an automation plan for user review before execution.
-     * Renders the task list with Run/Edit action buttons.
-     */
-    _showPlanForReview(plan) {
-        this._automationPlan = plan;
-        this._automationStatuses = {};
-        this._automationResults = {};
-        for (const s of plan) this._automationStatuses[s.step] = 'pending';
-        this._renderAutomationPlan();
-
-        // Add review action bar below the plan
-        const actionsBar = document.createElement('div');
-        actionsBar.className = 'taskplan-review-actions';
-        actionsBar.innerHTML = `
-            <button class="taskplan-review-btn taskplan-run-btn" id="planRunBtn">▶ Run</button>
-            <span class="taskplan-review-hint">or type to revise the plan</span>
-        `;
-        this.elements.responseText.appendChild(actionsBar);
-
-        // Stop thinking state — plan is ready for review
-        this.stopThinking();
-        this.elements.floatingStopBtn.style.display = 'none';
-        this.updateDatetimeVisibility();
-        this.isWaitingForResponse = false;
-        this.windowManager.resizeWindow();
-
-        // Run button handler
-        const runBtn = document.getElementById('planRunBtn');
-        if (runBtn) {
-            runBtn.addEventListener('mousedown', (e) => e.preventDefault());
-            runBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent handleOutsideClick from hiding the window
-                actionsBar.remove();
-                this._pendingPlanRevision = null;
-                this.isWaitingForResponse = true;
-                this._executeAutomationPlan(plan);
-            });
-        }
-
-        // Focus input so user can type to revise
-        this.elements.input.focus();
-
-        // Override the next send to handle plan revision
-        this._pendingPlanRevision = plan;
-    }
-
-    async _executeAutomationPlan(plan) {
-        // Render the plan as a task list immediately
-        this._automationPlan = plan;
-        this._automationStatuses = {};
-        this._automationResults = {};
-        for (const s of plan) this._automationStatuses[s.step] = 'pending';
-        this._renderAutomationPlan();
-        await this.windowManager.resizeWindow();
-
-        // Show stop button
-        this.elements.floatingStopBtn.style.display = '';
-        this.updateDatetimeVisibility();
-
-        // Store cleanup so stopGenerating can tear down the plan
-        this._automationCleanup = null;
-
-        // Listen for step progress events
-        const stepStartUnlisten = await this.listen('automation_step_start', (event) => {
-            const { step } = event.payload;
-            this._automationStatuses[step] = 'running';
-            this._renderAutomationPlan();
-            this.windowManager.resizeWindow();
-        });
-
-        const stepCompleteUnlisten = await this.listen('automation_step_complete', (event) => {
-            const { step, success, result, stopped } = event.payload;
-            this._automationStatuses[step] = stopped ? 'stopped' : (success ? 'done' : 'failed');
-            if (result) this._automationResults[step] = result;
-            this._renderAutomationPlan();
-            this.windowManager.resizeWindow();
-        });
-
-        const cleanup = () => {
-            stepStartUnlisten();
-            stepCompleteUnlisten();
-            planCompleteUnlisten();
-            this._automationCleanup = null;
-        };
-        this._automationCleanup = cleanup;
-
-        const planCompleteUnlisten = await this.listen('automation_plan_complete', async () => {
-            cleanup();
-            this._automationPlanStarted = false;
-            this.isWaitingForResponse = false;
-            this.elements.floatingStopBtn.style.display = 'none';
-            this.stopThinking();
-            this.computerControlActive = false;
-            this.updateDatetimeVisibility();
-            this._showFloatingResponseActions();
-            await this.windowManager.resizeWindow();
-        });
-
-        // Execute the plan
-        try {
-            await this.invoke('execute_automation_plan', {
-                planJson: JSON.stringify(plan)
-            });
-        } catch (e) {
-            console.error('Automation plan execution failed:', e);
-            this.showError('Automation failed: ' + e);
-            cleanup();
-            this._automationPlanStarted = false;
-            this.isWaitingForResponse = false;
-        }
-    }
-
-    _renderAutomationPlan() {
-        if (!this._automationPlan) return;
-        const tasks = automationPlanToTasks(
-            this._automationPlan,
-            this._automationStatuses || {},
-            this._automationResults || {}
-        );
-        const wrapper = createTaskPlanElement(tasks);
-        this.elements.responseText.innerHTML = '';
-        this.elements.responseText.appendChild(wrapper);
-        this.elements.contentArea.classList.add('visible');
-        this.elements.expandBtn.classList.add('visible');
     }
 
     _showFloatingResponseActions() {
