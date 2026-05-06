@@ -270,3 +270,69 @@ fn manifest_accepts_unknown_top_level_fields() {
     let manifest: extensions::ExtensionManifest = serde_json::from_str(json).unwrap();
     assert_eq!(manifest.id, "future-ext");
 }
+
+// ---------------------------------------------------------------------------
+// validate_extension_id — gatekeeper for ids that land in filesystem paths
+// ---------------------------------------------------------------------------
+//
+// install_from_directory and uninstall both call fs::remove_dir_all on a
+// path built from the extension id. A hostile manifest with id="../foo"
+// would let that path escape the extensions directory before the validator
+// existed. These tests pin both halves of the contract: the shape we accept
+// and the attack surface we reject.
+
+#[test]
+fn validate_id_accepts_typical_extension_ids() {
+    for id in ["todos", "kage-math", "color_picker", "a", "ab12", "x-y_z9"] {
+        extensions::validate_extension_id(id)
+            .unwrap_or_else(|e| panic!("expected {:?} to be accepted, got: {}", id, e));
+    }
+}
+
+#[test]
+fn validate_id_rejects_path_traversal_attempts() {
+    // Each of these would break out of the extensions dir if interpolated
+    // into target_base.join(...). The validator must reject every one.
+    let attacks = [
+        "..",
+        "../foo",
+        "../../etc/passwd",
+        "..\\..\\windows\\system32",
+        "/etc/something",
+        "C:/Windows",
+        ".hidden",
+        "-leading-dash",
+        "_leading-underscore",
+    ];
+    for id in attacks {
+        let result = extensions::validate_extension_id(id);
+        assert!(
+            result.is_err(),
+            "validator must reject hostile id {:?}, but it was accepted",
+            id
+        );
+    }
+}
+
+#[test]
+fn validate_id_rejects_empty_oversized_uppercase_and_unicode() {
+    assert!(extensions::validate_extension_id("").is_err(), "empty id");
+    assert!(
+        extensions::validate_extension_id(&"a".repeat(65)).is_err(),
+        "overlong id"
+    );
+    assert!(
+        extensions::validate_extension_id("HasUpper").is_err(),
+        "mixed case"
+    );
+    // Unicode lookalike that would canonicalize to traversal in some FS:
+    assert!(
+        extensions::validate_extension_id("ext\u{2024}name").is_err(),
+        "Unicode one-dot leader"
+    );
+    // NUL byte:
+    assert!(
+        extensions::validate_extension_id("ext\0name").is_err(),
+        "embedded NUL"
+    );
+}

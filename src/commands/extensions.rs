@@ -119,6 +119,13 @@ pub async fn read_extension_file(
     kind: String,
     file_path: String,
 ) -> Result<String, AppError> {
+    // Validate the extension id before it's spliced into any path. The
+    // file_path containment check below is gated by `.exists()` and would
+    // be skipped for a non-existent path; validating the id upfront makes
+    // this fail closed on hostile ids regardless of which branch wins.
+    extensions::validate_extension_id(&extension_id)
+        .map_err(|e| format!("Invalid extension id: {}", e))?;
+
     // Validate file_path to prevent directory traversal
     if file_path.contains("..") || file_path.contains('\\') || file_path.starts_with('/') {
         return Err("Invalid file path".into());
@@ -188,6 +195,12 @@ pub async fn uninstall_extension(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    // extensions::uninstall validates internally too — checking here as well
+    // keeps this command's error message specific (frontend gets a clean
+    // "invalid extension id" rather than a generic "uninstall failed").
+    extensions::validate_extension_id(&id)
+        .map_err(|e| format!("Invalid extension id: {}", e))?;
+
     extensions::uninstall(&id, &kind)
         .map_err(|e| format!("Uninstall failed: {}", e))?;
 
@@ -494,6 +507,13 @@ pub async fn commit_extension_install(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    // Reject hostile ids before they're recorded as a grant. Even though
+    // this function only writes to the in-memory config map (no direct
+    // filesystem op), a stored bad id would later be consulted by code
+    // paths that *do* hit the filesystem. Defense in depth.
+    extensions::validate_extension_id(&extension_id)
+        .map_err(|e| format!("Invalid extension id: {}", e))?;
+
     let mut config = state.config.lock_or_recover();
     let record = crate::config::ExtensionGrant {
         granted,
@@ -829,6 +849,9 @@ pub async fn remove_extension_grant(
     extension_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
+    extensions::validate_extension_id(&extension_id)
+        .map_err(|e| format!("Invalid extension id: {}", e))?;
+
     let mut config = state.config.lock_or_recover();
     if config.extension_grants.remove(&extension_id).is_some() {
         info!("Removed capability grant for '{}'", extension_id);

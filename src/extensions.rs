@@ -18,6 +18,57 @@ use std::fs;
 use std::path::PathBuf;
 
 // ---------------------------------------------------------------------------
+// Identifier validation
+// ---------------------------------------------------------------------------
+
+/// Validate an extension/theme/command-pack identifier before it's used as a
+/// path component. Without this check, a hostile manifest with `id: "../foo"`
+/// (or `"id": "/etc/something"`) would let install_from_directory build a
+/// target path that escapes the extensions directory — and the function
+/// would then call fs::remove_dir_all on that escaped path before copying
+/// over it. That's an arbitrary directory delete on install.
+///
+/// Rules:
+/// - lowercase ASCII letters, digits, `-`, and `_`
+/// - must start with a letter or digit (no leading dot, dash, or underscore)
+/// - 1..=64 characters
+/// These are tighter than the manifest format technically allows, but match
+/// the convention every shipped extension follows and reject every Unicode
+/// directory-traversal trick we know about.
+pub fn validate_extension_id(id: &str) -> Result<()> {
+    if id.is_empty() || id.len() > 64 {
+        anyhow::bail!("Extension id must be 1..=64 characters: {:?}", id);
+    }
+    let mut chars = id.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphanumeric() {
+        anyhow::bail!(
+            "Extension id must start with an ASCII letter or digit: {:?}",
+            id
+        );
+    }
+    for c in chars {
+        let ok = c.is_ascii_alphanumeric() || c == '-' || c == '_';
+        if !ok {
+            anyhow::bail!(
+                "Extension id contains a disallowed character {:?}: {:?}",
+                c,
+                id
+            );
+        }
+        if c.is_ascii_uppercase() {
+            anyhow::bail!("Extension id must be lowercase: {:?}", id);
+        }
+    }
+    // The first-char check above already excludes uppercase (alphanumeric
+    // + later loop catches it), but be explicit:
+    if first.is_ascii_uppercase() {
+        anyhow::bail!("Extension id must be lowercase: {:?}", id);
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Manifest types
 // ---------------------------------------------------------------------------
 
@@ -220,6 +271,10 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
     let manifest: ExtensionManifest =
         serde_json::from_str(&content).context("Invalid manifest.json")?;
 
+    // Reject hostile manifest ids before they reach any filesystem op.
+    // See validate_extension_id for why this matters.
+    validate_extension_id(&manifest.id).context("Invalid extension id in manifest")?;
+
     let subdir = kind_to_subdir(&manifest.kind)?;
     let target_base = user_item_dir(subdir)?;
 
@@ -245,6 +300,10 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
 
 /// Uninstall a user-installed item by ID and type.
 pub fn uninstall(id: &str, kind: &str) -> Result<()> {
+    // Same defense as install_from_directory: never let a frontend-supplied
+    // id reach fs::remove_dir_all without being checked first.
+    validate_extension_id(id).context("Invalid extension id")?;
+
     let subdir = kind_to_subdir(kind)?;
     let base = user_item_dir(subdir)?;
 
