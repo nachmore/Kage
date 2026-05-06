@@ -315,6 +315,86 @@ fn validate_id_rejects_path_traversal_attempts() {
 }
 
 // ---------------------------------------------------------------------------
+// Store URL validation — suffix-abuse defense
+// ---------------------------------------------------------------------------
+//
+// The pre-fix check was `url.starts_with("http://localhost") ||
+// url.starts_with("http://127.0.0.1")`, which lets "http://localhost.evil.com"
+// through because the prefix matches even though the host resolves to an
+// attacker-controlled name. The fix parses the URL and compares the host
+// component exactly. These tests pin both halves: the shapes we accept and
+// the suffix-abuse cases we reject.
+
+#[test]
+fn store_url_accepts_https_anywhere() {
+    extensions::validate_store_url("https://store.example.com").unwrap();
+    extensions::validate_store_url("https://example.com/path").unwrap();
+    extensions::validate_store_url("https://localhost").unwrap();
+}
+
+#[test]
+fn store_url_accepts_http_only_for_loopback_hosts() {
+    for url in [
+        "http://localhost",
+        "http://localhost:1420",
+        "http://localhost:1420/store",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8080/path",
+        "http://[::1]/foo",
+    ] {
+        extensions::validate_store_url(url)
+            .unwrap_or_else(|e| panic!("expected {:?} to be accepted, got: {}", url, e));
+    }
+}
+
+#[test]
+fn store_url_rejects_suffix_abuse_against_localhost_prefix() {
+    // The whole point of P1.9: starts_with("http://localhost") matched these,
+    // but they all resolve to attacker-controlled hosts.
+    let attacks = [
+        "http://localhost.attacker.com",
+        "http://localhost.attacker.com/store",
+        "http://localhost.evil/store",
+        "http://127.0.0.1.attacker.com",
+        "http://127.0.0.1.evil.example/path",
+        // Userinfo trick: the real host is after the @
+        "http://localhost@evil.com/store",
+        "http://127.0.0.1@evil.com",
+    ];
+    for url in attacks {
+        let result = extensions::validate_store_url(url);
+        assert!(
+            result.is_err(),
+            "validator must reject suffix-abuse url {:?}, but it was accepted",
+            url
+        );
+    }
+}
+
+#[test]
+fn store_url_rejects_non_http_schemes() {
+    for url in [
+        "file:///etc/passwd",
+        "ftp://store.example.com",
+        "javascript:alert(1)",
+        "data:text/html,abc",
+    ] {
+        assert!(
+            extensions::validate_store_url(url).is_err(),
+            "non-http(s) scheme {:?} must be rejected",
+            url
+        );
+    }
+}
+
+#[test]
+fn store_url_rejects_unparseable_input() {
+    assert!(extensions::validate_store_url("").is_err());
+    assert!(extensions::validate_store_url("not a url").is_err());
+    assert!(extensions::validate_store_url("://nohost").is_err());
+}
+
+// ---------------------------------------------------------------------------
 // Per-extension data layout — namespacing + legacy migration
 // ---------------------------------------------------------------------------
 

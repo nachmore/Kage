@@ -4,6 +4,49 @@ const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphv
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 
+// Escape raw HTML the agent emits inside markdown.
+//
+// marked passes raw HTML through verbatim by default. The pre-fix guard
+// further down only catches the case where the *first* non-whitespace token
+// is <script> / <html> / etc — anything later (e.g. "Here is the page:\n\n
+// <script>alert(1)</script>") slipped through and ran inside the chat
+// window. Override the renderer.html hook (used for both block-level and
+// inline raw HTML tokens — see marked.umd.js cases at "html": in both the
+// block parser and the inline parser) to escape every raw HTML token to
+// plain text. Fenced code blocks (```html\n...\n```) are routed through
+// renderer.code, not renderer.html, so source listings still render as
+// syntax-highlighted code.
+//
+// We use a private DOM-based escape so we don't depend on import order
+// during module init — markdown.js is loaded as a non-module script tag
+// alongside marked, so static `import` of escapeHtml from tool-utils.js
+// would create a load-order coupling we don't otherwise have here.
+export function _escapeHtmlForMarked(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+let _markedHardenedFlag = false;
+/** Test-only: re-arm the hardening guard. Production code never calls this. */
+export function _resetMarkedHardenedFlagForTests() {
+    _markedHardenedFlag = false;
+}
+export function hardenMarkedOnce() {
+    if (_markedHardenedFlag) return;
+    if (typeof marked === 'undefined' || !marked.use) return;
+    marked.use({
+        renderer: {
+            html(token) { return _escapeHtmlForMarked(token.text || ''); },
+        },
+    });
+    _markedHardenedFlag = true;
+}
+// Hardening must run before any marked.parse() call. Trying it now covers
+// the common case (marked already loaded as a <script> tag); _doRender
+// retries below as a safety net for the case where this module is imported
+// before the marked vendor script has finished loading.
+hardenMarkedOnce();
+
 let graphvizInstance = null;
 async function getGraphviz() {
     if (graphvizInstance) return graphvizInstance;
@@ -189,10 +232,17 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
 function _doRender(markdown, targetElement, streaming) {
     _lastRenderTime.set(targetElement, Date.now());
 
-    // Guard against raw HTML documents being passed in as "markdown". marked.js
-    // passes HTML through verbatim, so a response that starts with `<!DOCTYPE>`,
-    // `<html>`, `<body>`, `<script>`, or `<style>` would inject those tags into
-    // the page. Wrap them in an html code fence so they render as source.
+    // Re-attempt the renderer.html override in case marked finished loading
+    // after this module did. hardenMarkedOnce is idempotent — guarded by
+    // a flag — so this is free if hardening already ran.
+    hardenMarkedOnce();
+
+    // Display nicety: if the response starts with a full HTML document
+    // (<!DOCTYPE>, <html>, ...), wrap it in an html code fence so it
+    // renders as a styled source listing instead of an ugly stream of
+    // escaped tags. The renderer.html override above is the *security*
+    // guarantee — this branch is just polish for the "agent pasted a
+    // whole page" UX. Don't extend the trusted-input set here.
     if (typeof markdown === 'string') {
         const head = markdown.trimStart().slice(0, 200).toLowerCase();
         if (/^<(!doctype|html[\s>]|body[\s>]|head[\s>]|script[\s>]|style[\s>])/.test(head)) {

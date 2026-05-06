@@ -7,6 +7,7 @@
   },
   "devDependencies": {
     "jsdom": "^26.1.0",
+    "marked": "^15.0.12",
     "mathjs": "^15.2.0",
     "vitest": "^3.1.1"
   }

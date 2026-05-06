@@ -303,17 +303,6 @@ fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
     String::new()
 }
 
-/// Validate a store URL: must be https, or http only for localhost (dev).
-fn validate_store_url(url: &str) -> Result<(), String> {
-    if url.starts_with("https://") {
-        return Ok(());
-    }
-    if url.starts_with("http://localhost") || url.starts_with("http://127.0.0.1") {
-        return Ok(());
-    }
-    Err(format!("Store URL must use HTTPS (got: {}). HTTP is only allowed for localhost.", url).into())
-}
-
 /// Build a reqwest client with timeout.
 fn store_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -344,7 +333,7 @@ pub async fn store_get_catalog(
     }
     for s in &sources {
         if s.enabled && !s.url.is_empty() && store_urls.len() < 3 {
-            if validate_store_url(&s.url).is_ok() {
+            if extensions::validate_store_url(&s.url).is_ok() {
                 store_urls.push((s.name.clone(), s.url.clone()));
             }
         }
@@ -449,7 +438,7 @@ pub async fn store_get_detail(
         return Err("No store URL configured".into());
     }
 
-    validate_store_url(&base_url)?;
+    extensions::validate_store_url(&base_url)?;
 
     let url = format!("{}/store/catalog/{}", base_url, id);
     let client = store_client()?;
@@ -486,7 +475,7 @@ pub async fn store_install(
         return Err("No store URL configured".into());
     }
 
-    validate_store_url(&base_url)?;
+    extensions::validate_store_url(&base_url)?;
 
     store_install_inner(&base_url, &id, &state, &app, false)
         .await
@@ -552,7 +541,7 @@ pub async fn check_extension_updates(
         return Ok(serde_json::json!({ "updated": 0, "checked": 0 }));
     }
 
-    validate_store_url(&base_url)?;
+    extensions::validate_store_url(&base_url)?;
 
     // Gather all installed items
     let mut installed: Vec<(String, String, String)> = Vec::new(); // (id, version, kind)

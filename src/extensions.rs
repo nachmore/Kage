@@ -69,6 +69,46 @@ pub fn validate_extension_id(id: &str) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
+// Store URL validation (used by store_install / store_get_catalog /
+// store_get_detail / save_store_url Tauri commands)
+// ---------------------------------------------------------------------------
+
+/// Validate a store URL. HTTPS is allowed unconditionally; HTTP is allowed
+/// only for localhost-equivalent hosts (the dev server).
+///
+/// Pre-fix the check was `url.starts_with("http://localhost")` /
+/// `url.starts_with("http://127.0.0.1")`, which is suffix-abusable: a URL
+/// like `http://localhost.attacker.com/store` or `http://127.0.0.1.evil.example/`
+/// matches the prefix but resolves to an attacker-controlled host. The fix
+/// is to parse the URL and compare the host component exactly.
+pub fn validate_store_url(url: &str) -> Result<()> {
+    let parsed = url::Url::parse(url)
+        .with_context(|| format!("Store URL is not a valid URL: {}", url))?;
+    match parsed.scheme() {
+        "https" => Ok(()),
+        "http" => {
+            // host_str returns Some("localhost") / Some("127.0.0.1") / Some("[::1]")
+            // for the loopback hostnames; suffix-abuse cases like
+            // "localhost.attacker.com" return Some("localhost.attacker.com")
+            // and fail this exact-equality check.
+            let host = parsed.host_str().unwrap_or("");
+            if matches!(host, "localhost" | "127.0.0.1" | "[::1]" | "::1") {
+                Ok(())
+            } else {
+                anyhow::bail!(
+                    "Store URL must use HTTPS (got: {}). HTTP is only allowed for localhost.",
+                    url
+                )
+            }
+        }
+        other => anyhow::bail!(
+            "Store URL must use HTTPS (got scheme: {}). HTTP is only allowed for localhost.",
+            other
+        ),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Per-extension data layout (used by save_extension_data / load_extension_data
 // / delete_extension_data Tauri commands)
 // ---------------------------------------------------------------------------
