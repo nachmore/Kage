@@ -17,11 +17,9 @@ sample_sessions/
 
 # Vendor node_modules (use vendor/lib for committed files)
 ui/vendor/node_modules/
-ui/vendor/package-lock.json
 
 # Test dependencies
 ui/tests/node_modules/
-ui/tests/package-lock.json
 
 # Python cache
 __pycache__/
