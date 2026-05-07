@@ -36,3 +36,8 @@ config.json
 .env
 .env.*
 !.env.example
+
+# Root-level local-only directories
+node_modules/
+www/
+.claude/

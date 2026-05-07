@@ -5,7 +5,7 @@ edition = "2021"
 default-run = "kage"
 authors = ["Oren Nachman (nachmano@)"]
 description = "Your AI-powered desktop companion!"
-license = "MIT"
+license = "Apache-2.0"
 repository = "TBD"
 homepage = "TBD"
 

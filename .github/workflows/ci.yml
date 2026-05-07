@@ -1,4 +1,4 @@
-# CI: gate every push to mainline and every PR to main on a green build,
+# CI: gate every push to main and every PR to main on a green build,
 # clean lints, and a passing test suite (Rust + JS).
 #
 # Runs on windows-latest only — kage is Windows-primary; half the codebase
@@ -14,7 +14,7 @@ name: CI
 
 on:
   push:
-    branches: [mainline]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
