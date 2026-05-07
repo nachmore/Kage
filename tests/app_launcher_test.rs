@@ -2,14 +2,14 @@ use kage::app_launcher::AppLauncher;
 
 #[test]
 fn test_new_launcher_empty_registry() {
-    let launcher = AppLauncher::new().unwrap();
+    let launcher = AppLauncher::new();
     let results = launcher.find_app("anything");
     assert!(results.is_empty());
 }
 
 #[test]
 fn test_find_app_exact_match() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
@@ -27,7 +27,7 @@ fn test_find_app_exact_match() {
 
 #[test]
 fn test_find_app_starts_with() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
@@ -45,7 +45,7 @@ fn test_find_app_starts_with() {
 
 #[test]
 fn test_find_app_contains() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
@@ -62,7 +62,7 @@ fn test_find_app_contains() {
 
 #[test]
 fn test_find_app_case_insensitive() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
@@ -79,7 +79,7 @@ fn test_find_app_case_insensitive() {
 
 #[test]
 fn test_find_app_no_match() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("notepad".to_string(), kage::app_launcher::Application {
         name: "Notepad".to_string(),
@@ -96,7 +96,7 @@ fn test_find_app_no_match() {
 
 #[test]
 fn test_find_app_max_results() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     for i in 0..10 {
         let name = format!("app{}", i);
@@ -117,7 +117,7 @@ fn test_find_app_max_results() {
 
 #[test]
 fn test_find_app_alias_no_spaces() {
-    let mut launcher = AppLauncher::new().unwrap();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     registry.insert("microsoft word".to_string(), kage::app_launcher::Application {
         name: "Microsoft Word".to_string(),
@@ -149,7 +149,7 @@ fn make_app(name: &str, aliases: &[&str]) -> kage::app_launcher::Application {
 }
 
 fn seed(apps: Vec<(&str, kage::app_launcher::Application)>) -> AppLauncher {
-    let mut launcher = AppLauncher::empty();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     for (key, app) in apps {
         registry.insert(key.to_string(), app);
@@ -160,11 +160,11 @@ fn seed(apps: Vec<(&str, kage::app_launcher::Application)>) -> AppLauncher {
 
 #[test]
 fn empty_launcher_finds_nothing() {
-    let launcher = AppLauncher::empty();
+    let launcher = AppLauncher::new();
     assert!(launcher.find_app("anything").is_empty());
     // Critically, empty() must not panic even when called in a tight loop.
     for _ in 0..50 {
-        let _ = AppLauncher::empty();
+        let _ = AppLauncher::new();
     }
 }
 
@@ -255,7 +255,7 @@ fn find_app_similarity_rejects_unrelated_strings() {
 
 #[test]
 fn find_app_caps_results_even_with_many_starts_with_hits() {
-    let mut launcher = AppLauncher::empty();
+    let mut launcher = AppLauncher::new();
     let mut registry = std::collections::HashMap::new();
     // 20 apps all starting with "wx".
     for i in 0..20 {
@@ -270,7 +270,7 @@ fn find_app_caps_results_even_with_many_starts_with_hits() {
 
 #[test]
 fn apply_registry_replaces_the_whole_set() {
-    let mut launcher = AppLauncher::empty();
+    let mut launcher = AppLauncher::new();
     let mut initial = std::collections::HashMap::new();
     initial.insert("alpha".to_string(), make_app("Alpha", &["alpha"]));
     launcher.apply_registry(initial);
@@ -287,7 +287,7 @@ fn apply_registry_replaces_the_whole_set() {
 
 #[test]
 fn apply_registry_can_replace_with_empty() {
-    let mut launcher = AppLauncher::empty();
+    let mut launcher = AppLauncher::new();
     let mut initial = std::collections::HashMap::new();
     initial.insert("alpha".to_string(), make_app("Alpha", &["alpha"]));
     launcher.apply_registry(initial);

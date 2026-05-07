@@ -20,16 +20,10 @@ pub struct AppLauncher {
 }
 
 impl AppLauncher {
-    pub fn new() -> Result<Self> {
-        Ok(Self {
-            app_registry: HashMap::new(),
-        })
-    }
-
-    /// Infallible constructor — returns an empty launcher with no registered apps.
-    /// Used as a last-ditch fallback to avoid panicking during startup if the
-    /// normal constructor ever starts returning errors.
-    pub fn empty() -> Self {
+    /// Build an empty launcher. The expensive registry scan happens later
+    /// in `build_registry`, which runs on a background thread and is
+    /// applied via `apply_registry`. Construction itself can't fail.
+    pub fn new() -> Self {
         Self {
             app_registry: HashMap::new(),
         }

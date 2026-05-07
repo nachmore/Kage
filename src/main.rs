@@ -33,7 +33,7 @@ mod updater;
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
 use config::Config;
-use log::{error, info, warn};
+use log::{info, warn};
 use process_manager::ProcessManager;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -168,22 +168,7 @@ fn main() {
     let process_manager = acp_client.get_process_manager();
     process_manager::install_signal_handlers(process_manager);
 
-    // AppLauncher::new() is currently infallible (returns Ok(empty)) but we
-    // handle the Err path defensively: if it ever becomes fallible, we fall
-    // back to an empty launcher rather than crashing the whole app. The
-    // background scan later populates the registry regardless.
-    let app_launcher = AppLauncher::new().unwrap_or_else(|e| {
-        error!("Failed to initialize app launcher: {}", e);
-        eprintln!("Failed to initialize app launcher: {}", e);
-        AppLauncher::new().unwrap_or_else(|e2| {
-            error!("AppLauncher fallback also failed: {} — continuing without app launcher registry", e2);
-            // If even the fallback fails, build a zero-initialized launcher
-            // by reusing the no-op path. This can't actually happen with the
-            // current implementation (new() just returns an empty HashMap)
-            // but we refuse to panic here either way.
-            AppLauncher::empty()
-        })
-    });
+    let app_launcher = AppLauncher::new();
     info!("App launcher initialized (scan deferred to background)");
     if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
 
