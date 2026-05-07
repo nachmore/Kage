@@ -1,5 +1,9 @@
-# CI: gate every push to main and every PR to main on a green build,
-# clean lints, and a passing test suite (Rust + JS).
+# Debug Build + Test: gate every push to main and every PR to main on a
+# green build, clean lints, and a passing test suite (Rust + JS), then
+# publish the raw debug binaries as a short-lived workflow artifact.
+#
+# This is a *debug* build — no --release, no Tauri bundle, no installer.
+# Release/production builds live in a separate workflow (TBD).
 #
 # Runs on windows-latest only — kage is Windows-primary; half the codebase
 # is gated #[cfg(target_os = "windows")] with WinRT/COM/uiautomation deps
@@ -10,7 +14,7 @@
 # vitest. All four together take ~5 min warm / ~10 min cold; well inside
 # any GitHub Actions allowance for a personal-scale push frequency.
 
-name: CI
+name: Debug Build + Test
 
 on:
   push:
@@ -28,7 +32,7 @@ concurrency:
 
 jobs:
   build-test:
-    name: build + test
+    name: debug build + test
     runs-on: windows-latest
 
     steps:
@@ -85,3 +89,22 @@ jobs:
       - name: vitest
         working-directory: ui/tests
         run: npx vitest run
+
+      # ----- Artifact upload ------------------------------------------
+
+      # Raw debug binaries from `cargo build --bins`. These won't run on
+      # their own — the Tauri frontend and resources are only bundled by
+      # `cargo tauri build` — but they're handy for "does this branch
+      # compile and link?" sanity checks, attaching to an issue, or
+      # grabbing a stripped-down kage-computer-control-mcp.exe to
+      # reproduce MCP behaviour locally. Short retention since these
+      # aren't shipping artifacts.
+      - name: Upload debug binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: kage-debug-${{ github.sha }}
+          path: |
+            target/debug/kage.exe
+            target/debug/kage-computer-control-mcp.exe
+          if-no-files-found: error
+          retention-days: 7
