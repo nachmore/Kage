@@ -70,9 +70,44 @@ if port_in_use(PORT):
     import time
     time.sleep(0.3)
 
-# Resolve ui/ directory
-ui_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui")
-ui_dir = os.path.normpath(ui_dir)
+# Resolve repo root (scripts/ is one level deep) and the ui/ directory
+repo_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+ui_dir = os.path.join(repo_root, "ui")
+
+
+def build_mcp_binary():
+    """Rebuild the standalone kage-computer-control-mcp binary.
+
+    `cargo tauri dev` only rebuilds the main `kage` binary — edits to
+    `src/bin/computer_control_mcp.rs` (or to any module it pulls in,
+    notably `src/os/accessibility.rs`) silently produce a stale MCP
+    binary unless the developer remembers to run this command by hand.
+    Running it here on every dev start makes the dev loop honest:
+    the binary kage-cli spawns is always up-to-date with the source.
+
+    Cargo's incremental cache makes this a no-op when nothing changed
+    (sub-second on a warm tree); when it isn't, the dev server start
+    is delayed by the rebuild, which is the correct trade-off — we'd
+    rather wait than ship a stale binary into a debugging session.
+
+    A failure here is fatal: continuing would launch the app against
+    an old (or missing) binary and produce confusing runtime errors.
+    """
+    print("Building kage-computer-control-mcp...")
+    sys.stdout.flush()
+    result = subprocess.run(
+        ["cargo", "build", "--bin", "kage-computer-control-mcp"],
+        cwd=repo_root,
+        # Pipe through so build progress and any compile errors show up
+        # in the same terminal as the dev server.
+    )
+    if result.returncode != 0:
+        print(f"\n❌ kage-computer-control-mcp build failed (exit {result.returncode}); aborting dev start")
+        sys.exit(result.returncode)
+
+
+if "--no-mcp-build" not in sys.argv:
+    build_mcp_binary()
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):

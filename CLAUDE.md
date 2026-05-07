@@ -18,11 +18,11 @@ cargo build                      # debug binaries only — no installer, no bund
 
 `cargo build --release` does **not** produce the installer; only `cargo tauri build` does.
 
-### Two binaries — they don't rebuild together
+### Two binaries — built separately, chained automatically
 
 `src/main.rs` → `kage` (the app). `src/bin/computer_control_mcp.rs` → `kage-computer-control-mcp` (standalone MCP server spawned by kage-cli over stdio).
 
-`cargo tauri dev` and `cargo check` rebuild **only** `kage`. After editing `src/bin/computer_control_mcp.rs` or any module it pulls in (notably `src/os/accessibility.rs`, `src/computer_control/`):
+`cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `src/bin/computer_control_mcp.rs` or any module it pulls in (notably `src/os/accessibility.rs`, `src/computer_control/`) run:
 
 ```bash
 cargo build --bin kage-computer-control-mcp
@@ -30,7 +30,9 @@ cargo build --bin kage-computer-control-mcp
 
 If the binary is locked because it's running, kill it first (`Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`), then rebuild and restart the app so kage-cli picks up the new binary.
 
-`cargo tauri build` rebuilds it automatically (see `tauri.conf.json` → `beforeBuildCommand`).
+`cargo tauri build` rebuilds it automatically too (see `tauri.conf.json` → `beforeBuildCommand`).
+
+To skip the MCP rebuild during dev (purely UI/main-binary iteration), pass `--no-mcp-build` to the dev server, e.g. by editing the `beforeDevCommand` line in `tauri.conf.json` for that session.
 
 ## Test & Lint
 
