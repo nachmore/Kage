@@ -13,9 +13,10 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::fs::{self, File, OpenOptions};
+use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 /// Kinds of events we track. Each variant carries the data needed to
 /// reconstruct what happened without cross-referencing the config.
@@ -124,22 +125,17 @@ pub fn default_log_path() -> Option<PathBuf> {
 /// Append one entry to the given log file. Best-effort: a failure is
 /// logged via `log::warn!` and swallowed so a broken disk never blocks
 /// a grant operation. Creates the parent directory if missing.
-pub fn append_to(path: &std::path::Path, entry: &AuditEntry) {
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            if let Err(e) = fs::create_dir_all(parent) {
-                log::warn!("audit log: cannot create {}: {}", parent.display(), e);
-                return;
-            }
-        }
+///
+/// Each call opens, writes, and closes the file. This is the testing
+/// API — production code uses [`append`] which keeps a single
+/// long-lived `BufWriter` per process to avoid the open/close round-trip
+/// per event.
+pub fn append_to(path: &Path, entry: &AuditEntry) {
+    if !ensure_parent(path) {
+        return;
     }
-
-    let serialized = match serde_json::to_string(entry) {
-        Ok(s) => s,
-        Err(e) => {
-            log::warn!("audit log: failed to serialize entry: {}", e);
-            return;
-        }
+    let Some(serialized) = serialize(entry) else {
+        return;
     };
 
     let mut file = match OpenOptions::new().create(true).append(true).open(path) {
@@ -157,14 +153,108 @@ pub fn append_to(path: &std::path::Path, entry: &AuditEntry) {
     }
 }
 
-/// Convenience: append to the default path. Use this from command
-/// handlers; tests should call `append_to` with a tempdir path.
+fn ensure_parent(path: &Path) -> bool {
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                log::warn!("audit log: cannot create {}: {}", parent.display(), e);
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn serialize(entry: &AuditEntry) -> Option<String> {
+    match serde_json::to_string(entry) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            log::warn!("audit log: failed to serialize entry: {}", e);
+            None
+        }
+    }
+}
+
+/// Long-lived writer for the default log path. Audit events arrive
+/// during permission-grant flows, which run on the Tauri command
+/// thread pool — opening and closing the file every time was wasted
+/// I/O, especially during automation runs that grant many tools in
+/// quick succession.
+///
+/// One process-wide handle keeps the FD open and a small BufWriter
+/// in front of it. We flush after every record so a crash doesn't
+/// lose more than the one entry that was mid-write.
+static DEFAULT_WRITER: OnceLock<Mutex<Option<BufWriter<File>>>> = OnceLock::new();
+
+fn default_writer_lock() -> &'static Mutex<Option<BufWriter<File>>> {
+    DEFAULT_WRITER.get_or_init(|| Mutex::new(None))
+}
+
+fn open_default_writer() -> Option<BufWriter<File>> {
+    let path = default_log_path()?;
+    if !ensure_parent(&path) {
+        return None;
+    }
+    match OpenOptions::new().create(true).append(true).open(&path) {
+        Ok(f) => Some(BufWriter::with_capacity(4096, f)),
+        Err(e) => {
+            log::warn!("audit log: failed to open {}: {}", path.display(), e);
+            None
+        }
+    }
+}
+
+/// Append to the default path through the cached writer.
 pub fn append(entry: &AuditEntry) {
-    let Some(path) = default_log_path() else {
-        log::warn!("audit log: config_dir unavailable, skipping append");
+    let Some(serialized) = serialize(entry) else {
         return;
     };
-    append_to(&path, entry);
+
+    let lock = default_writer_lock();
+    let mut guard = match lock.lock() {
+        Ok(g) => g,
+        // Another thread panicked while holding the writer — recover
+        // the inner state. The writer might be in a half-flushed state
+        // but it's better to keep going than refuse all future audits.
+        Err(p) => p.into_inner(),
+    };
+
+    // Lazy-init on first use so a process that never grants any tools
+    // doesn't even open the file.
+    if guard.is_none() {
+        *guard = open_default_writer();
+    }
+
+    let Some(writer) = guard.as_mut() else {
+        // Couldn't open — already warned in open_default_writer; no point
+        // logging again per entry.
+        return;
+    };
+
+    if let Err(e) = writeln!(writer, "{}", serialized) {
+        log::warn!("audit log: write failed: {}", e);
+        // Drop the writer — the FD may be in a bad state. Next append
+        // will try to reopen.
+        *guard = None;
+        return;
+    }
+    // Flush every record so `read_recent_default` sees recent entries
+    // and a crash doesn't drop more than the in-flight line.
+    if let Err(e) = writer.flush() {
+        log::warn!("audit log: flush failed: {}", e);
+        *guard = None;
+    }
+}
+
+/// Drop the cached writer so the next `append` reopens. Used by `clear`
+/// after it truncates the file out from under us — keeping the old FD
+/// would either keep writing into a deleted-but-still-open file (Unix)
+/// or fail outright (Windows).
+fn reset_default_writer() {
+    let lock = default_writer_lock();
+    if let Ok(mut guard) = lock.lock() {
+        *guard = None;
+    }
 }
 
 /// Read the last `limit` entries, most-recent-first. Tolerates
@@ -325,6 +415,9 @@ pub fn clear_default() -> std::io::Result<()> {
     let Some(path) = default_log_path() else {
         return Ok(());
     };
+    // Drop the cached writer first so the truncate isn't fighting an open
+    // append-mode FD. The next `append` will reopen against the fresh file.
+    reset_default_writer();
     clear(&path)
 }
 
@@ -613,6 +706,66 @@ mod tests {
         } else {
             panic!("wrong event");
         }
+    }
+
+    // ---- Helper-level tests added with the BufWriter refactor (B.2) -------
+
+    #[test]
+    fn ensure_parent_creates_missing_dir_and_returns_true() {
+        let dir = tempdir();
+        let nested = dir.join("a").join("b").join("c");
+        let path = nested.join("audit.jsonl");
+        assert!(!nested.exists());
+        assert!(ensure_parent(&path));
+        assert!(nested.is_dir());
+    }
+
+    #[test]
+    fn ensure_parent_succeeds_when_dir_already_exists() {
+        let dir = tempdir();
+        // Path under an existing dir; ensure_parent should be a no-op.
+        let path = dir.join("audit.jsonl");
+        assert!(ensure_parent(&path));
+        assert!(dir.is_dir());
+    }
+
+    #[test]
+    fn ensure_parent_handles_root_path_without_panicking() {
+        // A path with no parent (e.g. `audit.jsonl` with no directory
+        // component) must still return true — `Path::parent` is None,
+        // which means "nothing to create."
+        let path = PathBuf::from("audit.jsonl");
+        assert!(ensure_parent(&path));
+    }
+
+    #[test]
+    fn serialize_returns_some_for_valid_entry() {
+        let entry = AuditEntry::at_time(
+            "2026-04-28T12:00:00.000Z",
+            AuditEvent::Denied { tool: "x".into(), session_id: None },
+        );
+        let s = serialize(&entry).expect("serialize must succeed");
+        // Round-trip back through serde to confirm the output is well-formed.
+        let parsed: AuditEntry = serde_json::from_str(&s).unwrap();
+        assert_eq!(parsed, entry);
+    }
+
+    #[test]
+    fn append_to_then_append_to_appends_new_line_each_time() {
+        // The path-explicit API used in tests doesn't go through the cached
+        // writer — verify it still appends cleanly multiple times so the
+        // refactor didn't accidentally break read-back behaviour.
+        let dir = tempdir();
+        let path = logpath(&dir);
+
+        for i in 0..5 {
+            append_to(&path, &AuditEntry::at_time(
+                format!("2026-04-28T12:00:0{}.000Z", i),
+                AuditEvent::Denied { tool: format!("t{}", i), session_id: None },
+            ));
+        }
+        let got = read_recent(&path, 100);
+        assert_eq!(got.len(), 5);
     }
 
     #[test]
