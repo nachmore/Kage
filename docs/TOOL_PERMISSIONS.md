@@ -1,92 +1,72 @@
 # Tool Permissions
 
-## Overview
+How Kage decides whether to allow a tool call from the agent. The trust
+boundary lives in the Rust backend; the frontend modal is just the prompt
+that fills in the user's decision.
 
-The Tool Permissions system provides user control over which tools the AI can use. When the ACP (Agent Communication Protocol) requests permission to use a tool, the user is presented with options to approve or deny the request.
+## What the user sees
 
-## User Experience
+When the agent requests a tool that isn't already allowed, a modal appears
+with four options:
 
-### Permission Modal
+- **Once** — allow this single call.
+- **24 hours** — auto-approve this tool for the next 24h, then ask again.
+- **Always** — auto-approve indefinitely, with a 30-day staleness check.
+- **Deny** — reject this call.
 
-When the AI wants to use a tool (like web search, file operations, etc.), a modal appears with three options:
+Two settings change this prompt flow:
 
-1. **Deny** - Reject this specific request
-2. **Trust Once** - Allow this one time only
-3. **Trust Always** - Remember this choice and auto-approve future requests for this tool
+- **Trust mode (`trust_all`)** — auto-approves every tool call without
+  prompting, except those with an explicit `deny` policy.
+- **Terminator mode (`terminator_mode`)** — same as `trust_all` but
+  intended as a temporary "leave me alone" toggle. Toggling it on/off
+  is recorded in the audit log.
 
-### Settings Panel
+Both default to off. Both surface a warning in Settings when enabled.
 
-Users can manage tool permissions in Settings > Tool Permissions:
+## Where it lives in the code
 
-- **Trust All Tools** - Toggle to automatically approve all tool requests without prompting
-  - Shows a warning about security implications
-  - Useful for power users who trust the AI completely
+- **Config** (`src/config.rs`) — `ToolPermissionsConfig` carries
+  `trust_all`, `terminator_mode`, and `tools: Vec<ToolPolicy>`.
+- **Per-tool policy** (`ToolPolicy`) — `policy` is `"ask" | "allow" |
+  "deny"`; `grant_type` is `"once" | "24h" | "always"`; `granted_at` and
+  `last_seen` are ISO 8601 timestamps. `effective_policy()` resolves the
+  raw fields against the current time so that a 24h grant lapses, an
+  "always" grant goes stale after 30 days, and a future-dated timestamp
+  (clock skew) is treated as suspicious and demotes back to `ask`.
+- **Permission handler** (`src/commands/messaging.rs`) — the ACP
+  notification handler reads `effective_policy()`, returns a synthesized
+  approval to ACP if it's `allow` or `deny`, and otherwise emits the
+  `permission_request` Tauri event so the frontend can prompt.
+- **Audit log** (`src/permission_audit.rs`) — every grant, deny, revoke,
+  expiry, and terminator-mode toggle is appended to
+  `<config_dir>/kage/permission-audit.jsonl`. Documented in
+  `SECURITY_MODEL.md` as informational, not tamper-evident.
+- **Settings UI** (`ui/js/settings/tool-permissions.js`) — manages the
+  toggles plus a list view of granted tools. Revoking from the list
+  writes a `Revoked` audit entry.
+- **Modal** (`ui/js/floating/permissions.js` and
+  `ui/js/chat/permissions.js`) — listens for `permission_request`
+  events, gates the modal by current session id, sends the user's
+  decision back through `send_permission_response`.
 
-- **Allowed Tools List** - Shows all tools granted "Trust Always" permission
-  - Displays tool name and when permission was granted
-  - Allows revoking permission for any tool
+## Permission flow
 
-## Technical Implementation
+1. Agent calls a tool; ACP sends `session/request_permission`.
+2. The notification handler reads `ToolPolicy::effective_policy()` for
+   the tool title.
+3. If `trust_all` or `terminator_mode` is on, the handler returns
+   `allow_once` immediately and writes a `Granted` audit entry.
+4. If the policy resolves to `allow`, the handler returns `allow_once`
+   immediately. The grant_type is preserved for the next call.
+5. If the policy resolves to `deny`, the handler returns `reject_once`.
+6. Otherwise, the handler emits `permission_request` to the frontend.
+   The modal collects the user's choice and calls
+   `send_permission_response`, which writes the new policy back to
+   config (atomically — see P0.5 in the audit) and writes the audit
+   entry.
 
-### Backend (Rust)
-
-**Config Structure** (`src/config.rs`):
-```rust
-pub struct ToolPermissionsConfig {
-    pub trust_all: bool,
-    pub allowed_tools: Vec<AllowedTool>,
-}
-
-pub struct AllowedTool {
-    pub tool_call_id: String,
-    pub title: String,
-    pub allowed_at: String, // ISO 8601 timestamp
-}
-```
-
-**ACP Client** (`src/acp_client.rs`):
-- `send_chat_streaming()` now accepts an optional `permission_callback`
-- Detects `session/request_permission` notifications from ACP
-- Emits permission requests to the frontend via Tauri events
-
-**Tauri Commands** (`src/main.rs`):
-- `send_permission_response()` - Sends user's decision back to ACP
-- `remove_tool_permission()` - Removes a tool from the allowed list
-
-### Frontend (JavaScript)
-
-**Permission Modal** (`ui/js/floating-permissions.js`):
-- Listens for `permission_request` events from backend
-- Shows modal with tool information
-- Handles auto-approval for trusted tools
-- Sends user's choice back to backend
-
-**Settings Module** (`ui/js/settings/tool-permissions.js`):
-- Manages trust_all toggle
-- Displays and manages allowed tools list
-- Allows revoking permissions
-
-## Permission Flow
-
-1. AI requests to use a tool
-2. ACP sends `session/request_permission` notification
-3. Backend checks if `trust_all` is enabled or tool is in allowed list
-4. If auto-approved, sends `allow_once` response immediately
-5. Otherwise, emits `permission_request` event to frontend
-6. Frontend shows modal to user
-7. User makes choice (deny/once/always)
-8. Frontend calls `send_permission_response` command
-9. Backend sends response to ACP
-10. If "always", tool is added to config and saved
-
-## Security Considerations
-
-- **Trust All** is disabled by default and shows a warning when enabled
-- Permissions are stored per-tool, not per-session
-- Users can revoke permissions at any time
-- Permission history includes timestamps for audit purposes
-
-## Example ACP Permission Request
+## Example ACP `session/request_permission`
 
 ```json
 {
@@ -99,19 +79,20 @@ pub struct AllowedTool {
       "title": "Searching the web"
     },
     "options": [
-      {"optionId": "allow_once", "name": "Yes", "kind": "allow_once"},
-      {"optionId": "allow_always", "name": "Always", "kind": "allow_always"},
-      {"optionId": "reject_once", "name": "No", "kind": "reject_once"}
+      { "optionId": "allow_once",   "name": "Yes",     "kind": "allow_once"   },
+      { "optionId": "allow_always", "name": "Always",  "kind": "allow_always" },
+      { "optionId": "reject_once",  "name": "No",      "kind": "reject_once"  }
     ]
   },
   "id": "b8c39264-fe39-49a9-9c5e-dd9e4934f3df"
 }
 ```
 
-## Future Enhancements
+## Extension capabilities
 
-- Per-tool permission levels (read-only vs full access)
-- Temporary time-based permissions
-- Permission groups (e.g., "All file operations")
-- Export/import permission settings
-- Audit log of all tool usage
+Extensions are a separate trust system: each one declares the
+capabilities it needs (storage, network, etc.) and the user approves
+the set at install time. Capability grants live in `extension_grants`
+(keyed by extension id) in config; the sandbox host enforces them on
+every IPC `invoke` from the extension iframe. See `SECURITY_MODEL.md`
+for the threat model.

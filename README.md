@@ -56,6 +56,5 @@ Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
 - [Security Model](docs/SECURITY_MODEL.md)
 - [Debug Mode Guide](docs/DEBUG_MODE.md)
 - [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md)
-- [OS Abstraction Guide](docs/OS_ABSTRACTION_GUIDE.md)
-- [OS Architecture](docs/OS_ARCHITECTURE.md)
+- [OS Abstraction Layer](docs/OS_ABSTRACTION_GUIDE.md)
 - [Tool Permissions](docs/TOOL_PERMISSIONS.md)

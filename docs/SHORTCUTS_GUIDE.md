@@ -28,21 +28,41 @@ Each shortcut has the following fields:
 |-------|----------|-------------|
 | **Name / Description** | Yes | A friendly name describing what the shortcut does |
 | **Shortcut** | Yes | The trigger word you'll type (e.g., "code", "git", "google") |
-| **Action Type** | Yes | Type of action: "Run Program" or "Open URL" |
+| **Action Type** | Yes | One of: `run_program`, `open_url`, `prompt`, `text`, `script` |
+| **Icon** | No | Emoji or PNG/JPG data URI shown next to the shortcut |
 
-#### For "Run Program" Action Type:
+#### `run_program` — launch an executable
 
 | Field | Required | Description |
 |-------|----------|-------------|
 | **Path** | Yes | Full path to the executable to run |
 | **Working Directory** | No | Directory to run the command in |
-| **Arguments** | No | Arguments to pass to the executable |
+| **Arguments** | No | Arguments to pass (supports `{*}` and `{0}`/`{1}`/...) |
 
-#### For "Open URL" Action Type:
+#### `open_url` — open a URL in the default browser
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| **URL** | Yes | URL to open (supports argument templates) |
+| **URL** | Yes | URL to open (arguments URL-encoded into `{*}`/`{N}` slots) |
+
+#### `prompt` — send a templated prompt to the agent
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Prompt** | Yes | Prompt template; `{*}`/`{N}` substitute the user's args |
+
+#### `text` — paste literal text
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Prompt** | Yes | Text to paste at the cursor; `{*}`/`{N}` substituted |
+
+#### `script` — run a JS function body and feed the result to a follow-up action
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| **Script** | Yes | JS function body. The args are bound; return a string. |
+| **Script Action** | Yes | What to do with the return value: `run_program`, `open_url`, `prompt`, or `text` |
 
 ### Argument Templates
 

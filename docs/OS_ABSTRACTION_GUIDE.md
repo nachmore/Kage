@@ -1,451 +1,112 @@
-# OS Abstraction Layer - Developer Guide
+# OS Abstraction Layer
 
-## Quick Start
+Cross-platform OS code lives in `src/os/`. The pattern: a thin
+cross-platform module per concern (cursor, clipboard, launcher, etc.) that
+dispatches to a Windows/macOS/Linux implementation under it. The split is
+compile-time `#[cfg(target_os = "...")]` — zero runtime overhead, no
+dynamic dispatch.
 
-### Using OS Functions
+Application code never reaches into a platform submodule directly. Always
+go through the cross-platform API.
 
-Instead of writing platform-specific code with `#[cfg]` attributes, simply use the OS abstraction layer:
+## Modules
 
-```rust
-use crate::os;
-
-// Get cursor position
-if let Some((x, y)) = os::get_cursor_position() {
-    println!("Cursor at: {}, {}", x, y);
-}
-
-// Open a URL
-os::open_url("https://example.com")?;
-
-// Open a file or folder
-os::open_path("/path/to/file")?;
-
-// Scan for installed applications
-let apps = os::scan_applications()?;
-
-// Launch an application
-os::launch_application(&app_path)?;
-
-// Kill a process
-if os::kill_process(pid) {
-    println!("Process terminated");
-}
-
-// Configure process spawning
-let mut cmd = Command::new("program");
-os::configure_process_spawn(&mut cmd);
-let child = cmd.spawn()?;
+```
+src/os/
+├── mod.rs
+├── accessibility.rs
+├── calendar.rs
+├── clipboard.rs
+├── clipboard_history.rs
+├── cursor.rs
+├── file_search.rs
+├── hotkey.rs
+├── icon.rs
+├── launcher.rs
+├── power.rs
+├── process.rs
+├── shell.rs
+├── startup.rs
+├── user.rs
+├── window_list.rs
+├── windows/      ← full implementation
+├── macos/        ← common paths only; gaps return empty + warn once
+└── linux/        ← common paths only; gaps return empty + warn once
 ```
 
-## Adding New OS-Specific Functionality
+Windows is the primary target and the only fully-featured implementation.
+macOS and Linux cover the common paths used by features that ship cross-
+platform; the rest are stubs that log a single warning per process and
+return an empty result. The intent is "still compiles and runs" rather
+than feature parity.
 
-### Step 1: Define the Cross-Platform API
+## Dispatch pattern
 
-Create or update a file in `src/os/` (e.g., `clipboard.rs`):
+Every cross-platform module follows the same shape — Pattern A in the
+audit. The cross-platform fn takes care of dispatch; the platform fn is
+named with an `_impl` suffix to make ownership obvious at the call site.
 
 ```rust
 // src/os/clipboard.rs
-
-/// Get text from the system clipboard
 pub fn get_clipboard_text() -> Option<String> {
     #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::clipboard::get_clipboard_text_impl()
-    }
-    
+    { crate::os::windows::clipboard::get_clipboard_text_impl() }
     #[cfg(target_os = "macos")]
-    {
-        crate::os::macos::clipboard::get_clipboard_text_impl()
-    }
-    
+    { crate::os::macos::clipboard::get_clipboard_text_impl() }
     #[cfg(target_os = "linux")]
-    {
-        crate::os::linux::clipboard::get_clipboard_text_impl()
-    }
-}
-
-/// Set text to the system clipboard
-pub fn set_clipboard_text(text: &str) -> Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::clipboard::set_clipboard_text_impl(text)
-    }
-    
-    #[cfg(target_os = "macos")]
-    {
-        crate::os::macos::clipboard::set_clipboard_text_impl(text)
-    }
-    
-    #[cfg(target_os = "linux")]
-    {
-        crate::os::linux::clipboard::set_clipboard_text_impl(text)
-    }
+    { crate::os::linux::clipboard::get_clipboard_text_impl() }
 }
 ```
-
-### Step 2: Implement for Each Platform
-
-#### Windows Implementation
-```rust
-// src/os/windows/clipboard.rs
-
-use anyhow::Result;
-
-pub fn get_clipboard_text_impl() -> Option<String> {
-    // Use Windows clipboard API
-    // ...
-}
-
-pub fn set_clipboard_text_impl(text: &str) -> Result<()> {
-    // Use Windows clipboard API
-    // ...
-}
-```
-
-#### macOS Implementation
-```rust
-// src/os/macos/clipboard.rs
-
-use anyhow::Result;
-
-pub fn get_clipboard_text_impl() -> Option<String> {
-    // Use macOS pasteboard API
-    // ...
-}
-
-pub fn set_clipboard_text_impl(text: &str) -> Result<()> {
-    // Use macOS pasteboard API
-    // ...
-}
-```
-
-#### Linux Implementation
-```rust
-// src/os/linux/clipboard.rs
-
-use anyhow::Result;
-
-pub fn get_clipboard_text_impl() -> Option<String> {
-    // Use X11 or Wayland clipboard
-    // ...
-}
-
-pub fn set_clipboard_text_impl(text: &str) -> Result<()> {
-    // Use X11 or Wayland clipboard
-    // ...
-}
-```
-
-### Step 3: Export from Platform Modules
-
-```rust
-// src/os/windows/mod.rs
-pub mod clipboard;
-
-// src/os/macos/mod.rs
-pub mod clipboard;
-
-// src/os/linux/mod.rs
-pub mod clipboard;
-```
-
-### Step 4: Re-export from Main OS Module
-
-```rust
-// src/os/mod.rs
-pub mod clipboard;
-
-pub use clipboard::{get_clipboard_text, set_clipboard_text};
-```
-
-### Step 5: Use in Application Code
-
-```rust
-// src/main.rs or any other file
-use crate::os;
-
-fn copy_to_clipboard() -> Result<()> {
-    os::set_clipboard_text("Hello, World!")?;
-    Ok(())
-}
-
-fn paste_from_clipboard() -> Option<String> {
-    os::get_clipboard_text()
-}
-```
-
-## Common Patterns
-
-### Pattern 1: Simple Function Call
-
-When the operation is straightforward:
-
-```rust
-// Cross-platform API
-pub fn do_something() -> Result<()> {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::module::do_something_impl() }
-    
-    #[cfg(target_os = "macos")]
-    { crate::os::macos::module::do_something_impl() }
-    
-    #[cfg(target_os = "linux")]
-    { crate::os::linux::module::do_something_impl() }
-}
-```
-
-### Pattern 2: Returning Platform-Specific Data
-
-When you need to return structured data:
-
-```rust
-// Define common types in the cross-platform module
-pub struct SystemInfo {
-    pub os_name: String,
-    pub version: String,
-    pub architecture: String,
-}
-
-pub fn get_system_info() -> SystemInfo {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::system::get_system_info_impl() }
-    
-    #[cfg(target_os = "macos")]
-    { crate::os::macos::system::get_system_info_impl() }
-    
-    #[cfg(target_os = "linux")]
-    { crate::os::linux::system::get_system_info_impl() }
-}
-```
-
-### Pattern 3: Configuring Objects
-
-When you need to modify an object based on platform:
-
-```rust
-pub fn configure_window(window: &mut Window) {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::window::configure_window_impl(window) }
-    
-    #[cfg(target_os = "macos")]
-    { crate::os::macos::window::configure_window_impl(window) }
-    
-    #[cfg(target_os = "linux")]
-    { crate::os::linux::window::configure_window_impl(window) }
-}
-```
-
-### Pattern 4: Optional Features
-
-When a feature might not be available on all platforms:
-
-```rust
-pub fn get_battery_level() -> Option<f32> {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::power::get_battery_level_impl() }
-    
-    #[cfg(target_os = "macos")]
-    { crate::os::macos::power::get_battery_level_impl() }
-    
-    #[cfg(target_os = "linux")]
-    { crate::os::linux::power::get_battery_level_impl() }
-    
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    { None }
-}
-```
-
-## Testing
-
-### Unit Testing Platform-Specific Code
-
-Test each platform implementation independently:
 
 ```rust
 // src/os/windows/clipboard.rs
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_clipboard_roundtrip() {
-        let text = "Test text";
-        set_clipboard_text_impl(text).unwrap();
-        assert_eq!(get_clipboard_text_impl(), Some(text.to_string()));
-    }
-}
+pub fn get_clipboard_text_impl() -> Option<String> { /* Win32 calls */ }
 ```
-
-### Integration Testing
-
-Test the cross-platform API:
 
 ```rust
-// tests/os_integration_test.rs
-
-use kage::os;
-
-#[test]
-fn test_clipboard_works() {
-    let text = "Integration test";
-    os::set_clipboard_text(text).unwrap();
-    assert_eq!(os::get_clipboard_text(), Some(text.to_string()));
+// src/os/macos/clipboard.rs — stub
+pub fn get_clipboard_text_impl() -> Option<String> {
+    crate::os::macos::warn_once("clipboard::get_clipboard_text");
+    None
 }
 ```
 
-### Mocking for Tests
+For one-line helpers (e.g. `is_dark_mode`, `fonts_dir`) the cross-platform
+file may keep the `#[cfg]` switch inline rather than going through `_impl`
+fns. Anything non-trivial gets the full pattern so platform implementations
+stay independently testable and easy to grep.
 
-Create a mock module for testing:
+## Adding a new operation
 
-```rust
-// src/os/mock/mod.rs (only compiled in test mode)
+1. Create or update `src/os/<concern>.rs` with the public API. Use the
+   dispatch pattern above.
+2. Add a matching `<concern>.rs` (or extend the existing one) in
+   `src/os/windows/`, `src/os/macos/`, `src/os/linux/`. Each must export
+   the same `_impl` function, even if the macOS/Linux version is a stub
+   that calls `warn_once` and returns a default.
+3. Re-export from `src/os/mod.rs` so call sites can do
+   `use crate::os; os::your_function()`.
+4. Tests live next to the implementation. Pure helpers (e.g. parsers,
+   format converters) get unit tests without going through the whole
+   stack — see `is_strict_iso_date` in `os/windows/calendar.rs` as a
+   reference.
 
-#[cfg(test)]
-pub mod clipboard {
-    use std::sync::Mutex;
-    
-    static CLIPBOARD: Mutex<Option<String>> = Mutex::new(None);
-    
-    pub fn get_clipboard_text_impl() -> Option<String> {
-        CLIPBOARD.lock().unwrap().clone()
-    }
-    
-    pub fn set_clipboard_text_impl(text: &str) -> Result<()> {
-        *CLIPBOARD.lock().unwrap() = Some(text.to_string());
-        Ok(())
-    }
-}
-```
+## Things that aren't in `os/` and shouldn't be
 
-## Best Practices
+- **Tauri-typed code** (windows, app handles, IPC commands) lives in
+  `commands/` and `setup/`. Those modules are gated `#[cfg(not(test))]`
+  in `lib.rs` because Tauri's type system doesn't compile under `--test`.
+  When pure logic gets entangled there, lift it into a sibling module
+  (the `chunk_batcher.rs` precedent) so it remains testable.
+- **The MCP binary** (`src/bin/computer_control_mcp.rs`) reaches into
+  `os/` directly because it's a separate binary, not "application code"
+  in the kage sense. The same dispatch contract applies — it consumes
+  the cross-platform API, never the platform submodules.
 
-### DO ✅
+## Capabilities and feature gating
 
-1. **Keep platform code isolated**
-   ```rust
-   // Good: All Windows code in windows/ directory
-   // src/os/windows/feature.rs
-   ```
-
-2. **Use descriptive function names**
-   ```rust
-   // Good
-   pub fn get_cursor_position() -> Option<(i32, i32)>
-   
-   // Bad
-   pub fn cursor() -> Option<(i32, i32)>
-   ```
-
-3. **Return Result for operations that can fail**
-   ```rust
-   // Good
-   pub fn open_url(url: &str) -> Result<()>
-   
-   // Bad
-   pub fn open_url(url: &str) -> bool
-   ```
-
-4. **Document platform-specific behavior**
-   ```rust
-   /// Get the cursor position in screen coordinates.
-   /// 
-   /// # Platform-specific behavior
-   /// - Windows: Uses GetCursorPos from Win32 API
-   /// - macOS: Uses CoreGraphics (TODO)
-   /// - Linux: Uses X11/Wayland (TODO)
-   /// 
-   /// Returns None if the cursor position cannot be determined.
-   pub fn get_cursor_position() -> Option<(i32, i32)>
-   ```
-
-5. **Use common types across platforms**
-   ```rust
-   // Good: Define shared types
-   pub struct AppInfo {
-       pub name: String,
-       pub path: PathBuf,
-       pub icon_path: Option<String>,
-   }
-   ```
-
-### DON'T ❌
-
-1. **Don't put platform-specific code in main application files**
-   ```rust
-   // Bad: Platform code in main.rs
-   #[cfg(target_os = "windows")]
-   fn do_something() { /* ... */ }
-   
-   // Good: Use OS abstraction
-   fn do_something() {
-       os::do_something()
-   }
-   ```
-
-2. **Don't duplicate logic across platforms**
-   ```rust
-   // Bad: Same logic in multiple platform files
-   
-   // Good: Extract common logic to a shared function
-   ```
-
-3. **Don't use platform-specific types in cross-platform APIs**
-   ```rust
-   // Bad
-   #[cfg(target_os = "windows")]
-   pub fn get_window_handle() -> HWND
-   
-   // Good
-   pub fn get_window_handle() -> WindowHandle
-   ```
-
-4. **Don't forget error handling**
-   ```rust
-   // Bad
-   pub fn open_file(path: &str) {
-       // What if it fails?
-   }
-   
-   // Good
-   pub fn open_file(path: &str) -> Result<()> {
-       // Proper error handling
-   }
-   ```
-
-## Troubleshooting
-
-### Compilation Errors
-
-**Error: "cannot find function in module `os`"**
-- Make sure you've re-exported the function in `src/os/mod.rs`
-- Check that all platform modules export the implementation
-
-**Error: "no rules expected this token in macro call"**
-- Check your `#[cfg]` attributes syntax
-- Make sure you're using `target_os` not `target_platform`
-
-### Runtime Issues
-
-**Function returns None unexpectedly**
-- Check if the platform implementation is complete
-- Add logging to see which platform code is being called
-- Verify the platform-specific API is working correctly
-
-**Wrong platform code being called**
-- Verify your `#[cfg(target_os = "...")]` attributes
-- Check that you're compiling for the correct target
-
-## Examples
-
-See the existing implementations for reference:
-- `src/os/cursor.rs` - Simple function returning Option
-- `src/os/launcher.rs` - Complex operations with structured data
-- `src/os/process.rs` - Object configuration pattern
-- `src/os/shell.rs` - Simple operations with error handling
-
-## Getting Help
-
-- Check existing platform implementations for patterns
-- Review the architecture documentation in `docs/OS_ARCHITECTURE.md`
-- Look at the refactoring summary in `REFACTORING_SUMMARY.md`
+Stubs return defaults and warn so missing features don't crash. UI that
+shouldn't appear on platforms that don't implement a feature should query
+the relevant config flag rather than probing the OS layer at runtime.
+There's no central capabilities struct yet (audit P3.8 follow-up); add
+one if/when the UI starts needing to hide entry points.
