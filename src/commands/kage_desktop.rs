@@ -188,7 +188,7 @@ pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppE
             });
         }
     }
-    workspaces.sort_by(|a, b| b.session_count.cmp(&a.session_count));
+    workspaces.sort_by_key(|w| std::cmp::Reverse(w.session_count));
     Ok(workspaces)
 }
 

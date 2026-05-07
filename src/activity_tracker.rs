@@ -375,7 +375,7 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
                         percentage: (secs as f64 / app_total as f64) * 100.0,
                     })
                     .collect();
-                site_list.sort_by(|a, b| b.seconds.cmp(&a.seconds));
+                site_list.sort_by_key(|s| std::cmp::Reverse(s.seconds));
                 site_list.truncate(10); // Top 10 sites per browser
                 app.sites = site_list;
             }
