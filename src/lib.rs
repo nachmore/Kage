@@ -15,6 +15,7 @@ pub mod error;
 pub mod extensions;
 pub mod lock_ext;
 pub mod logger;
+pub mod mcp_json_rpc;
 pub mod mcp_registration;
 pub mod os;
 pub mod panic_handler;

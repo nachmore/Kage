@@ -103,54 +103,42 @@ fn main() {
             // Drain the rest of the oversized line so we resync on the next newline.
             let mut discard = String::new();
             let _ = reader.read_line(&mut discard);
-            let err = json_rpc_error(
-                &serde_json::Value::Null,
-                -32700,
-                "Parse error: message exceeds size limit",
-            );
+            let err = mcp_json_rpc::oversized_error();
             let mut out = stdout.lock();
             let _ = writeln!(out, "{}", err);
             let _ = out.flush();
             continue;
         }
 
-        if line_buf.trim().is_empty() { continue; }
-
-        let request: serde_json::Value = match serde_json::from_str(&line_buf) {
-            Ok(v) => v,
-            Err(e) => {
-                log::warn!("Invalid JSON: {}", e);
-                // Respond with a JSON-RPC parse error so the client doesn't hang
-                // waiting for a response. ID is unknown, so null per spec.
-                let err = json_rpc_error(
-                    &serde_json::Value::Null,
-                    -32700,
-                    &format!("Parse error: {}", e),
-                );
+        let request = match mcp_json_rpc::parse_request(&line_buf) {
+            mcp_json_rpc::ParseOutcome::Empty => continue,
+            mcp_json_rpc::ParseOutcome::Ok(req) => req,
+            mcp_json_rpc::ParseOutcome::ParseError(resp) => {
+                log::warn!("Invalid JSON-RPC line dropped");
                 let mut out = stdout.lock();
-                let _ = writeln!(out, "{}", err);
+                let _ = writeln!(out, "{}", resp);
                 let _ = out.flush();
                 continue;
             }
         };
 
-        let id = request.get("id").cloned().unwrap_or(serde_json::Value::Null);
-        let method = request.get("method").and_then(|m| m.as_str()).unwrap_or("");
-        let params = request.get("params").cloned().unwrap_or(serde_json::json!({}));
-
-        let response = match method {
-            "initialize" => handle_initialize(&id),
-            "tools/list" => handle_tools_list(&id),
-            "tools/call" => handle_tool_call(&id, &params),
+        let response = match request.method.as_str() {
+            "initialize" => handle_initialize(&request.id),
+            "tools/list" => handle_tools_list(&request.id),
+            "tools/call" => handle_tool_call(&request.id, &request.params),
             "notifications/initialized" | "ping" => {
                 // Notifications — no response needed (but ping gets a pong)
-                if method == "ping" {
-                    json_rpc_result(&id, serde_json::json!({}))
+                if request.method == "ping" {
+                    mcp_json_rpc::success(&request.id, serde_json::json!({}))
                 } else {
                     continue;
                 }
             }
-            _ => json_rpc_error(&id, -32601, &format!("Method not found: {}", method)),
+            other => mcp_json_rpc::error(
+                &request.id,
+                mcp_json_rpc::ErrorCode::MethodNotFound,
+                &format!("Method not found: {}", other),
+            ),
         };
 
         let mut out = stdout.lock();
@@ -161,22 +149,18 @@ fn main() {
     log::info!("Computer Control MCP server exiting");
 }
 
-// ---------------------------------------------------------------------------
-// JSON-RPC helpers
-// ---------------------------------------------------------------------------
-fn json_rpc_result(id: &serde_json::Value, result: serde_json::Value) -> String {
-    serde_json::json!({ "jsonrpc": "2.0", "id": id, "result": result }).to_string()
-}
+// JSON-RPC framing lives in `kage::mcp_json_rpc` so it's testable without
+// pulling in the whole binary. The thin local aliases below are kept for
+// readability of the existing handler bodies — they desugar to the new
+// typed builders.
+use kage::mcp_json_rpc;
 
-fn json_rpc_error(id: &serde_json::Value, code: i32, message: &str) -> String {
-    serde_json::json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } }).to_string()
+fn json_rpc_result(id: &serde_json::Value, result: serde_json::Value) -> String {
+    mcp_json_rpc::success(id, result)
 }
 
 fn tool_result_text(id: &serde_json::Value, text: &str, is_error: bool) -> String {
-    json_rpc_result(id, serde_json::json!({
-        "content": [{ "type": "text", "text": text }],
-        "isError": is_error,
-    }))
+    mcp_json_rpc::tool_result_text(id, text, is_error)
 }
 
 // ---------------------------------------------------------------------------
@@ -896,7 +880,11 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
-        _ => json_rpc_error(id, -32601, &format!("Unknown tool: {}", tool_name)),
+        _ => mcp_json_rpc::error(
+            id,
+            mcp_json_rpc::ErrorCode::MethodNotFound,
+            &format!("Unknown tool: {}", tool_name),
+        ),
     }
 }
 
