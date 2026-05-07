@@ -26,7 +26,12 @@ tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.43", features = ["full"] }
+# Explicit tokio feature list rather than `full` — we don't use the
+# process / signal / net / fs surface (those go through the std-blocking
+# path inside spawn_blocking), and `full` pulls them in unconditionally.
+# rt-multi-thread + macros + sync + time + rt cover what's actually used
+# (tokio::spawn, tokio::sync::Mutex, tokio::time::sleep, async fns).
+tokio = { version = "1.43", features = ["rt-multi-thread", "macros", "sync", "time"] }
 uuid = { version = "1.12", features = ["v4", "serde"] }
 anyhow = "1.0"
 dirs = "6.0"
@@ -37,7 +42,6 @@ ctrlc = "3.4"
 whoami = "2.1"
 base64 = "0.22"
 reqwest = { version = "0.13", features = ["blocking", "json"] }
-urlencoding = "2.1"
 url = "2.5"
 zip = { version = "8.1", default-features = false, features = ["deflate"] }
 semver = "1.0"

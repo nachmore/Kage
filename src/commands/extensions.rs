@@ -367,7 +367,10 @@ pub async fn store_get_catalog(
             url.push_str(&format!("&type={}", k));
         }
         if let Some(ref s) = search {
-            url.push_str(&format!("&search={}", urlencoding::encode(s)));
+            // Percent-encode the user-supplied search term so a query
+            // like `foo&bar` doesn't smuggle in extra params.
+            let encoded: String = url::form_urlencoded::byte_serialize(s.as_bytes()).collect();
+            url.push_str(&format!("&search={encoded}"));
         }
         handles.push(tokio::spawn(async move {
             match client.get(&url).send().await {
