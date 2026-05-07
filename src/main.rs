@@ -35,7 +35,6 @@ use app_launcher::AppLauncher;
 use config::Config;
 use log::{error, info, warn};
 use process_manager::ProcessManager;
-use state::AppState;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -201,26 +200,32 @@ fn main() {
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            acp_client: acp_client_arc,
-            config: config_arc,
-            app_launcher: Arc::new(Mutex::new(app_launcher)),
-            dev_mode,
-            floating_session_id: Arc::new(std::sync::Mutex::new(None)),
+        .manage(state::AcpHandles {
+            client: acp_client_arc,
             pending_permission: pending_permission_arc,
             slash_commands: slash_commands_arc,
             available_models: available_models_arc,
+            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+        })
+        .manage(state::UiState {
+            dev_mode,
+            floating_session_id: Arc::new(std::sync::Mutex::new(None)),
             last_selection: Arc::new(std::sync::Mutex::new(None)),
             source_window: Arc::new(std::sync::Mutex::new(None)),
             notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
+            frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        })
+        .manage(state::ChildProcesses {
+            pocket_tts: Arc::new(std::sync::Mutex::new(None)),
+            pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
+        })
+        .manage(state::FeatureServices {
+            config: config_arc,
+            app_launcher: Arc::new(Mutex::new(app_launcher)),
             updater: Arc::new(updater::UpdaterState::new()),
             user_info_cache: Arc::new(std::sync::Mutex::new(None)),
             session_cache: Arc::new(std::sync::Mutex::new(None)),
-            pocket_tts_process: Arc::new(std::sync::Mutex::new(None)),
-            pocket_tts_install_process: Arc::new(std::sync::Mutex::new(None)),
             automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
-            frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
             kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
             automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),

@@ -11,7 +11,7 @@
 //! manually.
 
 use crate::lock_ext::LockExt;
-use crate::state::AppState;
+use crate::state::{AcpHandles, ChildProcesses, FeatureServices, UiState};
 use log::{error, info, warn};
 use std::sync::Arc;
 use tauri::{App, AppHandle, Listener, Manager};
@@ -48,7 +48,7 @@ pub fn configure_transparent_windows(app: &App) {
 /// saves don't churn the registration.
 pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Config) {
     let hotkey_app = app.handle().clone();
-    let hotkey_config = app.state::<AppState>().config.clone();
+    let hotkey_config = app.state::<FeatureServices>().config.clone();
     let last_hotkey_snapshot: Arc<std::sync::Mutex<(String, Option<String>, Option<String>)>> = {
         let main = initial_config.get_hotkey_string();
         let cb = initial_config.get_clipboard_hotkey_string();
@@ -82,7 +82,7 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
 /// exit with code 1 rather than run headless — a UI-less app is
 /// worse than a clean restart.
 pub fn spawn_frontend_watchdog(app: &App) {
-    let ready_flag = app.state::<AppState>().frontend_ready.clone();
+    let ready_flag = app.state::<UiState>().frontend_ready.clone();
     let app_handle = app.handle().clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(15));
@@ -111,11 +111,11 @@ pub fn install_show_sessions_listener(app: &App) {
 }
 
 /// Boot the automation scheduler in the background and stash its
-/// signal sender in AppState so emit_automation_signal can find it.
+/// signal sender in FeatureServices so emit_automation_signal can find it.
 pub fn spawn_automation_scheduler(app: &App) {
-    let state: tauri::State<'_, AppState> = app.state();
-    let config_arc = state.config.clone();
-    let signal_tx_arc = state.automation_signal_tx.clone();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let config_arc = features.config.clone();
+    let signal_tx_arc = features.automation_signal_tx.clone();
     let app_handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         let (scheduler, signal_rx) = crate::automation::AutomationScheduler::new(config_arc);
@@ -125,16 +125,17 @@ pub fn spawn_automation_scheduler(app: &App) {
 }
 
 /// If Pocket TTS is configured to auto-start, spawn its Python server
-/// in the background and stash the child handle in AppState so we can
-/// shut it down later.
+/// in the background and stash the child handle in ChildProcesses so we
+/// can shut it down later.
 pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
     if !(config.pocket_tts.enabled && config.pocket_tts.auto_start && config.pocket_tts.installed) {
         return;
     }
     info!("Pocket TTS auto-start enabled, spawning server in background");
-    let state: tauri::State<'_, AppState> = app.state();
-    let config_arc = state.config.clone();
-    let tts_proc = state.pocket_tts_process.clone();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let procs: tauri::State<'_, ChildProcesses> = app.state();
+    let config_arc = features.config.clone();
+    let tts_proc = procs.pocket_tts.clone();
     tauri::async_runtime::spawn(async move {
         let (port, voice, temp, eos_threshold, python) = {
             let config = config_arc.lock_or_recover();
@@ -180,8 +181,8 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
 /// scans run on blocking threads so the async runtime isn't tied up
 /// during Windows registry walks.
 pub fn spawn_app_registry_scan(app: &App) {
-    let state: tauri::State<'_, AppState> = app.state();
-    let launcher = state.app_launcher.clone();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let launcher = features.app_launcher.clone();
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("app-launcher");
 
@@ -248,11 +249,13 @@ pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
     }
     info!("start_session_on_launch enabled, spawning background session init");
 
-    let state: tauri::State<'_, AppState> = app.state();
-    let acp_client = state.acp_client.clone();
-    let floating_session = state.floating_session_id.clone();
-    let config_arc = state.config.clone();
-    let models_arc = state.available_models.clone();
+    let acp: tauri::State<'_, AcpHandles> = app.state();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let ui: tauri::State<'_, UiState> = app.state();
+    let acp_client = acp.client.clone();
+    let floating_session = ui.floating_session_id.clone();
+    let config_arc = features.config.clone();
+    let models_arc = acp.available_models.clone();
 
     tauri::async_runtime::spawn(async move {
         info!("Connecting ACP client on launch...");
@@ -346,22 +349,24 @@ fn send_startup_steering(
 
 /// Kick off the auto-update background loop.
 pub fn start_updater(app: &App) {
-    let state: tauri::State<'_, AppState> = app.state();
+    let acp: tauri::State<'_, AcpHandles> = app.state();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let ui: tauri::State<'_, UiState> = app.state();
     crate::updater::start_update_loop(
-        state.updater.clone(),
-        state.config.clone(),
+        features.updater.clone(),
+        features.config.clone(),
         app.handle().clone(),
-        state.floating_session_id.clone(),
-        state.acp_client.clone(),
+        ui.floating_session_id.clone(),
+        acp.client.clone(),
     );
 }
 
 /// Watch the sessions directory for external changes (e.g., kage-cli
 /// creating sessions outside of this process).
 pub fn start_session_watcher(app: &App) {
-    let state: tauri::State<'_, AppState> = app.state();
+    let features: tauri::State<'_, FeatureServices> = app.state();
     crate::commands::sessions::start_session_watcher(
-        state.session_cache.clone(),
+        features.session_cache.clone(),
         app.handle().clone(),
     );
 }

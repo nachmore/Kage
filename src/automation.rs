@@ -250,9 +250,9 @@ fn get_throttle_multiplier(config: &AutomationPowerConfig, state: PowerState) ->
 pub async fn emit_automation_signal(
     name: String,
     data: Option<serde_json::Value>,
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
 ) -> Result<(), String> {
-    if let Some(ref tx) = *state.automation_signal_tx.lock_or_recover() {
+    if let Some(ref tx) = *features.automation_signal_tx.lock_or_recover() {
         // Use try_send so a flood of signals from a misbehaving extension drops
         // rather than blocking the Tauri IPC thread or growing memory.
         match tx.try_send(AutomationSignal { name: name.clone(), data }) {

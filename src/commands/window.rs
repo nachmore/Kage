@@ -51,10 +51,11 @@ pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
 /// just wants to browse their clipboard history.
 pub fn show_floating_at_mouse(window: &WebviewWindow) {
     let app = window.app_handle();
-    let state: tauri::State<'_, crate::state::AppState> = app.state();
+    let ui: tauri::State<'_, crate::state::UiState> = app.state();
+    let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
 
     // Don't show if frontend hasn't finished initializing yet
-    if !state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
+    if !ui.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
         info!("Ignoring show_floating_at_mouse — frontend not ready");
         return;
     }
@@ -68,10 +69,10 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
     position_floating_window_with_height(window, "mouse", None, None, Some(500));
     let _ = window.show();
     let _ = window.set_focus();
-    state.updater.touch_activity();
+    features.updater.touch_activity();
 
     // Clear selection — clipboard mode doesn't use it
-    if let Ok(mut sel) = state.last_selection.lock() {
+    if let Ok(mut sel) = ui.last_selection.lock() {
         *sel = None;
     }
     let _ = app.emit("selection_captured", false);
@@ -80,17 +81,18 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
 /// Toggle the floating window visibility and position it
 pub fn toggle_floating_window(window: &WebviewWindow) {
     let app = window.app_handle();
-    let state: tauri::State<'_, crate::state::AppState> = app.state();
+    let ui_state: tauri::State<'_, crate::state::UiState> = app.state();
+    let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
 
     // Don't show if frontend hasn't finished initializing yet
-    if !state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
+    if !ui_state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
         info!("Ignoring hotkey — frontend not ready");
         return;
     }
 
     let is_showing = !window.is_visible().unwrap_or(true);
 
-    let config = state.config.lock_or_recover();
+    let config = features.config.lock_or_recover();
     let capture_enabled = config.system.capture_selection;
     let start_pos = config.ui.window_start_position.clone();
     let last_x = config.ui.last_window_x;
@@ -118,8 +120,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 // Save position before hiding if "remember" mode
                 if start_pos == "remember" {
                     if let Ok(pos) = window.outer_position() {
-                        let state: tauri::State<'_, crate::state::AppState> = app.state();
-                        let mut config = state.config.lock_or_recover();
+                        let mut config = features.config.lock_or_recover();
                         config.ui.last_window_x = Some(pos.x);
                         config.ui.last_window_y = Some(pos.y);
                         let _ = config.save();
@@ -127,13 +128,13 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 }
                 let _ = window.hide();
                 // Clear source window info when hiding
-                if let Ok(mut sw) = state.source_window.lock() {
+                if let Ok(mut sw) = ui_state.source_window.lock() {
                     *sw = None;
                 }
             } else {
                 // Restore saved launcher size if enabled
                 {
-                    let config = state.config.lock_or_recover();
+                    let config = features.config.lock_or_recover();
                     if config.ui.remember_launcher_size {
                         if let (Some(w), Some(h)) = (config.ui.launcher_width, config.ui.launcher_height) {
                             let scale = window.scale_factor().unwrap_or(1.0);
@@ -152,17 +153,17 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 let _ = window.set_focus();
 
                 // Record floating window activity for the updater idle check
-                state.updater.touch_activity();
+                features.updater.touch_activity();
 
                 // Store the source window info for screen context
-                if let Ok(mut sw) = state.source_window.lock() {
+                if let Ok(mut sw) = ui_state.source_window.lock() {
                     *sw = source_window_info;
                 }
 
                 // Phase 2: poll clipboard in background and deliver result via event.
                 // The Ctrl+C was already sent, so this just waits for the clipboard change.
                 if let Some(token) = capture_token {
-                    let last_selection = state.last_selection.clone();
+                    let last_selection = ui_state.last_selection.clone();
                     let app_handle = app.clone();
                     std::thread::spawn(move || {
                         let selection = crate::os::clipboard::finish_selection_capture(token);
@@ -173,7 +174,7 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                         let _ = app_handle.emit("selection_captured", has_sel);
                     });
                 } else {
-                    if let Ok(mut sel) = state.last_selection.lock() {
+                    if let Ok(mut sel) = ui_state.last_selection.lock() {
                         *sel = None;
                     }
                     let _ = app.emit("selection_captured", false);
@@ -326,8 +327,8 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
     }
 
     if let Some(window) = app.get_webview_window("main") {
-        let state: tauri::State<'_, crate::state::AppState> = app.state();
-        let config = state.config.lock_or_recover();
+        let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
+        let config = features.config.lock_or_recover();
         let saved_w = config.ui.chat_window_width;
         let saved_h = config.ui.chat_window_height;
         let saved_x = config.ui.chat_window_x;
@@ -506,11 +507,11 @@ pub async fn apply_chat_window_size(
 
 #[tauri::command]
 pub async fn save_window_position(
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
     x: i32,
     y: i32,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
     config.save().map_err(|e| format!("Failed to save window position: {}", e))?;
@@ -519,13 +520,13 @@ pub async fn save_window_position(
 
 #[tauri::command]
 pub async fn save_chat_window_geometry(
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
     width: u32,
     height: u32,
     x: i32,
     y: i32,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.ui.chat_window_width = width;
     config.ui.chat_window_height = height;
     config.ui.chat_window_x = Some(x);
@@ -536,18 +537,18 @@ pub async fn save_chat_window_geometry(
 
 #[tauri::command]
 pub async fn get_last_selection(
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<Option<String>, AppError> {
-    let sel = state.last_selection.lock().map_err(|e| e.to_string())?;
+    let sel = ui.last_selection.lock().map_err(|e| e.to_string())?;
     Ok(sel.clone())
 }
 
 #[tauri::command]
 pub async fn set_notification_source(
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
     source: String,
 ) -> Result<(), AppError> {
-    if let Ok(mut s) = state.notification_source.lock() {
+    if let Ok(mut s) = ui.notification_source.lock() {
         *s = source;
     }
     Ok(())
@@ -556,9 +557,9 @@ pub async fn set_notification_source(
 #[tauri::command]
 pub async fn show_notification_source_window(
     app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
-    let source = state.notification_source.lock()
+    let source = ui.notification_source.lock()
         .map(|s| s.clone())
         .unwrap_or_else(|_| "floating".to_string());
 
@@ -577,17 +578,17 @@ pub async fn show_notification_source_window(
 /// Until this is called, hotkey presses are silently ignored to prevent
 /// showing a half-initialized window.
 #[tauri::command]
-pub fn notify_frontend_ready(state: tauri::State<'_, crate::state::AppState>) {
+pub fn notify_frontend_ready(ui: tauri::State<'_, crate::state::UiState>) {
     info!("Frontend signaled ready");
-    state.frontend_ready.store(true, std::sync::atomic::Ordering::Release);
+    ui.frontend_ready.store(true, std::sync::atomic::Ordering::Release);
 }
 
 /// Get the source window info (title, process_name) captured when the hotkey was pressed.
 #[tauri::command]
 pub async fn get_source_window(
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<Option<serde_json::Value>, AppError> {
-    let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+    let sw = ui.source_window.lock().map_err(|e| e.to_string())?;
     match sw.as_ref() {
         Some((title, process_name)) => Ok(Some(serde_json::json!({
             "title": title,
@@ -601,10 +602,10 @@ pub async fn get_source_window(
 /// Uses depth 2 to keep it fast and small. Returns a compact text representation.
 #[tauri::command]
 pub async fn get_screen_context(
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<Option<String>, AppError> {
     let title = {
-        let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+        let sw = ui.source_window.lock().map_err(|e| e.to_string())?;
         match sw.as_ref() {
             Some((title, _)) => title.clone(),
             None => return Ok(None),
@@ -661,10 +662,10 @@ pub async fn show_inline_assist_with_context(
     info!("show_inline_assist_with_context: source={:?}, selection_len={}, cursor=({},{})",
         source_info, selection.as_ref().map(|s| s.len()).unwrap_or(0), cursor_pos.0, cursor_pos.1);
 
-    let state: tauri::State<'_, crate::state::AppState> = app.state();
+    let ui: tauri::State<'_, crate::state::UiState> = app.state();
 
     // Store source window info for paste-back
-    if let Ok(mut sw) = state.source_window.lock() {
+    if let Ok(mut sw) = ui.source_window.lock() {
         *sw = source_info.clone();
     }
 
@@ -719,7 +720,7 @@ pub async fn show_inline_assist_with_context(
 pub async fn inline_assist_apply(
     text: String,
     app: tauri::AppHandle,
-    state: tauri::State<'_, crate::state::AppState>,
+    ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
     // Hide the inline assist window FIRST so it doesn't receive the paste
     if let Some(window) = app.get_webview_window("inline-assist") {
@@ -731,7 +732,7 @@ pub async fn inline_assist_apply(
 
     // Focus the source window
     let source_title = {
-        let sw = state.source_window.lock().map_err(|e| e.to_string())?;
+        let sw = ui.source_window.lock().map_err(|e| e.to_string())?;
         sw.as_ref().map(|(title, _)| title.clone())
     };
 

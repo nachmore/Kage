@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::lock_ext::LockExt;
-use crate::state::AppState;
+use crate::state::{AcpHandles, FeatureServices, UiState};
 use log::{info, warn, error};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 
@@ -351,7 +351,7 @@ fn handle_permission_notification(
             }
 
             // Determine which window originated this conversation
-            let source = app_handle.try_state::<crate::state::AppState>()
+            let source = app_handle.try_state::<UiState>()
                 .and_then(|s| s.notification_source.lock().ok().map(|s| s.clone()))
                 .unwrap_or_else(|| "floating".to_string());
 
@@ -382,12 +382,13 @@ fn handle_permission_notification(
 pub async fn send_message_streaming(
     message: String,
     attachments: Option<Vec<serde_json::Value>>,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
     window: WebviewWindow,
 ) -> Result<(), String> {
     info!("Sending message: {}", message);
-    let client = state.acp_client.clone();
-    let config = state.config.clone();
+    let client = acp.client.clone();
+    let config = features.config.clone();
     let window_clone = window.clone();
 
     async_runtime::spawn_blocking(move || {
@@ -464,16 +465,17 @@ pub async fn send_permission_response(
     request_id: serde_json::Value,
     option_id: String,
     tool_title: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
-    state.acp_client.send_permission_response(&request_id, &option_id)
+    acp.client.send_permission_response(&request_id, &option_id)
         .map_err(|e| AppError::connection_lost(format!("Permission response failed: {}", e)))?;
 
     if option_id == "allow_always" {
-        let mut config = state.config.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+        let mut config = features.config.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
             tool.policy = "allow".to_string();
         }
@@ -483,7 +485,7 @@ pub async fn send_permission_response(
     // Audit log: record the user's decision. We classify option_id into
     // our event kinds; unrecognised strings are recorded as Denied with
     // the raw option_id in the tool field so the UI still shows them.
-    let session_id = state.acp_client.get_session_id();
+    let session_id = acp.client.get_session_id();
     let audit_event = match option_id.as_str() {
         "allow_once" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
@@ -512,7 +514,7 @@ pub async fn send_permission_response(
         &crate::permission_audit::AuditEntry::now(audit_event),
     );
 
-    if let Ok(mut pending) = state.pending_permission.lock() {
+    if let Ok(mut pending) = acp.pending_permission.lock() {
         *pending = None;
     }
 
@@ -523,27 +525,30 @@ pub async fn send_permission_response(
 }
 
 #[tauri::command]
-pub async fn check_connection(state: State<'_, AppState>) -> Result<bool, AppError> {
-    Ok(state.acp_client.is_connected())
+pub async fn check_connection(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
+    Ok(acp.client.is_connected())
 }
 
 #[tauri::command]
-pub async fn reconnect_acp(state: State<'_, AppState>) -> Result<bool, AppError> {
-    state.acp_client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
+pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
+    acp.client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
     Ok(true)
 }
 
 #[tauri::command]
-pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppError> {
+pub async fn cancel_generation(
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
+) -> Result<(), AppError> {
     // Signal automation plan loop to stop
-    state.automation_plan_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+    features.automation_plan_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
 
     // Direct read — the AcpClient is no longer wrapped in an outer mutex,
     // so this never has to fall back to guessing the floating session id.
-    let session_id = state.acp_client.get_session_id()
+    let session_id = acp.client.get_session_id()
         .ok_or_else(|| AppError::internal("No active session to cancel"))?;
 
-    state.acp_client.cancel_session(&session_id)
+    acp.client.cancel_session(&session_id)
         .map_err(|e| AppError::connection_lost(format!("Cancel failed: {}", e)))?;
 
     Ok(())
@@ -552,14 +557,15 @@ pub async fn cancel_generation(state: State<'_, AppState>) -> Result<(), AppErro
 #[tauri::command]
 pub async fn open_chat_with_message(
     message: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
+    ui: State<'_, UiState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.hide();
     }
     // Route notifications to the chat window while this message is in flight
-    if let Ok(mut s) = state.notification_source.lock() {
+    if let Ok(mut s) = ui.notification_source.lock() {
         *s = "main".to_string();
     }
     if let Some(main) = app.get_webview_window("main") {
@@ -569,7 +575,7 @@ pub async fn open_chat_with_message(
         let _ = main.set_focus();
         let _ = main.emit("initial_message", message.clone());
 
-        let client = state.acp_client.clone();
+        let client = acp.client.clone();
         let window = main.clone();
 
         async_runtime::spawn_blocking(move || {
@@ -591,20 +597,20 @@ pub async fn open_chat_with_message(
 
 #[tauri::command]
 pub async fn dismiss_pending_permission(
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
 ) -> Result<bool, AppError> {
     let pending = {
-        let guard = state.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+        let guard = acp.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
         guard.clone()
     };
 
     if let Some(perm) = pending {
-        if let Err(e) = state.acp_client.send_permission_response(&perm.request_id, "reject_once") {
+        if let Err(e) = acp.client.send_permission_response(&perm.request_id, "reject_once") {
             warn!("Failed to dismiss pending permission: {}", e);
         }
 
-        if let Ok(mut guard) = state.pending_permission.lock() {
+        if let Ok(mut guard) = acp.pending_permission.lock() {
             *guard = None;
         }
         if let Some(main) = app.get_webview_window("main") {
@@ -617,14 +623,14 @@ pub async fn dismiss_pending_permission(
 }
 
 #[tauri::command]
-pub async fn has_pending_permission(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let guard = state.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+pub async fn has_pending_permission(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
+    let guard = acp.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
     Ok(guard.is_some())
 }
 
 #[tauri::command]
-pub async fn get_slash_commands(state: State<'_, AppState>) -> Result<Vec<crate::state::SlashCommand>, String> {
-    let cmds = state.slash_commands.lock().map_err(|e| format!("Lock: {}", e))?;
+pub async fn get_slash_commands(acp: State<'_, AcpHandles>) -> Result<Vec<crate::state::SlashCommand>, String> {
+    let cmds = acp.slash_commands.lock().map_err(|e| format!("Lock: {}", e))?;
     Ok(cmds.clone())
 }
 
@@ -632,10 +638,10 @@ pub async fn get_slash_commands(state: State<'_, AppState>) -> Result<Vec<crate:
 pub async fn execute_slash_command(
     command: String,
     args: Option<serde_json::Value>,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
     window: WebviewWindow,
 ) -> Result<serde_json::Value, String> {
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
 
     let result = async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -666,17 +672,17 @@ pub async fn execute_slash_command(
 #[tauri::command]
 pub async fn get_slash_command_options(
     _command: String,
-    _state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "options": [] }))
 }
 
 #[tauri::command]
 pub async fn send_steering_message(
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
 ) -> Result<bool, String> {
     let steering_msg = {
-        let config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
+        let config = features.config.lock().map_err(|e| format!("Lock: {}", e))?;
         let parts = crate::commands::system::assemble_steering_parts(&config);
         format!(
             "{} {}",
@@ -685,7 +691,7 @@ pub async fn send_steering_message(
         )
     };
 
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
     async_runtime::spawn_blocking(move || {
         if client.is_connected() {
             if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
@@ -699,9 +705,9 @@ pub async fn send_steering_message(
 
 #[tauri::command]
 pub async fn get_available_models(
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let models = state.available_models.lock()
+    let models = acp.available_models.lock()
         .map_err(|e| format!("Lock error: {}", e))?;
     Ok(models.iter().map(|m| serde_json::json!({
         "modelId": m.model_id,
@@ -719,7 +725,8 @@ pub async fn get_available_models(
 #[tauri::command]
 pub async fn execute_automation_plan(
     plan_json: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
+    features: State<'_, FeatureServices>,
     window: WebviewWindow,
 ) -> Result<(), String> {
     info!("Executing automation plan");
@@ -741,8 +748,8 @@ pub async fn execute_automation_plan(
         "plan": plan,
     }));
 
-    let client = state.acp_client.clone();
-    let cancelled = state.automation_plan_cancelled.clone();
+    let client = acp.client.clone();
+    let cancelled = features.automation_plan_cancelled.clone();
 
     // Reset cancellation flag at the start
     cancelled.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -892,7 +899,7 @@ pub async fn extension_tool_response(
     tool_name: String,
     result_json: String,
     success: bool,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
     window: WebviewWindow,
 ) -> Result<(), String> {
     info!(
@@ -900,7 +907,7 @@ pub async fn extension_tool_response(
         extension_id, tool_name, success, result_json.len()
     );
 
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -939,7 +946,7 @@ pub async fn extension_tool_response(
 #[tauri::command]
 pub async fn send_extension_tool_steering(
     tool_steering: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
 ) -> Result<(), String> {
     if tool_steering.trim().is_empty() {
         return Ok(());
@@ -954,7 +961,7 @@ pub async fn send_extension_tool_steering(
         hasher.finish()
     };
     {
-        let mut last = state.last_tool_steering_hash.lock_or_recover();
+        let mut last = acp.last_tool_steering_hash.lock_or_recover();
         if *last == hash {
             return Ok(());
         }
@@ -963,7 +970,7 @@ pub async fn send_extension_tool_steering(
 
     info!("Sending extension tool steering ({} chars)", tool_steering.len());
 
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -992,10 +999,10 @@ pub async fn send_extension_tool_steering(
 pub async fn check_extension_tool_permission(
     extension_id: String,
     tool_name: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<String, String> {
     let tool_title = format!("ext:{}/{}", extension_id, tool_name);
-    let mut config = state.config.lock().map_err(|e| format!("Lock: {}", e))?;
+    let mut config = features.config.lock().map_err(|e| format!("Lock: {}", e))?;
 
     // Check trust_all first
     if config.tool_permissions.trust_all {
@@ -1048,10 +1055,10 @@ pub async fn check_extension_tool_permission(
 #[tauri::command]
 pub async fn send_inline_assist(
     message: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -1099,10 +1106,10 @@ pub async fn send_inline_assist(
 pub async fn execute_macro(
     steps: Vec<serde_json::Value>,
     initial_input: String,
-    state: State<'_, AppState>,
+    acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    let client = state.acp_client.clone();
+    let client = acp.client.clone();
 
     let result = async_runtime::spawn_blocking(move || {
         let mut current_input = initial_input;

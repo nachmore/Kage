@@ -3,7 +3,7 @@
 use crate::error::AppError;
 use crate::extensions;
 use crate::lock_ext::LockExt;
-use crate::state::AppState;
+use crate::state::{FeatureServices, UiState};
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
 
@@ -12,20 +12,20 @@ use tauri::{Emitter, Manager, State};
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn list_extensions(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn list_extensions(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(extensions::discover_items("extension", None, &config.extension_states))
 }
 
 #[tauri::command]
-pub async fn list_themes(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn list_themes(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(extensions::discover_items("theme", None, &config.extension_states))
 }
 
 #[tauri::command]
-pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extensions::InstalledItem>, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn list_command_packs(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(extensions::discover_items("commands", None, &config.extension_states))
 }
 
@@ -36,9 +36,9 @@ pub async fn list_command_packs(state: State<'_, AppState>) -> Result<Vec<extens
 #[tauri::command]
 pub async fn get_extension_config(
     id: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<serde_json::Value, AppError> {
-    let config = state.config.lock_or_recover();
+    let config = features.config.lock_or_recover();
     Ok(config.extensions.get(&id).cloned().unwrap_or(serde_json::json!({})))
 }
 
@@ -46,10 +46,10 @@ pub async fn get_extension_config(
 pub async fn save_extension_config(
     id: String,
     value: serde_json::Value,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extensions.insert(id.clone(), value);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Saved extension config for '{}'", id);
@@ -67,10 +67,10 @@ pub async fn save_extension_config(
 pub async fn set_extension_enabled(
     id: String,
     enabled: bool,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extension_states.insert(id.clone(), enabled);
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
@@ -164,7 +164,7 @@ pub async fn read_extension_file(
 #[tauri::command]
 pub async fn install_extension_from_path(
     source_path: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     _app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let source = std::path::PathBuf::from(&source_path);
@@ -180,7 +180,7 @@ pub async fn install_extension_from_path(
     };
 
     // Mark enabled so the commit step can flip the grant and load it.
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
@@ -192,7 +192,7 @@ pub async fn install_extension_from_path(
 pub async fn uninstall_extension(
     id: String,
     kind: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     // extensions::uninstall validates internally too — checking here as well
@@ -205,7 +205,7 @@ pub async fn uninstall_extension(
         .map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extension_states.remove(&id);
     config.extensions.remove(&id);
     config.extension_grants.remove(&id);
@@ -271,9 +271,9 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
 #[tauri::command]
 pub async fn save_store_url(
     url: Option<String>,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.store_url = url.filter(|s| !s.is_empty());
     config.save().map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Store URL updated");
@@ -317,11 +317,12 @@ pub async fn store_get_catalog(
     search: Option<String>,
     page: Option<u32>,
     source: Option<String>,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
 ) -> Result<serde_json::Value, AppError> {
     let (primary_url, sources) = {
-        let config = state.config.lock_or_recover();
-        let primary = resolve_store_url(&config, state.dev_mode);
+        let config = features.config.lock_or_recover();
+        let primary = resolve_store_url(&config, ui.dev_mode);
         let sources = config.store_sources.clone();
         (primary, sources)
     };
@@ -427,11 +428,12 @@ pub async fn store_get_catalog(
 #[tauri::command]
 pub async fn store_get_detail(
     id: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
-        let config = state.config.lock_or_recover();
-        resolve_store_url(&config, state.dev_mode)
+        let config = features.config.lock_or_recover();
+        resolve_store_url(&config, ui.dev_mode)
     };
 
     if base_url.is_empty() {
@@ -463,12 +465,13 @@ pub async fn store_get_detail(
 #[tauri::command]
 pub async fn store_install(
     id: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
     app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let base_url = {
-        let config = state.config.lock_or_recover();
-        resolve_store_url(&config, state.dev_mode)
+        let config = features.config.lock_or_recover();
+        resolve_store_url(&config, ui.dev_mode)
     };
 
     if base_url.is_empty() {
@@ -477,7 +480,7 @@ pub async fn store_install(
 
     extensions::validate_store_url(&base_url)?;
 
-    store_install_inner(&base_url, &id, &state, &app, false)
+    store_install_inner(&base_url, &id, &features, &app, false)
         .await
         .map_err(AppError::from)
 }
@@ -493,7 +496,7 @@ pub async fn commit_extension_install(
     extension_id: String,
     granted: Vec<String>,
     approved_version: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     // Reject hostile ids before they're recorded as a grant. Even though
@@ -503,7 +506,7 @@ pub async fn commit_extension_install(
     extensions::validate_extension_id(&extension_id)
         .map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     let record = crate::config::ExtensionGrant {
         granted,
         approved_version,
@@ -529,12 +532,13 @@ pub async fn commit_extension_install(
 /// Returns { updated: N, checked: N }
 #[tauri::command]
 pub async fn check_extension_updates(
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
     app: tauri::AppHandle,
 ) -> Result<serde_json::Value, AppError> {
     let base_url = {
-        let config = state.config.lock_or_recover();
-        resolve_store_url(&config, state.dev_mode)
+        let config = features.config.lock_or_recover();
+        resolve_store_url(&config, ui.dev_mode)
     };
 
     if base_url.is_empty() {
@@ -546,7 +550,7 @@ pub async fn check_extension_updates(
     // Gather all installed items
     let mut installed: Vec<(String, String, String)> = Vec::new(); // (id, version, kind)
     let states = {
-        let config = state.config.lock_or_recover();
+        let config = features.config.lock_or_recover();
         config.extension_states.clone()
     };
 
@@ -609,7 +613,7 @@ pub async fn check_extension_updates(
                     // more capabilities, the runtime drops them until the
                     // user re-approves. We do emit here because auto-update
                     // is an in-place refresh of already-approved software.
-                    match store_install_inner(&base_url, id, &state, &app, true).await {
+                    match store_install_inner(&base_url, id, &features, &app, true).await {
                         Ok(_) => {
                             updated += 1;
                             info!("Updated extension '{}' to {}", id, remote_version);
@@ -624,7 +628,7 @@ pub async fn check_extension_updates(
     }
 
     // Update the last check timestamp
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.last_extension_update_check = Some(chrono::Utc::now().to_rfc3339());
     let _ = config.save();
     drop(config);
@@ -641,7 +645,7 @@ pub async fn check_extension_updates(
 async fn store_install_inner(
     base_url: &str,
     id: &str,
-    state: &State<'_, AppState>,
+    features: &State<'_, FeatureServices>,
     app: &tauri::AppHandle,
     emit_changed: bool,
 ) -> Result<extensions::InstalledItem, String> {
@@ -668,7 +672,7 @@ async fn store_install_inner(
 
     let _ = std::fs::remove_file(&zip_path);
 
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
@@ -797,7 +801,7 @@ fn bundled_packages_dir() -> Option<std::path::PathBuf> {
 #[tauri::command]
 pub async fn install_bundled_package(
     id: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     _app: tauri::AppHandle,
 ) -> Result<extensions::InstalledItem, AppError> {
     let packages_dir = bundled_packages_dir()
@@ -818,7 +822,7 @@ pub async fn install_bundled_package(
     let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| AppError::from(format!("Failed to install bundled package '{}': {}", id, e)))?;
 
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     config.extension_states.insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
@@ -834,12 +838,12 @@ pub async fn install_bundled_package(
 #[tauri::command]
 pub async fn remove_extension_grant(
     extension_id: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
     extensions::validate_extension_id(&extension_id)
         .map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     if config.extension_grants.remove(&extension_id).is_some() {
         info!("Removed capability grant for '{}'", extension_id);
         config

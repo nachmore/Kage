@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::os;
-use crate::state::AppState;
+use crate::state::{AcpHandles, ChildProcesses, FeatureServices, UiState};
 use log::{error, info, warn};
 use std::fs;
 use tauri::{Emitter, Manager, State};
@@ -24,8 +24,8 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
     }
 
     // Kill pocket-tts server if running
-    if let Some(state) = app.try_state::<AppState>() {
-        let mut tts_proc = state.pocket_tts_process.lock_or_recover();
+    if let Some(procs) = app.try_state::<ChildProcesses>() {
+        let mut tts_proc = procs.pocket_tts.lock_or_recover();
         if let Some(mut child) = tts_proc.take() {
             info!("Stopping pocket-tts server on shutdown");
             let _ = child.kill();
@@ -49,9 +49,9 @@ pub async fn shutdown_and_exit_with_restart(app: &tauri::AppHandle, exe: std::pa
 }
 
 async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::path::PathBuf, Vec<String>)>) {
-    if let Some(state) = app.try_state::<AppState>() {
-        let acp_client = state.acp_client.clone();
-        let config = state.config.clone();
+    if let (Some(acp), Some(features)) = (app.try_state::<AcpHandles>(), app.try_state::<FeatureServices>()) {
+        let acp_client = acp.client.clone();
+        let config = features.config.clone();
 
         // Snapshot whether auto-steering will actually run before we pay any
         // cancel-and-wait cost. If there's nothing to steer, quit can skip
@@ -189,15 +189,15 @@ pub fn format_steering_message(parts: &[String]) -> String {
 }
 
 #[tauri::command]
-pub async fn get_config(state: State<'_, AppState>) -> Result<Config, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn get_config(features: State<'_, FeatureServices>) -> Result<Config, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(config.clone())
 }
 
 #[tauri::command]
 pub async fn save_config(
     config: Config,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Saving configuration");
@@ -211,7 +211,7 @@ pub async fn save_config(
     let new_terminator = config.tool_permissions.terminator_mode;
     let new_log_buffer_size = config.system.log_buffer_size;
     let prior_terminator = {
-        let mut state_config = state.config.lock_or_recover();
+        let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         *state_config = config;
         state_config.save().map_err(|e| {
@@ -329,11 +329,11 @@ pub async fn update_tool_policy(
     tool_title: String,
     policy: String,
     grant_type: Option<String>,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
     let gt = grant_type.unwrap_or_else(|| "once".to_string());
     info!("Updating tool policy: {} -> {} (grant: {})", tool_title, policy, gt);
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
     // Capture the prior state so the audit log can say "you changed
@@ -391,9 +391,9 @@ pub async fn update_tool_policy(
 #[tauri::command]
 pub async fn remove_tool_permission(
     tool_title: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
 
     // Snapshot the policy we're about to drop so we can log what was
     // revoked, not just that something was.
@@ -426,13 +426,13 @@ pub async fn remove_tool_permission(
 }
 
 #[tauri::command]
-pub async fn is_dev_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
-    Ok(state.dev_mode)
+pub async fn is_dev_mode(ui: State<'_, UiState>) -> Result<bool, AppError> {
+    Ok(ui.dev_mode)
 }
 
 #[tauri::command]
-pub async fn is_terminator_mode(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn is_terminator_mode(features: State<'_, FeatureServices>) -> Result<bool, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(config.tool_permissions.terminator_mode)
 }
 
@@ -470,13 +470,14 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
 #[tauri::command]
 pub async fn complete_first_run(
     app: tauri::AppHandle,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
     launch_at_startup: bool,
     auto_update: bool,
     enable_computer_control: bool,
     enable_personalization: bool,
 ) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+    let mut config = features.config.lock_or_recover();
     let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
     if auto_update {
@@ -495,7 +496,7 @@ pub async fn complete_first_run(
     }
 
     // On true first run (or dev mode), show the floating window with a welcome banner
-    if is_true_first_run || state.dev_mode {
+    if is_true_first_run || ui.dev_mode {
         show_welcome_banner(&app);
     }
 
@@ -505,9 +506,9 @@ pub async fn complete_first_run(
 /// Show the floating window with a welcome banner displaying the configured hotkey.
 /// Called from first-run completion and the dev tray menu.
 pub fn show_welcome_banner(app: &tauri::AppHandle) {
-    let hotkey_str = app.try_state::<crate::state::AppState>()
-        .and_then(|state| {
-            state.config.try_lock().ok().map(|c| c.get_hotkey_string())
+    let hotkey_str = app.try_state::<FeatureServices>()
+        .and_then(|features| {
+            features.config.try_lock().ok().map(|c| c.get_hotkey_string())
         })
         .unwrap_or_else(|| "Alt+Space".to_string());
     let keycaps: String = hotkey_str.split('+')
@@ -531,8 +532,8 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub async fn is_first_run(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn is_first_run(features: State<'_, FeatureServices>) -> Result<bool, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(!config.first_run_completed)
 }
 
@@ -619,8 +620,8 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     info!("Registering all hotkeys...");
     let _ = app.global_shortcut().unregister_all();
 
-    let state: tauri::State<'_, AppState> = app.state();
-    let config = state.config.lock_or_recover();
+    let features: tauri::State<'_, FeatureServices> = app.state();
+    let config = features.config.lock_or_recover();
     let main_hk = config.get_hotkey_string();
     let cb_hk = config.get_clipboard_hotkey_string();
     let ia_hk = config.get_inline_assist_hotkey_string();
@@ -728,8 +729,8 @@ pub async fn try_register_hotkey(
 
     // Check for conflicts with other hotkey slots
     {
-        let state: tauri::State<'_, AppState> = app.state();
-        let config = state.config.lock_or_recover();
+        let features: tauri::State<'_, FeatureServices> = app.state();
+        let config = features.config.lock_or_recover();
         let main_hk = config.get_hotkey_string();
         let cb_hk = config.get_clipboard_hotkey_string();
         let ia_hk = config.get_inline_assist_hotkey_string();
@@ -839,7 +840,7 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn restart_app(app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Restart requested via > command");
 
     let exe = std::env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
@@ -870,7 +871,7 @@ pub async fn restart_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> 
 }
 
 #[tauri::command]
-pub async fn quit_app(_state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), AppError> {
+pub async fn quit_app(app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Quit requested via > command");
     graceful_shutdown(&app);
 
@@ -1028,10 +1029,10 @@ pub struct UserInfo {
 }
 
 #[tauri::command]
-pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, AppError> {
+pub async fn get_user_info(features: State<'_, FeatureServices>) -> Result<UserInfo, AppError> {
     // Return cached user info if available
     {
-        let cached = state.user_info_cache.lock_or_recover();
+        let cached = features.user_info_cache.lock_or_recover();
         if let Some(ref info) = *cached {
             return Ok(info.clone());
         }
@@ -1040,14 +1041,14 @@ pub async fn get_user_info(state: State<'_, AppState>) -> Result<UserInfo, AppEr
     // Compute and cache
     let info = compute_user_info();
     {
-        let mut cached = state.user_info_cache.lock_or_recover();
+        let mut cached = features.user_info_cache.lock_or_recover();
         *cached = Some(info.clone());
     }
     Ok(info)
 }
 
 /// Compute user info (expensive — spawns whoami subprocess on Windows).
-/// Called once and cached in AppState.
+/// Called once and cached in FeatureServices.user_info_cache.
 pub fn compute_user_info() -> UserInfo {
     let profile = os::get_user_profile();
 
@@ -1108,8 +1109,8 @@ pub fn compute_user_info() -> UserInfo {
 /// User steering takes precedence (placed first).
 /// Returns None if no steering content is available.
 #[tauri::command]
-pub async fn get_steering_content(state: State<'_, AppState>) -> Result<Option<String>, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn get_steering_content(features: State<'_, FeatureServices>) -> Result<Option<String>, AppError> {
+    let config = features.config.lock_or_recover();
     let parts = assemble_steering_parts(&config);
     Ok(Some(format_steering_message(&parts)))
 }
@@ -1195,9 +1196,9 @@ pub async fn get_update_urls() -> Result<serde_json::Value, AppError> {
 
 #[tauri::command]
 pub async fn download_and_install_update(
-    state: State<'_, AppState>,
+    ui: State<'_, UiState>,
 ) -> Result<(), AppError> {
-    let session_id = state.floating_session_id.lock()
+    let session_id = ui.floating_session_id.lock()
         .ok()
         .and_then(|s| s.clone());
 
@@ -1212,21 +1213,21 @@ pub async fn download_and_install_update(
 }
 
 #[tauri::command]
-pub async fn was_just_updated(state: State<'_, AppState>) -> Result<bool, AppError> {
-    let config = state.config.lock_or_recover();
+pub async fn was_just_updated(features: State<'_, FeatureServices>) -> Result<bool, AppError> {
+    let config = features.config.lock_or_recover();
     Ok(crate::updater::was_just_updated(&config))
 }
 
 #[tauri::command]
-pub async fn clear_update_flag(state: State<'_, AppState>) -> Result<(), AppError> {
-    let mut config = state.config.lock_or_recover();
+pub async fn clear_update_flag(features: State<'_, FeatureServices>) -> Result<(), AppError> {
+    let mut config = features.config.lock_or_recover();
     crate::updater::clear_update_flag(&mut config);
     Ok(config.save().map_err(|e| format!("Failed to save: {}", e))?)
 }
 
 #[tauri::command]
-pub async fn touch_floating_activity(state: State<'_, AppState>) -> Result<(), AppError> {
-    state.updater.touch_activity();
+pub async fn touch_floating_activity(features: State<'_, FeatureServices>) -> Result<(), AppError> {
+    features.updater.touch_activity();
     Ok(())
 }
 
@@ -1278,10 +1279,10 @@ pub async fn focus_open_window(
 
 #[tauri::command]
 pub async fn start_activity_tracker(
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     poll_interval: Option<u64>,
 ) -> Result<(), AppError> {
-    let tracker = state.activity_tracker.clone();
+    let tracker = features.activity_tracker.clone();
     crate::activity_tracker::start_tracker(&tracker, poll_interval)
         .await
         .map_err(|e| format!("Failed to start tracker: {}", e))?;
@@ -1289,26 +1290,26 @@ pub async fn start_activity_tracker(
 }
 
 #[tauri::command]
-pub async fn stop_activity_tracker(state: State<'_, AppState>) -> Result<(), AppError> {
-    let tracker = state.activity_tracker.clone();
+pub async fn stop_activity_tracker(features: State<'_, FeatureServices>) -> Result<(), AppError> {
+    let tracker = features.activity_tracker.clone();
     crate::activity_tracker::stop_tracker(&tracker).await;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn get_activity_report(
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     period: String,
 ) -> Result<crate::activity_tracker::ActivityReport, AppError> {
-    let tracker = state.activity_tracker.clone();
+    let tracker = features.activity_tracker.clone();
     Ok(crate::activity_tracker::get_report(&tracker, &period)
         .await
         .map_err(|e| format!("Failed to get report: {}", e))?)
 }
 
 #[tauri::command]
-pub async fn is_activity_tracker_running(state: State<'_, AppState>) -> Result<bool, AppError> {
-    Ok(state.activity_tracker.is_running())
+pub async fn is_activity_tracker_running(features: State<'_, FeatureServices>) -> Result<bool, AppError> {
+    Ok(features.activity_tracker.is_running())
 }
 
 #[tauri::command]

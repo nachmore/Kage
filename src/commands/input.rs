@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::os;
-use crate::state::AppState;
+use crate::state::FeatureServices;
 use log::{error, info};
 use tauri::{Manager, State};
 
@@ -176,7 +176,7 @@ fn match_system_command(input: &str) -> Option<(&'static str, &'static str, bool
 #[tauri::command]
 pub async fn handle_floating_input(
     input: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
 ) -> Result<String, AppError> {
     let trimmed_input = input.trim();
 
@@ -221,7 +221,7 @@ pub async fn handle_floating_input(
     }
 
     // App search — use original input (preserving spaces) so "w " doesn't match "word"
-    let launcher = state.app_launcher.lock().await;
+    let launcher = features.app_launcher.lock().await;
     let app_matches = launcher.find_app(&input);
     for (i, app) in app_matches.iter().enumerate() {
         results.push(serde_json::json!({
@@ -247,12 +247,12 @@ pub async fn handle_floating_input(
 #[tauri::command]
 pub async fn launch_app_by_name(
     app_name: String,
-    state: State<'_, AppState>,
+    features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Launching app by name: {}", app_name);
 
-    let launcher = state.app_launcher.lock().await;
+    let launcher = features.app_launcher.lock().await;
     let matches = launcher.find_app(&app_name);
 
     if let Some(app_to_launch) = matches.first() {

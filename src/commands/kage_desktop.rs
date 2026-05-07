@@ -153,12 +153,12 @@ pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppE
 pub async fn kage_desktop_sessions(
     workspace_encoded: Option<String>,
     limit: Option<usize>,
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
 ) -> Result<Vec<KageDesktopSession>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
     let limit = limit.unwrap_or(50);
-    let cache = state.kage_desktop_cache.clone();
+    let cache = features.kage_desktop_cache.clone();
 
     // Run the scan + JSON parse on the blocking pool — both are file I/O
     // heavy and synchronous.
@@ -452,7 +452,7 @@ fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
 #[tauri::command]
 pub async fn kage_desktop_delete_session(
     file_path: String,
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
 ) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
     if !path.exists() { return Err("File not found".into()); }
@@ -467,7 +467,7 @@ pub async fn kage_desktop_delete_session(
     // surface a stale entry (mtime-based invalidation alone can't catch a
     // delete — the file is gone, there's nothing to re-stat).
     {
-        let cache = &state.kage_desktop_cache;
+        let cache = &features.kage_desktop_cache;
         cache.workspace_sessions.lock_or_recover().remove(path);
         cache.chat_files.lock_or_recover().remove(path);
     }
@@ -531,11 +531,11 @@ pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDe
 #[tauri::command]
 pub async fn kage_desktop_chat_sessions(
     limit: Option<usize>,
-    state: tauri::State<'_, crate::state::AppState>,
+    features: tauri::State<'_, crate::state::FeatureServices>,
 ) -> Result<Vec<KageDesktopSession>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let limit = limit.unwrap_or(50);
-    let cache = state.kage_desktop_cache.clone();
+    let cache = features.kage_desktop_cache.clone();
 
     tokio::task::spawn_blocking(move || scan_chat_sessions(&base, limit, &cache))
         .await
