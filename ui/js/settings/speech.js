@@ -66,7 +66,7 @@ class SpeechSettingsModule extends SettingsModule {
 
                     <!-- Status + Setup (collapsible) -->
                     <div id="pocketTtsSetupSection">
-                        <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kage-bg-secondary);margin-bottom:8px;cursor:pointer;" onclick="togglePocketTtsSetup()">
+                        <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kage-bg-secondary);margin-bottom:8px;cursor:pointer;" data-action="speech.togglePocketTtsSetup">
                             <span id="pocketTtsStatusText" style="font-size:12px;">Checking...</span>
                             <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kage-text-muted);">▼ Setup</span>
                         </div>
@@ -81,7 +81,7 @@ class SpeechSettingsModule extends SettingsModule {
                                 <div class="setting-label">Install pocket-tts</div>
                                 <div class="setting-description">Installs the Python package (~400MB model download on first use).</div>
                                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                    <button class="setting-button" id="pocketTtsInstallBtn" onclick="pocketTtsInstall()">Install</button>
+                                    <button class="setting-button" id="pocketTtsInstallBtn" data-action="speech.pocketTtsInstall">Install</button>
                                     <span id="pocketTtsInstallStatus" style="font-size:12px;"></span>
                                 </div>
                                 <pre id="pocketTtsInstallLog" style="display:none;font-size:11px;max-height:150px;overflow-y:auto;background:var(--kage-bg-tertiary);padding:8px;border-radius:6px;margin-top:8px;white-space:pre-wrap;word-break:break-all;"></pre>
@@ -90,7 +90,7 @@ class SpeechSettingsModule extends SettingsModule {
                                 <div class="setting-label">Server</div>
                                 <div class="setting-description">First start takes ~10-30s to load the model.</div>
                                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                    <button class="setting-button" id="pocketTtsStartBtn" onclick="pocketTtsToggleServer()">Start Server</button>
+                                    <button class="setting-button" id="pocketTtsStartBtn" data-action="speech.pocketTtsToggleServer">Start Server</button>
                                     <span id="pocketTtsServerStatus" style="font-size:12px;"></span>
                                 </div>
                             </div>
@@ -131,7 +131,7 @@ class SpeechSettingsModule extends SettingsModule {
                         <!-- Test -->
                         <div class="setting-row">
                             <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                <button class="setting-button" id="pocketTtsTestBtn" onclick="pocketTtsTest()">🔊 Test Voice</button>
+                                <button class="setting-button" id="pocketTtsTestBtn" data-action="speech.pocketTtsTest">🔊 Test Voice</button>
                                 <span id="pocketTtsTestSpinner" style="display:none;font-size:12px;">⏳ Generating...</span>
                                 <span id="pocketTtsTestStatus" style="font-size:12px;"></span>
                             </div>
@@ -147,7 +147,7 @@ class SpeechSettingsModule extends SettingsModule {
                             <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                                 <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="hf://kyutai/tts-voices/..." style="flex:1;">
                                 <input type="text" class="setting-input" id="pocketTtsVoiceName" placeholder="Name" style="width:100px;">
-                                <button class="setting-button" id="pocketTtsAddVoiceBtn" onclick="pocketTtsAddVoice()">Add</button>
+                                <button class="setting-button" id="pocketTtsAddVoiceBtn" data-action="speech.pocketTtsAddVoice">Add</button>
                             </div>
                             <div id="pocketTtsAddVoiceStatus" style="font-size:12px;margin-top:4px;"></div>
                         </div>
@@ -155,7 +155,7 @@ class SpeechSettingsModule extends SettingsModule {
                         <div class="setting-row">
                             <div class="setting-description">Or place .wav files directly in the voices folder (5-20s clean audio works best).</div>
                             <div class="setting-control">
-                                <button class="setting-button" onclick="pocketTtsOpenVoicesDir()">Open Voices Folder</button>
+                                <button class="setting-button" data-action="speech.pocketTtsOpenVoicesDir">Open Voices Folder</button>
                             </div>
                         </div>
 
@@ -435,7 +435,7 @@ async function pocketTtsInstall() {
     const status = document.getElementById('pocketTtsInstallStatus');
     const log = document.getElementById('pocketTtsInstallLog');
 
-    if (btn) { btn.textContent = '✕ Cancel'; btn.style.background = '#c44'; btn.style.color = 'white'; btn.onclick = pocketTtsCancelInstall; }
+    if (btn) { btn.textContent = '✕ Cancel'; btn.style.background = '#c44'; btn.style.color = 'white'; btn.dataset.action = 'speech.pocketTtsCancelInstall'; }
     if (status) status.textContent = 'Installing...';
     if (log) { log.style.display = 'block'; log.textContent = '$ pip install pocket-tts\n'; }
 
@@ -464,7 +464,7 @@ async function pocketTtsInstall() {
                 if (status) status.textContent = '❌ ' + (data.message || 'Failed');
                 if (log) log.textContent += '\n❌ ' + data.message + '\n';
             }
-            if (btn) { btn.textContent = data.success ? 'Reinstall' : 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.onclick = pocketTtsInstall; btn.disabled = false; }
+            if (btn) { btn.textContent = data.success ? 'Reinstall' : 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.dataset.action = 'speech.pocketTtsInstall'; btn.disabled = false; }
             const mod = settingsManager.modules.find(m => m.id === 'speech');
             if (mod) mod._refreshPocketStatus();
         });
@@ -473,7 +473,7 @@ async function pocketTtsInstall() {
 
     try { await invoke('pocket_tts_install'); } catch (e) {
         if (status) status.textContent = '❌ ' + e;
-        if (btn) { btn.textContent = 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.onclick = pocketTtsInstall; btn.disabled = false; }
+        if (btn) { btn.textContent = 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.dataset.action = 'speech.pocketTtsInstall'; btn.disabled = false; }
         _pocketTtsInstallUnlisteners.forEach(fn => fn());
         _pocketTtsInstallUnlisteners.length = 0;
     }
@@ -559,4 +559,19 @@ async function pocketTtsOpenVoicesDir() {
         else { basePath = '~/.local/share/kage/pocket-tts/voices'; }
         await invoke('open_path', { path: basePath });
     } catch (e) { console.warn('[Speech] Failed to open voices dir:', e); }
+}
+
+// Register the speech section's handlers with the delegated dispatcher
+// (actions.js). Replaces the inline `onclick="pocketTtsX()"` attributes
+// that previously called these functions through window globals.
+if (typeof window !== 'undefined' && window.registerSettingsActions) {
+    window.registerSettingsActions({
+        'speech.togglePocketTtsSetup':   () => togglePocketTtsSetup(),
+        'speech.pocketTtsInstall':       () => pocketTtsInstall(),
+        'speech.pocketTtsCancelInstall': () => pocketTtsCancelInstall(),
+        'speech.pocketTtsToggleServer':  () => pocketTtsToggleServer(),
+        'speech.pocketTtsTest':          () => pocketTtsTest(),
+        'speech.pocketTtsAddVoice':      () => pocketTtsAddVoice(),
+        'speech.pocketTtsOpenVoicesDir': () => pocketTtsOpenVoicesDir(),
+    });
 }

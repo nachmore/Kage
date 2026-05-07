@@ -209,13 +209,13 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                         <div class="agent-tool-name">${escapeHtml(tool.title)} ${badge}</div>
                         <div class="agent-tool-meta">Last seen: ${lastSeen}${tool.grant_type === '24h' && tool.granted_at ? ' · Granted: ' + new Date(tool.granted_at).toLocaleString() : ''}</div>
                     </div>
-                    <select class="agent-tool-select" data-index="${index}" onchange="updateToolPolicy(${index}, this.value)">
+                    <select class="agent-tool-select" data-index="${index}" data-action-change="toolPermissions.updatePolicy" data-arg="${index}">
                         <option value="ask" ${tool.policy === 'ask' ? 'selected' : ''}>Always Ask</option>
                         <option value="allow" ${tool.policy === 'allow' && tool.grant_type === '24h' ? 'selected' : ''} data-grant="24h">Allow 24h</option>
                         <option value="allow" ${tool.policy === 'allow' && tool.grant_type === 'always' ? 'selected' : ''} data-grant="always">Always Allow</option>
                         <option value="deny" ${tool.policy === 'deny' ? 'selected' : ''}>Deny</option>
                     </select>
-                    <button class="agent-tool-remove" onclick="removeSeenTool(${index})" title="Remove">✕</button>
+                    <button class="agent-tool-remove" data-action="toolPermissions.removeTool" data-arg="${index}" title="Remove">✕</button>
                 </div>
             `;
         }).join('');
@@ -359,6 +359,21 @@ function updateToolPolicy(index, policy) {
 function removeSeenTool(index) {
     const module = settingsManager.modules.find(m => m.id === 'tool-permissions');
     if (module) module.removeTool(index);
+}
+
+// Register the tool-permissions handlers with the delegated dispatcher.
+// The select uses data-action-change with the row index in data-arg, so
+// the handler receives the index as a string and reads `this.value` from
+// the element argument.
+if (typeof window !== 'undefined' && window.registerSettingsActions) {
+    window.registerSettingsActions({
+        'toolPermissions.updatePolicy': (arg, el) => {
+            updateToolPolicy(parseInt(arg, 10), el.value);
+        },
+        'toolPermissions.removeTool': (arg) => {
+            removeSeenTool(parseInt(arg, 10));
+        },
+    });
 }
 
 // Styles

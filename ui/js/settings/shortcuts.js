@@ -24,10 +24,10 @@ class ShortcutsSettingsModule extends SettingsModule {
             </div>
 
             <div class="shortcuts-actions">
-                <button class="setting-button" onclick="shortcutsModule.showAddDialog()">+ Add</button>
-                <button class="setting-button" onclick="if(window.__TAURI__?.core)window.__TAURI__.core.invoke('open_store_window',{tab:'commands'})">🛍️ Store</button>
-                <button class="setting-button" onclick="shortcutsModule.exportShortcuts()">Export</button>
-                <button class="setting-button" onclick="shortcutsModule.importShortcuts()">Import</button>
+                <button class="setting-button" data-action="shortcuts.showAddDialog">+ Add</button>
+                <button class="setting-button" data-action="shortcuts.openCommandsStore">🛍️ Store</button>
+                <button class="setting-button" data-action="shortcuts.exportShortcuts">Export</button>
+                <button class="setting-button" data-action="shortcuts.importShortcuts">Import</button>
             </div>
 
             <div class="shortcuts-list" id="shortcutsList"></div>
@@ -37,7 +37,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                 <div class="shortcut-dialog-content">
                     <div class="shortcut-dialog-header">
                         <h3 id="dialogTitle">Add Shortcut</h3>
-                        <button class="dialog-close-btn" onclick="shortcutsModule.closeDialog()">×</button>
+                        <button class="dialog-close-btn" data-action="shortcuts.closeDialog">×</button>
                     </div>
                     <div class="shortcut-dialog-body">
                         <div class="dialog-field">
@@ -52,17 +52,17 @@ class ShortcutsSettingsModule extends SettingsModule {
                             <label>Icon (optional)</label>
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <div id="shortcutIconPreview" class="shortcut-icon-preview">⚡</div>
-                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="⚡" maxlength="4" oninput="shortcutsModule.onIconInput()">
-                                <button class="setting-button" onclick="document.getElementById('shortcutIconFile').click()">📁 Image</button>
-                                <button class="setting-button" id="shortcutFaviconBtn" style="display:none" onclick="shortcutsModule.fetchFavicon()">🌐 Use Favicon</button>
-                                <button class="setting-button" id="shortcutIconClear" style="display:none" onclick="shortcutsModule.clearIcon()">✕</button>
-                                <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none" onchange="shortcutsModule.onIconFileSelected(event)">
+                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="⚡" maxlength="4">
+                                <button class="setting-button" data-action="shortcuts.openIconFilePicker">📁 Image</button>
+                                <button class="setting-button" id="shortcutFaviconBtn" style="display:none" data-action="shortcuts.fetchFavicon">🌐 Use Favicon</button>
+                                <button class="setting-button" id="shortcutIconClear" style="display:none" data-action="shortcuts.clearIcon">✕</button>
+                                <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none">
                             </div>
                             <div style="font-size:11px;color:var(--kage-text-muted);margin-top:4px;">Emoji, image file, or paste an image from clipboard</div>
                         </div>
                         <div class="dialog-field">
                             <label>Action Type</label>
-                            <select id="shortcutActionType" class="setting-select" onchange="shortcutsModule.onActionTypeChange()">
+                            <select id="shortcutActionType" class="setting-select" data-action-change="shortcuts.onActionTypeChange">
                                 <option value="run_program">▶️ Run Program</option>
                                 <option value="open_url">🌐 Open URL</option>
                                 <option value="prompt">💬 Send Prompt to Agent</option>
@@ -128,9 +128,9 @@ class ShortcutsSettingsModule extends SettingsModule {
                             <div class="dialog-field">
                                 <label>✨ Ask Kage to write or update the script</label>
                                 <div class="ai-prompt-row">
-                                    <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="e.g., Parse a Jira ticket URL and return the ticket ID" onkeydown="if(event.key==='Enter'){event.preventDefault();shortcutsModule.generateScript()}">
-                                    <button class="setting-button" id="scriptAiBtn" onclick="shortcutsModule.generateScript()">Generate</button>
-                                    <button class="setting-button" id="scriptAiUndo" onclick="shortcutsModule.undoGenerate()" style="display:none">Undo</button>
+                                    <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="e.g., Parse a Jira ticket URL and return the ticket ID">
+                                    <button class="setting-button" id="scriptAiBtn" data-action="shortcuts.generateScript">Generate</button>
+                                    <button class="setting-button" id="scriptAiUndo" data-action="shortcuts.undoGenerate" style="display:none">Undo</button>
                                 </div>
                                 <div id="scriptAiStatus" class="setting-description" style="margin-top: 4px;"></div>
                             </div>
@@ -139,8 +139,7 @@ class ShortcutsSettingsModule extends SettingsModule {
                                 <div class="script-editor-container">
                                     <pre class="script-highlight" aria-hidden="true"><code class="language-javascript" id="shortcutScriptHighlight"></code></pre>
                                     <textarea id="shortcutScript" class="setting-input script-editor" rows="8" spellcheck="false" wrap="off"
-                                        placeholder="// Arguments are passed as ...args&#10;// Return a string (or array for Run as Command)&#10;const query = args.join(' ');&#10;return 'Processed: ' + query;"
-                                        oninput="shortcutsModule.updateHighlight()"></textarea>
+                                        placeholder="// Arguments are passed as ...args&#10;// Return a string (or array for Run as Command)&#10;const query = args.join(' ');&#10;return 'Processed: ' + query;"></textarea>
                                 </div>
                                 <div class="setting-description" style="margin-top: 4px;">
                                     JavaScript function body. Receives arguments as <code>...args</code>.
@@ -150,22 +149,22 @@ class ShortcutsSettingsModule extends SettingsModule {
                         </div>
                     </div>
                     <div class="shortcut-test-section">
-                        <div class="shortcut-test-header" onclick="shortcutsModule.toggleTestSection()">
+                        <div class="shortcut-test-header" data-action="shortcuts.toggleTestSection">
                             <span id="shortcutTestToggle">▶</span> Test
                         </div>
                         <div id="shortcutTestBody" style="display:none;">
                             <div class="dialog-field" style="margin-bottom:8px;">
                                 <div style="display:flex;gap:8px;">
-                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="Enter test arguments..." style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();shortcutsModule.runTest()}">
-                                    <button class="setting-button" onclick="shortcutsModule.runTest()">▶ Run</button>
+                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="Enter test arguments..." style="flex:1;">
+                                    <button class="setting-button" data-action="shortcuts.runTest">▶ Run</button>
                                 </div>
                             </div>
                             <pre id="shortcutTestOutput" class="shortcut-test-output" style="display:none;"></pre>
                         </div>
                     </div>
                     <div class="shortcut-dialog-footer">
-                        <button class="setting-button" onclick="shortcutsModule.closeDialog()">Cancel</button>
-                        <button class="setting-button" onclick="shortcutsModule.saveShortcut()">Save</button>
+                        <button class="setting-button" data-action="shortcuts.closeDialog">Cancel</button>
+                        <button class="setting-button" data-action="shortcuts.saveShortcut">Save</button>
                     </div>
                 </div>
             </div>
@@ -251,6 +250,8 @@ class ShortcutsSettingsModule extends SettingsModule {
     initialize() {
         this.renderShortcutsList();
         window.shortcutsModule = this;
+        this._registerActions();
+        this._wireDialogListeners();
         this._escHandler = (e) => {
             if (e.key === 'Escape' && document.getElementById('shortcutDialog')?.style.display === 'flex') {
                 e.stopPropagation();
@@ -352,8 +353,8 @@ class ShortcutsSettingsModule extends SettingsModule {
                         </div>
                     </div>
                     <div class="shortcut-actions">
-                        <button class="shortcut-action-btn" onclick="shortcutsModule.editShortcut(${index})">Edit</button>
-                        <button class="shortcut-action-btn delete" onclick="shortcutsModule.deleteShortcut(${index})">Delete</button>
+                        <button class="shortcut-action-btn" data-action="shortcuts.editShortcut" data-arg="${index}">Edit</button>
+                        <button class="shortcut-action-btn delete" data-action="shortcuts.deleteShortcut" data-arg="${index}">Delete</button>
                     </div>
                 </div>`;
         }).join('');
@@ -793,5 +794,62 @@ class ShortcutsSettingsModule extends SettingsModule {
     destroy() {
         if (this._escHandler) document.removeEventListener('keydown', this._escHandler, true);
         delete window.shortcutsModule;
+    }
+
+    // Wire input/change/keydown listeners that previously lived as inline
+    // attributes (oninput=, onkeydown=). These are non-trivial — they
+    // either need to read event.key or call a method on this — so they
+    // can't go through the data-action dispatcher cleanly. addEventListener
+    // is the appropriate tool here.
+    _wireDialogListeners() {
+        const emoji = document.getElementById('shortcutIconEmoji');
+        if (emoji) emoji.addEventListener('input', () => this.onIconInput());
+
+        const iconFile = document.getElementById('shortcutIconFile');
+        if (iconFile) iconFile.addEventListener('change', (e) => this.onIconFileSelected(e));
+
+        const script = document.getElementById('shortcutScript');
+        if (script) script.addEventListener('input', () => this.updateHighlight());
+
+        const aiPrompt = document.getElementById('scriptAiPrompt');
+        if (aiPrompt) aiPrompt.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); this.generateScript(); }
+        });
+
+        const testArgs = document.getElementById('shortcutTestArgs');
+        if (testArgs) testArgs.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); this.runTest(); }
+        });
+    }
+
+    // Register every data-action="shortcuts.*" handler with the dispatcher.
+    // This replaces the previous pattern of inline onclick="shortcutsModule.X()"
+    // attributes — that pattern coupled rendered HTML to a window global and
+    // forced eval-style attribute strings (which CSP and content-sniffing
+    // checkers flag).
+    _registerActions() {
+        if (!window.registerSettingsActions) return;
+        window.registerSettingsActions({
+            'shortcuts.showAddDialog':       () => this.showAddDialog(),
+            'shortcuts.openCommandsStore':   () => {
+                if (window.__TAURI__?.core) {
+                    window.__TAURI__.core.invoke('open_store_window', { tab: 'commands' });
+                }
+            },
+            'shortcuts.exportShortcuts':     () => this.exportShortcuts(),
+            'shortcuts.importShortcuts':     () => this.importShortcuts(),
+            'shortcuts.closeDialog':         () => this.closeDialog(),
+            'shortcuts.openIconFilePicker':  () => document.getElementById('shortcutIconFile')?.click(),
+            'shortcuts.fetchFavicon':        () => this.fetchFavicon(),
+            'shortcuts.clearIcon':           () => this.clearIcon(),
+            'shortcuts.onActionTypeChange':  () => this.onActionTypeChange(),
+            'shortcuts.generateScript':      () => this.generateScript(),
+            'shortcuts.undoGenerate':        () => this.undoGenerate(),
+            'shortcuts.toggleTestSection':   () => this.toggleTestSection(),
+            'shortcuts.runTest':             () => this.runTest(),
+            'shortcuts.saveShortcut':        () => this.saveShortcut(),
+            'shortcuts.editShortcut':        (arg) => this.editShortcut(parseInt(arg, 10)),
+            'shortcuts.deleteShortcut':      (arg) => this.deleteShortcut(parseInt(arg, 10)),
+        });
     }
 }

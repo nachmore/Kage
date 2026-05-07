@@ -122,7 +122,7 @@ class StoreSettingsModule extends SettingsModule {
                 <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="Enable/disable this source">
                 <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="Name" style="width:120px;">
                 <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" style="flex:1;">
-                <button class="setting-button" style="font-size:11px;padding:4px 8px;" onclick="this.closest('.store-source-row').remove()">✕</button>
+                <button class="setting-button" style="font-size:11px;padding:4px 8px;" data-action="store.removeSourceRow">✕</button>
             </div>
         `).join('');
     }
@@ -132,4 +132,15 @@ class StoreSettingsModule extends SettingsModule {
     }
 
     validate() { return { valid: true }; }
+}
+
+// Register the store section's row-removal handler with the delegated
+// dispatcher. The button used to carry an inline `onclick="this.closest(
+// '.store-source-row').remove()"` — same behavior, expressed once.
+if (typeof window !== 'undefined' && window.registerSettingsActions) {
+    window.registerSettingsActions({
+        'store.removeSourceRow': (_arg, el) => {
+            el.closest('.store-source-row')?.remove();
+        },
+    });
 }

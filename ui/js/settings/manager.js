@@ -189,7 +189,7 @@ class SettingsManager {
                 // Framework-owned header: icon + title on left, enable/disable button on right
                 html += `<h2 class="settings-section-header ext-section-header">
                     <span>${module.icon} ${module.title}</span>
-                    <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" onclick="toggleExtension('${extId}')">Disable</button>
+                    <button class="setting-button" id="ext-toggle-btn-${extId}" style="min-width:80px;font-size:12px;" data-action="toggleExtension" data-arg="${extId}">Disable</button>
                     <input type="hidden" id="ext-enabled-${extId}" value="true">
                 </h2>`;
                 if (module.description) {
@@ -415,7 +415,8 @@ function addExtensionSidebarItem(id, icon, label) {
     item.className = 'sidebar-item';
     item.dataset.section = id;
     item.dataset.extSidebar = 'true'; // mark as dynamic extension item
-    item.onclick = () => switchSection(id);
+    item.dataset.action = 'switchSection';
+    item.dataset.arg = id;
     const iconSpan = document.createElement('span');
     iconSpan.className = 'sidebar-item-icon';
     iconSpan.textContent = icon;
@@ -697,4 +698,17 @@ function _updateExtToggleUI(extId, enabled) {
         content.style.opacity = enabled ? '' : '0.4';
         content.style.pointerEvents = enabled ? '' : 'none';
     }
+}
+
+// Register manager-owned actions with the delegated dispatcher (actions.js).
+// These replace what used to be inline `onclick="..."` attributes calling
+// window-level globals.
+if (typeof window !== 'undefined' && window.registerSettingsActions) {
+    window.registerSettingsActions({
+        switchSection: (sectionId) => switchSection(sectionId),
+        saveAndClose: () => saveAndClose(),
+        closeSettings: () => closeSettings(),
+        toggleExtension: (extId) => toggleExtension(extId),
+        openStore: () => openStore(),
+    });
 }

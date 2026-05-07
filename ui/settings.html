@@ -46,64 +46,64 @@
         <div class="settings-sidebar">
             <div class="sidebar-section">
                 <div class="sidebar-section-title">User Experience</div>
-                <div class="sidebar-item active" data-section="appearance" onclick="switchSection('appearance')">
+                <div class="sidebar-item active" data-section="appearance" data-action="switchSection" data-arg="appearance">
                     <span class="sidebar-item-icon">🎨</span>
                     <span>Appearance</span>
                 </div>
-                <div class="sidebar-item" data-section="hotkey" onclick="switchSection('hotkey')">
+                <div class="sidebar-item" data-section="hotkey" data-action="switchSection" data-arg="hotkey">
                     <span class="sidebar-item-icon">🎹</span>
                     <span>Hotkey & Shortcuts</span>
                 </div>
-                <div class="sidebar-item" data-section="system" onclick="switchSection('system')">
+                <div class="sidebar-item" data-section="system" data-action="switchSection" data-arg="system">
                     <span class="sidebar-item-icon" id="systemSidebarIcon">🚀</span>
                     <span>Startup</span>
                 </div>
-                <div class="sidebar-item" data-section="speech" onclick="switchSection('speech')">
+                <div class="sidebar-item" data-section="speech" data-action="switchSection" data-arg="speech">
                     <span class="sidebar-item-icon">🎙️</span>
                     <span>Speech</span>
                 </div>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title">Kage AI</div>
-                <div class="sidebar-item" data-section="personalization" onclick="switchSection('personalization')">
+                <div class="sidebar-item" data-section="personalization" data-action="switchSection" data-arg="personalization">
                     <span class="sidebar-item-icon">✨</span>
                     <span>Personalization</span>
                 </div>
-                <div class="sidebar-item" data-section="connection" onclick="switchSection('connection')">
+                <div class="sidebar-item" data-section="connection" data-action="switchSection" data-arg="connection">
                     <span class="sidebar-item-icon">🔌</span>
                     <span>Agent Connection</span>
                 </div>
-                <div class="sidebar-item" data-section="model" onclick="switchSection('model')">
+                <div class="sidebar-item" data-section="model" data-action="switchSection" data-arg="model">
                     <span class="sidebar-item-icon">🧠</span>
                     <span>Model</span>
                 </div>
-                <div class="sidebar-item" data-section="mcp" onclick="switchSection('mcp')">
+                <div class="sidebar-item" data-section="mcp" data-action="switchSection" data-arg="mcp">
                     <span class="sidebar-item-icon">🔌</span>
                     <span>MCP Servers</span>
                 </div>
-                <div class="sidebar-item" data-section="tool-permissions" onclick="switchSection('tool-permissions')">
+                <div class="sidebar-item" data-section="tool-permissions" data-action="switchSection" data-arg="tool-permissions">
                     <span class="sidebar-item-icon">🔧</span>
                     <span>Agent Permissions</span>
                 </div>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title">Automation</div>
-                <div class="sidebar-item" data-section="integration" onclick="switchSection('integration')">
+                <div class="sidebar-item" data-section="integration" data-action="switchSection" data-arg="integration">
                     <span class="sidebar-item-icon" id="integrationSidebarIcon">🔗</span>
                     <span>System Integration</span>
                 </div>
-                <div class="sidebar-item" data-section="shortcuts" onclick="switchSection('shortcuts')">
+                <div class="sidebar-item" data-section="shortcuts" data-action="switchSection" data-arg="shortcuts">
                     <span class="sidebar-item-icon">⚡</span>
                     <span>Quick Commands</span>
                 </div>
-                <div class="sidebar-item" data-section="macros" onclick="switchSection('macros')">
+                <div class="sidebar-item" data-section="macros" data-action="switchSection" data-arg="macros">
                     <span class="sidebar-item-icon">🔄</span>
                     <span>Automations</span>
                 </div>
             </div>
             <div class="sidebar-section" id="extensionsSidebarSection">
                 <div class="sidebar-section-title">Extensions</div>
-                <div class="sidebar-item" data-section="store" data-sidebar-store onclick="switchSection('store')">
+                <div class="sidebar-item" data-section="store" data-sidebar-store data-action="switchSection" data-arg="store">
                     <span class="sidebar-item-icon">🛍️</span>
                     <span>Extension Store</span>
                 </div>
@@ -112,11 +112,11 @@
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-section-title">About</div>
-                <div class="sidebar-item" data-section="updates" onclick="switchSection('updates')">
+                <div class="sidebar-item" data-section="updates" data-action="switchSection" data-arg="updates">
                     <span class="sidebar-item-icon">🔄</span>
                     <span>Updates</span>
                 </div>
-                <div class="sidebar-item" data-section="about" onclick="switchSection('about')">
+                <div class="sidebar-item" data-section="about" data-action="switchSection" data-arg="about">
                     <span class="sidebar-item-icon">ℹ️</span>
                     <span>About Kage</span>
                 </div>
@@ -135,7 +135,7 @@
     <div id="statusMessage" class="status-message"></div>
     <!-- Save Button -->
     <div class="save-button-container">
-        <button class="save-button" onclick="saveAndClose()">Save &amp; Close</button>
+        <button class="save-button" data-action="saveAndClose">Save &amp; Close</button>
     </div>
 
     <!-- Theme initialization for settings window -->
@@ -193,6 +193,7 @@
     <script src="vendor/lib/marked.min.js"></script>
     
     <!-- Load all settings modules -->
+    <script src="js/settings/actions.js"></script>
     <script src="js/settings/base.js"></script>
     <script>
         // Intercept console for settings window logging
