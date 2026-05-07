@@ -21,9 +21,10 @@ def run(label, cmd, cwd=ROOT):
         failed = True
 
 
-# Rust tests — lib + integration tests. Use -j 1 to avoid parallel compilation
-# exhausting memory (Tauri + deps are large). Binaries excluded via test=false.
-run("Rust Tests", ["cargo", "test", "-j", "1"])
+# Rust tests — lib + integration tests. Parallelism is capped at jobs=2 in
+# .cargo/config.toml to keep Tauri's compile graph from exhausting the
+# Windows paging file. Binaries excluded via test=false.
+run("Rust Tests", ["cargo", "test"])
 
 # JS tests — install deps if needed
 js_dir = os.path.join(ROOT, "ui", "tests")

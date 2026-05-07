@@ -1,0 +1,8 @@
+# Cap parallel build jobs to 2 so the Tauri + dependency tree (large LLVM
+# units, large generic-heavy crates like `windows`) doesn't exhaust the
+# Windows paging file under default `-j N` where N == logical CPU count.
+# Symptom without this cap: `cargo test` OOMs mid-link with no clear error.
+# 2 is the sweet spot — single-threaded is too slow, 4+ blows up on 16GB
+# laptops. CI machines with more memory can override via `CARGO_BUILD_JOBS`.
+[build]
+jobs = 2

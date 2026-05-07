@@ -1,6 +1,5 @@
 # Rust
 target/
-Cargo.lock
 
 # IDE
 .vscode/
@@ -12,9 +11,6 @@ Cargo.lock
 # OS
 .DS_Store
 Thumbs.db
-
-# Local config
-.cargo/
 
 # Sample data
 sample_sessions/
