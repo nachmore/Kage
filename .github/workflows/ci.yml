@@ -1,0 +1,87 @@
+# CI: gate every push to mainline and every PR to main on a green build,
+# clean lints, and a passing test suite (Rust + JS).
+#
+# Runs on windows-latest only — kage is Windows-primary; half the codebase
+# is gated #[cfg(target_os = "windows")] with WinRT/COM/uiautomation deps
+# that don't exist on Linux/macOS, so other runners would skip the
+# meaningful coverage.
+#
+# Hard gates: cargo fmt, cargo clippy, cargo build --bins, cargo test,
+# vitest. All four together take ~5 min warm / ~10 min cold; well inside
+# any GitHub Actions allowance for a personal-scale push frequency.
+
+name: CI
+
+on:
+  push:
+    branches: [mainline]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel an in-progress run when a new push lands on the same ref —
+# saves minutes when the user pushes a fixup commit before the previous
+# one finishes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build + test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Cache target/ and ~/.cargo/registry keyed on Cargo.lock — turns a
+      # ~10min cold compile into a ~2min warm one. Swatinem/rust-cache
+      # is the standard choice; it knows how to invalidate properly when
+      # rustc / Cargo.lock / Cargo.toml change.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js (v20) with npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ui/tests/package-lock.json
+
+      - name: Install JS test deps
+        working-directory: ui/tests
+        run: npm ci
+
+      # ----- Lint gates ------------------------------------------------
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        # --all-targets covers lib, bins, tests, examples. -D warnings
+        # promotes any warning into a failure so we stay at zero warnings.
+        run: cargo clippy --all-targets -- -D warnings
+
+      # ----- Build + test gates ---------------------------------------
+
+      # `cargo test` doesn't build the binaries (both have `test = false`
+      # in Cargo.toml), so an error in main.rs or bin/computer_control_mcp.rs
+      # that the lib doesn't surface would slip through. Build them
+      # explicitly first.
+      - name: cargo build --bins
+        run: cargo build --bins
+
+      - name: cargo test
+        # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
+        # exhaustion on Windows; CI inherits that.
+        run: cargo test
+
+      - name: vitest
+        working-directory: ui/tests
+        run: npx vitest run
