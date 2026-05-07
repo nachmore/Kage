@@ -17,7 +17,9 @@ pub fn get_power_state_impl() -> PowerState {
     if status == "Discharging" {
         if let Ok(cap) = std::fs::read_to_string(capacity_path) {
             if let Ok(pct) = cap.trim().parse::<u32>() {
-                if pct < 20 { return PowerState::LowBattery; }
+                if pct < 20 {
+                    return PowerState::LowBattery;
+                }
             }
         }
         return PowerState::Battery;

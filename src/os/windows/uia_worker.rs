@@ -158,7 +158,10 @@ fn run_worker(rx: mpsc::Receiver<Job>) {
     let state = match build_worker_state() {
         Ok(s) => s,
         Err(e) => {
-            log::error!("UIA worker init failed: {} — accessibility calls will fail", e);
+            log::error!(
+                "UIA worker init failed: {} — accessibility calls will fail",
+                e
+            );
             // Drain jobs and reply with the init error so callers don't hang.
             for job in rx.iter() {
                 reply_init_error(job, &e);
@@ -186,8 +189,18 @@ fn build_worker_state() -> Result<WorkerState, String> {
 /// that ever calls those, so the `thread_local!` registry stays consistent.
 fn dispatch(state: &WorkerState, job: Job) {
     match job {
-        Job::GetUiTree { window_title, max_depth, include_invisible, reply } => {
-            let result = acc::get_ui_tree_inner(state, window_title.as_deref(), max_depth, include_invisible);
+        Job::GetUiTree {
+            window_title,
+            max_depth,
+            include_invisible,
+            reply,
+        } => {
+            let result = acc::get_ui_tree_inner(
+                state,
+                window_title.as_deref(),
+                max_depth,
+                include_invisible,
+            );
             let _ = reply.send(result);
         }
         Job::FindElements { params, reply } => {
@@ -198,7 +211,10 @@ fn dispatch(state: &WorkerState, job: Job) {
             let result = acc::get_focused_element_inner(state);
             let _ = reply.send(result);
         }
-        Job::ListAccessibleWindows { title_filter, reply } => {
+        Job::ListAccessibleWindows {
+            title_filter,
+            reply,
+        } => {
             let result = acc::list_accessible_windows_inner(state, title_filter.as_deref());
             let _ = reply.send(result);
         }
@@ -210,7 +226,11 @@ fn dispatch(state: &WorkerState, job: Job) {
             let result = acc::focus_element_inner(&element_id);
             let _ = reply.send(result);
         }
-        Job::SetElementValue { element_id, value, reply } => {
+        Job::SetElementValue {
+            element_id,
+            value,
+            reply,
+        } => {
             let result = acc::set_element_value_inner(&element_id, &value);
             let _ = reply.send(result);
         }
@@ -230,7 +250,12 @@ fn dispatch(state: &WorkerState, job: Job) {
             let result = acc::collapse_element_inner(&element_id);
             let _ = reply.send(result);
         }
-        Job::ScrollElement { element_id, direction, amount, reply } => {
+        Job::ScrollElement {
+            element_id,
+            direction,
+            amount,
+            reply,
+        } => {
             let result = acc::scroll_element_inner(&element_id, &direction, amount);
             let _ = reply.send(result);
         }
@@ -238,7 +263,11 @@ fn dispatch(state: &WorkerState, job: Job) {
             let result = acc::get_element_text_inner(&element_id);
             let _ = reply.send(result);
         }
-        Job::GetElementChildren { element_id, max_depth, reply } => {
+        Job::GetElementChildren {
+            element_id,
+            max_depth,
+            reply,
+        } => {
             let result = acc::get_element_children_inner(state, &element_id, max_depth);
             let _ = reply.send(result);
         }
@@ -250,20 +279,48 @@ fn dispatch(state: &WorkerState, job: Job) {
 fn reply_init_error(job: Job, err: &str) {
     let msg = format!("UIA worker unavailable: {}", err);
     match job {
-        Job::GetUiTree { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::FindElements { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::GetFocusedElement { reply } => { let _ = reply.send(Err(msg)); }
-        Job::ListAccessibleWindows { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::ClickElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::FocusElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::SetElementValue { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::ToggleElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::SelectElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::ExpandElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::CollapseElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::ScrollElement { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::GetElementText { reply, .. } => { let _ = reply.send(Err(msg)); }
-        Job::GetElementChildren { reply, .. } => { let _ = reply.send(Err(msg)); }
+        Job::GetUiTree { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::FindElements { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::GetFocusedElement { reply } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::ListAccessibleWindows { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::ClickElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::FocusElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::SetElementValue { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::ToggleElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::SelectElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::ExpandElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::CollapseElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::ScrollElement { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::GetElementText { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
+        Job::GetElementChildren { reply, .. } => {
+            let _ = reply.send(Err(msg));
+        }
     }
 }
 

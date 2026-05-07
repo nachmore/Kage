@@ -84,8 +84,8 @@ pub fn validate_extension_id(id: &str) -> Result<()> {
 /// matches the prefix but resolves to an attacker-controlled host. The fix
 /// is to parse the URL and compare the host component exactly.
 pub fn validate_store_url(url: &str) -> Result<()> {
-    let parsed = url::Url::parse(url)
-        .with_context(|| format!("Store URL is not a valid URL: {}", url))?;
+    let parsed =
+        url::Url::parse(url).with_context(|| format!("Store URL is not a valid URL: {}", url))?;
     match parsed.scheme() {
         "https" => Ok(()),
         "http" => {
@@ -126,7 +126,10 @@ pub fn validate_data_key(key: &str) -> Result<()> {
     if key.is_empty() || key.len() > 128 {
         anyhow::bail!("Data key must be 1-128 characters");
     }
-    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+    if !key
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
         anyhow::bail!("Data key contains invalid characters (allowed: a-z, 0-9, -, _, .)");
     }
     if key.contains("..") {
@@ -215,7 +218,6 @@ pub struct ExtensionContributes {
     pub trigger_provider: Option<String>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetContribution {
     pub id: String,
@@ -272,7 +274,11 @@ pub fn kind_to_subdir(kind: &str) -> Result<&'static str> {
 // ---------------------------------------------------------------------------
 
 /// Scan a directory for manifest.json files, returning discovered items.
-fn scan_directory(dir: &PathBuf, bundled: bool, enabled_states: &HashMap<String, bool>) -> Vec<InstalledItem> {
+fn scan_directory(
+    dir: &PathBuf,
+    bundled: bool,
+    enabled_states: &HashMap<String, bool>,
+) -> Vec<InstalledItem> {
     let mut items = Vec::new();
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -290,10 +296,7 @@ fn scan_directory(dir: &PathBuf, bundled: bool, enabled_states: &HashMap<String,
         match fs::read_to_string(&manifest_path) {
             Ok(content) => match serde_json::from_str::<ExtensionManifest>(&content) {
                 Ok(manifest) => {
-                    let enabled = enabled_states
-                        .get(&manifest.id)
-                        .copied()
-                        .unwrap_or(true);
+                    let enabled = enabled_states.get(&manifest.id).copied().unwrap_or(true);
                     items.push(InstalledItem {
                         path: path.to_string_lossy().to_string(),
                         bundled,
@@ -351,8 +354,8 @@ pub fn discover_items(
 /// `source_dir` should contain a valid manifest.json.
 pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
     let manifest_path = source_dir.join("manifest.json");
-    let content = fs::read_to_string(&manifest_path)
-        .context("No manifest.json found in source directory")?;
+    let content =
+        fs::read_to_string(&manifest_path).context("No manifest.json found in source directory")?;
     let manifest: ExtensionManifest =
         serde_json::from_str(&content).context("Invalid manifest.json")?;
 
@@ -373,7 +376,10 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
     // Copy the directory
     copy_dir_recursive(source_dir, &target_dir)?;
 
-    info!("Installed {} '{}' v{}", manifest.kind, manifest.id, manifest.version);
+    info!(
+        "Installed {} '{}' v{}",
+        manifest.kind, manifest.id, manifest.version
+    );
 
     Ok(InstalledItem {
         path: target_dir.to_string_lossy().to_string(),
@@ -427,21 +433,20 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
     use std::io;
     use std::path::Component;
 
-    let file = fs::File::open(zip_path)
-        .context("Failed to open zip file")?;
-    let mut archive = zip::ZipArchive::new(file)
-        .context("Failed to read zip archive")?;
+    let file = fs::File::open(zip_path).context("Failed to open zip file")?;
+    let mut archive = zip::ZipArchive::new(file).context("Failed to read zip archive")?;
 
     // Make sure the target exists so we can canonicalize it once up-front.
     fs::create_dir_all(target_dir).ok();
-    let canonical_target = target_dir.canonicalize()
+    let canonical_target = target_dir
+        .canonicalize()
         .with_context(|| format!("Failed to canonicalize target {}", target_dir.display()))?;
 
     for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)
-            .context("Failed to read zip entry")?;
+        let mut entry = archive.by_index(i).context("Failed to read zip entry")?;
 
-        let entry_path = entry.enclosed_name()
+        let entry_path = entry
+            .enclosed_name()
             .context("Zip entry has invalid path (possible Zip Slip attack)")?
             .to_owned();
 
@@ -477,9 +482,7 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
                 break;
             }
         }
-        let anchor_canon = anchor
-            .canonicalize()
-            .unwrap_or(anchor);
+        let anchor_canon = anchor.canonicalize().unwrap_or(anchor);
         let mut resolved = anchor_canon;
         for name in tail.into_iter().rev() {
             resolved.push(name);
@@ -524,7 +527,11 @@ pub fn extract_zip(zip_path: &PathBuf, target_dir: &PathBuf) -> Result<()> {
         }
     }
 
-    info!("Extracted zip to {:?} ({} entries)", target_dir, archive.len());
+    info!(
+        "Extracted zip to {:?} ({} entries)",
+        target_dir,
+        archive.len()
+    );
     Ok(())
 }
 
@@ -534,7 +541,11 @@ pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
     // Extract to a temp directory
     let temp_dir = std::env::temp_dir().join(format!(
         "kage-ext-{}",
-        uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("tmp")
+        uuid::Uuid::new_v4()
+            .to_string()
+            .split('-')
+            .next()
+            .unwrap_or("tmp")
     ));
     if temp_dir.exists() {
         fs::remove_dir_all(&temp_dir)?;
@@ -577,7 +588,11 @@ pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
 
 /// Load theme colors from a theme's JSON file.
 /// Returns the colors map or None if not found.
-pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&PathBuf>) -> Result<Option<serde_json::Value>> {
+pub fn load_theme_colors(
+    theme_id: &str,
+    variant: &str,
+    bundled_dir: Option<&PathBuf>,
+) -> Result<Option<serde_json::Value>> {
     // Check user themes first
     if let Ok(user_dir) = user_item_dir("themes") {
         let theme_dir = user_dir.join(theme_id);
@@ -596,11 +611,18 @@ pub fn load_theme_colors(theme_id: &str, variant: &str, bundled_dir: Option<&Pat
         }
     }
 
-    log::warn!("load_theme_colors: theme '{}' ({}) not found in any directory", theme_id, variant);
+    log::warn!(
+        "load_theme_colors: theme '{}' ({}) not found in any directory",
+        theme_id,
+        variant
+    );
     Ok(None)
 }
 
-fn try_load_theme_variant(theme_dir: &std::path::Path, variant: &str) -> Result<Option<serde_json::Value>> {
+fn try_load_theme_variant(
+    theme_dir: &std::path::Path,
+    variant: &str,
+) -> Result<Option<serde_json::Value>> {
     // First read the manifest to find the variant file path
     let manifest_path = theme_dir.join("manifest.json");
     if !manifest_path.exists() {

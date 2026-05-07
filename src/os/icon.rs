@@ -49,7 +49,9 @@ static ICON_BY_NAME: LazyLock<Mutex<LruCache<String, String>>> =
 /// failed. A None result is also cached — callers shouldn't re-attempt
 /// extraction on every call for an exe that legitimately has no icon.
 pub fn extract_icon_base64_cached(path: &str) -> Option<String> {
-    if path.is_empty() { return None; }
+    if path.is_empty() {
+        return None;
+    }
     let mut cache = ICON_BY_PATH.lock_or_recover();
     cache
         .get_or_insert(path.to_string(), || {
@@ -70,7 +72,9 @@ pub fn extract_icon_base64(path: &str) -> Option<String> {
 /// during window enumeration once we've identified both the process
 /// name and (via the path cache) its icon.
 pub fn register_process_name_icon(process_name: &str, icon: &str) {
-    if process_name.is_empty() || icon.is_empty() { return; }
+    if process_name.is_empty() || icon.is_empty() {
+        return;
+    }
     let key = process_name.to_lowercase();
     let mut cache = ICON_BY_NAME.lock_or_recover();
     if cache.get(&key).is_none() {
@@ -116,7 +120,10 @@ mod tests {
         cache.put("d".into(), "icon-d".into());
 
         assert_eq!(cache.len(), 3);
-        assert!(cache.get(&"a".to_string()).is_none(), "a should have been evicted");
+        assert!(
+            cache.get(&"a".to_string()).is_none(),
+            "a should have been evicted"
+        );
         assert_eq!(cache.get(&"b".to_string()), Some(&"icon-b".to_string()));
         assert_eq!(cache.get(&"c".to_string()), Some(&"icon-c".to_string()));
         assert_eq!(cache.get(&"d".to_string()), Some(&"icon-d".to_string()));
@@ -132,8 +139,14 @@ mod tests {
         let _ = cache.get(&"a".to_string());
         cache.put("d".into(), "icon-d".into());
 
-        assert!(cache.get(&"a".to_string()).is_some(), "a should survive — was just touched");
-        assert!(cache.get(&"b".to_string()).is_none(), "b should be evicted as the LRU");
+        assert!(
+            cache.get(&"a".to_string()).is_some(),
+            "a should survive — was just touched"
+        );
+        assert!(
+            cache.get(&"b".to_string()).is_none(),
+            "b should be evicted as the LRU"
+        );
     }
 
     #[test]
@@ -148,7 +161,10 @@ mod tests {
                 "icon-notepad".to_string()
             });
         }
-        assert_eq!(extractions, 1, "expected a single extraction across 5 lookups");
+        assert_eq!(
+            extractions, 1,
+            "expected a single extraction across 5 lookups"
+        );
         assert_eq!(cache.len(), 1);
     }
 

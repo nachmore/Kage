@@ -11,8 +11,7 @@ pub fn get_avatar_path_impl(username: &str) -> Option<String> {
     }
 
     // AccountsService icon
-    let accounts_icon =
-        std::path::PathBuf::from("/var/lib/AccountsService/icons").join(username);
+    let accounts_icon = std::path::PathBuf::from("/var/lib/AccountsService/icons").join(username);
     if accounts_icon.exists() {
         return accounts_icon.to_str().map(|s| s.to_string());
     }

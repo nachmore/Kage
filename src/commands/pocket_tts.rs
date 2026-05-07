@@ -110,9 +110,10 @@ pub fn get_server_script_path() -> std::path::PathBuf {
     dev_path
 }
 
-
 #[tauri::command]
-pub async fn pocket_tts_check_install(features: State<'_, FeatureServices>) -> Result<PocketTtsStatus, AppError> {
+pub async fn pocket_tts_check_install(
+    features: State<'_, FeatureServices>,
+) -> Result<PocketTtsStatus, AppError> {
     let (port, python_path) = {
         let config = features.config.lock_or_recover();
         let pp = config.pocket_tts.python_path.clone().or_else(find_python);
@@ -168,7 +169,9 @@ pub async fn pocket_tts_install(
         .stderr(Stdio::piped());
     configure_no_window(&mut cmd);
 
-    let mut child = cmd.spawn().map_err(|e| format!("Failed to run pip: {}", e))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to run pip: {}", e))?;
 
     // Take stdout and stderr for streaming
     let stdout = child.stdout.take();
@@ -211,8 +214,12 @@ pub async fn pocket_tts_install(
         });
 
         // Wait for output threads to finish
-        if let Some(t) = stdout_thread { let _ = t.join(); }
-        if let Some(t) = stderr_thread { let _ = t.join(); }
+        if let Some(t) = stdout_thread {
+            let _ = t.join();
+        }
+        if let Some(t) = stderr_thread {
+            let _ = t.join();
+        }
 
         // Wait for the process to exit
         let exit_status = {
@@ -234,24 +241,33 @@ pub async fn pocket_tts_install(
         match exit_status {
             Some(status) if status.success() => {
                 info!("pocket-tts installed successfully");
-                let _ = app_handle.emit("pocket_tts_install_done", serde_json::json!({
-                    "success": true,
-                    "message": "pocket-tts installed successfully",
-                    "python_path": python_for_config,
-                }));
+                let _ = app_handle.emit(
+                    "pocket_tts_install_done",
+                    serde_json::json!({
+                        "success": true,
+                        "message": "pocket-tts installed successfully",
+                        "python_path": python_for_config,
+                    }),
+                );
             }
             Some(_status) => {
-                let _ = app_handle.emit("pocket_tts_install_done", serde_json::json!({
-                    "success": false,
-                    "message": "Installation failed (pip returned non-zero exit code)",
-                }));
+                let _ = app_handle.emit(
+                    "pocket_tts_install_done",
+                    serde_json::json!({
+                        "success": false,
+                        "message": "Installation failed (pip returned non-zero exit code)",
+                    }),
+                );
             }
             None => {
                 // Process was cancelled
-                let _ = app_handle.emit("pocket_tts_install_done", serde_json::json!({
-                    "success": false,
-                    "message": "Installation cancelled",
-                }));
+                let _ = app_handle.emit(
+                    "pocket_tts_install_done",
+                    serde_json::json!({
+                        "success": false,
+                        "message": "Installation cancelled",
+                    }),
+                );
             }
         }
     });
@@ -260,7 +276,9 @@ pub async fn pocket_tts_install(
 }
 
 #[tauri::command]
-pub async fn pocket_tts_cancel_install(procs: State<'_, ChildProcesses>) -> Result<String, AppError> {
+pub async fn pocket_tts_cancel_install(
+    procs: State<'_, ChildProcesses>,
+) -> Result<String, AppError> {
     let mut proc = procs.pocket_tts_install.lock_or_recover();
     if let Some(mut child) = proc.take() {
         info!("Cancelling pocket-tts installation");
@@ -284,7 +302,10 @@ pub async fn pocket_tts_start(
             config.pocket_tts.voice.clone(),
             config.pocket_tts.temp,
             config.pocket_tts.eos_threshold,
-            config.pocket_tts.python_path.clone()
+            config
+                .pocket_tts
+                .python_path
+                .clone()
                 .or_else(find_python)
                 .ok_or_else(|| "Python 3 not found".to_string())?,
         )
@@ -297,10 +318,7 @@ pub async fn pocket_tts_start(
 
     let script_path = get_server_script_path();
     if !script_path.exists() {
-        return Err(format!(
-            "Server script not found at: {}",
-            script_path.display()
-        ).into());
+        return Err(format!("Server script not found at: {}", script_path.display()).into());
     }
 
     info!(
@@ -420,7 +438,9 @@ pub async fn pocket_tts_stop(procs: State<'_, ChildProcesses>) -> Result<String,
 }
 
 #[tauri::command]
-pub async fn pocket_tts_voices(features: State<'_, FeatureServices>) -> Result<serde_json::Value, AppError> {
+pub async fn pocket_tts_voices(
+    features: State<'_, FeatureServices>,
+) -> Result<serde_json::Value, AppError> {
     let port = {
         let config = features.config.lock_or_recover();
         config.pocket_tts.port
@@ -467,10 +487,7 @@ pub async fn pocket_tts_test(
     // happens in the frontend via fetch to the TTS server
     let url = format!("http://127.0.0.1:{}/status", port);
     match reqwest::get(&url).await {
-        Ok(resp) if resp.status().is_success() => Ok(format!(
-            "http://127.0.0.1:{}/tts",
-            port
-        )),
+        Ok(resp) if resp.status().is_success() => Ok(format!("http://127.0.0.1:{}/tts", port)),
         _ => Err("Pocket TTS server is not running. Start it first.".into()),
     }
 }

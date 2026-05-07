@@ -22,9 +22,7 @@ use log::{info, warn};
 use std::sync::OnceLock;
 
 use windows::core::HSTRING;
-use windows::Storage::Search::{
-    CommonFileQuery, FolderDepth, IndexerOption, QueryOptions,
-};
+use windows::Storage::Search::{CommonFileQuery, FolderDepth, IndexerOption, QueryOptions};
 use windows::Storage::StorageFolder;
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
 use windows_collections::IIterable;
@@ -52,7 +50,10 @@ fn ensure_winrt_initialized() {
         // thread return S_FALSE without harm.
         let hr = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
         if let Err(e) = hr {
-            warn!("[file_search] RoInitialize failed: {} — searches will likely fail", e);
+            warn!(
+                "[file_search] RoInitialize failed: {} — searches will likely fail",
+                e
+            );
         }
     });
     // Also cover the case where the worker thread is fresh and the
@@ -85,7 +86,11 @@ pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResul
 
     match run_query(&cleaned, max_results) {
         Ok(results) => {
-            info!("[file_search] Found {} results for '{}'", results.len(), query);
+            info!(
+                "[file_search] Found {} results for '{}'",
+                results.len(),
+                query
+            );
             results
         }
         Err(e) => {
@@ -114,10 +119,7 @@ fn run_query(query: &str, max_results: usize) -> windows::core::Result<Vec<FileS
     // FileTypeFilter — empty IIterable<HSTRING> means "all types".
     // CreateCommonFileQuery requires it; build one from an empty Vec.
     let empty_filter: IIterable<HSTRING> = IIterable::from(Vec::<HSTRING>::new());
-    let options = QueryOptions::CreateCommonFileQuery(
-        CommonFileQuery::OrderByDate,
-        &empty_filter,
-    )?;
+    let options = QueryOptions::CreateCommonFileQuery(CommonFileQuery::OrderByDate, &empty_filter)?;
 
     options.SetUserSearchFilter(&HSTRING::from(query))?;
     options.SetFolderDepth(FolderDepth::Deep)?;
@@ -128,9 +130,7 @@ fn run_query(query: &str, max_results: usize) -> windows::core::Result<Vec<FileS
     // GetFilesAsync(start, max) — the indexer respects this and stops
     // walking once it has the requested count. Saves walking 10k files
     // for a 10-result UI dropdown.
-    let files = query_result
-        .GetFilesAsync(0, max_results as u32)?
-        .join()?;
+    let files = query_result.GetFilesAsync(0, max_results as u32)?.join()?;
 
     let count = files.Size()? as usize;
     let take = count.min(max_results);

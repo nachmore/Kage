@@ -32,7 +32,9 @@ pub fn get_clipboard_history_impl() -> Vec<ClipboardHistoryEntry> {
 }
 
 fn get_clipboard_history_sta() -> Vec<ClipboardHistoryEntry> {
-    use windows::ApplicationModel::DataTransfer::{Clipboard, ClipboardHistoryItemsResult, ClipboardHistoryItem, DataPackageView};
+    use windows::ApplicationModel::DataTransfer::{
+        Clipboard, ClipboardHistoryItem, ClipboardHistoryItemsResult, DataPackageView,
+    };
     use windows_collections::IVectorView;
 
     // Get history items (async WinRT call, block on it).

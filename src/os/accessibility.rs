@@ -45,7 +45,9 @@ pub fn get_focused_element() -> Result<Option<UIElement>, String> {
     crate::os::platform::accessibility::get_focused_element_impl()
 }
 
-pub fn list_accessible_windows(title_filter: Option<&str>) -> Result<Vec<AccessibleWindowInfo>, String> {
+pub fn list_accessible_windows(
+    title_filter: Option<&str>,
+) -> Result<Vec<AccessibleWindowInfo>, String> {
     crate::os::platform::accessibility::list_accessible_windows_impl(title_filter)
 }
 

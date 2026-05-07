@@ -69,14 +69,21 @@ impl AuditEvent {
     #[allow(dead_code)] // Kept for log formatting and future Rust-side UIs.
     pub fn summary(&self) -> String {
         match self {
-            AuditEvent::Granted { tool, grant_type, .. } => {
+            AuditEvent::Granted {
+                tool, grant_type, ..
+            } => {
                 format!("Granted '{}' ({})", tool, grant_type)
             }
             AuditEvent::Denied { tool, .. } => format!("Denied '{}'", tool),
-            AuditEvent::Revoked { tool, prior_policy, .. } => {
+            AuditEvent::Revoked {
+                tool, prior_policy, ..
+            } => {
                 format!("Revoked '{}' (was {})", tool, prior_policy)
             }
-            AuditEvent::Expired { tool, prior_grant_type } => {
+            AuditEvent::Expired {
+                tool,
+                prior_grant_type,
+            } => {
                 format!("Expired '{}' ({})", tool, prior_grant_type)
             }
             AuditEvent::TerminatorModeChanged { enabled } => {
@@ -112,14 +119,21 @@ impl AuditEntry {
 
     #[allow(dead_code)] // used by tests
     pub fn at_time(at: impl Into<String>, event: AuditEvent) -> Self {
-        Self { at: at.into(), event }
+        Self {
+            at: at.into(),
+            event,
+        }
     }
 }
 
 /// The on-disk path for the audit log. Returns `None` if the config
 /// directory itself is unavailable (very rare).
 pub fn default_log_path() -> Option<PathBuf> {
-    Some(dirs::config_dir()?.join("kage").join("permission-audit.jsonl"))
+    Some(
+        dirs::config_dir()?
+            .join("kage")
+            .join("permission-audit.jsonl"),
+    )
 }
 
 /// Append one entry to the given log file. Best-effort: a failure is
@@ -337,7 +351,7 @@ pub fn read_recent(path: &std::path::Path, limit: usize) -> Vec<AuditEntry> {
             0
         } else {
             match memchr_newline(&tail) {
-                Some(i) => i + 1,  // skip past the newline
+                Some(i) => i + 1, // skip past the newline
                 None => {
                     // No newline yet — the entire chunk is a single
                     // partial line. Loop and read more.
@@ -463,15 +477,18 @@ mod tests {
         let dir = tempdir();
         let path = logpath(&dir);
         for i in 0..5 {
-            append_to(&path, &AuditEntry::at_time(
-                format!("2026-04-28T12:00:0{}.000Z", i),
-                AuditEvent::Granted {
-                    tool: format!("tool{}", i),
-                    grant_type: "once".to_string(),
-                    session_id: None,
-                    args_preview: None,
-                },
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(
+                    format!("2026-04-28T12:00:0{}.000Z", i),
+                    AuditEvent::Granted {
+                        tool: format!("tool{}", i),
+                        grant_type: "once".to_string(),
+                        session_id: None,
+                        args_preview: None,
+                    },
+                ),
+            );
         }
         let got = read_recent(&path, 10);
         assert_eq!(got.len(), 5);
@@ -488,10 +505,16 @@ mod tests {
         let dir = tempdir();
         let path = logpath(&dir);
         for i in 0..10 {
-            append_to(&path, &AuditEntry::at_time(
-                format!("2026-04-28T12:00:{:02}.000Z", i),
-                AuditEvent::Denied { tool: format!("t{}", i), session_id: None },
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(
+                    format!("2026-04-28T12:00:{:02}.000Z", i),
+                    AuditEvent::Denied {
+                        tool: format!("t{}", i),
+                        session_id: None,
+                    },
+                ),
+            );
         }
         let got = read_recent(&path, 3);
         assert_eq!(got.len(), 3);
@@ -511,8 +534,12 @@ mod tests {
         // Mix of valid and malformed lines.
         let good = serde_json::to_string(&AuditEntry::at_time(
             "2026-04-28T12:00:01.000Z",
-            AuditEvent::Expired { tool: "x".into(), prior_grant_type: "always".into() },
-        )).unwrap();
+            AuditEvent::Expired {
+                tool: "x".into(),
+                prior_grant_type: "always".into(),
+            },
+        ))
+        .unwrap();
         let mut content = String::new();
         content.push_str("not json at all\n");
         content.push_str("{malformed\n");
@@ -535,11 +562,14 @@ mod tests {
     fn clear_empties_existing_log() {
         let dir = tempdir();
         let path = logpath(&dir);
-        append_to(&path, &AuditEntry::now(AuditEvent::Revoked {
-            tool: "x".into(),
-            prior_policy: "allow".into(),
-            prior_grant_type: Some("24h".into()),
-        }));
+        append_to(
+            &path,
+            &AuditEntry::now(AuditEvent::Revoked {
+                tool: "x".into(),
+                prior_policy: "allow".into(),
+                prior_grant_type: Some("24h".into()),
+            }),
+        );
         assert_eq!(read_recent(&path, 10).len(), 1);
         clear(&path).unwrap();
         assert!(read_recent(&path, 10).is_empty());
@@ -558,22 +588,31 @@ mod tests {
         let path = logpath(&dir);
         let events = [
             AuditEvent::Granted {
-                tool: "a".into(), grant_type: "once".into(),
-                session_id: None, args_preview: None,
+                tool: "a".into(),
+                grant_type: "once".into(),
+                session_id: None,
+                args_preview: None,
             },
-            AuditEvent::Denied { tool: "b".into(), session_id: Some("s".into()) },
+            AuditEvent::Denied {
+                tool: "b".into(),
+                session_id: Some("s".into()),
+            },
             AuditEvent::Revoked {
-                tool: "c".into(), prior_policy: "allow".into(),
+                tool: "c".into(),
+                prior_policy: "allow".into(),
                 prior_grant_type: Some("always".into()),
             },
-            AuditEvent::Expired { tool: "d".into(), prior_grant_type: "24h".into() },
+            AuditEvent::Expired {
+                tool: "d".into(),
+                prior_grant_type: "24h".into(),
+            },
             AuditEvent::TerminatorModeChanged { enabled: true },
         ];
         for (i, e) in events.iter().enumerate() {
-            append_to(&path, &AuditEntry::at_time(
-                format!("2026-04-28T12:00:0{}.000Z", i),
-                e.clone(),
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(format!("2026-04-28T12:00:0{}.000Z", i), e.clone()),
+            );
         }
         let got = read_recent(&path, 100);
         assert_eq!(got.len(), 5);
@@ -587,9 +626,12 @@ mod tests {
     fn summary_is_human_readable() {
         assert_eq!(
             AuditEvent::Granted {
-                tool: "shell_exec".into(), grant_type: "always".into(),
-                session_id: None, args_preview: None
-            }.summary(),
+                tool: "shell_exec".into(),
+                grant_type: "always".into(),
+                session_id: None,
+                args_preview: None
+            }
+            .summary(),
             "Granted 'shell_exec' (always)"
         );
         assert_eq!(
@@ -603,10 +645,16 @@ mod tests {
         let dir = tempdir();
         let path = logpath(&dir);
         for i in 0..3 {
-            append_to(&path, &AuditEntry::at_time(
-                format!("2026-04-28T12:00:0{}.000Z", i),
-                AuditEvent::Denied { tool: format!("t{}", i), session_id: None },
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(
+                    format!("2026-04-28T12:00:0{}.000Z", i),
+                    AuditEvent::Denied {
+                        tool: format!("t{}", i),
+                        session_id: None,
+                    },
+                ),
+            );
         }
         assert!(read_recent(&path, 0).is_empty());
     }
@@ -624,18 +672,26 @@ mod tests {
         // ~225 KB, comfortably more than 7 chunks.
         const N: usize = 1500;
         for i in 0..N {
-            append_to(&path, &AuditEntry::at_time(
-                // Pad the tool name so each line is a different length
-                // and chunk boundaries land in different intra-line
-                // offsets — exercises the partial-line discard path.
-                format!("2026-04-28T12:{:02}:{:02}.{:03}Z", i / 3600, (i / 60) % 60, i % 1000),
-                AuditEvent::Granted {
-                    tool: format!("tool_{:04}_{}", i, "x".repeat(i % 50)),
-                    grant_type: "once".into(),
-                    session_id: None,
-                    args_preview: None,
-                },
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(
+                    // Pad the tool name so each line is a different length
+                    // and chunk boundaries land in different intra-line
+                    // offsets — exercises the partial-line discard path.
+                    format!(
+                        "2026-04-28T12:{:02}:{:02}.{:03}Z",
+                        i / 3600,
+                        (i / 60) % 60,
+                        i % 1000
+                    ),
+                    AuditEvent::Granted {
+                        tool: format!("tool_{:04}_{}", i, "x".repeat(i % 50)),
+                        grant_type: "once".into(),
+                        session_id: None,
+                        args_preview: None,
+                    },
+                ),
+            );
         }
 
         // Asking for the last 10 should return entries N-1 .. N-10 newest-first.
@@ -648,7 +704,9 @@ mod tests {
                 assert!(
                     tool.starts_with(&expected_prefix),
                     "got tool {:?} at position {}, expected prefix {:?}",
-                    tool, i, expected_prefix
+                    tool,
+                    i,
+                    expected_prefix
                 );
             } else {
                 panic!("unexpected event variant");
@@ -674,7 +732,10 @@ mod tests {
         let path = logpath(&dir);
         let entry = AuditEntry::at_time(
             "2026-04-28T12:00:00.000Z",
-            AuditEvent::Denied { tool: "x".into(), session_id: None },
+            AuditEvent::Denied {
+                tool: "x".into(),
+                session_id: None,
+            },
         );
         let mut content = serde_json::to_string(&entry).unwrap();
         content.push_str("\r\n");
@@ -693,12 +754,20 @@ mod tests {
         let path = logpath(&dir);
         let e1 = serde_json::to_string(&AuditEntry::at_time(
             "2026-04-28T12:00:00.000Z",
-            AuditEvent::Denied { tool: "first".into(), session_id: None },
-        )).unwrap();
+            AuditEvent::Denied {
+                tool: "first".into(),
+                session_id: None,
+            },
+        ))
+        .unwrap();
         let e2 = serde_json::to_string(&AuditEntry::at_time(
             "2026-04-28T12:00:01.000Z",
-            AuditEvent::Denied { tool: "second".into(), session_id: None },
-        )).unwrap();
+            AuditEvent::Denied {
+                tool: "second".into(),
+                session_id: None,
+            },
+        ))
+        .unwrap();
         // Note: no trailing newline after e2.
         std::fs::write(&path, format!("{}\n{}", e1, e2)).unwrap();
 
@@ -745,7 +814,10 @@ mod tests {
     fn serialize_returns_some_for_valid_entry() {
         let entry = AuditEntry::at_time(
             "2026-04-28T12:00:00.000Z",
-            AuditEvent::Denied { tool: "x".into(), session_id: None },
+            AuditEvent::Denied {
+                tool: "x".into(),
+                session_id: None,
+            },
         );
         let s = serialize(&entry).expect("serialize must succeed");
         // Round-trip back through serde to confirm the output is well-formed.
@@ -762,10 +834,16 @@ mod tests {
         let path = logpath(&dir);
 
         for i in 0..5 {
-            append_to(&path, &AuditEntry::at_time(
-                format!("2026-04-28T12:00:0{}.000Z", i),
-                AuditEvent::Denied { tool: format!("t{}", i), session_id: None },
-            ));
+            append_to(
+                &path,
+                &AuditEntry::at_time(
+                    format!("2026-04-28T12:00:0{}.000Z", i),
+                    AuditEvent::Denied {
+                        tool: format!("t{}", i),
+                        session_id: None,
+                    },
+                ),
+            );
         }
         let got = read_recent(&path, 100);
         assert_eq!(got.len(), 5);
@@ -777,12 +855,22 @@ mod tests {
         let entry = AuditEntry::at_time(
             "2026-04-28T12:00:00.000Z",
             AuditEvent::Granted {
-                tool: "x".into(), grant_type: "once".into(),
-                session_id: None, args_preview: None,
+                tool: "x".into(),
+                grant_type: "once".into(),
+                session_id: None,
+                args_preview: None,
             },
         );
         let s = serde_json::to_string(&entry).unwrap();
-        assert!(!s.contains("session_id"), "session_id should be omitted, got: {}", s);
-        assert!(!s.contains("args_preview"), "args_preview should be omitted, got: {}", s);
+        assert!(
+            !s.contains("session_id"),
+            "session_id should be omitted, got: {}",
+            s
+        );
+        assert!(
+            !s.contains("args_preview"),
+            "args_preview should be omitted, got: {}",
+            s
+        );
     }
 }

@@ -43,7 +43,11 @@ fn cli_flags_accepts_slash_and_dash_variants() {
 #[test]
 fn cli_flags_ignores_unknown_args() {
     let parsed = CliFlags::parse(&args(&[
-        "kage.exe", "--dev", "/resume-session", "abc", "--weird-flag",
+        "kage.exe",
+        "--dev",
+        "/resume-session",
+        "abc",
+        "--weird-flag",
     ]));
     assert!(parsed.dev_mode);
     assert!(!parsed.debug_mode);
@@ -123,7 +127,10 @@ fn resume_session_falls_back_to_last_session_file() {
     assert_eq!(got, Some("file-session-id".to_string()));
     // File must be consumed (removed) so the session isn't resumed again
     // on the next launch.
-    assert!(!marker.exists(), "last-session.txt should be deleted after read");
+    assert!(
+        !marker.exists(),
+        "last-session.txt should be deleted after read"
+    );
 }
 
 #[test]
@@ -221,12 +228,9 @@ fn webview_wait_returns_not_present_when_dir_missing() {
         std::env::temp_dir().display(),
         uuid::Uuid::new_v4()
     ));
-    let out = wait_for_webview_release(
-        &nonexistent,
-        20,
-        Duration::from_millis(500),
-        |_| panic!("should never sleep when dir missing"),
-    );
+    let out = wait_for_webview_release(&nonexistent, 20, Duration::from_millis(500), |_| {
+        panic!("should never sleep when dir missing")
+    });
     assert_eq!(out, WebviewWaitResult::NotPresent);
 }
 
@@ -235,14 +239,9 @@ fn webview_wait_returns_released_on_first_attempt_when_writable() {
     let tmp = tempdir_scoped();
     let calls = Arc::new(AtomicU32::new(0));
     let calls_clone = calls.clone();
-    let out = wait_for_webview_release(
-        tmp.path(),
-        20,
-        Duration::from_millis(10),
-        move |_| {
-            calls_clone.fetch_add(1, Ordering::SeqCst);
-        },
-    );
+    let out = wait_for_webview_release(tmp.path(), 20, Duration::from_millis(10), move |_| {
+        calls_clone.fetch_add(1, Ordering::SeqCst);
+    });
     match out {
         WebviewWaitResult::Released { waited_ms } => {
             // One sleep of 10ms before the first probe attempt.
@@ -294,7 +293,11 @@ fn webview_user_data_dir_is_under_kage_namespace() {
     let dir = startup::webview_user_data_dir().expect("data_local_dir is unavailable on this host");
     let p = dir.to_string_lossy();
     assert!(p.contains("kage"), "path {} should include 'kage'", p);
-    assert!(p.ends_with("EBWebView"), "path {} should end with EBWebView", p);
+    assert!(
+        p.ends_with("EBWebView"),
+        "path {} should end with EBWebView",
+        p
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +326,6 @@ fn tempdir_scoped() -> ScopedTempDir {
     ScopedTempDir(dir)
 }
 
-
 // ---------------------------------------------------------------------------
 // load_config_with_overrides
 // ---------------------------------------------------------------------------
@@ -333,7 +335,10 @@ use kage::config::Config;
 #[test]
 fn load_config_uses_loaded_value_when_ok() {
     // Loader returns a custom config; the result should preserve its fields.
-    let custom = Config { first_run_completed: true, ..Config::default() };
+    let custom = Config {
+        first_run_completed: true,
+        ..Config::default()
+    };
 
     let result = kage::startup::load_config_with_overrides(false, || Ok(custom.clone()));
     assert!(result.first_run_completed);
@@ -343,10 +348,9 @@ fn load_config_uses_loaded_value_when_ok() {
 fn load_config_falls_back_to_default_on_loader_error() {
     // When the loader fails we want to keep the app running. Verify we
     // get a sane default rather than a panic.
-    let result = kage::startup::load_config_with_overrides(
-        false,
-        || anyhow::bail!("simulated load failure"),
-    );
+    let result = kage::startup::load_config_with_overrides(false, || {
+        anyhow::bail!("simulated load failure")
+    });
     // Default has first_run_completed = false.
     assert!(!result.first_run_completed);
     // And the version is the current schema version.
@@ -360,14 +364,23 @@ fn load_config_debug_flag_forces_debug_mode_on() {
     let loaded = Config::default(); // debug_mode = false by default
     assert!(!loaded.debug_mode);
     let result = kage::startup::load_config_with_overrides(true, || Ok(loaded));
-    assert!(result.debug_mode, "--debug CLI flag should force debug_mode on");
+    assert!(
+        result.debug_mode,
+        "--debug CLI flag should force debug_mode on"
+    );
 }
 
 #[test]
 fn load_config_debug_flag_off_does_not_clobber_persisted_true() {
     // The inverse: if the user saved debug_mode=true in their config,
     // running without --debug should NOT flip it back off.
-    let loaded = Config { debug_mode: true, ..Config::default() };
+    let loaded = Config {
+        debug_mode: true,
+        ..Config::default()
+    };
     let result = kage::startup::load_config_with_overrides(false, || Ok(loaded));
-    assert!(result.debug_mode, "persisted debug_mode=true must not be clobbered");
+    assert!(
+        result.debug_mode,
+        "persisted debug_mode=true must not be clobbered"
+    );
 }

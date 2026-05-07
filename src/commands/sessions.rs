@@ -20,7 +20,7 @@ pub struct SessionSummary {
 /// A single message in a session conversation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionMessage {
-    pub kind: String,       // "Prompt", "AssistantMessage", "ToolResults"
+    pub kind: String, // "Prompt", "AssistantMessage", "ToolResults"
     pub message_id: String,
     pub content: Vec<MessageContent>,
 }
@@ -115,7 +115,8 @@ fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
                         if item.get("kind").and_then(|k| k.as_str()) == Some("text") {
                             if let Some(text) = item.get("data").and_then(|d| d.as_str()) {
                                 let trimmed = text.trim();
-                                if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX) {
+                                if trimmed.starts_with(crate::commands::system::STEERING_MSG_PREFIX)
+                                {
                                     continue;
                                 }
                                 // Skip timestamp injections — not meaningful titles
@@ -234,7 +235,7 @@ pub fn start_session_watcher(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     app_handle: tauri::AppHandle,
 ) {
-    use notify::{Watcher, RecursiveMode, Event, EventKind};
+    use notify::{Event, EventKind, RecursiveMode, Watcher};
     use tauri::Emitter;
 
     let sessions_dir = match crate::agent_presets::default_sessions_dir() {
@@ -250,78 +251,85 @@ pub fn start_session_watcher(
         let _ = fs::create_dir_all(&sessions_dir);
     }
 
-    std::thread::Builder::new().name("session-watcher".into()).spawn(move || {
-        // Debounce: ignore events within 2s of the last invalidation
-        let last_invalidation = std::sync::Mutex::new(std::time::Instant::now()
-            - std::time::Duration::from_secs(10));
+    std::thread::Builder::new()
+        .name("session-watcher".into())
+        .spawn(move || {
+            // Debounce: ignore events within 2s of the last invalidation
+            let last_invalidation = std::sync::Mutex::new(
+                std::time::Instant::now() - std::time::Duration::from_secs(10),
+            );
 
-        let cache = session_cache;
-        let app = app_handle;
+            let cache = session_cache;
+            let app = app_handle;
 
-        let mut watcher = match notify::recommended_watcher(
-            move |res: Result<Event, notify::Error>| {
-                let event = match res {
-                    Ok(e) => e,
+            let mut watcher =
+                match notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
+                    let event = match res {
+                        Ok(e) => e,
+                        Err(e) => {
+                            log::warn!("Session watcher error: {}", e);
+                            return;
+                        }
+                    };
+
+                    // Only care about creates, removes, and modifications to .json/.jsonl files
+                    let dominated = matches!(
+                        event.kind,
+                        EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
+                    );
+                    if !dominated {
+                        return;
+                    }
+
+                    let dominated_ext = event.paths.iter().any(|p| {
+                        p.extension()
+                            .and_then(|e| e.to_str())
+                            .map(|e| e == "json" || e == "jsonl")
+                            .unwrap_or(false)
+                    });
+                    if !dominated_ext {
+                        return;
+                    }
+
+                    // Debounce
+                    {
+                        let mut last = last_invalidation.lock_or_recover();
+                        if last.elapsed() < std::time::Duration::from_secs(2) {
+                            return;
+                        }
+                        *last = std::time::Instant::now();
+                    }
+
+                    log::info!("Session directory changed, invalidating cache");
+                    if let Ok(mut c) = cache.lock() {
+                        *c = None;
+                    }
+                    let _ = app.emit("sessions_changed", ());
+                }) {
+                    Ok(w) => w,
                     Err(e) => {
-                        log::warn!("Session watcher error: {}", e);
+                        log::error!("Failed to create session watcher: {}", e);
                         return;
                     }
                 };
 
-                // Only care about creates, removes, and modifications to .json/.jsonl files
-                let dominated = matches!(
-                    event.kind,
-                    EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_)
+            if let Err(e) = watcher.watch(&sessions_dir, RecursiveMode::NonRecursive) {
+                log::error!(
+                    "Failed to watch sessions directory {:?}: {}",
+                    sessions_dir,
+                    e
                 );
-                if !dominated {
-                    return;
-                }
-
-                let dominated_ext = event.paths.iter().any(|p| {
-                    p.extension()
-                        .and_then(|e| e.to_str())
-                        .map(|e| e == "json" || e == "jsonl")
-                        .unwrap_or(false)
-                });
-                if !dominated_ext {
-                    return;
-                }
-
-                // Debounce
-                {
-                    let mut last = last_invalidation.lock_or_recover();
-                    if last.elapsed() < std::time::Duration::from_secs(2) {
-                        return;
-                    }
-                    *last = std::time::Instant::now();
-                }
-
-                log::info!("Session directory changed, invalidating cache");
-                if let Ok(mut c) = cache.lock() {
-                    *c = None;
-                }
-                let _ = app.emit("sessions_changed", ());
-            },
-        ) {
-            Ok(w) => w,
-            Err(e) => {
-                log::error!("Failed to create session watcher: {}", e);
                 return;
             }
-        };
 
-        if let Err(e) = watcher.watch(&sessions_dir, RecursiveMode::NonRecursive) {
-            log::error!("Failed to watch sessions directory {:?}: {}", sessions_dir, e);
-            return;
-        }
+            log::info!("Session watcher started on {:?}", sessions_dir);
 
-        log::info!("Session watcher started on {:?}", sessions_dir);
-
-        // Keep the thread alive — the watcher is dropped when this thread exits
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(3600));
-        }
-    }).expect("Failed to spawn session-watcher thread");
+            // Keep the thread alive — the watcher is dropped when this thread exits
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        })
+        .expect("Failed to spawn session-watcher thread");
 }
 
 #[tauri::command]
@@ -338,8 +346,12 @@ pub async fn list_sessions(
         let cache = features.session_cache.lock_or_recover();
         if let Some(ref cached) = *cache {
             let sessions = paginate(&cached.sessions, limit, offset);
-            info!("Found {} sessions (returning {} from cache, offset {})",
-                cached.sessions.len(), sessions.len(), offset.unwrap_or(0));
+            info!(
+                "Found {} sessions (returning {} from cache, offset {})",
+                cached.sessions.len(),
+                sessions.len(),
+                offset.unwrap_or(0)
+            );
             return Ok(sessions);
         }
     }
@@ -358,11 +370,20 @@ pub async fn list_sessions(
     }
 
     let sessions = paginate(&all_sessions, limit, offset);
-    info!("Found {} sessions (returning {}, offset {})", total, sessions.len(), offset.unwrap_or(0));
+    info!(
+        "Found {} sessions (returning {}, offset {})",
+        total,
+        sessions.len(),
+        offset.unwrap_or(0)
+    );
     Ok(sessions)
 }
 
-fn paginate(sessions: &[SessionSummary], limit: Option<usize>, offset: Option<usize>) -> Vec<SessionSummary> {
+fn paginate(
+    sessions: &[SessionSummary],
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Vec<SessionSummary> {
     let offset = offset.unwrap_or(0);
     let iter = sessions.iter().skip(offset);
     match limit {
@@ -372,13 +393,14 @@ fn paginate(sessions: &[SessionSummary], limit: Option<usize>, offset: Option<us
 }
 
 /// Scan the sessions directory using auto-detected path.
-fn scan_sessions_with_config(config: &crate::config::Config) -> Result<Vec<SessionSummary>, String> {
+fn scan_sessions_with_config(
+    config: &crate::config::Config,
+) -> Result<Vec<SessionSummary>, String> {
     let sessions_dir = get_sessions_dir_from_config(config)?;
     scan_sessions_in_dir(&sessions_dir)
 }
 
 fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, String> {
-
     if !sessions_dir.exists() {
         info!("Sessions directory does not exist yet: {:?}", sessions_dir);
         return Ok(vec![]);
@@ -420,17 +442,25 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
         // Get dates from file metadata (fast)
         let (created_at, updated_at) = match fs::metadata(&path) {
             Ok(meta) => {
-                let updated = meta.modified().ok()
+                let updated = meta
+                    .modified()
+                    .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                        .map(|dt| dt.to_rfc3339())
-                        .unwrap_or_default())
+                    .map(|d| {
+                        chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                            .map(|dt| dt.to_rfc3339())
+                            .unwrap_or_default()
+                    })
                     .unwrap_or_default();
-                let created = meta.created().ok()
+                let created = meta
+                    .created()
+                    .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                        .map(|dt| dt.to_rfc3339())
-                        .unwrap_or_default())
+                    .map(|d| {
+                        chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                            .map(|dt| dt.to_rfc3339())
+                            .unwrap_or_default()
+                    })
                     .unwrap_or_default();
                 (created, updated)
             }
@@ -471,7 +501,10 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
 }
 
 #[tauri::command]
-pub async fn load_session(session_id: String, features: State<'_, FeatureServices>) -> Result<SessionData, AppError> {
+pub async fn load_session(
+    session_id: String,
+    features: State<'_, FeatureServices>,
+) -> Result<SessionData, AppError> {
     let config = features.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
@@ -519,10 +552,13 @@ pub async fn load_session(session_id: String, features: State<'_, FeatureService
         if let Some(conv) = state.get("conversation_metadata") {
             if let Some(turns) = conv.get("user_turn_metadatas").and_then(|t| t.as_array()) {
                 for turn in turns {
-                    let end_ts = turn.get("end_timestamp")
+                    let end_ts = turn
+                        .get("end_timestamp")
                         .and_then(|t| t.as_str())
                         .unwrap_or("");
-                    if end_ts.is_empty() { continue; }
+                    if end_ts.is_empty() {
+                        continue;
+                    }
 
                     // Extract turn duration
                     let duration_secs = turn.get("turn_duration").map(|d| {
@@ -558,7 +594,9 @@ pub async fn load_session(session_id: String, features: State<'_, FeatureService
 
 /// Get the sessions directory path
 #[tauri::command]
-pub async fn get_sessions_directory(features: State<'_, FeatureServices>) -> Result<String, AppError> {
+pub async fn get_sessions_directory(
+    features: State<'_, FeatureServices>,
+) -> Result<String, AppError> {
     let config = features.config.lock_or_recover().clone();
     let dir = get_sessions_dir_from_config(&config)?;
     Ok(dir.to_string_lossy().to_string())
@@ -566,7 +604,10 @@ pub async fn get_sessions_directory(features: State<'_, FeatureServices>) -> Res
 
 /// Open the session's JSON file in the system file explorer
 #[tauri::command]
-pub async fn reveal_session_file(session_id: String, features: State<'_, FeatureServices>) -> Result<(), AppError> {
+pub async fn reveal_session_file(
+    session_id: String,
+    features: State<'_, FeatureServices>,
+) -> Result<(), AppError> {
     let config = features.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
@@ -585,7 +626,10 @@ pub async fn reveal_session_file(session_id: String, features: State<'_, Feature
 
 /// Delete a session's files (.json, .jsonl, .lock)
 #[tauri::command]
-pub async fn delete_session(session_id: String, features: State<'_, FeatureServices>) -> Result<(), AppError> {
+pub async fn delete_session(
+    session_id: String,
+    features: State<'_, FeatureServices>,
+) -> Result<(), AppError> {
     let config = features.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
 
@@ -603,7 +647,10 @@ pub async fn delete_session(session_id: String, features: State<'_, FeatureServi
                 if let Ok(mut cache) = serde_json::from_str::<serde_json::Value>(&content) {
                     if let Some(obj) = cache.as_object_mut() {
                         obj.remove(&session_id);
-                        let _ = fs::write(&cache_path, serde_json::to_string_pretty(&cache).unwrap_or_default());
+                        let _ = fs::write(
+                            &cache_path,
+                            serde_json::to_string_pretty(&cache).unwrap_or_default(),
+                        );
                     }
                 }
             }
@@ -619,7 +666,6 @@ pub async fn delete_session(session_id: String, features: State<'_, FeatureServi
     info!("Deleted session: {}", session_id);
     Ok(())
 }
-
 
 /// Switch the ACP client to a different session.
 /// If session_id is provided, loads that session via session/load.
@@ -639,7 +685,10 @@ pub async fn switch_acp_session(
         info!("Not connected, attempting to connect for session switch...");
         if let Err(e) = client_guard.connect() {
             error!("Connection failed: {}", e);
-            return Err(AppError::connection_lost(format!("Failed to connect: {}", e)));
+            return Err(AppError::connection_lost(format!(
+                "Failed to connect: {}",
+                e
+            )));
         }
     }
 
@@ -666,7 +715,9 @@ pub async fn switch_acp_session(
                 if json_path.exists() {
                     fs::read_to_string(&json_path)
                         .ok()
-                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .and_then(|content| {
+                            serde_json::from_str::<serde_json::Value>(&content).ok()
+                        })
                         .and_then(|data| {
                             data.get("cwd")
                                 .and_then(|v| v.as_str())

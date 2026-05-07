@@ -12,7 +12,9 @@ pub struct SelectionCaptureToken {
 }
 
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
-    SelectionCaptureToken { selection: capture_selection_impl() }
+    SelectionCaptureToken {
+        selection: capture_selection_impl(),
+    }
 }
 
 pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<String> {
@@ -26,12 +28,17 @@ pub fn simulate_paste_impl() {
     use std::sync::OnceLock;
     static WARNED: OnceLock<()> = OnceLock::new();
     WARNED.get_or_init(|| {
-        log::warn!("simulate_paste: Linux implementation not yet available — paste keystroke skipped");
+        log::warn!(
+            "simulate_paste: Linux implementation not yet available — paste keystroke skipped"
+        );
     });
 }
 
 pub fn read_clipboard_impl() -> Option<String> {
-    Command::new("xclip").args(["-selection", "clipboard", "-o"]).output().ok()
+    Command::new("xclip")
+        .args(["-selection", "clipboard", "-o"])
+        .output()
+        .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
@@ -53,9 +60,7 @@ pub fn capture_selection_impl() -> Option<String> {
     let original_clipboard = read_clipboard_impl();
 
     // Simulate Ctrl+C via xdotool
-    let _ = Command::new("xdotool")
-        .args(["key", "ctrl+c"])
-        .output();
+    let _ = Command::new("xdotool").args(["key", "ctrl+c"]).output();
 
     std::thread::sleep(std::time::Duration::from_millis(100));
     let new_clipboard = read_clipboard_impl();

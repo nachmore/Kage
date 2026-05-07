@@ -7,7 +7,10 @@ use std::path::PathBuf;
 const PLIST_LABEL: &str = "com.kage.app";
 
 fn get_plist_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join("Library/LaunchAgents").join(format!("{}.plist", PLIST_LABEL)))
+    dirs::home_dir().map(|h| {
+        h.join("Library/LaunchAgents")
+            .join(format!("{}.plist", PLIST_LABEL))
+    })
 }
 
 pub fn get_startup_enabled_impl() -> bool {
@@ -17,7 +20,10 @@ pub fn get_startup_enabled_impl() -> bool {
 pub fn set_startup_enabled_impl(enabled: bool) {
     let plist_path = match get_plist_path() {
         Some(p) => p,
-        None => { warn!("Could not determine LaunchAgents path"); return; }
+        None => {
+            warn!("Could not determine LaunchAgents path");
+            return;
+        }
     };
 
     if enabled {

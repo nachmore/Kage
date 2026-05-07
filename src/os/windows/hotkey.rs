@@ -12,9 +12,20 @@ use std::sync::Mutex;
 extern "system" {
     fn SetWindowsHookExW(id_hook: i32, lpfn: KeyboardProc, hmod: usize, thread_id: u32) -> usize;
     fn UnhookWindowsHookEx(hhk: usize) -> i32;
-    fn CallNextHookEx(hhk: usize, code: i32, wparam: usize, lparam: *const KbdLlHookStruct) -> isize;
+    fn CallNextHookEx(
+        hhk: usize,
+        code: i32,
+        wparam: usize,
+        lparam: *const KbdLlHookStruct,
+    ) -> isize;
     fn GetMessageW(msg: *mut Msg, hwnd: usize, filter_min: u32, filter_max: u32) -> i32;
-    fn PeekMessageW(msg: *mut Msg, hwnd: usize, filter_min: u32, filter_max: u32, remove: u32) -> i32;
+    fn PeekMessageW(
+        msg: *mut Msg,
+        hwnd: usize,
+        filter_min: u32,
+        filter_max: u32,
+        remove: u32,
+    ) -> i32;
     fn PostThreadMessageW(thread_id: u32, msg: u32, wparam: usize, lparam: isize) -> i32;
     fn GetCurrentThreadId() -> u32;
 }
@@ -52,13 +63,13 @@ const VK_LSHIFT: u32 = 0xA0;
 const VK_RSHIFT: u32 = 0xA1;
 const VK_LCONTROL: u32 = 0xA2;
 const VK_RCONTROL: u32 = 0xA3;
-const VK_LMENU: u32 = 0xA4;  // Left Alt
-const VK_RMENU: u32 = 0xA5;  // Right Alt
+const VK_LMENU: u32 = 0xA4; // Left Alt
+const VK_RMENU: u32 = 0xA5; // Right Alt
 const VK_LWIN: u32 = 0x5B;
 const VK_RWIN: u32 = 0x5C;
 const VK_SHIFT: u32 = 0x10;
 const VK_CONTROL: u32 = 0x11;
-const VK_MENU: u32 = 0x12;   // Alt
+const VK_MENU: u32 = 0x12; // Alt
 
 // Global state for the hook callback
 static CAPTURING: AtomicBool = AtomicBool::new(false);
@@ -73,11 +84,19 @@ static MOD_SHIFT: AtomicBool = AtomicBool::new(false);
 static MOD_WIN: AtomicBool = AtomicBool::new(false);
 
 fn is_modifier(vk: u32) -> bool {
-    matches!(vk,
-        VK_LSHIFT | VK_RSHIFT | VK_SHIFT |
-        VK_LCONTROL | VK_RCONTROL | VK_CONTROL |
-        VK_LMENU | VK_RMENU | VK_MENU |
-        VK_LWIN | VK_RWIN
+    matches!(
+        vk,
+        VK_LSHIFT
+            | VK_RSHIFT
+            | VK_SHIFT
+            | VK_LCONTROL
+            | VK_RCONTROL
+            | VK_CONTROL
+            | VK_LMENU
+            | VK_RMENU
+            | VK_MENU
+            | VK_LWIN
+            | VK_RWIN
     )
 }
 
@@ -108,15 +127,15 @@ fn vk_to_key_name(vk: u32) -> String {
         0x28 => "Down".into(),
         0x2D => "Insert".into(),
         0x2E => "Delete".into(),
-        0x30..=0x39 => format!("{}", (vk - 0x30)),  // 0-9
-        0x41..=0x5A => format!("{}", (vk as u8 as char)),  // A-Z
-        0x60..=0x69 => format!("Num{}", vk - 0x60),  // Numpad 0-9
+        0x30..=0x39 => format!("{}", (vk - 0x30)), // 0-9
+        0x41..=0x5A => format!("{}", (vk as u8 as char)), // A-Z
+        0x60..=0x69 => format!("Num{}", vk - 0x60), // Numpad 0-9
         0x6A => "NumMultiply".into(),
         0x6B => "NumAdd".into(),
         0x6D => "NumSubtract".into(),
         0x6E => "NumDecimal".into(),
         0x6F => "NumDivide".into(),
-        0x70..=0x7B => format!("F{}", vk - 0x6F),  // F1-F12
+        0x70..=0x7B => format!("F{}", vk - 0x6F), // F1-F12
         0xBA => ";".into(),
         0xBB => "=".into(),
         0xBC => ",".into(),
@@ -132,14 +151,21 @@ fn vk_to_key_name(vk: u32) -> String {
     }
 }
 
-extern "system" fn keyboard_hook_proc(code: i32, wparam: usize, lparam: *const KbdLlHookStruct) -> isize {
+extern "system" fn keyboard_hook_proc(
+    code: i32,
+    wparam: usize,
+    lparam: *const KbdLlHookStruct,
+) -> isize {
     if code == HC_ACTION && !lparam.is_null() && CAPTURING.load(Ordering::SeqCst) {
         let kb = unsafe { &*lparam };
         let vk = kb.vk_code;
         let is_keydown = wparam == WM_KEYDOWN || wparam == WM_SYSKEYDOWN;
         let is_keyup = !is_keydown;
 
-        info!("[HOTKEY_CAPTURE] Hook event: vk=0x{:02X} down={}", vk, is_keydown);
+        info!(
+            "[HOTKEY_CAPTURE] Hook event: vk=0x{:02X} down={}",
+            vk, is_keydown
+        );
 
         if is_modifier(vk) {
             update_modifier_state(vk, is_keydown);
@@ -150,10 +176,18 @@ extern "system" fn keyboard_hook_proc(code: i32, wparam: usize, lparam: *const K
         if is_keydown {
             // Non-modifier key pressed — capture the combo
             let mut modifiers = Vec::new();
-            if MOD_CTRL.load(Ordering::SeqCst) { modifiers.push("Ctrl".to_string()); }
-            if MOD_ALT.load(Ordering::SeqCst) { modifiers.push("Alt".to_string()); }
-            if MOD_SHIFT.load(Ordering::SeqCst) { modifiers.push("Shift".to_string()); }
-            if MOD_WIN.load(Ordering::SeqCst) { modifiers.push("Super".to_string()); }
+            if MOD_CTRL.load(Ordering::SeqCst) {
+                modifiers.push("Ctrl".to_string());
+            }
+            if MOD_ALT.load(Ordering::SeqCst) {
+                modifiers.push("Alt".to_string());
+            }
+            if MOD_SHIFT.load(Ordering::SeqCst) {
+                modifiers.push("Shift".to_string());
+            }
+            if MOD_WIN.load(Ordering::SeqCst) {
+                modifiers.push("Super".to_string());
+            }
 
             let key = vk_to_key_name(vk);
             let display = if modifiers.is_empty() {
@@ -178,7 +212,9 @@ extern "system" fn keyboard_hook_proc(code: i32, wparam: usize, lparam: *const K
             // Post WM_QUIT to break the message loop
             if let Ok(tid) = HOOK_THREAD_ID.lock() {
                 if *tid != 0 {
-                    unsafe { PostThreadMessageW(*tid, WM_QUIT, 0, 0); }
+                    unsafe {
+                        PostThreadMessageW(*tid, WM_QUIT, 0, 0);
+                    }
                 }
             }
 
@@ -204,30 +240,42 @@ pub fn capture_hotkey(timeout_ms: u64) -> Option<CapturedHotkey> {
     MOD_ALT.store(false, Ordering::SeqCst);
     MOD_SHIFT.store(false, Ordering::SeqCst);
     MOD_WIN.store(false, Ordering::SeqCst);
-    if let Ok(mut c) = CAPTURED.lock() { *c = None; }
+    if let Ok(mut c) = CAPTURED.lock() {
+        *c = None;
+    }
     CAPTURING.store(true, Ordering::SeqCst);
 
     // Run the hook on a dedicated OS thread with its own message pump
     let handle = std::thread::spawn(move || {
         // Create the message queue
         let mut msg = Msg {
-            hwnd: 0, message: 0, wparam: 0, lparam: 0, time: 0, pt_x: 0, pt_y: 0,
+            hwnd: 0,
+            message: 0,
+            wparam: 0,
+            lparam: 0,
+            time: 0,
+            pt_x: 0,
+            pt_y: 0,
         };
-        unsafe { PeekMessageW(&mut msg, 0, 0, 0, 0); }
+        unsafe {
+            PeekMessageW(&mut msg, 0, 0, 0, 0);
+        }
 
         let tid = unsafe { GetCurrentThreadId() };
-        if let Ok(mut t) = HOOK_THREAD_ID.lock() { *t = tid; }
+        if let Ok(mut t) = HOOK_THREAD_ID.lock() {
+            *t = tid;
+        }
 
-        let hook = unsafe {
-            SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, 0, 0)
-        };
+        let hook = unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, keyboard_hook_proc, 0, 0) };
         if hook == 0 {
             log::error!("[HOTKEY_CAPTURE] Failed to install keyboard hook");
             CAPTURING.store(false, Ordering::SeqCst);
             return;
         }
 
-        if let Ok(mut h) = HOOK_HANDLE.lock() { *h = hook; }
+        if let Ok(mut h) = HOOK_HANDLE.lock() {
+            *h = hook;
+        }
         info!("[HOTKEY_CAPTURE] Hook installed on thread {}", tid);
 
         // Timeout thread
@@ -237,19 +285,29 @@ pub fn capture_hotkey(timeout_ms: u64) -> Option<CapturedHotkey> {
             if CAPTURING.load(Ordering::SeqCst) {
                 info!("[HOTKEY_CAPTURE] Timeout");
                 CAPTURING.store(false, Ordering::SeqCst);
-                unsafe { PostThreadMessageW(timeout_tid, WM_QUIT, 0, 0); }
+                unsafe {
+                    PostThreadMessageW(timeout_tid, WM_QUIT, 0, 0);
+                }
             }
         });
 
         // Message loop
         loop {
             let ret = unsafe { GetMessageW(&mut msg, 0, 0, 0) };
-            if ret <= 0 { break; }
+            if ret <= 0 {
+                break;
+            }
         }
 
-        unsafe { UnhookWindowsHookEx(hook); }
-        if let Ok(mut h) = HOOK_HANDLE.lock() { *h = 0; }
-        if let Ok(mut t) = HOOK_THREAD_ID.lock() { *t = 0; }
+        unsafe {
+            UnhookWindowsHookEx(hook);
+        }
+        if let Ok(mut h) = HOOK_HANDLE.lock() {
+            *h = 0;
+        }
+        if let Ok(mut t) = HOOK_THREAD_ID.lock() {
+            *t = 0;
+        }
     });
 
     let _ = handle.join();
@@ -270,12 +328,15 @@ pub fn capture_hotkey(timeout_ms: u64) -> Option<CapturedHotkey> {
 /// Named `_impl` to match the cross-platform Pattern A dispatch shape
 /// (`crate::os::platform::hotkey::capture_hotkey_impl`).
 pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
-    use std::process::{Command, Stdio};
     use std::io::Read;
     use std::os::windows::process::CommandExt;
+    use std::process::{Command, Stdio};
 
     let exe = std::env::current_exe().ok()?;
-    info!("[HOTKEY_CAPTURE] Spawning helper: {:?} /capture-hotkey {}", exe, timeout_ms);
+    info!(
+        "[HOTKEY_CAPTURE] Spawning helper: {:?} /capture-hotkey {}",
+        exe, timeout_ms
+    );
 
     let mut child = Command::new(&exe)
         .args(["/capture-hotkey", &timeout_ms.to_string()])
@@ -300,10 +361,15 @@ pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
 
     // Parse "Ctrl+Alt+Space" format
     let parts: Vec<&str> = output.split('+').collect();
-    if parts.is_empty() { return None; }
+    if parts.is_empty() {
+        return None;
+    }
 
     let key = parts.last()?.to_string();
-    let modifiers: Vec<String> = parts[..parts.len()-1].iter().map(|s| s.to_string()).collect();
+    let modifiers: Vec<String> = parts[..parts.len() - 1]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
 
     Some(CapturedHotkey {
         display: output.to_string(),
@@ -330,7 +396,9 @@ pub fn cancel_capture_impl() {
         CAPTURING.store(false, Ordering::SeqCst);
         if let Ok(tid) = HOOK_THREAD_ID.lock() {
             if *tid != 0 {
-                unsafe { PostThreadMessageW(*tid, WM_QUIT, 0, 0); }
+                unsafe {
+                    PostThreadMessageW(*tid, WM_QUIT, 0, 0);
+                }
             }
         }
     }
@@ -434,10 +502,17 @@ mod tests {
     fn is_modifier_covers_all_sides() {
         // Generic plus left/right variants for shift, ctrl, alt, win.
         for vk in [
-            VK_LSHIFT, VK_RSHIFT, VK_SHIFT,
-            VK_LCONTROL, VK_RCONTROL, VK_CONTROL,
-            VK_LMENU, VK_RMENU, VK_MENU,
-            VK_LWIN, VK_RWIN,
+            VK_LSHIFT,
+            VK_RSHIFT,
+            VK_SHIFT,
+            VK_LCONTROL,
+            VK_RCONTROL,
+            VK_CONTROL,
+            VK_LMENU,
+            VK_RMENU,
+            VK_MENU,
+            VK_LWIN,
+            VK_RWIN,
         ] {
             assert!(is_modifier(vk), "expected {:#X} to be a modifier", vk);
         }

@@ -10,7 +10,7 @@ use crate::os::launcher::AppInfo;
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     let mut apps = Vec::new();
-    
+
     let applications_dir = PathBuf::from("/Applications");
     if applications_dir.exists() {
         if let Ok(entries) = fs::read_dir(&applications_dir) {
@@ -35,23 +35,91 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     // Add System Settings pages (macOS Ventura+)
     let settings: Vec<(&str, &str, &str)> = vec![
         ("System Settings", "x-apple.systempreferences:", "⚙️"),
-        ("Settings: Wi-Fi", "x-apple.systempreferences:com.apple.wifi-settings-extension", "📶"),
-        ("Settings: Bluetooth", "x-apple.systempreferences:com.apple.BluetoothSettings", "🔵"),
-        ("Settings: Network", "x-apple.systempreferences:com.apple.Network-Settings.extension", "🌐"),
-        ("Settings: Sound", "x-apple.systempreferences:com.apple.Sound-Settings.extension", "🔊"),
-        ("Settings: Display", "x-apple.systempreferences:com.apple.Displays-Settings.extension", "🖥️"),
-        ("Settings: Wallpaper", "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension", "🖼️"),
-        ("Settings: Notifications", "x-apple.systempreferences:com.apple.Notifications-Settings.extension", "🔔"),
-        ("Settings: Keyboard", "x-apple.systempreferences:com.apple.Keyboard-Settings.extension", "⌨️"),
-        ("Settings: Trackpad", "x-apple.systempreferences:com.apple.Trackpad-Settings.extension", "🖱️"),
-        ("Settings: Mouse", "x-apple.systempreferences:com.apple.Mouse-Settings.extension", "🖱️"),
-        ("Settings: Printers & Scanners", "x-apple.systempreferences:com.apple.Print-Scan-Settings.extension", "🖨️"),
-        ("Settings: Battery", "x-apple.systempreferences:com.apple.Battery-Settings.extension", "🔋"),
-        ("Settings: Privacy & Security", "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension", "🛡️"),
-        ("Settings: General", "x-apple.systempreferences:com.apple.General-Settings.extension", "⚙️"),
-        ("Settings: Accessibility", "x-apple.systempreferences:com.apple.Accessibility-Settings.extension", "♿"),
-        ("Settings: Users & Groups", "x-apple.systempreferences:com.apple.Users-Groups-Settings.extension", "👥"),
-        ("Settings: Software Update", "x-apple.systempreferences:com.apple.Software-Update-Settings.extension", "🔄"),
+        (
+            "Settings: Wi-Fi",
+            "x-apple.systempreferences:com.apple.wifi-settings-extension",
+            "📶",
+        ),
+        (
+            "Settings: Bluetooth",
+            "x-apple.systempreferences:com.apple.BluetoothSettings",
+            "🔵",
+        ),
+        (
+            "Settings: Network",
+            "x-apple.systempreferences:com.apple.Network-Settings.extension",
+            "🌐",
+        ),
+        (
+            "Settings: Sound",
+            "x-apple.systempreferences:com.apple.Sound-Settings.extension",
+            "🔊",
+        ),
+        (
+            "Settings: Display",
+            "x-apple.systempreferences:com.apple.Displays-Settings.extension",
+            "🖥️",
+        ),
+        (
+            "Settings: Wallpaper",
+            "x-apple.systempreferences:com.apple.Wallpaper-Settings.extension",
+            "🖼️",
+        ),
+        (
+            "Settings: Notifications",
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+            "🔔",
+        ),
+        (
+            "Settings: Keyboard",
+            "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
+            "⌨️",
+        ),
+        (
+            "Settings: Trackpad",
+            "x-apple.systempreferences:com.apple.Trackpad-Settings.extension",
+            "🖱️",
+        ),
+        (
+            "Settings: Mouse",
+            "x-apple.systempreferences:com.apple.Mouse-Settings.extension",
+            "🖱️",
+        ),
+        (
+            "Settings: Printers & Scanners",
+            "x-apple.systempreferences:com.apple.Print-Scan-Settings.extension",
+            "🖨️",
+        ),
+        (
+            "Settings: Battery",
+            "x-apple.systempreferences:com.apple.Battery-Settings.extension",
+            "🔋",
+        ),
+        (
+            "Settings: Privacy & Security",
+            "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+            "🛡️",
+        ),
+        (
+            "Settings: General",
+            "x-apple.systempreferences:com.apple.General-Settings.extension",
+            "⚙️",
+        ),
+        (
+            "Settings: Accessibility",
+            "x-apple.systempreferences:com.apple.Accessibility-Settings.extension",
+            "♿",
+        ),
+        (
+            "Settings: Users & Groups",
+            "x-apple.systempreferences:com.apple.Users-Groups-Settings.extension",
+            "👥",
+        ),
+        (
+            "Settings: Software Update",
+            "x-apple.systempreferences:com.apple.Software-Update-Settings.extension",
+            "🔄",
+        ),
     ];
 
     for (name, uri, emoji) in settings {
@@ -63,7 +131,7 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
             icon_data: None,
         });
     }
-    
+
     Ok(apps)
 }
 

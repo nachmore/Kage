@@ -1,16 +1,16 @@
 // Library exports for testing and external use
 
 // Pure modules — always available, including in test mode
-pub mod agent_presets;
-pub mod config;
-pub mod config_migrations;
 pub mod acp_client;
 pub mod activity_tracker;
+pub mod agent_presets;
 pub mod app_launcher;
 pub mod app_log;
 pub mod auto_steering;
 pub mod chunk_batcher;
 pub mod computer_control;
+pub mod config;
+pub mod config_migrations;
 pub mod error;
 pub mod extensions;
 pub mod lock_ext;

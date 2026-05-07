@@ -38,7 +38,10 @@ struct FileFingerprint {
 
 fn fingerprint(md: &std::fs::Metadata) -> Option<FileFingerprint> {
     let mtime = md.modified().ok()?;
-    Some(FileFingerprint { mtime, size: md.len() })
+    Some(FileFingerprint {
+        mtime,
+        size: md.len(),
+    })
 }
 
 /// Cached parse result for a single session file.
@@ -75,14 +78,37 @@ pub type KageDesktopCacheHandle = Arc<KageDesktopCache>;
 /// Get the Kage Desktop globalStorage directory.
 fn kage_desktop_data_dir() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
-    { dirs::config_dir().map(|d| d.join("Kage").join("User").join("globalStorage").join("kage.kageagent")) }
+    {
+        dirs::config_dir().map(|d| {
+            d.join("Kage")
+                .join("User")
+                .join("globalStorage")
+                .join("kage.kageagent")
+        })
+    }
     #[cfg(target_os = "macos")]
-    { dirs::home_dir().map(|d| d.join("Library").join("Application Support").join("Kage").join("User").join("globalStorage").join("kage.kageagent")) }
+    {
+        dirs::home_dir().map(|d| {
+            d.join("Library")
+                .join("Application Support")
+                .join("Kage")
+                .join("User")
+                .join("globalStorage")
+                .join("kage.kageagent")
+        })
+    }
     #[cfg(target_os = "linux")]
     {
-        std::env::var("XDG_CONFIG_HOME").ok().map(PathBuf::from)
+        std::env::var("XDG_CONFIG_HOME")
+            .ok()
+            .map(PathBuf::from)
             .or_else(|| dirs::home_dir().map(|d| d.join(".config")))
-            .map(|d| d.join("Kage").join("User").join("globalStorage").join("kage.kageagent"))
+            .map(|d| {
+                d.join("Kage")
+                    .join("User")
+                    .join("globalStorage")
+                    .join("kage.kageagent")
+            })
     }
 }
 
@@ -118,7 +144,9 @@ pub struct KageDesktopMessage {
 
 fn base64_decode_path(encoded: &str) -> Option<String> {
     use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded).ok()
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(encoded)
+        .ok()
         .and_then(|b| String::from_utf8(b).ok())
 }
 
@@ -131,18 +159,33 @@ pub async fn kage_desktop_available() -> bool {
 pub async fn kage_desktop_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
     let ws_dir = base.join("workspace-sessions");
-    if !ws_dir.exists() { return Ok(Vec::new()); }
+    if !ws_dir.exists() {
+        return Ok(Vec::new());
+    }
 
     let mut workspaces = Vec::new();
-    for entry in std::fs::read_dir(&ws_dir).map_err(|e| e.to_string())?.flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
+    for entry in std::fs::read_dir(&ws_dir)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
         let encoded = entry.file_name().to_string_lossy().to_string();
         let name = base64_decode_path(&encoded).unwrap_or_else(|| encoded.clone());
         let session_count = std::fs::read_dir(entry.path())
-            .map(|rd| rd.flatten().filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false)).count())
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false))
+                    .count()
+            })
             .unwrap_or(0);
         if session_count > 0 {
-            workspaces.push(KageDesktopWorkspace { name, encoded, session_count });
+            workspaces.push(KageDesktopWorkspace {
+                name,
+                encoded,
+                session_count,
+            });
         }
     }
     workspaces.sort_by(|a, b| b.session_count.cmp(&a.session_count));
@@ -178,12 +221,15 @@ fn scan_workspace_sessions(
     limit: usize,
     cache: &KageDesktopCache,
 ) -> Result<Vec<KageDesktopSession>, AppError> {
-    if !ws_dir.exists() { return Ok(Vec::new()); }
+    if !ws_dir.exists() {
+        return Ok(Vec::new());
+    }
 
     let dirs_to_scan: Vec<(String, PathBuf)> = if let Some(enc) = workspace_encoded {
         vec![(enc.to_string(), ws_dir.join(enc))]
     } else {
-        std::fs::read_dir(ws_dir).map_err(|e| e.to_string())?
+        std::fs::read_dir(ws_dir)
+            .map_err(|e| e.to_string())?
             .flatten()
             .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
             .map(|e| (e.file_name().to_string_lossy().to_string(), e.path()))
@@ -195,11 +241,15 @@ fn scan_workspace_sessions(
     let mut seen_files: Vec<(PathBuf, FileFingerprint, String, String)> = Vec::new();
     for (encoded, dir) in &dirs_to_scan {
         let ws_name = base64_decode_path(encoded).unwrap_or_else(|| encoded.clone());
-        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
 
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.extension().map(|e| e != "json").unwrap_or(true) { continue; }
+            if path.extension().map(|e| e != "json").unwrap_or(true) {
+                continue;
+            }
             let Ok(md) = entry.metadata() else { continue };
             let Some(fp) = fingerprint(&md) else { continue };
             seen_files.push((path, fp, ws_name.clone(), encoded.clone()));
@@ -226,8 +276,16 @@ fn scan_workspace_sessions(
     // Slow path: parse missed/changed files without holding the cache lock.
     let mut fresh: Vec<(PathBuf, CachedSession)> = Vec::with_capacity(misses.len());
     for (path, fp, ws_name, encoded) in misses {
-        let Some(session) = parse_workspace_session(&path, &ws_name, &encoded) else { continue };
-        fresh.push((path, CachedSession { fp, session: session.clone() }));
+        let Some(session) = parse_workspace_session(&path, &ws_name, &encoded) else {
+            continue;
+        };
+        fresh.push((
+            path,
+            CachedSession {
+                fp,
+                session: session.clone(),
+            },
+        ));
         sessions.push(session);
     }
 
@@ -247,27 +305,61 @@ fn scan_workspace_sessions(
 /// Parse a single `workspace-sessions/*/<id>.json` file into a
 /// `KageDesktopSession`. Returns `None` if the file is unreadable,
 /// unparseable, or represents an empty session that should be skipped.
-fn parse_workspace_session(path: &Path, ws_name: &str, encoded: &str) -> Option<KageDesktopSession> {
-    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+fn parse_workspace_session(
+    path: &Path,
+    ws_name: &str,
+    encoded: &str,
+) -> Option<KageDesktopSession> {
+    let id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
 
     let content = std::fs::read_to_string(path).ok()?;
     let json: serde_json::Value = serde_json::from_str(&content).ok()?;
 
-    let history_count = json.get("history").and_then(|h| h.as_array()).map(|a| a.len()).unwrap_or(0);
-    if history_count == 0 { return None; }
+    let history_count = json
+        .get("history")
+        .and_then(|h| h.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+    if history_count == 0 {
+        return None;
+    }
 
-    let title = json.get("title").and_then(|t| t.as_str()).unwrap_or("Untitled").to_string();
-    let title = if title.len() > 80 { format!("{}...", &title[..77]) } else { title };
+    let title = json
+        .get("title")
+        .and_then(|t| t.as_str())
+        .unwrap_or("Untitled")
+        .to_string();
+    let title = if title.len() > 80 {
+        format!("{}...", &title[..77])
+    } else {
+        title
+    };
 
-    let session_type = json.get("sessionType").and_then(|t| t.as_str()).unwrap_or("").to_string();
-    let model = json.get("selectedModel").and_then(|m| m.as_str())
+    let session_type = json
+        .get("sessionType")
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+    let model = json
+        .get("selectedModel")
+        .and_then(|m| m.as_str())
         .or_else(|| json.get("defaultModelTitle").and_then(|m| m.as_str()))
-        .unwrap_or("").to_string();
+        .unwrap_or("")
+        .to_string();
 
-    let updated_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()
+    let updated_at = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-            .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+        .map(|d| {
+            chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                .map(|dt| dt.to_rfc3339())
+                .unwrap_or_default()
+        })
         .unwrap_or_default();
 
     Some(KageDesktopSession {
@@ -290,26 +382,46 @@ pub async fn kage_desktop_load_session(
     session_id: String,
 ) -> Result<Vec<KageDesktopMessage>, AppError> {
     let base = kage_desktop_data_dir().ok_or("Kage Desktop not found")?;
-    let path = base.join("workspace-sessions").join(&workspace_encoded).join(format!("{}.json", session_id));
+    let path = base
+        .join("workspace-sessions")
+        .join(&workspace_encoded)
+        .join(format!("{}.json", session_id));
 
-    if !path.exists() { return Err(format!("Session not found: {}", session_id).into()); }
+    if !path.exists() {
+        return Err(format!("Session not found: {}", session_id).into());
+    }
 
     let content = std::fs::read_to_string(&path).map_err(|e| format!("Read: {}", e))?;
-    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
 
-    let history = json.get("history").and_then(|h| h.as_array()).ok_or("No history")?;
+    let history = json
+        .get("history")
+        .and_then(|h| h.as_array())
+        .ok_or("No history")?;
     let mut messages = Vec::new();
 
     for entry in history {
-        let msg = match entry.get("message") { Some(m) => m, None => continue };
-        let role = msg.get("role").and_then(|r| r.as_str()).unwrap_or("unknown");
+        let msg = match entry.get("message") {
+            Some(m) => m,
+            None => continue,
+        };
+        let role = msg
+            .get("role")
+            .and_then(|r| r.as_str())
+            .unwrap_or("unknown");
 
         // Extract user message text from content blocks
         if role == "user" {
             let text = extract_text_content(msg.get("content"));
             // Skip system prompts and steering
-            if text.is_empty() || is_system_message(&text) { continue; }
-            messages.push(KageDesktopMessage { role: "user".into(), content: text });
+            if text.is_empty() || is_system_message(&text) {
+                continue;
+            }
+            messages.push(KageDesktopMessage {
+                role: "user".into(),
+                content: text,
+            });
         }
 
         // The actual agent response is in promptLogs.completion
@@ -319,17 +431,28 @@ pub async fn kage_desktop_load_session(
             if text.is_empty() || text == "On it." {
                 // Try to get the real response from promptLogs
                 if let Some(logs) = entry.get("promptLogs") {
-                    let completion = logs.get("completion").and_then(|c| c.as_str()).unwrap_or("");
+                    let completion = logs
+                        .get("completion")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("");
                     if !completion.is_empty() {
-                        messages.push(KageDesktopMessage { role: "assistant".into(), content: completion.to_string() });
+                        messages.push(KageDesktopMessage {
+                            role: "assistant".into(),
+                            content: completion.to_string(),
+                        });
                         continue;
                     }
                 }
                 // Skip "On it." if we can't find the real response
-                if text == "On it." { continue; }
+                if text == "On it." {
+                    continue;
+                }
             }
             if !text.is_empty() {
-                messages.push(KageDesktopMessage { role: "assistant".into(), content: text });
+                messages.push(KageDesktopMessage {
+                    role: "assistant".into(),
+                    content: text,
+                });
             }
         }
     }
@@ -347,28 +470,31 @@ pub async fn kage_desktop_load_session(
         }
     }
 
-    info!("Loaded Kage Desktop session {}: {} messages", session_id, messages.len());
+    info!(
+        "Loaded Kage Desktop session {}: {} messages",
+        session_id,
+        messages.len()
+    );
     Ok(messages)
 }
 
 fn extract_text_content(content: Option<&serde_json::Value>) -> String {
     match content {
         Some(serde_json::Value::String(s)) => s.clone(),
-        Some(serde_json::Value::Array(arr)) => {
-            arr.iter()
-                .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"))
-                .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        }
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .filter(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"))
+            .filter_map(|item| item.get("text").and_then(|t| t.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n"),
         _ => String::new(),
     }
 }
 
 fn is_system_message(text: &str) -> bool {
     // Only filter out pure system prompts — not user messages with steering wrappers
-    text.starts_with("<identity>") ||
-    (text.starts_with("Follow these instructions") && text.len() > 5000)
+    text.starts_with("<identity>")
+        || (text.starts_with("Follow these instructions") && text.len() > 5000)
 }
 
 /// Extract the actual user text from a message that may contain steering/context wrappers.
@@ -389,7 +515,11 @@ fn extract_user_text_from_chat(text: &str) -> String {
     // Find the last </user-rule> and take everything after it.
     if let Some(idx) = user_text.rfind("</user-rule>") {
         let after = &user_text[idx + "</user-rule>".len()..];
-        let trimmed = after.trim_start_matches('`').trim_start_matches('\n').trim_start_matches('\r').trim();
+        let trimmed = after
+            .trim_start_matches('`')
+            .trim_start_matches('\n')
+            .trim_start_matches('\r')
+            .trim();
         if !trimmed.is_empty() {
             user_text = trimmed.to_string();
         } else {
@@ -418,13 +548,15 @@ fn extract_user_text_from_chat(text: &str) -> String {
         user_text = user_text[..idx].trim().to_string();
     }
 
-    if user_text.is_empty() || user_text.starts_with("<identity>") || user_text.starts_with("Follow these instructions") {
+    if user_text.is_empty()
+        || user_text.starts_with("<identity>")
+        || user_text.starts_with("Follow these instructions")
+    {
         return String::new();
     }
 
     user_text
 }
-
 
 /// Read only the first N bytes of a file (for fast metadata extraction).
 fn read_file_head(path: &std::path::Path, max_bytes: usize) -> Option<String> {
@@ -455,7 +587,9 @@ pub async fn kage_desktop_delete_session(
     features: tauri::State<'_, crate::state::FeatureServices>,
 ) -> Result<(), AppError> {
     let path = std::path::Path::new(&file_path);
-    if !path.exists() { return Err("File not found".into()); }
+    if !path.exists() {
+        return Err("File not found".into());
+    }
     // Safety: only delete .json files in the kage.kageagent directory
     let path_str = path.to_string_lossy();
     if !path_str.contains("kage.kageagent") || !path_str.ends_with(".json") {
@@ -485,11 +619,17 @@ pub async fn kage_desktop_open_folder(file_path: String) -> Result<(), AppError>
 
 /// Load a .chat file directly (older format with full conversations).
 #[tauri::command]
-pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDesktopMessage>, AppError> {
+pub async fn kage_desktop_load_chat_file(
+    file_path: String,
+) -> Result<Vec<KageDesktopMessage>, AppError> {
     let content = std::fs::read_to_string(&file_path).map_err(|e| format!("Read: {}", e))?;
-    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Parse: {}", e))?;
 
-    let chat = json.get("chat").and_then(|c| c.as_array()).ok_or("No chat array")?;
+    let chat = json
+        .get("chat")
+        .and_then(|c| c.as_array())
+        .ok_or("No chat array")?;
     let mut messages = Vec::new();
 
     for msg in chat {
@@ -504,12 +644,18 @@ pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDe
         };
 
         // Skip empty messages
-        if content.is_empty() { continue; }
+        if content.is_empty() {
+            continue;
+        }
         // For user messages, extract the actual text (strip steering/context wrappers)
         if normalized_role == "user" {
-            if is_system_message(content) { continue; }
+            if is_system_message(content) {
+                continue;
+            }
             let extracted = extract_user_text_from_chat(content);
-            if extracted.is_empty() { continue; }
+            if extracted.is_empty() {
+                continue;
+            }
             messages.push(KageDesktopMessage {
                 role: normalized_role.to_string(),
                 content: extracted,
@@ -523,7 +669,11 @@ pub async fn kage_desktop_load_chat_file(file_path: String) -> Result<Vec<KageDe
         });
     }
 
-    info!("Loaded .chat file {}: {} messages", file_path, messages.len());
+    info!(
+        "Loaded .chat file {}: {} messages",
+        file_path,
+        messages.len()
+    );
     Ok(messages)
 }
 
@@ -556,14 +706,20 @@ fn scan_chat_sessions(
     let entries = std::fs::read_dir(base).map_err(|e| e.to_string())?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.len() != 32 || !name.chars().all(|c| c.is_ascii_hexdigit()) { continue; }
+        if name.len() != 32 || !name.chars().all(|c| c.is_ascii_hexdigit()) {
+            continue;
+        }
 
         let dir = entry.path();
-        let Ok(files) = std::fs::read_dir(&dir) else { continue };
+        let Ok(files) = std::fs::read_dir(&dir) else {
+            continue;
+        };
 
         for file in files.flatten() {
             let path = file.path();
-            if path.extension().map(|e| e != "chat").unwrap_or(true) { continue; }
+            if path.extension().map(|e| e != "chat").unwrap_or(true) {
+                continue;
+            }
             let Ok(md) = file.metadata() else { continue };
             let Some(fp) = fingerprint(&md) else { continue };
             seen_files.push((path, fp, name.clone()));
@@ -589,8 +745,16 @@ fn scan_chat_sessions(
     // Parse missed files without holding the cache lock.
     let mut fresh: Vec<(PathBuf, CachedSession)> = Vec::with_capacity(misses.len());
     for (path, fp, hash) in misses {
-        let Some(session) = parse_chat_session(&path, &hash) else { continue };
-        fresh.push((path, CachedSession { fp, session: session.clone() }));
+        let Some(session) = parse_chat_session(&path, &hash) else {
+            continue;
+        };
+        fresh.push((
+            path,
+            CachedSession {
+                fp,
+                session: session.clone(),
+            },
+        ));
         sessions.push(session);
     }
 
@@ -603,7 +767,8 @@ fn scan_chat_sessions(
 
     // Group by workflow — keep only the latest .chat file per workflow
     // (the last file has the full accumulated conversation)
-    let mut by_workflow: std::collections::HashMap<String, KageDesktopSession> = std::collections::HashMap::new();
+    let mut by_workflow: std::collections::HashMap<String, KageDesktopSession> =
+        std::collections::HashMap::new();
 
     for s in sessions {
         // Use workflowId for dedup when available, fall back to workspace:title
@@ -631,7 +796,11 @@ fn scan_chat_sessions(
 /// filesystem metadata for timestamps). Returns `None` if the file is
 /// empty or can't be opened at all.
 fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession> {
-    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
 
     // Only read the first 50KB — enough for metadata and first few messages
     let content = read_file_head(path, 50_000)?;
@@ -641,10 +810,15 @@ fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession>
         Ok(v) => v,
         Err(_) => {
             // Truncated JSON — fall back to file metadata for date
-            let updated_at = std::fs::metadata(path).and_then(|m| m.modified()).ok()
+            let updated_at = std::fs::metadata(path)
+                .and_then(|m| m.modified())
+                .ok()
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                    .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+                .map(|d| {
+                    chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                        .map(|dt| dt.to_rfc3339())
+                        .unwrap_or_default()
+                })
                 .unwrap_or_default();
             return Some(KageDesktopSession {
                 id,
@@ -662,42 +836,77 @@ fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession>
     };
 
     let chat = json.get("chat").and_then(|c| c.as_array())?;
-    if chat.is_empty() { return None; }
+    if chat.is_empty() {
+        return None;
+    }
 
     // Find the first real user message for the title
-    let title = chat.iter()
+    let title = chat
+        .iter()
         .filter(|m| m.get("role").and_then(|r| r.as_str()) == Some("human"))
         .filter_map(|m| m.get("content").and_then(|c| c.as_str()))
         .filter_map(|c| {
             // Use the same extraction logic as the message renderer
             let extracted = extract_user_text_from_chat(c);
-            if extracted.is_empty() { None } else { Some(extracted) }
+            if extracted.is_empty() {
+                None
+            } else {
+                Some(extracted)
+            }
         })
         .next()
         .map(|c| {
             let t: String = c.chars().take(80).collect();
             let t = t.replace(['\n', '\r'], " ");
-            if c.len() > 80 { format!("{}...", t.trim()) } else { t.trim().to_string() }
+            if c.len() > 80 {
+                format!("{}...", t.trim())
+            } else {
+                t.trim().to_string()
+            }
         })
         .unwrap_or_else(|| "Untitled".to_string());
 
     let message_count = chat.len();
-    let model = json.get("metadata").and_then(|m| m.get("modelId")).and_then(|m| m.as_str()).unwrap_or("").to_string();
-    let workflow_id = json.get("metadata").and_then(|m| m.get("workflowId")).and_then(|w| w.as_str()).map(|s| s.to_string());
+    let model = json
+        .get("metadata")
+        .and_then(|m| m.get("modelId"))
+        .and_then(|m| m.as_str())
+        .unwrap_or("")
+        .to_string();
+    let workflow_id = json
+        .get("metadata")
+        .and_then(|m| m.get("workflowId"))
+        .and_then(|w| w.as_str())
+        .map(|s| s.to_string());
 
-    let start_time = json.get("metadata").and_then(|m| m.get("startTime")).and_then(|t| t.as_i64()).unwrap_or(0);
-    let end_time = json.get("metadata").and_then(|m| m.get("endTime")).and_then(|t| t.as_i64()).unwrap_or(start_time);
+    let start_time = json
+        .get("metadata")
+        .and_then(|m| m.get("startTime"))
+        .and_then(|t| t.as_i64())
+        .unwrap_or(0);
+    let end_time = json
+        .get("metadata")
+        .and_then(|m| m.get("endTime"))
+        .and_then(|t| t.as_i64())
+        .unwrap_or(start_time);
     let updated_at = if end_time > 0 {
         chrono::DateTime::from_timestamp(end_time / 1000, 0)
-            .map(|dt| dt.to_rfc3339()).unwrap_or_default()
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_default()
     } else if start_time > 0 {
         chrono::DateTime::from_timestamp(start_time / 1000, 0)
-            .map(|dt| dt.to_rfc3339()).unwrap_or_default()
+            .map(|dt| dt.to_rfc3339())
+            .unwrap_or_default()
     } else {
-        std::fs::metadata(path).and_then(|m| m.modified()).ok()
+        std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .ok()
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
-                .map(|dt| dt.to_rfc3339()).unwrap_or_default())
+            .map(|d| {
+                chrono::DateTime::from_timestamp(d.as_secs() as i64, 0)
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default()
+            })
             .unwrap_or_default()
     };
 
@@ -722,9 +931,20 @@ fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession>
 /// Get the kage-cli SQLite database path.
 fn kage_cli_db_path() -> Option<PathBuf> {
     #[cfg(target_os = "windows")]
-    { std::env::var("LOCALAPPDATA").ok().map(|d| PathBuf::from(d).join("kage-cli").join("data.sqlite3")) }
+    {
+        std::env::var("LOCALAPPDATA")
+            .ok()
+            .map(|d| PathBuf::from(d).join("kage-cli").join("data.sqlite3"))
+    }
     #[cfg(not(target_os = "windows"))]
-    { dirs::home_dir().map(|d| d.join(".local").join("share").join("kage-cli").join("data.sqlite3")) }
+    {
+        dirs::home_dir().map(|d| {
+            d.join(".local")
+                .join("share")
+                .join("kage-cli")
+                .join("data.sqlite3")
+        })
+    }
 }
 
 #[tauri::command]
@@ -735,7 +955,9 @@ pub async fn kage_cli_available() -> bool {
 #[tauri::command]
 pub async fn kage_cli_sessions(limit: Option<usize>) -> Result<Vec<KageDesktopSession>, AppError> {
     let db_path = kage_cli_db_path().ok_or("kage-cli database not found")?;
-    if !db_path.exists() { return Ok(Vec::new()); }
+    if !db_path.exists() {
+        return Ok(Vec::new());
+    }
 
     let limit = limit.unwrap_or(50);
 
@@ -743,23 +965,28 @@ pub async fn kage_cli_sessions(limit: Option<usize>) -> Result<Vec<KageDesktopSe
     let db = rusqlite::Connection::open_with_flags(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ).map_err(|e| format!("SQLite open: {}", e))?;
+    )
+    .map_err(|e| format!("SQLite open: {}", e))?;
 
-    let mut stmt = db.prepare(
-        "SELECT key, conversation_id, value, created_at, updated_at \
-         FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1"
-    ).map_err(|e| format!("SQLite prepare: {}", e))?;
+    let mut stmt = db
+        .prepare(
+            "SELECT key, conversation_id, value, created_at, updated_at \
+         FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1",
+        )
+        .map_err(|e| format!("SQLite prepare: {}", e))?;
 
     let mut sessions = Vec::new();
-    let rows = stmt.query_map([limit as i64], |row| {
-        Ok((
-            row.get::<_, String>(0)?,  // key (workspace)
-            row.get::<_, String>(1)?,  // conversation_id
-            row.get::<_, String>(2)?,  // value (JSON)
-            row.get::<_, i64>(3)?,     // created_at
-            row.get::<_, i64>(4)?,     // updated_at
-        ))
-    }).map_err(|e| format!("SQLite query: {}", e))?;
+    let rows = stmt
+        .query_map([limit as i64], |row| {
+            Ok((
+                row.get::<_, String>(0)?, // key (workspace)
+                row.get::<_, String>(1)?, // conversation_id
+                row.get::<_, String>(2)?, // value (JSON)
+                row.get::<_, i64>(3)?,    // created_at
+                row.get::<_, i64>(4)?,    // updated_at
+            ))
+        })
+        .map_err(|e| format!("SQLite query: {}", e))?;
 
     for row in rows {
         let (workspace, conv_id, value_json, _created_at, updated_at) = match row {
@@ -803,7 +1030,11 @@ fn extract_cli_title(value_json: &str) -> String {
             let clean = first.trim().trim_start_matches('>').trim();
             let title: String = clean.chars().take(80).collect();
             let title = title.replace(['\n', '\r'], " ");
-            return if clean.len() > 80 { format!("{}...", title.trim()) } else { title.trim().to_string() };
+            return if clean.len() > 80 {
+                format!("{}...", title.trim())
+            } else {
+                title.trim().to_string()
+            };
         }
     }
     "Untitled".to_string()
@@ -815,26 +1046,34 @@ fn count_cli_messages(value_json: &str) -> usize {
         Ok(v) => v,
         Err(_) => return 0,
     };
-    json.get("transcript").and_then(|t| t.as_array()).map(|a| a.len()).unwrap_or(0)
+    json.get("transcript")
+        .and_then(|t| t.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0)
 }
 
 #[tauri::command]
-pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDesktopMessage>, AppError> {
+pub async fn kage_cli_load_session(
+    conversation_id: String,
+) -> Result<Vec<KageDesktopMessage>, AppError> {
     let db_path = kage_cli_db_path().ok_or("kage-cli database not found")?;
 
     let db = rusqlite::Connection::open_with_flags(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ).map_err(|e| format!("SQLite open: {}", e))?;
+    )
+    .map_err(|e| format!("SQLite open: {}", e))?;
 
-    let value_json: String = db.query_row(
-        "SELECT value FROM conversations_v2 WHERE conversation_id = ?1",
-        [&conversation_id],
-        |row| row.get(0),
-    ).map_err(|e| format!("SQLite query: {}", e))?;
+    let value_json: String = db
+        .query_row(
+            "SELECT value FROM conversations_v2 WHERE conversation_id = ?1",
+            [&conversation_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("SQLite query: {}", e))?;
 
-    let json: serde_json::Value = serde_json::from_str(&value_json)
-        .map_err(|e| format!("JSON parse: {}", e))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&value_json).map_err(|e| format!("JSON parse: {}", e))?;
 
     let mut messages = Vec::new();
 
@@ -844,7 +1083,11 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
             // Extract user message
             if let Some(user) = entry.get("user") {
                 if let Some(content) = user.get("content") {
-                    if let Some(prompt) = content.get("Prompt").and_then(|p| p.get("prompt")).and_then(|p| p.as_str()) {
+                    if let Some(prompt) = content
+                        .get("Prompt")
+                        .and_then(|p| p.get("prompt"))
+                        .and_then(|p| p.as_str())
+                    {
                         if !prompt.is_empty() {
                             messages.push(KageDesktopMessage {
                                 role: "user".to_string(),
@@ -853,14 +1096,28 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
                         }
                     }
                     // Tool results — show as tool messages
-                    if let Some(tool_results) = content.get("ToolUseResults").and_then(|t| t.get("tool_use_results")).and_then(|t| t.as_array()) {
+                    if let Some(tool_results) = content
+                        .get("ToolUseResults")
+                        .and_then(|t| t.get("tool_use_results"))
+                        .and_then(|t| t.as_array())
+                    {
                         for tr in tool_results {
-                            let tool_content = tr.get("content").and_then(|c| c.as_array())
-                                .map(|arr| arr.iter().filter_map(|item| {
-                                    item.get("Text").and_then(|t| t.as_str()).or_else(|| {
-                                        item.get("Json").map(|_j| "").filter(|_| false) // skip JSON for now
-                                    })
-                                }).collect::<Vec<_>>().join("\n"))
+                            let tool_content = tr
+                                .get("content")
+                                .and_then(|c| c.as_array())
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|item| {
+                                            item.get("Text").and_then(|t| t.as_str()).or_else(
+                                                || {
+                                                    item.get("Json").map(|_j| "").filter(|_| false)
+                                                    // skip JSON for now
+                                                },
+                                            )
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                })
                                 .unwrap_or_default();
                             if !tool_content.is_empty() {
                                 messages.push(KageDesktopMessage {
@@ -877,7 +1134,10 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
             if let Some(assistant) = entry.get("assistant") {
                 // ToolUse — assistant is calling tools
                 if let Some(tool_use) = assistant.get("ToolUse") {
-                    let content = tool_use.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    let content = tool_use
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("");
                     let tool_uses = tool_use.get("tool_uses").and_then(|t| t.as_array());
 
                     // Show the assistant's text (if any)
@@ -891,8 +1151,14 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
                     // Show tool calls with names and args
                     if let Some(tools) = tool_uses {
                         for tool in tools {
-                            let name = tool.get("name").and_then(|n| n.as_str()).unwrap_or("unknown");
-                            let args = tool.get("args").map(|a| serde_json::to_string_pretty(a).unwrap_or_default()).unwrap_or_default();
+                            let name = tool
+                                .get("name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or("unknown");
+                            let args = tool
+                                .get("args")
+                                .map(|a| serde_json::to_string_pretty(a).unwrap_or_default())
+                                .unwrap_or_default();
                             messages.push(KageDesktopMessage {
                                 role: "tool".to_string(),
                                 content: format!("🔧 {} {}", name, args),
@@ -902,7 +1168,10 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
                 }
                 // Response — final assistant message
                 if let Some(response) = assistant.get("Response") {
-                    let content = response.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                    let content = response
+                        .get("content")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("");
                     if !content.is_empty() {
                         messages.push(KageDesktopMessage {
                             role: "assistant".to_string(),
@@ -924,7 +1193,11 @@ pub async fn kage_cli_load_session(conversation_id: String) -> Result<Vec<KageDe
         }
     }
 
-    info!("Loaded kage-cli session {}: {} messages", conversation_id, messages.len());
+    info!(
+        "Loaded kage-cli session {}: {} messages",
+        conversation_id,
+        messages.len()
+    );
     Ok(messages)
 }
 
@@ -940,13 +1213,16 @@ pub async fn kage_cli_check_updated(
     let db = rusqlite::Connection::open_with_flags(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    ).map_err(|e| format!("SQLite open: {}", e))?;
+    )
+    .map_err(|e| format!("SQLite open: {}", e))?;
 
-    let current: i64 = db.query_row(
-        "SELECT updated_at FROM conversations_v2 WHERE conversation_id = ?1",
-        [&conversation_id],
-        |row| row.get(0),
-    ).map_err(|e| format!("SQLite query: {}", e))?;
+    let current: i64 = db
+        .query_row(
+            "SELECT updated_at FROM conversations_v2 WHERE conversation_id = ?1",
+            [&conversation_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("SQLite query: {}", e))?;
 
     if current > last_updated_at {
         Ok(Some(current))

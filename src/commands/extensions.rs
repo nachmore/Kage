@@ -12,21 +12,39 @@ use tauri::{Emitter, Manager, State};
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn list_extensions(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+pub async fn list_extensions(
+    features: State<'_, FeatureServices>,
+) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = features.config.lock_or_recover();
-    Ok(extensions::discover_items("extension", None, &config.extension_states))
+    Ok(extensions::discover_items(
+        "extension",
+        None,
+        &config.extension_states,
+    ))
 }
 
 #[tauri::command]
-pub async fn list_themes(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+pub async fn list_themes(
+    features: State<'_, FeatureServices>,
+) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = features.config.lock_or_recover();
-    Ok(extensions::discover_items("theme", None, &config.extension_states))
+    Ok(extensions::discover_items(
+        "theme",
+        None,
+        &config.extension_states,
+    ))
 }
 
 #[tauri::command]
-pub async fn list_command_packs(features: State<'_, FeatureServices>) -> Result<Vec<extensions::InstalledItem>, AppError> {
+pub async fn list_command_packs(
+    features: State<'_, FeatureServices>,
+) -> Result<Vec<extensions::InstalledItem>, AppError> {
     let config = features.config.lock_or_recover();
-    Ok(extensions::discover_items("commands", None, &config.extension_states))
+    Ok(extensions::discover_items(
+        "commands",
+        None,
+        &config.extension_states,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +57,11 @@ pub async fn get_extension_config(
     features: State<'_, FeatureServices>,
 ) -> Result<serde_json::Value, AppError> {
     let config = features.config.lock_or_recover();
-    Ok(config.extensions.get(&id).cloned().unwrap_or(serde_json::json!({})))
+    Ok(config
+        .extensions
+        .get(&id)
+        .cloned()
+        .unwrap_or(serde_json::json!({})))
 }
 
 #[tauri::command]
@@ -51,7 +73,9 @@ pub async fn save_extension_config(
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     config.extensions.insert(id.clone(), value);
-    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Saved extension config for '{}'", id);
     if let Err(e) = app.emit("config_updated", ()) {
         error!("Failed to emit config_updated: {}", e);
@@ -72,7 +96,9 @@ pub async fn set_extension_enabled(
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     config.extension_states.insert(id.clone(), enabled);
-    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
     if let Err(e) = app.emit("config_updated", ()) {
         error!("Failed to emit config_updated: {}", e);
@@ -89,14 +115,20 @@ pub async fn load_theme_colors(
     theme_id: String,
     variant: String,
 ) -> Result<serde_json::Value, AppError> {
-    info!("load_theme_colors: id='{}', variant='{}'", theme_id, variant);
+    info!(
+        "load_theme_colors: id='{}', variant='{}'",
+        theme_id, variant
+    );
     match extensions::load_theme_colors(&theme_id, &variant, None) {
         Ok(Some(colors)) => {
             info!("load_theme_colors: found colors for '{}'", theme_id);
             Ok(colors)
         }
         Ok(None) => {
-            warn!("load_theme_colors: no colors found for '{}' ({})", theme_id, variant);
+            warn!(
+                "load_theme_colors: no colors found for '{}' ({})",
+                theme_id, variant
+            );
             Ok(serde_json::json!(null))
         }
         Err(e) => {
@@ -131,26 +163,26 @@ pub async fn read_extension_file(
         return Err("Invalid file path".into());
     }
 
-    let subdir = extensions::kind_to_subdir(&kind)
-        .map_err(|e| format!("Invalid kind: {}", e))?;
-    let base = extensions::user_item_dir(subdir)
-        .map_err(|e| format!("Failed to get directory: {}", e))?;
+    let subdir = extensions::kind_to_subdir(&kind).map_err(|e| format!("Invalid kind: {}", e))?;
+    let base =
+        extensions::user_item_dir(subdir).map_err(|e| format!("Failed to get directory: {}", e))?;
     let full_path = base.join(&extension_id).join(&file_path);
 
     // Verify the resolved path is within the extension directory
     let canonical_base = base.join(&extension_id);
     if full_path.exists() {
-        let canonical = full_path.canonicalize()
+        let canonical = full_path
+            .canonicalize()
             .map_err(|e| format!("Path error: {}", e))?;
-        let canonical_parent = canonical_base.canonicalize()
+        let canonical_parent = canonical_base
+            .canonicalize()
             .map_err(|e| format!("Path error: {}", e))?;
         if !canonical.starts_with(&canonical_parent) {
             return Err("Path traversal detected".into());
         }
     }
 
-    Ok(std::fs::read_to_string(&full_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?)
+    Ok(std::fs::read_to_string(&full_path).map_err(|e| format!("Failed to read file: {}", e))?)
 }
 
 // ---------------------------------------------------------------------------
@@ -171,8 +203,7 @@ pub async fn install_extension_from_path(
 
     let item = if source.extension().map(|e| e == "zip").unwrap_or(false) {
         // Install from zip file
-        extensions::install_from_zip(&source)
-            .map_err(|e| format!("Installation failed: {}", e))?
+        extensions::install_from_zip(&source).map_err(|e| format!("Installation failed: {}", e))?
     } else {
         // Install from directory
         extensions::install_from_directory(&source)
@@ -181,7 +212,9 @@ pub async fn install_extension_from_path(
 
     // Mark enabled so the commit step can flip the grant and load it.
     let mut config = features.config.lock_or_recover();
-    config.extension_states.insert(item.manifest.id.clone(), true);
+    config
+        .extension_states
+        .insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 
@@ -198,11 +231,9 @@ pub async fn uninstall_extension(
     // extensions::uninstall validates internally too — checking here as well
     // keeps this command's error message specific (frontend gets a clean
     // "invalid extension id" rather than a generic "uninstall failed").
-    extensions::validate_extension_id(&id)
-        .map_err(|e| format!("Invalid extension id: {}", e))?;
+    extensions::validate_extension_id(&id).map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    extensions::uninstall(&id, &kind)
-        .map_err(|e| format!("Uninstall failed: {}", e))?;
+    extensions::uninstall(&id, &kind).map_err(|e| format!("Uninstall failed: {}", e))?;
 
     // Remove from enabled states and extension config
     let mut config = features.config.lock_or_recover();
@@ -233,7 +264,10 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         // the window is already loaded and events can race with show()
         if let Some(ref t) = tab {
             // Sanitize: only allow alphanumeric and hyphens to prevent JS injection
-            let safe_tab: String = t.chars().filter(|c| c.is_alphanumeric() || *c == '-').collect();
+            let safe_tab: String = t
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '-')
+                .collect();
             let js = format!("if(typeof switchTab==='function')switchTab('{}')", safe_tab);
             let _ = w.eval(&js);
         }
@@ -246,18 +280,14 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         None => "store.html".to_string(),
     };
 
-    let w = WebviewWindowBuilder::new(
-        &app,
-        "store",
-        tauri::WebviewUrl::App(url_str.into()),
-    )
-    .title("Extension Store")
-    .inner_size(900.0, 640.0)
-    .min_inner_size(600.0, 400.0)
-    .center()
-    .visible(true)
-    .build()
-    .map_err(|e| format!("Failed to open store window: {}", e))?;
+    let w = WebviewWindowBuilder::new(&app, "store", tauri::WebviewUrl::App(url_str.into()))
+        .title("Extension Store")
+        .inner_size(900.0, 640.0)
+        .min_inner_size(600.0, 400.0)
+        .center()
+        .visible(true)
+        .build()
+        .map_err(|e| format!("Failed to open store window: {}", e))?;
 
     let _ = w.set_background_color(Some(tauri::window::Color(30, 30, 30, 255)));
 
@@ -275,7 +305,9 @@ pub async fn save_store_url(
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     config.store_url = url.filter(|s| !s.is_empty());
-    config.save().map_err(|e| format!("Failed to save config: {}", e))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Store URL updated");
     Ok(())
 }
@@ -376,24 +408,22 @@ pub async fn store_get_catalog(
         }
         handles.push(tokio::spawn(async move {
             match client.get(&url).send().await {
-                Ok(resp) => {
-                    match resp.json::<serde_json::Value>().await {
-                        Ok(body) => {
-                            let mut items = Vec::new();
-                            if let Some(arr) = body.get("items").and_then(|v| v.as_array()) {
-                                for item in arr {
-                                    let mut tagged = item.clone();
-                                    if let Some(obj) = tagged.as_object_mut() {
-                                        obj.insert("_source".to_string(), serde_json::json!(name));
-                                    }
-                                    items.push(tagged);
+                Ok(resp) => match resp.json::<serde_json::Value>().await {
+                    Ok(body) => {
+                        let mut items = Vec::new();
+                        if let Some(arr) = body.get("items").and_then(|v| v.as_array()) {
+                            for item in arr {
+                                let mut tagged = item.clone();
+                                if let Some(obj) = tagged.as_object_mut() {
+                                    obj.insert("_source".to_string(), serde_json::json!(name));
                                 }
+                                items.push(tagged);
                             }
-                            items
                         }
-                        Err(_) => Vec::new(),
+                        items
                     }
-                }
+                    Err(_) => Vec::new(),
+                },
                 Err(e) => {
                     log::warn!("Failed to fetch from store '{}': {}", name, e);
                     Vec::new()
@@ -429,7 +459,6 @@ pub async fn store_get_catalog(
     }))
 }
 
-
 #[tauri::command]
 pub async fn store_get_detail(
     id: String,
@@ -449,7 +478,8 @@ pub async fn store_get_detail(
 
     let url = format!("{}/store/catalog/{}", base_url, id);
     let client = store_client()?;
-    let resp = client.get(&url)
+    let resp = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Store request failed: {}", e))?;
@@ -562,7 +592,9 @@ pub async fn check_extension_updates(
     for kind in &["extension", "theme", "commands"] {
         let items = extensions::discover_items(kind, None, &states);
         for item in items {
-            if item.bundled { continue; }
+            if item.bundled {
+                continue;
+            }
             installed.push((
                 item.manifest.id.clone(),
                 item.manifest.version.clone(),
@@ -578,7 +610,8 @@ pub async fn check_extension_updates(
     // Fetch the full catalog (no type filter) to get all available versions
     let url = format!("{}/store/catalog?page=1", base_url);
     let client = store_client()?;
-    let resp = client.get(&url)
+    let resp = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Store request failed: {}", e))?;
@@ -587,7 +620,8 @@ pub async fn check_extension_updates(
         .await
         .map_err(|e| format!("Invalid store response: {}", e))?;
 
-    let catalog_items = catalog.get("items")
+    let catalog_items = catalog
+        .get("items")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
@@ -597,12 +631,13 @@ pub async fn check_extension_updates(
 
     for (id, local_version, _kind) in &installed {
         // Find this item in the catalog
-        let catalog_item = catalog_items.iter().find(|ci| {
-            ci.get("id").and_then(|v| v.as_str()) == Some(id.as_str())
-        });
+        let catalog_item = catalog_items
+            .iter()
+            .find(|ci| ci.get("id").and_then(|v| v.as_str()) == Some(id.as_str()));
 
         if let Some(ci) = catalog_item {
-            let remote_version = ci.get("version")
+            let remote_version = ci
+                .get("version")
                 .and_then(|v| v.as_str())
                 .unwrap_or("0.0.0");
 
@@ -612,7 +647,10 @@ pub async fn check_extension_updates(
 
             if let (Some(local), Some(remote)) = (local_sv, remote_sv) {
                 if remote > local {
-                    info!("Extension '{}' has update: {} -> {}", id, local_version, remote_version);
+                    info!(
+                        "Extension '{}' has update: {} -> {}",
+                        id, local_version, remote_version
+                    );
                     // Install the update in place. The existing capability
                     // grant is preserved; if the updated manifest requests
                     // more capabilities, the runtime drops them until the
@@ -658,19 +696,21 @@ async fn store_install_inner(
     let zip_path = std::env::temp_dir().join(format!("kage-download-{}.zip", id));
 
     let client = store_client()?;
-    let resp = client.get(&url)
+    let resp = client
+        .get(&url)
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
-    let bytes = resp.bytes().await
+    let bytes = resp
+        .bytes()
+        .await
         .map_err(|e| format!("Failed to read download: {}", e))?;
 
     if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
         return Err("Invalid zip archive".into());
     }
 
-    std::fs::write(&zip_path, &bytes)
-        .map_err(|e| format!("Failed to save download: {}", e))?;
+    std::fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save download: {}", e))?;
 
     let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| format!("Installation failed: {}", e))?;
@@ -678,7 +718,9 @@ async fn store_install_inner(
     let _ = std::fs::remove_file(&zip_path);
 
     let mut config = features.config.lock_or_recover();
-    config.extension_states.insert(item.manifest.id.clone(), true);
+    config
+        .extension_states
+        .insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 
@@ -719,8 +761,7 @@ fn extension_data_root() -> Result<std::path::PathBuf, String> {
 /// Resolve the on-disk path for a given (extension_id, key).
 fn resolve_data_path(extension_id: &str, key: &str) -> Result<std::path::PathBuf, String> {
     let root = extension_data_root()?;
-    extensions::resolve_extension_data_path(&root, extension_id, key)
-        .map_err(|e| format!("{}", e))
+    extensions::resolve_extension_data_path(&root, extension_id, key).map_err(|e| format!("{}", e))
 }
 
 /// Save arbitrary JSON data for an extension.
@@ -732,8 +773,12 @@ pub async fn save_extension_data(
     data: String,
 ) -> Result<(), AppError> {
     let path = resolve_data_path(&extension_id, &key)?;
-    std::fs::write(&path, &data)
-        .map_err(|e| format!("Failed to save extension data '{}/{}': {}", extension_id, key, e))?;
+    std::fs::write(&path, &data).map_err(|e| {
+        format!(
+            "Failed to save extension data '{}/{}': {}",
+            extension_id, key, e
+        )
+    })?;
     Ok(())
 }
 
@@ -747,21 +792,24 @@ pub async fn load_extension_data(
     match std::fs::read_to_string(&path) {
         Ok(data) => Ok(Some(data)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(format!("Failed to load extension data '{}/{}': {}", extension_id, key, e))?,
+        Err(e) => Err(format!(
+            "Failed to load extension data '{}/{}': {}",
+            extension_id, key, e
+        ))?,
     }
 }
 
 /// Delete extension data file.
 #[tauri::command]
-pub async fn delete_extension_data(
-    extension_id: String,
-    key: String,
-) -> Result<(), AppError> {
+pub async fn delete_extension_data(extension_id: String, key: String) -> Result<(), AppError> {
     let path = resolve_data_path(&extension_id, &key)?;
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!("Failed to delete extension data '{}/{}': {}", extension_id, key, e))?,
+        Err(e) => Err(format!(
+            "Failed to delete extension data '{}/{}': {}",
+            extension_id, key, e
+        ))?,
     }
 }
 
@@ -818,17 +866,21 @@ pub async fn install_bundled_package(
         packages_dir.join(format!("{}-theme.zip", id)),
     ];
 
-    let zip_path = candidates.into_iter()
+    let zip_path = candidates
+        .into_iter()
         .find(|p| p.exists())
         .ok_or_else(|| AppError::from(format!("Bundled package not found for '{}'", id)))?;
 
     info!("Installing bundled package '{}' from {:?}", id, zip_path);
 
-    let item = extensions::install_from_zip(&zip_path)
-        .map_err(|e| AppError::from(format!("Failed to install bundled package '{}': {}", id, e)))?;
+    let item = extensions::install_from_zip(&zip_path).map_err(|e| {
+        AppError::from(format!("Failed to install bundled package '{}': {}", id, e))
+    })?;
 
     let mut config = features.config.lock_or_recover();
-    config.extension_states.insert(item.manifest.id.clone(), true);
+    config
+        .extension_states
+        .insert(item.manifest.id.clone(), true);
     let _ = config.save();
     drop(config);
 

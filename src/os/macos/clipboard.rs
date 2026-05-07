@@ -12,7 +12,9 @@ pub struct SelectionCaptureToken {
 }
 
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
-    SelectionCaptureToken { selection: capture_selection_impl() }
+    SelectionCaptureToken {
+        selection: capture_selection_impl(),
+    }
 }
 
 pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<String> {
@@ -26,18 +28,25 @@ pub fn simulate_paste_impl() {
     use std::sync::OnceLock;
     static WARNED: OnceLock<()> = OnceLock::new();
     WARNED.get_or_init(|| {
-        log::warn!("simulate_paste: macOS implementation not yet available — paste keystroke skipped");
+        log::warn!(
+            "simulate_paste: macOS implementation not yet available — paste keystroke skipped"
+        );
     });
 }
 
 pub fn read_clipboard_impl() -> Option<String> {
-    Command::new("pbpaste").output().ok()
+    Command::new("pbpaste")
+        .output()
+        .ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
 pub fn write_clipboard_impl(text: &str) {
     use std::io::Write;
-    if let Ok(mut child) = Command::new("pbcopy").stdin(std::process::Stdio::piped()).spawn() {
+    if let Ok(mut child) = Command::new("pbcopy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+    {
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(text.as_bytes());
         }
@@ -50,7 +59,10 @@ pub fn capture_selection_impl() -> Option<String> {
 
     // Simulate Cmd+C via osascript
     let _ = Command::new("osascript")
-        .args(["-e", "tell application \"System Events\" to keystroke \"c\" using command down"])
+        .args([
+            "-e",
+            "tell application \"System Events\" to keystroke \"c\" using command down",
+        ])
         .output();
 
     std::thread::sleep(std::time::Duration::from_millis(100));

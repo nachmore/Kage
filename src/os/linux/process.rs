@@ -12,7 +12,9 @@ pub fn get_process_name_impl(pid: u32) -> Option<String> {
     // Try /proc/{pid}/comm first (no subprocess needed)
     if let Ok(name) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
         let name = name.trim().to_string();
-        if !name.is_empty() { return Some(name); }
+        if !name.is_empty() {
+            return Some(name);
+        }
     }
     // Fallback to ps
     let output = Command::new("ps")
@@ -20,14 +22,18 @@ pub fn get_process_name_impl(pid: u32) -> Option<String> {
         .output()
         .ok()?;
     let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if name.is_empty() { None } else { Some(name) }
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
 }
 
 pub fn kill_process_impl(pid: u32) -> bool {
     // Try SIGTERM first
     if kill(Pid::from_raw(pid as i32), Signal::SIGTERM).is_ok() {
         std::thread::sleep(std::time::Duration::from_millis(500));
-        
+
         // Force kill if still alive
         if kill(Pid::from_raw(pid as i32), Signal::SIGKILL).is_ok() {
             return true;
@@ -69,8 +75,8 @@ where
     F: Fn() + Send + 'static,
 {
     std::thread::spawn(move || {
-        let mut signals = Signals::new(&[SIGTERM, SIGINT, SIGQUIT])
-            .expect("Failed to register signal handlers");
+        let mut signals =
+            Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).expect("Failed to register signal handlers");
 
         for sig in signals.forever() {
             info!("Received signal: {:?}", sig);
@@ -78,7 +84,7 @@ where
             std::process::exit(0);
         }
     });
-    
+
     info!("✅ Signal handlers installed (SIGTERM, SIGINT, SIGQUIT)");
     Ok(())
 }

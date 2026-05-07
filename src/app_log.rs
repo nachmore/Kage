@@ -302,11 +302,7 @@ fn write_batch(file: &mut BufWriter<File>, batch: &[LogEntry]) -> u64 {
 }
 
 fn open_append(path: &std::path::Path) -> Option<BufWriter<File>> {
-    match OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-    {
+    match OpenOptions::new().create(true).append(true).open(path) {
         Ok(f) => Some(BufWriter::with_capacity(16 * 1024, f)),
         Err(e) => {
             log::warn!("app_log: failed to open {path:?} for append: {e}");
@@ -565,7 +561,10 @@ mod tests {
         }
         let log = AppLog::new(3, &path).unwrap();
         let msgs: Vec<_> = log.entries().into_iter().map(|e| e.msg).collect();
-        assert_eq!(msgs, vec!["7".to_string(), "8".to_string(), "9".to_string()]);
+        assert_eq!(
+            msgs,
+            vec!["7".to_string(), "8".to_string(), "9".to_string()]
+        );
     }
 
     #[test]
@@ -590,8 +589,12 @@ mod tests {
         let handle = thread::spawn(move || writer_loop(rx, path_clone));
 
         for i in 0..5 {
-            tx.send(WriterMsg::Entry(make_entry("info", "test", &format!("m{i}"))))
-                .unwrap();
+            tx.send(WriterMsg::Entry(make_entry(
+                "info",
+                "test",
+                &format!("m{i}"),
+            )))
+            .unwrap();
         }
 
         // Ask for an explicit flush so we don't have to sleep on the timer.
@@ -616,10 +619,16 @@ mod tests {
     #[test]
     fn sibling_old_path_adds_old_infix_before_extension() {
         let base = PathBuf::from("/tmp/logs/app.jsonl");
-        assert_eq!(sibling_old_path(&base), PathBuf::from("/tmp/logs/app.old.jsonl"));
+        assert_eq!(
+            sibling_old_path(&base),
+            PathBuf::from("/tmp/logs/app.old.jsonl")
+        );
 
         let base = PathBuf::from("/tmp/logs/foo.log");
-        assert_eq!(sibling_old_path(&base), PathBuf::from("/tmp/logs/foo.old.log"));
+        assert_eq!(
+            sibling_old_path(&base),
+            PathBuf::from("/tmp/logs/foo.old.log")
+        );
 
         let base = PathBuf::from("app");
         assert_eq!(sibling_old_path(&base), PathBuf::from("app.old"));
@@ -731,7 +740,10 @@ mod tests {
 
         let contents = fs::read_to_string(&path).unwrap();
         let parsed: LogEntry = serde_json::from_str(contents.trim()).unwrap();
-        assert_eq!(parsed.ts, entry_ts, "writer must preserve entry ts verbatim");
+        assert_eq!(
+            parsed.ts, entry_ts,
+            "writer must preserve entry ts verbatim"
+        );
 
         drop(tx);
         handle.join().unwrap();

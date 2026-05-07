@@ -62,7 +62,12 @@ fn get_avatar_from_registry() -> Option<String> {
     for size in &sizes {
         if let Ok(path) = key.get_value::<String, _>(size) {
             let p = std::path::Path::new(&path);
-            log::info!("[USER] Registry {} = {} (exists: {})", size, path, p.exists());
+            log::info!(
+                "[USER] Registry {} = {} (exists: {})",
+                size,
+                path,
+                p.exists()
+            );
             if p.exists() {
                 return Some(path);
             }
@@ -76,10 +81,8 @@ fn get_avatar_from_registry() -> Option<String> {
 /// Get the current user's SID as a string using Win32 API (no subprocess).
 fn get_current_user_sid() -> Option<String> {
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
-    use windows::Win32::Security::{
-        GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
-    };
     use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
     unsafe {
@@ -91,13 +94,7 @@ fn get_current_user_sid() -> Option<String> {
 
         // Query token for user SID — first call to get buffer size
         let mut return_length = 0u32;
-        let _ = GetTokenInformation(
-            token_handle,
-            TokenUser,
-            None,
-            0,
-            &mut return_length,
-        );
+        let _ = GetTokenInformation(token_handle, TokenUser, None, 0, &mut return_length);
 
         if return_length == 0 {
             let _ = CloseHandle(token_handle);
@@ -133,7 +130,9 @@ fn get_current_user_sid() -> Option<String> {
         let sid_str = sid_string.to_string().ok();
 
         // Free the string allocated by ConvertSidToStringSidW
-        windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(sid_string.0 as *mut _)));
+        windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(
+            sid_string.0 as *mut _,
+        )));
 
         sid_str
     }

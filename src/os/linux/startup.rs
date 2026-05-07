@@ -17,7 +17,10 @@ pub fn get_startup_enabled_impl() -> bool {
 pub fn set_startup_enabled_impl(enabled: bool) {
     let desktop_path = match get_autostart_path() {
         Some(p) => p,
-        None => { warn!("Could not determine autostart path"); return; }
+        None => {
+            warn!("Could not determine autostart path");
+            return;
+        }
     };
 
     if enabled {

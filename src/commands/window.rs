@@ -43,8 +43,6 @@ pub fn get_active_monitor(window: &WebviewWindow) -> Option<tauri::Monitor> {
     window.primary_monitor().ok().flatten()
 }
 
-
-
 /// Position the floating window at the mouse cursor, regardless of user config.
 /// Show the floating window at the mouse cursor without selection capture.
 /// Used by the clipboard hotkey — we don't want to send Ctrl+C when the user
@@ -85,7 +83,10 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
 
     // Don't show if frontend hasn't finished initializing yet
-    if !ui_state.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
+    if !ui_state
+        .frontend_ready
+        .load(std::sync::atomic::Ordering::Acquire)
+    {
         info!("Ignoring hotkey — frontend not ready");
         return;
     }
@@ -136,7 +137,9 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                 {
                     let config = features.config.lock_or_recover();
                     if config.ui.remember_launcher_size {
-                        if let (Some(w), Some(h)) = (config.ui.launcher_width, config.ui.launcher_height) {
+                        if let (Some(w), Some(h)) =
+                            (config.ui.launcher_width, config.ui.launcher_height)
+                        {
                             let scale = window.scale_factor().unwrap_or(1.0);
                             let phys_w = (w as f64 * scale) as u32;
                             let phys_h = (h as f64 * scale) as u32;
@@ -211,7 +214,10 @@ fn position_floating_window_with_height(
                 if let Some(monitor) = find_monitor_at_position(window, cursor_x, cursor_y) {
                     let mon_pos = monitor.position();
                     let mon_size = monitor.size();
-                    let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
+                    let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize {
+                        width: 500,
+                        height: 60,
+                    });
                     // Use estimated height if provided (e.g. clipboard dropdown)
                     let effective_height = estimated_height.unwrap_or(win_size.height) as i32;
 
@@ -225,9 +231,8 @@ fn position_floating_window_with_height(
                     x = x.max(mon_pos.x).min(max_x);
                     y = y.max(mon_pos.y).min(max_y);
 
-                    let _ = window.set_position(tauri::Position::Physical(
-                        tauri::PhysicalPosition { x, y },
-                    ));
+                    let _ = window
+                        .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
                     return;
                 }
             }
@@ -239,8 +244,13 @@ fn position_floating_window_with_height(
             if let (Some(x), Some(y)) = (last_x, last_y) {
                 if let Some(_monitor) = find_monitor_at_position(window, x, y) {
                     // Verify the window would be mostly visible
-                    let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize { width: 500, height: 60 });
-                    if find_monitor_at_position(window, x + win_size.width as i32 / 2, y + 30).is_some() {
+                    let win_size = window.inner_size().unwrap_or(tauri::PhysicalSize {
+                        width: 500,
+                        height: 60,
+                    });
+                    if find_monitor_at_position(window, x + win_size.width as i32 / 2, y + 30)
+                        .is_some()
+                    {
                         let _ = window.set_position(tauri::Position::Physical(
                             tauri::PhysicalPosition { x, y },
                         ));
@@ -271,16 +281,22 @@ pub fn center_on_active_monitor(
         let mon_size = monitor.size();
         let win_size = window.inner_size().unwrap_or(default_size);
         let x = mon_pos.x + (mon_size.width as i32 - win_size.width as i32) / 2;
-        let y = mon_pos.y + ((mon_size.height as f64 - win_size.height as f64) * vertical_fraction) as i32;
-        let _ = window.set_position(tauri::Position::Physical(
-            tauri::PhysicalPosition { x, y },
-        ));
+        let y = mon_pos.y
+            + ((mon_size.height as f64 - win_size.height as f64) * vertical_fraction) as i32;
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
     }
 }
 
 /// Center the floating window horizontally on the active monitor, 1/3 down
 pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
-    center_on_active_monitor(window, 0.33, tauri::PhysicalSize { width: 500, height: 60 });
+    center_on_active_monitor(
+        window,
+        0.33,
+        tauri::PhysicalSize {
+            width: 500,
+            height: 60,
+        },
+    );
 }
 
 #[tauri::command]
@@ -291,11 +307,17 @@ pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppEr
         let is_visible = window.is_visible().unwrap_or(false);
 
         if is_visible {
-            window.hide().map_err(|e| format!("Failed to hide: {}", e))?;
+            window
+                .hide()
+                .map_err(|e| format!("Failed to hide: {}", e))?;
             Ok("Window was visible, now hidden".to_string())
         } else {
-            window.show().map_err(|e| format!("Failed to show: {}", e))?;
-            window.set_focus().map_err(|e| format!("Failed to focus: {}", e))?;
+            window
+                .show()
+                .map_err(|e| format!("Failed to show: {}", e))?;
+            window
+                .set_focus()
+                .map_err(|e| format!("Failed to focus: {}", e))?;
             center_floating_on_active_monitor(&window);
             Ok("Window was hidden, now visible and positioned".to_string())
         }
@@ -315,7 +337,14 @@ pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
 
 /// Center a window on the active monitor (where the cursor is)
 pub fn center_window_on_active_monitor(window: &WebviewWindow) {
-    center_on_active_monitor(window, 0.5, tauri::PhysicalSize { width: 800, height: 600 });
+    center_on_active_monitor(
+        window,
+        0.5,
+        tauri::PhysicalSize {
+            width: 800,
+            height: 600,
+        },
+    );
 }
 
 #[tauri::command]
@@ -339,11 +368,14 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 
         // Get active monitor bounds
         let monitor = get_active_monitor(&window);
-        let (mon_x, mon_y, mon_w, mon_h) = monitor.as_ref().map(|m| {
-            let p = m.position();
-            let s = m.size();
-            (p.x, p.y, s.width as i32, s.height as i32)
-        }).unwrap_or((0, 0, 1920, 1080));
+        let (mon_x, mon_y, mon_w, mon_h) = monitor
+            .as_ref()
+            .map(|m| {
+                let p = m.position();
+                let s = m.size();
+                (p.x, p.y, s.width as i32, s.height as i32)
+            })
+            .unwrap_or((0, 0, 1920, 1080));
 
         if saved_w > 0 && saved_h > 0 {
             // Clamp size to monitor dimensions
@@ -360,9 +392,10 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
                 let win_h = phys_h;
                 let cx = x.max(mon_x).min(mon_x + mon_w - win_w);
                 let cy = y.max(mon_y).min(mon_y + mon_h - win_h);
-                let _ = window.set_position(tauri::Position::Physical(
-                    tauri::PhysicalPosition { x: cx, y: cy },
-                ));
+                let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                    x: cx,
+                    y: cy,
+                }));
             } else {
                 center_window_on_active_monitor(&window);
             }
@@ -405,10 +438,16 @@ pub async fn resize_floating_window(
         .map_err(|e| AppError::internal(e.to_string()))
 }
 
-
 #[tauri::command]
-pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>, sub_section: Option<String>) -> Result<(), AppError> {
-    info!("Opening settings window (section: {:?}, sub: {:?})", section, sub_section);
+pub async fn open_settings_window(
+    app: tauri::AppHandle,
+    section: Option<String>,
+    sub_section: Option<String>,
+) -> Result<(), AppError> {
+    info!(
+        "Opening settings window (section: {:?}, sub: {:?})",
+        section, sub_section
+    );
     if let Some(window) = app.get_webview_window("settings") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -423,11 +462,7 @@ pub async fn open_settings_window(app: tauri::AppHandle, section: Option<String>
 }
 
 #[tauri::command]
-pub async fn show_context_menu(
-    x: i32,
-    y: i32,
-    app: tauri::AppHandle,
-) -> Result<(), AppError> {
+pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<(), AppError> {
     if let Some(window) = app.get_webview_window("context-menu") {
         // Get the menu window size
         let win_size = window.outer_size().unwrap_or(tauri::PhysicalSize {
@@ -460,7 +495,10 @@ pub async fn show_context_menu(
         }
 
         window
-            .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x: final_x, y: final_y }))
+            .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+                x: final_x,
+                y: final_y,
+            }))
             .map_err(|e| format!("Failed to position context menu: {}", e))?;
         window
             .show()
@@ -473,10 +511,7 @@ pub async fn show_context_menu(
 }
 
 #[tauri::command]
-pub async fn set_floating_opacity(
-    app: tauri::AppHandle,
-    opacity: f64,
-) -> Result<(), AppError> {
+pub async fn set_floating_opacity(app: tauri::AppHandle, opacity: f64) -> Result<(), AppError> {
     // Opacity is applied via CSS in the frontend (body opacity).
     // This command exists so the frontend can trigger it via config_updated.
     // The actual application happens in floating-theme.js loadAndApplyTheme().
@@ -514,7 +549,9 @@ pub async fn save_window_position(
     let mut config = features.config.lock_or_recover();
     config.ui.last_window_x = Some(x);
     config.ui.last_window_y = Some(y);
-    config.save().map_err(|e| format!("Failed to save window position: {}", e))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save window position: {}", e))?;
     Ok(())
 }
 
@@ -531,7 +568,9 @@ pub async fn save_chat_window_geometry(
     config.ui.chat_window_height = height;
     config.ui.chat_window_x = Some(x);
     config.ui.chat_window_y = Some(y);
-    config.save().map_err(|e| format!("Failed to save chat window geometry: {}", e))?;
+    config
+        .save()
+        .map_err(|e| format!("Failed to save chat window geometry: {}", e))?;
     Ok(())
 }
 
@@ -559,7 +598,9 @@ pub async fn show_notification_source_window(
     app: tauri::AppHandle,
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
-    let source = ui.notification_source.lock()
+    let source = ui
+        .notification_source
+        .lock()
         .map(|s| s.clone())
         .unwrap_or_else(|_| "floating".to_string());
 
@@ -580,7 +621,8 @@ pub async fn show_notification_source_window(
 #[tauri::command]
 pub fn notify_frontend_ready(ui: tauri::State<'_, crate::state::UiState>) {
     info!("Frontend signaled ready");
-    ui.frontend_ready.store(true, std::sync::atomic::Ordering::Release);
+    ui.frontend_ready
+        .store(true, std::sync::atomic::Ordering::Release);
 }
 
 /// Get the source window info (title, process_name) captured when the hotkey was pressed.
@@ -615,7 +657,9 @@ pub async fn get_screen_context(
     // Spawn on a blocking thread since UI Automation is COM-based
     let result = tokio::task::spawn_blocking(move || {
         crate::os::accessibility::get_ui_tree(Some(&title), 2, false)
-    }).await.map_err(|e| format!("Join error: {}", e))?;
+    })
+    .await
+    .map_err(|e| format!("Join error: {}", e))?;
 
     match result {
         Ok(tree) => {
@@ -659,8 +703,13 @@ pub async fn show_inline_assist_with_context(
     selection: Option<String>,
     cursor_pos: (i32, i32),
 ) -> Result<(), AppError> {
-    info!("show_inline_assist_with_context: source={:?}, selection_len={}, cursor=({},{})",
-        source_info, selection.as_ref().map(|s| s.len()).unwrap_or(0), cursor_pos.0, cursor_pos.1);
+    info!(
+        "show_inline_assist_with_context: source={:?}, selection_len={}, cursor=({},{})",
+        source_info,
+        selection.as_ref().map(|s| s.len()).unwrap_or(0),
+        cursor_pos.0,
+        cursor_pos.1
+    );
 
     let ui: tauri::State<'_, crate::state::UiState> = app.state();
 
@@ -671,7 +720,10 @@ pub async fn show_inline_assist_with_context(
 
     // Show the inline assist window at cursor
     if let Some(window) = app.get_webview_window("inline-assist") {
-        info!("Found inline-assist window, positioning at ({}, {})", cursor_pos.0, cursor_pos.1);
+        info!(
+            "Found inline-assist window, positioning at ({}, {})",
+            cursor_pos.0, cursor_pos.1
+        );
         // Position near cursor, with screen edge clamping
         let mut x = cursor_pos.0;
         let mut y = cursor_pos.1;
@@ -685,13 +737,15 @@ pub async fn show_inline_assist_with_context(
             let mon_right = mon_pos.x + mon_size.width as i32;
             let mon_bottom = mon_pos.y + mon_size.height as i32;
 
-            if x + win_w > mon_right { x = (mon_right - win_w).max(mon_pos.x); }
-            if y + win_h > mon_bottom { y = (mon_bottom - win_h).max(mon_pos.y); }
+            if x + win_w > mon_right {
+                x = (mon_right - win_w).max(mon_pos.x);
+            }
+            if y + win_h > mon_bottom {
+                y = (mon_bottom - win_h).max(mon_pos.y);
+            }
         }
 
-        let _ = window.set_position(tauri::Position::Physical(
-            tauri::PhysicalPosition { x, y },
-        ));
+        let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
         let _ = window.show();
         let _ = window.set_focus();
 

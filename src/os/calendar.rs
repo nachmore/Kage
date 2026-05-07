@@ -5,7 +5,7 @@
 // - macOS: EventKit (via swift CLI) — TODO
 // - Linux: stub (no standard API)
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarEvent {
@@ -57,18 +57,29 @@ pub fn extract_meeting_url(location: &str, body: &str) -> Option<String> {
             let trimmed = line.trim();
             if let Some(pos) = trimmed.find("https://") {
                 let url = &trimmed[pos..];
-                let end = url.find(|c: char| {
-                    c.is_whitespace() || c == '"' || c == '\'' || c == '<' || c == '>' || c == ')'
-                }).unwrap_or(url.len());
+                let end = url
+                    .find(|c: char| {
+                        c.is_whitespace()
+                            || c == '"'
+                            || c == '\''
+                            || c == '<'
+                            || c == '>'
+                            || c == ')'
+                    })
+                    .unwrap_or(url.len());
                 let candidate = &url[..end];
                 let after_scheme = &candidate[8..]; // skip "https://"
                 if domain_patterns.iter().any(|p| {
-                    after_scheme.starts_with(p) || after_scheme.contains(&format!("{}/", p))
-                        || (p.starts_with('.') && after_scheme.find('/').is_some_and(|slash| after_scheme[..slash].ends_with(p)))
-                })
-                    && candidate.len() > 15 {
-                        return Some(candidate.to_string());
-                    }
+                    after_scheme.starts_with(p)
+                        || after_scheme.contains(&format!("{}/", p))
+                        || (p.starts_with('.')
+                            && after_scheme
+                                .find('/')
+                                .is_some_and(|slash| after_scheme[..slash].ends_with(p)))
+                }) && candidate.len() > 15
+                {
+                    return Some(candidate.to_string());
+                }
             }
         }
     }

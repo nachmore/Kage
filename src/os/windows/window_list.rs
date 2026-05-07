@@ -27,14 +27,20 @@ const SW_RESTORE: i32 = 9;
 fn get_window_title(hwnd: isize) -> Option<String> {
     unsafe {
         let len = GetWindowTextLengthW(hwnd);
-        if len <= 0 { return None; }
+        if len <= 0 {
+            return None;
+        }
         let mut buf = vec![0u16; (len + 1) as usize];
         let copied = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
-        if copied <= 0 { return None; }
+        if copied <= 0 {
+            return None;
+        }
         let title = OsString::from_wide(&buf[..copied as usize])
             .to_string_lossy()
             .to_string();
-        if title.trim().is_empty() { return None; }
+        if title.trim().is_empty() {
+            return None;
+        }
         Some(title)
     }
 }
@@ -44,7 +50,11 @@ fn get_process_info(pid: u32) -> (String, String) {
 
     #[allow(non_snake_case)]
     extern "system" {
-        fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
+        fn OpenProcess(
+            dwDesiredAccess: u32,
+            bInheritHandle: i32,
+            dwProcessId: u32,
+        ) -> *mut std::ffi::c_void;
         fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
         fn QueryFullProcessImageNameW(
             hProcess: *mut std::ffi::c_void,
@@ -56,12 +66,16 @@ fn get_process_info(pid: u32) -> (String, String) {
 
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if handle.is_null() { return (String::new(), String::new()); }
+        if handle.is_null() {
+            return (String::new(), String::new());
+        }
         let mut buf = vec![0u16; 260];
         let mut size = buf.len() as u32;
         let ok = QueryFullProcessImageNameW(handle, 0, buf.as_mut_ptr(), &mut size);
         CloseHandle(handle);
-        if ok == 0 { return (String::new(), String::new()); }
+        if ok == 0 {
+            return (String::new(), String::new());
+        }
         let path = OsString::from_wide(&buf[..size as usize])
             .to_string_lossy()
             .to_string();
@@ -78,9 +92,13 @@ fn get_process_info(pid: u32) -> (String, String) {
 fn is_app_window(hwnd: isize) -> bool {
     unsafe {
         let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
-        if ex_style & WS_EX_TOOLWINDOW != 0 { return false; }
+        if ex_style & WS_EX_TOOLWINDOW != 0 {
+            return false;
+        }
         let owner = GetWindow(hwnd, GW_OWNER);
-        if owner != 0 { return false; }
+        if owner != 0 {
+            return false;
+        }
         true
     }
 }
@@ -91,8 +109,12 @@ struct EnumState {
 
 extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
     unsafe {
-        if IsWindowVisible(hwnd) == 0 { return 1; }
-        if !is_app_window(hwnd) { return 1; }
+        if IsWindowVisible(hwnd) == 0 {
+            return 1;
+        }
+        if !is_app_window(hwnd) {
+            return 1;
+        }
 
         let title = match get_window_title(hwnd) {
             Some(t) => t,
@@ -100,25 +122,36 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
         };
 
         // Skip our own window
-        if title.contains("Kage") { return 1; }
+        if title.contains("Kage") {
+            return 1;
+        }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
-        let (process_name, exe_path) = if pid > 0 { get_process_info(pid) } else { (String::new(), String::new()) };
+        let (process_name, exe_path) = if pid > 0 {
+            get_process_info(pid)
+        } else {
+            (String::new(), String::new())
+        };
 
         let state = &mut *(lparam as *mut EnumState);
-        state.windows.push((WindowInfo {
-            title,
-            process_name,
-            handle: hwnd as u64,
-            icon_base64: None,
-        }, exe_path));
+        state.windows.push((
+            WindowInfo {
+                title,
+                process_name,
+                handle: hwnd as u64,
+                icon_base64: None,
+            },
+            exe_path,
+        ));
     }
     1 // continue enumeration
 }
 
 pub fn list_windows_impl() -> Vec<WindowInfo> {
-    let mut state = EnumState { windows: Vec::new() };
+    let mut state = EnumState {
+        windows: Vec::new(),
+    };
     unsafe {
         EnumWindows(enum_callback, &mut state as *mut EnumState as isize);
     }
@@ -129,7 +162,9 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
     // then register the (process_name → icon) pair so `get_app_icon`
     // can look it up by name without re-enumerating.
     for (win, exe_path) in &mut state.windows {
-        if exe_path.is_empty() { continue; }
+        if exe_path.is_empty() {
+            continue;
+        }
         let icon = crate::os::icon::extract_icon_base64_cached(exe_path);
         win.icon_base64 = icon.clone();
         if let Some(ref icon_str) = icon {
@@ -164,14 +199,22 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
 
     unsafe {
         let hwnd = GetForegroundWindow();
-        if hwnd == 0 { return None; }
+        if hwnd == 0 {
+            return None;
+        }
 
         let title = get_window_title(hwnd)?;
-        if title.contains("Kage") { return None; }
+        if title.contains("Kage") {
+            return None;
+        }
 
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
-        let (process_name, _) = if pid > 0 { get_process_info(pid) } else { (String::new(), String::new()) };
+        let (process_name, _) = if pid > 0 {
+            get_process_info(pid)
+        } else {
+            (String::new(), String::new())
+        };
 
         Some((title, process_name))
     }

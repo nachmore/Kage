@@ -103,7 +103,9 @@ pub fn spawn_frontend_watchdog(app: &App) {
         std::thread::sleep(std::time::Duration::from_secs(15));
         if !ready_flag.load(std::sync::atomic::Ordering::Acquire) {
             error!("❌ Frontend did not become ready within 15 seconds — webview may have failed to load.");
-            error!("   This usually means another process is holding the WebView2 user data folder.");
+            error!(
+                "   This usually means another process is holding the WebView2 user data folder."
+            );
             error!("   Try closing other instances or killing stale WebView2 processes.");
             app_handle.exit(1);
         }
@@ -159,7 +161,10 @@ pub fn maybe_autostart_pocket_tts(app: &App, config: &crate::config::Config) {
                 config.pocket_tts.voice.clone(),
                 config.pocket_tts.temp,
                 config.pocket_tts.eos_threshold,
-                config.pocket_tts.python_path.clone()
+                config
+                    .pocket_tts
+                    .python_path
+                    .clone()
                     .unwrap_or_else(|| "python".to_string()),
             )
         };
@@ -201,7 +206,9 @@ pub fn spawn_app_registry_scan(app: &App) {
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("app-launcher");
 
-        match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry).await {
+        match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry)
+            .await
+        {
             Ok(Ok(registry)) => {
                 launcher.lock().await.apply_registry(registry);
             }
@@ -214,7 +221,11 @@ pub fn spawn_app_registry_scan(app: &App) {
         loop {
             interval.tick().await;
             log::info!("Periodic app registry refresh");
-            match tauri::async_runtime::spawn_blocking(crate::app_launcher::AppLauncher::build_registry).await {
+            match tauri::async_runtime::spawn_blocking(
+                crate::app_launcher::AppLauncher::build_registry,
+            )
+            .await
+            {
                 Ok(Ok(registry)) => {
                     launcher.lock().await.apply_registry(registry);
                 }
@@ -247,7 +258,6 @@ pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bo
         let _ = crate::commands::system::open_welcome_window(app_handle).await;
     });
 }
-
 
 /// Spawn the start-of-day session bootstrap in the background.
 ///
@@ -320,7 +330,10 @@ pub fn maybe_spawn_default_session(
                     return;
                 }
                 Err(e) => {
-                    error!("Failed to resume session {}, falling back to fresh session: {}", resume_id, e);
+                    error!(
+                        "Failed to resume session {}, falling back to fresh session: {}",
+                        resume_id, e
+                    );
                     // Recompute cwd because we moved it into load_existing_session
                     let cwd = {
                         let cfg = config_arc.lock_or_recover();

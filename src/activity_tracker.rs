@@ -13,8 +13,8 @@
 //! SQLite does disk I/O.
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, Local, NaiveDate, Duration as ChronoDuration};
-use log::{info, debug, warn};
+use chrono::{Datelike, Duration as ChronoDuration, Local, NaiveDate};
+use log::{debug, info, warn};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -121,7 +121,7 @@ fn init_db(conn: &Connection) -> Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp);
         CREATE INDEX IF NOT EXISTS idx_activity_process ON activity_log(process_name);
-        "
+        ",
     )?;
     Ok(())
 }
@@ -130,7 +130,10 @@ fn init_db(conn: &Connection) -> Result<()> {
 // Start / Stop
 // ---------------------------------------------------------------------------
 
-pub async fn start_tracker(state: &Arc<ActivityTrackerState>, poll_interval: Option<u64>) -> Result<()> {
+pub async fn start_tracker(
+    state: &Arc<ActivityTrackerState>,
+    poll_interval: Option<u64>,
+) -> Result<()> {
     if state.running.load(Ordering::Relaxed) {
         return Ok(()); // Already running
     }
@@ -151,7 +154,10 @@ pub async fn start_tracker(state: &Arc<ActivityTrackerState>, poll_interval: Opt
     *state.db.lock_or_recover() = Some(conn);
 
     state.running.store(true, Ordering::Relaxed);
-    info!("[ActivityTracker] Started (poll every {}s)", state.poll_interval_secs.lock_or_recover());
+    info!(
+        "[ActivityTracker] Started (poll every {}s)",
+        state.poll_interval_secs.lock_or_recover()
+    );
 
     // Spawn background poller
     let state_clone = Arc::clone(state);
@@ -179,7 +185,9 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
         let interval = *state.poll_interval_secs.lock_or_recover();
         tokio::time::sleep(std::time::Duration::from_secs(interval)).await;
 
-        if !state.running.load(Ordering::Relaxed) { break; }
+        if !state.running.load(Ordering::Relaxed) {
+            break;
+        }
 
         let now = std::time::Instant::now();
         let elapsed_secs = now.duration_since(last_poll).as_secs().max(1);
@@ -193,7 +201,9 @@ async fn poll_loop(state: Arc<ActivityTrackerState>) {
         };
 
         // Skip transient system UI processes (noise, not real app usage)
-        if is_system_noise(&process) { continue; }
+        if is_system_noise(&process) {
+            continue;
+        }
 
         debug!("[ActivityTracker] Active: {} ({})", process, title);
 
@@ -252,11 +262,13 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
     let (start_date, period_label) = match period {
         "today" => (now.date_naive(), "Today".to_string()),
         "week" => {
-            let start = now.date_naive() - ChronoDuration::days(now.weekday().num_days_from_monday() as i64);
+            let start = now.date_naive()
+                - ChronoDuration::days(now.weekday().num_days_from_monday() as i64);
             (start, "This Week".to_string())
         }
         "month" => {
-            let start = NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap_or(now.date_naive());
+            let start =
+                NaiveDate::from_ymd_opt(now.year(), now.month(), 1).unwrap_or(now.date_naive());
             (start, "This Month".to_string())
         }
         _ => {
@@ -273,7 +285,7 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
          FROM activity_log
          WHERE timestamp >= ?1
          GROUP BY process_name
-         ORDER BY total DESC"
+         ORDER BY total DESC",
     )?;
 
     let mut apps: Vec<AppUsage> = Vec::new();
@@ -310,7 +322,8 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
     }
 
     // Browser site breakdown: extract site/page from window titles
-    let browser_processes: Vec<&str> = apps.iter()
+    let browser_processes: Vec<&str> = apps
+        .iter()
         .filter(|a| is_browser(&a.process_name))
         .map(|a| a.process_name.as_str())
         .collect();
@@ -321,7 +334,7 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
              FROM activity_log
              WHERE timestamp >= ?1
              GROUP BY process_name, window_title
-             ORDER BY process_name, total DESC"
+             ORDER BY process_name, total DESC",
         )?;
 
         let site_rows = site_stmt.query_map(rusqlite::params![start_str], |row| {
@@ -333,19 +346,29 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
         })?;
 
         // Aggregate by extracted site name per browser process
-        let mut site_map: std::collections::HashMap<String, std::collections::HashMap<String, u64>> = std::collections::HashMap::new();
+        let mut site_map: std::collections::HashMap<
+            String,
+            std::collections::HashMap<String, u64>,
+        > = std::collections::HashMap::new();
         for row in site_rows {
             let (process, title, secs) = row?;
-            if !is_browser(&process) { continue; }
+            if !is_browser(&process) {
+                continue;
+            }
             let site = extract_site_from_title(&title, &process);
-            *site_map.entry(process).or_default().entry(site).or_default() += secs;
+            *site_map
+                .entry(process)
+                .or_default()
+                .entry(site)
+                .or_default() += secs;
         }
 
         // Attach site breakdowns to app entries
         for app in &mut apps {
             if let Some(sites) = site_map.remove(&app.process_name) {
                 let app_total = app.seconds.max(1);
-                let mut site_list: Vec<SiteUsage> = sites.into_iter()
+                let mut site_list: Vec<SiteUsage> = sites
+                    .into_iter()
                     .map(|(site, secs)| SiteUsage {
                         site,
                         seconds: secs,
@@ -361,7 +384,7 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
 
     // Context switches: count consecutive process changes
     let mut switch_stmt = conn.prepare(
-        "SELECT process_name FROM activity_log WHERE timestamp >= ?1 ORDER BY timestamp"
+        "SELECT process_name FROM activity_log WHERE timestamp >= ?1 ORDER BY timestamp",
     )?;
     let processes: Vec<String> = switch_stmt
         .query_map(rusqlite::params![start_str], |row| row.get(0))?
@@ -410,9 +433,14 @@ fn build_report(state: &ActivityTrackerState, period: &str) -> Result<ActivityRe
 fn is_system_noise(process_name: &str) -> bool {
     matches!(
         process_name.to_lowercase().as_str(),
-        "shellexperiencehost" | "searchhost" | "textinputhost" |
-        "startmenuexperiencehost" | "searchui" | "cortana" |
-        "gamebar" | "gamebarftserver"
+        "shellexperiencehost"
+            | "searchhost"
+            | "textinputhost"
+            | "startmenuexperiencehost"
+            | "searchui"
+            | "cortana"
+            | "gamebar"
+            | "gamebarftserver"
     )
 }
 
@@ -475,7 +503,9 @@ fn extract_site_from_title(title: &str, process_name: &str) -> String {
     if trimmed.len() > 50 {
         // Find a valid char boundary near 47 bytes
         let mut end = 47;
-        while end > 0 && !trimmed.is_char_boundary(end) { end -= 1; }
+        while end > 0 && !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
         format!("{}…", &trimmed[..end])
     } else if trimmed.is_empty() {
         prettify_process_name(process_name)

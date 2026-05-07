@@ -33,20 +33,26 @@ pub fn list_windows_impl() -> Vec<WindowInfo> {
         Err(_) => return vec![],
     };
 
-    if !output.status.success() { return vec![]; }
+    if !output.status.success() {
+        return vec![];
+    }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut windows = Vec::new();
 
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 3 { continue; }
+        if parts.len() < 3 {
+            continue;
+        }
         let process_name = parts[0].to_string();
         let title = parts[1].to_string();
         let pid: u64 = parts[2].parse().unwrap_or(0);
 
         // Skip our own window
-        if process_name.contains("Kage") { continue; }
+        if process_name.contains("Kage") {
+            continue;
+        }
 
         windows.push(WindowInfo {
             title,

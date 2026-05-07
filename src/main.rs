@@ -47,7 +47,9 @@ fn attach_parent_console() {
         fn AttachConsole(process_id: u32) -> i32;
     }
     const ATTACH_PARENT_PROCESS: u32 = 0xFFFFFFFF;
-    unsafe { AttachConsole(ATTACH_PARENT_PROCESS); }
+    unsafe {
+        AttachConsole(ATTACH_PARENT_PROCESS);
+    }
 }
 
 fn main() {
@@ -121,7 +123,12 @@ fn main() {
         logger::enable_console_logging();
     }
 
-    if dev_mode { info!("⏱ Tauri builder starting at +{}ms", startup_t0.elapsed().as_millis()); }
+    if dev_mode {
+        info!(
+            "⏱ Tauri builder starting at +{}ms",
+            startup_t0.elapsed().as_millis()
+        );
+    }
 
     // Capture the parsed args once — `main` references `flags` and the
     // setup closure needs the raw argv to resolve the resume marker.

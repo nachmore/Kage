@@ -14,17 +14,32 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
     let menu = if dev_mode {
         info!("Dev mode enabled - adding developer menu items");
         let inspect = MenuItemBuilder::with_id("inspect", "Inspect Chat").build(app)?;
-        let inspect_floating = MenuItemBuilder::with_id("inspect-floating", "Inspect Floating").build(app)?;
+        let inspect_floating =
+            MenuItemBuilder::with_id("inspect-floating", "Inspect Floating").build(app)?;
         let reload = MenuItemBuilder::with_id("reload", "Reload UX").build(app)?;
-        let test_banner = MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
-        let test_update = MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
-        let test_update_avail = MenuItemBuilder::with_id("test-update-available", "Test Update Available").build(app)?;
-        let test_first_run = MenuItemBuilder::with_id("test-first-run", "Show First Run").build(app)?;
+        let test_banner =
+            MenuItemBuilder::with_id("test-welcome-banner", "Test Welcome Banner").build(app)?;
+        let test_update =
+            MenuItemBuilder::with_id("test-update-banner", "Test Update Banner").build(app)?;
+        let test_update_avail =
+            MenuItemBuilder::with_id("test-update-available", "Test Update Available")
+                .build(app)?;
+        let test_first_run =
+            MenuItemBuilder::with_id("test-first-run", "Show First Run").build(app)?;
         let dump_threads = MenuItemBuilder::with_id("dump-threads", "Dump Threads").build(app)?;
         MenuBuilder::new(app)
             .items(&[&show, &settings])
             .separator()
-            .items(&[&inspect, &inspect_floating, &reload, &test_banner, &test_update, &test_update_avail, &test_first_run, &dump_threads])
+            .items(&[
+                &inspect,
+                &inspect_floating,
+                &reload,
+                &test_banner,
+                &test_update,
+                &test_update_avail,
+                &test_first_run,
+                &dump_threads,
+            ])
             .separator()
             .item(&quit)
             .build()?

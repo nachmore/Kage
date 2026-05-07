@@ -148,7 +148,10 @@ fn test_config_migration_v1_config_upgrades_to_current() {
         Some(CURRENT_VERSION as u64)
     );
     // Unknown fields are preserved through the migration pipeline.
-    assert_eq!(migrated.get("_legacy_unknown_field"), Some(&serde_json::json!("preserved")));
+    assert_eq!(
+        migrated.get("_legacy_unknown_field"),
+        Some(&serde_json::json!("preserved"))
+    );
     // And it still deserializes into a Config.
     let loaded: Config = serde_json::from_value(migrated).unwrap();
     assert_eq!(loaded.version, CURRENT_VERSION);
@@ -176,7 +179,9 @@ fn save_to_atomic_writes_full_payload_and_leaves_no_temp_file() {
     let mut config = Config::default();
     config.hotkey.key = "F12".to_string();
 
-    config.save_to(&path).expect("save_to succeeds on a writable dir");
+    config
+        .save_to(&path)
+        .expect("save_to succeeds on a writable dir");
 
     // The file is present and parses back to an equivalent config.
     let raw = std::fs::read_to_string(&path).expect("config file exists");
@@ -211,5 +216,8 @@ fn save_to_overwriting_existing_file_replaces_atomically() {
 
     let raw = std::fs::read_to_string(&path).expect("config file exists");
     let loaded: Config = serde_json::from_str(&raw).expect("valid json");
-    assert_eq!(loaded.hotkey.key, "Second", "second save must fully replace first");
+    assert_eq!(
+        loaded.hotkey.key, "Second",
+        "second save must fully replace first"
+    );
 }

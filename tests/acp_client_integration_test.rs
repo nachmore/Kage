@@ -25,13 +25,22 @@ fn client_for(port: u16) -> AcpClient {
 fn connect_then_disconnect_reports_connected_state() {
     let server = MockAcpServer::start(MockResponder { replies: vec![] });
     let client = client_for(server.port);
-    assert!(!client.is_connected(), "fresh client should not claim to be connected");
+    assert!(
+        !client.is_connected(),
+        "fresh client should not claim to be connected"
+    );
 
     client.connect().expect("connect to mock server");
-    assert!(client.is_connected(), "client should be connected after connect()");
+    assert!(
+        client.is_connected(),
+        "client should be connected after connect()"
+    );
 
     client.disconnect();
-    assert!(!client.is_connected(), "client should report disconnected after disconnect()");
+    assert!(
+        !client.is_connected(),
+        "client should report disconnected after disconnect()"
+    );
 }
 
 #[test]
@@ -45,7 +54,9 @@ fn request_receives_matching_response_by_id() {
     let client = client_for(server.port);
     client.connect().expect("connect");
 
-    let resp = client.send_request("initialize", json!({})).expect("send_request");
+    let resp = client
+        .send_request("initialize", json!({}))
+        .expect("send_request");
     let result = resp.result.expect("expected a result, not an error");
     assert_eq!(result["agent"], "mock");
 
@@ -54,8 +65,15 @@ fn request_receives_matching_response_by_id() {
     let seen = server.wait_for_requests(1, Duration::from_secs(2));
     assert_eq!(seen.len(), 1);
     assert_eq!(seen[0]["method"], "initialize");
-    assert!(seen[0]["id"].is_number(), "id must be a number, got: {:?}", seen[0]["id"]);
-    assert_eq!(seen[0]["id"], resp.id, "server must echo the same id we sent");
+    assert!(
+        seen[0]["id"].is_number(),
+        "id must be a number, got: {:?}",
+        seen[0]["id"]
+    );
+    assert_eq!(
+        seen[0]["id"], resp.id,
+        "server must echo the same id we sent"
+    );
 }
 
 #[test]
@@ -63,16 +81,23 @@ fn error_response_is_surfaced_by_send_request() {
     let server = MockAcpServer::start(MockResponder {
         replies: vec![(
             "session/new",
-            Reply::Err { code: -32601, message: "method not found" },
+            Reply::Err {
+                code: -32601,
+                message: "method not found",
+            },
         )],
     });
     let client = client_for(server.port);
     client.connect().expect("connect");
 
-    let resp = client.send_request("session/new", json!({}))
+    let resp = client
+        .send_request("session/new", json!({}))
         .expect("send_request returns Ok(response) for JSON-RPC errors");
     assert!(resp.error.is_some(), "expected error field populated");
-    assert!(resp.result.is_none(), "result must be None when error is present");
+    assert!(
+        resp.result.is_none(),
+        "result must be None when error is present"
+    );
     let err = resp.error.unwrap();
     assert_eq!(err.code, -32601);
     assert_eq!(err.message, "method not found");
@@ -259,13 +284,20 @@ fn send_permission_response_writes_jsonrpc_response_keyed_to_request_id() {
     client.connect().expect("connect");
 
     let request_id = json!("perm-req-42");
-    client.send_permission_response(&request_id, "allow_24h")
+    client
+        .send_permission_response(&request_id, "allow_24h")
         .expect("send_permission_response writes successfully");
 
     let seen = server.wait_for_requests(1, Duration::from_secs(2));
     assert_eq!(seen.len(), 1);
-    assert_eq!(seen[0]["id"], request_id, "response must echo the original request id");
-    assert!(seen[0].get("method").is_none(), "responses don't carry a method");
+    assert_eq!(
+        seen[0]["id"], request_id,
+        "response must echo the original request id"
+    );
+    assert!(
+        seen[0].get("method").is_none(),
+        "responses don't carry a method"
+    );
     assert_eq!(seen[0]["result"]["outcome"]["outcome"], "selected");
     assert_eq!(seen[0]["result"]["outcome"]["optionId"], "allow_24h");
 }
@@ -279,7 +311,9 @@ fn cancel_session_writes_jsonrpc_notification_to_transport() {
     let client = client_for(server.port);
     client.connect().expect("connect");
 
-    client.cancel_session("session-abc").expect("cancel_session writes successfully");
+    client
+        .cancel_session("session-abc")
+        .expect("cancel_session writes successfully");
 
     let seen = server.wait_for_requests(1, Duration::from_secs(2));
     assert_eq!(seen.len(), 1);
@@ -313,7 +347,12 @@ fn unsolicited_response_is_dropped_not_delivered_to_next_request() {
     // Give the reader a beat to process the stray line.
     std::thread::sleep(Duration::from_millis(100));
 
-    let resp = client.send_request("ping", json!({})).expect("ping should succeed");
-    assert_eq!(resp.result.unwrap()["ok"], true,
-        "subsequent legitimate request must not be served the stray response");
+    let resp = client
+        .send_request("ping", json!({}))
+        .expect("ping should succeed");
+    assert_eq!(
+        resp.result.unwrap()["ok"],
+        true,
+        "subsequent legitimate request must not be served the stray response"
+    );
 }

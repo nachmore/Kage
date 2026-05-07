@@ -16,7 +16,9 @@ pub struct ProcessManager {
 }
 
 impl Default for ProcessManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProcessManager {
@@ -32,15 +34,14 @@ impl ProcessManager {
 
     /// Get the path to the PID file
     fn get_pid_file_path() -> PathBuf {
-        let mut path = dirs::data_local_dir()
-            .unwrap_or_else(|| PathBuf::from("."));
+        let mut path = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
         path.push("kage");
-        
+
         // Create directory if it doesn't exist
         if let Err(e) = fs::create_dir_all(&path) {
             warn!("Failed to create PID directory {:?}: {}", path, e);
         }
-        
+
         path.push("spawned_cli.pid");
         path
     }
@@ -48,7 +49,7 @@ impl ProcessManager {
     /// Clean up any orphaned processes from previous runs
     pub fn cleanup_orphaned_processes() -> Result<()> {
         let pid_file = Self::get_pid_file_path();
-        
+
         if !pid_file.exists() {
             info!("No PID file found, no orphaned processes to clean up");
             return Ok(());
@@ -58,7 +59,7 @@ impl ProcessManager {
             Ok(content) => {
                 if let Ok(pid) = content.trim().parse::<u32>() {
                     info!("Found PID file with PID: {}", pid);
-                    
+
                     // Verify the PID still belongs to a kage-related process
                     // to avoid killing a recycled PID that now belongs to something else
                     match os::process::get_process_name(pid) {
@@ -67,13 +68,19 @@ impl ProcessManager {
                             let is_ours = name_lower.contains("Kage")
                                 || name_lower.contains("node")
                                 || name_lower.contains("npx");
-                            
+
                             if is_ours {
                                 info!("PID {} is '{}' — killing orphaned process", pid, name);
                                 if Self::kill_process(pid) {
-                                    info!("✅ Cleaned up orphaned process (PID: {}, name: {})", pid, name);
+                                    info!(
+                                        "✅ Cleaned up orphaned process (PID: {}, name: {})",
+                                        pid, name
+                                    );
                                 } else {
-                                    warn!("Failed to kill orphaned process (PID: {}, name: {})", pid, name);
+                                    warn!(
+                                        "Failed to kill orphaned process (PID: {}, name: {})",
+                                        pid, name
+                                    );
                                 }
                             } else {
                                 info!("PID {} is '{}' — not a kage process, skipping kill (PID was recycled)", pid, name);
@@ -84,7 +91,7 @@ impl ProcessManager {
                         }
                     }
                 }
-                
+
                 // Remove the PID file
                 let _ = fs::remove_file(&pid_file);
                 info!("PID file removed");
@@ -102,14 +109,13 @@ impl ProcessManager {
     pub fn store_process(&mut self, child: Child) -> Result<()> {
         let pid = child.id();
         info!("Storing process with PID: {}", pid);
-        
+
         // Write PID to file
-        fs::write(&self.pid_file, pid.to_string())
-            .context("Failed to write PID file")?;
-        
+        fs::write(&self.pid_file, pid.to_string()).context("Failed to write PID file")?;
+
         self.pid = Some(pid);
         *self.child.lock_or_recover() = Some(child);
-        
+
         info!("✅ Process registered for cleanup (PID: {})", pid);
         Ok(())
     }
@@ -124,36 +130,33 @@ impl ProcessManager {
         if let Some(mut child) = self.child.lock_or_recover().take() {
             let pid = child.id();
             info!("Terminating spawned process (PID: {})", pid);
-            
+
             // Try graceful shutdown first
             let _ = child.kill();
-            
+
             // Wait for process to exit (with timeout)
-            let wait_result = std::thread::spawn(move || {
-                child.wait()
-            }).join();
-            
+            let wait_result = std::thread::spawn(move || child.wait()).join();
+
             if wait_result.is_ok() {
                 info!("✅ Process terminated gracefully");
             } else {
                 warn!("Process may not have terminated cleanly");
-                
+
                 // Force kill if still running
                 if let Some(pid) = self.pid {
                     Self::kill_process(pid);
                 }
             }
         }
-        
+
         // Clean up PID file
         if self.pid_file.exists() {
             let _ = fs::remove_file(&self.pid_file);
             info!("✅ PID file removed");
         }
-        
+
         self.pid = None;
     }
-
 }
 
 impl Drop for ProcessManager {
@@ -170,7 +173,7 @@ pub fn install_signal_handlers(process_manager: Arc<Mutex<ProcessManager>>) {
             pm.terminate();
         }
     };
-    
+
     if let Err(e) = os::process::install_signal_handlers(cleanup) {
         warn!("Failed to install signal handlers: {}", e);
     }

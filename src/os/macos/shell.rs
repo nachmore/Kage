@@ -37,7 +37,6 @@ pub fn open_in_editor_impl(path: &str) -> Result<()> {
     Ok(())
 }
 
-
 /// Get the program and arguments for a well-known system command on macOS.
 pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     match cmd {

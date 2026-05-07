@@ -10,17 +10,17 @@ use crate::os::launcher::AppInfo;
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     let mut apps = Vec::new();
-    
+
     // Scan .desktop files in standard locations
     let mut desktop_dirs = vec![
         PathBuf::from("/usr/share/applications"),
         PathBuf::from("/usr/local/share/applications"),
     ];
-    
+
     if let Some(home) = dirs::home_dir() {
         desktop_dirs.push(home.join(".local/share/applications"));
     }
-    
+
     for dir in desktop_dirs {
         if dir.exists() {
             if let Ok(entries) = fs::read_dir(&dir) {
@@ -37,7 +37,7 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
             }
         }
     }
-    
+
     Ok(apps)
 }
 
@@ -54,7 +54,9 @@ fn parse_desktop_file(content: &str, _path: &PathBuf) -> Option<AppInfo> {
             in_main_section = line == "[Desktop Entry]";
             continue;
         }
-        if !in_main_section { continue; }
+        if !in_main_section {
+            continue;
+        }
         // The first matching key in the section wins; skip later overrides
         // (locale-specific Name[xx]=... lines never start with plain "Name=").
         if name.is_none() {
@@ -120,8 +122,8 @@ fn parse_exec_field(exec: &str) -> Option<String> {
                 // becomes a literal `%`.
                 match chars.next() {
                     Some('%') => current.push('%'),
-                    Some(_)   => {} // f / F / u / U / i / c / k / etc — drop
-                    None      => {} // trailing %, malformed — drop
+                    Some(_) => {} // f / F / u / U / i / c / k / etc — drop
+                    None => {}    // trailing %, malformed — drop
                 }
             }
             c if c.is_whitespace() && !in_quotes => {
@@ -132,8 +134,12 @@ fn parse_exec_field(exec: &str) -> Option<String> {
             _ => current.push(c),
         }
     }
-    if in_quotes { return None; }
-    if !current.is_empty() { tokens.push(current); }
+    if in_quotes {
+        return None;
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
 
     tokens.into_iter().next()
 }
@@ -148,12 +154,30 @@ mod tests {
     fn exec_strips_field_codes() {
         // %U, %F, %u, %f, %i, %c, %k all need to be dropped — the resulting
         // path must not include them.
-        assert_eq!(parse_exec_field("/usr/bin/firefox %U").as_deref(), Some("/usr/bin/firefox"));
-        assert_eq!(parse_exec_field("/usr/bin/code %F").as_deref(), Some("/usr/bin/code"));
-        assert_eq!(parse_exec_field("/usr/bin/foo %u %f").as_deref(), Some("/usr/bin/foo"));
-        assert_eq!(parse_exec_field("/usr/bin/bar %i").as_deref(), Some("/usr/bin/bar"));
-        assert_eq!(parse_exec_field("/usr/bin/baz %c").as_deref(), Some("/usr/bin/baz"));
-        assert_eq!(parse_exec_field("/usr/bin/qux %k").as_deref(), Some("/usr/bin/qux"));
+        assert_eq!(
+            parse_exec_field("/usr/bin/firefox %U").as_deref(),
+            Some("/usr/bin/firefox")
+        );
+        assert_eq!(
+            parse_exec_field("/usr/bin/code %F").as_deref(),
+            Some("/usr/bin/code")
+        );
+        assert_eq!(
+            parse_exec_field("/usr/bin/foo %u %f").as_deref(),
+            Some("/usr/bin/foo")
+        );
+        assert_eq!(
+            parse_exec_field("/usr/bin/bar %i").as_deref(),
+            Some("/usr/bin/bar")
+        );
+        assert_eq!(
+            parse_exec_field("/usr/bin/baz %c").as_deref(),
+            Some("/usr/bin/baz")
+        );
+        assert_eq!(
+            parse_exec_field("/usr/bin/qux %k").as_deref(),
+            Some("/usr/bin/qux")
+        );
     }
 
     #[test]
@@ -277,7 +301,7 @@ Exec=/usr/bin/x\n";
 
 pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     info!("Launching Linux application at {:?}", path);
-    
+
     if path.extension().and_then(|s| s.to_str()) == Some("desktop") {
         Command::new("xdg-open")
             .arg(path)
@@ -288,6 +312,6 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
             .spawn()
             .context("Failed to launch application")?;
     }
-    
+
     Ok(())
 }

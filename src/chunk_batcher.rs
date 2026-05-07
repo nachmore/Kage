@@ -30,10 +30,7 @@ use std::sync::Mutex;
 /// The drain uses `std::mem::take` so the lock is held only long enough
 /// to swap the HashMap; emits happen outside the lock, meaning the
 /// notification handler is never blocked on Tauri's IPC bridge.
-pub fn drain_and_emit_pending<F>(
-    pending: &Mutex<HashMap<String, String>>,
-    mut emit: F,
-) -> bool
+pub fn drain_and_emit_pending<F>(pending: &Mutex<HashMap<String, String>>, mut emit: F) -> bool
 where
     F: FnMut(&str, &str) -> Result<(), String>,
 {
@@ -133,7 +130,10 @@ mod tests {
         let pending = Mutex::new(HashMap::<String, String>::new());
         {
             let mut guard = pending.lock().unwrap();
-            guard.entry("s".to_string()).or_default().push_str("Hello, ");
+            guard
+                .entry("s".to_string())
+                .or_default()
+                .push_str("Hello, ");
             guard.entry("s".to_string()).or_default().push_str("world!");
         }
 

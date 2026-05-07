@@ -22,9 +22,9 @@
 // DEBUGGING: A standalone PowerShell version of this query lives in
 // scripts/outlook_calendar.ps1 — keep it in sync when changing the query logic here.
 
+use crate::os::calendar::CalendarEvent;
 use log::{debug, info, warn};
 use std::process::{Command, Stdio};
-use crate::os::calendar::CalendarEvent;
 
 pub fn get_upcoming_events_impl(hours: u32) -> Vec<CalendarEvent> {
     let time_range = format!(
@@ -56,13 +56,20 @@ pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
 /// even if they'd parse as a date.
 fn is_strict_iso_date(s: &str) -> bool {
     let bytes = s.as_bytes();
-    if bytes.len() != 10 { return false; }
+    if bytes.len() != 10 {
+        return false;
+    }
     let is_digit = |b: u8| b.is_ascii_digit();
-    is_digit(bytes[0]) && is_digit(bytes[1]) && is_digit(bytes[2]) && is_digit(bytes[3])
+    is_digit(bytes[0])
+        && is_digit(bytes[1])
+        && is_digit(bytes[2])
+        && is_digit(bytes[3])
         && bytes[4] == b'-'
-        && is_digit(bytes[5]) && is_digit(bytes[6])
+        && is_digit(bytes[5])
+        && is_digit(bytes[6])
         && bytes[7] == b'-'
-        && is_digit(bytes[8]) && is_digit(bytes[9])
+        && is_digit(bytes[8])
+        && is_digit(bytes[9])
 }
 
 /// Spawn a closure on a dedicated thread (needed for COM/STA) and wait for the result.
@@ -147,7 +154,10 @@ try {{
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
-    debug!("[calendar] Running PowerShell query ({}), time_range: {}", label, time_range_setup);
+    debug!(
+        "[calendar] Running PowerShell query ({}), time_range: {}",
+        label, time_range_setup
+    );
 
     let output = match cmd.output() {
         Ok(o) => o,
@@ -159,12 +169,20 @@ try {{
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !stderr.trim().is_empty() {
-        warn!("[calendar] PowerShell stderr ({}, {} bytes): {}", label, stderr.len(), stderr.trim());
+        warn!(
+            "[calendar] PowerShell stderr ({}, {} bytes): {}",
+            label,
+            stderr.len(),
+            stderr.trim()
+        );
     }
 
     let exit_code = output.status.code();
     if exit_code != Some(0) {
-        warn!("[calendar] PowerShell exited with code {:?} ({})", exit_code, label);
+        warn!(
+            "[calendar] PowerShell exited with code {:?} ({})",
+            exit_code, label
+        );
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -193,8 +211,10 @@ try {{
                 } else {
                     &stdout[context_start..]
                 };
-                warn!("[calendar] Failed to parse JSON array ({}): {} | around col {}: {:?}",
-                    label, e, col, context);
+                warn!(
+                    "[calendar] Failed to parse JSON array ({}): {} | around col {}: {:?}",
+                    label, e, col, context
+                );
                 vec![]
             }
         }
@@ -210,32 +230,43 @@ try {{
                 } else {
                     &stdout[context_start..]
                 };
-                warn!("[calendar] Failed to parse single JSON object ({}): {} | around col {}: {:?}",
-                    label, e, col, context);
+                warn!(
+                    "[calendar] Failed to parse single JSON object ({}): {} | around col {}: {:?}",
+                    label, e, col, context
+                );
                 vec![]
             }
         }
     } else {
-        warn!("[calendar] Unexpected stdout — not JSON ({}): {}",
-            label, if stdout.len() > 200 { &stdout[..200] } else { &stdout });
+        warn!(
+            "[calendar] Unexpected stdout — not JSON ({}): {}",
+            label,
+            if stdout.len() > 200 {
+                &stdout[..200]
+            } else {
+                &stdout
+            }
+        );
         vec![]
     };
 
     info!("[calendar] Parsed {} events ({})", raw.len(), label);
 
-    raw.into_iter().map(|r| {
-        let online_url = crate::os::calendar::extract_meeting_url(&r.location, &r.body);
-        CalendarEvent {
-            id: r.id,
-            subject: r.subject,
-            location: r.location,
-            organizer: r.organizer,
-            start_time: r.start_time,
-            duration_minutes: r.duration_minutes,
-            all_day: r.all_day,
-            online_url,
-        }
-    }).collect()
+    raw.into_iter()
+        .map(|r| {
+            let online_url = crate::os::calendar::extract_meeting_url(&r.location, &r.body);
+            CalendarEvent {
+                id: r.id,
+                subject: r.subject,
+                location: r.location,
+                organizer: r.organizer,
+                start_time: r.start_time,
+                duration_minutes: r.duration_minutes,
+                all_day: r.all_day,
+                online_url,
+            }
+        })
+        .collect()
 }
 
 /// Sanitize JSON output from PowerShell. Walks through the string and escapes
@@ -249,7 +280,7 @@ fn sanitize_ps_json(input: &str) -> String {
     let mut result = String::with_capacity(input.len() + 256);
     let mut in_string = false;
     let mut prev_backslash = false;
-    
+
     for ch in input.chars() {
         if in_string {
             if prev_backslash {
@@ -308,7 +339,6 @@ struct RawOutlookEvent {
     #[serde(default)]
     body: String,
 }
-
 
 #[cfg(test)]
 mod tests {

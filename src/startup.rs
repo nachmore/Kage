@@ -68,7 +68,10 @@ pub fn detect_capture_hotkey_subcommand(args: &[String]) -> Option<u64> {
 /// yielded an empty/whitespace string.
 pub fn resolve_resume_session_id(args: &[String], config_dir: &Path) -> Option<String> {
     // 1. Explicit CLI argument
-    if let Some(pos) = args.iter().position(|a| a == "/resume-session" || a == "--resume-session") {
+    if let Some(pos) = args
+        .iter()
+        .position(|a| a == "/resume-session" || a == "--resume-session")
+    {
         if let Some(id) = args.get(pos + 1) {
             let trimmed = id.trim().to_string();
             if !trimmed.is_empty() {
@@ -81,7 +84,11 @@ pub fn resolve_resume_session_id(args: &[String], config_dir: &Path) -> Option<S
     let contents = std::fs::read_to_string(&path).ok()?;
     let _ = std::fs::remove_file(&path);
     let trimmed = contents.trim().to_string();
-    if trimmed.is_empty() { None } else { Some(trimmed) }
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
 }
 
 /// Turn a user-facing `AcpMode` (from config) into the transport-level
@@ -91,12 +98,24 @@ pub fn resolve_resume_session_id(args: &[String], config_dir: &Path) -> Option<S
 pub fn acp_mode_for(mode: &AcpMode) -> (AcpConnectionMode, String) {
     match mode {
         AcpMode::Local { spawn_command } => (
-            AcpConnectionMode::Local { spawn_command: spawn_command.clone() },
+            AcpConnectionMode::Local {
+                spawn_command: spawn_command.clone(),
+            },
             format!("ACP Mode: Local with spawn command: {}", spawn_command),
         ),
-        AcpMode::Remote { host, port, timeout_ms } => (
-            AcpConnectionMode::Remote { host: host.clone(), port: *port },
-            format!("ACP Mode: Remote at {}:{} (timeout: {}ms)", host, port, timeout_ms),
+        AcpMode::Remote {
+            host,
+            port,
+            timeout_ms,
+        } => (
+            AcpConnectionMode::Remote {
+                host: host.clone(),
+                port: *port,
+            },
+            format!(
+                "ACP Mode: Remote at {}:{} (timeout: {}ms)",
+                host, port, timeout_ms
+            ),
         ),
     }
 }
@@ -158,7 +177,6 @@ pub fn webview_user_data_dir() -> Option<PathBuf> {
     Some(dirs::data_local_dir()?.join("kage").join("EBWebView"))
 }
 
-
 // -------------------------------------------------------------------
 // Post-config helpers
 // -------------------------------------------------------------------
@@ -189,7 +207,6 @@ where
     config
 }
 
-
 /// If the app was launched with `--restart`, poll the WebView2 user
 /// data directory until the previous process releases its lock.
 /// Silent no-op on first run or when we're not restarting.
@@ -202,7 +219,9 @@ pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
         return;
     }
     log::info!("Restart mode: waiting for previous instance resources to release...");
-    let Some(webview_dir) = webview_user_data_dir() else { return };
+    let Some(webview_dir) = webview_user_data_dir() else {
+        return;
+    };
     match wait_for_webview_release(
         &webview_dir,
         20,
@@ -214,7 +233,10 @@ pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
             log::info!("WebView2 resources released after {}ms", waited_ms);
         }
         WebviewWaitResult::TimedOut { waited_ms } => {
-            log::warn!("WebView2 lock still held after {}ms — continuing anyway", waited_ms);
+            log::warn!(
+                "WebView2 lock still held after {}ms — continuing anyway",
+                waited_ms
+            );
         }
     }
 }

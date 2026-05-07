@@ -5,12 +5,12 @@
 //! - Signal-based triggers (from extensions or system events)
 //! - Battery-aware throttling
 
-use crate::config::{AutomationTrigger, AutomationPowerConfig, MacroConfig};
+use crate::config::{AutomationPowerConfig, AutomationTrigger, MacroConfig};
 use crate::lock_ext::LockExt;
-use crate::os::power::{PowerState, get_power_state};
-use log::{info, debug};
-use std::sync::{Arc, Mutex};
+use crate::os::power::{get_power_state, PowerState};
+use log::{debug, info};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 /// A signal emitted by an extension or the system.
@@ -38,14 +38,19 @@ pub struct AutomationScheduler {
 }
 
 impl AutomationScheduler {
-    pub fn new(config: Arc<Mutex<crate::config::Config>>) -> (Self, mpsc::Receiver<AutomationSignal>) {
+    pub fn new(
+        config: Arc<Mutex<crate::config::Config>>,
+    ) -> (Self, mpsc::Receiver<AutomationSignal>) {
         let (tx, rx) = mpsc::channel(SIGNAL_CHANNEL_CAPACITY);
-        (AutomationScheduler {
-            signal_tx: tx,
-            config,
-            last_runs: Arc::new(Mutex::new(HashMap::new())),
-            running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        }, rx)
+        (
+            AutomationScheduler {
+                signal_tx: tx,
+                config,
+                last_runs: Arc::new(Mutex::new(HashMap::new())),
+                running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            },
+            rx,
+        )
     }
 
     /// Get a sender handle for emitting signals (clone-friendly).
@@ -54,8 +59,13 @@ impl AutomationScheduler {
     }
 
     /// Start the scheduler loop. Call from a tokio::spawn.
-    pub async fn run(&self, mut signal_rx: mpsc::Receiver<AutomationSignal>, app_handle: tauri::AppHandle) {
-        self.running.store(true, std::sync::atomic::Ordering::SeqCst);
+    pub async fn run(
+        &self,
+        mut signal_rx: mpsc::Receiver<AutomationSignal>,
+        app_handle: tauri::AppHandle,
+    ) {
+        self.running
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         crate::os::set_current_thread_name("automation");
         info!("[Automation] Scheduler started");
 
@@ -78,7 +88,8 @@ impl AutomationScheduler {
             }
         }
 
-        self.running.store(false, std::sync::atomic::Ordering::SeqCst);
+        self.running
+            .store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Check all schedule-based automations and fire any that are due.
@@ -94,11 +105,17 @@ impl AutomationScheduler {
         let now = chrono::Local::now();
 
         for mac in &macros {
-            if !mac.enabled { continue; }
+            if !mac.enabled {
+                continue;
+            }
             if let AutomationTrigger::Schedule { ref interval, .. } = mac.trigger {
-                if interval.is_empty() { continue; }
+                if interval.is_empty() {
+                    continue;
+                }
                 let interval_secs = parse_interval(interval);
-                if interval_secs == 0 { continue; }
+                if interval_secs == 0 {
+                    continue;
+                }
 
                 // Apply battery throttle
                 let effective_interval = (interval_secs as f32 * multiplier) as i64;
@@ -113,10 +130,14 @@ impl AutomationScheduler {
 
                 if should_run {
                     // Check daily/weekday time constraints
-                    if !check_time_constraint(interval, &now) { continue; }
+                    if !check_time_constraint(interval, &now) {
+                        continue;
+                    }
 
                     info!("[Automation] Schedule trigger firing: {}", mac.name);
-                    self.last_runs.lock_or_recover().insert(mac.name.clone(), now);
+                    self.last_runs
+                        .lock_or_recover()
+                        .insert(mac.name.clone(), now);
                     fire_automation(app_handle, mac, None);
                 }
             }
@@ -132,18 +153,29 @@ impl AutomationScheduler {
 
         let power_state = get_power_state();
         if power_config.disable_signals_on_low_battery && power_state == PowerState::LowBattery {
-            debug!("[Automation] Skipping signal '{}' — low battery", signal.name);
+            debug!(
+                "[Automation] Skipping signal '{}' — low battery",
+                signal.name
+            );
             return;
         }
 
         for mac in &macros {
-            if !mac.enabled { continue; }
-            if let AutomationTrigger::Signal { signal: ref sig_name, ref filter } = mac.trigger {
+            if !mac.enabled {
+                continue;
+            }
+            if let AutomationTrigger::Signal {
+                signal: ref sig_name,
+                ref filter,
+            } = mac.trigger
+            {
                 if sig_name == &signal.name {
                     // Check filter if present
                     if let Some(f) = filter {
                         if !f.is_empty() {
-                            let data_str = signal.data.as_ref()
+                            let data_str = signal
+                                .data
+                                .as_ref()
                                 .map(|d| d.to_string())
                                 .unwrap_or_default();
                             if !data_str.to_lowercase().contains(&f.to_lowercase()) {
@@ -151,7 +183,10 @@ impl AutomationScheduler {
                             }
                         }
                     }
-                    info!("[Automation] Signal trigger firing: {} (signal: {})", mac.name, signal.name);
+                    info!(
+                        "[Automation] Signal trigger firing: {} (signal: {})",
+                        mac.name, signal.name
+                    );
                     fire_automation(app_handle, mac, signal.data.clone());
                 }
             }
@@ -160,7 +195,11 @@ impl AutomationScheduler {
 }
 
 /// Fire an automation by emitting a Tauri event that the frontend handles.
-fn fire_automation(app_handle: &tauri::AppHandle, mac: &MacroConfig, data: Option<serde_json::Value>) {
+fn fire_automation(
+    app_handle: &tauri::AppHandle,
+    mac: &MacroConfig,
+    data: Option<serde_json::Value>,
+) {
     use tauri::Emitter;
     let payload = serde_json::json!({
         "name": mac.name,
@@ -192,8 +231,11 @@ fn parse_interval(interval: &str) -> i64 {
         return hours_str.parse::<i64>().unwrap_or(1) * 3600;
     }
     // Daily, monthly, yearly — check every 60 seconds
-    if interval.starts_with("daily_") || interval.starts_with("weekdays_")
-        || interval.starts_with("monthly_") || interval.starts_with("yearly_") {
+    if interval.starts_with("daily_")
+        || interval.starts_with("weekdays_")
+        || interval.starts_with("monthly_")
+        || interval.starts_with("yearly_")
+    {
         return 60;
     }
     0
@@ -215,7 +257,6 @@ fn check_time_constraint(interval: &str, now: &chrono::DateTime<chrono::Local>) 
     true // non-time-constrained intervals always pass
 }
 
-
 fn check_time_match(time_str: &str, now: &chrono::DateTime<chrono::Local>) -> bool {
     use chrono::Timelike;
     let parts: Vec<&str> = time_str.split(':').collect();
@@ -233,7 +274,8 @@ fn get_throttle_multiplier(config: &AutomationPowerConfig, state: PowerState) ->
     match config.mode.as_str() {
         "full" => 1.0,
         "saving" => config.low_battery_multiplier,
-        _ => { // "auto"
+        _ => {
+            // "auto"
             match state {
                 PowerState::AC | PowerState::Unknown => 1.0,
                 PowerState::Battery => config.battery_multiplier,
@@ -253,10 +295,16 @@ pub async fn emit_automation_signal(
     if let Some(ref tx) = *features.automation_signal_tx.lock_or_recover() {
         // Use try_send so a flood of signals from a misbehaving extension drops
         // rather than blocking the Tauri IPC thread or growing memory.
-        match tx.try_send(AutomationSignal { name: name.clone(), data }) {
+        match tx.try_send(AutomationSignal {
+            name: name.clone(),
+            data,
+        }) {
             Ok(_) => {}
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                log::warn!("[Automation] Signal channel full, dropping signal '{}'", name);
+                log::warn!(
+                    "[Automation] Signal channel full, dropping signal '{}'",
+                    name
+                );
             }
             Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
                 log::debug!("[Automation] Signal channel closed, ignoring '{}'", name);

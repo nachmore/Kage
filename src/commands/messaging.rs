@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
-use log::{info, warn, error};
+use log::{error, info, warn};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 
 /// Set up the notification handler on the ACP client.
@@ -37,13 +37,16 @@ pub fn setup_notification_handler(
     // bursts pile up in Tauri's internal queue. Coalescing into ~60 fps
     // batches drops the IPC roundtrip count by 1-2 orders of magnitude
     // without changing the on-screen feel of streaming.
-    let pending_chunks: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    let pending_chunks: std::sync::Arc<
+        std::sync::Mutex<std::collections::HashMap<String, String>>,
+    > = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
     spawn_chunk_flush_thread(app_handle.clone(), pending_chunks.clone());
 
     // Throttle config saves for last_seen updates — at most once per 60s
     let last_config_save: std::sync::Arc<std::sync::Mutex<std::time::Instant>> =
-        std::sync::Arc::new(std::sync::Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(60)));
+        std::sync::Arc::new(std::sync::Mutex::new(
+            std::time::Instant::now() - std::time::Duration::from_secs(60),
+        ));
 
     client.set_notification_handler(move |notification: serde_json::Value| {
         let method = notification.get("method").and_then(|m| m.as_str()).unwrap_or("");
@@ -242,15 +245,16 @@ fn spawn_chunk_flush_thread(
             let interval = std::time::Duration::from_millis(CHUNK_FLUSH_INTERVAL_MS);
             loop {
                 std::thread::sleep(interval);
-                let alive = crate::chunk_batcher::drain_and_emit_pending(&pending, |session_id, text| {
-                    let payload = serde_json::json!({
-                        "text": text,
-                        "sessionId": session_id,
+                let alive =
+                    crate::chunk_batcher::drain_and_emit_pending(&pending, |session_id, text| {
+                        let payload = serde_json::json!({
+                            "text": text,
+                            "sessionId": session_id,
+                        });
+                        app_handle
+                            .emit("message_chunk", payload)
+                            .map_err(|e| format!("{}", e))
                     });
-                    app_handle
-                        .emit("message_chunk", payload)
-                        .map_err(|e| format!("{}", e))
-                });
                 if !alive {
                     return;
                 }
@@ -286,7 +290,9 @@ fn handle_permission_notification(
 
     // Look up the real tool name from the first tool_call update
     let tool_title = if !tool_call_id.is_empty() {
-        tool_names.lock().ok()
+        tool_names
+            .lock()
+            .ok()
             .and_then(|names| names.get(tool_call_id).cloned())
             .unwrap_or_else(|| fallback_title.to_string())
     } else {
@@ -296,7 +302,11 @@ fn handle_permission_notification(
     let timestamp = chrono::Utc::now().to_rfc3339();
     let mut config_guard = config.lock_or_recover();
 
-    let existing = config_guard.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
+    let existing = config_guard
+        .tool_permissions
+        .tools
+        .iter_mut()
+        .find(|t| t.title == tool_title);
     if let Some(tool) = existing {
         // Update last_seen in memory — throttle disk writes to at most once per 60s
         tool.last_seen = timestamp;
@@ -308,13 +318,16 @@ fn handle_permission_notification(
             *last_save = std::time::Instant::now();
         }
     } else {
-        config_guard.tool_permissions.tools.push(crate::config::ToolPolicy {
-            title: tool_title.to_string(),
-            policy: "ask".to_string(),
-            last_seen: timestamp,
-            granted_at: String::new(),
-            grant_type: "once".to_string(),
-        });
+        config_guard
+            .tool_permissions
+            .tools
+            .push(crate::config::ToolPolicy {
+                title: tool_title.to_string(),
+                policy: "ask".to_string(),
+                last_seen: timestamp,
+                granted_at: String::new(),
+                grant_type: "once".to_string(),
+            });
         // New tool discovered — save immediately
         if let Err(e) = config_guard.save() {
             warn!("Failed to save config (new tool): {}", e);
@@ -322,10 +335,15 @@ fn handle_permission_notification(
         *last_config_save.lock_or_recover() = std::time::Instant::now();
     }
 
-    let policy = if config_guard.tool_permissions.terminator_mode || config_guard.tool_permissions.trust_all {
+    let policy = if config_guard.tool_permissions.terminator_mode
+        || config_guard.tool_permissions.trust_all
+    {
         "allow".to_string()
     } else {
-        config_guard.tool_permissions.tools.iter()
+        config_guard
+            .tool_permissions
+            .tools
+            .iter()
             .find(|t| t.title == tool_title)
             .map(|t| t.effective_policy().to_string())
             .unwrap_or_else(|| "ask".to_string())
@@ -346,12 +364,16 @@ fn handle_permission_notification(
         _ => {
             if let Ok(mut pending) = pending_perm.lock() {
                 *pending = Some(crate::state::PendingPermission {
-                    request_id: notification.get("id").cloned().unwrap_or(serde_json::Value::Null),
+                    request_id: notification
+                        .get("id")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null),
                 });
             }
 
             // Determine which window originated this conversation
-            let source = app_handle.try_state::<UiState>()
+            let source = app_handle
+                .try_state::<UiState>()
                 .and_then(|s| s.notification_source.lock().ok().map(|s| s.clone()))
                 .unwrap_or_else(|| "floating".to_string());
 
@@ -407,12 +429,11 @@ pub async fn send_message_streaming(
         let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
         if let Err(e) = client.send_chat_streaming_with_recovery(message, attachments) {
             let error_str = format!("{}", e);
-            let is_image_error = had_attachments && (
-                error_str.contains("Internal error")
-                || error_str.contains("image")
-                || error_str.contains("unsupported")
-                || error_str.contains("response stream")
-            );
+            let is_image_error = had_attachments
+                && (error_str.contains("Internal error")
+                    || error_str.contains("image")
+                    || error_str.contains("unsupported")
+                    || error_str.contains("response stream"));
 
             if is_image_error {
                 // The ACP connection is likely stuck after an image error.
@@ -422,28 +443,29 @@ pub async fn send_message_streaming(
                 client.set_session_id(None);
 
                 let reconnected = match client.connect() {
-                    Ok(_) => {
-                        match client.create_session(None) {
-                            Ok(_) => {
-                                client.send_builtin_steering();
-                                true
-                            }
-                            Err(e) => {
-                                error!("Failed to create new session after image error: {}", e);
-                                false
-                            }
+                    Ok(_) => match client.create_session(None) {
+                        Ok(_) => {
+                            client.send_builtin_steering();
+                            true
                         }
-                    }
+                        Err(e) => {
+                            error!("Failed to create new session after image error: {}", e);
+                            false
+                        }
+                    },
                     Err(e) => {
                         error!("Failed to reconnect after image error: {}", e);
                         false
                     }
                 };
 
-                let _ = window.emit("session_reset", serde_json::json!({
-                    "reason": "image_unsupported",
-                    "reconnected": reconnected,
-                }));
+                let _ = window.emit(
+                    "session_reset",
+                    serde_json::json!({
+                        "reason": "image_unsupported",
+                        "reconnected": reconnected,
+                    }),
+                );
             } else {
                 let _ = window.emit("message_error", format!("Failed to send: {}", error_str));
             }
@@ -471,15 +493,26 @@ pub async fn send_permission_response(
 ) -> Result<(), AppError> {
     info!("Permission response: {}={}", tool_title, option_id);
 
-    acp.client.send_permission_response(&request_id, &option_id)
+    acp.client
+        .send_permission_response(&request_id, &option_id)
         .map_err(|e| AppError::connection_lost(format!("Permission response failed: {}", e)))?;
 
     if option_id == "allow_always" {
-        let mut config = features.config.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
-        if let Some(tool) = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title) {
+        let mut config = features
+            .config
+            .lock()
+            .map_err(|e| AppError::lock(format!("{}", e)))?;
+        if let Some(tool) = config
+            .tool_permissions
+            .tools
+            .iter_mut()
+            .find(|t| t.title == tool_title)
+        {
             tool.policy = "allow".to_string();
         }
-        config.save().map_err(|e| AppError::internal(format!("Save: {}", e)))?;
+        config
+            .save()
+            .map_err(|e| AppError::internal(format!("Save: {}", e)))?;
     }
 
     // Audit log: record the user's decision. We classify option_id into
@@ -510,9 +543,7 @@ pub async fn send_permission_response(
             session_id,
         },
     };
-    crate::permission_audit::append(
-        &crate::permission_audit::AuditEntry::now(audit_event),
-    );
+    crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(audit_event));
 
     if let Ok(mut pending) = acp.pending_permission.lock() {
         *pending = None;
@@ -531,7 +562,9 @@ pub async fn check_connection(acp: State<'_, AcpHandles>) -> Result<bool, AppErr
 
 #[tauri::command]
 pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
-    acp.client.connect().map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
+    acp.client
+        .connect()
+        .map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
     Ok(true)
 }
 
@@ -541,14 +574,19 @@ pub async fn cancel_generation(
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
     // Signal automation plan loop to stop
-    features.automation_plan_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+    features
+        .automation_plan_cancelled
+        .store(true, std::sync::atomic::Ordering::Relaxed);
 
     // Direct read — the AcpClient is no longer wrapped in an outer mutex,
     // so this never has to fall back to guessing the floating session id.
-    let session_id = acp.client.get_session_id()
+    let session_id = acp
+        .client
+        .get_session_id()
         .ok_or_else(|| AppError::internal("No active session to cancel"))?;
 
-    acp.client.cancel_session(&session_id)
+    acp.client
+        .cancel_session(&session_id)
         .map_err(|e| AppError::connection_lost(format!("Cancel failed: {}", e)))?;
 
     Ok(())
@@ -601,12 +639,18 @@ pub async fn dismiss_pending_permission(
     app: tauri::AppHandle,
 ) -> Result<bool, AppError> {
     let pending = {
-        let guard = acp.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+        let guard = acp
+            .pending_permission
+            .lock()
+            .map_err(|e| AppError::lock(format!("{}", e)))?;
         guard.clone()
     };
 
     if let Some(perm) = pending {
-        if let Err(e) = acp.client.send_permission_response(&perm.request_id, "reject_once") {
+        if let Err(e) = acp
+            .client
+            .send_permission_response(&perm.request_id, "reject_once")
+        {
             warn!("Failed to dismiss pending permission: {}", e);
         }
 
@@ -624,13 +668,21 @@ pub async fn dismiss_pending_permission(
 
 #[tauri::command]
 pub async fn has_pending_permission(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
-    let guard = acp.pending_permission.lock().map_err(|e| AppError::lock(format!("{}", e)))?;
+    let guard = acp
+        .pending_permission
+        .lock()
+        .map_err(|e| AppError::lock(format!("{}", e)))?;
     Ok(guard.is_some())
 }
 
 #[tauri::command]
-pub async fn get_slash_commands(acp: State<'_, AcpHandles>) -> Result<Vec<crate::state::SlashCommand>, String> {
-    let cmds = acp.slash_commands.lock().map_err(|e| format!("Lock: {}", e))?;
+pub async fn get_slash_commands(
+    acp: State<'_, AcpHandles>,
+) -> Result<Vec<crate::state::SlashCommand>, String> {
+    let cmds = acp
+        .slash_commands
+        .lock()
+        .map_err(|e| format!("Lock: {}", e))?;
     Ok(cmds.clone())
 }
 
@@ -670,9 +722,7 @@ pub async fn execute_slash_command(
 }
 
 #[tauri::command]
-pub async fn get_slash_command_options(
-    _command: String,
-) -> Result<serde_json::Value, String> {
+pub async fn get_slash_command_options(_command: String) -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "options": [] }))
 }
 
@@ -707,13 +757,20 @@ pub async fn send_steering_message(
 pub async fn get_available_models(
     acp: State<'_, AcpHandles>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let models = acp.available_models.lock()
+    let models = acp
+        .available_models
+        .lock()
         .map_err(|e| format!("Lock error: {}", e))?;
-    Ok(models.iter().map(|m| serde_json::json!({
-        "modelId": m.model_id,
-        "name": m.name,
-        "description": m.description,
-    })).collect())
+    Ok(models
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "modelId": m.model_id,
+                "name": m.name,
+                "description": m.description,
+            })
+        })
+        .collect())
 }
 
 /// Execute an automation plan step by step using sub-agents.
@@ -732,8 +789,8 @@ pub async fn execute_automation_plan(
     info!("Executing automation plan");
 
     // Parse the plan
-    let plan: Vec<serde_json::Value> = serde_json::from_str(&plan_json)
-        .map_err(|e| format!("Invalid plan JSON: {}", e))?;
+    let plan: Vec<serde_json::Value> =
+        serde_json::from_str(&plan_json).map_err(|e| format!("Invalid plan JSON: {}", e))?;
 
     if plan.is_empty() {
         return Err("Empty plan".to_string());
@@ -743,10 +800,13 @@ pub async fn execute_automation_plan(
     info!("Plan has {} steps", total_steps);
 
     // Emit plan start event
-    let _ = window.emit("automation_plan_start", serde_json::json!({
-        "totalSteps": total_steps,
-        "plan": plan,
-    }));
+    let _ = window.emit(
+        "automation_plan_start",
+        serde_json::json!({
+            "totalSteps": total_steps,
+            "plan": plan,
+        }),
+    );
 
     let client = acp.client.clone();
     let cancelled = features.automation_plan_cancelled.clone();
@@ -770,18 +830,24 @@ pub async fn execute_automation_plan(
             }
 
             let step_num = i + 1;
-            let task = step.get("task").and_then(|t| t.as_str()).unwrap_or("Unknown task");
+            let task = step
+                .get("task")
+                .and_then(|t| t.as_str())
+                .unwrap_or("Unknown task");
             let details = step.get("details").and_then(|d| d.as_str()).unwrap_or("");
 
             info!("Executing step {}/{}: {}", step_num, total_steps, task);
 
             // Emit step start event
-            let _ = window.emit("automation_step_start", serde_json::json!({
-                "step": step_num,
-                "totalSteps": total_steps,
-                "task": task,
-                "details": details,
-            }));
+            let _ = window.emit(
+                "automation_step_start",
+                serde_json::json!({
+                    "step": step_num,
+                    "totalSteps": total_steps,
+                    "task": task,
+                    "details": details,
+                }),
+            );
 
             // Build the sub-agent query with full context
             let query = format!(
@@ -804,7 +870,12 @@ pub async fn execute_automation_plan(
             // Invoke the sub-agent
             match client.invoke_subagent(&query) {
                 Ok(result) => {
-                    info!("Step {}/{} completed: {} chars", step_num, total_steps, result.len());
+                    info!(
+                        "Step {}/{} completed: {} chars",
+                        step_num,
+                        total_steps,
+                        result.len()
+                    );
 
                     // Check if the sub-agent reported a failure in its response text.
                     // The ACP call succeeded (we got a response), but the agent may
@@ -816,34 +887,49 @@ pub async fn execute_automation_plan(
                         || result_lower.contains("failed -");
 
                     if agent_reported_failure {
-                        warn!("Step {}/{} agent reported failure: {}", step_num, total_steps,
-                            &result[..result.len().min(200)]);
+                        warn!(
+                            "Step {}/{} agent reported failure: {}",
+                            step_num,
+                            total_steps,
+                            &result[..result.len().min(200)]
+                        );
                     }
 
                     let success = !agent_reported_failure;
 
-                    let _ = window.emit("automation_step_complete", serde_json::json!({
-                        "step": step_num,
-                        "totalSteps": total_steps,
-                        "task": task,
-                        "result": result,
-                        "success": success,
-                    }));
+                    let _ = window.emit(
+                        "automation_step_complete",
+                        serde_json::json!({
+                            "step": step_num,
+                            "totalSteps": total_steps,
+                            "task": task,
+                            "result": result,
+                            "success": success,
+                        }),
+                    );
 
                     if !success {
-                        warn!("Aborting automation plan: step {}/{} failed", step_num, total_steps);
+                        warn!(
+                            "Aborting automation plan: step {}/{} failed",
+                            step_num, total_steps
+                        );
                         // Mark remaining steps as stopped
                         for (j, remaining) in plan.iter().enumerate().skip(i + 1) {
-                            let remaining_task = remaining.get("task")
-                                .and_then(|t| t.as_str()).unwrap_or("Unknown task");
-                            let _ = window.emit("automation_step_complete", serde_json::json!({
-                                "step": j + 1,
-                                "totalSteps": total_steps,
-                                "task": remaining_task,
-                                "result": "Skipped due to earlier step failure",
-                                "success": false,
-                                "stopped": true,
-                            }));
+                            let remaining_task = remaining
+                                .get("task")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or("Unknown task");
+                            let _ = window.emit(
+                                "automation_step_complete",
+                                serde_json::json!({
+                                    "step": j + 1,
+                                    "totalSteps": total_steps,
+                                    "task": remaining_task,
+                                    "result": "Skipped due to earlier step failure",
+                                    "success": false,
+                                    "stopped": true,
+                                }),
+                            );
                         }
                         break;
                     }
@@ -852,27 +938,38 @@ pub async fn execute_automation_plan(
                     let error_msg = format!("{}", e);
                     warn!("Step {}/{} failed: {}", step_num, total_steps, error_msg);
 
-                    let _ = window.emit("automation_step_complete", serde_json::json!({
-                        "step": step_num,
-                        "totalSteps": total_steps,
-                        "task": task,
-                        "result": error_msg,
-                        "success": false,
-                    }));
+                    let _ = window.emit(
+                        "automation_step_complete",
+                        serde_json::json!({
+                            "step": step_num,
+                            "totalSteps": total_steps,
+                            "task": task,
+                            "result": error_msg,
+                            "success": false,
+                        }),
+                    );
 
                     // Abort on transport/protocol errors too
-                    warn!("Aborting automation plan: step {}/{} errored", step_num, total_steps);
+                    warn!(
+                        "Aborting automation plan: step {}/{} errored",
+                        step_num, total_steps
+                    );
                     for (j, remaining) in plan.iter().enumerate().skip(i + 1) {
-                        let remaining_task = remaining.get("task")
-                            .and_then(|t| t.as_str()).unwrap_or("Unknown task");
-                        let _ = window.emit("automation_step_complete", serde_json::json!({
-                            "step": j + 1,
-                            "totalSteps": total_steps,
-                            "task": remaining_task,
-                            "result": "Skipped due to earlier step failure",
-                            "success": false,
-                            "stopped": true,
-                        }));
+                        let remaining_task = remaining
+                            .get("task")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("Unknown task");
+                        let _ = window.emit(
+                            "automation_step_complete",
+                            serde_json::json!({
+                                "step": j + 1,
+                                "totalSteps": total_steps,
+                                "task": remaining_task,
+                                "result": "Skipped due to earlier step failure",
+                                "success": false,
+                                "stopped": true,
+                            }),
+                        );
                     }
                     break;
                 }
@@ -880,9 +977,12 @@ pub async fn execute_automation_plan(
         }
 
         // Emit plan complete event
-        let _ = window.emit("automation_plan_complete", serde_json::json!({
-            "totalSteps": total_steps,
-        }));
+        let _ = window.emit(
+            "automation_plan_complete",
+            serde_json::json!({
+                "totalSteps": total_steps,
+            }),
+        );
 
         let _ = window.emit("message_complete", ());
     });
@@ -904,7 +1004,10 @@ pub async fn extension_tool_response(
 ) -> Result<(), String> {
     info!(
         "Extension tool response: ext={}, tool={}, success={}, len={}",
-        extension_id, tool_name, success, result_json.len()
+        extension_id,
+        tool_name,
+        success,
+        result_json.len()
     );
 
     let client = acp.client.clone();
@@ -930,7 +1033,10 @@ pub async fn extension_tool_response(
 
         // Send as a follow-up user message so the agent continues
         if let Err(e) = client.send_chat_streaming(&content, None) {
-            let _ = window.emit("message_error", format!("Failed to send tool result: {}", e));
+            let _ = window.emit(
+                "message_error",
+                format!("Failed to send tool result: {}", e),
+            );
         }
 
         // Emit message_complete so the frontend knows the follow-up response is done
@@ -968,7 +1074,10 @@ pub async fn send_extension_tool_steering(
         *last = hash;
     }
 
-    info!("Sending extension tool steering ({} chars)", tool_steering.len());
+    info!(
+        "Sending extension tool steering ({} chars)",
+        tool_steering.len()
+    );
 
     let client = acp.client.clone();
 
@@ -1008,21 +1117,33 @@ pub async fn check_extension_tool_permission(
     if config.tool_permissions.trust_all {
         // Still register the tool so it shows up in settings
         let timestamp = chrono::Utc::now().to_rfc3339();
-        if !config.tool_permissions.tools.iter().any(|t| t.title == tool_title) {
-            config.tool_permissions.tools.push(crate::config::ToolPolicy {
-                title: tool_title,
-                policy: "allow".to_string(),
-                last_seen: timestamp.clone(),
-                granted_at: timestamp.clone(),
-                grant_type: "always".to_string(),
-            });
+        if !config
+            .tool_permissions
+            .tools
+            .iter()
+            .any(|t| t.title == tool_title)
+        {
+            config
+                .tool_permissions
+                .tools
+                .push(crate::config::ToolPolicy {
+                    title: tool_title,
+                    policy: "allow".to_string(),
+                    last_seen: timestamp.clone(),
+                    granted_at: timestamp.clone(),
+                    grant_type: "always".to_string(),
+                });
             let _ = config.save();
         }
         return Ok("allow".to_string());
     }
 
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let existing = config.tool_permissions.tools.iter_mut().find(|t| t.title == tool_title);
+    let existing = config
+        .tool_permissions
+        .tools
+        .iter_mut()
+        .find(|t| t.title == tool_title);
 
     if let Some(tool) = existing {
         tool.last_seen = timestamp;
@@ -1033,13 +1154,16 @@ pub async fn check_extension_tool_permission(
         Ok(policy)
     } else {
         // First time seeing this tool — register with "ask" policy
-        config.tool_permissions.tools.push(crate::config::ToolPolicy {
-            title: tool_title,
-            policy: "ask".to_string(),
-            last_seen: timestamp,
-            granted_at: String::new(),
-            grant_type: "once".to_string(),
-        });
+        config
+            .tool_permissions
+            .tools
+            .push(crate::config::ToolPolicy {
+                title: tool_title,
+                policy: "ask".to_string(),
+                last_seen: timestamp,
+                granted_at: String::new(),
+                grant_type: "once".to_string(),
+            });
         if let Err(e) = config.save() {
             warn!("Failed to save config (new tool registration): {}", e);
         }
@@ -1200,9 +1324,11 @@ fn apply_transform(name: &str, input: &str) -> String {
             let lines: Vec<&str> = input.lines().collect();
             lines.into_iter().rev().collect::<Vec<_>>().join("\n")
         }
-        "remove_blank_lines" => {
-            input.lines().filter(|l| !l.trim().is_empty()).collect::<Vec<_>>().join("\n")
-        }
+        "remove_blank_lines" => input
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
         "count_words" => {
             let count = input.split_whitespace().count();
             format!("{} words", count)
@@ -1227,11 +1353,18 @@ fn apply_transform(name: &str, input: &str) -> String {
         }
         "unique_lines" => {
             let mut seen = std::collections::HashSet::new();
-            input.lines().filter(|l| seen.insert(*l)).collect::<Vec<_>>().join("\n")
+            input
+                .lines()
+                .filter(|l| seen.insert(*l))
+                .collect::<Vec<_>>()
+                .join("\n")
         }
-        "number_lines" => {
-            input.lines().enumerate().map(|(i, l)| format!("{:>4}  {}", i + 1, l)).collect::<Vec<_>>().join("\n")
-        }
+        "number_lines" => input
+            .lines()
+            .enumerate()
+            .map(|(i, l)| format!("{:>4}  {}", i + 1, l))
+            .collect::<Vec<_>>()
+            .join("\n"),
         _ => input.to_string(),
     }
 }

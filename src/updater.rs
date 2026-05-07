@@ -82,7 +82,10 @@ pub fn check_for_update() -> Result<Option<String>> {
         .context("Failed to read version response")?;
 
     let remote_version = response.trim();
-    info!("Remote version: {}, current: {}", remote_version, CURRENT_VERSION);
+    info!(
+        "Remote version: {}, current: {}",
+        remote_version, CURRENT_VERSION
+    );
 
     let remote = semver::Version::parse(remote_version)
         .with_context(|| format!("Invalid remote version: {}", remote_version))?;
@@ -90,10 +93,16 @@ pub fn check_for_update() -> Result<Option<String>> {
         .with_context(|| format!("Invalid current version: {}", CURRENT_VERSION))?;
 
     if remote > current {
-        info!("Update available: {} -> {}", CURRENT_VERSION, remote_version);
+        info!(
+            "Update available: {} -> {}",
+            CURRENT_VERSION, remote_version
+        );
         Ok(Some(remote_version.to_string()))
     } else {
-        info!("Already up to date (current: {}, remote: {})", CURRENT_VERSION, remote_version);
+        info!(
+            "Already up to date (current: {}, remote: {})",
+            CURRENT_VERSION, remote_version
+        );
         Ok(None)
     }
 }
@@ -121,13 +130,22 @@ pub fn download_installer() -> Result<String> {
 
     std::fs::create_dir_all(&download_dir)?;
 
-    let ext = if cfg!(windows) { ".exe" } else if cfg!(target_os = "macos") { ".dmg" } else { ".AppImage" };
+    let ext = if cfg!(windows) {
+        ".exe"
+    } else if cfg!(target_os = "macos") {
+        ".dmg"
+    } else {
+        ".AppImage"
+    };
     let installer_path = download_dir.join(format!("kage-update{}", ext));
 
-    std::fs::write(&installer_path, &bytes)
-        .context("Failed to write installer")?;
+    std::fs::write(&installer_path, &bytes).context("Failed to write installer")?;
 
-    info!("Installer downloaded to {:?} ({} bytes)", installer_path, bytes.len());
+    info!(
+        "Installer downloaded to {:?} ({} bytes)",
+        installer_path,
+        bytes.len()
+    );
     Ok(installer_path.to_string_lossy().to_string())
 }
 
@@ -152,7 +170,10 @@ pub fn fetch_changelog() -> Result<String> {
         while end > 0 && !response.is_char_boundary(end) {
             end -= 1;
         }
-        format!("{}\n\n---\n*Changelog truncated. Full version available online.*", &response[..end])
+        format!(
+            "{}\n\n---\n*Changelog truncated. Full version available online.*",
+            &response[..end]
+        )
     } else {
         response
     };
@@ -216,7 +237,9 @@ pub fn start_update_loop(
                 } else {
                     cfg.updates.last_check_time.as_ref().is_none_or(|t| {
                         chrono::DateTime::parse_from_rfc3339(t)
-                            .map(|dt| chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24)
+                            .map(|dt| {
+                                chrono::Utc::now().signed_duration_since(dt).num_hours() >= 24
+                            })
                             .unwrap_or(true)
                     })
                 };
@@ -258,7 +281,8 @@ pub fn start_update_loop(
 
                     // If silent update enabled, download
                     if silent_update {
-                        let dl_result = tauri::async_runtime::spawn_blocking(download_installer).await;
+                        let dl_result =
+                            tauri::async_runtime::spawn_blocking(download_installer).await;
                         match dl_result {
                             Ok(Ok(path)) => {
                                 info!("Installer downloaded, waiting for idle to install");
@@ -345,7 +369,10 @@ pub fn start_update_loop(
 /// Check if the app was just updated (current version matches last_updated_version
 /// but differs from what was running before).
 pub fn was_just_updated(config: &Config) -> bool {
-    config.updates.last_updated_version.as_ref()
+    config
+        .updates
+        .last_updated_version
+        .as_ref()
         .map(|v| v == CURRENT_VERSION)
         .unwrap_or(false)
 }

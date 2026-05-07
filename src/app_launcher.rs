@@ -45,8 +45,14 @@ impl AppLauncher {
                 aliases.push(no_spaces);
             }
 
-            let icon_base64 = app_info.icon_path.and_then(|path| os::extract_icon_base64(&path));
-            let final_icon = if app_info.icon_data.is_some() { app_info.icon_data } else { icon_base64 };
+            let icon_base64 = app_info
+                .icon_path
+                .and_then(|path| os::extract_icon_base64(&path));
+            let final_icon = if app_info.icon_data.is_some() {
+                app_info.icon_data
+            } else {
+                icon_base64
+            };
 
             let app = Application {
                 name: app_info.name,
@@ -81,7 +87,11 @@ impl AppLauncher {
             }
 
             // Starts with match
-            if app.aliases.iter().any(|alias| alias.starts_with(&query_lower)) {
+            if app
+                .aliases
+                .iter()
+                .any(|alias| alias.starts_with(&query_lower))
+            {
                 matches.push((app.clone(), 90));
                 continue;
             }

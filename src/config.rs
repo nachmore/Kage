@@ -73,8 +73,7 @@ pub struct Config {
     pub automation_power: AutomationPowerConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ToolPermissionsConfig {
     #[serde(default)]
     pub trust_all: bool,
@@ -92,11 +91,11 @@ pub struct ToolPolicy {
     #[serde(default = "default_policy")]
     pub policy: String,
     #[serde(default)]
-    pub last_seen: String,    // ISO 8601 — last time this tool was requested
+    pub last_seen: String, // ISO 8601 — last time this tool was requested
     #[serde(default)]
-    pub granted_at: String,   // ISO 8601 — when the current grant was issued
+    pub granted_at: String, // ISO 8601 — when the current grant was issued
     #[serde(default = "default_grant_type")]
-    pub grant_type: String,   // "once", "24h", "always"
+    pub grant_type: String, // "once", "24h", "always"
 }
 
 fn default_policy() -> String {
@@ -173,7 +172,6 @@ impl ToolPolicy {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoreSource {
     pub name: String,
@@ -182,8 +180,7 @@ pub struct StoreSource {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateConfig {
     /// Automatically check for updates once per day
     #[serde(default)]
@@ -198,7 +195,6 @@ pub struct UpdateConfig {
     #[serde(default)]
     pub last_updated_version: Option<String>,
 }
-
 
 impl Default for AgentConfig {
     fn default() -> Self {
@@ -342,7 +338,6 @@ fn default_time_format() -> String {
 fn default_date_format() -> String {
     "ddd, MMM D".to_string()
 }
-
 
 fn default_true() -> bool {
     true
@@ -511,9 +506,15 @@ impl Default for AutomationPowerConfig {
     }
 }
 
-fn default_power_mode() -> String { "auto".to_string() }
-fn default_battery_multiplier() -> f32 { 2.0 }
-fn default_low_battery_multiplier() -> f32 { 4.0 }
+fn default_power_mode() -> String {
+    "auto".to_string()
+}
+fn default_battery_multiplier() -> f32 {
+    2.0
+}
+fn default_low_battery_multiplier() -> f32 {
+    4.0
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroStep {
@@ -540,10 +541,16 @@ pub struct MacroStep {
     pub script: String,
 }
 
-fn default_step_type() -> String { "ai_prompt".to_string() }
+fn default_step_type() -> String {
+    "ai_prompt".to_string()
+}
 
-fn default_macro_icon() -> String { "🔄".to_string() }
-fn default_macro_output() -> String { "clipboard".to_string() }
+fn default_macro_icon() -> String {
+    "🔄".to_string()
+}
+fn default_macro_output() -> String {
+    "clipboard".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
@@ -722,8 +729,7 @@ impl Config {
             return Ok(config);
         }
 
-        let metadata = fs::metadata(&config_path)
-            .context("Failed to read config file metadata")?;
+        let metadata = fs::metadata(&config_path).context("Failed to read config file metadata")?;
         if metadata.len() > Self::MAX_CONFIG_SIZE {
             // Too-large config is almost certainly corrupted (maybe a
             // truncated write that got padded, or a log file written to
@@ -731,7 +737,8 @@ impl Config {
             // refusing to start — the user's session can continue.
             log::warn!(
                 "Config file is {} bytes (max {}); treating as corrupt",
-                metadata.len(), Self::MAX_CONFIG_SIZE
+                metadata.len(),
+                Self::MAX_CONFIG_SIZE
             );
             Self::backup_corrupt(&config_path, "oversized");
             let config = Self::default();
@@ -739,8 +746,7 @@ impl Config {
             return Ok(config);
         }
 
-        let content = fs::read_to_string(&config_path)
-            .context("Failed to read config file")?;
+        let content = fs::read_to_string(&config_path).context("Failed to read config file")?;
 
         // Parse to a generic Value first so we can run migrations on the
         // JSON representation before it hits the strongly-typed struct.
@@ -749,7 +755,10 @@ impl Config {
         let raw: serde_json::Value = match serde_json::from_str(&content) {
             Ok(v) => v,
             Err(e) => {
-                log::warn!("Config file is not valid JSON ({}); backing up and resetting", e);
+                log::warn!(
+                    "Config file is not valid JSON ({}); backing up and resetting",
+                    e
+                );
                 Self::backup_corrupt(&config_path, "invalid-json");
                 let config = Self::default();
                 config.save()?;
@@ -814,7 +823,7 @@ impl Config {
             log::info!("Backed up corrupt config to {:?}", backup);
         }
     }
-    
+
     /// Persist the config atomically: write to a sibling temp file in the
     /// same directory, then rename over the destination. fs::rename is
     /// atomic on POSIX and uses MoveFileExW with REPLACE_EXISTING on Windows
@@ -832,12 +841,10 @@ impl Config {
     /// against a temp path without depending on the user's config dir.
     pub fn save_to(&self, config_path: &std::path::Path) -> Result<()> {
         if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create config directory")?;
+            fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
 
-        let content = serde_json::to_string_pretty(self)
-            .context("Failed to serialize config")?;
+        let content = serde_json::to_string_pretty(self).context("Failed to serialize config")?;
 
         // Sibling temp file so the rename is same-volume (cross-volume
         // renames degrade to copy+delete, which loses atomicity). Include
@@ -864,14 +871,13 @@ impl Config {
 
         Ok(())
     }
-    
+
     pub fn get_config_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Failed to get config directory")?;
-        
+        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
+
         Ok(config_dir.join("kage").join("config.json"))
     }
-    
+
     pub fn get_hotkey_string(&self) -> String {
         let mut parts = self.hotkey.modifiers.clone();
         parts.push(self.hotkey.key.clone());
@@ -904,8 +910,7 @@ impl Config {
 
     /// Get the path to the auto-generated steering document
     pub fn get_auto_steering_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Failed to get config directory")?;
+        let config_dir = dirs::config_dir().context("Failed to get config directory")?;
         Ok(config_dir.join("kage").join("auto-steering.md"))
     }
 }

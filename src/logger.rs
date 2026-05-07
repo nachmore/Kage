@@ -100,8 +100,7 @@ impl log::Log for LogShim {
             // not a correctness concern at that point. Capture the timestamp
             // now so the drained entries reflect when each was actually
             // emitted, not the moment app_log finally came up.
-            let ts = chrono::Utc::now()
-                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            let ts = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
             if let Ok(mut guard) = PREINIT_BUFFER.lock() {
                 if let Some(ref mut buf) = *guard {
                     buf.push(BufferedRecord {

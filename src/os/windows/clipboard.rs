@@ -14,9 +14,8 @@ use log::info;
 use std::ptr;
 
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
-    KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC,
-    VIRTUAL_KEY,
+    MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
+    KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC, VIRTUAL_KEY,
 };
 
 extern "system" {
@@ -38,21 +37,34 @@ const GMEM_MOVEABLE: u32 = 0x0002;
 
 pub fn read_clipboard_impl() -> Option<String> {
     unsafe {
-        if OpenClipboard(ptr::null_mut()) == 0 { return None; }
+        if OpenClipboard(ptr::null_mut()) == 0 {
+            return None;
+        }
         let handle = GetClipboardData(CF_UNICODETEXT);
-        if handle.is_null() { CloseClipboard(); return None; }
+        if handle.is_null() {
+            CloseClipboard();
+            return None;
+        }
         // Cap the read at the allocated size reported by GlobalSize. Clipboard
         // data from other processes is untrusted — a missing null terminator
         // would otherwise let us walk off the end of the buffer.
         let max_u16 = {
             let bytes = GlobalSize(handle);
-            if bytes == 0 { CloseClipboard(); return None; }
+            if bytes == 0 {
+                CloseClipboard();
+                return None;
+            }
             bytes / std::mem::size_of::<u16>()
         };
         let p = GlobalLock(handle) as *const u16;
-        if p.is_null() { CloseClipboard(); return None; }
+        if p.is_null() {
+            CloseClipboard();
+            return None;
+        }
         let mut len = 0usize;
-        while len < max_u16 && *p.add(len) != 0 { len += 1; }
+        while len < max_u16 && *p.add(len) != 0 {
+            len += 1;
+        }
         let slice = std::slice::from_raw_parts(p, len);
         let text = String::from_utf16_lossy(slice);
         GlobalUnlock(handle);
@@ -65,7 +77,9 @@ pub fn write_clipboard_impl(text: &str) {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let bytes = wide.len() * 2;
     unsafe {
-        if OpenClipboard(ptr::null_mut()) == 0 { return; }
+        if OpenClipboard(ptr::null_mut()) == 0 {
+            return;
+        }
         EmptyClipboard();
         let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes);
         if hmem.is_null() {
@@ -99,7 +113,11 @@ fn make_key(vk: u16, up: bool) -> INPUT {
             ki: KEYBDINPUT {
                 wVk: VIRTUAL_KEY(vk),
                 wScan: scan,
-                dwFlags: if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) },
+                dwFlags: if up {
+                    KEYEVENTF_KEYUP
+                } else {
+                    KEYBD_EVENT_FLAGS(0)
+                },
                 time: 0,
                 dwExtraInfo: 0,
             },
@@ -117,7 +135,12 @@ fn scan_input(scan: u16, up: bool) -> INPUT {
             ki: KEYBDINPUT {
                 wVk: VIRTUAL_KEY(0),
                 wScan: scan,
-                dwFlags: KEYEVENTF_SCANCODE | if up { KEYEVENTF_KEYUP } else { KEYBD_EVENT_FLAGS(0) },
+                dwFlags: KEYEVENTF_SCANCODE
+                    | if up {
+                        KEYEVENTF_KEYUP
+                    } else {
+                        KEYBD_EVENT_FLAGS(0)
+                    },
                 time: 0,
                 dwExtraInfo: 0,
             },
@@ -220,13 +243,19 @@ pub struct SelectionCaptureToken {
 /// focused.
 pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
     let (original_clipboard, seq_before) = send_copy_keystroke();
-    SelectionCaptureToken { original_clipboard, seq_before }
+    SelectionCaptureToken {
+        original_clipboard,
+        seq_before,
+    }
 }
 
 /// Phase 2: Poll the clipboard for a change and return the captured text.
 /// Can be called after the floating window is shown — the Ctrl+C was already sent.
 pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<String> {
-    let SelectionCaptureToken { original_clipboard, seq_before } = token;
+    let SelectionCaptureToken {
+        original_clipboard,
+        seq_before,
+    } = token;
     let changed = wait_for_clipboard_change(seq_before, 300);
 
     if changed {

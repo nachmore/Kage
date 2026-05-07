@@ -2,7 +2,10 @@ use kage::extensions;
 
 #[test]
 fn test_kind_to_subdir_extension() {
-    assert_eq!(extensions::kind_to_subdir("extension").unwrap(), "extensions");
+    assert_eq!(
+        extensions::kind_to_subdir("extension").unwrap(),
+        "extensions"
+    );
 }
 
 #[test]
@@ -12,7 +15,10 @@ fn test_kind_to_subdir_theme() {
 
 #[test]
 fn test_kind_to_subdir_commands() {
-    assert_eq!(extensions::kind_to_subdir("commands").unwrap(), "command-packs");
+    assert_eq!(
+        extensions::kind_to_subdir("commands").unwrap(),
+        "command-packs"
+    );
 }
 
 #[test]
@@ -85,10 +91,14 @@ use zip::write::SimpleFileOptions;
 
 struct ScopedTempDir(PathBuf);
 impl ScopedTempDir {
-    fn path(&self) -> &std::path::Path { &self.0 }
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
 }
 impl Drop for ScopedTempDir {
-    fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }
 fn tmpdir() -> ScopedTempDir {
     let dir = std::env::temp_dir().join(format!("kage-ext-test-{}", Uuid::new_v4()));
@@ -120,11 +130,17 @@ fn build_zip(dir: &std::path::Path, entries: &[(&str, &[u8])]) -> PathBuf {
 #[test]
 fn extract_zip_writes_nested_files_successfully() {
     let tmp = tmpdir();
-    let zip_path = build_zip(tmp.path(), &[
-        ("manifest.json", br#"{"id":"t","name":"T","version":"0.1.0","type":"extension"}"#),
-        ("search.js", b"export default class {}"),
-        ("assets/icon.svg", b"<svg/>"),
-    ]);
+    let zip_path = build_zip(
+        tmp.path(),
+        &[
+            (
+                "manifest.json",
+                br#"{"id":"t","name":"T","version":"0.1.0","type":"extension"}"#,
+            ),
+            ("search.js", b"export default class {}"),
+            ("assets/icon.svg", b"<svg/>"),
+        ],
+    );
     let target = tmp.path().join("extracted");
 
     extensions::extract_zip(&zip_path, &target).expect("extract");
@@ -141,9 +157,7 @@ fn extract_zip_writes_nested_files_successfully() {
 fn extract_zip_rejects_parent_traversal() {
     let tmp = tmpdir();
     // Classic zip slip: an entry whose path escapes the target dir.
-    let zip_path = build_zip(tmp.path(), &[
-        ("../evil.js", b"owned"),
-    ]);
+    let zip_path = build_zip(tmp.path(), &[("../evil.js", b"owned")]);
     let target = tmp.path().join("extracted");
 
     let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
@@ -161,10 +175,13 @@ fn extract_zip_rejects_parent_traversal() {
 #[test]
 fn extract_zip_rejects_deep_parent_traversal() {
     let tmp = tmpdir();
-    let zip_path = build_zip(tmp.path(), &[
-        ("ok.js", b"safe"),
-        ("../../../../../../../etc/passwd", b"pwned"),
-    ]);
+    let zip_path = build_zip(
+        tmp.path(),
+        &[
+            ("ok.js", b"safe"),
+            ("../../../../../../../etc/passwd", b"pwned"),
+        ],
+    );
     let target = tmp.path().join("extracted");
 
     let err = extensions::extract_zip(&zip_path, &target).unwrap_err();
@@ -181,7 +198,10 @@ fn extract_zip_creates_target_if_missing() {
     extensions::extract_zip(&zip_path, &target).expect("extract creates target");
 
     assert!(target.join("a.txt").is_file());
-    assert_eq!(std::fs::read_to_string(target.join("a.txt")).unwrap(), "hello");
+    assert_eq!(
+        std::fs::read_to_string(target.join("a.txt")).unwrap(),
+        "hello"
+    );
 }
 
 #[test]
@@ -196,18 +216,27 @@ fn extract_zip_into_existing_target_overlays_files() {
 
     // New file is present, pre-existing file is untouched (extract_zip
     // doesn't clear the target — that's the caller's job).
-    assert_eq!(std::fs::read_to_string(target.join("new.txt")).unwrap(), "fresh");
-    assert_eq!(std::fs::read_to_string(target.join("old.txt")).unwrap(), "pre-existing");
+    assert_eq!(
+        std::fs::read_to_string(target.join("new.txt")).unwrap(),
+        "fresh"
+    );
+    assert_eq!(
+        std::fs::read_to_string(target.join("old.txt")).unwrap(),
+        "pre-existing"
+    );
 }
 
 #[test]
 fn extract_zip_handles_directory_entries() {
     let tmp = tmpdir();
-    let zip_path = build_zip(tmp.path(), &[
-        ("nested/", b""),
-        ("nested/deeply/", b""),
-        ("nested/deeply/file.txt", b"data"),
-    ]);
+    let zip_path = build_zip(
+        tmp.path(),
+        &[
+            ("nested/", b""),
+            ("nested/deeply/", b""),
+            ("nested/deeply/file.txt", b"data"),
+        ],
+    );
     let target = tmp.path().join("out");
     extensions::extract_zip(&zip_path, &target).expect("extract");
 
@@ -224,14 +253,20 @@ fn extract_zip_handles_directory_entries() {
 fn manifest_rejects_missing_required_id() {
     let json = r#"{ "name": "X", "version": "1.0.0", "type": "extension" }"#;
     let result: Result<extensions::ExtensionManifest, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "expected deserialization to fail without id");
+    assert!(
+        result.is_err(),
+        "expected deserialization to fail without id"
+    );
 }
 
 #[test]
 fn manifest_rejects_missing_required_version() {
     let json = r#"{ "id": "x", "name": "X", "type": "extension" }"#;
     let result: Result<extensions::ExtensionManifest, _> = serde_json::from_str(json);
-    assert!(result.is_err(), "expected deserialization to fail without version");
+    assert!(
+        result.is_err(),
+        "expected deserialization to fail without version"
+    );
 }
 
 #[test]
@@ -411,10 +446,19 @@ fn data_path_isolates_extensions_into_separate_subdirs() {
     let p_b = extensions::resolve_extension_data_path(root, "color-picker", "kage-todos")
         .expect("extension b path resolves");
 
-    assert_ne!(p_a, p_b, "same key under different extension ids must not collide");
-    assert!(p_a.starts_with(root.join("todos")), "path must live under its extension dir");
+    assert_ne!(
+        p_a, p_b,
+        "same key under different extension ids must not collide"
+    );
+    assert!(
+        p_a.starts_with(root.join("todos")),
+        "path must live under its extension dir"
+    );
     assert!(p_b.starts_with(root.join("color-picker")));
-    assert_eq!(p_a.file_name().and_then(|n| n.to_str()), Some("kage-todos.json"));
+    assert_eq!(
+        p_a.file_name().and_then(|n| n.to_str()),
+        Some("kage-todos.json")
+    );
 }
 
 #[test]

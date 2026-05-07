@@ -99,7 +99,10 @@ pub fn get_common_folders() -> HashMap<String, String> {
     if let Some(pics) = dirs::picture_dir() {
         let screenshots = pics.join("Screenshots");
         if screenshots.is_dir() {
-            folders.insert("screenshots".to_string(), screenshots.to_string_lossy().to_string());
+            folders.insert(
+                "screenshots".to_string(),
+                screenshots.to_string_lossy().to_string(),
+            );
         }
     }
 
@@ -126,7 +129,11 @@ pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, AppErr
 
     // Use blocking_pick_folder on a blocking thread to avoid blocking the async runtime
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let file_resp = app.dialog().file().set_title("Select Folder to Organize").blocking_pick_folder();
+        let file_resp = app
+            .dialog()
+            .file()
+            .set_title("Select Folder to Organize")
+            .blocking_pick_folder();
         file_resp.map(|p| p.to_string())
     })
     .await
@@ -155,18 +162,22 @@ pub async fn scan_folder(
     let depth_limit = max_depth.unwrap_or(MAX_DEPTH);
     let do_hashes = compute_hashes.unwrap_or(true);
 
-    info!("Scanning folder: {} (depth={}, hashes={})", path, depth_limit, do_hashes);
+    info!(
+        "Scanning folder: {} (depth={}, hashes={})",
+        path, depth_limit, do_hashes
+    );
 
     // Run the scan on a blocking thread since it's I/O heavy
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        scan_directory(&root, depth_limit, do_hashes)
-    })
-    .await
-    .map_err(|e| format!("Scan task failed: {}", e))?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || scan_directory(&root, depth_limit, do_hashes))
+            .await
+            .map_err(|e| format!("Scan task failed: {}", e))?;
 
     info!(
         "Scan complete: {} files, {} dirs, {} bytes, {} duplicate groups",
-        result.total_files, result.total_dirs, result.total_size,
+        result.total_files,
+        result.total_dirs,
+        result.total_size,
         result.duplicates.len()
     );
     Ok(result)
@@ -183,13 +194,16 @@ pub async fn execute_folder_plan(
         return Err(format!("'{}' is not a directory", root).into());
     }
 
-    info!("Executing folder plan: {} operations in {}", operations.len(), root);
+    info!(
+        "Executing folder plan: {} operations in {}",
+        operations.len(),
+        root
+    );
 
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        execute_plan(&root_path, &operations)
-    })
-    .await
-    .map_err(|e| format!("Plan execution task failed: {}", e))?;
+    let result =
+        tauri::async_runtime::spawn_blocking(move || execute_plan(&root_path, &operations))
+            .await
+            .map_err(|e| format!("Plan execution task failed: {}", e))?;
 
     info!(
         "Plan execution: {} completed, {} failed",
@@ -220,7 +234,10 @@ pub fn scan_directory(root: &Path, max_depth: usize, compute_hashes: bool) -> Sc
     if compute_hashes {
         for entry in &state.entries {
             if let Some(ref hash) = entry.hash {
-                hash_map.entry(hash.clone()).or_default().push(entry.path.clone());
+                hash_map
+                    .entry(hash.clone())
+                    .or_default()
+                    .push(entry.path.clone());
             }
         }
     }
@@ -309,7 +326,8 @@ fn walk_dir(
 
         let is_dir = metadata.is_dir();
         let size = if is_dir { 0 } else { metadata.len() };
-        let modified = metadata.modified()
+        let modified = metadata
+            .modified()
             .ok()
             .map(|t| {
                 let dt: chrono::DateTime<chrono::Local> = t.into();
@@ -531,14 +549,22 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                     // Log the actual directory contents for debugging
                     let parent = from_abs.parent().unwrap_or(root);
                     let dir_entries: Vec<String> = std::fs::read_dir(parent)
-                        .map(|rd| rd.filter_map(|e| e.ok())
-                            .map(|e| e.file_name().to_string_lossy().to_string())
-                            .collect())
+                        .map(|rd| {
+                            rd.filter_map(|e| e.ok())
+                                .map(|e| e.file_name().to_string_lossy().to_string())
+                                .collect()
+                        })
                         .unwrap_or_default();
-                    warn!("Source file not found: {} (parent has {} entries: {:?})",
-                        from_abs.display(), dir_entries.len(),
-                        dir_entries.iter().take(5).collect::<Vec<_>>());
-                    errors.push(format!("Move {} → {}: source file not found", op.from, to_rel));
+                    warn!(
+                        "Source file not found: {} (parent has {} entries: {:?})",
+                        from_abs.display(),
+                        dir_entries.len(),
+                        dir_entries.iter().take(5).collect::<Vec<_>>()
+                    );
+                    errors.push(format!(
+                        "Move {} → {}: source file not found",
+                        op.from, to_rel
+                    ));
                     failed += 1;
                     continue;
                 }
@@ -550,14 +576,27 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                     }
                     Err(e) => {
                         // Log hex bytes of the filename for debugging encoding issues
-                        let from_hex: String = from_abs.to_string_lossy()
-                            .chars().map(|c| {
-                                if c.is_ascii_graphic() || c == ' ' { format!("{}", c) }
-                                else { format!("[U+{:04X}]", c as u32) }
-                            }).collect();
+                        let from_hex: String = from_abs
+                            .to_string_lossy()
+                            .chars()
+                            .map(|c| {
+                                if c.is_ascii_graphic() || c == ' ' {
+                                    format!("{}", c)
+                                } else {
+                                    format!("[U+{:04X}]", c as u32)
+                                }
+                            })
+                            .collect();
                         let exists = from_abs.exists();
-                        warn!("Failed to move '{}' → '{}': {} (exists={}, from_abs={}, hex={})",
-                            op.from, to_rel, e, exists, from_abs.display(), from_hex);
+                        warn!(
+                            "Failed to move '{}' → '{}': {} (exists={}, from_abs={}, hex={})",
+                            op.from,
+                            to_rel,
+                            e,
+                            exists,
+                            from_abs.display(),
+                            from_hex
+                        );
                         errors.push(format!("Move {} → {}: {}", op.from, to_rel, e));
                         failed += 1;
                     }
@@ -586,7 +625,8 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                 }
 
                 // Use just the filename to avoid nesting paths inside trash
-                let file_name = Path::new(&op.from).file_name()
+                let file_name = Path::new(&op.from)
+                    .file_name()
                     .map(|f| f.to_string_lossy().to_string())
                     .unwrap_or_else(|| op.from.clone());
                 let trash_dest = trash_dir.join(&file_name);
@@ -594,10 +634,12 @@ pub fn execute_plan(root: &Path, operations: &[FolderOperation]) -> PlanExecutio
                 // If a file with the same name already exists in trash, add a timestamp
                 // plus a counter suffix to avoid collisions within the same second.
                 let trash_dest = if trash_dest.exists() {
-                    let stem = Path::new(&file_name).file_stem()
+                    let stem = Path::new(&file_name)
+                        .file_stem()
                         .map(|s| s.to_string_lossy().to_string())
                         .unwrap_or_else(|| file_name.clone());
-                    let ext = Path::new(&file_name).extension()
+                    let ext = Path::new(&file_name)
+                        .extension()
                         .map(|e| format!(".{}", e.to_string_lossy()))
                         .unwrap_or_default();
                     let ts = chrono::Local::now().format("%Y%m%d%H%M%S");

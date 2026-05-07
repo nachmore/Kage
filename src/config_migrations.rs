@@ -118,14 +118,20 @@ mod tests {
     fn missing_version_is_treated_as_1() {
         let v = json!({ "debug_mode": false });
         let out = migrate(v).unwrap();
-        assert_eq!(out.get("version").and_then(|n| n.as_u64()), Some(CURRENT_VERSION as u64));
+        assert_eq!(
+            out.get("version").and_then(|n| n.as_u64()),
+            Some(CURRENT_VERSION as u64)
+        );
     }
 
     #[test]
     fn current_version_is_unchanged() {
         let v = json!({ "version": CURRENT_VERSION, "debug_mode": true });
         let out = migrate(v).unwrap();
-        assert_eq!(out.get("version").and_then(|n| n.as_u64()), Some(CURRENT_VERSION as u64));
+        assert_eq!(
+            out.get("version").and_then(|n| n.as_u64()),
+            Some(CURRENT_VERSION as u64)
+        );
         // Other fields are preserved.
         assert_eq!(out.get("debug_mode"), Some(&json!(true)));
     }
@@ -134,7 +140,10 @@ mod tests {
     fn v1_is_migrated_up_to_current() {
         let v = json!({ "version": 1, "debug_mode": true });
         let out = migrate(v).unwrap();
-        assert_eq!(out.get("version").and_then(|n| n.as_u64()), Some(CURRENT_VERSION as u64));
+        assert_eq!(
+            out.get("version").and_then(|n| n.as_u64()),
+            Some(CURRENT_VERSION as u64)
+        );
         assert_eq!(out.get("debug_mode"), Some(&json!(true)));
     }
 

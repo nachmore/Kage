@@ -2,17 +2,19 @@
 
 use anyhow::Result;
 use log::{info, warn};
-use std::process::Command;
 use std::os::windows::process::CommandExt;
+use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Check if a PID belongs to a kage-related process (kage-cli, node, etc.)
 /// Returns the process name if found, None if the process doesn't exist or isn't ours.
 pub fn get_process_name_impl(pid: u32) -> Option<String> {
-    use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
-    use windows::Win32::Foundation::CloseHandle;
     use windows::core::PWSTR;
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
 
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
@@ -81,7 +83,7 @@ where
         cleanup_fn();
         std::process::exit(0);
     })?;
-    
+
     info!("✅ Ctrl+C handler installed");
     Ok(())
 }
@@ -89,15 +91,14 @@ where
 /// Set the current thread's description (name) via Win32 SetThreadDescription.
 /// This makes the thread identifiable in debuggers and in our thread dump command.
 pub fn set_thread_name(name: &str) {
-    use windows::Win32::System::Threading::{GetCurrentThread, SetThreadDescription};
     use windows::core::PCWSTR;
+    use windows::Win32::System::Threading::{GetCurrentThread, SetThreadDescription};
 
     let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
     unsafe {
         let _ = SetThreadDescription(GetCurrentThread(), PCWSTR(wide.as_ptr()));
     }
 }
-
 
 /// Create a Windows Job Object with KILL_ON_JOB_CLOSE and assign this
 /// process to it. Any child process we spawn (TTS server, ACP CLI,
@@ -115,9 +116,9 @@ pub fn set_thread_name(name: &str) {
 /// Errors are logged but never propagated: if we can't create the
 /// job, the app still runs; we just lose the orphan-cleanup guarantee.
 pub fn install_kill_on_exit_job_impl() {
+    use windows::core::PCWSTR;
     use windows::Win32::System::JobObjects::*;
     use windows::Win32::System::Threading::GetCurrentProcess;
-    use windows::core::PCWSTR;
 
     unsafe {
         let job = match CreateJobObjectW(None, PCWSTR::null()) {

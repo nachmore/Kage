@@ -297,7 +297,10 @@ mod tests {
         let v = parse_response(&resp_str);
         assert_eq!(v["error"]["code"], -32700);
         assert!(
-            v["error"]["message"].as_str().unwrap().starts_with("Parse error"),
+            v["error"]["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("Parse error"),
             "got {:?}",
             v["error"]["message"]
         );

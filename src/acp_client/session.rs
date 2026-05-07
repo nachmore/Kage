@@ -6,8 +6,8 @@ use log::{info, warn};
 use std::sync::Mutex;
 use std::time::Instant;
 
-use super::AcpClient;
 use super::types::format_acp_error;
+use super::AcpClient;
 use crate::lock_ext::LockExt;
 
 /// Track when we last injected a timestamp into a user message.
@@ -77,14 +77,21 @@ impl AcpClient {
             anyhow::bail!("Session creation failed: {}", format_acp_error(&error));
         }
 
-        let result = response.result.context("No result in session/new response")?;
-        let session_id = result.get("sessionId")
+        let result = response
+            .result
+            .context("No result in session/new response")?;
+        let session_id = result
+            .get("sessionId")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .context("No sessionId in response")?;
 
         let mut models_list = Vec::new();
-        if let Some(models) = result.get("models").and_then(|m| m.get("availableModels")).and_then(|a| a.as_array()) {
+        if let Some(models) = result
+            .get("models")
+            .and_then(|m| m.get("availableModels"))
+            .and_then(|a| a.as_array())
+        {
             info!("Session has {} available models", models.len());
             models_list = models.clone();
         }
@@ -161,14 +168,22 @@ impl AcpClient {
 
     // --- Chat streaming ---
 
-    pub fn send_chat_streaming(&self, content: &str, attachments: Option<&[serde_json::Value]>) -> Result<()> {
+    pub fn send_chat_streaming(
+        &self,
+        content: &str,
+        attachments: Option<&[serde_json::Value]>,
+    ) -> Result<()> {
         // Wait for any in-progress compaction to finish before sending
         self.wait_for_compaction();
 
         let debug = *self.transport.debug_mode.lock_or_recover();
 
         if debug {
-            info!("[CHAT] Sending message ({} chars): {}", content.chars().count(), content);
+            info!(
+                "[CHAT] Sending message ({} chars): {}",
+                content.chars().count(),
+                content
+            );
         } else {
             info!("Sending chat message ({} chars)", content.chars().count());
         }
@@ -310,7 +325,10 @@ impl AcpClient {
             Err(e) => {
                 let err_str = format!("{}", e);
                 if Self::is_recoverable_error(&err_str) {
-                    warn!("Prompt failed again after session reload ({}), trying fresh session…", err_str);
+                    warn!(
+                        "Prompt failed again after session reload ({}), trying fresh session…",
+                        err_str
+                    );
                 } else {
                     return Err(e);
                 }
@@ -342,8 +360,7 @@ impl AcpClient {
         if err_str.contains("Timeout") || err_str.contains("Connection lost") {
             return false;
         }
-        err_str.contains("invalid conversation history")
-            || err_str.contains("panicked")
+        err_str.contains("invalid conversation history") || err_str.contains("panicked")
     }
 
     // --- Sub-agent invocation ---
@@ -367,7 +384,10 @@ impl AcpClient {
             }
         };
 
-        info!("Invoking sub-agent with query: {}", &query[..query.len().min(100)]);
+        info!(
+            "Invoking sub-agent with query: {}",
+            &query[..query.len().min(100)]
+        );
 
         // Reset this session's bucket so we read just the sub-agent's reply
         self.reset_session_accumulator(&session_id);

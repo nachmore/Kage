@@ -23,7 +23,7 @@ fn is_path(input: &str) -> Option<String> {
 
     // Reject if it looks like a natural language query (starts with common words)
     // A path input should start directly with the path characters.
-    
+
     // Windows paths — must start with drive letter or UNC prefix
     if cfg!(target_os = "windows") {
         // Drive letter: C:\ or C:/ or just C: (bare drive root)
@@ -79,11 +79,14 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
         (&["desktop"], dirs::desktop_dir),
         (&["home", "user"], dirs::home_dir),
         (&["templates", "template"], dirs::template_dir),
-        (&["temp", "tmp"], || -> Option<std::path::PathBuf> { Some(std::env::temp_dir()) }),
-        (&["public"], dirs::public_dir),
-        (&["screenshots", "screenshot"], || -> Option<std::path::PathBuf> {
-            dirs::picture_dir().map(|p| p.join("Screenshots"))
+        (&["temp", "tmp"], || -> Option<std::path::PathBuf> {
+            Some(std::env::temp_dir())
         }),
+        (&["public"], dirs::public_dir),
+        (
+            &["screenshots", "screenshot"],
+            || -> Option<std::path::PathBuf> { dirs::picture_dir().map(|p| p.join("Screenshots")) },
+        ),
         (&["fonts", "font"], dirs::font_dir),
         (&["cache"], dirs::cache_dir),
         (&["config", "configuration"], dirs::config_dir),
@@ -93,7 +96,9 @@ fn resolve_well_known_dir(input: &str) -> Option<String> {
     // Override "fonts"/"font" to use the system fonts directory
     {
         let font_names = ["fonts", "font"];
-        if font_names.contains(&lower.as_str()) || font_names.iter().any(|n| n.starts_with(lower.as_str())) {
+        if font_names.contains(&lower.as_str())
+            || font_names.iter().any(|n| n.starts_with(lower.as_str()))
+        {
             if let Some(font_dir) = crate::os::fonts_dir() {
                 return Some(font_dir.to_string_lossy().to_string());
             }
@@ -134,38 +139,100 @@ fn match_system_command(input: &str) -> Option<(&'static str, &'static str, bool
         (&["mute"], "mute", "🔇 Mute Audio", false, "all"),
         (&["unmute"], "unmute", "🔊 Unmute Audio", false, "all"),
         (&["emoji"], "emoji", "😀 Emoji Picker", false, "all"),
-        (&["trash", "recycle"], "trash", "🗑️ Open Recycle Bin", false, "windows"),
+        (
+            &["trash", "recycle"],
+            "trash",
+            "🗑️ Open Recycle Bin",
+            false,
+            "windows",
+        ),
         (&["trash"], "trash", "🗑️ Open Trash", false, "macos"),
         (&["trash"], "trash", "🗑️ Open Trash", false, "linux"),
-        (&["taskmanager", "taskmgr"], "taskmanager", "📊 Task Manager", false, "windows"),
-        (&["activitymonitor", "taskmanager", "taskmgr"], "taskmanager", "📊 Activity Monitor", false, "macos"),
-        (&["taskmanager", "taskmgr", "systemmonitor"], "taskmanager", "📊 System Monitor", false, "linux"),
-        (&["terminal", "cmd", "powershell"], "terminal", "💻 Terminal", false, "windows"),
+        (
+            &["taskmanager", "taskmgr"],
+            "taskmanager",
+            "📊 Task Manager",
+            false,
+            "windows",
+        ),
+        (
+            &["activitymonitor", "taskmanager", "taskmgr"],
+            "taskmanager",
+            "📊 Activity Monitor",
+            false,
+            "macos",
+        ),
+        (
+            &["taskmanager", "taskmgr", "systemmonitor"],
+            "taskmanager",
+            "📊 System Monitor",
+            false,
+            "linux",
+        ),
+        (
+            &["terminal", "cmd", "powershell"],
+            "terminal",
+            "💻 Terminal",
+            false,
+            "windows",
+        ),
         (&["terminal"], "terminal", "💻 Terminal", false, "macos"),
         (&["terminal"], "terminal", "💻 Terminal", false, "linux"),
-        (&["explorer"], "filemanager", "📁 File Explorer", false, "windows"),
+        (
+            &["explorer"],
+            "filemanager",
+            "📁 File Explorer",
+            false,
+            "windows",
+        ),
         (&["finder"], "filemanager", "📁 Finder", false, "macos"),
-        (&["files", "nautilus"], "filemanager", "📁 Files", false, "linux"),
+        (
+            &["files", "nautilus"],
+            "filemanager",
+            "📁 Files",
+            false,
+            "linux",
+        ),
         // With confirmation
-        (&["restart", "reboot"], "restart", "🔄 Restart Computer", true, "all"),
+        (
+            &["restart", "reboot"],
+            "restart",
+            "🔄 Restart Computer",
+            true,
+            "all",
+        ),
         (&["shutdown"], "shutdown", "⏻ Shut Down", true, "all"),
-        (&["signout", "logout", "logoff"], "signout", "🚪 Sign Out", true, "all"),
+        (
+            &["signout", "logout", "logoff"],
+            "signout",
+            "🚪 Sign Out",
+            true,
+            "all",
+        ),
     ];
 
-    let platform = if cfg!(target_os = "windows") { "windows" }
-        else if cfg!(target_os = "macos") { "macos" }
-        else { "linux" };
+    let platform = if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    };
 
     // Exact match first
     for &(aliases, id, label, confirm, plat) in commands {
-        if plat != "all" && plat != platform { continue; }
+        if plat != "all" && plat != platform {
+            continue;
+        }
         if aliases.contains(&lower.as_str()) {
             return Some((id, label, confirm));
         }
     }
     // Prefix match
     for &(aliases, id, label, confirm, plat) in commands {
-        if plat != "all" && plat != platform { continue; }
+        if plat != "all" && plat != platform {
+            continue;
+        }
         if aliases.iter().any(|a| a.starts_with(lower.as_str())) {
             return Some((id, label, confirm));
         }
@@ -375,7 +442,11 @@ pub async fn execute_system_command(
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     let elevated = elevated.unwrap_or(false);
-    info!("Executing system command: {}{}", command_id, if elevated { " (elevated)" } else { "" });
+    info!(
+        "Executing system command: {}{}",
+        command_id,
+        if elevated { " (elevated)" } else { "" }
+    );
 
     // Hide the floating window first
     if let Some(floating) = app.get_webview_window("floating") {
@@ -407,7 +478,6 @@ pub async fn execute_system_command(
 /// Fetch metadata (title, description, favicon) from a URL for link previews.
 #[tauri::command]
 pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppError> {
-
     // Validate URL
     if !url.starts_with("http://") && !url.starts_with("https://") {
         return Err("Invalid URL".into());
@@ -420,7 +490,10 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
         .build()
         .map_err(|e| format!("HTTP client error: {}", e))?;
 
-    let resp = client.get(&url).send().await
+    let resp = client
+        .get(&url)
+        .send()
+        .await
         .map_err(|e| format!("Fetch error: {}", e))?;
 
     let final_url = resp.url().to_string();
@@ -430,7 +503,8 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
     }
 
     // Only process HTML responses
-    let content_type = resp.headers()
+    let content_type = resp
+        .headers()
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
@@ -446,7 +520,10 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
     }
 
     // Read only the first 32KB to extract meta tags (don't download entire pages)
-    let bytes = resp.bytes().await.map_err(|e| format!("Read error: {}", e))?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Read error: {}", e))?;
     let html = String::from_utf8_lossy(&bytes[..bytes.len().min(32768)]);
 
     let title = extract_meta(&html, "og:title")
@@ -478,7 +555,10 @@ fn extract_meta(html: &str, name: &str) -> Option<String> {
         if let Some(pos) = lower.find(&needle) {
             // Find content= in the same <meta> tag
             let tag_start = lower[..pos].rfind('<').unwrap_or(0);
-            let tag_end = lower[pos..].find('>').map(|i| pos + i).unwrap_or(lower.len());
+            let tag_end = lower[pos..]
+                .find('>')
+                .map(|i| pos + i)
+                .unwrap_or(lower.len());
             let tag = &html[tag_start..tag_end];
             if let Some(content) = extract_attr(tag, "content") {
                 let trimmed = content.trim();
@@ -516,7 +596,10 @@ fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
     for pattern in &["rel=\"icon\"", "rel=\"shortcut icon\""] {
         if let Some(pos) = lower.find(pattern) {
             let tag_start = lower[..pos].rfind('<').unwrap_or(0);
-            let tag_end = lower[pos..].find('>').map(|i| pos + i).unwrap_or(lower.len());
+            let tag_end = lower[pos..]
+                .find('>')
+                .map(|i| pos + i)
+                .unwrap_or(lower.len());
             let tag = &html[tag_start..tag_end];
             if let Some(href) = extract_attr(tag, "href") {
                 return Some(resolve_url(href.trim(), base_url));
@@ -525,7 +608,11 @@ fn extract_link_icon(html: &str, base_url: &str) -> Option<String> {
     }
     // Fallback: /favicon.ico
     if let Ok(parsed) = url::Url::parse(base_url) {
-        return Some(format!("{}://{}/favicon.ico", parsed.scheme(), parsed.host_str().unwrap_or("")));
+        return Some(format!(
+            "{}://{}/favicon.ico",
+            parsed.scheme(),
+            parsed.host_str().unwrap_or("")
+        ));
     }
     None
 }

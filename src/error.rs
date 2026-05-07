@@ -42,7 +42,10 @@ pub struct AppError {
 #[allow(dead_code)]
 impl AppError {
     pub fn new(kind: ErrorKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into() }
+        Self {
+            kind,
+            message: message.into(),
+        }
     }
 
     /// Connection lost or not connected

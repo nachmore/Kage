@@ -60,13 +60,19 @@ fn test_all_error_kinds_serialize_to_snake_case() {
         (AppError::session_corrupted(""), "session_corrupted"),
         (AppError::image_unsupported(""), "image_unsupported"),
         (AppError::lock(""), "lock_error"),
-        (AppError::new(ErrorKind::SerializeError, ""), "serialize_error"),
+        (
+            AppError::new(ErrorKind::SerializeError, ""),
+            "serialize_error",
+        ),
         (AppError::new(ErrorKind::RateLimited, ""), "rate_limited"),
         (AppError::internal(""), "internal"),
     ];
     for (err, expected_kind) in cases {
         let json = serde_json::to_value(&err).unwrap();
-        assert_eq!(json["kind"], expected_kind, "ErrorKind serialization mismatch");
+        assert_eq!(
+            json["kind"], expected_kind,
+            "ErrorKind serialization mismatch"
+        );
     }
 }
 

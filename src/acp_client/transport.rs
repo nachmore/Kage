@@ -12,10 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use super::types::{AcpConnectionMode, AcpRequest, AcpResponse, NotificationHandler};
 use crate::lock_ext::LockExt;
 use crate::os;
 use crate::process_manager::ProcessManager;
-use super::types::{AcpConnectionMode, AcpRequest, AcpResponse, NotificationHandler};
 
 /// Per-request inbox: the reader thread routes responses here by id.
 /// `sync_channel(1)` is enough — there's only ever one response per id, and
@@ -89,7 +89,10 @@ impl AcpTransport {
     }
 
     /// Set the notification handler. Called by the background reader for all notifications.
-    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
+    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(
+        &self,
+        handler: F,
+    ) {
         let mut h = self.notification_handler.lock_or_recover();
         *h = Some(Arc::new(handler));
     }
@@ -125,7 +128,12 @@ impl AcpTransport {
         };
 
         let addr = format!("{}:{}", host, port);
-        info!("TCP connection attempt {}/{} to {}", attempt + 1, self.max_retries + 1, addr);
+        info!(
+            "TCP connection attempt {}/{} to {}",
+            attempt + 1,
+            self.max_retries + 1,
+            addr
+        );
 
         match TcpStream::connect_timeout(
             &addr.parse().context("Invalid address")?,
@@ -152,7 +160,10 @@ impl AcpTransport {
                     thread::sleep(Duration::from_millis(delay.min(30000)));
                     self.connect_with_retry(attempt + 1)
                 } else {
-                    Err(e).context(format!("Failed to connect after {} attempts", self.max_retries + 1))
+                    Err(e).context(format!(
+                        "Failed to connect after {} attempts",
+                        self.max_retries + 1
+                    ))
                 }
             }
         }
@@ -177,7 +188,9 @@ impl AcpTransport {
 
         os::configure_process_spawn(&mut cmd);
 
-        let mut child = cmd.spawn().context(format!("Failed to spawn: {}", program))?;
+        let mut child = cmd
+            .spawn()
+            .context(format!("Failed to spawn: {}", program))?;
 
         let stdin = child.stdin.take().context("No stdin")?;
         let stdout = child.stdout.take().context("No stdout")?;

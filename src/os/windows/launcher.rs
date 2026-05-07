@@ -12,7 +12,7 @@ use crate::os::launcher::AppInfo;
 
 pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
     let mut apps = HashMap::new();
-    
+
     // Scan Start Menu shortcuts (.lnk files)
     if let Some(start_menu) = dirs::data_dir() {
         let start_menu_path = start_menu.join("Microsoft\\Windows\\Start Menu\\Programs");
@@ -20,11 +20,12 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
             scan_directory_for_shortcuts(&start_menu_path, &mut apps)?;
         }
     }
-    let common_start_menu = PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs");
+    let common_start_menu =
+        PathBuf::from("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs");
     if common_start_menu.exists() {
         scan_directory_for_shortcuts(&common_start_menu, &mut apps)?;
     }
-    
+
     // Scan registry for installed desktop applications
     scan_registry_apps(&mut apps)?;
 
@@ -33,7 +34,7 @@ pub fn scan_applications_impl() -> Result<Vec<AppInfo>> {
 
     // Add Windows Settings pages (URI-based, not packages)
     add_settings_pages(&mut apps);
-    
+
     Ok(apps.into_values().collect())
 }
 
@@ -48,12 +49,12 @@ fn scan_directory_for_shortcuts(dir: &PathBuf, apps: &mut HashMap<String, AppInf
                     let icon_path = path.to_string_lossy().to_string();
                     let key = name.to_lowercase();
                     apps.entry(key).or_insert_with(|| AppInfo {
-                            name: name.to_string(),
-                            path: path.clone(),
-                            icon_path: Some(icon_path),
-                            emoji_icon: None,
-                            icon_data: None,
-                        });
+                        name: name.to_string(),
+                        path: path.clone(),
+                        icon_path: Some(icon_path),
+                        emoji_icon: None,
+                        icon_data: None,
+                    });
                 }
             }
         }
@@ -63,7 +64,9 @@ fn scan_directory_for_shortcuts(dir: &PathBuf, apps: &mut HashMap<String, AppInf
 
 fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    if let Ok(uninstall_key) = hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall") {
+    if let Ok(uninstall_key) =
+        hklm.open_subkey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall")
+    {
         for subkey_name in uninstall_key.enum_keys().filter_map(|k| k.ok()) {
             if let Ok(subkey) = uninstall_key.open_subkey(&subkey_name) {
                 if let Ok(display_name) = subkey.get_value::<String, _>("DisplayName") {
@@ -77,12 +80,12 @@ fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
                                         let icon_path = path.to_string_lossy().to_string();
                                         let key = display_name.to_lowercase();
                                         apps.entry(key).or_insert_with(|| AppInfo {
-                                                name: display_name.clone(),
-                                                path: path.clone(),
-                                                icon_path: Some(icon_path),
-                                                emoji_icon: None,
-                                                icon_data: None,
-                                            });
+                                            name: display_name.clone(),
+                                            path: path.clone(),
+                                            icon_path: Some(icon_path),
+                                            emoji_icon: None,
+                                            icon_data: None,
+                                        });
                                         break;
                                     }
                                 }
@@ -98,35 +101,46 @@ fn scan_registry_apps(apps: &mut HashMap<String, AppInfo>) -> Result<()> {
 
 /// Scan installed UWP/Store packages for launchable apps
 fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
-    use windows::Management::Deployment::PackageManager;
     use windows::core::HSTRING;
+    use windows::Management::Deployment::PackageManager;
     use windows_collections::IVectorView;
 
     let pm = match PackageManager::new() {
         Ok(pm) => pm,
-        Err(e) => { warn!("Failed to create PackageManager: {}", e); return; }
+        Err(e) => {
+            warn!("Failed to create PackageManager: {}", e);
+            return;
+        }
     };
 
     // FindPackagesByUserSecurityId with empty string = current user (no admin needed)
     let packages = match pm.FindPackagesByUserSecurityId(&HSTRING::new()) {
         Ok(p) => p,
-        Err(e) => { warn!("Failed to enumerate UWP packages: {}", e); return; }
+        Err(e) => {
+            warn!("Failed to enumerate UWP packages: {}", e);
+            return;
+        }
     };
 
     for package in packages {
         // Skip framework/resource packages — they're not launchable apps
-        if package.IsFramework().unwrap_or(true) { continue; }
-        if package.IsResourcePackage().unwrap_or(false) { continue; }
+        if package.IsFramework().unwrap_or(true) {
+            continue;
+        }
+        if package.IsResourcePackage().unwrap_or(false) {
+            continue;
+        }
 
         // Get app list entries (launchable apps within the package)
         let async_op = match package.GetAppListEntriesAsync() {
             Ok(op) => op,
             Err(_) => continue,
         };
-        let entries: IVectorView<windows::ApplicationModel::Core::AppListEntry> = match async_op.join() {
-            Ok(e) => e,
-            Err(_) => continue,
-        };
+        let entries: IVectorView<windows::ApplicationModel::Core::AppListEntry> =
+            match async_op.join() {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
 
         for entry in &entries {
             let di = match entry.DisplayInfo() {
@@ -139,10 +153,14 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
                 Err(_) => continue,
             };
 
-            if name.is_empty() || name.starts_with("ms-resource:") { continue; }
+            if name.is_empty() || name.starts_with("ms-resource:") {
+                continue;
+            }
 
             let key = name.to_lowercase();
-            if apps.contains_key(&key) { continue; }
+            if apps.contains_key(&key) {
+                continue;
+            }
 
             let aumid: String = match entry.AppUserModelId() {
                 Ok(id) => id.to_string(),
@@ -151,13 +169,16 @@ fn scan_uwp_packages(apps: &mut HashMap<String, AppInfo>) {
 
             let icon_data = get_uwp_icon_base64(&package);
 
-            apps.insert(key, AppInfo {
-                name,
-                path: PathBuf::from(format!("shell:AppsFolder\\{}", aumid)),
-                icon_path: None,
-                emoji_icon: None,
-                icon_data,
-            });
+            apps.insert(
+                key,
+                AppInfo {
+                    name,
+                    path: PathBuf::from(format!("shell:AppsFolder\\{}", aumid)),
+                    icon_path: None,
+                    emoji_icon: None,
+                    icon_data,
+                },
+            );
         }
     }
 }
@@ -207,30 +228,49 @@ fn get_uwp_icon_base64(package: &windows::ApplicationModel::Package) -> Option<S
 /// Find the best scale variant of a UWP icon (prefer scale-200, then 150, 100, etc.)
 fn find_best_scale_icon(base_path: &std::path::Path) -> Option<PathBuf> {
     // If the exact file exists, use it
-    if base_path.exists() { return Some(base_path.to_path_buf()); }
+    if base_path.exists() {
+        return Some(base_path.to_path_buf());
+    }
 
     let stem = base_path.file_stem()?.to_str()?;
     let ext = base_path.extension()?.to_str()?;
     let parent = base_path.parent()?;
 
     // Try common scale suffixes in preference order
-    let scales = ["scale-200", "scale-150", "scale-100", "scale-400", "scale-125"];
+    let scales = [
+        "scale-200",
+        "scale-150",
+        "scale-100",
+        "scale-400",
+        "scale-125",
+    ];
     for scale in &scales {
         let candidate = parent.join(format!("{}.{}.{}", stem, scale, ext));
-        if candidate.exists() { return Some(candidate); }
+        if candidate.exists() {
+            return Some(candidate);
+        }
     }
 
     // Try targetsize variants
-    let sizes = ["targetsize-48", "targetsize-64", "targetsize-32", "targetsize-256"];
+    let sizes = [
+        "targetsize-48",
+        "targetsize-64",
+        "targetsize-32",
+        "targetsize-256",
+    ];
     for size in &sizes {
         let candidate = parent.join(format!("{}.{}.{}", stem, size, ext));
-        if candidate.exists() { return Some(candidate); }
+        if candidate.exists() {
+            return Some(candidate);
+        }
     }
 
     // Try without any suffix but with different extensions
     for alt_ext in &["png", "jpg", "svg"] {
         let candidate = parent.join(format!("{}.{}", stem, alt_ext));
-        if candidate.exists() { return Some(candidate); }
+        if candidate.exists() {
+            return Some(candidate);
+        }
     }
 
     None
@@ -247,7 +287,11 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
         ("Settings: Storage", "ms-settings:storagesense", "💾"),
         ("Settings: Multitasking", "ms-settings:multitasking", "🪟"),
         ("Settings: About", "ms-settings:about", "ℹ️"),
-        ("Settings: Remote Desktop", "ms-settings:remotedesktop", "🖥️"),
+        (
+            "Settings: Remote Desktop",
+            "ms-settings:remotedesktop",
+            "🖥️",
+        ),
         ("Settings: Clipboard", "ms-settings:clipboard", "📋"),
         // Settings — Network
         ("Settings: Network", "ms-settings:network", "🌐"),
@@ -255,61 +299,129 @@ fn add_settings_pages(apps: &mut HashMap<String, AppInfo>) {
         ("Settings: VPN", "ms-settings:network-vpn", "🔒"),
         ("Settings: Proxy", "ms-settings:network-proxy", "🔀"),
         ("Settings: Ethernet", "ms-settings:network-ethernet", "🔌"),
-        ("Settings: Mobile Hotspot", "ms-settings:network-mobilehotspot", "📱"),
+        (
+            "Settings: Mobile Hotspot",
+            "ms-settings:network-mobilehotspot",
+            "📱",
+        ),
         // Settings — Personalization
-        ("Settings: Personalization", "ms-settings:personalization", "🎨"),
-        ("Settings: Background", "ms-settings:personalization-background", "🖼️"),
+        (
+            "Settings: Personalization",
+            "ms-settings:personalization",
+            "🎨",
+        ),
+        (
+            "Settings: Background",
+            "ms-settings:personalization-background",
+            "🖼️",
+        ),
         ("Settings: Colors", "ms-settings:colors", "🎨"),
         ("Settings: Themes", "ms-settings:themes", "🎭"),
         ("Settings: Lock Screen", "ms-settings:lockscreen", "🔐"),
         ("Settings: Taskbar", "ms-settings:taskbar", "📌"),
-        ("Settings: Start Menu", "ms-settings:personalization-start", "▶️"),
+        (
+            "Settings: Start Menu",
+            "ms-settings:personalization-start",
+            "▶️",
+        ),
         ("Settings: Fonts", "ms-settings:fonts", "🔤"),
         // Settings — Apps
-        ("Settings: Apps & Features", "ms-settings:appsfeatures", "📦"),
+        (
+            "Settings: Apps & Features",
+            "ms-settings:appsfeatures",
+            "📦",
+        ),
         ("Settings: Default Apps", "ms-settings:defaultapps", "📱"),
         ("Settings: Startup Apps", "ms-settings:startupapps", "🚀"),
         // Settings — Accounts
         ("Settings: Accounts", "ms-settings:accounts", "👤"),
-        ("Settings: Sign-in Options", "ms-settings:signinoptions", "🔑"),
-        ("Settings: Email & Accounts", "ms-settings:emailandaccounts", "📧"),
+        (
+            "Settings: Sign-in Options",
+            "ms-settings:signinoptions",
+            "🔑",
+        ),
+        (
+            "Settings: Email & Accounts",
+            "ms-settings:emailandaccounts",
+            "📧",
+        ),
         // Settings — Time & Language
         ("Settings: Date & Time", "ms-settings:dateandtime", "📅"),
-        ("Settings: Language & Region", "ms-settings:regionlanguage", "🌍"),
+        (
+            "Settings: Language & Region",
+            "ms-settings:regionlanguage",
+            "🌍",
+        ),
         ("Settings: Typing", "ms-settings:typing", "⌨️"),
         // Settings — Privacy & Security
         ("Settings: Privacy", "ms-settings:privacy", "🛡️"),
-        ("Settings: Windows Security", "ms-settings:windowsdefender", "🛡️"),
+        (
+            "Settings: Windows Security",
+            "ms-settings:windowsdefender",
+            "🛡️",
+        ),
         ("Settings: For Developers", "ms-settings:developers", "👨‍💻"),
         // Settings — Windows Update
-        ("Settings: Windows Update", "ms-settings:windowsupdate", "🔄"),
-        ("Settings: Update History", "ms-settings:windowsupdate-history", "📜"),
+        (
+            "Settings: Windows Update",
+            "ms-settings:windowsupdate",
+            "🔄",
+        ),
+        (
+            "Settings: Update History",
+            "ms-settings:windowsupdate-history",
+            "📜",
+        ),
         // Settings — Bluetooth & Devices
         ("Settings: Bluetooth", "ms-settings:bluetooth", "🔵"),
-        ("Settings: Printers & Scanners", "ms-settings:printers", "🖨️"),
+        (
+            "Settings: Printers & Scanners",
+            "ms-settings:printers",
+            "🖨️",
+        ),
         ("Settings: Mouse", "ms-settings:mousetouchpad", "🖱️"),
         ("Settings: Camera", "ms-settings:camera", "📷"),
         ("Settings: USB", "ms-settings:usb", "🔌"),
         // Settings — Accessibility
         ("Settings: Accessibility", "ms-settings:easeofaccess", "♿"),
-        ("Settings: Text Size", "ms-settings:easeofaccess-display", "🔍"),
-        ("Settings: Magnifier", "ms-settings:easeofaccess-magnifier", "🔎"),
-        ("Settings: Narrator", "ms-settings:easeofaccess-narrator", "🗣️"),
-        ("Settings: Keyboard", "ms-settings:easeofaccess-keyboard", "⌨️"),
+        (
+            "Settings: Text Size",
+            "ms-settings:easeofaccess-display",
+            "🔍",
+        ),
+        (
+            "Settings: Magnifier",
+            "ms-settings:easeofaccess-magnifier",
+            "🔎",
+        ),
+        (
+            "Settings: Narrator",
+            "ms-settings:easeofaccess-narrator",
+            "🗣️",
+        ),
+        (
+            "Settings: Keyboard",
+            "ms-settings:easeofaccess-keyboard",
+            "⌨️",
+        ),
         // Settings — Gaming
         ("Settings: Game Mode", "ms-settings:gaming-gamemode", "🎮"),
-        ("Settings: Xbox Game Bar", "ms-settings:gaming-gamebar", "🎮"),
+        (
+            "Settings: Xbox Game Bar",
+            "ms-settings:gaming-gamebar",
+            "🎮",
+        ),
     ];
 
     for (name, uri, emoji) in pages {
         let key = name.to_lowercase();
         apps.entry(key).or_insert_with(|| AppInfo {
-                name: name.to_string(),
-                path: PathBuf::from(uri),
-                icon_path: None,
-                emoji_icon: Some(emoji.to_string()),
-                icon_data: None,
-            });
+            name: name.to_string(),
+            path: PathBuf::from(uri),
+            icon_path: None,
+            emoji_icon: Some(emoji.to_string()),
+            icon_data: None,
+        });
     }
 
     // Bluetooth SVG icon override
@@ -324,7 +436,10 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     use std::process::Command;
 
     let path_str = path.to_str().unwrap_or("");
-    info!("launch_application_impl: path={:?} path_str='{}'", path, path_str);
+    info!(
+        "launch_application_impl: path={:?} path_str='{}'",
+        path, path_str
+    );
 
     if path_str.is_empty() {
         anyhow::bail!("Empty path passed to launch_application_impl");

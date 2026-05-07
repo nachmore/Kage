@@ -11,7 +11,8 @@ use crate::lock_ext::LockExt;
 // ---------------------------------------------------------------------------
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
-static REGISTRY: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static REGISTRY: LazyLock<Mutex<HashMap<String, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Register a native element handle (stored as an opaque u64) and return an ephemeral ID.
 pub fn register_element(native_handle: u64) -> String {
@@ -22,17 +23,13 @@ pub fn register_element(native_handle: u64) -> String {
 
 /// Resolve an ephemeral ID back to its native handle.
 pub fn resolve_element(eid: &str) -> Result<u64, String> {
-    REGISTRY
-        .lock_or_recover()
-        .get(eid)
-        .copied()
-        .ok_or_else(|| {
-            format!(
-                "Element '{}' not found. IDs are ephemeral — \
+    REGISTRY.lock_or_recover().get(eid).copied().ok_or_else(|| {
+        format!(
+            "Element '{}' not found. IDs are ephemeral — \
                  call get_ui_tree() or find_elements() to get fresh IDs.",
-                eid
-            )
-        })
+            eid
+        )
+    })
 }
 
 /// Clear all registered IDs. Call before building a new tree snapshot.
@@ -45,7 +42,13 @@ pub fn clear_registry() {
 // ---------------------------------------------------------------------------
 
 const NOISE_ROLES: &[&str] = &[
-    "separator", "thumb", "scrollbar", "image", "pane", "group", "header",
+    "separator",
+    "thumb",
+    "scrollbar",
+    "image",
+    "pane",
+    "group",
+    "header",
 ];
 
 // ---------------------------------------------------------------------------
@@ -106,7 +109,11 @@ impl UIElement {
 
     /// Count total elements in this subtree.
     pub fn count_elements(&self) -> usize {
-        1 + self.children.iter().map(|c| c.count_elements()).sum::<usize>()
+        1 + self
+            .children
+            .iter()
+            .map(|c| c.count_elements())
+            .sum::<usize>()
     }
 
     /// Serialize to compact text tree format for LLM consumption.

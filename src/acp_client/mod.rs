@@ -5,14 +5,17 @@
 //! - `transport`: Connection management, pipe/TCP I/O, background reader thread
 //! - This module: `AcpClient` facade composing the above with session/protocol logic
 
-pub mod types;
-pub mod transport;
 mod session;
+pub mod transport;
+pub mod types;
 
 // Re-export public types so callers can still use `crate::acp_client::AcpRequest` etc.
-#[allow(unused_imports)]
-pub use types::{AcpRequest, AcpResponse, AcpNotification, AcpError, AcpConnectionMode, NotificationHandler, format_acp_error};
 pub use transport::AcpTransport;
+#[allow(unused_imports)]
+pub use types::{
+    format_acp_error, AcpConnectionMode, AcpError, AcpNotification, AcpRequest, AcpResponse,
+    NotificationHandler,
+};
 
 use anyhow::Result;
 use log::info;
@@ -63,7 +66,8 @@ impl AcpClient {
     /// the same delta it accumulated.
     pub fn accumulate_chunk<'a>(&self, session_id: &str, text: &'a str) -> Option<&'a str> {
         let mut map = self.streaming_accumulators.lock_or_recover();
-        let acc = map.entry(session_id.to_string())
+        let acc = map
+            .entry(session_id.to_string())
             .or_insert_with(|| String::with_capacity(64 * 1024));
         if acc.len() >= MAX_ACCUMULATOR_SIZE {
             return None;
@@ -115,7 +119,10 @@ impl AcpClient {
         self.transport.process_manager.clone()
     }
 
-    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(&self, handler: F) {
+    pub fn set_notification_handler<F: Fn(serde_json::Value) + Send + Sync + 'static>(
+        &self,
+        handler: F,
+    ) {
         self.transport.set_notification_handler(handler);
     }
 

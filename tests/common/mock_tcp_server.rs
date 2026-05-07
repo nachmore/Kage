@@ -31,7 +31,10 @@ pub struct MockResponder {
 
 pub enum Reply {
     Ok(Value),
-    Err { code: i32, message: &'static str },
+    Err {
+        code: i32,
+        message: &'static str,
+    },
     /// Never respond — used to test timeouts.
     Drop,
 }
@@ -81,11 +84,19 @@ impl MockAcpServer {
                 }
             };
             stream.set_nonblocking(false).unwrap();
-            stream.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_millis(50)))
+                .unwrap();
             handle_connection(stream, responder, requests_clone, stop_clone, notif_rx);
         });
 
-        MockAcpServer { port, requests, stop, handle: Some(handle), notifier }
+        MockAcpServer {
+            port,
+            requests,
+            stop,
+            handle: Some(handle),
+            notifier,
+        }
     }
 
     /// Send a notification (no id) to the connected client at any time.
@@ -149,8 +160,9 @@ fn handle_connection(
         match reader.read_line(&mut line) {
             Ok(0) => return, // EOF — client disconnected
             Ok(_) => {}
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.kind() == std::io::ErrorKind::TimedOut =>
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
             {
                 continue;
             }

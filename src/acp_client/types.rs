@@ -65,5 +65,4 @@ pub enum AcpConnectionMode {
 /// invocation so the reader thread never holds this lock across the callback —
 /// that would cause deadlocks whenever the callback re-acquires a lock that
 /// the main thread holds while waiting for a response.
-pub type NotificationHandler =
-    Arc<Mutex<Option<Arc<dyn Fn(serde_json::Value) + Send + Sync>>>>;
+pub type NotificationHandler = Arc<Mutex<Option<Arc<dyn Fn(serde_json::Value) + Send + Sync>>>>;

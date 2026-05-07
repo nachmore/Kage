@@ -19,7 +19,7 @@ use kage::os::accessibility;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-    MOUSEEVENTF_WHEEL, MOUSE_EVENT_FLAGS, MOUSEINPUT,
+    MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS,
 };
 
 #[cfg(target_os = "windows")]
@@ -53,7 +53,11 @@ fn main() {
         eprintln!("Failed to create log dir {:?}: {}", log_dir, e);
     }
     let log_file = log_dir.join("kage-computer-control-mcp.log");
-    match std::fs::OpenOptions::new().create(true).append(true).open(&log_file) {
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_file)
+    {
         Ok(file) => {
             // LineWriter ensures each log line is flushed immediately
             let writer = std::io::LineWriter::new(file);
@@ -70,7 +74,10 @@ fn main() {
         Err(e) => eprintln!("Failed to open log file {:?}: {}", log_file, e),
     }
 
-    log::info!("Computer Control MCP server starting (pid={})", std::process::id());
+    log::info!(
+        "Computer Control MCP server starting (pid={})",
+        std::process::id()
+    );
 
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -167,14 +174,17 @@ fn tool_result_text(id: &serde_json::Value, text: &str, is_error: bool) -> Strin
 // MCP protocol handlers
 // ---------------------------------------------------------------------------
 fn handle_initialize(id: &serde_json::Value) -> String {
-    json_rpc_result(id, serde_json::json!({
-        "protocolVersion": "2024-11-05",
-        "capabilities": { "tools": {} },
-        "serverInfo": {
-            "name": "computer-control",
-            "version": env!("CARGO_PKG_VERSION"),
-        }
-    }))
+    json_rpc_result(
+        id,
+        serde_json::json!({
+            "protocolVersion": "2024-11-05",
+            "capabilities": { "tools": {} },
+            "serverInfo": {
+                "name": "computer-control",
+                "version": env!("CARGO_PKG_VERSION"),
+            }
+        }),
+    )
 }
 
 fn handle_tools_list(id: &serde_json::Value) -> String {
@@ -383,7 +393,14 @@ fn shell_launch(name: &str) -> Result<(), String> {
 
     let result = unsafe {
         if params_str.is_empty() {
-            ShellExecuteW(None, &op, &file, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+            ShellExecuteW(
+                None,
+                &op,
+                &file,
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
         } else {
             let params = HSTRING::from(params_str);
             ShellExecuteW(None, &op, &file, &params, PCWSTR::null(), SW_SHOWNORMAL)
@@ -393,28 +410,39 @@ fn shell_launch(name: &str) -> Result<(), String> {
     if result.0 as usize > 32 {
         Ok(())
     } else {
-        Err(format!("ShellExecuteW failed with code {} for '{}'", result.0 as usize, name))
+        Err(format!(
+            "ShellExecuteW failed with code {} for '{}'",
+            result.0 as usize, name
+        ))
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // Tool call dispatch
 // ---------------------------------------------------------------------------
 fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> String {
     let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-    let args = params.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+    let args = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or(serde_json::json!({}));
     log::info!("[tool_call] {} args={}", tool_name, args);
 
     match tool_name {
         "get_ui_tree" => {
             let title = args.get("window_title").and_then(|v| v.as_str());
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
-            let invisible = args.get("include_invisible").and_then(|v| v.as_bool()).unwrap_or(false);
+            let invisible = args
+                .get("include_invisible")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             match accessibility::get_ui_tree(title, depth, invisible) {
                 Ok(elem) => {
                     let mut text = String::new();
-                    if !elem.meta.is_empty() { text.push_str(&elem.meta); text.push('\n'); }
+                    if !elem.meta.is_empty() {
+                        text.push_str(&elem.meta);
+                        text.push('\n');
+                    }
                     text.push_str(&elem.to_text(0, depth));
                     tool_result_text(id, &text, false)
                 }
@@ -425,29 +453,37 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let params = accessibility::FindElementsParams {
                 name: args.get("name").and_then(|v| v.as_str()).map(String::from),
                 role: args.get("role").and_then(|v| v.as_str()).map(String::from),
-                automation_id: args.get("automation_id").and_then(|v| v.as_str()).map(String::from),
+                automation_id: args
+                    .get("automation_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
                 value: args.get("value").and_then(|v| v.as_str()).map(String::from),
-                window_title: args.get("window_title").and_then(|v| v.as_str()).map(String::from),
+                window_title: args
+                    .get("window_title")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
             };
             match accessibility::find_elements(&params) {
                 Ok(elems) => {
                     let text: String = if elems.is_empty() {
                         "No matching elements found.".to_string()
                     } else {
-                        elems.iter().map(|e| e.to_text(0, 0)).collect::<Vec<_>>().join("\n")
+                        elems
+                            .iter()
+                            .map(|e| e.to_text(0, 0))
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     };
                     tool_result_text(id, &text, false)
                 }
                 Err(e) => tool_result_text(id, &e, true),
             }
         }
-        "get_focused_element" => {
-            match accessibility::get_focused_element() {
-                Ok(Some(elem)) => tool_result_text(id, &elem.to_text(0, 0), false),
-                Ok(None) => tool_result_text(id, "No focused element found.", false),
-                Err(e) => tool_result_text(id, &e, true),
-            }
-        }
+        "get_focused_element" => match accessibility::get_focused_element() {
+            Ok(Some(elem)) => tool_result_text(id, &elem.to_text(0, 0), false),
+            Ok(None) => tool_result_text(id, "No focused element found.", false),
+            Err(e) => tool_result_text(id, &e, true),
+        },
         "list_windows" => {
             let filter = args.get("title_filter").and_then(|v| v.as_str());
             match accessibility::list_accessible_windows(filter) {
@@ -455,10 +491,19 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     let text = if wins.is_empty() {
                         "No visible windows found.".to_string()
                     } else {
-                        wins.iter().map(|w| {
-                            let b = w.bounds.map(|(x,y,ww,h)| format!(" ({}x{}@{},{})", ww, h, x, y)).unwrap_or_default();
-                            format!("[window] \"{}\" pid={} process={}{}", w.title, w.process_id, w.process_name, b)
-                        }).collect::<Vec<_>>().join("\n")
+                        wins.iter()
+                            .map(|w| {
+                                let b = w
+                                    .bounds
+                                    .map(|(x, y, ww, h)| format!(" ({}x{}@{},{})", ww, h, x, y))
+                                    .unwrap_or_default();
+                                format!(
+                                    "[window] \"{}\" pid={} process={}{}",
+                                    w.title, w.process_id, w.process_name, b
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     };
                     tool_result_text(id, &text, false)
                 }
@@ -468,7 +513,10 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         "click_element" => dispatch_element_action(id, &args, accessibility::click_element),
         "focus_element" => dispatch_element_action(id, &args, accessibility::focus_element),
         "set_value" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let val = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
             match accessibility::set_element_value(eid, val) {
                 Ok(msg) => tool_result_text(id, &msg, false),
@@ -480,8 +528,14 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         "expand_element" => dispatch_element_action(id, &args, accessibility::expand_element),
         "collapse_element" => dispatch_element_action(id, &args, accessibility::collapse_element),
         "scroll_element" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
-            let dir = args.get("direction").and_then(|v| v.as_str()).unwrap_or("down");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let dir = args
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("down");
             let amt = args.get("amount").and_then(|v| v.as_f64()).unwrap_or(0.2);
             match accessibility::scroll_element(eid, dir, amt) {
                 Ok(msg) => tool_result_text(id, &msg, false),
@@ -490,7 +544,10 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         }
         "get_element_text" => dispatch_element_action(id, &args, accessibility::get_element_text),
         "get_element_children" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(2) as usize;
             match accessibility::get_element_children(eid, depth) {
                 Ok(elem) => tool_result_text(id, &elem.to_text(0, depth), false),
@@ -502,7 +559,12 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let app = args.get("app_name").and_then(|v| v.as_str()).unwrap_or("");
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
             let wait = args.get("wait_ms").and_then(|v| v.as_u64()).unwrap_or(2000);
-            log::info!("[launch_and_get_tree] Launching: '{}' (wait={}ms, depth={})", app, wait, depth);
+            log::info!(
+                "[launch_and_get_tree] Launching: '{}' (wait={}ms, depth={})",
+                app,
+                wait,
+                depth
+            );
             let launch_result = shell_launch(app);
             match launch_result {
                 Ok(_) => {
@@ -511,18 +573,28 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     match accessibility::get_ui_tree(None, depth, false) {
                         Ok(elem) => {
                             let mut text = format!("Launched '{}'. UI tree:\n", app);
-                            if !elem.meta.is_empty() { text.push_str(&elem.meta); text.push('\n'); }
+                            if !elem.meta.is_empty() {
+                                text.push_str(&elem.meta);
+                                text.push('\n');
+                            }
                             text.push_str(&elem.to_text(0, depth));
                             tool_result_text(id, &text, false)
                         }
-                        Err(e) => tool_result_text(id, &format!("Launched '{}' but failed to get tree: {}", app, e), true),
+                        Err(e) => tool_result_text(
+                            id,
+                            &format!("Launched '{}' but failed to get tree: {}", app, e),
+                            true,
+                        ),
                     }
                 }
                 Err(e) => tool_result_text(id, &format!("Failed to launch '{}': {}", app, e), true),
             }
         }
         "click_and_get_tree" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let title = args.get("window_title").and_then(|v| v.as_str());
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
             let click_msg = accessibility::click_element(eid);
@@ -534,33 +606,59 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     text.push_str(&elem.to_text(0, depth));
                     tool_result_text(id, &text, false)
                 }
-                Err(e) => tool_result_text(id, &format!("Click succeeded but tree failed: {}", e), true),
+                Err(e) => {
+                    tool_result_text(id, &format!("Click succeeded but tree failed: {}", e), true)
+                }
             }
         }
         "click_and_read_result" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
-            let result_name = args.get("result_name").and_then(|v| v.as_str()).unwrap_or("");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let result_name = args
+                .get("result_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let title = args.get("window_title").and_then(|v| v.as_str());
             let click_msg = accessibility::click_element(eid);
             std::thread::sleep(std::time::Duration::from_millis(300));
             let find_params = accessibility::FindElementsParams {
                 name: Some(result_name.to_string()),
-                role: None, automation_id: None, value: None,
+                role: None,
+                automation_id: None,
+                value: None,
                 window_title: title.map(String::from),
             };
             match accessibility::find_elements(&find_params) {
                 Ok(elems) => {
                     let click_str = click_msg.unwrap_or_else(|e| format!("Click failed: {}", e));
-                    let result_text = elems.first().map(|e| {
-                        if !e.value.is_empty() { e.value.clone() } else { e.name.clone() }
-                    }).unwrap_or_else(|| format!("Element '{}' not found", result_name));
-                    tool_result_text(id, &format!("{}\nResult: {}", click_str, result_text), false)
+                    let result_text = elems
+                        .first()
+                        .map(|e| {
+                            if !e.value.is_empty() {
+                                e.value.clone()
+                            } else {
+                                e.name.clone()
+                            }
+                        })
+                        .unwrap_or_else(|| format!("Element '{}' not found", result_name));
+                    tool_result_text(
+                        id,
+                        &format!("{}\nResult: {}", click_str, result_text),
+                        false,
+                    )
                 }
-                Err(e) => tool_result_text(id, &format!("Click succeeded but find failed: {}", e), true),
+                Err(e) => {
+                    tool_result_text(id, &format!("Click succeeded but find failed: {}", e), true)
+                }
             }
         }
         "type_and_get_tree" => {
-            let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
+            let eid = args
+                .get("element_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let text_val = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
             let title = args.get("window_title").and_then(|v| v.as_str());
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(3) as usize;
@@ -573,7 +671,9 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     text.push_str(&elem.to_text(0, depth));
                     tool_result_text(id, &text, false)
                 }
-                Err(e) => tool_result_text(id, &format!("Type succeeded but tree failed: {}", e), true),
+                Err(e) => {
+                    tool_result_text(id, &format!("Type succeeded but tree failed: {}", e), true)
+                }
             }
         }
         "get_app_steering" => {
@@ -582,12 +682,35 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             let combined = format!("{} {}", task, details).to_lowercase();
             // Embedded app steering files
             const STEERING: &[(&str, &str)] = &[
-                ("calculator", include_str!("../computer_control/app_steering/calculator.md")),
-                ("microsoft_office", include_str!("../computer_control/app_steering/microsoft_office.md")),
-                ("notepad", include_str!("../computer_control/app_steering/notepad.md")),
+                (
+                    "calculator",
+                    include_str!("../computer_control/app_steering/calculator.md"),
+                ),
+                (
+                    "microsoft_office",
+                    include_str!("../computer_control/app_steering/microsoft_office.md"),
+                ),
+                (
+                    "notepad",
+                    include_str!("../computer_control/app_steering/notepad.md"),
+                ),
             ];
             const APP_PATTERNS: &[(&str, &[&str])] = &[
-                ("microsoft_office", &["word", "winword", "excel", "powerpnt", "powerpoint", "outlook", "onenote", "access", "publisher", "visio"]),
+                (
+                    "microsoft_office",
+                    &[
+                        "word",
+                        "winword",
+                        "excel",
+                        "powerpnt",
+                        "powerpoint",
+                        "outlook",
+                        "onenote",
+                        "access",
+                        "publisher",
+                        "visio",
+                    ],
+                ),
                 ("notepad", &["notepad"]),
                 ("calculator", &["calc", "calculator"]),
             ];
@@ -613,18 +736,29 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 Err(e) => {
                     log::info!("[launch_app] Failed: {}", e);
                     tool_result_text(id, &format!("Failed to launch '{}': {}", name, e), true)
-                },
+                }
             }
         }
         "list_all_windows" => {
             let filter = args.get("title_filter").and_then(|v| v.as_str());
             match accessibility::list_accessible_windows(filter) {
                 Ok(wins) => {
-                    let text = if wins.is_empty() { "No windows found.".to_string() } else {
-                        wins.iter().map(|w| {
-                            let b = w.bounds.map(|(x,y,ww,h)| format!(" ({}x{}@{},{})", ww, h, x, y)).unwrap_or_default();
-                            format!("[window] \"{}\" pid={} process={}{}", w.title, w.process_id, w.process_name, b)
-                        }).collect::<Vec<_>>().join("\n")
+                    let text = if wins.is_empty() {
+                        "No windows found.".to_string()
+                    } else {
+                        wins.iter()
+                            .map(|w| {
+                                let b = w
+                                    .bounds
+                                    .map(|(x, y, ww, h)| format!(" ({}x{}@{},{})", ww, h, x, y))
+                                    .unwrap_or_default();
+                                format!(
+                                    "[window] \"{}\" pid={} process={}{}",
+                                    w.title, w.process_id, w.process_name, b
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
                     };
                     tool_result_text(id, &text, false)
                 }
@@ -633,7 +767,11 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         }
         "type_text" => {
             let text_val = args.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            log::info!("[type_text] Typing {} chars: {:?}", text_val.len(), text_val);
+            log::info!(
+                "[type_text] Typing {} chars: {:?}",
+                text_val.len(),
+                text_val
+            );
             #[cfg(target_os = "windows")]
             {
                 let kb = uiautomation::inputs::Keyboard::new();
@@ -642,20 +780,38 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 for (i, line) in lines.iter().enumerate() {
                     if !line.is_empty() {
                         if let Err(e) = kb.send_text(line) {
-                            return tool_result_text(id, &format!("Failed to type line {}: {}", i + 1, e), true);
+                            return tool_result_text(
+                                id,
+                                &format!("Failed to type line {}: {}", i + 1, e),
+                                true,
+                            );
                         }
                     }
                     // Send Enter between lines (not after the last one)
                     if i < lines.len() - 1 {
                         if let Err(e) = kb.send_keys("{Enter}") {
-                            return tool_result_text(id, &format!("Failed to send Enter: {}", e), true);
+                            return tool_result_text(
+                                id,
+                                &format!("Failed to send Enter: {}", e),
+                                true,
+                            );
                         }
                     }
                 }
-                tool_result_text(id, &format!("Typed {} characters ({} lines)", text_val.len(), lines.len()), false)
+                tool_result_text(
+                    id,
+                    &format!(
+                        "Typed {} characters ({} lines)",
+                        text_val.len(),
+                        lines.len()
+                    ),
+                    false,
+                )
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "type_text not available on this platform", true) }
+            {
+                tool_result_text(id, "type_text not available on this platform", true)
+            }
         }
         "key_press" => {
             let keys = args.get("keys").and_then(|v| v.as_str()).unwrap_or("");
@@ -671,16 +827,25 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     let uia_keys = convert_key_combo(keys);
                     match kb.send_keys(&uia_keys) {
                         Ok(_) => tool_result_text(id, &format!("Pressed: {}", keys), false),
-                        Err(e) => tool_result_text(id, &format!("Failed to press '{}': {}", keys, e), true),
+                        Err(e) => tool_result_text(
+                            id,
+                            &format!("Failed to press '{}': {}", keys, e),
+                            true,
+                        ),
                     }
                 }
                 #[cfg(not(target_os = "windows"))]
-                { tool_result_text(id, "key_press not available on this platform", true) }
+                {
+                    tool_result_text(id, "key_press not available on this platform", true)
+                }
             }
         }
         "key_press_confirmed" => {
             let keys = args.get("keys").and_then(|v| v.as_str()).unwrap_or("");
-            let confirm = args.get("confirm").and_then(|v| v.as_bool()).unwrap_or(false);
+            let confirm = args
+                .get("confirm")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             if !confirm {
                 tool_result_text(id, "Cancelled — confirm must be true.", false)
             } else {
@@ -694,17 +859,24 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     }
                 }
                 #[cfg(not(target_os = "windows"))]
-                { tool_result_text(id, "key_press not available on this platform", true) }
+                {
+                    tool_result_text(id, "key_press not available on this platform", true)
+                }
             }
         }
         "click" => {
             let x = args.get("x").and_then(|v| v.as_i64());
             let y = args.get("y").and_then(|v| v.as_i64());
-            let button = args.get("button").and_then(|v| v.as_str()).unwrap_or("left");
+            let button = args
+                .get("button")
+                .and_then(|v| v.as_str())
+                .unwrap_or("left");
             let count = args.get("count").and_then(|v| v.as_u64()).unwrap_or(1);
             #[cfg(target_os = "windows")]
             {
-                let mouse = uiautomation::inputs::Mouse::new().auto_move(true).move_time(50);
+                let mouse = uiautomation::inputs::Mouse::new()
+                    .auto_move(true)
+                    .move_time(50);
                 if let (Some(px), Some(py)) = (x, y) {
                     let pt = uiautomation::types::Point::new(px as i32, py as i32);
                     let result = match (button, count) {
@@ -713,16 +885,27 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                         _ => mouse.click(&pt),
                     };
                     match result {
-                        Ok(_) => tool_result_text(id, &format!("Clicked {} at ({}, {})", button, px, py), false),
+                        Ok(_) => tool_result_text(
+                            id,
+                            &format!("Clicked {} at ({}, {})", button, px, py),
+                            false,
+                        ),
                         Err(e) => tool_result_text(id, &format!("Click failed: {}", e), true),
                     }
                 } else {
-                    let pos = uiautomation::inputs::Mouse::get_cursor_pos().unwrap_or(uiautomation::types::Point::new(0, 0));
-                    tool_result_text(id, &format!("Clicked {} at ({}, {})", button, pos.get_x(), pos.get_y()), false)
+                    let pos = uiautomation::inputs::Mouse::get_cursor_pos()
+                        .unwrap_or(uiautomation::types::Point::new(0, 0));
+                    tool_result_text(
+                        id,
+                        &format!("Clicked {} at ({}, {})", button, pos.get_x(), pos.get_y()),
+                        false,
+                    )
                 }
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "click not available on this platform", true) }
+            {
+                tool_result_text(id, "click not available on this platform", true)
+            }
         }
         "drag" => {
             let from_x = args.get("from_x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -733,7 +916,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             #[cfg(target_os = "windows")]
             {
                 let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                    &uiautomation::types::Point::new(from_x, from_y)
+                    &uiautomation::types::Point::new(from_x, from_y),
                 );
                 std::thread::sleep(std::time::Duration::from_millis(50));
                 // Press, move in steps, release
@@ -743,18 +926,33 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 let dy = (to_y - from_y) as f64 / steps as f64;
                 for i in 1..=steps {
                     let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                        &uiautomation::types::Point::new(from_x + (dx * i as f64) as i32, from_y + (dy * i as f64) as i32)
+                        &uiautomation::types::Point::new(
+                            from_x + (dx * i as f64) as i32,
+                            from_y + (dy * i as f64) as i32,
+                        ),
                     );
                     std::thread::sleep(std::time::Duration::from_secs_f64(duration / steps as f64));
                 }
                 win32_mouse_event(MOUSEEVENTF_LEFTUP, 0);
-                tool_result_text(id, &format!("Dragged from ({},{}) to ({},{})", from_x, from_y, to_x, to_y), false)
+                tool_result_text(
+                    id,
+                    &format!(
+                        "Dragged from ({},{}) to ({},{})",
+                        from_x, from_y, to_x, to_y
+                    ),
+                    false,
+                )
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "drag not available on this platform", true) }
+            {
+                tool_result_text(id, "drag not available on this platform", true)
+            }
         }
         "scroll" => {
-            let direction = args.get("direction").and_then(|v| v.as_str()).unwrap_or("down");
+            let direction = args
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("down");
             let amount = args.get("amount").and_then(|v| v.as_i64()).unwrap_or(3) as i32;
             let x = args.get("x").and_then(|v| v.as_i64());
             let y = args.get("y").and_then(|v| v.as_i64());
@@ -762,31 +960,44 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             {
                 if let (Some(px), Some(py)) = (x, y) {
                     let _ = uiautomation::inputs::Mouse::set_cursor_pos(
-                        &uiautomation::types::Point::new(px as i32, py as i32)
+                        &uiautomation::types::Point::new(px as i32, py as i32),
                     );
                 }
-                let wheel_delta = if direction == "up" { amount * 120 } else { -amount * 120 };
+                let wheel_delta = if direction == "up" {
+                    amount * 120
+                } else {
+                    -amount * 120
+                };
                 win32_mouse_event(MOUSEEVENTF_WHEEL, wheel_delta);
                 tool_result_text(id, &format!("Scrolled {} by {}", direction, amount), false)
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "scroll not available on this platform", true) }
+            {
+                tool_result_text(id, "scroll not available on this platform", true)
+            }
         }
         "move_mouse" => {
             let x = args.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             let y = args.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             #[cfg(target_os = "windows")]
             {
-                match uiautomation::inputs::Mouse::set_cursor_pos(&uiautomation::types::Point::new(x, y)) {
+                match uiautomation::inputs::Mouse::set_cursor_pos(&uiautomation::types::Point::new(
+                    x, y,
+                )) {
                     Ok(_) => tool_result_text(id, &format!("Mouse moved to ({}, {})", x, y), false),
                     Err(e) => tool_result_text(id, &format!("Failed to move mouse: {}", e), true),
                 }
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "move_mouse not available on this platform", true) }
+            {
+                tool_result_text(id, "move_mouse not available on this platform", true)
+            }
         }
         "wait" => {
-            let ms = args.get("milliseconds").and_then(|v| v.as_u64()).unwrap_or(500);
+            let ms = args
+                .get("milliseconds")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(500);
             std::thread::sleep(std::time::Duration::from_millis(ms));
             tool_result_text(id, &format!("Waited {}ms", ms), false)
         }
@@ -794,23 +1005,35 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             #[cfg(target_os = "windows")]
             {
                 match uiautomation::inputs::Mouse::get_cursor_pos() {
-                    Ok(pos) => tool_result_text(id, &format!("{{\"x\": {}, \"y\": {}}}", pos.get_x(), pos.get_y()), false),
+                    Ok(pos) => tool_result_text(
+                        id,
+                        &format!("{{\"x\": {}, \"y\": {}}}", pos.get_x(), pos.get_y()),
+                        false,
+                    ),
                     Err(e) => tool_result_text(id, &format!("Failed: {}", e), true),
                 }
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "Not available on this platform", true) }
+            {
+                tool_result_text(id, "Not available on this platform", true)
+            }
         }
         "get_screen_size" => {
             #[cfg(target_os = "windows")]
             {
                 match uiautomation::inputs::get_screen_size() {
-                    Ok((w, h)) => tool_result_text(id, &format!("{{\"width\": {}, \"height\": {}}}", w, h), false),
+                    Ok((w, h)) => tool_result_text(
+                        id,
+                        &format!("{{\"width\": {}, \"height\": {}}}", w, h),
+                        false,
+                    ),
                     Err(e) => tool_result_text(id, &format!("Failed: {}", e), true),
                 }
             }
             #[cfg(not(target_os = "windows"))]
-            { tool_result_text(id, "Not available on this platform", true) }
+            {
+                tool_result_text(id, "Not available on this platform", true)
+            }
         }
         // Folder tools
         "get_common_folders" => {
@@ -842,7 +1065,11 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                     let path_str = path.to_string_lossy().replace('\\', "\\\\");
                     tool_result_text(id, &format!("{{\"path\": \"{}\"}}", path_str), false)
                 }
-                None => tool_result_text(id, "{\"path\": null, \"message\": \"User cancelled the folder picker\"}", false),
+                None => tool_result_text(
+                    id,
+                    "{\"path\": null, \"message\": \"User cancelled the folder picker\"}",
+                    false,
+                ),
             }
         }
         "scan_folder" => {
@@ -851,12 +1078,16 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 return tool_result_text(id, "Missing required parameter: path", true);
             }
             let max_depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(10) as usize;
-            let compute_hashes = args.get("compute_hashes").and_then(|v| v.as_bool()).unwrap_or(true);
+            let compute_hashes = args
+                .get("compute_hashes")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
             let root = std::path::Path::new(path);
             if !root.is_dir() {
                 return tool_result_text(id, &format!("Not a directory: {}", path), true);
             }
-            let result = kage::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
+            let result =
+                kage::commands::folder_tools::scan_directory(root, max_depth, compute_hashes);
             let text = serde_json::to_string_pretty(&result).unwrap_or_default();
             tool_result_text(id, &text, false)
         }
@@ -865,10 +1096,13 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
             if root_str.is_empty() {
                 return tool_result_text(id, "Missing required parameter: root", true);
             }
-            let ops: Vec<kage::commands::folder_tools::FolderOperation> = match args.get("operations") {
-                Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
-                None => return tool_result_text(id, "Missing required parameter: operations", true),
-            };
+            let ops: Vec<kage::commands::folder_tools::FolderOperation> =
+                match args.get("operations") {
+                    Some(v) => serde_json::from_value(v.clone()).unwrap_or_default(),
+                    None => {
+                        return tool_result_text(id, "Missing required parameter: operations", true)
+                    }
+                };
             if ops.is_empty() {
                 return tool_result_text(id, "Operations array is empty", true);
             }
@@ -893,7 +1127,10 @@ fn dispatch_element_action(
     args: &serde_json::Value,
     action: impl Fn(&str) -> Result<String, String>,
 ) -> String {
-    let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
+    let eid = args
+        .get("element_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     match action(eid) {
         Ok(msg) => tool_result_text(id, &msg, false),
         Err(e) => tool_result_text(id, &e, true),

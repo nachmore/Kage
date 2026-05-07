@@ -79,7 +79,9 @@ fn permissioned_commands() -> HashSet<String> {
     let src = fs::read_to_string(&path).expect("read extension-permissions.js");
 
     let marker = "COMMAND_CAPABILITIES = Object.freeze({";
-    let start = src.find(marker).expect("COMMAND_CAPABILITIES marker not found");
+    let start = src
+        .find(marker)
+        .expect("COMMAND_CAPABILITIES marker not found");
     let after_open = start + marker.len();
     // Walk forward counting brace depth. The block contains nested literal
     // `{` only inside string descriptions — there are none in this map —
@@ -153,7 +155,11 @@ fn every_registered_command_has_a_permission_entry() {
          `null` (never callable from extensions). The sandbox host fails \n\
          closed today, but the explicit decision is required so a future \n\
          refactor doesn't silently expose new commands.\n",
-        missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  - "),
+        missing
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n  - "),
     );
 }
 
@@ -171,7 +177,11 @@ fn no_stale_permission_entries_for_removed_commands() {
          that don't correspond to any registered Tauri command:\n\n  - {}\n\n\
          Either the command was removed (drop the JS entry) or the parser \n\
          is missing it (extend tests/command_permissions_parity_test.rs).\n",
-        stale.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n  - "),
+        stale
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n  - "),
     );
 }
 
@@ -186,7 +196,11 @@ fn registered_commands_includes_known_anchors() {
     // parser stops finding them, it's broken and the parity assertion
     // above can't be trusted.
     let registered = registered_commands();
-    for anchor in ["save_config", "send_message_streaming", "emit_automation_signal"] {
+    for anchor in [
+        "save_config",
+        "send_message_streaming",
+        "emit_automation_signal",
+    ] {
         assert!(
             registered.contains(anchor),
             "parser missed expected command: {anchor}"
@@ -198,7 +212,11 @@ fn registered_commands_includes_known_anchors() {
 fn permissioned_commands_includes_known_anchors() {
     // Same idea for the JS map.
     let permissioned = permissioned_commands();
-    for anchor in ["save_config", "save_extension_data", "execute_system_command"] {
+    for anchor in [
+        "save_config",
+        "save_extension_data",
+        "execute_system_command",
+    ] {
         assert!(
             permissioned.contains(anchor),
             "parser missed expected permission entry: {anchor}"

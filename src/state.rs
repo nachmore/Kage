@@ -1,8 +1,8 @@
 use crate::acp_client::AcpClient;
 use crate::app_launcher::AppLauncher;
 use crate::config::Config;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// State that lives or dies with the agent connection — the ACP client itself
@@ -76,7 +76,9 @@ pub struct FeatureServices {
     /// re-parsing unchanged ones. See `kage_desktop::KageDesktopCache`.
     pub kage_desktop_cache: crate::commands::kage_desktop::KageDesktopCacheHandle,
     /// Automation signal sender (for extensions to emit signals)
-    pub automation_signal_tx: Arc<std::sync::Mutex<Option<tokio::sync::mpsc::Sender<crate::automation::AutomationSignal>>>>,
+    pub automation_signal_tx: Arc<
+        std::sync::Mutex<Option<tokio::sync::mpsc::Sender<crate::automation::AutomationSignal>>>,
+    >,
 }
 
 #[derive(Debug, Clone)]

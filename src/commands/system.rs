@@ -8,7 +8,7 @@ use std::fs;
 use tauri::{Emitter, Manager, State};
 
 /// Re-export steering constants from auto_steering (the canonical location).
-pub use crate::auto_steering::{STEERING_MSG_PREFIX, BUILTIN_STEERING};
+pub use crate::auto_steering::{BUILTIN_STEERING, STEERING_MSG_PREFIX};
 
 /// Consolidated shutdown: hide UI, kill TTS, generate steering, disconnect ACP.
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
@@ -44,12 +44,22 @@ pub async fn shutdown_and_exit(app: &tauri::AppHandle) {
 }
 
 /// Shutdown with optional restart: spawns a new process right before exit.
-pub async fn shutdown_and_exit_with_restart(app: &tauri::AppHandle, exe: std::path::PathBuf, args: Vec<String>) {
+pub async fn shutdown_and_exit_with_restart(
+    app: &tauri::AppHandle,
+    exe: std::path::PathBuf,
+    args: Vec<String>,
+) {
     shutdown_and_exit_inner(app, Some((exe, args))).await;
 }
 
-async fn shutdown_and_exit_inner(app: &tauri::AppHandle, restart: Option<(std::path::PathBuf, Vec<String>)>) {
-    if let (Some(acp), Some(features)) = (app.try_state::<AcpHandles>(), app.try_state::<FeatureServices>()) {
+async fn shutdown_and_exit_inner(
+    app: &tauri::AppHandle,
+    restart: Option<(std::path::PathBuf, Vec<String>)>,
+) {
+    if let (Some(acp), Some(features)) = (
+        app.try_state::<AcpHandles>(),
+        app.try_state::<FeatureServices>(),
+    ) {
         let acp_client = acp.client.clone();
         let config = features.config.clone();
 
@@ -275,11 +285,14 @@ fn shortcut_history_path() -> Result<std::path::PathBuf, String> {
 #[tauri::command]
 pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), AppError> {
     let args = args.trim().to_string();
-    if args.is_empty() { return Ok(()); }
+    if args.is_empty() {
+        return Ok(());
+    }
 
     let path = shortcut_history_path()?;
     let mut history: serde_json::Map<String, serde_json::Value> = if path.exists() {
-        fs::read_to_string(&path).ok()
+        fs::read_to_string(&path)
+            .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default()
     } else {
@@ -291,10 +304,14 @@ pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), 
         "at": chrono::Utc::now().to_rfc3339()
     });
 
-    let entries = history.entry(trigger).or_insert_with(|| serde_json::json!([]));
+    let entries = history
+        .entry(trigger)
+        .or_insert_with(|| serde_json::json!([]));
     if let Some(arr) = entries.as_array_mut() {
         // Remove duplicate if same args already exist
-        arr.retain(|e| e.get("args").and_then(|a| a.as_str()) != Some(entry["args"].as_str().unwrap_or("")));
+        arr.retain(|e| {
+            e.get("args").and_then(|a| a.as_str()) != Some(entry["args"].as_str().unwrap_or(""))
+        });
         // Prepend new entry
         arr.insert(0, entry);
         // Cap at MAX_SHORTCUT_HISTORY
@@ -304,21 +321,28 @@ pub async fn record_shortcut_usage(trigger: String, args: String) -> Result<(), 
     if let Some(dir) = path.parent() {
         let _ = fs::create_dir_all(dir);
     }
-    Ok(fs::write(&path, serde_json::to_string_pretty(&history).unwrap_or_default())
-        .map_err(|e| format!("Failed to save shortcut history: {}", e))?)
+    Ok(fs::write(
+        &path,
+        serde_json::to_string_pretty(&history).unwrap_or_default(),
+    )
+    .map_err(|e| format!("Failed to save shortcut history: {}", e))?)
 }
 
 /// Get history entries for a specific shortcut trigger.
 #[tauri::command]
 pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Value>, AppError> {
     let path = shortcut_history_path()?;
-    if !path.exists() { return Ok(vec![]); }
+    if !path.exists() {
+        return Ok(vec![]);
+    }
 
-    let history: serde_json::Map<String, serde_json::Value> = fs::read_to_string(&path).ok()
+    let history: serde_json::Map<String, serde_json::Value> = fs::read_to_string(&path)
+        .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
 
-    Ok(history.get(&trigger)
+    Ok(history
+        .get(&trigger)
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default())
@@ -332,7 +356,10 @@ pub async fn update_tool_policy(
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
     let gt = grant_type.unwrap_or_else(|| "once".to_string());
-    info!("Updating tool policy: {} -> {} (grant: {})", tool_title, policy, gt);
+    info!(
+        "Updating tool policy: {} -> {} (grant: {})",
+        tool_title, policy, gt
+    );
     let mut config = features.config.lock_or_recover();
     let timestamp = chrono::Utc::now().to_rfc3339();
 
@@ -446,15 +473,19 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
         return Ok(());
     }
     // Create fresh window (previous one was closed/destroyed)
-    let w = WebviewWindowBuilder::new(&app, "welcome", tauri::WebviewUrl::App("welcome.html".into()))
-        .title("Welcome to Kage")
-        .inner_size(580.0, 640.0)
-        .resizable(false)
-        .decorations(false)
-        .center()
-        .visible(false) // Hidden until content loads
-        .build()
-        .map_err(|e| format!("Failed to open welcome window: {}", e))?;
+    let w = WebviewWindowBuilder::new(
+        &app,
+        "welcome",
+        tauri::WebviewUrl::App("welcome.html".into()),
+    )
+    .title("Welcome to Kage")
+    .inner_size(580.0, 640.0)
+    .resizable(false)
+    .decorations(false)
+    .center()
+    .visible(false) // Hidden until content loads
+    .build()
+    .map_err(|e| format!("Failed to open welcome window: {}", e))?;
     // Set dark background to prevent white flash
     let _ = w.set_background_color(Some(tauri::window::Color(30, 26, 36, 255)));
     // When closed, destroy so it can be recreated
@@ -506,29 +537,41 @@ pub async fn complete_first_run(
 /// Show the floating window with a welcome banner displaying the configured hotkey.
 /// Called from first-run completion and the dev tray menu.
 pub fn show_welcome_banner(app: &tauri::AppHandle) {
-    let hotkey_str = app.try_state::<FeatureServices>()
+    let hotkey_str = app
+        .try_state::<FeatureServices>()
         .and_then(|features| {
-            features.config.try_lock().ok().map(|c| c.get_hotkey_string())
+            features
+                .config
+                .try_lock()
+                .ok()
+                .map(|c| c.get_hotkey_string())
         })
         .unwrap_or_else(|| "Alt+Space".to_string());
-    let keycaps: String = hotkey_str.split('+')
+    let keycaps: String = hotkey_str
+        .split('+')
         .map(|k| format!("<span class=\"keycap\">{}</span>", k))
         .collect::<Vec<_>>()
         .join("<span class=\"keycap-sep\">+</span>");
-    let text = format!("<b>Welcome to Kage!</b><br/>&nbsp;<br>Press {} anytime to summon me.", keycaps);
+    let text = format!(
+        "<b>Welcome to Kage!</b><br/>&nbsp;<br>Press {} anytime to summon me.",
+        keycaps
+    );
 
     if let Some(floating) = app.get_webview_window("floating") {
         crate::commands::window::center_floating_on_active_monitor(&floating);
         let _ = floating.show();
         let _ = floating.set_focus();
     }
-    let _ = app.emit("show_floating_banner", serde_json::json!({
-        "icon": "👋",
-        "text": text,
-        "action_label": "",
-        "action_type": "dismiss",
-        "action_data": ""
-    }));
+    let _ = app.emit(
+        "show_floating_banner",
+        serde_json::json!({
+            "icon": "👋",
+            "text": text,
+            "action_label": "",
+            "action_type": "dismiss",
+            "action_data": ""
+        }),
+    );
 }
 
 #[tauri::command]
@@ -576,8 +619,14 @@ pub async fn get_mcp_config(path: Option<String>) -> Result<serde_json::Value, A
 }
 
 #[tauri::command]
-pub async fn save_mcp_config(path: Option<String>, config: serde_json::Value) -> Result<(), AppError> {
-    Ok(crate::mcp_registration::write_mcp_json(path.as_deref(), &config)?)
+pub async fn save_mcp_config(
+    path: Option<String>,
+    config: serde_json::Value,
+) -> Result<(), AppError> {
+    Ok(crate::mcp_registration::write_mcp_json(
+        path.as_deref(),
+        &config,
+    )?)
 }
 
 fn get_startup_enabled_impl() -> bool {
@@ -614,8 +663,8 @@ pub async fn get_os_dark_mode() -> bool {
 /// - After hotkey capture (capture_hotkey_combo)
 /// - After hotkey test (try_register_hotkey)
 pub fn register_all_hotkeys(app: &tauri::AppHandle) {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
     use tauri::Emitter;
+    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
     info!("Registering all hotkeys...");
     let _ = app.global_shortcut().unregister_all();
@@ -630,14 +679,15 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
 
     // --- Main hotkey: toggle floating window (unique behavior) ---
     if let Some(floating) = app.get_webview_window("floating") {
-        match app.global_shortcut().on_shortcut(
-            main_hk.as_str(),
-            move |_app, _shortcut, event| {
-                if event.state != ShortcutState::Pressed { return; }
+        match app
+            .global_shortcut()
+            .on_shortcut(main_hk.as_str(), move |_app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed {
+                    return;
+                }
                 info!("Hotkey triggered: main ({})", _shortcut);
                 crate::commands::window::toggle_floating_window(&floating);
-            },
-        ) {
+            }) {
             Ok(_) => info!("✅ Registered main hotkey: {}", main_hk),
             Err(e) => error!("❌ Failed to register main hotkey {}: {}", main_hk, e),
         }
@@ -646,10 +696,12 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     // --- Inline assist hotkey: capture selection + show assist (unique behavior) ---
     if let Some(ref ia) = ia_hk {
         let ia_handle = app.clone();
-        match app.global_shortcut().on_shortcut(
-            ia.as_str(),
-            move |_app, _shortcut, event| {
-                if event.state != ShortcutState::Pressed { return; }
+        match app
+            .global_shortcut()
+            .on_shortcut(ia.as_str(), move |_app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed {
+                    return;
+                }
                 info!("Hotkey triggered: inline-assist ({})", _shortcut);
                 let source_info = crate::os::window_list::get_foreground_window_info();
                 let capture_token = crate::os::clipboard::begin_selection_capture();
@@ -658,13 +710,17 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                 let handle = ia_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = crate::commands::window::show_inline_assist_with_context(
-                        handle, source_info, selection, cursor_pos
-                    ).await {
+                        handle,
+                        source_info,
+                        selection,
+                        cursor_pos,
+                    )
+                    .await
+                    {
                         error!("Failed to show inline assist: {}", e);
                     }
                 });
-            },
-        ) {
+            }) {
             Ok(_) => info!("✅ Registered inline-assist hotkey: {}", ia),
             Err(e) => warn!("❌ Failed to register inline-assist hotkey {}: {}", ia, e),
         }
@@ -676,8 +732,8 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     // To add a new hotkey of this type: add a config getter and an entry here.
     let event_hotkeys: Vec<(&str, Option<String>, &str, u64)> = vec![
         // (name,        hotkey_string, event_name,              delay_ms)
-        ("clipboard",    cb_hk,         "clipboard_history_mode", 150),
-        ("voice",        voice_hk,      "voice_mode",             200),
+        ("clipboard", cb_hk, "clipboard_history_mode", 150),
+        ("voice", voice_hk, "voice_mode", 200),
     ];
 
     for (name, hk_opt, event_name, delay_ms) in event_hotkeys {
@@ -690,7 +746,9 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                     match app.global_shortcut().on_shortcut(
                         hk.as_str(),
                         move |_app, _shortcut, event| {
-                            if event.state != ShortcutState::Pressed { return; }
+                            if event.state != ShortcutState::Pressed {
+                                return;
+                            }
                             info!("Hotkey triggered: {} ({})", label, _shortcut);
                             crate::commands::window::show_floating_at_mouse(&floating);
                             let handle = app_handle.clone();
@@ -725,7 +783,10 @@ pub async fn try_register_hotkey(
     } else {
         format!("{}+{}", modifiers.join("+"), key)
     };
-    info!("Trying to register hotkey: {} (slot: {:?})", hotkey_str, slot);
+    info!(
+        "Trying to register hotkey: {} (slot: {:?})",
+        hotkey_str, slot
+    );
 
     // Check for conflicts with other hotkey slots
     {
@@ -752,10 +813,11 @@ pub async fn try_register_hotkey(
             ("main", Some(main_hk)),
             ("clipboard", cb_hk),
             ("inline-assist", ia_hk),
-        ].into_iter()
-            .filter(|(name, _)| *name != slot_name)
-            .filter_map(|(name, hk)| hk.map(|h| (name, normalize(&h))))
-            .collect();
+        ]
+        .into_iter()
+        .filter(|(name, _)| *name != slot_name)
+        .filter_map(|(name, hk)| hk.map(|h| (name, normalize(&h))))
+        .collect();
 
         for (name, norm) in &all_hotkeys {
             if new_norm == *norm {
@@ -767,7 +829,9 @@ pub async fn try_register_hotkey(
         let current_for_slot = match slot_name {
             "main" => Some(normalize(&config.get_hotkey_string())),
             "clipboard" => config.get_clipboard_hotkey_string().map(|s| normalize(&s)),
-            "inline-assist" => config.get_inline_assist_hotkey_string().map(|s| normalize(&s)),
+            "inline-assist" => config
+                .get_inline_assist_hotkey_string()
+                .map(|s| normalize(&s)),
             _ => None,
         };
         if current_for_slot.as_deref() == Some(new_norm.as_str()) {
@@ -777,10 +841,10 @@ pub async fn try_register_hotkey(
 
     // Test that the hotkey can be registered
     let _ = app.global_shortcut().unregister_all();
-    match app.global_shortcut().on_shortcut(
-        hotkey_str.as_str(),
-        |_app, _shortcut, _event| {},
-    ) {
+    match app
+        .global_shortcut()
+        .on_shortcut(hotkey_str.as_str(), |_app, _shortcut, _event| {})
+    {
         Ok(_) => {
             info!("✅ Hotkey test passed: {}", hotkey_str);
             // Re-register all hotkeys (the config hasn't been saved yet,
@@ -804,9 +868,9 @@ pub async fn capture_hotkey_combo(app: tauri::AppHandle) -> Result<serde_json::V
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
     let _ = app.global_shortcut().unregister_all();
 
-    let result = tauri::async_runtime::spawn_blocking(|| {
-        crate::os::capture_hotkey(10000)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
+    let result = tauri::async_runtime::spawn_blocking(|| crate::os::capture_hotkey(10000))
+        .await
+        .map_err(|e| format!("Task error: {}", e))?;
 
     // Re-register all global hotkeys from config
     register_all_hotkeys(&app);
@@ -835,7 +899,9 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
         window.open_devtools();
     }
     #[cfg(not(debug_assertions))]
-    { let _ = app; }
+    {
+        let _ = app;
+    }
     Ok(())
 }
 
@@ -848,16 +914,30 @@ pub async fn restart_app(app: tauri::AppHandle) -> Result<(), AppError> {
     let mut args: Vec<String> = Vec::new();
     let mut skip_next = false;
     for arg in std::env::args().skip(1) {
-        if skip_next { skip_next = false; continue; }
-        if arg == "--" { break; } // Stop at cargo separator
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        if arg == "--" {
+            break;
+        } // Stop at cargo separator
         if arg.starts_with("--no-default") || arg.starts_with("--color") {
-            if arg == "--color" { skip_next = true; } // --color has a value arg
+            if arg == "--color" {
+                skip_next = true;
+            } // --color has a value arg
             continue;
         }
         args.push(arg);
     }
     if !args.iter().any(|a| a == "--restart" || a == "/restart") {
-        args.push(if cfg!(windows) { "/restart" } else { "--restart" }.to_string());
+        args.push(
+            if cfg!(windows) {
+                "/restart"
+            } else {
+                "--restart"
+            }
+            .to_string(),
+        );
     }
 
     graceful_shutdown(&app);
@@ -902,71 +982,90 @@ pub async fn resolve_directories() -> Result<Vec<serde_json::Value>, AppError> {
         ("music", &["audio"], dirs::audio_dir()),
         ("pictures", &["photos"], dirs::picture_dir()),
         ("public", &["—"], dirs::public_dir()),
-        ("screenshots", &["screenshot"], dirs::picture_dir().map(|p| p.join("Screenshots"))),
+        (
+            "screenshots",
+            &["screenshot"],
+            dirs::picture_dir().map(|p| p.join("Screenshots")),
+        ),
         ("templates", &["template"], dirs::template_dir()),
         ("temp", &["tmp"], Some(std::env::temp_dir())),
         ("videos", &["video", "movies"], dirs::video_dir()),
     ];
-    Ok(dirs.into_iter().map(|(keyword, aliases, path)| {
-        serde_json::json!({
-            "keyword": keyword,
-            "aliases": aliases.join(", "),
-            "path": path.map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+    Ok(dirs
+        .into_iter()
+        .map(|(keyword, aliases, path)| {
+            serde_json::json!({
+                "keyword": keyword,
+                "aliases": aliases.join(", "),
+                "path": path.map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+            })
         })
-    }).collect())
+        .collect())
 }
 
 #[tauri::command]
-pub async fn get_clipboard_history() -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, AppError> {
+pub async fn get_clipboard_history(
+) -> Result<Vec<crate::os::clipboard_history::ClipboardHistoryEntry>, AppError> {
     Ok(crate::os::get_clipboard_history())
 }
 
 /// Search for files using the OS-native search index.
 #[tauri::command]
-pub async fn search_files(query: String, max_results: Option<usize>) -> Result<Vec<crate::os::file_search::FileSearchResult>, AppError> {
+pub async fn search_files(
+    query: String,
+    max_results: Option<usize>,
+) -> Result<Vec<crate::os::file_search::FileSearchResult>, AppError> {
     let max = max_results.unwrap_or(10);
     let q = query.clone();
-    Ok(tauri::async_runtime::spawn_blocking(move || {
-        crate::os::search_files(&q, max)
-    })
-    .await
-    .map_err(|e| format!("Search task failed: {}", e))?)
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || crate::os::search_files(&q, max))
+            .await
+            .map_err(|e| format!("Search task failed: {}", e))?,
+    )
 }
 
 /// Get upcoming calendar events.
 #[tauri::command]
-pub async fn get_calendar_events(hours: Option<u32>) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
+pub async fn get_calendar_events(
+    hours: Option<u32>,
+) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     let h = hours.unwrap_or(24).min(72);
-    Ok(tauri::async_runtime::spawn_blocking(move || {
-        crate::os::get_upcoming_events(h)
-    })
-    .await
-    .map_err(|e| format!("Calendar task failed: {}", e))?)
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || crate::os::get_upcoming_events(h))
+            .await
+            .map_err(|e| format!("Calendar task failed: {}", e))?,
+    )
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
 #[tauri::command]
-pub async fn get_calendar_events_for_date(date: String) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
+pub async fn get_calendar_events_for_date(
+    date: String,
+) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     // Strict YYYY-MM-DD validation. The date is interpolated into a PowerShell
     // command on Windows, so anything more permissive is an injection vector.
     if date.len() != 10 {
         return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
     let bytes = date.as_bytes();
-    let ok = bytes[0].is_ascii_digit() && bytes[1].is_ascii_digit()
-        && bytes[2].is_ascii_digit() && bytes[3].is_ascii_digit()
+    let ok = bytes[0].is_ascii_digit()
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit()
+        && bytes[3].is_ascii_digit()
         && bytes[4] == b'-'
-        && bytes[5].is_ascii_digit() && bytes[6].is_ascii_digit()
+        && bytes[5].is_ascii_digit()
+        && bytes[6].is_ascii_digit()
         && bytes[7] == b'-'
-        && bytes[8].is_ascii_digit() && bytes[9].is_ascii_digit();
+        && bytes[8].is_ascii_digit()
+        && bytes[9].is_ascii_digit();
     if !ok {
         return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
-    Ok(tauri::async_runtime::spawn_blocking(move || {
-        crate::os::get_events_for_date(&date)
-    })
-    .await
-    .map_err(|e| format!("Calendar date query failed: {}", e))?)
+    Ok(
+        tauri::async_runtime::spawn_blocking(move || crate::os::get_events_for_date(&date))
+            .await
+            .map_err(|e| format!("Calendar date query failed: {}", e))?,
+    )
 }
 
 /// Fetch a website's favicon and return it as a base64 data URI.
@@ -1104,12 +1203,13 @@ pub fn compute_user_info() -> UserInfo {
     }
 }
 
-
 /// Build the combined steering content from user and auto-generated docs.
 /// User steering takes precedence (placed first).
 /// Returns None if no steering content is available.
 #[tauri::command]
-pub async fn get_steering_content(features: State<'_, FeatureServices>) -> Result<Option<String>, AppError> {
+pub async fn get_steering_content(
+    features: State<'_, FeatureServices>,
+) -> Result<Option<String>, AppError> {
     let config = features.config.lock_or_recover();
     let parts = assemble_steering_parts(&config);
     Ok(Some(format_steering_message(&parts)))
@@ -1125,8 +1225,7 @@ pub async fn open_auto_steering_file() -> Result<String, AppError> {
     // Create with header if it doesn't exist
     if !auto_path.exists() {
         if let Some(parent) = auto_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
         }
         let header = "<!-- AUTO-GENERATED STEERING DOCUMENT\n     Any manual changes will be overridden the next time this document is generated.\n     To add your own persistent instructions, use a User Steering Document instead. -->\n\n";
         fs::write(&auto_path, header)
@@ -1139,8 +1238,7 @@ pub async fn open_auto_steering_file() -> Result<String, AppError> {
         .to_string();
 
     // Open in default editor
-    crate::os::open_in_editor(&path_str)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
+    crate::os::open_in_editor(&path_str).map_err(|e| format!("Failed to open file: {}", e))?;
 
     Ok(path_str)
 }
@@ -1179,10 +1277,12 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value
 
 #[tauri::command]
 pub async fn fetch_changelog() -> Result<String, AppError> {
-    Ok(tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
-        .await
-        .map_err(|e| format!("Task error: {}", e))?
-        .map_err(|e| format!("Fetch failed: {}", e))?)
+    Ok(
+        tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
+            .await
+            .map_err(|e| format!("Task error: {}", e))?
+            .map_err(|e| format!("Fetch failed: {}", e))?,
+    )
 }
 
 #[tauri::command]
@@ -1195,16 +1295,11 @@ pub async fn get_update_urls() -> Result<serde_json::Value, AppError> {
 }
 
 #[tauri::command]
-pub async fn download_and_install_update(
-    ui: State<'_, UiState>,
-) -> Result<(), AppError> {
-    let session_id = ui.floating_session_id.lock()
-        .ok()
-        .and_then(|s| s.clone());
+pub async fn download_and_install_update(ui: State<'_, UiState>) -> Result<(), AppError> {
+    let session_id = ui.floating_session_id.lock().ok().and_then(|s| s.clone());
 
     Ok(tauri::async_runtime::spawn_blocking(move || {
-        let path = crate::updater::download_installer()
-            .map_err(|e| e.to_string())?;
+        let path = crate::updater::download_installer().map_err(|e| e.to_string())?;
         crate::updater::run_installer_and_exit(&path, session_id.as_deref())
             .map_err(|e| e.to_string())
     })
@@ -1222,7 +1317,9 @@ pub async fn was_just_updated(features: State<'_, FeatureServices>) -> Result<bo
 pub async fn clear_update_flag(features: State<'_, FeatureServices>) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     crate::updater::clear_update_flag(&mut config);
-    Ok(config.save().map_err(|e| format!("Failed to save: {}", e))?)
+    Ok(config
+        .save()
+        .map_err(|e| format!("Failed to save: {}", e))?)
 }
 
 #[tauri::command]
@@ -1242,13 +1339,16 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
         let _ = floating.show();
         let _ = floating.set_focus();
     }
-    let _ = app.emit("show_floating_banner", serde_json::json!({
-        "icon": "🎉",
-        "text": "Kage has been updated!",
-        "action_label": "View changelog →",
-        "action_type": "settings",
-        "action_data": "updates"
-    }));
+    let _ = app.emit(
+        "show_floating_banner",
+        serde_json::json!({
+            "icon": "🎉",
+            "text": "Kage has been updated!",
+            "action_label": "View changelog →",
+            "action_type": "settings",
+            "action_data": "updates"
+        }),
+    );
 }
 
 // --- Window Walker ---
@@ -1264,10 +1364,7 @@ pub async fn get_process_name(pid: u32) -> Result<String, AppError> {
 }
 
 #[tauri::command]
-pub async fn focus_open_window(
-    handle: u64,
-    app: tauri::AppHandle,
-) -> Result<(), AppError> {
+pub async fn focus_open_window(handle: u64, app: tauri::AppHandle) -> Result<(), AppError> {
     // Hide the floating window before focusing the target
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.hide();
@@ -1308,7 +1405,9 @@ pub async fn get_activity_report(
 }
 
 #[tauri::command]
-pub async fn is_activity_tracker_running(features: State<'_, FeatureServices>) -> Result<bool, AppError> {
+pub async fn is_activity_tracker_running(
+    features: State<'_, FeatureServices>,
+) -> Result<bool, AppError> {
     Ok(features.activity_tracker.is_running())
 }
 
@@ -1342,9 +1441,7 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
     let home = dirs::home_dir();
 
     // Known agent definitions: (display_name, binary_name, acp_args)
-    let known = [
-        ("Kiro CLI", "kiro-cli", "acp"),
-    ];
+    let known = [("Kiro CLI", "kiro-cli", "acp")];
 
     for (display_name, bin_name, acp_args) in &known {
         let mut candidates: Vec<std::path::PathBuf> = Vec::new();
@@ -1353,11 +1450,24 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
         #[cfg(target_os = "windows")]
         {
             if let Ok(local) = std::env::var("LOCALAPPDATA") {
-                candidates.push(std::path::PathBuf::from(&local).join("Toolbox").join("bin").join(format!("{}.exe", bin_name)));
-                candidates.push(std::path::PathBuf::from(&local).join("Programs").join(format!("{}.exe", bin_name)));
+                candidates.push(
+                    std::path::PathBuf::from(&local)
+                        .join("Toolbox")
+                        .join("bin")
+                        .join(format!("{}.exe", bin_name)),
+                );
+                candidates.push(
+                    std::path::PathBuf::from(&local)
+                        .join("Programs")
+                        .join(format!("{}.exe", bin_name)),
+                );
             }
             if let Some(ref h) = home {
-                candidates.push(h.join(".local").join("bin").join(format!("{}.exe", bin_name)));
+                candidates.push(
+                    h.join(".local")
+                        .join("bin")
+                        .join(format!("{}.exe", bin_name)),
+                );
             }
         }
 
@@ -1387,9 +1497,10 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
         }
 
         // Also check PATH via `which` / `where`
-        if let Ok(output) = std::process::Command::new(if cfg!(windows) { "where" } else { "which" })
-            .arg(bin_name)
-            .output()
+        if let Ok(output) =
+            std::process::Command::new(if cfg!(windows) { "where" } else { "which" })
+                .arg(bin_name)
+                .output()
         {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1404,12 +1515,16 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
 
         // Check each candidate
         for path in candidates {
-            if !path.exists() { continue; }
+            if !path.exists() {
+                continue;
+            }
 
             let path_str = path.to_string_lossy().to_string();
 
             // Skip if we already found this exact path
-            if agents.iter().any(|a: &DetectedAgent| a.path == path_str) { continue; }
+            if agents.iter().any(|a: &DetectedAgent| a.path == path_str) {
+                continue;
+            }
 
             // Try to get version
             let version = std::process::Command::new(&path)
@@ -1419,8 +1534,14 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
                 .and_then(|o| {
                     if o.status.success() {
                         let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                        if !v.is_empty() { Some(v) } else { None }
-                    } else { None }
+                        if !v.is_empty() {
+                            Some(v)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 });
 
             agents.push(DetectedAgent {
@@ -1514,7 +1635,8 @@ fn dump_thread_info_windows() -> String {
     let mut deltas: Vec<ThreadDelta> = Vec::new();
     // (tid, delta_total, delta_user, delta_kernel, cum_total, cum_user, cum_kernel, name)
     for (tid, total2, user2, kernel2, name) in &snap2 {
-        if let Some((_, total1, user1, kernel1, _)) = snap1.iter().find(|(t, _, _, _, _)| t == tid) {
+        if let Some((_, total1, user1, kernel1, _)) = snap1.iter().find(|(t, _, _, _, _)| t == tid)
+        {
             let dt = total2 - total1;
             let du = user2 - user1;
             let dk = kernel2 - kernel1;
@@ -1528,17 +1650,27 @@ fn dump_thread_info_windows() -> String {
     // Active threads (delta > 0)
     let active: Vec<_> = deltas.iter().filter(|d| d.1 > 10.0).collect();
     if active.is_empty() {
-        let _ = writeln!(output, "No threads used significant CPU in the 3s sample window.");
+        let _ = writeln!(
+            output,
+            "No threads used significant CPU in the 3s sample window."
+        );
     } else {
         let _ = writeln!(output, "\n--- Active threads (CPU used in last 3s) ---");
-        let _ = writeln!(output, "{:<8} {:<22} {:>10} {:>10} {:>10}  {:>12} {:>12} {:>12}", 
-            "TID", "Name", "Δ Total", "Δ User", "Δ Kernel", "Cum Total", "Cum User", "Cum Kernel");
+        let _ = writeln!(
+            output,
+            "{:<8} {:<22} {:>10} {:>10} {:>10}  {:>12} {:>12} {:>12}",
+            "TID", "Name", "Δ Total", "Δ User", "Δ Kernel", "Cum Total", "Cum User", "Cum Kernel"
+        );
         let _ = writeln!(output, "{}", "-".repeat(105));
         for (tid, dt, du, dk, ct, cu, ck, name) in &active {
             let pct = dt / 3000.0 * 100.0; // % of one core
-            let note = if pct > 80.0 { " ← SPINNING" }
-                else if pct > 30.0 { " ← HOT" }
-                else { "" };
+            let note = if pct > 80.0 {
+                " ← SPINNING"
+            } else if pct > 30.0 {
+                " ← HOT"
+            } else {
+                ""
+            };
             let display_name = if name.is_empty() { "-" } else { name.as_str() };
             let _ = writeln!(output, "{:<8} {:<22} {:>9.0}ms {:>9.0}ms {:>9.0}ms  {:>11.0}ms {:>11.0}ms {:>11.0}ms  ({:.0}% core){}",
                 tid, display_name, dt, du, dk, ct, cu, ck, pct, note);
@@ -1547,13 +1679,21 @@ fn dump_thread_info_windows() -> String {
 
     // Top 10 by cumulative total
     let _ = writeln!(output, "\n--- All threads by cumulative CPU (top 10) ---");
-    let _ = writeln!(output, "{:<8} {:<22} {:>12} {:>12} {:>12}", "TID", "Name", "Total(ms)", "User(ms)", "Kernel(ms)");
+    let _ = writeln!(
+        output,
+        "{:<8} {:<22} {:>12} {:>12} {:>12}",
+        "TID", "Name", "Total(ms)", "User(ms)", "Kernel(ms)"
+    );
     let _ = writeln!(output, "{}", "-".repeat(72));
     let mut by_cum = deltas.clone();
     by_cum.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
     for (tid, _, _, _, ct, cu, ck, name) in by_cum.iter().take(10) {
         let display_name = if name.is_empty() { "-" } else { name.as_str() };
-        let _ = writeln!(output, "{:<8} {:<22} {:>12.0} {:>12.0} {:>12.0}", tid, display_name, ct, cu, ck);
+        let _ = writeln!(
+            output,
+            "{:<8} {:<22} {:>12.0} {:>12.0} {:>12.0}",
+            tid, display_name, ct, cu, ck
+        );
     }
 
     let _ = writeln!(output, "\n=== End Thread Dump ===");
@@ -1568,9 +1708,9 @@ fn dump_thread_info_windows() -> String {
 
 #[cfg(target_os = "windows")]
 fn snapshot_threads(pid: u32) -> Vec<(u32, f64, f64, f64, String)> {
+    use windows::Win32::Foundation::*;
     use windows::Win32::System::Diagnostics::ToolHelp::*;
     use windows::Win32::System::Threading::*;
-    use windows::Win32::Foundation::*;
 
     let mut threads = Vec::new();
 
@@ -1602,7 +1742,9 @@ fn snapshot_threads(pid: u32) -> Vec<(u32, f64, f64, f64, String)> {
                         let mut kernel = FILETIME::default();
                         let mut user = FILETIME::default();
 
-                        if GetThreadTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user).is_ok() {
+                        if GetThreadTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user)
+                            .is_ok()
+                        {
                             let kernel_ms = filetime_to_ms(&kernel);
                             let user_ms = filetime_to_ms(&user);
 
@@ -1611,11 +1753,21 @@ fn snapshot_threads(pid: u32) -> Vec<(u32, f64, f64, f64, String)> {
                                 .ok()
                                 .and_then(|pwstr| {
                                     let s = pwstr.to_string().ok().unwrap_or_default();
-                                    if s.is_empty() { None } else { Some(s) }
+                                    if s.is_empty() {
+                                        None
+                                    } else {
+                                        Some(s)
+                                    }
                                 })
                                 .unwrap_or_default();
 
-                            threads.push((entry.th32ThreadID, kernel_ms + user_ms, user_ms, kernel_ms, name));
+                            threads.push((
+                                entry.th32ThreadID,
+                                kernel_ms + user_ms,
+                                user_ms,
+                                kernel_ms,
+                                name,
+                            ));
                         }
                         let _ = CloseHandle(handle);
                     }
@@ -1639,7 +1791,6 @@ fn filetime_to_ms(ft: &windows::Win32::Foundation::FILETIME) -> f64 {
     // FILETIME is in 100-nanosecond intervals
     ticks as f64 / 10_000.0
 }
-
 
 // --- Permission audit log commands ---
 
