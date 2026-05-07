@@ -472,8 +472,13 @@ function _doRender(markdown, targetElement, streaming) {
  * Find the last safe split point in markdown where we can freeze the prefix.
  * A safe split is a double-newline (\n\n) that is NOT inside a code fence.
  * Returns the index right after the \n\n, or 0 if no safe split found.
+ *
+ * Exported (with underscore prefix to preserve "private" intent) so the
+ * incremental streaming logic can be exercised in isolation — this is the
+ * function the 2026-04 OOM regression touched. The underscore signals
+ * "implementation detail, don't import elsewhere".
  */
-function _findStableSplitPoint(markdown) {
+export function _findStableSplitPoint(markdown) {
     let inFence = false;
     let lastSafeSplit = 0;
 
@@ -1548,8 +1553,12 @@ function makeTablesSortable(container) {
  * Keeps only the last complete ```taskplan block, removing all earlier ones.
  * Also parses inline step status markers (`[step N status]`) and applies
  * them to the taskplan block so the plan updates in-place.
+ *
+ * Exported (with underscore prefix) for testing only. The agent re-emits
+ * the full taskplan on every update, so this is the spot where stale
+ * versions get pruned — easy to break, worth pinning behavior.
  */
-function _keepLastTaskPlan(markdown) {
+export function _keepLastTaskPlan(markdown) {
     // Strip any leading "ack" from steering response that may have leaked into the stream
     if (markdown.startsWith('ack')) {
         markdown = markdown.slice(3);

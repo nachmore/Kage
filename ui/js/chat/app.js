@@ -19,22 +19,14 @@ import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
-
-/** Prefix used to identify steering messages that should be hidden in the UI */
-const STEERING_MSG_PREFIX = '[KAGE_STEERING_IGNORE]';
-
-/** Build metadata object for a message from session turn data. */
-function _buildMsgMeta(messageId, timestamps, durations, role) {
-    if (!messageId) return null;
-    const endTs = timestamps[messageId];
-    if (!endTs) return null;
-    const dur = durations[messageId] || 0;
-    if (role === 'user' && dur > 0) {
-        const endDate = new Date(endTs);
-        return { timestamp: new Date(endDate.getTime() - dur * 1000).toISOString() };
-    }
-    return { timestamp: endTs, durationSecs: role === 'assistant' ? dur : null };
-}
+import {
+    STEERING_MSG_PREFIX,
+    buildMsgMeta as _buildMsgMeta,
+    buildRenderQueue,
+    formatDuration,
+    formatRelativeDate,
+    formatError as formatErrorShared,
+} from '../shared/session-render.js';
 
 export class ChatApp {
     constructor(invoke, appWindow, listen) {
@@ -1026,19 +1018,7 @@ export class ChatApp {
         }
 
     formatDate(date) {
-        const now = new Date();
-        const diff = now - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-        if (days === 0) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        } else if (days === 1) {
-            return 'Yesterday';
-        } else if (days < 7) {
-            return date.toLocaleDateString([], { weekday: 'short' });
-        } else {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        }
+        return formatRelativeDate(date);
     }
 
     async selectSession(sessionId) {
@@ -1167,78 +1147,7 @@ export class ChatApp {
      * No DOM work — just data extraction.
      */
     _buildRenderQueue(messages, timestamps, durations) {
-        const queue = [];
-        let skipNextAssistant = false;
-
-        for (const msg of messages) {
-            if (msg.kind === 'Prompt') {
-                let textParts = [];
-                let imageDataUrls = [];
-                let isSteering = false;
-                for (const item of msg.content) {
-                    if (item.kind === 'text' && typeof item.data === 'string') {
-                        if (item.data.startsWith(STEERING_MSG_PREFIX)) {
-                            isSteering = true;
-                            textParts.push(item.data.substring(STEERING_MSG_PREFIX.length).trim());
-                            continue;
-                        }
-                        // Strip timestamp injections — these are metadata, not user text
-                        if (item.data.trim().startsWith('[Current time:')) {
-                            continue;
-                        }
-                        textParts.push(item.data);
-                    } else if (item.kind === 'image') {
-                        const dataUrl = sessionImageToDataUrl(item);
-                        if (dataUrl) imageDataUrls.push(dataUrl);
-                    }
-                }
-
-                if (isSteering) {
-                    skipNextAssistant = true;
-                    queue.push({ type: 'steering', text: textParts.join('\n\n') });
-                    continue;
-                }
-
-                if (textParts.length > 0 || imageDataUrls.length > 0) {
-                    const text = textParts.join('\n');
-                    const snapshots = imageDataUrls.length > 0 ? imageDataUrls.map(url => ({ type: 'image', previewUrl: url })) : null;
-                    queue.push({
-                        type: 'user',
-                        text,
-                        snapshots,
-                        meta: _buildMsgMeta(msg.message_id, timestamps, durations, 'user'),
-                    });
-                }
-            } else if (msg.kind === 'AssistantMessage') {
-                if (skipNextAssistant) {
-                    skipNextAssistant = false;
-                    const ackText = [];
-                    for (const item of msg.content) {
-                        if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
-                            ackText.push(item.data.trim());
-                        }
-                    }
-                    if (ackText.length > 0) {
-                        queue.push({ type: 'steering_ack', text: ackText.join(' ') });
-                    }
-                    continue;
-                }
-                const textParts = [];
-                for (const item of msg.content) {
-                    if (item.kind === 'text' && typeof item.data === 'string' && item.data.trim()) {
-                        textParts.push(item.data);
-                    }
-                }
-                if (textParts.length > 0) {
-                    queue.push({
-                        type: 'assistant',
-                        text: textParts.join('\n\n'),
-                        meta: _buildMsgMeta(msg.message_id, timestamps, durations, 'assistant'),
-                    });
-                }
-            }
-        }
-        return queue;
+        return buildRenderQueue(messages, timestamps, durations, sessionImageToDataUrl);
     }
 
     /**
@@ -1315,11 +1224,7 @@ export class ChatApp {
     }
 
     _formatDuration(totalSecs) {
-        const secs = Math.round(totalSecs);
-        if (secs < 60) return `${secs}s`;
-        const mins = Math.floor(secs / 60);
-        const rem = secs % 60;
-        return rem > 0 ? `${mins}m${rem}s` : `${mins}m`;
+        return formatDuration(totalSecs);
     }
 
     async createNewSession() {
@@ -1933,11 +1838,7 @@ export class ChatApp {
      * Format an error for display — extracts message and data from structured errors
      */
     formatError(error) {
-        if (!error) return 'Unknown error';
-        if (typeof error === 'string') return error;
-        if (error.message) return error.message;
-        if (error.toString && error.toString() !== '[object Object]') return error.toString();
-        try { return JSON.stringify(error); } catch { return 'Unknown error'; }
+        return formatErrorShared(error);
     }
 
 
