@@ -14,7 +14,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 /// Kinds of events we track. Each variant carries the data needed to
@@ -170,49 +170,137 @@ pub fn append(entry: &AuditEntry) {
 /// Read the last `limit` entries, most-recent-first. Tolerates
 /// corrupt/partial JSON lines by logging and skipping. A missing log
 /// file is NOT an error — the return is just an empty Vec.
+///
+/// Reads the file backwards in chunks so the caller pays for ~`limit`
+/// entries regardless of how large the log has grown. JSONL is
+/// well-suited to this: every line is self-contained, so a chunk-aligned
+/// suffix can be parsed in isolation as long as we discard the partial
+/// first line (which gets re-read as part of the next chunk further back).
 pub fn read_recent(path: &std::path::Path, limit: usize) -> Vec<AuditEntry> {
-    if !path.exists() {
+    if limit == 0 || !path.exists() {
         return Vec::new();
     }
-    let file = match fs::File::open(path) {
+    let mut file = match fs::File::open(path) {
         Ok(f) => f,
         Err(e) => {
             log::warn!("audit log: failed to open {}: {}", path.display(), e);
             return Vec::new();
         }
     };
-    let reader = BufReader::new(file);
+    let total_len = match file.seek(SeekFrom::End(0)) {
+        Ok(n) => n,
+        Err(e) => {
+            log::warn!("audit log: seek failed for {}: {}", path.display(), e);
+            return Vec::new();
+        }
+    };
+    if total_len == 0 {
+        return Vec::new();
+    }
+
+    // 32 KB chunks — typical entry is well under 512 B (tool name +
+    // timestamp + a small args preview), so one chunk usually covers
+    // 60+ entries. We grow it in subsequent reads if a single chunk
+    // didn't cover `limit` lines.
+    const CHUNK: u64 = 32 * 1024;
+
+    // Buffer holds the suffix of the file we've read so far. We always
+    // hold the bytes for at least one *complete* line at the start,
+    // which lets us hand the rest off to the line iterator below
+    // confident that no entry is split across our parse boundary.
+    let mut tail: Vec<u8> = Vec::new();
+    let mut cursor = total_len;
+    let mut hit_bof = false;
+
     let mut entries: Vec<AuditEntry> = Vec::new();
-    for (lineno, line) in reader.lines().enumerate() {
-        let line = match line {
-            Ok(l) => l,
-            Err(e) => {
-                log::warn!("audit log: read error at line {}: {}", lineno + 1, e);
-                continue;
+
+    while !hit_bof && entries.len() < limit {
+        let read_size = CHUNK.min(cursor);
+        cursor -= read_size;
+        if cursor == 0 {
+            hit_bof = true;
+        }
+
+        if let Err(e) = file.seek(SeekFrom::Start(cursor)) {
+            log::warn!("audit log: seek failed for {}: {}", path.display(), e);
+            return Vec::new();
+        }
+        let mut chunk = vec![0u8; read_size as usize];
+        if let Err(e) = file.read_exact(&mut chunk) {
+            log::warn!("audit log: read failed for {}: {}", path.display(), e);
+            return Vec::new();
+        }
+
+        // Prepend the chunk we just read to whatever tail we already
+        // had. Together they form a contiguous suffix of the file.
+        chunk.extend_from_slice(&tail);
+        tail = chunk;
+
+        // If we haven't reached BOF yet, the first line in `tail` is
+        // probably partial (the previous read split through the middle
+        // of a line). Drop it — we'll pick it up on the next chunk.
+        // When we *have* reached BOF, the first line is whole.
+        let parse_start = if hit_bof {
+            0
+        } else {
+            match memchr_newline(&tail) {
+                Some(i) => i + 1,  // skip past the newline
+                None => {
+                    // No newline yet — the entire chunk is a single
+                    // partial line. Loop and read more.
+                    continue;
+                }
             }
         };
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        match serde_json::from_str::<AuditEntry>(trimmed) {
-            Ok(entry) => entries.push(entry),
-            Err(e) => {
-                log::warn!(
-                    "audit log: skipping malformed line {} in {}: {}",
-                    lineno + 1,
-                    path.display(),
-                    e
-                );
+
+        // Parse all complete lines in tail[parse_start..], collect
+        // entries newest-last (file order), then reverse only the
+        // batch we just gathered to push them newest-first into
+        // `entries`.
+        let mut batch: Vec<AuditEntry> = Vec::new();
+        for line in tail[parse_start..].split(|&b| b == b'\n') {
+            // Trim a trailing \r so Windows-style line endings parse cleanly.
+            let line = match line.split_last() {
+                Some((&b'\r', rest)) => rest,
+                _ => line,
+            };
+            if line.is_empty() {
+                continue;
+            }
+            match serde_json::from_slice::<AuditEntry>(line) {
+                Ok(entry) => batch.push(entry),
+                Err(e) => {
+                    log::warn!(
+                        "audit log: skipping malformed entry in {}: {}",
+                        path.display(),
+                        e
+                    );
+                }
             }
         }
+        // batch is in file order — newest-last. Push reversed so
+        // `entries` is newest-first overall.
+        for e in batch.into_iter().rev() {
+            entries.push(e);
+            if entries.len() >= limit {
+                break;
+            }
+        }
+
+        // We've consumed everything up to the last newline boundary in
+        // `tail`. Reset for the next iteration: keep only the partial
+        // prefix (bytes before parse_start) so the next read can stitch
+        // onto it.
+        tail.truncate(parse_start);
     }
-    // Return most-recent-first, capped at `limit`.
-    entries.reverse();
-    if entries.len() > limit {
-        entries.truncate(limit);
-    }
+
     entries
+}
+
+/// Find the index of the first `\n` in `bytes`, if any.
+/// Tiny helper — kept inline rather than pulling in the `memchr` crate.
+fn memchr_newline(bytes: &[u8]) -> Option<usize> {
+    bytes.iter().position(|&b| b == b'\n')
 }
 
 /// Convenience: read from the default path.
@@ -412,6 +500,119 @@ mod tests {
             AuditEvent::TerminatorModeChanged { enabled: true }.summary(),
             "Terminator mode enabled"
         );
+    }
+
+    #[test]
+    fn read_recent_with_zero_limit_returns_empty() {
+        let dir = tempdir();
+        let path = logpath(&dir);
+        for i in 0..3 {
+            append_to(&path, &AuditEntry::at_time(
+                format!("2026-04-28T12:00:0{}.000Z", i),
+                AuditEvent::Denied { tool: format!("t{}", i), session_id: None },
+            ));
+        }
+        assert!(read_recent(&path, 0).is_empty());
+    }
+
+    /// Reads must be O(limit) regardless of file size — the chunk-walking
+    /// reader has to handle entries that cross 32 KB boundaries cleanly.
+    /// Build a log large enough to span several chunks, then verify the
+    /// last few entries come back in the right order.
+    #[test]
+    fn read_recent_handles_chunk_boundaries() {
+        let dir = tempdir();
+        let path = logpath(&dir);
+        // Append enough entries that the file grows past several 32 KB
+        // chunks. Each entry serializes to ~150 bytes; 1500 entries is
+        // ~225 KB, comfortably more than 7 chunks.
+        const N: usize = 1500;
+        for i in 0..N {
+            append_to(&path, &AuditEntry::at_time(
+                // Pad the tool name so each line is a different length
+                // and chunk boundaries land in different intra-line
+                // offsets — exercises the partial-line discard path.
+                format!("2026-04-28T12:{:02}:{:02}.{:03}Z", i / 3600, (i / 60) % 60, i % 1000),
+                AuditEvent::Granted {
+                    tool: format!("tool_{:04}_{}", i, "x".repeat(i % 50)),
+                    grant_type: "once".into(),
+                    session_id: None,
+                    args_preview: None,
+                },
+            ));
+        }
+
+        // Asking for the last 10 should return entries N-1 .. N-10 newest-first.
+        let got = read_recent(&path, 10);
+        assert_eq!(got.len(), 10);
+        for (i, entry) in got.iter().enumerate() {
+            let expected_idx = N - 1 - i;
+            if let AuditEvent::Granted { tool, .. } = &entry.event {
+                let expected_prefix = format!("tool_{:04}_", expected_idx);
+                assert!(
+                    tool.starts_with(&expected_prefix),
+                    "got tool {:?} at position {}, expected prefix {:?}",
+                    tool, i, expected_prefix
+                );
+            } else {
+                panic!("unexpected event variant");
+            }
+        }
+
+        // Asking for more than the file holds returns everything in order.
+        let got_all = read_recent(&path, N + 100);
+        assert_eq!(got_all.len(), N);
+        if let AuditEvent::Granted { tool, .. } = &got_all[0].event {
+            assert!(tool.starts_with(&format!("tool_{:04}_", N - 1)));
+        }
+        if let AuditEvent::Granted { tool, .. } = &got_all[N - 1].event {
+            assert!(tool.starts_with("tool_0000_"));
+        }
+    }
+
+    /// Files written with CRLF line endings (e.g. on Windows via a text
+    /// editor) must still parse — the byte-slice reader trims the \r.
+    #[test]
+    fn read_recent_tolerates_crlf_line_endings() {
+        let dir = tempdir();
+        let path = logpath(&dir);
+        let entry = AuditEntry::at_time(
+            "2026-04-28T12:00:00.000Z",
+            AuditEvent::Denied { tool: "x".into(), session_id: None },
+        );
+        let mut content = serde_json::to_string(&entry).unwrap();
+        content.push_str("\r\n");
+        std::fs::write(&path, content).unwrap();
+
+        let got = read_recent(&path, 10);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].at, "2026-04-28T12:00:00.000Z");
+    }
+
+    /// File without a trailing newline (atomic write race, OS crash mid-write)
+    /// must still parse the last line.
+    #[test]
+    fn read_recent_handles_missing_trailing_newline() {
+        let dir = tempdir();
+        let path = logpath(&dir);
+        let e1 = serde_json::to_string(&AuditEntry::at_time(
+            "2026-04-28T12:00:00.000Z",
+            AuditEvent::Denied { tool: "first".into(), session_id: None },
+        )).unwrap();
+        let e2 = serde_json::to_string(&AuditEntry::at_time(
+            "2026-04-28T12:00:01.000Z",
+            AuditEvent::Denied { tool: "second".into(), session_id: None },
+        )).unwrap();
+        // Note: no trailing newline after e2.
+        std::fs::write(&path, format!("{}\n{}", e1, e2)).unwrap();
+
+        let got = read_recent(&path, 10);
+        assert_eq!(got.len(), 2);
+        if let AuditEvent::Denied { tool, .. } = &got[0].event {
+            assert_eq!(tool, "second");
+        } else {
+            panic!("wrong event");
+        }
     }
 
     #[test]
