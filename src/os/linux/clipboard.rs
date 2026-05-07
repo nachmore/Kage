@@ -3,6 +3,33 @@
 use log::info;
 use std::process::Command;
 
+/// Linux doesn't expose a sequence-number-based clipboard change API
+/// the way Windows does, so we approximate two-phase capture by doing
+/// the whole thing synchronously in `begin` and stashing the result on
+/// the token. `finish` just unwraps it.
+pub struct SelectionCaptureToken {
+    selection: Option<String>,
+}
+
+pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
+    SelectionCaptureToken { selection: capture_selection_impl() }
+}
+
+pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<String> {
+    token.selection
+}
+
+/// Simulate a Ctrl+V paste keystroke into the foreground window.
+/// Stub today — a real implementation would use xdotool or wtype on
+/// Wayland. Logs once per process so the missing behaviour is visible.
+pub fn simulate_paste_impl() {
+    use std::sync::OnceLock;
+    static WARNED: OnceLock<()> = OnceLock::new();
+    WARNED.get_or_init(|| {
+        log::warn!("simulate_paste: Linux implementation not yet available — paste keystroke skipped");
+    });
+}
+
 pub fn read_clipboard_impl() -> Option<String> {
     Command::new("xclip").args(["-selection", "clipboard", "-o"]).output().ok()
         .map(|o| String::from_utf8_lossy(&o.stdout).to_string())

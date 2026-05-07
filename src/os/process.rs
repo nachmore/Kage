@@ -31,13 +31,13 @@ where
 /// survives when Kage exits. On other platforms, this is a plain spawn.
 /// Use for user-facing launches (apps, URLs, explorer, system commands).
 pub fn spawn_detached(cmd: &mut Command) -> std::io::Result<std::process::Child> {
-    #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::process::spawn_detached_impl(cmd)
-    }
+    crate::os::platform::process::spawn_detached_impl(cmd)
+}
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        cmd.spawn()
-    }
+/// On Windows: create a Job Object that kills all child processes when
+/// this process exits, even on crash. Prevents orphaned TTS servers,
+/// ACP CLI processes, MCP children, etc. No-op on macOS/Linux which
+/// rely on init/launchd reaping for orphan cleanup.
+pub fn install_kill_on_exit_job() {
+    crate::os::platform::process::install_kill_on_exit_job_impl()
 }

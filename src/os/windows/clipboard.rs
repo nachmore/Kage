@@ -206,16 +206,27 @@ pub fn capture_selection_impl() -> Option<String> {
     None
 }
 
-/// Phase 1: Send Ctrl+C to the foreground window and return the clipboard
-/// sequence number from before the copy. This must be called while the source
-/// window is still focused. Returns (original_clipboard, seq_before).
-pub fn begin_selection_capture() -> (Option<String>, u32) {
-    send_copy_keystroke()
+/// Carries state between begin/finish selection capture. The Windows
+/// flavour uses the clipboard sequence number to detect that a copy
+/// actually happened (so we don't return stale clipboard contents when
+/// the user had nothing selected).
+pub struct SelectionCaptureToken {
+    original_clipboard: Option<String>,
+    seq_before: u32,
+}
+
+/// Phase 1: Send Ctrl+C to the foreground window and snapshot the
+/// clipboard state. Must be called while the source window is still
+/// focused.
+pub fn begin_selection_capture_impl() -> SelectionCaptureToken {
+    let (original_clipboard, seq_before) = send_copy_keystroke();
+    SelectionCaptureToken { original_clipboard, seq_before }
 }
 
 /// Phase 2: Poll the clipboard for a change and return the captured text.
 /// Can be called after the floating window is shown — the Ctrl+C was already sent.
-pub fn finish_selection_capture(original_clipboard: Option<String>, seq_before: u32) -> Option<String> {
+pub fn finish_selection_capture_impl(token: SelectionCaptureToken) -> Option<String> {
+    let SelectionCaptureToken { original_clipboard, seq_before } = token;
     let changed = wait_for_clipboard_change(seq_before, 300);
 
     if changed {

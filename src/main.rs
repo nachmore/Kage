@@ -51,12 +51,17 @@ fn attach_parent_console() {
 }
 
 fn main() {
-    // Handle /capture-hotkey subcommand (helper process mode)
+    // Handle /capture-hotkey subcommand (helper process mode).
+    // This is a Windows-only CLI dispatch path — the helper *is* this
+    // very binary re-spawned to run a low-level keyboard hook outside
+    // WebView2's input registration. Reaching directly into the
+    // platform module is intentional here: it's not a runtime API,
+    // it's a CLI mode the rest of the app never touches.
     #[cfg(target_os = "windows")]
     {
         let args: Vec<String> = std::env::args().collect();
         if let Some(timeout) = startup::detect_capture_hotkey_subcommand(&args) {
-            os::windows::hotkey_capture::run_capture_helper(timeout);
+            os::windows::hotkey::run_capture_helper(timeout);
             return;
         }
     }
@@ -141,11 +146,11 @@ fn main() {
         }
     });
 
-    // On Windows, create a Job Object that auto-kills all child processes
-    // when this process exits (even on crash). This prevents orphaned
-    // TTS servers, ACP CLI processes, etc.
-    #[cfg(target_os = "windows")]
-    os::windows::process::install_kill_on_exit_job();
+    // Create a Job Object that auto-kills all child processes when this
+    // process exits, even on crash — prevents orphaned TTS servers, ACP
+    // CLI processes, MCP children, etc. No-op on non-Windows where
+    // orphan reaping happens via init/launchd.
+    os::install_kill_on_exit_job();
 
     let config = startup::load_config_with_overrides(debug_mode, Config::load);
 

@@ -3,6 +3,7 @@
 //! Uses WH_KEYBOARD_LL to intercept key events at the OS level,
 //! allowing capture of system-reserved combos like Alt+Space, Win+key, etc.
 
+use crate::os::hotkey::CapturedHotkey;
 use log::info;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -58,14 +59,6 @@ const VK_RWIN: u32 = 0x5C;
 const VK_SHIFT: u32 = 0x10;
 const VK_CONTROL: u32 = 0x11;
 const VK_MENU: u32 = 0x12;   // Alt
-
-/// Captured hotkey result
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct CapturedHotkey {
-    pub modifiers: Vec<String>,
-    pub key: String,
-    pub display: String,
-}
 
 // Global state for the hook callback
 static CAPTURING: AtomicBool = AtomicBool::new(false);
@@ -273,7 +266,10 @@ pub fn capture_hotkey(timeout_ms: u64) -> Option<CapturedHotkey> {
 
 /// Capture hotkey using a helper child process to work around WebView2's
 /// raw input registration which blocks WH_KEYBOARD_LL in the same process.
-pub fn capture_hotkey_via_helper(timeout_ms: u64) -> Option<CapturedHotkey> {
+///
+/// Named `_impl` to match the cross-platform Pattern A dispatch shape
+/// (`crate::os::platform::hotkey::capture_hotkey_impl`).
+pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
     use std::process::{Command, Stdio};
     use std::io::Read;
     use std::os::windows::process::CommandExt;
@@ -326,8 +322,10 @@ pub fn run_capture_helper(timeout_ms: u64) {
     }
 }
 
-/// Cancel an in-progress capture
-pub fn cancel_capture() {
+/// Cancel an in-progress capture.
+///
+/// Named `_impl` to match the cross-platform Pattern A dispatch shape.
+pub fn cancel_capture_impl() {
     if CAPTURING.load(Ordering::SeqCst) {
         CAPTURING.store(false, Ordering::SeqCst);
         if let Ok(tid) = HOOK_THREAD_ID.lock() {

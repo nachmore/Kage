@@ -1,11 +1,20 @@
-// Cross-platform clipboard operations
+// Cross-platform clipboard operations.
+//
+// Each platform's `clipboard` submodule defines its own opaque
+// `SelectionCaptureToken` type — the data needed to complete a
+// two-phase capture is genuinely different per OS (Windows uses the
+// clipboard sequence number; macOS/Linux just capture synchronously
+// and stash the result). We re-export the platform's token here so
+// callers see a uniform name.
 
-/// Read text from the system clipboard
+pub use crate::os::platform::clipboard::SelectionCaptureToken;
+
+/// Read text from the system clipboard.
 pub fn read_clipboard() -> Option<String> {
     crate::os::platform::clipboard::read_clipboard_impl()
 }
 
-/// Write text to the system clipboard
+/// Write text to the system clipboard.
 pub fn write_clipboard(text: &str) {
     crate::os::platform::clipboard::write_clipboard_impl(text);
 }
@@ -16,41 +25,14 @@ pub fn capture_selection() -> Option<String> {
     crate::os::platform::clipboard::capture_selection_impl()
 }
 
-/// Phase 1 of two-phase selection capture: send the copy keystroke to the
-/// foreground window. Must be called while the source window is still focused.
+/// Phase 1 of two-phase selection capture: send the copy keystroke to
+/// the foreground window. Must be called while the source window is
+/// still focused.
 pub fn begin_selection_capture() -> SelectionCaptureToken {
-    #[cfg(target_os = "windows")]
-    {
-        let (orig, seq) = crate::os::windows::clipboard::begin_selection_capture();
-        SelectionCaptureToken { original_clipboard: orig, seq_before: seq }
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let selection = capture_selection();
-        SelectionCaptureToken { selection }
-    }
+    crate::os::platform::clipboard::begin_selection_capture_impl()
 }
 
 /// Phase 2: poll the clipboard and return the captured text.
 pub fn finish_selection_capture(token: SelectionCaptureToken) -> Option<String> {
-    #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::clipboard::finish_selection_capture(token.original_clipboard, token.seq_before)
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        token.selection
-    }
-}
-
-/// Opaque token carrying state between begin/finish selection capture.
-pub struct SelectionCaptureToken {
-    #[cfg(target_os = "windows")]
-    original_clipboard: Option<String>,
-    #[cfg(target_os = "windows")]
-    seq_before: u32,
-    #[cfg(not(target_os = "windows"))]
-    selection: Option<String>,
+    crate::os::platform::clipboard::finish_selection_capture_impl(token)
 }

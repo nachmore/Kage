@@ -3,16 +3,8 @@
 // Requires the user to have clipboard history enabled (Win+V or Settings > System > Clipboard).
 // Uses Windows.ApplicationModel.DataTransfer.Clipboard.GetHistoryItemsAsync().
 
+use crate::os::clipboard_history::ClipboardHistoryEntry;
 use log::{info, warn};
-use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ClipboardHistoryEntry {
-    pub id: String,
-    pub text: String,
-    pub timestamp: String, // ISO 8601
-    pub content_type: String, // "text", "image", "other"
-}
 
 pub fn get_clipboard_history_impl() -> Vec<ClipboardHistoryEntry> {
     // The WinRT Clipboard API requires STA (single-threaded apartment).

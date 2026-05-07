@@ -42,6 +42,22 @@ pub fn configure_spawn_impl(cmd: &mut Command) {
     info!("macOS: Setting up process detachment");
 }
 
+/// Spawn a process detached from the parent. On macOS this is a plain
+/// `Command::spawn` since there's no Windows-style Job Object to break
+/// out of. The cross-platform `spawn_detached` calls this; users who
+/// want explicit setsid behaviour can layer that on top.
+pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
+    cmd.spawn()
+}
+
+/// No-op on macOS — there's no Windows-style Job Object that auto-kills
+/// children on parent exit. macOS handles orphan reaping via launchd
+/// (and we set process groups via setsid in `configure_spawn_impl`).
+/// Kept as a function rather than an `#[cfg]` at the call site so the
+/// cross-platform `os::process::install_kill_on_exit_job` is a clean
+/// one-liner.
+pub fn install_kill_on_exit_job_impl() {}
+
 pub fn install_signal_handlers_impl<F>(cleanup_fn: F) -> Result<()>
 where
     F: Fn() + Send + 'static,

@@ -114,7 +114,7 @@ pub fn set_thread_name(name: &str) {
 ///
 /// Errors are logged but never propagated: if we can't create the
 /// job, the app still runs; we just lose the orphan-cleanup guarantee.
-pub fn install_kill_on_exit_job() {
+pub fn install_kill_on_exit_job_impl() {
     use windows::Win32::System::JobObjects::*;
     use windows::Win32::System::Threading::GetCurrentProcess;
     use windows::core::PCWSTR;

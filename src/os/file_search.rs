@@ -25,21 +25,5 @@ pub fn search_files(query: &str, max_results: usize) -> Vec<FileSearchResult> {
     if query.trim().is_empty() {
         return vec![];
     }
-
-    #[cfg(target_os = "windows")]
-    {
-        crate::os::windows::file_search::search_files_impl(query, max_results)
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // TODO: Use mdfind (Spotlight) for macOS
-        vec![]
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        // TODO: Use locate/mlocate for Linux
-        vec![]
-    }
+    crate::os::platform::file_search::search_files_impl(query, max_results)
 }

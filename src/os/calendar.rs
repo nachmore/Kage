@@ -29,26 +29,12 @@ pub struct CalendarEvent {
 
 /// Get upcoming calendar events within the next `hours` hours.
 pub fn get_upcoming_events(hours: u32) -> Vec<CalendarEvent> {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::calendar::get_upcoming_events_impl(hours) }
-
-    #[cfg(target_os = "macos")]
-    { vec![] } // TODO: EventKit via swift CLI
-
-    #[cfg(target_os = "linux")]
-    { vec![] }
+    crate::os::platform::calendar::get_upcoming_events_impl(hours)
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
 pub fn get_events_for_date(date: &str) -> Vec<CalendarEvent> {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::calendar::get_events_for_date_impl(date) }
-
-    #[cfg(target_os = "macos")]
-    { vec![] }
-
-    #[cfg(target_os = "linux")]
-    { vec![] }
+    crate::os::platform::calendar::get_events_for_date_impl(date)
 }
 
 /// Extract a meeting/join URL from event location and body text.

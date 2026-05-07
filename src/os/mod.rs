@@ -10,19 +10,19 @@ pub mod macos;
 #[cfg(target_os = "linux")]
 pub mod linux;
 
-// Re-export platform-specific implementations with a common interface
-// Note: These are available for advanced use cases, but most code should use
-// the cross-platform functions exported below
+// Pattern A dispatch: each cross-platform module forwards to
+// `crate::os::platform::<mod>::<fn>_impl(...)`. The platform alias
+// resolves at compile time so there's no runtime cost; the rest of
+// the codebase never imports the platform-specific submodule directly
+// (with one exception: main.rs's `/capture-hotkey` helper-process CLI
+// dispatch, which is a Windows-only entry point not a runtime API).
 #[cfg(target_os = "windows")]
-#[allow(unused)]
 pub use windows as platform;
 
 #[cfg(target_os = "macos")]
-#[allow(unused)]
 pub use macos as platform;
 
 #[cfg(target_os = "linux")]
-#[allow(unused)]
 pub use linux as platform;
 
 // Common types and traits
@@ -46,7 +46,7 @@ pub mod accessibility;
 // Re-export common functionality
 pub use cursor::get_cursor_position;
 pub use launcher::{scan_applications, launch_application};
-pub use process::{kill_process, configure_process_spawn};
+pub use process::{kill_process, configure_process_spawn, install_kill_on_exit_job};
 pub use shell::{open_url, open_path, reveal_in_file_manager, open_in_editor};
 pub use user::get_user_profile;
 #[allow(unused_imports)]
@@ -58,11 +58,7 @@ pub use startup::{get_startup_enabled, set_startup_enabled};
 /// Simulate Ctrl+V paste keystroke to the foreground window.
 #[allow(unused)]
 pub fn simulate_paste() {
-    #[cfg(target_os = "windows")]
-    { crate::os::windows::clipboard::simulate_paste_impl(); }
-
-    #[cfg(not(target_os = "windows"))]
-    { /* TODO: implement for macOS/Linux */ }
+    crate::os::platform::clipboard::simulate_paste_impl();
 }
 
 pub use clipboard_history::get_clipboard_history;
