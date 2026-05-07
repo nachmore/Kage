@@ -2632,6 +2632,7 @@ dependencies = [
  "whoami",
  "windows 0.62.2",
  "windows-collections 0.3.2",
+ "windows-future 0.3.2",
  "windows-icons",
  "winreg 0.56.0",
  "zip",

@@ -53,6 +53,7 @@ lru = "0.18"
 winreg = "0.56"
 windows-icons = "0.3"
 windows-collections = "0.3"
+windows-future = "0.3"
 uiautomation = { version = "0.24", features = ["process", "control", "input"] }
 windows = { version = "0.62", features = [
     "Win32_UI_WindowsAndMessaging",
@@ -68,11 +69,17 @@ windows = { version = "0.62", features = [
     "Win32_Security_Authorization",
     "Win32_System_Com",
     "Win32_System_Power",
+    "Win32_System_WinRT",
     "Management_Deployment",
     "ApplicationModel",
     "ApplicationModel_Core",
     "ApplicationModel_DataTransfer",
     "Foundation",
+    "Foundation_Collections",
+    "Storage",
+    "Storage_Search",
+    "Storage_FileProperties",
+    "Storage_Streams",
 ] }
 
 [target.'cfg(unix)'.dependencies]

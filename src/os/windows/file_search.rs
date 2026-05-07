@@ -1,277 +1,264 @@
-// Windows file search using the Windows Search Index.
-//
-// Queries the SystemIndex catalog via OLE DB (through a small PowerShell helper).
-// The index query itself is instant — the overhead is PowerShell startup (~200ms).
-// Results are cached per-session to avoid repeated startup costs.
-//
-// Future: can be extended to support Everything SDK for even faster results.
+//! Windows file search via the WinRT `Windows.Storage.Search` API.
+//!
+//! Pre-2026-05-07 this shelled out to PowerShell on every call —
+//! `powershell.exe -Command "<script using ADODB.Connection / SystemIndex SQL>"`
+//! — which spent ~200ms booting the PowerShell runtime per query before
+//! the actual SystemIndex lookup ran. The chat's "search files" path was
+//! routinely hitting that 200ms tax.
+//!
+//! `Windows.Storage.Search` is the same API Explorer uses internally.
+//! It transparently consults the Windows Search Index for indexed
+//! locations (Users, Documents, Desktop, OneDrive — fast, microseconds)
+//! and falls back to a slower file enumeration only for non-indexed
+//! locations. We pass the user's home directory as the root with
+//! `FolderDepth::Deep` and `IndexerOption::UseIndexerWhenAvailable`,
+//! which covers the same surface the previous `SystemIndex` SQL hit.
+//!
+//! No more PowerShell, no more SQL escaping (the input goes through
+//! WinRT's `UserSearchFilter` which interprets it as AQS — no SQL
+//! injection class to worry about).
 
 use log::{info, warn};
-use std::process::{Command, Stdio};
+use std::sync::OnceLock;
+
+use windows::core::HSTRING;
+use windows::Storage::Search::{
+    CommonFileQuery, FolderDepth, IndexerOption, QueryOptions,
+};
+use windows::Storage::StorageFolder;
+use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};
+use windows_collections::IIterable;
 
 use crate::os::file_search::FileSearchResult;
 
-/// Search the Windows Search Index for files matching the query.
-pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResult> {
-    let ps_pattern = sanitize_query_to_like_pattern(query);
+/// Maximum query length. The previous PowerShell implementation
+/// capped at 256 chars to bound DoS risk; AQS doesn't have the same
+/// concern but we keep a similar cap so a pathological input can't
+/// produce a multi-megabyte query string.
+const MAX_QUERY_LEN: usize = 256;
 
-    let ps_script = format!(
-        r#"
-$conn = New-Object -COM ADODB.Connection
-$rs = New-Object -COM ADODB.Recordset
-$conn.Open("Provider=Search.CollatorDSO;Extended Properties='Application=Windows';")
-$sql = "SELECT TOP {max} System.ItemName, System.ItemPathDisplay, System.ItemType, System.Size, System.DateModified FROM SystemIndex WHERE System.ItemName LIKE '{pattern}' ESCAPE '\' ORDER BY System.DateModified DESC"
-$rs.Open($sql, $conn)
-$results = @()
-while (-not $rs.EOF) {{
-    $results += [PSCustomObject]@{{
-        name = [string]$rs.Fields.Item("System.ItemName").Value
-        path = [string]$rs.Fields.Item("System.ItemPathDisplay").Value
-        item_type = [string]$rs.Fields.Item("System.ItemType").Value
-        size = if ($rs.Fields.Item("System.Size").Value) {{ [long]$rs.Fields.Item("System.Size").Value }} else {{ 0 }}
-        modified = if ($rs.Fields.Item("System.DateModified").Value) {{ ([datetime]$rs.Fields.Item("System.DateModified").Value).ToString("o") }} else {{ "" }}
-    }}
-    $rs.MoveNext()
-}}
-$rs.Close()
-$conn.Close()
-$results | ConvertTo-Json -Compress
-"#,
-        max = max_results,
-        pattern = ps_pattern,
-    );
+/// Initialize WinRT for this thread once. Tauri's `spawn_blocking`
+/// thread pool reuses worker threads, so a `OnceLock` per-thread isn't
+/// possible — but `RoInitialize` is idempotent on the same thread
+/// (returns `S_FALSE` for the second call), and we tolerate the warning
+/// once. The OnceLock here just suppresses repeated logs on workers
+/// that have already initialized.
+static RO_INIT_ATTEMPTED: OnceLock<()> = OnceLock::new();
 
-    let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
-
-    let output = match cmd.output() {
-        Ok(o) => o,
-        Err(e) => {
-            warn!("[file_search] Failed to run PowerShell: {}", e);
-            return vec![];
+fn ensure_winrt_initialized() {
+    RO_INIT_ATTEMPTED.get_or_init(|| {
+        // SAFETY: RoInitialize is the standard WinRT entry point. It's
+        // safe to call on any thread; subsequent calls on the same
+        // thread return S_FALSE without harm.
+        let hr = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+        if let Err(e) = hr {
+            warn!("[file_search] RoInitialize failed: {} — searches will likely fail", e);
         }
-    };
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if stdout.trim().is_empty() {
-        return vec![];
-    }
-
-    // PowerShell returns a single object (not array) when there's only one result
-    let parsed: Vec<PsSearchResult> = if stdout.trim().starts_with('[') {
-        serde_json::from_str(&stdout).unwrap_or_default()
-    } else {
-        serde_json::from_str::<PsSearchResult>(&stdout)
-            .map(|r| vec![r])
-            .unwrap_or_default()
-    };
-
-    info!("[file_search] Found {} results for '{}'", parsed.len(), query);
-
-    parsed.into_iter().map(|r| {
-        let is_folder = r.item_type.is_empty() || r.item_type == "Directory";
-        FileSearchResult {
-            name: r.name,
-            path: r.path,
-            is_folder,
-            size: r.size,
-            modified: r.modified,
-        }
-    }).collect()
+    });
+    // Also cover the case where the worker thread is fresh and the
+    // OnceLock has already fired — initialize on this thread too.
+    // RoInitialize is reference-counted per thread; idempotent calls
+    // are cheap.
+    let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
 }
 
-#[derive(serde::Deserialize, Default)]
-struct PsSearchResult {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    path: String,
-    #[serde(default)]
-    item_type: String,
-    #[serde(default)]
-    size: u64,
-    #[serde(default)]
-    modified: String,
-}
-
-
-/// Turn a user-supplied query string into a fully-sanitized SQL LIKE
-/// pattern that's safe to splice into a PowerShell single-quoted string
-/// literal and executed via OLE DB against the Windows Search Index.
-///
-/// Defence in depth against SQL-LIKE and COM-string injection:
-///   1. Strip control characters that could confuse the parser.
-///   2. Cap at 256 chars so a pathological input can't DOS PowerShell.
-///   3. Escape SQL LIKE metacharacters (`%`, `_`, `[`, `\`) with the
-///      `\` escape so user input can't inject wildcards or character
-///      classes. The outer SQL uses `ESCAPE '\'` to honor this.
-///   4. Translate user glob wildcards (`*` → `%`, `?` → `_`) AFTER
-///      step 3 so they're preserved while literal `%`/`_` are not.
-///   5. Wrap plain queries in `%...%` so bare words are treated as
-///      substring matches.
-///   6. Double single quotes so the pattern is safe inside a
-///      PowerShell single-quoted string literal.
-///
-/// Exposed for testing; production callers should go through
-/// `search_files_impl` which also runs the search.
-pub(crate) fn sanitize_query_to_like_pattern(query: &str) -> String {
-    const MAX_QUERY_LEN: usize = 256;
-    let trimmed: String = query
+/// Sanitize and bound the query string. AQS handles its own escaping,
+/// but we still strip control characters (UI hygiene) and cap length.
+fn sanitize_query(query: &str) -> String {
+    query
         .chars()
         .filter(|c| !c.is_control())
         .take(MAX_QUERY_LEN)
-        .collect();
+        .collect()
+}
 
-    // Step 1: escape SQL LIKE metacharacters (use `\` as ESCAPE in the SQL).
-    let mut sql_escaped = String::with_capacity(trimmed.len() + 8);
-    for ch in trimmed.chars() {
-        match ch {
-            '\\' | '%' | '_' | '[' => {
-                sql_escaped.push('\\');
-                sql_escaped.push(ch);
-            }
-            _ => sql_escaped.push(ch),
-        }
+pub fn search_files_impl(query: &str, max_results: usize) -> Vec<FileSearchResult> {
+    let cleaned = sanitize_query(query);
+    if cleaned.trim().is_empty() {
+        return vec![];
+    }
+    if max_results == 0 {
+        return vec![];
     }
 
-    // Step 2: translate user wildcards AFTER escaping so they're preserved.
-    let has_wildcard = sql_escaped.contains('*') || sql_escaped.contains('?');
-    let sql_pattern: String = if has_wildcard {
-        sql_escaped.replace('*', "%").replace('?', "_")
-    } else {
-        format!("%{}%", sql_escaped)
-    };
+    ensure_winrt_initialized();
 
-    // Step 3: escape PowerShell single quote for the surrounding string literal.
-    sql_pattern.replace('\'', "''")
+    match run_query(&cleaned, max_results) {
+        Ok(results) => {
+            info!("[file_search] Found {} results for '{}'", results.len(), query);
+            results
+        }
+        Err(e) => {
+            warn!("[file_search] Query failed: {}", e);
+            vec![]
+        }
+    }
+}
+
+fn run_query(query: &str, max_results: usize) -> windows::core::Result<Vec<FileSearchResult>> {
+    // Root the search at the user's home directory. The Windows Search
+    // Index covers Documents/Desktop/Downloads/Pictures/Music/Videos
+    // and OneDrive by default — all under home — so a single deep
+    // query against home reaches the same surface the previous
+    // SystemIndex query did, without us having to enumerate folder
+    // roots ourselves.
+    let home = match dirs::home_dir() {
+        Some(p) => p,
+        None => return Ok(vec![]),
+    };
+    let home_str = home.to_string_lossy().replace('/', "\\");
+    let root_path = HSTRING::from(home_str);
+
+    let folder = StorageFolder::GetFolderFromPathAsync(&root_path)?.join()?;
+
+    // FileTypeFilter — empty IIterable<HSTRING> means "all types".
+    // CreateCommonFileQuery requires it; build one from an empty Vec.
+    let empty_filter: IIterable<HSTRING> = IIterable::from(Vec::<HSTRING>::new());
+    let options = QueryOptions::CreateCommonFileQuery(
+        CommonFileQuery::OrderByDate,
+        &empty_filter,
+    )?;
+
+    options.SetUserSearchFilter(&HSTRING::from(query))?;
+    options.SetFolderDepth(FolderDepth::Deep)?;
+    options.SetIndexerOption(IndexerOption::UseIndexerWhenAvailable)?;
+
+    let query_result = folder.CreateFileQueryWithOptions(&options)?;
+
+    // GetFilesAsync(start, max) — the indexer respects this and stops
+    // walking once it has the requested count. Saves walking 10k files
+    // for a 10-result UI dropdown.
+    let files = query_result
+        .GetFilesAsync(0, max_results as u32)?
+        .join()?;
+
+    let count = files.Size()? as usize;
+    let take = count.min(max_results);
+    let mut out = Vec::with_capacity(take);
+
+    for i in 0..take {
+        let file = files.GetAt(i as u32)?;
+        let name = file.Name()?.to_string_lossy();
+        let path = file.Path()?.to_string_lossy();
+
+        // Basic properties carry size + modified date. WinRT returns a
+        // DateTime in 100-ns FILETIME ticks since 1601 — convert to
+        // ISO 8601 to match the previous JSON shape.
+        let (size, modified) = match read_basic_props(&file) {
+            Ok((size, modified)) => (size, modified),
+            Err(e) => {
+                warn!(
+                    "[file_search] failed to read properties for {}: {}",
+                    path, e
+                );
+                (0, String::new())
+            }
+        };
+
+        out.push(FileSearchResult {
+            name,
+            path,
+            // Storage::Search file queries return only files (folders
+            // surface through CreateFolderQuery instead). Always false.
+            is_folder: false,
+            size,
+            modified,
+        });
+    }
+
+    Ok(out)
+}
+
+/// Read size + modified date off a `StorageFile`. Split out so the
+/// type of the `IAsyncOperation` is unambiguous to the borrow checker
+/// (the inline `.and_then(|op| op.join())` pattern triggered an
+/// inference failure under the IAsyncOperation generic).
+fn read_basic_props(file: &windows::Storage::StorageFile) -> windows::core::Result<(u64, String)> {
+    let props = file.GetBasicPropertiesAsync()?.join()?;
+    let size = props.Size().unwrap_or(0);
+    let modified = props
+        .DateModified()
+        .ok()
+        .and_then(|dt| filetime_ticks_to_iso8601(dt.UniversalTime))
+        .unwrap_or_default();
+    Ok((size, modified))
+}
+
+/// Convert a WinRT `DateTime::UniversalTime` (100-ns FILETIME ticks
+/// since 1601-01-01 UTC) to an ISO 8601 string. Returns `None` if
+/// the value is out of range.
+fn filetime_ticks_to_iso8601(ticks: i64) -> Option<String> {
+    // 1601-01-01 UTC to 1970-01-01 UTC in 100-ns ticks:
+    //   369 years × 365.25 days × 24 × 3600 × 10_000_000
+    //   = 11_644_473_600_000_000_000 / 100ns granularity
+    const FILETIME_EPOCH_TO_UNIX_TICKS: i64 = 11_644_473_600 * 10_000_000;
+    let unix_ticks = ticks.checked_sub(FILETIME_EPOCH_TO_UNIX_TICKS)?;
+    let secs = unix_ticks / 10_000_000;
+    let nanos = ((unix_ticks % 10_000_000) * 100) as u32;
+    let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(secs, nanos)?;
+    Some(dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
 }
 
 #[cfg(test)]
 mod tests {
-    //! The sanitizer is security-critical: user input flows through
-    //! PowerShell → OLE DB → Windows Search SQL. Each test here pins
-    //! down a specific injection or encoding edge case.
+    //! Pure-helper tests. The full WinRT round-trip needs an actual
+    //! Windows host with a populated Search Index, so we exercise the
+    //! sanitizer and the FILETIME conversion in isolation.
 
-    use super::sanitize_query_to_like_pattern as s;
+    use super::*;
 
     #[test]
-    fn plain_word_wraps_in_substring_pattern() {
-        assert_eq!(s("hello"), "%hello%");
+    fn sanitize_strips_control_characters() {
+        assert_eq!(sanitize_query("hello\nworld"), "helloworld");
+        assert_eq!(sanitize_query("tab\there"), "tabhere");
+        assert_eq!(sanitize_query("null\0inside"), "nullinside");
     }
 
     #[test]
-    fn empty_input_becomes_match_everything() {
-        // Empty query wraps to "%%" which matches any file. We treat
-        // that as acceptable because an empty query is also a
-        // no-results case in practice (search doesn't fire).
-        assert_eq!(s(""), "%%");
-    }
-
-    #[test]
-    fn glob_star_maps_to_sql_percent() {
-        assert_eq!(s("*.rs"), "%.rs");
-        assert_eq!(s("foo*bar"), "foo%bar");
-        assert_eq!(s("*"), "%");
-    }
-
-    #[test]
-    fn glob_question_maps_to_sql_underscore() {
-        assert_eq!(s("?.rs"), "_.rs");
-        assert_eq!(s("f?o"), "f_o");
-    }
-
-    #[test]
-    fn literal_percent_is_escaped_not_treated_as_wildcard() {
-        // Without escaping, 50% match would match anything starting
-        // with "50". We need the literal to be preserved so the SQL
-        // LIKE with ESCAPE '\' matches a real percent sign only.
-        let out = s("50%");
-        assert!(out.contains(r"\%"), "expected escape of %, got {}", out);
-        // Because it contained no glob wildcards, it's still wrapped.
-        assert!(out.starts_with('%') && out.ends_with('%'));
-    }
-
-    #[test]
-    fn literal_underscore_is_escaped() {
-        let out = s("foo_bar");
-        assert!(out.contains(r"\_"), "expected escape of _, got {}", out);
-    }
-
-    #[test]
-    fn literal_bracket_is_escaped_to_prevent_char_class() {
-        // Without escaping, [abc] would match any of a/b/c in LIKE.
-        let out = s("[abc]");
-        assert!(out.contains(r"\["), "expected escape of [, got {}", out);
-    }
-
-    #[test]
-    fn backslash_is_escaped_to_preserve_escape_semantics() {
-        // `\` is the SQL LIKE ESCAPE character. A bare `\` from user
-        // input has to be doubled or the next metachar becomes a
-        // literal.
-        let out = s(r"a\b");
-        // The raw backslash becomes `\\` so the SQL parser sees one
-        // escaped backslash (= literal `\`). Our output is the PS
-        // string, so we expect `\\` in the middle.
-        assert!(out.contains(r"\\"), "expected escaped backslash, got {}", out);
-    }
-
-    #[test]
-    fn single_quote_is_doubled_for_powershell() {
-        // Without doubling, a single quote would end the PS string
-        // literal and anything after would execute as code. 1 of the
-        // worst kinds of injection available here.
-        assert_eq!(s("O'Reilly"), "%O''Reilly%");
-    }
-
-    #[test]
-    fn control_characters_are_stripped() {
-        assert_eq!(s("hello\nworld"), "%helloworld%");
-        assert_eq!(s("tab\there"), "%tabhere%");
-        assert_eq!(s("null\0inside"), "%nullinside%");
-    }
-
-    #[test]
-    fn length_is_capped_at_256_chars() {
+    fn sanitize_caps_length() {
         let input: String = "a".repeat(500);
-        let out = s(&input);
-        // 256 'a's plus the two wrapping '%' characters.
-        assert_eq!(out.len(), 258);
-        assert!(out.starts_with('%') && out.ends_with('%'));
+        assert_eq!(sanitize_query(&input).len(), MAX_QUERY_LEN);
     }
 
     #[test]
-    fn mixed_wildcards_and_escaped_literals() {
-        // Users can type "foo*bar_baz" — star is glob, underscore is
-        // literal. After sanitize: star → %, underscore → \_, and
-        // no outer wrapping because a wildcard is present.
-        let out = s("foo*bar_baz");
-        assert_eq!(out, r"foo%bar\_baz");
+    fn sanitize_passes_through_normal_input() {
+        assert_eq!(sanitize_query("report 2026"), "report 2026");
+        // AQS handles wildcards / quotes natively — no escaping needed
+        // and the previous SQL-LIKE escaping that turned `O'Reilly`
+        // into `O''Reilly` is gone.
+        assert_eq!(sanitize_query("O'Reilly"), "O'Reilly");
+        assert_eq!(sanitize_query("foo*bar"), "foo*bar");
     }
 
     #[test]
-    fn injection_attempts_are_declawed() {
-        // The classic LIKE injection: %' OR 1=1 --
-        let out = s("%' OR 1=1 --");
-        // The % is escaped, the ' is doubled. No SQL can escape.
-        assert!(out.contains(r"\%"), "missing escape: {}", out);
-        assert!(out.contains("''"), "missing doubled quote: {}", out);
-        // No single unescaped quote should remain — every `'` is part
-        // of a `''` doubled pair. Scanning once to verify.
-        let mut last_was_quote = false;
-        for ch in out.chars() {
-            if ch == '\'' {
-                last_was_quote = !last_was_quote;
-            } else if last_was_quote {
-                panic!("found unescaped quote followed by {:?} in {}", ch, out);
-            }
-        }
-        assert!(!last_was_quote, "trailing unescaped quote in {}", out);
+    fn filetime_epoch_maps_to_unix_epoch() {
+        // Exactly 11_644_473_600 seconds × 10_000_000 ticks should land
+        // on 1970-01-01T00:00:00Z.
+        let unix_epoch_ticks = 11_644_473_600_i64 * 10_000_000;
+        assert_eq!(
+            filetime_ticks_to_iso8601(unix_epoch_ticks).as_deref(),
+            Some("1970-01-01T00:00:00Z"),
+        );
+    }
+
+    #[test]
+    fn filetime_known_value_round_trips() {
+        // 2025-05-07T12:00:00Z = 1746619200 unix seconds
+        // = (1746619200 + 11644473600) × 10_000_000 ticks since 1601
+        let ticks = (1_746_619_200_i64 + 11_644_473_600) * 10_000_000;
+        assert_eq!(
+            filetime_ticks_to_iso8601(ticks).as_deref(),
+            Some("2025-05-07T12:00:00Z"),
+        );
+    }
+
+    #[test]
+    fn filetime_pre_unix_epoch_returns_some() {
+        // FILETIME 0 (= 1601-01-01) maps to a pre-unix-epoch
+        // chrono::DateTime, which is a perfectly valid representation
+        // and round-trips cleanly. Pin the contract so a future
+        // refactor doesn't accidentally start dropping these.
+        let s = filetime_ticks_to_iso8601(0).expect("0 ticks must convert");
+        assert!(s.starts_with("1601-01-01"), "got {s}");
     }
 }
