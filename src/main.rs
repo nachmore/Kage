@@ -115,10 +115,18 @@ fn main() {
         }
     }
 
-    // Check for session resume after update — clean up last-session.txt
-    let _resume_session_id: Option<String> = dirs::config_dir()
+    // Check for session resume after update. The marker file (or
+    // /resume-session CLI arg) is *always* consumed here so a stale
+    // marker doesn't ghost-trigger on the next normal launch. The id
+    // itself is fed into the launch session bootstrap below — without
+    // this, the auto-update flow would silently lose the user's session
+    // every time even though all the plumbing existed to preserve it.
+    let resume_session_id: Option<String> = dirs::config_dir()
         .map(|d| d.join("kage"))
         .and_then(|cfg_dir| startup::resolve_resume_session_id(&args, &cfg_dir));
+    if let Some(ref id) = resume_session_id {
+        info!("Resume marker present: will attempt to load session {}", id);
+    }
 
     if debug_mode {
         println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
@@ -290,8 +298,10 @@ fn main() {
             // and periodic refresh every hour so the list stays current.
             setup::spawn_app_registry_scan(app);
 
-            // Start default session on launch if configured
-            setup::maybe_spawn_default_session(app, &config);
+            // Start default session on launch if configured. Pass through
+            // the resume id consumed at startup so the post-update launch
+            // restores the user's session instead of silently dropping it.
+            setup::maybe_spawn_default_session(app, &config, resume_session_id);
 
             // Start the auto-update background loop
             setup::start_updater(app);

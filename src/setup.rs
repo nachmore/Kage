@@ -234,17 +234,36 @@ pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bo
 }
 
 
-/// Spawn the start-of-day session bootstrap in the background when the
-/// user has opted into `start_session_on_launch`. The flow:
+/// Spawn the start-of-day session bootstrap in the background.
+///
+/// `resume_session_id` is set when the user is launching a fresh process
+/// after auto-update (or used `--resume-session <id>`). When present we
+/// take the resume path: load that session via `session/load` and skip
+/// the model/steering bootstrap, since the loaded session already has
+/// its own model selection and steering history.
+///
+/// When `resume_session_id` is None we follow the original flow:
 ///   1. Connect the ACP client.
-///   2. Create a default session (capturing the available models).
+///   2. Create a fresh session (capturing the available models).
 ///   3. Apply the default model if configured.
 ///   4. Send the steering message as the first hidden message.
 ///
+/// If `start_session_on_launch` is disabled we skip both paths. The
+/// resume marker has already been consumed at startup either way, so
+/// turning the setting off doesn't leave the file lying around to ghost
+/// the next launch.
+///
 /// Any failure here is logged but not propagated — the app stays
 /// usable even if the agent backend is down at launch.
-pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
+pub fn maybe_spawn_default_session(
+    app: &App,
+    config: &crate::config::Config,
+    resume_session_id: Option<String>,
+) {
     if !config.acp.agent.start_session_on_launch {
+        if resume_session_id.is_some() {
+            warn!("Resume marker present but start_session_on_launch is disabled — ignoring (marker already consumed)");
+        }
         return;
     }
     info!("start_session_on_launch enabled, spawning background session init");
@@ -264,26 +283,65 @@ pub fn maybe_spawn_default_session(app: &App, config: &crate::config::Config) {
             return;
         }
 
-        info!("Creating default session on launch...");
         let cwd = {
             let cfg = config_arc.lock_or_recover();
             cfg.acp.agent.working_directory.clone()
         };
 
-        let (session_id, models_json) = match acp_client.create_session(cwd) {
-            Ok(v) => v,
-            Err(e) => {
-                error!("Failed to create default session on launch: {}", e);
-                return;
+        let session_id = if let Some(resume_id) = resume_session_id {
+            info!("Resuming session on launch: {}", resume_id);
+            match acp_client.load_existing_session(&resume_id, cwd) {
+                Ok(id) => {
+                    info!("Resumed session on launch: {}", id);
+                    if let Ok(mut fs) = floating_session.lock() {
+                        *fs = Some(id.clone());
+                    }
+                    // Loaded session already has its model + steering history;
+                    // don't re-apply either or we'd duplicate the steering
+                    // message and stomp the model the user actually picked.
+                    // Available-models stays empty until the user creates a
+                    // new session (frontend handles that gracefully and
+                    // refetches when needed).
+                    return;
+                }
+                Err(e) => {
+                    error!("Failed to resume session {}, falling back to fresh session: {}", resume_id, e);
+                    // Recompute cwd because we moved it into load_existing_session
+                    let cwd = {
+                        let cfg = config_arc.lock_or_recover();
+                        cfg.acp.agent.working_directory.clone()
+                    };
+                    match acp_client.create_session(cwd) {
+                        Ok((sid, models_json)) => {
+                            store_available_models(models_json, &models_arc);
+                            sid
+                        }
+                        Err(e) => {
+                            error!("Fallback session creation also failed: {}", e);
+                            return;
+                        }
+                    }
+                }
+            }
+        } else {
+            info!("Creating default session on launch...");
+            match acp_client.create_session(cwd) {
+                Ok((sid, models_json)) => {
+                    info!("Default session created on launch: {}", sid);
+                    store_available_models(models_json, &models_arc);
+                    sid
+                }
+                Err(e) => {
+                    error!("Failed to create default session on launch: {}", e);
+                    return;
+                }
             }
         };
-        info!("Default session created on launch: {}", session_id);
 
         if let Ok(mut fs) = floating_session.lock() {
             *fs = Some(session_id.clone());
         }
 
-        store_available_models(models_json, &models_arc);
         apply_default_model_if_any(&acp_client, &config_arc, &session_id);
         send_startup_steering(&acp_client, &config_arc);
     });
