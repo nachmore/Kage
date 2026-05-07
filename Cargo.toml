@@ -46,6 +46,7 @@ tauri-plugin-dialog = "2"
 rfd = "0.15"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 regex = "1"
+lru = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

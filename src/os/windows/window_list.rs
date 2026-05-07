@@ -1,6 +1,5 @@
 // Windows window enumeration using Win32 API
 
-use crate::lock_ext::LockExt;
 use crate::os::window_list::WindowInfo;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
@@ -118,79 +117,27 @@ extern "system" fn enum_callback(hwnd: isize, lparam: isize) -> i32 {
     1 // continue enumeration
 }
 
-use std::collections::HashMap;
-use std::sync::Mutex;
-
-// Soft cap per cache — a user's machine typically has a few hundred unique
-// executables, but we don't want pathological growth from long-running
-// sessions or oddball apps. When we hit the cap we drop the entire table so
-// next lookup re-extracts. Simpler than LRU; icons are cheap to regenerate.
-const ICON_CACHE_MAX: usize = 512;
-
-// Cache icons by executable path — same exe always has the same icon
-static ICON_CACHE: std::sync::LazyLock<Mutex<HashMap<String, Option<String>>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-
-// Cache icons by process name (lowercase) — for quick lookup by name
-static ICON_BY_NAME: std::sync::LazyLock<Mutex<HashMap<String, String>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
-
 pub fn list_windows_impl() -> Vec<WindowInfo> {
     let mut state = EnumState { windows: Vec::new() };
     unsafe {
         EnumWindows(enum_callback, &mut state as *mut EnumState as isize);
     }
 
-    let mut cache = ICON_CACHE.lock_or_recover();
-    let mut name_cache = ICON_BY_NAME.lock_or_recover();
-
-    // Bound both caches before inserting new entries this pass.
-    if cache.len() >= ICON_CACHE_MAX {
-        log::debug!("ICON_CACHE hit cap ({}), clearing", cache.len());
-        cache.clear();
-    }
-    if name_cache.len() >= ICON_CACHE_MAX {
-        log::debug!("ICON_BY_NAME hit cap ({}), clearing", name_cache.len());
-        name_cache.clear();
-    }
-
+    // Icon caching now lives in the cross-platform layer (`os::icon`)
+    // so future macOS/Linux icon support gets the same LRU treatment for
+    // free. Per-window: ask the cache for the icon (extracts on miss),
+    // then register the (process_name → icon) pair so `get_app_icon`
+    // can look it up by name without re-enumerating.
     for (win, exe_path) in &mut state.windows {
         if exe_path.is_empty() { continue; }
-        let icon = cache.entry(exe_path.clone()).or_insert_with(|| {
-            crate::os::icon::extract_icon_base64(exe_path)
-        });
+        let icon = crate::os::icon::extract_icon_base64_cached(exe_path);
         win.icon_base64 = icon.clone();
-        // Also cache by process name for lookup
-        if let Some(ref icon_str) = *icon {
-            if !win.process_name.is_empty() {
-                name_cache.entry(win.process_name.to_lowercase()).or_insert_with(|| icon_str.clone());
-            }
+        if let Some(ref icon_str) = icon {
+            crate::os::icon::register_process_name_icon(&win.process_name, icon_str);
         }
     }
 
     state.windows.into_iter().map(|(w, _)| w).collect()
-}
-
-/// Look up a cached icon by process name (e.g. "winword", "chrome").
-/// Returns the base64 data URI if found, or None.
-/// If the cache is empty, triggers a window enumeration to populate it.
-pub fn get_icon_by_process_name(name: &str) -> Option<String> {
-    let cache = ICON_BY_NAME.lock_or_recover();
-    if let Some(icon) = cache.get(&name.to_lowercase()) {
-        return Some(icon.clone());
-    }
-    // Cache miss — if the cache is empty, populate it by listing windows
-    let is_empty = cache.is_empty();
-    drop(cache);
-
-    if is_empty {
-        // Prime the cache by enumerating windows (populates both ICON_CACHE and ICON_BY_NAME)
-        let _ = list_windows_impl();
-        let cache = ICON_BY_NAME.lock_or_recover();
-        return cache.get(&name.to_lowercase()).cloned();
-    }
-
-    None
 }
 
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {

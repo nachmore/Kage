@@ -26,9 +26,19 @@ pub fn focus_window(handle: u64) -> Result<(), String> {
 }
 
 /// Look up a cached app icon by process name (e.g. "winword", "chrome").
-/// Returns the base64 data URI if found.
+/// Returns the base64 data URI if found in the cache populated by an
+/// earlier `list_windows()` call. If the cache is empty, primes it by
+/// enumerating windows once — covers the activity tracker's first-call
+/// path before any UI has rendered.
 pub fn get_app_icon(process_name: &str) -> Option<String> {
-    crate::os::platform::window_list::get_icon_by_process_name(process_name)
+    if let Some(icon) = crate::os::icon::get_icon_by_process_name(process_name) {
+        return Some(icon);
+    }
+    if crate::os::icon::process_name_cache_is_empty() {
+        let _ = list_windows();
+        return crate::os::icon::get_icon_by_process_name(process_name);
+    }
+    None
 }
 
 /// Get the foreground window's title and process name.
