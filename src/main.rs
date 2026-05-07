@@ -24,7 +24,6 @@ mod panic_handler;
 mod permission_audit;
 mod process_manager;
 mod setup;
-mod single_instance;
 mod startup;
 mod state;
 mod tray;
@@ -36,6 +35,7 @@ use config::Config;
 use log::{info, warn};
 use process_manager::ProcessManager;
 use std::sync::Arc;
+use tauri::Manager;
 use tokio::sync::Mutex;
 
 /// In debug builds on Windows, attach to the parent console (if any) so that
@@ -85,21 +85,16 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let flags = startup::CliFlags::parse(&args);
 
-    // Enforce single instance across all builds (debug + release)
-    let _instance_lock = match single_instance::try_acquire(flags.is_restart) {
-        Ok(lock) => lock,
-        Err(e) => {
-            // Another instance is running — signal it to show the sessions UI
-            info!("Another instance detected, signaling it to show sessions UI");
-            single_instance::signal_running_instance();
-            // Small delay to ensure the TCP send completes before we exit
-            std::thread::sleep(std::time::Duration::from_millis(200));
-            info!("{}", e);
-            std::process::exit(0);
-        }
-    };
-
-    // On restart, wait for the old process to fully release WebView2/Tauri resources
+    // Single-instance enforcement is wired in further below as a Tauri
+    // plugin (tauri-plugin-single-instance). The plugin's setup hook
+    // detects an existing primary, forwards argv/cwd over a platform-
+    // appropriate IPC (named pipe on Windows, AF_UNIX socket on Unix —
+    // both have OS-enforced user-bound access control, unlike the prior
+    // loopback-TCP IPC), and exits the second process before window
+    // creation.
+    //
+    // On restart, wait for the old process to fully release WebView2/Tauri
+    // resources before we proceed.
     startup::wait_for_previous_instance_if_restart(flags.is_restart);
 
     let dev_mode = flags.dev_mode;
@@ -120,114 +115,45 @@ fn main() {
         }
     }
 
-    // Check for session resume after update. The marker file (or
-    // /resume-session CLI arg) is *always* consumed here so a stale
-    // marker doesn't ghost-trigger on the next normal launch. The id
-    // itself is fed into the launch session bootstrap below — without
-    // this, the auto-update flow would silently lose the user's session
-    // every time even though all the plumbing existed to preserve it.
-    let resume_session_id: Option<String> = dirs::config_dir()
-        .map(|d| d.join("kage"))
-        .and_then(|cfg_dir| startup::resolve_resume_session_id(&args, &cfg_dir));
-    if let Some(ref id) = resume_session_id {
-        info!("Resume marker present: will attempt to load session {}", id);
-    }
-
     if debug_mode {
         println!("🐛 DEBUG MODE ENABLED - Detailed ACP logs will be printed to console");
         info!("🐛 DEBUG MODE ENABLED via command line argument");
         logger::enable_console_logging();
     }
 
-    info!("Checking for orphaned processes...");
-    std::thread::spawn(|| {
-        if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
-            warn!("Failed to cleanup orphaned processes: {}", e);
-        }
-    });
-
-    // Create a Job Object that auto-kills all child processes when this
-    // process exits, even on crash — prevents orphaned TTS servers, ACP
-    // CLI processes, MCP children, etc. No-op on non-Windows where
-    // orphan reaping happens via init/launchd.
-    os::install_kill_on_exit_job();
-
-    let config = startup::load_config_with_overrides(debug_mode, Config::load);
-
-    info!("Configuration loaded");
-    if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
-
-    // Initialize the app log ring buffer
-    if let Err(e) = app_log::init(config.system.log_buffer_size) {
-        warn!("Failed to initialize app log: {}", e);
-    } else {
-        app_log::log("info", "system", "App log initialized");
-    }
-
-    let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&config.acp.mode);
-    info!("{}", acp_mode_desc);
-    let acp_client = AcpClient::new(acp_connection_mode);
-
-    acp_client.set_debug_mode(config.debug_mode);
-
-    let process_manager = acp_client.get_process_manager();
-    process_manager::install_signal_handlers(process_manager);
-
-    let app_launcher = AppLauncher::new();
-    info!("App launcher initialized (scan deferred to background)");
-    if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
-
-    let config_for_setup = config.clone();
-    let dev_mode_for_setup = dev_mode;
-
-    let acp_client_arc = Arc::new(acp_client);
-    let config_arc = Arc::new(std::sync::Mutex::new(config));
-    let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
-    let available_models_arc = Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
-
-    // Clone Arcs for the notification handler setup
-    let config_for_handler = config_arc.clone();
-    let slash_cmds_for_handler = slash_commands_arc.clone();
-    let pending_perm_for_handler = pending_permission_arc.clone();
-    let acp_for_handler = acp_client_arc.clone();
-
     if dev_mode { info!("⏱ Tauri builder starting at +{}ms", startup_t0.elapsed().as_millis()); }
+
+    // Capture the parsed args once — `main` references `flags` and the
+    // setup closure needs the raw argv to resolve the resume marker.
+    let main_args = args.clone();
+
     tauri::Builder::default()
+        // Single-instance enforcement. Must be the FIRST plugin registered
+        // (per the plugin's docs) so the second-process exit happens before
+        // any window-creation work runs in that process. The callback fires
+        // in the *primary* process when a second launch happens — we just
+        // emit `show-sessions`, which the existing listener routes to
+        // `open_chat_window`. Same event name as the previous hand-rolled
+        // TCP IPC, so the frontend wiring is unchanged.
+        //
+        // Crucially: every expensive bit of startup (orphan cleanup,
+        // config load, AcpClient connection, app_log init, app launcher
+        // construction, signal handlers, the .manage() state) lives
+        // inside the `.setup()` block below. The plugin's setup hook
+        // runs *before* ours, so a second instance never reaches any of
+        // that work — it forwards argv to the primary and exits during
+        // plugin setup. The cost of a second launch is now bounded by
+        // logger init, panic-handler install, and the plugin's own IPC
+        // dance. Native named-pipe / AF_UNIX IPC is well under 50ms.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            use tauri::Emitter;
+            info!("Second instance signaled via single-instance plugin");
+            let _ = app.emit("show-sessions", ());
+        }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(state::AcpHandles {
-            client: acp_client_arc,
-            pending_permission: pending_permission_arc,
-            slash_commands: slash_commands_arc,
-            available_models: available_models_arc,
-            last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
-        })
-        .manage(state::UiState {
-            dev_mode,
-            floating_session_id: Arc::new(std::sync::Mutex::new(None)),
-            last_selection: Arc::new(std::sync::Mutex::new(None)),
-            source_window: Arc::new(std::sync::Mutex::new(None)),
-            notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
-            frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-        })
-        .manage(state::ChildProcesses {
-            pocket_tts: Arc::new(std::sync::Mutex::new(None)),
-            pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
-        })
-        .manage(state::FeatureServices {
-            config: config_arc,
-            app_launcher: Arc::new(Mutex::new(app_launcher)),
-            updater: Arc::new(updater::UpdaterState::new()),
-            user_info_cache: Arc::new(std::sync::Mutex::new(None)),
-            session_cache: Arc::new(std::sync::Mutex::new(None)),
-            automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
-            kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
-            automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
-        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 setup::handle_window_close(window, api);
@@ -237,8 +163,104 @@ fn main() {
             info!("Setting up application");
             info!("=== Kage Setup ===");
 
-            let config = config_for_setup;
-            let dev_mode = dev_mode_for_setup;
+            // Check for session resume after update. The marker file (or
+            // /resume-session CLI arg) is *always* consumed here so a stale
+            // marker doesn't ghost-trigger on the next normal launch.
+            let resume_session_id: Option<String> = dirs::config_dir()
+                .map(|d| d.join("kage"))
+                .and_then(|cfg_dir| startup::resolve_resume_session_id(&main_args, &cfg_dir));
+            if let Some(ref id) = resume_session_id {
+                info!("Resume marker present: will attempt to load session {}", id);
+            }
+
+            // Background orphan cleanup. Runs in the primary only — a second
+            // instance must never trigger this because it could read the
+            // primary's PID and try to kill it (the recycled-PID guard helps
+            // but isn't proof). Scoped to the primary by living in setup().
+            info!("Checking for orphaned processes...");
+            std::thread::spawn(|| {
+                if let Err(e) = ProcessManager::cleanup_orphaned_processes() {
+                    warn!("Failed to cleanup orphaned processes: {}", e);
+                }
+            });
+
+            // Create a Job Object that auto-kills all child processes when this
+            // process exits, even on crash — prevents orphaned TTS servers, ACP
+            // CLI processes, MCP children, etc. No-op on non-Windows where
+            // orphan reaping happens via init/launchd.
+            os::install_kill_on_exit_job();
+
+            let config = startup::load_config_with_overrides(debug_mode, Config::load);
+            info!("Configuration loaded");
+            if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
+
+            // Initialize the app log ring buffer
+            if let Err(e) = app_log::init(config.system.log_buffer_size) {
+                warn!("Failed to initialize app log: {}", e);
+            } else {
+                app_log::log("info", "system", "App log initialized");
+            }
+
+            let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&config.acp.mode);
+            info!("{}", acp_mode_desc);
+            let acp_client = AcpClient::new(acp_connection_mode);
+            acp_client.set_debug_mode(config.debug_mode);
+
+            let process_manager = acp_client.get_process_manager();
+            process_manager::install_signal_handlers(process_manager);
+
+            let app_launcher = AppLauncher::new();
+            info!("App launcher initialized (scan deferred to background)");
+            if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
+
+            let acp_client_arc = Arc::new(acp_client);
+            let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
+            let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
+            let available_models_arc =
+                Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
+
+            // Clone Arcs for the notification handler setup
+            let config_for_handler = config_arc.clone();
+            let slash_cmds_for_handler = slash_commands_arc.clone();
+            let pending_perm_for_handler = pending_permission_arc.clone();
+            let acp_for_handler = acp_client_arc.clone();
+
+            // Register Tauri-managed state. Doing this from inside setup()
+            // (rather than via .manage() in the inline builder chain)
+            // means a second instance — which exits during plugin setup
+            // before this point — never pays for the Arc construction or
+            // the AcpClient handle.
+            app.manage(state::AcpHandles {
+                client: acp_client_arc,
+                pending_permission: pending_permission_arc,
+                slash_commands: slash_commands_arc,
+                available_models: available_models_arc,
+                last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+            });
+            app.manage(state::UiState {
+                dev_mode,
+                floating_session_id: Arc::new(std::sync::Mutex::new(None)),
+                last_selection: Arc::new(std::sync::Mutex::new(None)),
+                source_window: Arc::new(std::sync::Mutex::new(None)),
+                notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
+                frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            });
+            app.manage(state::ChildProcesses {
+                pocket_tts: Arc::new(std::sync::Mutex::new(None)),
+                pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
+            });
+            app.manage(state::FeatureServices {
+                config: config_arc,
+                app_launcher: Arc::new(Mutex::new(app_launcher)),
+                updater: Arc::new(updater::UpdaterState::new()),
+                user_info_cache: Arc::new(std::sync::Mutex::new(None)),
+                session_cache: Arc::new(std::sync::Mutex::new(None)),
+                automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
+                kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
+                automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
+            });
 
             // Build system tray
             tray::setup_tray(app, dev_mode)?;
@@ -266,10 +288,9 @@ fn main() {
 
             info!("=== Setup Complete ===");
 
-            // Start IPC listener for second-instance signals
-            single_instance::start_ipc_listener(app.handle().clone());
-
-            // Listen for show-sessions event (triggered by second instance)
+            // Listen for show-sessions event. Emitted by the
+            // single-instance plugin's callback when a second process
+            // launches; routed here into `open_chat_window`.
             setup::install_show_sessions_listener(app);
 
             // Start automation scheduler

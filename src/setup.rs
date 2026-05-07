@@ -71,7 +71,7 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
             )
         };
 
-        let mut snapshot = last_hotkey_snapshot.lock_or_recover();
+        let snapshot = last_hotkey_snapshot.lock_or_recover();
         if snapshot.0 == new_main && snapshot.1 == new_cb && snapshot.2 == new_ia {
             return;
         }
