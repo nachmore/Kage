@@ -15,6 +15,7 @@ pub struct Application {
     pub emoji_icon: Option<String>,
 }
 
+#[derive(Default)]
 pub struct AppLauncher {
     app_registry: HashMap<String, Application>,
 }
@@ -24,9 +25,7 @@ impl AppLauncher {
     /// in `build_registry`, which runs on a background thread and is
     /// applied via `apply_registry`. Construction itself can't fail.
     pub fn new() -> Self {
-        Self {
-            app_registry: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Build a new application registry by scanning the system.

@@ -1486,6 +1486,10 @@ pub async fn dump_thread_info() -> Result<String, AppError> {
 }
 
 #[cfg(target_os = "windows")]
+/// (tid, delta_total, delta_user, delta_kernel, cum_total, cum_user, cum_kernel, name)
+type ThreadDelta = (u32, f64, f64, f64, f64, f64, f64, String);
+
+#[cfg(target_os = "windows")]
 fn dump_thread_info_windows() -> String {
     use std::fmt::Write;
 
@@ -1507,7 +1511,7 @@ fn dump_thread_info_windows() -> String {
     let snap2 = snapshot_threads(pid);
 
     // Compute deltas
-    let mut deltas: Vec<(u32, f64, f64, f64, f64, f64, f64, String)> = Vec::new();
+    let mut deltas: Vec<ThreadDelta> = Vec::new();
     // (tid, delta_total, delta_user, delta_kernel, cum_total, cum_user, cum_kernel, name)
     for (tid, total2, user2, kernel2, name) in &snap2 {
         if let Some((_, total1, user1, kernel1, _)) = snap1.iter().find(|(t, _, _, _, _)| t == tid) {

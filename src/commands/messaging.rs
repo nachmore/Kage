@@ -833,8 +833,8 @@ pub async fn execute_automation_plan(
                     if !success {
                         warn!("Aborting automation plan: step {}/{} failed", step_num, total_steps);
                         // Mark remaining steps as stopped
-                        for j in (i + 1)..plan.len() {
-                            let remaining_task = plan[j].get("task")
+                        for (j, remaining) in plan.iter().enumerate().skip(i + 1) {
+                            let remaining_task = remaining.get("task")
                                 .and_then(|t| t.as_str()).unwrap_or("Unknown task");
                             let _ = window.emit("automation_step_complete", serde_json::json!({
                                 "step": j + 1,
@@ -862,8 +862,8 @@ pub async fn execute_automation_plan(
 
                     // Abort on transport/protocol errors too
                     warn!("Aborting automation plan: step {}/{} errored", step_num, total_steps);
-                    for j in (i + 1)..plan.len() {
-                        let remaining_task = plan[j].get("task")
+                    for (j, remaining) in plan.iter().enumerate().skip(i + 1) {
+                        let remaining_task = remaining.get("task")
                             .and_then(|t| t.as_str()).unwrap_or("Unknown task");
                         let _ = window.emit("automation_step_complete", serde_json::json!({
                             "step": j + 1,

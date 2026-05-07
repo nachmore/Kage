@@ -175,8 +175,7 @@ fn fire_automation(app_handle: &tauri::AppHandle, mac: &MacroConfig, data: Optio
 /// Parse an interval string into the check frequency in seconds.
 /// The scheduler checks at this frequency; time-based triggers do their own matching.
 fn parse_interval(interval: &str) -> i64 {
-    if interval.starts_with("every_") {
-        let rest = &interval[6..];
+    if let Some(rest) = interval.strip_prefix("every_") {
         if let Some(m) = rest.strip_suffix('m') {
             return m.parse::<i64>().unwrap_or(0) * 60;
         }
@@ -188,8 +187,7 @@ fn parse_interval(interval: &str) -> i64 {
         }
     }
     // Hourly: "hourly_N" or "hourly_N_at_MM"
-    if interval.starts_with("hourly_") {
-        let rest = &interval[7..];
+    if let Some(rest) = interval.strip_prefix("hourly_") {
         let hours_str = rest.split('_').next().unwrap_or("1");
         return hours_str.parse::<i64>().unwrap_or(1) * 3600;
     }

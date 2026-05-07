@@ -388,7 +388,7 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
     let mut title_cache = load_title_cache();
     let mut cache_dirty = false;
 
-    let entries = fs::read_dir(&sessions_dir).map_err(|e| {
+    let entries = fs::read_dir(sessions_dir.as_path()).map_err(|e| {
         error!("Failed to read sessions directory: {}", e);
         format!("Failed to read sessions directory: {}", e)
     })?;

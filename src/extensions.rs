@@ -29,9 +29,11 @@ use std::path::PathBuf;
 /// over it. That's an arbitrary directory delete on install.
 ///
 /// Rules:
+///
 /// - lowercase ASCII letters, digits, `-`, and `_`
 /// - must start with a letter or digit (no leading dot, dash, or underscore)
 /// - 1..=64 characters
+///
 /// These are tighter than the manifest format technically allows, but match
 /// the convention every shipped extension follows and reject every Unicode
 /// directory-traversal trick we know about.

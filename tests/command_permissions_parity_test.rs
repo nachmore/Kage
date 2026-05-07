@@ -85,7 +85,7 @@ fn permissioned_commands() -> HashSet<String> {
     // `{` only inside string descriptions — there are none in this map —
     // so a simple counter is fine.
     let mut depth: i32 = 1;
-    let bytes = src[after_open..].as_bytes();
+    let bytes = &src.as_bytes()[after_open..];
     let mut end = 0;
     for (i, &b) in bytes.iter().enumerate() {
         match b {

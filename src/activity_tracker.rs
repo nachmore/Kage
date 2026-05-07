@@ -78,13 +78,19 @@ pub struct ActivityTrackerState {
     poll_interval_secs: Mutex<u64>,
 }
 
-impl ActivityTrackerState {
-    pub fn new() -> Self {
+impl Default for ActivityTrackerState {
+    fn default() -> Self {
         Self {
             running: AtomicBool::new(false),
             db: Mutex::new(None),
             poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
         }
+    }
+}
+
+impl ActivityTrackerState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn is_running(&self) -> bool {
@@ -422,11 +428,23 @@ fn is_browser(process_name: &str) -> bool {
 /// Browser titles typically look like: "Page Title - Site Name - Google Chrome"
 /// We strip the browser suffix and return the meaningful part.
 fn extract_site_from_title(title: &str, process_name: &str) -> String {
+    // Real-world browser window titles vary: some Edge builds emit a
+    // U+200B zero-width space between "Microsoft" and "Edge" (encoded
+    // as `\u{200B}` so it survives editors that strip invisibles), and
+    // Firefox alternates between em-dash and en-dash separators across
+    // versions.
     let suffixes = [
-        " - Google Chrome", " - Microsoft​ Edge", " - Microsoft Edge",
-        " — Mozilla Firefox", " - Mozilla Firefox",
-        " - Brave", " - Opera", " - Vivaldi", " - Arc",
-        " – Google Chrome", " – Microsoft Edge",
+        " - Google Chrome",
+        " - Microsoft\u{200B} Edge",
+        " - Microsoft Edge",
+        " — Mozilla Firefox",
+        " - Mozilla Firefox",
+        " - Brave",
+        " - Opera",
+        " - Vivaldi",
+        " - Arc",
+        " – Google Chrome",
+        " – Microsoft Edge",
     ];
 
     let mut clean = title.to_string();

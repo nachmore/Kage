@@ -333,10 +333,12 @@ pub async fn store_get_catalog(
         store_urls.push(("Default".to_string(), primary_url));
     }
     for s in &sources {
-        if s.enabled && !s.url.is_empty() && store_urls.len() < 3 {
-            if extensions::validate_store_url(&s.url).is_ok() {
-                store_urls.push((s.name.clone(), s.url.clone()));
-            }
+        if s.enabled
+            && !s.url.is_empty()
+            && store_urls.len() < 3
+            && extensions::validate_store_url(&s.url).is_ok()
+        {
+            store_urls.push((s.name.clone(), s.url.clone()));
         }
     }
 

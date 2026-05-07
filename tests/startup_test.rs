@@ -333,8 +333,7 @@ use kage::config::Config;
 #[test]
 fn load_config_uses_loaded_value_when_ok() {
     // Loader returns a custom config; the result should preserve its fields.
-    let mut custom = Config::default();
-    custom.first_run_completed = true;
+    let custom = Config { first_run_completed: true, ..Config::default() };
 
     let result = kage::startup::load_config_with_overrides(false, || Ok(custom.clone()));
     assert!(result.first_run_completed);
@@ -368,8 +367,7 @@ fn load_config_debug_flag_forces_debug_mode_on() {
 fn load_config_debug_flag_off_does_not_clobber_persisted_true() {
     // The inverse: if the user saved debug_mode=true in their config,
     // running without --debug should NOT flip it back off.
-    let mut loaded = Config::default();
-    loaded.debug_mode = true;
+    let loaded = Config { debug_mode: true, ..Config::default() };
     let result = kage::startup::load_config_with_overrides(false, || Ok(loaded));
     assert!(result.debug_mode, "persisted debug_mode=true must not be clobbered");
 }

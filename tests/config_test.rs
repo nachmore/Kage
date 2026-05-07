@@ -65,10 +65,12 @@ fn test_hotkey_string_generation() {
 
 #[test]
 fn test_hotkey_string_single_modifier() {
-    let mut config = Config::default();
-    config.hotkey = HotkeyConfig {
-        modifiers: vec!["Super".to_string()],
-        key: "Space".to_string(),
+    let config = Config {
+        hotkey: HotkeyConfig {
+            modifiers: vec!["Super".to_string()],
+            key: "Space".to_string(),
+        },
+        ..Config::default()
     };
     assert_eq!(config.get_hotkey_string(), "Super+Space");
 }

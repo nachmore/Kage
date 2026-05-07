@@ -47,9 +47,13 @@ pub fn configure_transparent_windows(app: &App) {
 /// actually changes. Snapshots the prior values so unrelated config
 /// saves don't churn the registration.
 pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Config) {
+    /// Snapshot of the three hotkey strings (main, clipboard, inline-assist).
+    /// Aliased so the type doesn't bloat the local declaration.
+    type HotkeySnapshot = (String, Option<String>, Option<String>);
+
     let hotkey_app = app.handle().clone();
     let hotkey_config = app.state::<FeatureServices>().config.clone();
-    let last_hotkey_snapshot: Arc<std::sync::Mutex<(String, Option<String>, Option<String>)>> = {
+    let last_hotkey_snapshot: Arc<std::sync::Mutex<HotkeySnapshot>> = {
         let main = initial_config.get_hotkey_string();
         let cb = initial_config.get_clipboard_hotkey_string();
         let ia = initial_config.get_inline_assist_hotkey_string();

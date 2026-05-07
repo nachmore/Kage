@@ -454,10 +454,11 @@ pub struct MacroConfig {
 }
 
 /// How an automation is triggered.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AutomationTrigger {
     /// Only runs via inline assist / quick actions (current behavior)
+    #[default]
     #[serde(rename = "manual")]
     Manual,
     /// Runs on a time-based schedule
@@ -480,10 +481,6 @@ pub enum AutomationTrigger {
         #[serde(default)]
         filter: Option<String>,
     },
-}
-
-impl Default for AutomationTrigger {
-    fn default() -> Self { AutomationTrigger::Manual }
 }
 
 /// Power/battery awareness settings for automations.

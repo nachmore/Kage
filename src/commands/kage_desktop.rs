@@ -676,7 +676,7 @@ fn parse_chat_session(path: &Path, hash_dir: &str) -> Option<KageDesktopSession>
         .next()
         .map(|c| {
             let t: String = c.chars().take(80).collect();
-            let t = t.replace('\n', " ").replace('\r', " ");
+            let t = t.replace(['\n', '\r'], " ");
             if c.len() > 80 { format!("{}...", t.trim()) } else { t.trim().to_string() }
         })
         .unwrap_or_else(|| "Untitled".to_string());
@@ -802,7 +802,7 @@ fn extract_cli_title(value_json: &str) -> String {
         if let Some(first) = transcript.first().and_then(|t| t.as_str()) {
             let clean = first.trim().trim_start_matches('>').trim();
             let title: String = clean.chars().take(80).collect();
-            let title = title.replace('\n', " ").replace('\r', " ");
+            let title = title.replace(['\n', '\r'], " ");
             return if clean.len() > 80 { format!("{}...", title.trim()) } else { title.trim().to_string() };
         }
     }

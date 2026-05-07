@@ -465,8 +465,8 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 Err(e) => tool_result_text(id, &e, true),
             }
         }
-        "click_element" => dispatch_element_action(id, &args, |eid| accessibility::click_element(eid)),
-        "focus_element" => dispatch_element_action(id, &args, |eid| accessibility::focus_element(eid)),
+        "click_element" => dispatch_element_action(id, &args, accessibility::click_element),
+        "focus_element" => dispatch_element_action(id, &args, accessibility::focus_element),
         "set_value" => {
             let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
             let val = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
@@ -475,10 +475,10 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 Err(e) => tool_result_text(id, &e, true),
             }
         }
-        "toggle_element" => dispatch_element_action(id, &args, |eid| accessibility::toggle_element(eid)),
-        "select_element" => dispatch_element_action(id, &args, |eid| accessibility::select_element(eid)),
-        "expand_element" => dispatch_element_action(id, &args, |eid| accessibility::expand_element(eid)),
-        "collapse_element" => dispatch_element_action(id, &args, |eid| accessibility::collapse_element(eid)),
+        "toggle_element" => dispatch_element_action(id, &args, accessibility::toggle_element),
+        "select_element" => dispatch_element_action(id, &args, accessibility::select_element),
+        "expand_element" => dispatch_element_action(id, &args, accessibility::expand_element),
+        "collapse_element" => dispatch_element_action(id, &args, accessibility::collapse_element),
         "scroll_element" => {
             let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
             let dir = args.get("direction").and_then(|v| v.as_str()).unwrap_or("down");
@@ -488,7 +488,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 Err(e) => tool_result_text(id, &e, true),
             }
         }
-        "get_element_text" => dispatch_element_action(id, &args, |eid| accessibility::get_element_text(eid)),
+        "get_element_text" => dispatch_element_action(id, &args, accessibility::get_element_text),
         "get_element_children" => {
             let eid = args.get("element_id").and_then(|v| v.as_str()).unwrap_or("");
             let depth = args.get("max_depth").and_then(|v| v.as_u64()).unwrap_or(2) as usize;

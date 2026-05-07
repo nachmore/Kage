@@ -129,7 +129,10 @@ pub fn default_log_path() -> Option<PathBuf> {
 /// Each call opens, writes, and closes the file. This is the testing
 /// API — production code uses [`append`] which keeps a single
 /// long-lived `BufWriter` per process to avoid the open/close round-trip
-/// per event.
+/// per event. Marked `dead_code`-allowed because the lib's normal call
+/// path goes through [`append`]; this entry point exists for tests that
+/// need a per-call open/close so they can read what they wrote.
+#[allow(dead_code)]
 pub fn append_to(path: &Path, entry: &AuditEntry) {
     if !ensure_parent(path) {
         return;
@@ -515,7 +518,7 @@ mod tests {
         content.push_str("{malformed\n");
         content.push_str(&good);
         content.push('\n');
-        content.push_str("\n"); // empty line
+        content.push('\n'); // empty line
         content.push_str("{\"at\":\"2026\",\"event\":\"unknown_event\"}\n");
         std::fs::write(&path, content).unwrap();
 
@@ -553,7 +556,7 @@ mod tests {
     fn all_event_kinds_roundtrip() {
         let dir = tempdir();
         let path = logpath(&dir);
-        let events = vec![
+        let events = [
             AuditEvent::Granted {
                 tool: "a".into(), grant_type: "once".into(),
                 session_id: None, args_preview: None,

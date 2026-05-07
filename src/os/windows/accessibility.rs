@@ -94,7 +94,7 @@ fn get_role(elem: &UiaElement) -> String {
 
 fn safe_name(elem: &UiaElement) -> String { elem.get_name().unwrap_or_default() }
 fn safe_automation_id(elem: &UiaElement) -> String { elem.get_automation_id().unwrap_or_default() }
-fn safe_pid(elem: &UiaElement) -> u32 { elem.get_process_id().unwrap_or(0) as u32 }
+fn safe_pid(elem: &UiaElement) -> u32 { elem.get_process_id().unwrap_or(0) }
 
 fn get_value(elem: &UiaElement) -> String {
     if let Ok(vp) = elem.get_pattern::<UIValuePattern>() {
@@ -108,7 +108,7 @@ fn get_bounds(elem: &UiaElement) -> Option<(i32, i32, i32, i32)> {
         let w = rect.get_right() - rect.get_left();
         let h = rect.get_bottom() - rect.get_top();
         if w > 0 && h > 0 {
-            return Some((rect.get_left() as i32, rect.get_top() as i32, w as i32, h as i32));
+            return Some((rect.get_left(), rect.get_top(), w, h));
         }
     }
     None
@@ -324,7 +324,7 @@ pub(super) fn list_accessible_windows_inner(state: &WorkerState, title_filter: O
         if let Ok(ct) = cur.get_control_type() {
             if ct == ControlType::Window {
                 let title = safe_name(&cur);
-                let dominated = title_filter.map_or(false, |f| !title.to_lowercase().contains(&f.to_lowercase()));
+                let dominated = title_filter.is_some_and(|f| !title.to_lowercase().contains(&f.to_lowercase()));
                 if !dominated {
                     if let Some(b) = get_bounds(&cur) {
                         if b.2 > 50 && b.3 > 50 {
