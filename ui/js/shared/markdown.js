@@ -1,5 +1,7 @@
 // Markdown rendering with code block, mermaid, graphviz, and PlantUML support
 
+import { loadPrismLanguage } from './prism-loader.js';
+
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
@@ -504,6 +506,45 @@ function _findStableSplitPoint(markdown) {
 }
 
 /**
+ * Highlight a code block with the given language. If the Prism component
+ * for that language isn't loaded yet, kicks off the load and reapplies
+ * highlight to the same node when it arrives. Mid-load the block stays
+ * unhighlighted (plain text), which is fine — Prism's highlighting is
+ * cosmetic and we'd rather render the response immediately than block
+ * on a fetch.
+ *
+ * Used to be: 15 language packs eagerly loaded at every window startup
+ * via `<script defer>` tags. Now only `prism.js` core is eager; each
+ * pack loads on first use of its language.
+ */
+function _highlightOrLazy(codeBlock, language) {
+    if (typeof Prism === 'undefined') return;
+    if (!language || language === 'text') return;
+    if (Prism.languages[language]) {
+        try {
+            codeBlock.innerHTML = Prism.highlight(codeBlock.textContent, Prism.languages[language], language);
+            codeBlock.className = 'language-' + language;
+        } catch { /* skip */ }
+        return;
+    }
+    // Capture the source text now — by the time the load resolves, the
+    // codeBlock element may have been replaced (the streaming renderer
+    // throws away nodes between debounced repaints). Re-highlighting a
+    // detached node is harmless; if it's still attached the user sees
+    // the colors arrive a beat later.
+    const source = codeBlock.textContent;
+    loadPrismLanguage(language)
+        .then(() => {
+            if (!Prism.languages[language]) return;
+            try {
+                codeBlock.innerHTML = Prism.highlight(source, Prism.languages[language], language);
+                codeBlock.className = 'language-' + language;
+            } catch { /* skip */ }
+        })
+        .catch(() => { /* unknown language or offline — leave unhighlighted */ });
+}
+
+/**
  * Process code blocks in a container: syntax highlighting, diagrams, etc.
  * Extracted from _doRender so it can be called on frozen and tail sections independently.
  */
@@ -567,12 +608,7 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             renderJsonTree(codeBlock, pre, language);
             return;
         }
-        if (language && language !== 'text' && Prism.languages[language]) {
-            try {
-                codeBlock.innerHTML = Prism.highlight(codeBlock.textContent, Prism.languages[language], language);
-                codeBlock.className = 'language-' + language;
-            } catch (e) { /* skip */ }
-        }
+        _highlightOrLazy(codeBlock, language);
         wrapCodeBlock(codeBlock, pre, language);
     });
 }
@@ -768,9 +804,7 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
         placeholderPre.style.cssText = 'margin:0;padding:16px;overflow-x:auto';
         const placeholderCode = document.createElement('code');
         placeholderCode.textContent = code;
-        if (Prism.languages[language]) {
-            try { placeholderCode.innerHTML = Prism.highlight(code, Prism.languages[language], language); } catch {}
-        }
+        _highlightOrLazy(placeholderCode, language);
         placeholderPre.appendChild(placeholderCode);
         diagramDiv.appendChild(placeholderPre);
     }
@@ -950,9 +984,9 @@ function renderHtmlPreview(codeBlock, pre) {
     const sPre = document.createElement('pre');
     const sCode = document.createElement('code');
     sCode.textContent = code;
-    if (Prism.languages.markup) {
-        sCode.innerHTML = Prism.highlight(code, Prism.languages.markup, 'html');
-    }
+    // Use 'markup' as the language so the lazy loader fetches prism-markup;
+    // Prism aliases 'html' → 'markup' internally so highlight() accepts both.
+    _highlightOrLazy(sCode, 'markup');
     sPre.appendChild(sCode);
     sourceDiv.appendChild(sPre);
 
@@ -1011,9 +1045,7 @@ function renderJsonTree(codeBlock, pre, language) {
     sPre.style.margin = '0';
     const sCode = document.createElement('code');
     sCode.textContent = JSON.stringify(parsed, null, 2);
-    if (Prism.languages.json) {
-        try { sCode.innerHTML = Prism.highlight(JSON.stringify(parsed, null, 2), Prism.languages.json, 'json'); } catch {}
-    }
+    _highlightOrLazy(sCode, 'json');
     sPre.appendChild(sCode);
     sourceDiv.appendChild(sPre);
 

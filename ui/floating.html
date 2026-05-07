@@ -7,22 +7,10 @@
     
     <!-- Vendored Dependencies -->
     <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
+    <!-- Prism core only — language packs lazy-load via shared/prism-loader.js
+         on first use of each language (~75 KB across 15 packs that mostly
+         went unused per session). -->
     <script defer src="vendor/lib/prism.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-clike.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-javascript.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-typescript.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-python.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-csharp.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-java.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-rust.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-go.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-bash.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-json.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-markdown.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-sql.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-yaml.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-css.min.js"></script>
-    <script defer src="vendor/lib/prism-components/prism-markup.min.js"></script>
     <script defer src="vendor/lib/marked.min.js"></script>
     <script defer src="vendor/lib/math.js"></script>
     <!-- mermaid (3.2MB) is lazy-loaded on first use -->
