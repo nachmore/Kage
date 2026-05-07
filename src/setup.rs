@@ -56,13 +56,19 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
         Arc::new(std::sync::Mutex::new((main, cb, ia)))
     };
     app.listen("config_updated", move |_| {
-        let (new_main, new_cb, new_ia) = match hotkey_config.try_lock() {
-            Ok(config) => (
+        // Read the new hotkey strings out under a brief lock, then drop the
+        // guard before doing anything else. Using lock() (via lock_or_recover)
+        // instead of try_lock means we wait briefly under contention rather
+        // than silently dropping the change. Pre-fix this listener used
+        // try_lock and a single concurrent save of any config field would
+        // make the user's hotkey edit go nowhere with no log line.
+        let (new_main, new_cb, new_ia) = {
+            let config = hotkey_config.lock_or_recover();
+            (
                 config.get_hotkey_string(),
                 config.get_clipboard_hotkey_string(),
                 config.get_inline_assist_hotkey_string(),
-            ),
-            Err(_) => return,
+            )
         };
 
         let mut snapshot = last_hotkey_snapshot.lock_or_recover();
@@ -71,8 +77,13 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
         }
 
         info!("Hotkeys changed — re-registering all");
+        // Drop the snapshot guard before calling register_all_hotkeys — that
+        // path takes its own config lock and we don't want to hold an
+        // unrelated mutex across it.
+        let to_store = (new_main, new_cb, new_ia);
+        drop(snapshot);
         crate::commands::system::register_all_hotkeys(&hotkey_app);
-        *snapshot = (new_main, new_cb, new_ia);
+        *last_hotkey_snapshot.lock_or_recover() = to_store;
     });
 }
 
