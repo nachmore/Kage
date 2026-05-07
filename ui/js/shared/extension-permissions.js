@@ -149,6 +149,89 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     rename_session: null,
     delete_session: null,
     reveal_session_file: null,
+
+    // --- internal status flags (Kage UI-only — no extension use case) ------
+    check_connection: null,
+    is_dev_mode: null,
+    is_terminator_mode: null,
+    is_first_run: null,
+    was_just_updated: null,
+    get_computer_control_enabled: null,
+    get_startup_enabled: null,
+    get_app_info: null,
+    get_os_dark_mode: null,
+
+    // --- agent backend introspection (Kage chrome, not extension business) -
+    detect_agents: null,
+    kage_cli_available: null,
+    kage_cli_check_updated: null,
+    kage_cli_load_session: null,
+    kage_cli_sessions: null,
+    kage_desktop_available: null,
+    kage_desktop_chat_sessions: null,
+    kage_desktop_delete_session: null,
+    kage_desktop_load_chat_file: null,
+    kage_desktop_load_session: null,
+    kage_desktop_open_folder: null,
+    kage_desktop_sessions: null,
+    kage_desktop_workspaces: null,
+
+    // --- Kage window chrome — opening/closing Kage's own windows ------------
+    open_chat_window: null,
+    open_settings_window: null,
+    open_welcome_window: null,
+    open_store_window: null,
+    open_auto_steering_file: null,
+    show_context_menu: null,
+    show_notification_source_window: null,
+    set_notification_source: null,
+    test_floating_window: null,
+    handle_floating_input: null,
+    restore_floating_session: null,
+    touch_floating_activity: null,
+    get_last_selection: null,
+
+    // --- extension management itself (must never be re-entrant) -------------
+    list_extensions: null,
+    list_themes: null,
+    list_command_packs: null,
+    load_theme_colors: null,
+    set_extension_enabled: null,
+    commit_extension_install: null,
+    remove_extension_grant: null,
+    check_extension_updates: null,
+    store_get_catalog: null,
+    store_get_detail: null,
+    store_install: null,
+    save_store_url: null,
+
+    // --- permission system internals ----------------------------------------
+    get_permission_audit_log: null,
+    get_permission_audit_log_path: null,
+    clear_permission_audit_log: null,
+    dismiss_pending_permission: null,
+    has_pending_permission: null,
+    check_extension_tool_permission: null,
+
+    // --- agent / steering / screen ------------------------------------------
+    // get_user_info exposes home dir + username — capability-gate later if
+    // an extension actually needs it. get_screen_context returns the active
+    // window + screenshot which is more sensitive than read_clipboard.
+    get_user_info: null,
+    get_screen_context: null,
+    get_steering_content: null,
+    get_auto_steering_path: null,
+    execute_slash_command: null,
+    get_slash_command_options: null,
+
+    // --- updater / TTS install state ----------------------------------------
+    fetch_changelog: null,
+    get_update_urls: null,
+    pocket_tts_check_install: null,
+
+    // --- shortcut frecency (used by Kage's own search) ----------------------
+    record_shortcut_usage: null,
+    get_shortcut_history: null,
 });
 
 /**
