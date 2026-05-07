@@ -216,22 +216,35 @@ describe('MessageStreamController.handleToolCallUpdate', () => {
         expect(host.flushPendingMarkdown).not.toHaveBeenCalled();
     });
 
-    it('flushes pending markdown then shows the running spinner', () => {
+    it('shows the running spinner without forcing a full markdown re-render', () => {
+        // Tool-call updates fire on every kind/title change. Paying for a
+        // full re-render here was wasteful — the throttled streaming path
+        // already paints at ~60 fps. The flush is only triggered now from
+        // permission_request via flushStreamingRender().
         const host = makeHost();
         const c = new MessageStreamController(host);
         c.handleToolCallUpdate({
             payload: { params: { update: { title: 'read_file', toolCallId: 'tc1', kind: 'read' } } }
         });
-        expect(host.flushPendingMarkdown).toHaveBeenCalled();
+        expect(host.flushPendingMarkdown).not.toHaveBeenCalled();
         expect(host.showToolRunningSpinner).toHaveBeenCalled();
         expect(host.onToolCallTracked).toHaveBeenCalled();
     });
 
-    it('still flushes pending markdown when there is no title (no spinner)', () => {
+    it('skips the spinner when there is no title (and still no flush)', () => {
         const host = makeHost();
         const c = new MessageStreamController(host);
         c.handleToolCallUpdate({ payload: { params: { update: {} } } });
-        expect(host.flushPendingMarkdown).toHaveBeenCalled();
+        expect(host.flushPendingMarkdown).not.toHaveBeenCalled();
         expect(host.showToolRunningSpinner).not.toHaveBeenCalled();
+    });
+});
+
+describe('MessageStreamController.flushStreamingRender', () => {
+    it('delegates to the host adapter so the window can paint immediately', () => {
+        const host = makeHost();
+        const c = new MessageStreamController(host);
+        c.flushStreamingRender();
+        expect(host.flushPendingMarkdown).toHaveBeenCalledTimes(1);
     });
 });

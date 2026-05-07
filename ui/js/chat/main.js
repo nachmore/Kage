@@ -107,6 +107,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     });
 
     app = new ChatApp(invoke, appWindow, listen);
+    window._chatApp = app; // Expose for permission modal flush
     app.init().then(() => {
         setMarkdownExtManager(app.extensionManager);
         app.renderExtensionToolbarButtons();

@@ -22,7 +22,19 @@ waitForTauri(({ invoke, appWindow }) => {
             if (modal) modal.dataset.sessionId = '';
         },
         // Chat window accepts all permission requests without filtering
-        // (no session ownership check like floating does)
+        // (no session ownership check like floating does). The hook is
+        // wired purely to trigger a streaming-render flush before the
+        // dialog opens — without this, the user might see a half-rendered
+        // chunk of the agent's response sitting behind the modal because
+        // the throttled streaming path was mid-debounce when the request
+        // arrived.
+        async onRequestReceived(event) {
+            const { auto_approve } = event.payload;
+            if (!auto_approve) {
+                window._chatApp?.flushStreamingRender();
+            }
+            return { handle: true };
+        },
     });
 
     handler.init();

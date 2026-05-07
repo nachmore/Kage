@@ -1716,6 +1716,11 @@ export class ChatApp {
 
     // --- Streaming Handlers ---
 
+    /** Force the streaming renderer to paint the full accumulated text now.
+     *  Called by the permission modal handler before showing the dialog so
+     *  the user sees the complete streamed text behind it. */
+    flushStreamingRender() { this.messageStreamController.flushStreamingRender(); }
+
     handleMessageChunk(event) { return this.messageStreamController.handleChunk(event); }
 
     async handleMessageComplete() { return this.messageStreamController.handleComplete(); }

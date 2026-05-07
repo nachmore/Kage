@@ -147,6 +147,14 @@ const handler = createPermissionHandler(invoke, appWindow, {
         const nowVisible = await appWindow.isVisible();
         if (!nowVisible) return { handle: false };
 
+        // Force any pending throttled streaming render to paint NOW so the
+        // user sees the complete streamed text behind the dialog rather
+        // than whatever partial state the debounce timer happened to be in.
+        // The MessageStreamController used to do this on every tool_call
+        // update — wasteful, since most tool events don't open a modal.
+        // Now it only fires on the path that actually surfaces a dialog.
+        window._floatingApp?.flushStreamingRender();
+
         return { handle: true };
     }
 });

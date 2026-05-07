@@ -47,9 +47,11 @@
  *   - onError(event, online)          handle network/error UI
  *   - onSessionReset(event, msg)      session-reset UI
  *
- *   - flushPendingMarkdown()          called from handleToolCallUpdate to
- *                                     flush any throttled streaming render
- *                                     before a permission dialog or spinner
+ *   - flushPendingMarkdown()          called by the controller's public
+ *                                     `flushStreamingRender()` method when
+ *                                     the host needs the full streamed text
+ *                                     painted right now (e.g. before a
+ *                                     permission dialog opens over it)
  *   - showToolRunningSpinner(friendly) append the running-tool spinner
  *   - onToolCallTracked(update, updated)  after processToolCallUpdate
  */
@@ -146,12 +148,31 @@ export class MessageStreamController {
 
         const { updated, update } = processToolCallUpdate(event, host);
 
-        host.flushPendingMarkdown?.();
+        // Note: we deliberately do NOT call host.flushPendingMarkdown() here
+        // any more. Tool-call updates fire on every kind/title change and
+        // every progress event — paying for a full markdown re-render on
+        // each one was wasteful (the throttled streaming render is already
+        // painting at ~60 fps via the debounce path). The original
+        // motivation was "flush before a permission dialog appears" — but
+        // permission_request is a separate Tauri event, and each window's
+        // permission handler now calls flushStreamingRender() directly
+        // before showing the modal.
 
         if (update?.title) {
             host.showToolRunningSpinner?.(getToolFriendlyName(update.title));
         }
 
         host.onToolCallTracked?.(update, updated);
+    }
+
+    /**
+     * Synchronously render the full accumulated text now, cancelling any
+     * pending throttled streaming render. Called from the window's
+     * permission_request handler so the user sees the complete streamed
+     * text behind the permission dialog, not whatever partial state the
+     * debounce timer happens to have produced.
+     */
+    flushStreamingRender() {
+        this.host.flushPendingMarkdown?.();
     }
 }
