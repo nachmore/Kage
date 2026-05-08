@@ -368,6 +368,12 @@ fn tool_def(name: &str, description: &str, input_schema: serde_json::Value) -> s
 // ---------------------------------------------------------------------------
 // Tool call dispatch
 // ---------------------------------------------------------------------------
+// The Windows-only input-simulation handlers (click, drag, scroll, etc.)
+// bind their JSON args as plain locals for readability, then gate the
+// actual dispatch with `#[cfg(target_os = "windows")]`. On non-Windows
+// those locals are technically unused — the `allow` acknowledges this
+// intentional pattern without forcing a full per-arg cfg split.
+#[cfg_attr(not(windows), allow(unused_variables))]
 fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> String {
     let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
     let args = params
@@ -1086,6 +1092,7 @@ fn dispatch_element_action(
 }
 
 /// Convert "ctrl+shift+s" format to uiautomation "{Ctrl}{Shift}s" format.
+#[cfg(target_os = "windows")]
 fn convert_key_combo(keys: &str) -> String {
     let parts: Vec<&str> = keys.split('+').map(|s| s.trim()).collect();
     let mut result = String::new();
