@@ -315,3 +315,62 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
 
     Ok(())
 }
+
+/// Launch by name. Linux has no built-in app-name → binary resolution the
+/// way Windows (ShellExecuteW) or macOS (`open -a`) do, so this is a best
+/// effort: URIs go through `xdg-open`, everything else is attempted as a
+/// direct command. Proper name resolution would require walking the
+/// freedesktop `.desktop` index; tracked as future work.
+pub fn shell_launch_impl(name: &str) -> Result<()> {
+    if name.is_empty() {
+        anyhow::bail!("shell_launch called with empty name");
+    }
+
+    // Leading RFC 3986 URI scheme (same shape as macOS) goes through xdg-open.
+    if looks_like_uri(name) {
+        info!("shell_launch_impl: xdg-open '{}'", name);
+        let status = Command::new("xdg-open")
+            .arg(name)
+            .status()
+            .context("xdg-open failed to start")?;
+        if !status.success() {
+            anyhow::bail!("xdg-open '{}' exited with {}", name, status);
+        }
+        return Ok(());
+    }
+
+    // Split on first space so `"firefox --private-window"` lands as
+    // `firefox` + `["--private-window"]` (parity with the Windows impl).
+    let (program, args) = match name.split_once(' ') {
+        Some((p, rest)) => (p, rest.split_whitespace().collect::<Vec<_>>()),
+        None => (name, Vec::new()),
+    };
+
+    info!("shell_launch_impl: exec '{}' args={:?}", program, args);
+    Command::new(program)
+        .args(&args)
+        .spawn()
+        .with_context(|| format!("Failed to launch '{}'", name))?;
+    Ok(())
+}
+
+/// True if `s` starts with an RFC 3986 URI scheme. Mirrors the macOS helper —
+/// kept inline rather than shared because the rest of the Linux launcher is
+/// already platform-specific and duplicating a 10-line helper is cheaper
+/// than threading another cross-platform module.
+fn looks_like_uri(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+        return false;
+    }
+    for &b in bytes.iter().skip(1) {
+        if b == b':' {
+            return true;
+        }
+        let ok = b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.';
+        if !ok {
+            return false;
+        }
+    }
+    false
+}

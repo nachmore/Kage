@@ -153,3 +153,94 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     }
     Ok(())
 }
+
+/// Launch by name. Dispatches by input shape:
+///   - URI (`scheme://...` or `x-apple.systempreferences:...`) → `open <uri>`
+///   - Absolute path (starts with `/`)                         → `open <path>`
+///   - Bare name ("Calculator", "Safari", "chrome")            → `open -a <name>`
+///
+/// `open -a` asks LaunchServices to resolve the name, so display names and
+/// bundle basenames both work.
+pub fn shell_launch_impl(name: &str) -> Result<()> {
+    if name.is_empty() {
+        anyhow::bail!("shell_launch called with empty name");
+    }
+
+    // Treat anything starting with an RFC 3986 scheme (`letter followed by
+    // letters/digits/+-. then `:`) as a URI — covers `http://`, `mailto:`,
+    // `x-apple.systempreferences:`, `spotify:track:...`, etc. Display names
+    // never contain a colon, so this heuristic is safe.
+    let is_uri = looks_like_uri(name);
+    let is_path = name.starts_with('/');
+
+    let status = if is_uri || is_path {
+        info!("shell_launch_impl: open '{}'", name);
+        Command::new("open")
+            .arg(name)
+            .status()
+            .context("`open` failed")?
+    } else {
+        info!("shell_launch_impl: open -a '{}'", name);
+        Command::new("open")
+            .args(["-a", name])
+            .status()
+            .context("`open -a` failed")?
+    };
+
+    if !status.success() {
+        anyhow::bail!(
+            "Failed to launch '{}': `open` exited with {}",
+            name,
+            status
+        );
+    }
+    Ok(())
+}
+
+/// True if `s` starts with an RFC 3986 URI scheme — `ALPHA *( ALPHA / DIGIT /
+/// "+" / "-" / "." ) ":"`. Used to distinguish URIs like `mailto:`,
+/// `x-apple.systempreferences:`, and `https://` from bare display names.
+fn looks_like_uri(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || !bytes[0].is_ascii_alphabetic() {
+        return false;
+    }
+    // .skip(1) guarantees at least one byte before any colon, satisfying the
+    // RFC-3986 requirement that a scheme has ≥1 character.
+    for &b in bytes.iter().skip(1) {
+        if b == b':' {
+            return true;
+        }
+        let ok = b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.';
+        if !ok {
+            return false;
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::looks_like_uri;
+
+    #[test]
+    fn recognizes_common_schemes() {
+        assert!(looks_like_uri("https://example.com"));
+        assert!(looks_like_uri("http://example.com"));
+        assert!(looks_like_uri("mailto:foo@bar.com"));
+        assert!(looks_like_uri("x-apple.systempreferences:com.apple.foo"));
+        assert!(looks_like_uri("spotify:track:abc123"));
+        assert!(looks_like_uri("file:///tmp/x"));
+    }
+
+    #[test]
+    fn rejects_display_names_and_paths() {
+        assert!(!looks_like_uri("Safari"));
+        assert!(!looks_like_uri("Google Chrome"));
+        assert!(!looks_like_uri("/Applications/Safari.app"));
+        assert!(!looks_like_uri("123abc:foo"));   // must start with ALPHA
+        assert!(!looks_like_uri(":nope"));         // empty scheme
+        assert!(!looks_like_uri(""));              // empty
+        assert!(!looks_like_uri("no colon here"));
+    }
+}

@@ -24,3 +24,24 @@ pub fn scan_applications() -> Result<Vec<AppInfo>> {
 pub fn launch_application(path: &PathBuf) -> Result<()> {
     crate::os::platform::launcher::launch_application_impl(path)
 }
+
+/// Launch an application by name or URI via the platform's shell. Name may be:
+///   - display name ("Calculator", "Safari")
+///   - executable basename with args ("winword /w")
+///   - URI ("https://...", "x-apple.systempreferences:...")
+///   - full path
+///
+/// Each platform uses its native name-resolution mechanism:
+///   - Windows: `ShellExecuteW` — resolves via PATH + App Paths registry
+///   - macOS:   `open -a <name>` for bare names, `open <uri|path>` otherwise
+///   - Linux:   `xdg-open` for URIs, best-effort `Command::new(name)` for names
+///
+/// Distinct from `launch_application` (which takes a `PathBuf`) and from the
+/// Tauri `launch_app_by_name` command (which fuzzy-matches against the
+/// scanned app list for the floating-window launcher UI). This one is used
+/// by the MCP `launch_app` and `launch_and_get_tree` tools, which receive
+/// a free-form name from the agent.
+#[allow(dead_code)] // consumed by src/bin/computer_control_mcp.rs, not by the main kage binary
+pub fn shell_launch(name: &str) -> Result<()> {
+    crate::os::platform::launcher::shell_launch_impl(name)
+}

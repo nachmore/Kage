@@ -365,64 +365,6 @@ fn tool_def(name: &str, description: &str, input_schema: serde_json::Value) -> s
     serde_json::json!({ "name": name, "description": description, "inputSchema": input_schema })
 }
 
-/// Launch an app using ShellExecuteW — the proper Win32 API.
-/// Handles program names with args (e.g. "winword /w"), paths, and URIs.
-#[cfg(windows)]
-fn shell_launch(name: &str) -> Result<(), String> {
-    use windows::core::HSTRING;
-    use windows::core::PCWSTR;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-
-    // Detect if this is a file path (contains backslash, or drive letter like C:/)
-    let is_path = name.contains('\\') || (name.len() >= 3 && name.as_bytes().get(1) == Some(&b':'));
-    let (file_str, params_str) = if name.contains(' ') && !is_path {
-        let mut parts = name.splitn(2, ' ');
-        let prog = parts.next().unwrap_or(name);
-        let args = parts.next().unwrap_or("");
-        (prog, args)
-    } else {
-        (name, "")
-    };
-
-    let op = HSTRING::from("open");
-    let file = HSTRING::from(file_str);
-
-    log::info!("[shell_launch] file='{}' params='{}'", file_str, params_str);
-
-    let result = unsafe {
-        if params_str.is_empty() {
-            ShellExecuteW(
-                None,
-                &op,
-                &file,
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
-        } else {
-            let params = HSTRING::from(params_str);
-            ShellExecuteW(None, &op, &file, &params, PCWSTR::null(), SW_SHOWNORMAL)
-        }
-    };
-
-    if result.0 as usize > 32 {
-        Ok(())
-    } else {
-        Err(format!(
-            "ShellExecuteW failed with code {} for '{}'",
-            result.0 as usize, name
-        ))
-    }
-}
-
-// Non-Windows stub. TODO: route through `crate::os::launcher::launch_app`
-// so launch_app / launch_and_get_tree work on macOS/Linux.
-#[cfg(not(windows))]
-fn shell_launch(_name: &str) -> Result<(), String> {
-    Err("shell_launch is not yet implemented on this platform".to_string())
-}
-
 // ---------------------------------------------------------------------------
 // Tool call dispatch
 // ---------------------------------------------------------------------------
@@ -571,7 +513,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
                 wait,
                 depth
             );
-            let launch_result = shell_launch(app);
+            let launch_result = kage::os::launcher::shell_launch(app);
             match launch_result {
                 Ok(_) => {
                     std::thread::sleep(std::time::Duration::from_millis(wait));
@@ -737,7 +679,7 @@ fn handle_tool_call(id: &serde_json::Value, params: &serde_json::Value) -> Strin
         "launch_app" => {
             let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
             log::info!("[launch_app] Attempting to launch: '{}'", name);
-            match shell_launch(name) {
+            match kage::os::launcher::shell_launch(name) {
                 Ok(_) => tool_result_text(id, &format!("Launched '{}'", name), false),
                 Err(e) => {
                     log::info!("[launch_app] Failed: {}", e);

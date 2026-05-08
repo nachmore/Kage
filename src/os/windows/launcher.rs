@@ -452,3 +452,61 @@ pub fn launch_application_impl(path: &PathBuf) -> Result<()> {
     info!("Launch succeeded for '{}'", path_str);
     Ok(())
 }
+
+/// Launch by name via `ShellExecuteW` — delegates name resolution to the
+/// Windows shell (PATH, App Paths registry, associations, AUMID for UWP
+/// apps). Handles program names, paths, URIs, and "program args" strings.
+pub fn shell_launch_impl(name: &str) -> Result<()> {
+    use windows::core::{HSTRING, PCWSTR};
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    // Detect if this is a file path (contains backslash, or drive letter
+    // like C:/). Paths should not be split on the first space.
+    let is_path =
+        name.contains('\\') || (name.len() >= 3 && name.as_bytes().get(1) == Some(&b':'));
+    let (file_str, params_str) = if name.contains(' ') && !is_path {
+        let mut parts = name.splitn(2, ' ');
+        let prog = parts.next().unwrap_or(name);
+        let args = parts.next().unwrap_or("");
+        (prog, args)
+    } else {
+        (name, "")
+    };
+
+    let op = HSTRING::from("open");
+    let file = HSTRING::from(file_str);
+
+    info!(
+        "shell_launch_impl: file='{}' params='{}'",
+        file_str, params_str
+    );
+
+    let result = unsafe {
+        if params_str.is_empty() {
+            ShellExecuteW(
+                None,
+                &op,
+                &file,
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            )
+        } else {
+            let params = HSTRING::from(params_str);
+            ShellExecuteW(None, &op, &file, &params, PCWSTR::null(), SW_SHOWNORMAL)
+        }
+    };
+
+    // ShellExecuteW returns a HINSTANCE cast from an int — values > 32 mean
+    // success, 0..=32 are error codes.
+    if result.0 as usize > 32 {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "ShellExecuteW failed with code {} for '{}'",
+            result.0 as usize,
+            name
+        );
+    }
+}
