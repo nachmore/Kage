@@ -111,6 +111,11 @@ fn stage_externalbin_placeholder_if_missing() {
 /// Best-effort: prints a warning and returns without failing the build if
 /// swiftc isn't available or the compile fails — the runtime gracefully
 /// falls back to icalBuddy.
+///
+/// Both outputs are only rewritten when the Swift source is newer than
+/// them. `cargo tauri dev` watches `src-tauri/` for externalBin-resolved
+/// sidecars, so unconditionally `fs::copy`ing on every build would
+/// trigger an endless rebuild loop.
 fn build_macos_calendar_helper() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
@@ -142,6 +147,28 @@ fn build_macos_calendar_helper() {
         None
     };
 
+    // Fast path: both outputs already newer than the source → nothing to do.
+    // This is the hot path during `cargo tauri dev`, where ANY mtime change
+    // on the sidecar tells Tauri to rebuild the app.
+    let out_fresh = is_newer_than(&out_bin, &src);
+    let bundle_fresh = bundle_bin.as_ref().is_none_or(|p| is_newer_than(p, &src));
+    if out_fresh && bundle_fresh {
+        println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
+        if let Some(ref path) = bundle_bin {
+            println!(
+                "cargo:warning=calendar-helper up to date at {} (bundle staging: {})",
+                out_bin.display(),
+                path.display()
+            );
+        } else {
+            println!(
+                "cargo:warning=calendar-helper up to date at {}",
+                out_bin.display()
+            );
+        }
+        return;
+    }
+
     let swiftc = match which_swiftc() {
         Some(p) => p,
         None => {
@@ -153,44 +180,66 @@ fn build_macos_calendar_helper() {
         }
     };
 
-    let status = std::process::Command::new(&swiftc)
-        .arg("-O")
-        .arg("-o")
-        .arg(&out_bin)
-        .arg(&src)
-        .status();
-
-    match status {
-        Ok(s) if s.success() => {
-            println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
-            println!("cargo:warning=built calendar-helper at {}", out_bin.display());
-            if let Some(ref bundle_path) = bundle_bin {
-                match std::fs::copy(&out_bin, bundle_path) {
-                    Ok(_) => println!(
-                        "cargo:warning=staged calendar-helper for bundling at {}",
-                        bundle_path.display()
-                    ),
-                    Err(e) => println!(
-                        "cargo:warning=failed to stage helper at {} ({}); \
-                         release bundle will be missing the binary",
-                        bundle_path.display(),
-                        e
-                    ),
-                }
+    if !out_fresh {
+        let status = std::process::Command::new(&swiftc)
+            .arg("-O")
+            .arg("-o")
+            .arg(&out_bin)
+            .arg(&src)
+            .status();
+        match status {
+            Ok(s) if s.success() => {
+                println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
+                println!("cargo:warning=built calendar-helper at {}", out_bin.display());
+            }
+            Ok(s) => {
+                println!(
+                    "cargo:warning=swiftc exited with {} — calendar-helper not built (icalBuddy \
+                     fallback will still work)",
+                    s
+                );
+                return;
+            }
+            Err(e) => {
+                println!(
+                    "cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built"
+                );
+                return;
             }
         }
-        Ok(s) => {
-            println!(
-                "cargo:warning=swiftc exited with {} — calendar-helper not built (icalBuddy \
-                 fallback will still work)",
-                s
-            );
+    } else {
+        println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
+    }
+
+    // Mirror into the bundle-time path only when necessary.
+    if let Some(ref bundle_path) = bundle_bin {
+        if !bundle_fresh {
+            match std::fs::copy(&out_bin, bundle_path) {
+                Ok(_) => println!(
+                    "cargo:warning=staged calendar-helper for bundling at {}",
+                    bundle_path.display()
+                ),
+                Err(e) => println!(
+                    "cargo:warning=failed to stage helper at {} ({}); \
+                     release bundle will be missing the binary",
+                    bundle_path.display(),
+                    e
+                ),
+            }
         }
-        Err(e) => {
-            println!(
-                "cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built"
-            );
-        }
+    }
+}
+
+/// `true` if `a` exists and its mtime is >= `b`'s mtime. Used to skip
+/// unnecessary recompiles — the mtime bump from rewriting an output file
+/// is what triggers Tauri's dev watcher into an infinite rebuild loop.
+fn is_newer_than(a: &std::path::Path, b: &std::path::Path) -> bool {
+    let (Ok(am), Ok(bm)) = (std::fs::metadata(a), std::fs::metadata(b)) else {
+        return false;
+    };
+    match (am.modified(), bm.modified()) {
+        (Ok(at), Ok(bt)) => at >= bt,
+        _ => false,
     }
 }
 
