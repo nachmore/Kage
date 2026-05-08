@@ -24,7 +24,7 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::geometry::{CGPoint, CGSize};
-use log::info;
+use log::{info, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -41,7 +41,6 @@ use super::ax_worker::{self, Job};
 // ---------------------------------------------------------------------------
 const MAX_ELEMENTS: usize = 500;
 const TREE_WALK_TIMEOUT_SECS: f64 = 5.0;
-#[allow(dead_code)] // used by F5b find_elements once wired up
 const SEARCH_TIMEOUT_SECS: f64 = 8.0;
 
 // ---------------------------------------------------------------------------
@@ -860,40 +859,307 @@ pub(super) fn get_element_children_inner(
 }
 
 // ---------------------------------------------------------------------------
-// F5b/F5c — stubs returning "not yet implemented" for the write-op surface.
-// Tracked in .agent/F5_ACCESSIBILITY_DESIGN.md. Structured so the next
-// impl thread can fill each body in place without reshuffling the module.
+// F5b — read ops: find_elements, get_element_text
 // ---------------------------------------------------------------------------
 
-pub(super) fn find_elements_inner(_p: &FindElementsParams) -> Result<Vec<UIElement>, String> {
-    Err("find_elements: F5b, not yet implemented on macOS".into())
+fn matches_predicate(elem: ax::AXUIElementRef, params: &FindElementsParams) -> bool {
+    if let Some(ref r) = params.role {
+        if get_role(elem) != r.to_lowercase() {
+            return false;
+        }
+    }
+    if let Some(ref n) = params.name {
+        if !safe_name(elem).to_lowercase().contains(&n.to_lowercase()) {
+            return false;
+        }
+    }
+    if let Some(ref a) = params.automation_id {
+        if safe_automation_id(elem) != *a {
+            return false;
+        }
+    }
+    if let Some(ref v) = params.value {
+        if !get_value(elem).to_lowercase().contains(&v.to_lowercase()) {
+            return false;
+        }
+    }
+    true
 }
-pub(super) fn click_element_inner(_id: &str) -> Result<String, String> {
-    Err("click_element: F5c, not yet implemented on macOS".into())
+
+fn search_recursive(
+    elem: ax::AXUIElementRef,
+    params: &FindElementsParams,
+    results: &mut Vec<UIElement>,
+    depth: usize,
+    max_depth: usize,
+    st: &mut WalkState,
+) {
+    if depth > max_depth || st.exhausted() {
+        return;
+    }
+    st.count += 1;
+
+    // Only accumulate matches from depth > 0 to match the Windows
+    // provider — the window root itself is excluded from results.
+    if depth > 0 && matches_predicate(elem, params) {
+        let eid = register_native(elem);
+        let mut ui = UIElement::new(eid, get_role(elem));
+        ui.name = safe_name(elem);
+        ui.value = get_value(elem);
+        ui.automation_id = safe_automation_id(elem);
+        ui.states = get_states(elem);
+        ui.actions = get_actions(elem);
+        ui.bounds = get_bounds(elem);
+        results.push(ui);
+    }
+
+    let children = copy_elements_attr(elem, ax::kAXChildrenAttribute);
+    for child in children {
+        if st.exhausted() {
+            break;
+        }
+        search_recursive(child.as_ref(), params, results, depth + 1, max_depth, st);
+    }
 }
-pub(super) fn focus_element_inner(_id: &str) -> Result<String, String> {
-    Err("focus_element: F5c, not yet implemented on macOS".into())
+
+pub(super) fn find_elements_inner(p: &FindElementsParams) -> Result<Vec<UIElement>, String> {
+    ensure_trusted()?;
+    let win = find_window(p.window_title.as_deref())?;
+    let mut results = Vec::new();
+    let mut st = WalkState::new(SEARCH_TIMEOUT_SECS);
+    // Matches Windows' max-depth of 10 for find_elements — deep enough to
+    // cover real UIs without letting pathological trees burn the timeout.
+    search_recursive(win.as_ref(), p, &mut results, 0, 10, &mut st);
+    if st.truncated {
+        warn!(
+            "find_elements: truncated at {} elements ({} matches)",
+            st.count,
+            results.len()
+        );
+    }
+    Ok(results)
 }
-pub(super) fn set_element_value_inner(_id: &str, _val: &str) -> Result<String, String> {
-    Err("set_element_value: F5c, not yet implemented on macOS".into())
+
+pub(super) fn get_element_text_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    // Primary source: the AXValue attribute (text field contents, static
+    // text label value, etc.). Fall back to selected-text when the widget
+    // exposes a selection rather than a full value (e.g. AXTextArea with
+    // a selected range but an empty direct value).
+    let v = copy_value_as_string(elem.as_ref());
+    if !v.is_empty() {
+        return Ok(v);
+    }
+    let selected = copy_string_attr(elem.as_ref(), ax::kAXSelectedTextAttribute);
+    if !selected.is_empty() {
+        return Ok(selected);
+    }
+    // Last-ditch: the element's displayed title/description. Useful for
+    // static-text-only elements whose value attribute is intentionally empty.
+    Ok(safe_name(elem.as_ref()))
 }
-pub(super) fn toggle_element_inner(_id: &str) -> Result<String, String> {
-    Err("toggle_element: F5c, not yet implemented on macOS".into())
+
+// ---------------------------------------------------------------------------
+// F5c — write ops: click, focus, set_value, toggle, select, expand,
+// collapse, scroll
+// ---------------------------------------------------------------------------
+
+/// Perform a named AX action on an element. Returns a human-readable
+/// message on success; maps common AXError codes to actionable errors.
+fn perform_action(elem: ax::AXUIElementRef, action: &str) -> Result<String, String> {
+    let cf_action = CFString::new(action);
+    let err = unsafe { ax::AXUIElementPerformAction(elem, cf_action.as_concrete_TypeRef()) };
+    match err {
+        ax::kAXErrorSuccess => Ok(format!("Performed {}", action)),
+        ax::kAXErrorActionUnsupported => {
+            Err(format!("Element does not support action '{}'", action))
+        }
+        ax::kAXErrorCannotComplete => Err(format!(
+            "Action '{}' could not complete (element may be hidden or busy)",
+            action
+        )),
+        ax::kAXErrorInvalidUIElement => {
+            Err("Element is no longer valid (may have been destroyed)".into())
+        }
+        ax::kAXErrorAPIDisabled => Err("Accessibility permission not granted".into()),
+        _ => Err(format!("AX error {} performing '{}'", err, action)),
+    }
 }
-pub(super) fn select_element_inner(_id: &str) -> Result<String, String> {
-    Err("select_element: F5c, not yet implemented on macOS".into())
+
+/// Set an attribute value on an element. Generic over the CFType — the
+/// caller builds the CFString/CFBoolean/CFNumber wrapper. Returns the
+/// same human-readable message shape as `perform_action`.
+fn set_attribute(
+    elem: ax::AXUIElementRef,
+    attr: &str,
+    value: CFTypeRef,
+) -> Result<String, String> {
+    let cf_attr = CFString::new(attr);
+    let err = unsafe { ax::AXUIElementSetAttributeValue(elem, cf_attr.as_concrete_TypeRef(), value) };
+    match err {
+        ax::kAXErrorSuccess => Ok(format!("Set {}", attr)),
+        ax::kAXErrorAttributeUnsupported => {
+            Err(format!("Element does not expose '{}'", attr))
+        }
+        ax::kAXErrorIllegalArgument => {
+            Err(format!("Illegal argument for '{}'", attr))
+        }
+        ax::kAXErrorCannotComplete => Err(format!(
+            "Setting '{}' could not complete (element may be read-only or busy)",
+            attr
+        )),
+        ax::kAXErrorInvalidUIElement => {
+            Err("Element is no longer valid (may have been destroyed)".into())
+        }
+        ax::kAXErrorAPIDisabled => Err("Accessibility permission not granted".into()),
+        _ => Err(format!("AX error {} setting '{}'", err, attr)),
+    }
 }
-pub(super) fn expand_element_inner(_id: &str) -> Result<String, String> {
-    Err("expand_element: F5c, not yet implemented on macOS".into())
+
+pub(super) fn click_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    perform_action(elem.as_ref(), ax::kAXPressAction)
 }
-pub(super) fn collapse_element_inner(_id: &str) -> Result<String, String> {
-    Err("collapse_element: F5c, not yet implemented on macOS".into())
+
+pub(super) fn focus_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    let value = CFBoolean::true_value();
+    set_attribute(
+        elem.as_ref(),
+        ax::kAXFocusedAttribute,
+        value.as_concrete_TypeRef() as CFTypeRef,
+    )
 }
-pub(super) fn scroll_element_inner(_id: &str, _dir: &str, _amt: f64) -> Result<String, String> {
-    Err("scroll_element: F5c, not yet implemented on macOS".into())
+
+pub(super) fn set_element_value_inner(element_id: &str, val: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    let cf_val = CFString::new(val);
+    set_attribute(
+        elem.as_ref(),
+        ax::kAXValueAttribute,
+        cf_val.as_concrete_TypeRef() as CFTypeRef,
+    )
 }
-pub(super) fn get_element_text_inner(_id: &str) -> Result<String, String> {
-    Err("get_element_text: F5b, not yet implemented on macOS".into())
+
+pub(super) fn toggle_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    // AX checkboxes expose `AXPress` — a press toggles. For non-checkbox
+    // widgets that expose a writable boolean value, flip the value.
+    let role = copy_string_attr(elem.as_ref(), ax::kAXRoleAttribute);
+    if role == "AXCheckBox" {
+        return perform_action(elem.as_ref(), ax::kAXPressAction);
+    }
+    // Read current boolean value and flip it.
+    let current = copy_bool_attr(elem.as_ref(), ax::kAXValueAttribute).ok_or_else(|| {
+        format!(
+            "Element '{}' (role={}) has no toggleable value — \
+             AXPress unsupported and kAXValueAttribute is not a boolean",
+            element_id, role
+        )
+    })?;
+    let next = if current {
+        CFBoolean::false_value()
+    } else {
+        CFBoolean::true_value()
+    };
+    set_attribute(
+        elem.as_ref(),
+        ax::kAXValueAttribute,
+        next.as_concrete_TypeRef() as CFTypeRef,
+    )
+}
+
+pub(super) fn select_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    let role = copy_string_attr(elem.as_ref(), ax::kAXRoleAttribute);
+    // For menu items, table rows, and outline rows, AXPress performs the
+    // selection. For popup/combobox items, flip kAXSelectedAttribute.
+    if matches!(role.as_str(), "AXMenuItem" | "AXMenuBarItem" | "AXRow") {
+        return perform_action(elem.as_ref(), ax::kAXPressAction);
+    }
+    let value = CFBoolean::true_value();
+    set_attribute(
+        elem.as_ref(),
+        ax::kAXSelectedAttribute,
+        value.as_concrete_TypeRef() as CFTypeRef,
+    )
+}
+
+pub(super) fn expand_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    let value = CFBoolean::true_value();
+    // kAXDisclosingAttribute for outlines/rows, kAXExpandedAttribute for
+    // disclosure triangles. Try Disclosing first, fall back to Expanded.
+    match set_attribute(
+        elem.as_ref(),
+        ax::kAXDisclosingAttribute,
+        value.as_concrete_TypeRef() as CFTypeRef,
+    ) {
+        Ok(m) => Ok(m),
+        Err(_) => set_attribute(
+            elem.as_ref(),
+            ax::kAXExpandedAttribute,
+            value.as_concrete_TypeRef() as CFTypeRef,
+        ),
+    }
+}
+
+pub(super) fn collapse_element_inner(element_id: &str) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    let value = CFBoolean::false_value();
+    match set_attribute(
+        elem.as_ref(),
+        ax::kAXDisclosingAttribute,
+        value.as_concrete_TypeRef() as CFTypeRef,
+    ) {
+        Ok(m) => Ok(m),
+        Err(_) => set_attribute(
+            elem.as_ref(),
+            ax::kAXExpandedAttribute,
+            value.as_concrete_TypeRef() as CFTypeRef,
+        ),
+    }
+}
+
+pub(super) fn scroll_element_inner(
+    element_id: &str,
+    direction: &str,
+    _amount: f64,
+) -> Result<String, String> {
+    ensure_trusted()?;
+    let elem = resolve_native(element_id)?;
+    // `into_view` / empty direction → scroll-to-visible. Directional
+    // scrolls (up/down/left/right) would need synthesised CGEvent scrolls
+    // or AXIncrement/AXDecrement actions — the Windows impl supports both
+    // shapes but directional scroll on macOS is tracked as a follow-up
+    // (see .agent/F5_ACCESSIBILITY_DESIGN.md).
+    match direction {
+        "" | "into_view" | "visible" => {
+            // AX has no public constant for the scroll-to-visible action
+            // name via accessibility-sys 0.2; use the literal.
+            perform_action(elem.as_ref(), "AXScrollToVisible")
+        }
+        "up" | "down" | "left" | "right" => {
+            let action = if direction == "up" || direction == "left" {
+                ax::kAXDecrementAction
+            } else {
+                ax::kAXIncrementAction
+            };
+            perform_action(elem.as_ref(), action)
+        }
+        other => Err(format!(
+            "Unknown scroll direction '{}' — use up/down/left/right/into_view",
+            other
+        )),
+    }
 }
 
 // ---------------------------------------------------------------------------
