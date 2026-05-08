@@ -14,7 +14,10 @@ Application icons generated from `kage-icon-basic.svg` (app icon) and `kage-icon
 
 ## Regenerating
 
-Requires Python with Pillow and Inkscape installed:
+Requires Python with Pillow and Inkscape installed. Generating `kage.icns`
+additionally requires `iconutil` (ships with Xcode CLI tools) and is only
+produced when the script runs on macOS — on Windows/Linux the icns
+generation step is skipped automatically.
 
 ```bash
 pip install Pillow

@@ -5,15 +5,20 @@ Reads ui/assets/kage-icon.svg, applies the teal outline, and generates:
   - icons/128x128.png
   - icons/128x128@2x.png  (256x256)
   - icons/icon.ico          (multi-size Windows icon)
+  - icons/kage.icns         (multi-size macOS icon, rendered only on macOS
+                             — requires `iconutil` from Xcode CLI tools)
   - icons/nsis-header.bmp   (150x57, light bg, for installer pages)
   - icons/nsis-sidebar.bmp  (164x314, dark bg, for welcome/finish pages)
 
 Requirements:
   - pip install Pillow
   - Inkscape installed (used for SVG → PNG rendering)
+  - macOS only: `iconutil` (ships with Xcode CLI tools; used for .icns)
 """
 
 import os
+import platform
+import shutil
 import subprocess
 import tempfile
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -130,9 +135,13 @@ def add_outline(img, color, radius=3):
 
 def gen_app_icons():
     """Generate PNG icons and .ico for the app."""
-    print("Rendering SVG at 512px...")
-    hi_res = svg_to_pil(SVG_ICON, 512)
-    hi_res_outlined = add_outline(hi_res, OUTLINE_COLOR, radius=6)
+    # Render at 1024 (the largest size we need, for the macOS .icns
+    # @2x slot). All smaller sizes are downsampled from this via LANCZOS;
+    # rendering once at the top size keeps the outlined art crisp
+    # everywhere instead of upscaling a 512 render to 1024.
+    print("Rendering SVG at 1024px...")
+    hi_res = svg_to_pil(SVG_ICON, 1024)
+    hi_res_outlined = add_outline(hi_res, OUTLINE_COLOR, radius=12)
 
     for filename, size in [("32x32.png", 32), ("128x128.png", 128), ("128x128@2x.png", 256)]:
         img = hi_res_outlined.resize((size, size), Image.LANCZOS)
@@ -146,6 +155,55 @@ def gen_app_icons():
     # Pillow ICO: save the largest as base, append_images for the rest
     ico_frames[-1].save(ico_path, format="ICO", append_images=ico_frames[:-1])
     print(f"  kage.ico ({', '.join(str(s) for s in ico_sizes)})")
+
+    # macOS .icns — skipped on other platforms because `iconutil` is
+    # macOS-only.
+    if platform.system() == "Darwin":
+        gen_icns(hi_res_outlined)
+
+
+def gen_icns(hi_res_outlined):
+    """Generate a macOS .icns from the already-outlined hi-res PIL image.
+
+    Expects a 1024px source so the @2x slot is a native render rather than
+    an upscale. Apple's iconset requires a specific set of named PNG sizes
+    (16..1024 with @2x variants); `iconutil -c icns` packs them into the
+    final .icns. Requires `iconutil` from Xcode CLI tools — raises a
+    clear error if it's missing so the rest of the script still succeeds
+    on a Mac without full Xcode.
+    """
+    iconutil = shutil.which("iconutil")
+    if not iconutil:
+        print("  kage.icns — SKIPPED (iconutil not on PATH; install Xcode CLI tools)")
+        return
+
+    # Apple-required iconset entries: (pixel_size, filename)
+    iconset_entries = [
+        (16, "icon_16x16.png"),
+        (32, "icon_16x16@2x.png"),
+        (32, "icon_32x32.png"),
+        (64, "icon_32x32@2x.png"),
+        (128, "icon_128x128.png"),
+        (256, "icon_128x128@2x.png"),
+        (256, "icon_256x256.png"),
+        (512, "icon_256x256@2x.png"),
+        (512, "icon_512x512.png"),
+        (1024, "icon_512x512@2x.png"),
+    ]
+
+    with tempfile.TemporaryDirectory() as td:
+        iconset_dir = os.path.join(td, "kage.iconset")
+        os.makedirs(iconset_dir)
+        for size, name in iconset_entries:
+            resized = hi_res_outlined.resize((size, size), Image.LANCZOS)
+            resized.save(os.path.join(iconset_dir, name), "PNG")
+
+        icns_path = os.path.join(OUT_DIR, "kage.icns")
+        subprocess.run(
+            [iconutil, "-c", "icns", iconset_dir, "-o", icns_path],
+            check=True,
+        )
+        print(f"  kage.icns ({', '.join(str(s) for s, _ in iconset_entries)})")
 
 
 def gradient_fill(draw, width, height, top_color, bottom_color):
