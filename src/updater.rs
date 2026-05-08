@@ -14,11 +14,33 @@ use std::sync::Arc;
 use std::time::Instant;
 use tauri::Emitter;
 
-/// Compile-time update URLs from Cargo.toml [package.metadata.update]
+/// Compile-time update URLs from Cargo.toml [package.metadata.update].
+///
+/// `INSTALLER_URL` is a BASE URL (no extension). Use `installer_url()` to get
+/// the full URL for the current platform — it appends `.exe` / `.dmg` /
+/// `.AppImage` so a single shared server path fans out per-OS.
 pub const VERSION_URL: &str = env!("UPDATE_VERSION_URL");
 pub const INSTALLER_URL: &str = env!("UPDATE_INSTALLER_URL");
 pub const CHANGELOG_URL: &str = env!("UPDATE_CHANGELOG_URL");
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Installer file extension for the current platform, including the leading dot.
+/// Used both for the remote URL and the cached download filename so they stay
+/// in sync.
+pub fn installer_extension() -> &'static str {
+    if cfg!(windows) {
+        ".exe"
+    } else if cfg!(target_os = "macos") {
+        ".dmg"
+    } else {
+        ".AppImage"
+    }
+}
+
+/// Full installer URL for the current platform — base URL + extension.
+pub fn installer_url() -> String {
+    format!("{}{}", INSTALLER_URL, installer_extension())
+}
 
 /// Shared state for the updater
 pub struct UpdaterState {
@@ -113,10 +135,11 @@ pub fn download_installer() -> Result<String> {
         anyhow::bail!("No installer URL configured");
     }
 
-    info!("Downloading installer from {}", INSTALLER_URL);
+    let url = installer_url();
+    info!("Downloading installer from {}", url);
 
     let response = reqwest::blocking::Client::new()
-        .get(INSTALLER_URL)
+        .get(&url)
         .timeout(std::time::Duration::from_secs(300))
         .send()
         .context("Failed to download installer")?;
@@ -130,14 +153,7 @@ pub fn download_installer() -> Result<String> {
 
     std::fs::create_dir_all(&download_dir)?;
 
-    let ext = if cfg!(windows) {
-        ".exe"
-    } else if cfg!(target_os = "macos") {
-        ".dmg"
-    } else {
-        ".AppImage"
-    };
-    let installer_path = download_dir.join(format!("kage-update{}", ext));
+    let installer_path = download_dir.join(format!("kage-update{}", installer_extension()));
 
     std::fs::write(&installer_path, &bytes).context("Failed to write installer")?;
 

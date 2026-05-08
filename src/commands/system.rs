@@ -1289,7 +1289,7 @@ pub async fn fetch_changelog() -> Result<String, AppError> {
 pub async fn get_update_urls() -> Result<serde_json::Value, AppError> {
     Ok(serde_json::json!({
         "version_url": crate::updater::VERSION_URL,
-        "installer_url": crate::updater::INSTALLER_URL,
+        "installer_url": crate::updater::installer_url(),
         "changelog_url": crate::updater::CHANGELOG_URL,
     }))
 }

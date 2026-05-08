@@ -9,14 +9,20 @@ license = "Apache-2.0"
 repository = "TBD"
 homepage = "TBD"
 
+# Auto-updater endpoints. See `src/updater.rs` for the consumers.
+#
+# `installer_url` is a BASE URL — the updater appends the platform-specific
+# extension at runtime (`.exe` on Windows, `.dmg` on macOS, `.AppImage` on
+# Linux), so a single shared server path fans out per-OS. Do NOT include an
+# extension in this value; the server must serve all three filenames.
 [package.metadata.update]
 version_url = "https://example.com/kage/latest-version.txt"
-installer_url = "https://example.com/kage/kage-setup.exe"
+installer_url = "https://example.com/kage/kage-setup"
 changelog_url = "https://example.com/kage/CHANGELOG.md"
 
 [package.metadata.update.dev]
 version_url = "http://localhost:1420/updates/latest-version"
-installer_url = "http://localhost:1420/updates/kage-setup.exe"
+installer_url = "http://localhost:1420/updates/kage-setup"
 changelog_url = "http://localhost:1420/updates/CHANGELOG.md"
 
 [dependencies]
