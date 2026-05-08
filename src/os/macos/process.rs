@@ -68,9 +68,10 @@ where
 {
     std::thread::spawn(move || {
         let mut signals =
-            Signals::new(&[SIGTERM, SIGINT, SIGQUIT]).expect("Failed to register signal handlers");
+            Signals::new([SIGTERM, SIGINT, SIGQUIT]).expect("Failed to register signal handlers");
 
-        for sig in signals.forever() {
+        // Handle first signal then exit.
+        if let Some(sig) = signals.forever().next() {
             info!("Received signal: {:?}", sig);
             cleanup_fn();
             std::process::exit(0);

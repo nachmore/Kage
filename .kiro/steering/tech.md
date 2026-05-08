@@ -57,17 +57,21 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 cargo build --bin kage-computer-control-mcp
 # Then restart the app so kage-cli picks up the new binary.
 # If the old binary is locked (running), kill it first:
-# Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
+# Windows (PowerShell): Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
+# macOS/Linux:          pkill -f kage-computer-control-mcp
 
 # Testing
-cargo test -j 1             # All Rust tests (lib + integration, single-threaded build)
+cargo test                  # All Rust tests (lib + integration)
 cd ui/tests && npm test     # JS tests (shared modules: theme, tool-utils, etc.)
 cd ui/tests && npm install  # Install JS test deps (first time only)
 python scripts/test_all.py  # Run ALL tests (Rust + JS) in one command
 
-# Note: `cargo test` (without -j 1) may fail on machines with limited memory
-# because parallel compilation of Tauri + deps exhausts the paging file.
-# The -j 1 flag serializes compilation to avoid this.
+# Note: `.cargo/config.toml` caps parallel build jobs at 2 repo-wide, to
+# protect Windows users with limited RAM from paging-file exhaustion when
+# linking Tauri + large generic-heavy crates like `windows`. On macOS or
+# Linux with plenty of RAM the cap is wasteful — override via
+# `CARGO_BUILD_JOBS=8 cargo test` (or whatever suits your machine) for
+# faster builds. CI sets this already.
 
 # Code Quality
 cargo check                # Check without building
