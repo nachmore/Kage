@@ -7,6 +7,7 @@
 // once-per-process warn so users understand why nothing comes back.
 
 pub mod accessibility;
+pub mod ax_worker;
 pub mod calendar;
 pub mod clipboard;
 pub mod clipboard_history;
