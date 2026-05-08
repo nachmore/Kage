@@ -1579,3 +1579,85 @@ body.light-theme .ext-ephemeral-header {
     color: #666;
     border-bottom-color: #ddd;
 }
+
+
+/* macOS permission cards — shown in welcome wizard + Settings → Permissions
+   on macOS only. Keep in sync with js/shared/mac-permissions.js. */
+.mac-perm-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px;
+    background: var(--kage-surface, rgba(255,255,255,0.04));
+    border: 1px solid var(--kage-border, rgba(255,255,255,0.1));
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.mac-perm-card:last-child {
+    margin-bottom: 0;
+}
+
+.mac-perm-icon {
+    font-size: 28px;
+    line-height: 1;
+    width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.mac-perm-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.mac-perm-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--kage-text-primary, #E5E7EB);
+    margin-bottom: 4px;
+}
+
+.mac-perm-why {
+    font-size: 12px;
+    color: var(--kage-text-muted, #938F9B);
+    line-height: 1.5;
+}
+
+.mac-perm-btn {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    background: var(--kage-accent, #7138CC);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.mac-perm-btn:hover {
+    background: var(--kage-accent-hover, #8E47FF);
+    transform: translateY(-1px);
+}
+
+.mac-perm-note {
+    font-size: 12px;
+    color: var(--kage-text-muted, #938F9B);
+    margin-top: 12px;
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--kage-surface, rgba(255,255,255,0.04));
+    border-left: 3px solid var(--kage-accent, #7138CC);
+    border-radius: 4px;
+}
+
+body.light-theme .mac-perm-card {
+    background: rgba(0,0,0,0.03);
+    border-color: rgba(0,0,0,0.1);
+}
+
+body.light-theme .mac-perm-name {
+    color: #1a1a1a;
+}

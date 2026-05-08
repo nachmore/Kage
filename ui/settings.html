@@ -58,6 +58,10 @@
                     <span class="sidebar-item-icon" id="systemSidebarIcon">🚀</span>
                     <span>Startup</span>
                 </div>
+                <div class="sidebar-item hidden" data-section="mac-permissions" data-action="switchSection" data-arg="mac-permissions" id="macPermissionsSidebarItem">
+                    <span class="sidebar-item-icon">&#xF8FF;</span>
+                    <span>macOS Permissions</span>
+                </div>
                 <div class="sidebar-item" data-section="speech" data-action="switchSection" data-arg="speech">
                     <span class="sidebar-item-icon">🎙️</span>
                     <span>Speech</span>
@@ -142,6 +146,7 @@
     <script src="js/shared/theme-global.js"></script>
     <!-- Platform helpers (Ctrl/Cmd, key-glyph translation) for classic scripts -->
     <script src="js/shared/platform-global.js"></script>
+    <script src="js/shared/mac-permissions.js"></script>
     <script>
         // Thin wrappers so appearance.js can call these by name
         function applySettingsTheme(theme) { kageTheme.applyClasses(theme); }
@@ -218,6 +223,7 @@
     <script src="js/settings/connection.js"></script>
     <script src="js/settings/appearance.js"></script>
     <script src="js/settings/system.js"></script>
+    <script src="js/settings/permissions.js"></script>
     <script src="js/settings/assistant.js"></script>
     <script src="js/settings/model.js"></script>
     <script src="js/settings/shortcuts.js"></script>

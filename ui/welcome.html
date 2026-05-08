@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <script src="js/shared/theme-global.js"></script>
+    <script src="js/shared/mac-permissions.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -289,6 +290,26 @@
                 </div>
             </div>
         </div>
+
+        <!-- Step 5: macOS Permissions (shown on macOS only; removed at init on other platforms) -->
+        <div class="wizard-step" data-step="4" data-mac-only="true">
+            <div class="step-header">
+                <div class="step-title">macOS Permissions</div>
+                <div class="step-subtitle">Grant a few privacy permissions so Kage can do its job</div>
+            </div>
+            <div class="step-content">
+                <div class="section-desc" style="margin-bottom: 16px;">
+                    macOS prompts for each permission the first time Kage needs it, but
+                    you can grant them now to skip those prompts. Click each button to
+                    open the right pane in System Settings and enable Kage.
+                </div>
+                <div id="wMacPermCards"></div>
+                <div class="mac-perm-note">
+                    It is fine to skip this step — you can revisit it any time from
+                    <strong>Settings → macOS Permissions</strong>.
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="wizard-footer">
@@ -297,6 +318,7 @@
             <div class="wizard-dot" data-dot="1"></div>
             <div class="wizard-dot" data-dot="2"></div>
             <div class="wizard-dot" data-dot="3"></div>
+            <div class="wizard-dot" data-dot="4" data-mac-only="true"></div>
         </div>
         <div class="wizard-btns">
             <button class="wiz-btn wiz-btn-secondary" id="backBtn" style="display:none;">Back</button>
@@ -341,13 +363,20 @@
         mascotReady.then(() => appWindow.show().then(() => appWindow.setFocus()));
 
         let currentStep = 0;
-        const totalSteps = 4;
+        // Drop mac-only step + dot on non-macOS platforms; totalSteps
+        // reflects the visible step count after the pruning pass.
+        const isMacOS = window.kageMacPermissions?.isMacOS();
+        if (!isMacOS) {
+            document.querySelectorAll('[data-mac-only="true"]').forEach(el => el.remove());
+        }
         const steps = document.querySelectorAll('.wizard-step');
         const dots = document.querySelectorAll('.wizard-dot');
+        const totalSteps = steps.length;
         const backBtn = document.getElementById('backBtn');
         const nextBtn = document.getElementById('nextBtn');
         let storeExtensions = []; // catalog items loaded on step 3
         let extCatalogLoaded = false;
+        let macPermsRendered = false;
         let detectedAgent = null; // auto-detected agent, if any
         let agentDetectionDone = false;
         let useManualConfig = false;
@@ -587,6 +616,14 @@
                 // Load extension catalog when entering step 3
                 if (currentStep + 1 === 3) {
                     loadExtensionCatalog();
+                }
+                // Render macOS permission cards when entering step 4 (mac only)
+                if (isMacOS && currentStep + 1 === 4 && !macPermsRendered) {
+                    const container = document.getElementById('wMacPermCards');
+                    if (container && window.kageMacPermissions) {
+                        window.kageMacPermissions.renderAllInto(container, invoke, 'wMacPerm');
+                        macPermsRendered = true;
+                    }
                 }
                 showStep(currentStep + 1);
             } else {

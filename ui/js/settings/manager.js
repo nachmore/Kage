@@ -451,6 +451,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new HotkeySettingsModule());
     settingsManager.registerModule(new SystemSettingsModule());
+    // macOS-only: privacy/TCC permissions pane. The sidebar item for this
+    // module is hidden by default in settings.html and revealed here.
+    if (window.kageMacPermissions?.isMacOS()) {
+        settingsManager.registerModule(new MacPermissionsSettingsModule());
+        const sidebarItem = document.getElementById('macPermissionsSidebarItem');
+        if (sidebarItem) sidebarItem.classList.remove('hidden');
+    }
     settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ConnectionSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
