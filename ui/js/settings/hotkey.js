@@ -18,16 +18,16 @@ class HotkeySettingsModule extends SettingsModule {
             + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
             + '<div class="setting-section-label">Keyboard Shortcuts</div>'
             + '<div class="shortcuts-reference">'
-            + this.shortcutRow('Ctrl+N', 'New session', 'Chat window')
-            + this.shortcutRow('Ctrl+W', 'Close / hide window', 'All windows')
-            + this.shortcutRow('Ctrl+,', 'Open settings', 'Launcher & Chat')
-            + this.shortcutRow('Ctrl+E', 'Expand to full chat', 'Launcher')
-            + this.shortcutRow('Ctrl+L', 'Clear / reset', 'Launcher')
-            + this.shortcutRow('Ctrl+Shift+C', 'Copy last response', 'Launcher & Chat')
-            + this.shortcutRow('Ctrl+Enter', 'Send to agent (bypass suggestions)', 'Launcher')
-            + this.shortcutRow('Escape', 'Stop generating / Hide window', 'Launcher')
-            + this.shortcutRow('Enter', 'Send message', 'All')
-            + this.shortcutRow('Shift+Enter', 'New line', 'All')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+N'), 'New session', 'Chat window')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+W'), 'Close / hide window', 'All windows')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+,'), 'Open settings', 'Launcher & Chat')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+E'), 'Expand to full chat', 'Launcher')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+L'), 'Clear / reset', 'Launcher')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+Shift+C'), 'Copy last response', 'Launcher & Chat')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Ctrl+Enter'), 'Send to agent (bypass suggestions)', 'Launcher')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Escape'), 'Stop generating / Hide window', 'Launcher')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Enter'), 'Send message', 'All')
+            + this.shortcutRow(window.kagePlatform.platformKeyLabel('Shift+Enter'), 'New line', 'All')
             + this.shortcutRow('>cb', 'Clipboard history', 'Launcher')
             + '</div></div>';
     }

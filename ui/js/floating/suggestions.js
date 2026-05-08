@@ -1,5 +1,7 @@
 // App suggestions and search functionality
 
+import { platformKeyLabel } from '../shared/shortcuts.js';
+
 function shortcutIconHtml(shortcut) {
     if (shortcut.icon && shortcut.icon.startsWith('data:')) {
         return `<img src="${shortcut.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
@@ -171,6 +173,6 @@ export function appendSendHint(container) {
     
     const hint = document.createElement('div');
     hint.className = 'suggestions-hint';
-    hint.innerHTML = '<span class="hint-key">Ctrl+Enter</span> to send to agent';
+    hint.innerHTML = `<span class="hint-key">${platformKeyLabel('Ctrl+Enter')}</span> to send to agent`;
     container.appendChild(hint);
 }

@@ -6,6 +6,96 @@
  *   import { matchShortcut, buildShortcutCommand } from './shortcuts.js';
  */
 
+// ---------------------------------------------------------------------------
+// Platform helpers — cross-platform key handling for shortcuts UX.
+//
+// Classic-script windows (settings, store) mirror this logic in
+// `shared/platform-global.js` exposing `window.kagePlatform`. Keep the two
+// files in sync — same precedent as `shared/theme.js` and
+// `shared/theme-global.js`.
+// ---------------------------------------------------------------------------
+
+/**
+ * True if the browser is running on macOS. WebView-on-macOS reports
+ * "MacIntel" for both Apple Silicon and Intel; `navigator.userAgentData`
+ * isn't widely available in all WebViews so we stick with the legacy API.
+ */
+let _isMacCached = null;
+export function isMac() {
+    if (_isMacCached === null) {
+        _isMacCached = typeof navigator !== 'undefined'
+            && typeof navigator.platform === 'string'
+            && navigator.platform.startsWith('Mac');
+    }
+    return _isMacCached;
+}
+
+/**
+ * Uniform "command modifier" check for keyboard events.
+ *
+ * Mac: both Ctrl and ⌘ work (⌘ is idiomatic; labels rendered via
+ * platformKeyLabel show ⌘). Windows/Linux: Ctrl only — Win/Super+key
+ * combos are typically captured by the OS/WM and shouldn't hijack user
+ * bindings that happen to leak through.
+ *
+ * @param {KeyboardEvent} e
+ * @returns {boolean}
+ */
+export function cmdOrCtrlPressed(e) {
+    return isMac() ? (e.ctrlKey || e.metaKey) : e.ctrlKey;
+}
+
+/**
+ * Render a shortcut label with platform-appropriate modifier glyphs.
+ *
+ * On macOS "Ctrl+N" becomes "⌘N", "Ctrl+Shift+C" becomes "⌘⇧C", etc.
+ * On non-mac the label is returned unchanged. Input uses "Ctrl" as the
+ * platform-neutral token because that's what the rest of the codebase
+ * stores.
+ *
+ * Unknown tokens pass through verbatim — we don't silently drop a "Win+"
+ * or "Option+" that a user may have typed.
+ *
+ * @param {string} label
+ * @returns {string}
+ */
+export function platformKeyLabel(label) {
+    if (!isMac()) return label;
+    return label
+        .split('+')
+        .map(part => {
+            switch (part.trim()) {
+                case 'Ctrl':
+                case 'Cmd':
+                case 'Super':
+                case 'Meta':
+                    return '⌘';
+                case 'Shift':
+                    return '⇧';
+                case 'Alt':
+                case 'Option':
+                    return '⌥';
+                case 'Enter':
+                case 'Return':
+                    return '⏎';
+                case 'Backspace':
+                    return '⌫';
+                case 'Escape':
+                case 'Esc':
+                    return '⎋';
+                case 'Tab':
+                    return '⇥';
+                default:
+                    return part;
+            }
+        })
+        .join('');
+}
+
+// ---------------------------------------------------------------------------
+// Shortcut matching (pre-existing logic)
+// ---------------------------------------------------------------------------
+
 /**
  * Find shortcuts matching the input trigger word, scored by argument compatibility.
  * @param {string} input - Full user input string

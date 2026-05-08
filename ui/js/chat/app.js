@@ -10,7 +10,7 @@ import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
-import { matchShortcut, buildShortcutCommand } from '../shared/shortcuts.js';
+import { matchShortcut, buildShortcutCommand, cmdOrCtrlPressed } from '../shared/shortcuts.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
@@ -570,26 +570,26 @@ export class ChatApp {
                     return;
                 }
             }
-            // Ctrl+N — new session
-            if (e.ctrlKey && e.key === 'n') {
+            // Ctrl/⌘+N — new session
+            if (cmdOrCtrlPressed(e) && e.key === 'n') {
                 e.preventDefault();
                 this.createNewSession();
                 return;
             }
-            // Ctrl+, — open settings
-            if (e.ctrlKey && e.key === ',') {
+            // Ctrl/⌘+, — open settings
+            if (cmdOrCtrlPressed(e) && e.key === ',') {
                 e.preventDefault();
                 this.invoke('open_settings_window');
                 return;
             }
-            // Ctrl+W — hide window
-            if (e.ctrlKey && e.key === 'w') {
+            // Ctrl/⌘+W — hide window
+            if (cmdOrCtrlPressed(e) && e.key === 'w') {
                 e.preventDefault();
                 this.appWindow.hide();
                 return;
             }
-            // Ctrl+Shift+C — copy last response
-            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+            // Ctrl/⌘+Shift+C — copy last response
+            if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 if (this.currentStreamingContent) {
                     navigator.clipboard.writeText(this.currentStreamingContent).catch(() => {});

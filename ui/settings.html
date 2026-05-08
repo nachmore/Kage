@@ -140,6 +140,8 @@
 
     <!-- Theme initialization for settings window -->
     <script src="js/shared/theme-global.js"></script>
+    <!-- Platform helpers (Ctrl/Cmd, key-glyph translation) for classic scripts -->
+    <script src="js/shared/platform-global.js"></script>
     <script>
         // Thin wrappers so appearance.js can call these by name
         function applySettingsTheme(theme) { kageTheme.applyClasses(theme); }
@@ -154,9 +156,9 @@
             waitForTauri(() => kageTheme.init());
         })();
 
-        // Ctrl+W to close settings
+        // Ctrl/⌘+W to close settings
         document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'w') {
+            if (window.kagePlatform.cmdOrCtrlPressed(e) && e.key === 'w') {
                 e.preventDefault();
                 if (window.__TAURI__) {
                     window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();

@@ -2,6 +2,8 @@
  * Command registry for > prefix (local) and / prefix (ACP slash) commands.
  */
 
+import { platformKeyLabel } from './shortcuts.js';
+
 const LOCAL_COMMANDS = [
     {
         name: 'settings',
@@ -307,7 +309,7 @@ export function renderCommandSuggestions(commands, container, selectedIndex, onE
     if (showSendHint) {
         const hint = document.createElement('div');
         hint.className = 'suggestions-hint';
-        hint.innerHTML = '<span class="hint-key">Ctrl+Enter</span> to send to agent';
+        hint.innerHTML = `<span class="hint-key">${platformKeyLabel('Ctrl+Enter')}</span> to send to agent`;
         container.appendChild(hint);
     }
 

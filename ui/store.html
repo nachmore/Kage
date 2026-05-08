@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <script src="js/shared/theme-global.js"></script>
+    <script src="js/shared/platform-global.js"></script>
     <script type="module">
         // Expose the install-time permission prompt as a window-global so
         // the non-module store script below can reach it. See
@@ -737,7 +738,8 @@
     }
 
     document.addEventListener('keydown', (e) => {
-        if (e.ctrlKey && e.key === 'w') {
+        // Ctrl+W / ⌘+W — hide window
+        if (window.kagePlatform.cmdOrCtrlPressed(e) && e.key === 'w') {
             e.preventDefault();
             window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow()?.hide();
         }

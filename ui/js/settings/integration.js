@@ -15,7 +15,7 @@ class IntegrationSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Capture selected text',
-                    'Grab selected text from the active window when the hotkey is pressed (uses Ctrl+C). Disable if this interferes with terminal apps or other programs.',
+                    `Grab selected text from the active window when the hotkey is pressed (uses ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'}). Disable if this interferes with terminal apps or other programs.`,
                     'captureSelection',
                     true
                 )}

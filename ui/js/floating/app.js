@@ -12,7 +12,7 @@ import { playTimerSound } from '../shared/timer-sounds.js';
 import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './search-unified.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
-import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn } from '../shared/shortcuts.js';
+import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn, cmdOrCtrlPressed, platformKeyLabel } from '../shared/shortcuts.js';
 import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
 import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
@@ -533,36 +533,36 @@ export class FloatingApp {
                     this.appWindow.hide();
                     return;
                 }
-                // Ctrl+, — open settings
-                if (e.ctrlKey && e.key === ',') {
+                // Ctrl/⌘+, — open settings
+                if (cmdOrCtrlPressed(e) && e.key === ',') {
                     e.preventDefault();
                     this.invoke('open_settings_window');
                     return;
                 }
-                // Ctrl+E — expand to full chat
-                if (e.ctrlKey && e.key === 'e') {
+                // Ctrl/⌘+E — expand to full chat
+                if (cmdOrCtrlPressed(e) && e.key === 'e') {
                     e.preventDefault();
                     this.handleExpandClick();
                     return;
                 }
-                // Ctrl+L — clear/reset
-                if (e.ctrlKey && e.key === 'l') {
+                // Ctrl/⌘+L — clear/reset
+                if (cmdOrCtrlPressed(e) && e.key === 'l') {
                     e.preventDefault();
                     this.resetUI();
                     this.windowManager.userSetHeight = null;
                     this.windowManager.resizeWindow();
                     return;
                 }
-                // Ctrl+Shift+C — copy last response
-                if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                // Ctrl/⌘+Shift+C — copy last response
+                if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
                     e.preventDefault();
                     if (this.currentResponse) {
                         navigator.clipboard.writeText(this.currentResponse).catch(() => {});
                     }
                     return;
                 }
-                // Ctrl+W — hide window
-                if (e.ctrlKey && e.key === 'w') {
+                // Ctrl/⌘+W — hide window
+                if (cmdOrCtrlPressed(e) && e.key === 'w') {
                     e.preventDefault();
                     this.appWindow.hide();
                     return;
@@ -1621,7 +1621,7 @@ export class FloatingApp {
                 <div class="app-icon">${cmdLabel.split(' ')[0]}</div>
                 <div class="app-info">
                     <div class="app-name">${cmdLabel.substring(cmdLabel.indexOf(' ') + 1)}</div>
-                    <div class="app-description">${canElevate ? 'Enter to run · Ctrl+Shift+Enter as Admin' : 'Press Enter to execute'}</div>
+                    <div class="app-description">${canElevate ? `Enter to run · ${platformKeyLabel('Ctrl+Shift+Enter')} as Admin` : 'Press Enter to execute'}</div>
                 </div>
             `;
         }
@@ -1784,8 +1784,8 @@ export class FloatingApp {
             } else {
                 await this.appWindow.hide();
             }
-        } else if (event.key === 'Enter' && event.ctrlKey && event.shiftKey) {
-            // Ctrl+Shift+Enter: execute as elevated (admin) if it's a system command
+        } else if (event.key === 'Enter' && cmdOrCtrlPressed(event) && event.shiftKey) {
+            // Ctrl/⌘+Shift+Enter: execute as elevated (admin) if it's a system command
             event.preventDefault();
             if (this.currentMatches.length > 0 && this.selectedIndex >= 0) {
                 const selected = this.currentMatches[this.selectedIndex];
@@ -1794,15 +1794,15 @@ export class FloatingApp {
                     return;
                 }
             }
-        } else if (event.key === 'Enter' && event.ctrlKey) {
-            // Ctrl+Enter: send directly to agent, bypassing suggestions and input classification
+        } else if (event.key === 'Enter' && cmdOrCtrlPressed(event)) {
+            // Ctrl/⌘+Enter: send directly to agent, bypassing suggestions and input classification
             event.preventDefault();
             const message = this.elements.input.value.trim();
             if (message) {
                 await this.clearSuggestions();
                 await this.sendChatMessage(message, { forceChat: true });
             }
-        } else if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey) {
+        } else if (event.key === 'Enter' && !event.shiftKey && !cmdOrCtrlPressed(event)) {
             event.preventDefault();
             await this.handleEnterKey();
         }
