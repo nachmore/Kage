@@ -1,10 +1,9 @@
 // macOS-specific implementations.
 //
 // Submodules mirror the Windows set so the cross-platform `os::*`
-// modules can dispatch uniformly via `crate::os::platform::<mod>`. Where
-// macOS doesn't have a native API yet (calendar, clipboard_history,
-// file_search), the submodule is a stub returning empty results plus a
-// once-per-process warn so users understand why nothing comes back.
+// modules can dispatch uniformly via `crate::os::platform::<mod>`.
+// `clipboard_history` is the only stub (descoped — macOS users rely on
+// Paste/Maccy/Alfred); everything else has a native-API implementation.
 
 pub mod accessibility;
 pub mod ax_worker;

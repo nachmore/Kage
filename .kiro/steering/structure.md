@@ -50,7 +50,7 @@ kage/
 │       ├── window_list.rs # Window listing and focus
 │       ├── accessibility.rs # Accessibility/UI automation API
 │       ├── windows/       # Windows-specific implementations (full)
-│       ├── macos/         # macOS-specific implementations (partial)
+│       ├── macos/         # macOS-specific implementations (full)
 │       └── linux/         # Linux-specific implementations (partial)
 ├── tests/                 # Integration tests
 ├── ui/                    # Frontend assets
@@ -107,7 +107,7 @@ kage/
 - Implement `module_impl()` in each platform directory
 - Use `#[cfg(target_os = "...")]` for compile-time dispatch
 - Never import platform modules directly from application code
-- Windows: fully implemented. macOS/Linux: partial (missing cursor, icon, hotkey capture, file search, calendar)
+- Windows: fully implemented. macOS: fully implemented (accessibility, calendar via EventKit, hotkey, icon, cursor, power, file search, window list, clipboard paste, TCC onboarding). Linux: partial — relies on stubs for AX-equivalent surface.
 
 ### Configuration
 - JSON format with serde, stored in user's config directory

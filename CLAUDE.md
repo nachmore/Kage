@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo tauri dev -- /dev          # dev mode (DevTools, tray reload, RUST_BACKTRACE=1)
 cargo tauri dev -- /debug        # ACP protocol message logging to stdout
 cargo tauri dev -- /dev /debug   # both
-cargo tauri build                # release + NSIS installer (target/release/bundle/nsis/)
+cargo tauri build                # platform-native installer/bundle (Windows: NSIS; macOS: .app + .dmg)
 cargo build                      # debug binaries only — no installer, no bundling
 ```
 
@@ -28,7 +28,7 @@ cargo build                      # debug binaries only — no installer, no bund
 cargo build --bin kage-computer-control-mcp
 ```
 
-If the binary is locked because it's running, kill it first (`Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`), then rebuild and restart the app so kage-cli picks up the new binary.
+If the binary is locked because it's running, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), then rebuild and restart the app so kage-cli picks up the new binary.
 
 `cargo tauri build` rebuilds it automatically too (see `tauri.conf.json` → `beforeBuildCommand`).
 

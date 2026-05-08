@@ -126,17 +126,6 @@ jobs:
           path: |
             target/debug/kage
             target/debug/kage-computer-control-mcp
+            target/debug/kage-calendar-helper
           if-no-files-found: error
-          retention-days: 7
-
-      # Calendar helper is built best-effort by build.rs (skips quietly
-      # without swiftc). Keep its upload on `warn` so a future xcodebuild
-      # outage doesn't fail the whole CI run for something optional.
-      - name: Upload calendar helper (macOS, best-effort)
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: kage-calendar-helper-macos-${{ github.sha }}
-          path: target/debug/kage-calendar-helper
-          if-no-files-found: warn
           retention-days: 7

@@ -7,13 +7,16 @@ Debug mode provides detailed logging of ACP (Agent Communication Protocol) messa
 Start the application with the `/debug` or `--debug` command-line argument:
 
 ```bash
+# Windows
 kage.exe /debug
-```
-
-or
-
-```bash
 kage.exe --debug
+
+# macOS (from inside the app bundle)
+/Applications/Kage.app/Contents/MacOS/Kage /debug
+/Applications/Kage.app/Contents/MacOS/Kage --debug
+
+# During development on either platform
+cargo tauri dev -- /debug
 ```
 
 When enabled, you'll see a startup message:

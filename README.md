@@ -2,18 +2,78 @@
 
 A cross-platform desktop AI assistant with a floating window interface. Provides quick access to AI capabilities through a system tray application activated via global shortcuts.
 
-## Quick Start
+Supported platforms: **Windows 10+** and **macOS 11+** (universal — Apple Silicon and Intel).
+
+## Building
+
+### Prerequisites
+
+All platforms:
+- [Rust](https://rustup.rs/) stable toolchain (Edition 2021).
+- Tauri CLI v2: `cargo install tauri-cli --version "^2" --locked`.
+- Node.js for JS vendor deps + tests: `cd ui/vendor && npm install`.
+
+Windows-specific:
+- WebView2 Runtime (ships with Windows 11; installed automatically on Windows 10).
+- MSVC build tools (installed with Visual Studio Build Tools or the full IDE).
+- [NSIS](https://nsis.sourceforge.io/) only if producing the installer bundle.
+
+macOS-specific:
+- Xcode Command Line Tools: `xcode-select --install`. Provides `swiftc` (used to compile the EventKit calendar helper) and `iconutil` (used by the icon generator).
+- Optional: [Inkscape](https://inkscape.org/) + Python Pillow if regenerating app icons from `icons/kage-icon-basic.svg`.
+
+### Development mode
 
 ```bash
-cargo tauri dev -- /dev          # Development mode (inspector + live reload)
-cargo tauri dev -- /debug        # Debug logging (ACP protocol messages)
-cargo tauri build                # Release build + NSIS installer
+cargo tauri dev                  # Run with hot-reloaded frontend
+cargo tauri dev -- /dev          # + developer menu, DevTools, tray reload
+cargo tauri dev -- /debug        # + ACP protocol message logging
+cargo tauri dev -- /dev /debug   # Both
+```
+
+The frontend is served from disk via a local dev server, so HTML/CSS/JS edits take effect on reload without a recompile. Only Rust edits require the dev server to rebuild the binary.
+
+### Debug build (binaries only, no installer)
+
+```bash
+cargo build                       # Debug profile
+cargo build --release             # Release-optimised binaries
+```
+
+Debug output:
+- `target/debug/kage` (Windows: `kage.exe`)
+- `target/debug/kage-computer-control-mcp` (Windows: `.exe`)
+- `target/debug/kage-calendar-helper` (macOS only — compiled by `build.rs` via `swiftc`)
+
+Neither `cargo build` nor `cargo build --release` produces a user-installable bundle; they only produce raw binaries.
+
+### Production release build (installer / app bundle)
+
+```bash
+cargo tauri build                 # Platform-native installer + bundle
+```
+
+Output per platform:
+- **Windows**: NSIS installer at `target/release/bundle/nsis/kage_<version>_x64-setup.exe`. MSI is disabled; NSIS is the only distributable.
+- **macOS**: `.app` bundle at `target/release/bundle/macos/Kage.app` and DMG at `target/release/bundle/dmg/Kage_<version>_<arch>.dmg`. The calendar helper is bundled inside `Kage.app/Contents/MacOS/` via Tauri's `externalBin` mechanism.
+
+For a universal-binary macOS release covering both Apple Silicon and Intel, either run `cargo tauri build --target universal-apple-darwin` (requires both toolchains installed) or build per-arch and merge with `lipo`.
+
+### Common commands
+
+```bash
+cargo check                       # Fast type/borrow check, no codegen
+cargo fmt                         # Auto-format
+cargo clippy                      # Lint
+cargo test                        # All Rust tests
+cd ui/tests && npx vitest run     # JS tests
+python scripts/test_all.py        # Rust + JS tests combined
 ```
 
 ## Features
 
 ### Floating Window
-Summoned via global hotkey (default: Alt+Space). Supports:
+Summoned via global hotkey (default: Alt+Space on Windows, configurable on macOS). Supports:
 - AI chat with streaming responses
 - Inline math calculator (type expressions, get instant results)
 - Selected text capture from the active window (included as context)
@@ -37,6 +97,16 @@ For details, see [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md).
 - Window start position (center, near mouse, remember last)
 - Adjustable font size
 - Configurable chat window dimensions
+
+### macOS permissions
+
+Kage requires three macOS privacy permissions, prompted on first use and also surfaceable from **Settings → macOS Permissions**:
+
+- **Accessibility** — UI automation tools and the "paste captured text" flow
+- **Input Monitoring** — global hotkey
+- **Screen Recording** — reading foreground window titles
+
+These live in System Settings → Privacy & Security. The Welcome wizard walks through each on first launch.
 
 ## Frontend Dependencies
 

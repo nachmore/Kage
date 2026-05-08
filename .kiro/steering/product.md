@@ -11,7 +11,7 @@ Kage is a cross-platform desktop AI assistant with a floating window interface. 
 - Inline math calculator (evaluates expressions as you type)
 - Selected text capture from active window (included as context for prompts)
 - Agent Communication Protocol (ACP) client for connecting to kage-cli backend
-- Cross-platform support (Windows fully implemented, macOS/Linux partial)
+- Cross-platform support (Windows fully implemented, macOS fully implemented except descoped clipboard history, Linux partial)
 - Dark/Light/System theme with configurable opacity and font size
 - Configurable window positioning (center, near mouse, remember last position)
 - Tool permission management with auto-associated emojis

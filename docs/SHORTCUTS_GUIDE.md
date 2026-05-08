@@ -78,6 +78,19 @@ The Arguments field (for Run Program) and URL field (for Open URL) support speci
 
 ## Examples
 
+The examples below use Windows paths for concreteness, but `run_program`
+works the same on macOS and Linux — substitute your platform's executable
+location. Representative equivalents:
+
+| Program | Windows | macOS |
+|---|---|---|
+| VS Code | `C:\Program Files\Microsoft VS Code\Code.exe` | `/Applications/Visual Studio Code.app/Contents/MacOS/Electron` or `open -a "Visual Studio Code"` |
+| Git | `C:\Program Files\Git\bin\git.exe` | `/usr/bin/git` (or `/opt/homebrew/bin/git`) |
+| Terminal shell | `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` | `/bin/zsh` |
+
+On macOS you can also use `open` with an `-a <app>` argument to launch
+applications by name without hardcoding the bundle path.
+
 ### Example 1: Open VSCode in a Directory
 
 ```json
