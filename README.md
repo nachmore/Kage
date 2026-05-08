@@ -58,3 +58,4 @@ Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
 - [Shortcuts Guide](docs/SHORTCUTS_GUIDE.md)
 - [OS Abstraction Layer](docs/OS_ABSTRACTION_GUIDE.md)
 - [Tool Permissions](docs/TOOL_PERMISSIONS.md)
+- [Computer Control MCP: Why It's a Separate Binary](docs/COMPUTER_CONTROL_MCP.md)
