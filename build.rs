@@ -6,6 +6,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/builtin_steering.md");
     println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
+    println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
 
     // Expose update URLs from [package.metadata.update] as compile-time env vars.
     // Uses [package.metadata.update.dev] for debug builds, falling back to the
@@ -32,7 +33,100 @@ fn main() {
     println!("cargo:rustc-env=UPDATE_INSTALLER_URL={installer_url}");
     println!("cargo:rustc-env=UPDATE_CHANGELOG_URL={changelog_url}");
 
+    // Compile the macOS EventKit calendar helper. Skipped on other platforms
+    // and skipped quietly if swiftc isn't on PATH — the runtime falls back to
+    // the icalBuddy backend in that case.
+    build_macos_calendar_helper();
+
     tauri_build::build()
+}
+
+/// Compile `src-tauri/macos/calendar-helper.swift` into
+/// `target/{profile}/kage-calendar-helper`. Best-effort: prints a warning
+/// and returns without failing the build if swiftc isn't available or the
+/// compile fails — the runtime gracefully falls back to icalBuddy.
+fn build_macos_calendar_helper() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+
+    let src = std::path::PathBuf::from("src-tauri/macos/calendar-helper.swift");
+    if !src.exists() {
+        return;
+    }
+
+    // OUT_DIR is a build-dir under target/{profile}/build/kage-*/out.
+    // We deposit the binary in CARGO_TARGET_DIR/{profile}/ so it sits next
+    // to the kage + kage-computer-control-mcp binaries at runtime — the
+    // Rust side resolves it relative to the current_exe dir.
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
+    let target_dir = std::env::var("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("target"));
+    let out_bin = target_dir.join(&profile).join("kage-calendar-helper");
+
+    let swiftc = match which_swiftc() {
+        Some(p) => p,
+        None => {
+            println!(
+                "cargo:warning=swiftc not found — skipping calendar-helper build (icalBuddy \
+                 fallback will still work; install Xcode CLI tools to enable EventKit)"
+            );
+            return;
+        }
+    };
+
+    let status = std::process::Command::new(&swiftc)
+        .arg("-O")
+        .arg("-o")
+        .arg(&out_bin)
+        .arg(&src)
+        .status();
+
+    match status {
+        Ok(s) if s.success() => {
+            println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
+            println!("cargo:warning=built calendar-helper at {}", out_bin.display());
+        }
+        Ok(s) => {
+            println!(
+                "cargo:warning=swiftc exited with {} — calendar-helper not built (icalBuddy \
+                 fallback will still work)",
+                s
+            );
+        }
+        Err(e) => {
+            println!(
+                "cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built"
+            );
+        }
+    }
+}
+
+fn which_swiftc() -> Option<std::path::PathBuf> {
+    // Try PATH via `which`, fall back to the known Xcode CLI tools location.
+    let from_path = std::process::Command::new("which")
+        .arg("swiftc")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if s.is_empty() {
+                None
+            } else {
+                Some(std::path::PathBuf::from(s))
+            }
+        });
+    if let Some(p) = from_path {
+        return Some(p);
+    }
+    let xcode_default = std::path::PathBuf::from("/usr/bin/swiftc");
+    if xcode_default.exists() {
+        Some(xcode_default)
+    } else {
+        None
+    }
 }
 
 /// Read a URL out of `[package.metadata.update]` (or its `.dev` sibling for

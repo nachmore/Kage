@@ -1,25 +1,29 @@
 // macOS calendar integration.
 //
-// macOS has two canonical paths to read calendar events:
+// Three backends in preference order:
 //
-// 1. **EventKit** (Apple's official API) — proper but requires a Swift
-//    CLI helper bundled alongside kage-computer-control-mcp plus
-//    `NSCalendarsUsageDescription` in Info.plist + runtime permission
-//    prompt via TCC. That's a full feature with its own design space;
-//    tracked in MACMIGRATION.md as a follow-up.
+// 1. **EventKit helper** — `kage-calendar-helper`, a tiny Swift binary
+//    compiled by `build.rs` from `src-tauri/macos/calendar-helper.swift`.
+//    Uses Apple's EventKit API, returns JSON. Requires Calendar TCC
+//    permission (surfaced via `NSCalendarsUsageDescription` in Info.plist
+//    and prompted on first call). This is the canonical path.
 //
-// 2. **icalBuddy** (third-party Homebrew tool) — if the user already
-//    has it installed (`brew install ical-buddy`) we can shell out and
-//    parse its output. No permissions dance, no bundled helper, but
-//    zero coverage for users who don't have the tool.
+// 2. **icalBuddy** — third-party Homebrew tool (`brew install ical-buddy`).
+//    Zero permission dance but only helps if the user installed it.
 //
-// This file implements path 2 as a best-effort today and falls back to
-// the warn-once empty result when icalBuddy is absent. When the
-// EventKit path lands it replaces this file entirely.
+// 3. **Empty** — warn once and return no events. Happens when neither
+//    backend is available; the cross-platform layer treats this as "no
+//    calendar integration" rather than an error.
+//
+// Each call tries (1), and on any failure (missing binary, permission
+// denied, JSON parse error, stderr noise) falls through to (2), and
+// finally (3).
 
 use crate::os::calendar::CalendarEvent;
 use chrono::{Duration, Local, NaiveDate};
 use log::{debug, warn};
+use serde::Deserialize;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::OnceLock;
 
@@ -28,20 +32,126 @@ use std::sync::OnceLock;
 // ---------------------------------------------------------------------------
 
 pub fn get_upcoming_events_impl(hours: u32) -> Vec<CalendarEvent> {
-    if !icalbuddy_is_available() {
-        warn_unavailable_once();
+    if let Some(events) = run_eventkit_helper(&["upcoming", &hours.to_string()]) {
+        return events;
+    }
+    if icalbuddy_is_available() {
+        return get_upcoming_events_via_icalbuddy(hours);
+    }
+    warn_unavailable_once();
+    vec![]
+}
+
+pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
+    if NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
+        debug!("calendar: ignoring malformed date '{date}'");
         return vec![];
     }
+    if let Some(events) = run_eventkit_helper(&["date", date]) {
+        return events;
+    }
+    if icalbuddy_is_available() {
+        return get_events_for_date_via_icalbuddy(date);
+    }
+    warn_unavailable_once();
+    vec![]
+}
 
+// ---------------------------------------------------------------------------
+// EventKit helper (preferred backend)
+// ---------------------------------------------------------------------------
+
+/// Locate the `kage-calendar-helper` binary. Looks next to the current
+/// executable first (where Tauri bundles sibling binaries), then falls
+/// back to the compile-time hint written by build.rs, then PATH.
+fn helper_path() -> Option<PathBuf> {
+    static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+    PATH.get_or_init(|| {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let sibling = dir.join("kage-calendar-helper");
+                if sibling.exists() {
+                    return Some(sibling);
+                }
+            }
+        }
+        // Compile-time hint from build.rs (only set when swiftc was found
+        // at build time — points at the target/{profile}/ output).
+        if let Some(hint) = option_env!("KAGE_CALENDAR_HELPER") {
+            let p = PathBuf::from(hint);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        // Last-ditch: someone dropped it on PATH.
+        if let Ok(out) = Command::new("which").arg("kage-calendar-helper").output() {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !s.is_empty() {
+                    return Some(PathBuf::from(s));
+                }
+            }
+        }
+        None
+    })
+    .clone()
+}
+
+#[derive(Debug, Deserialize)]
+struct HelperError {
+    error: String,
+}
+
+fn run_eventkit_helper(args: &[&str]) -> Option<Vec<CalendarEvent>> {
+    let path = helper_path()?;
+    let output = match Command::new(&path).args(args).output() {
+        Ok(o) => o,
+        Err(e) => {
+            debug!("calendar-helper spawn failed: {e}");
+            return None;
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout_trim = stdout.trim();
+    if stdout_trim.is_empty() {
+        debug!("calendar-helper produced empty stdout");
+        return None;
+    }
+
+    // Try parsing as the success shape (Vec<CalendarEvent>) first. If that
+    // fails, see if the helper emitted a structured error payload so we
+    // can log something useful before the fallback.
+    if let Ok(events) = serde_json::from_str::<Vec<CalendarEvent>>(stdout_trim) {
+        debug!(
+            "calendar-helper returned {} events for {:?}",
+            events.len(),
+            args
+        );
+        return Some(events);
+    }
+    if let Ok(err) = serde_json::from_str::<HelperError>(stdout_trim) {
+        warn!("calendar-helper error: {}", err.error);
+        return None;
+    }
+    warn!(
+        "calendar-helper returned unexpected output ({} bytes); \
+         falling back",
+        stdout_trim.len()
+    );
+    None
+}
+
+// ---------------------------------------------------------------------------
+// icalBuddy backend (legacy fallback)
+// ---------------------------------------------------------------------------
+
+fn get_upcoming_events_via_icalbuddy(hours: u32) -> Vec<CalendarEvent> {
     let now = Local::now();
     let end = now + Duration::hours(hours as i64);
     let start_str = now.format("%Y-%m-%d").to_string();
     let end_str = end.format("%Y-%m-%d").to_string();
 
-    // `eventsFrom:to:` accepts inclusive YYYY-MM-DD dates. Using the
-    // date granularity is coarser than the requested hour window but
-    // avoids parsing + normalizing icalBuddy's human-readable times;
-    // callers already filter by exact start_time downstream.
     let range = format!("eventsFrom:{start_str} to:{end_str}");
     let events = run_icalbuddy(&[
         "-nc",
@@ -59,19 +169,7 @@ pub fn get_upcoming_events_impl(hours: u32) -> Vec<CalendarEvent> {
     events
 }
 
-pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
-    if !icalbuddy_is_available() {
-        warn_unavailable_once();
-        return vec![];
-    }
-
-    // Validate date format — icalBuddy fails with an unhelpful error on
-    // bad input, and we'd rather return empty than surface that.
-    if NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
-        debug!("calendar: ignoring malformed date '{date}'");
-        return vec![];
-    }
-
+fn get_events_for_date_via_icalbuddy(date: &str) -> Vec<CalendarEvent> {
     let range = format!("eventsFrom:{date} to:{date}");
     run_icalbuddy(&[
         "-nc",
@@ -85,10 +183,6 @@ pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
         &range,
     ])
 }
-
-// ---------------------------------------------------------------------------
-// icalBuddy backend
-// ---------------------------------------------------------------------------
 
 /// Check whether `icalBuddy` is on PATH. Cached for the process lifetime —
 /// installing it after Kage is running is vanishingly rare, and the
@@ -108,9 +202,10 @@ fn warn_unavailable_once() {
     static WARNED: OnceLock<()> = OnceLock::new();
     WARNED.get_or_init(|| {
         log::warn!(
-            "calendar: no backend available on macOS — install icalBuddy \
-             (`brew install ical-buddy`) for a lightweight option, or wait \
-             for the EventKit integration (tracked in MACMIGRATION.md)."
+            "calendar: no backend available on macOS — make sure the \
+             kage-calendar-helper binary ships alongside the app and \
+             Calendar permission is granted, or install icalBuddy \
+             (`brew install ical-buddy`) as a fallback."
         );
     });
 }
