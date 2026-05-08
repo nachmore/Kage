@@ -2,8 +2,8 @@
 //
 // Uses the OS-native search index where available:
 // - Windows: Windows Search Index (SystemIndex via OLE DB)
-// - macOS: Spotlight (mdfind) — TODO
-// - Linux: locate/mlocate — TODO
+// - macOS: Spotlight (`mdfind -interpret -onlyin $HOME`)
+// - Linux: locate/mlocate — stub for now
 //
 // Designed to be extensible — future backends (e.g. Everything SDK) can be
 // added as alternative implementations behind a config flag.

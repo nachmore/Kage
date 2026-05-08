@@ -2,7 +2,8 @@
 //
 // Uses OS-native calendar APIs:
 // - Windows: Windows.ApplicationModel.Appointments
-// - macOS: EventKit (via swift CLI) — TODO
+// - macOS: EventKit via the `kage-calendar-helper` Swift binary (compiled
+//          by build.rs), with icalBuddy as a fallback
 // - Linux: stub (no standard API)
 
 use serde::{Deserialize, Serialize};
