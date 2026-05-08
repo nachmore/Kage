@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Kage macOS Info.plist — merged into the default Info.plist by tauri-bundler.
+  Wired via `bundle.macOS.infoPlist` in ../../tauri.conf.json.
+
+  Only UsageDescription strings here. Bundle metadata (CFBundleName, version,
+  LSMinimumSystemVersion, etc.) is set from Tauri config + Cargo.toml and
+  must NOT be duplicated here.
+-->
+<plist version="1.0">
+<dict>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Kage uses System Events to list open windows, focus apps, and capture selected text for your queries.</string>
+
+    <key>NSCalendarsUsageDescription</key>
+    <string>Kage reads upcoming calendar events so you can ask about your schedule.</string>
+
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Kage needs microphone access to transcribe voice input.</string>
+</dict>
+</plist>

@@ -8,6 +8,7 @@ Application icons generated from `kage-icon-basic.svg` (app icon) and `kage-icon
 - `128x128.png` — standard app icon
 - `128x128@2x.png` — retina app icon (256x256)
 - `kage.ico` — Windows icon (16, 32, 48, 256)
+- `kage.icns` — macOS icon (16, 32, 128, 256, 512 + @2x variants)
 - `nsis-header.bmp` — NSIS installer header (300x114, light bg)
 - `nsis-sidebar.bmp` — NSIS installer sidebar (164x314, dark bg)
 

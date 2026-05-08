@@ -367,8 +367,7 @@ fn tool_def(name: &str, description: &str, input_schema: serde_json::Value) -> s
 
 /// Launch an app using ShellExecuteW — the proper Win32 API.
 /// Handles program names with args (e.g. "winword /w"), paths, and URIs.
-/// Launch an app using ShellExecuteW — the proper Win32 API.
-/// Handles program names with args (e.g. "winword /w"), paths, and URIs.
+#[cfg(windows)]
 fn shell_launch(name: &str) -> Result<(), String> {
     use windows::core::HSTRING;
     use windows::core::PCWSTR;
@@ -415,6 +414,13 @@ fn shell_launch(name: &str) -> Result<(), String> {
             result.0 as usize, name
         ))
     }
+}
+
+// Non-Windows stub. TODO: route through `crate::os::launcher::launch_app`
+// so launch_app / launch_and_get_tree work on macOS/Linux.
+#[cfg(not(windows))]
+fn shell_launch(_name: &str) -> Result<(), String> {
+    Err("shell_launch is not yet implemented on this platform".to_string())
 }
 
 // ---------------------------------------------------------------------------
