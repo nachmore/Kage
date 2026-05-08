@@ -5,14 +5,14 @@
 # This is a *debug* build — no --release, no Tauri bundle, no installer.
 # Release/production builds live in a separate workflow (TBD).
 #
-# Runs on windows-latest only — kage is Windows-primary; half the codebase
-# is gated #[cfg(target_os = "windows")] with WinRT/COM/uiautomation deps
-# that don't exist on Linux/macOS, so other runners would skip the
-# meaningful coverage.
+# Runs on Windows and macOS. Large swaths of the codebase are
+# `#[cfg(target_os = ...)]` gated (Windows: WinRT/COM/uiautomation;
+# macOS: AppKit/EventKit/AX), so single-OS coverage would miss
+# platform-specific regressions. Linux is a deliberate omission — the
+# Linux impls are mostly stubs and nothing ships there.
 #
 # Hard gates: cargo fmt, cargo clippy, cargo build --bins, cargo test,
-# vitest. All four together take ~5 min warm / ~10 min cold; well inside
-# any GitHub Actions allowance for a personal-scale push frequency.
+# vitest. All four together take ~5–10 min per OS warm / ~15 min cold.
 
 name: Debug Build + Test
 
@@ -32,8 +32,12 @@ concurrency:
 
 jobs:
   build-test:
-    name: debug build + test
-    runs-on: windows-latest
+    name: debug build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -47,7 +51,8 @@ jobs:
       # Cache target/ and ~/.cargo/registry keyed on Cargo.lock — turns a
       # ~10min cold compile into a ~2min warm one. Swatinem/rust-cache
       # is the standard choice; it knows how to invalidate properly when
-      # rustc / Cargo.lock / Cargo.toml change.
+      # rustc / Cargo.lock / Cargo.toml change. The action shards cache
+      # keys by OS+arch automatically, so Windows and macOS don't collide.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
@@ -64,7 +69,9 @@ jobs:
 
       # ----- Lint gates ------------------------------------------------
 
+      # fmt is OS-independent — only run on one runner to save minutes.
       - name: cargo fmt --check
+        if: matrix.os == 'windows-latest'
         run: cargo fmt --all -- --check
 
       - name: cargo clippy
@@ -77,7 +84,8 @@ jobs:
       # `cargo test` doesn't build the binaries (both have `test = false`
       # in Cargo.toml), so an error in main.rs or bin/computer_control_mcp.rs
       # that the lib doesn't surface would slip through. Build them
-      # explicitly first.
+      # explicitly first. On macOS this also triggers the build.rs
+      # swiftc compile of src-tauri/macos/calendar-helper.swift.
       - name: cargo build --bins
         run: cargo build --bins
 
@@ -92,19 +100,43 @@ jobs:
 
       # ----- Artifact upload ------------------------------------------
 
-      # Raw debug binaries from `cargo build --bins`. These won't run on
-      # their own — the Tauri frontend and resources are only bundled by
-      # `cargo tauri build` — but they're handy for "does this branch
-      # compile and link?" sanity checks, attaching to an issue, or
-      # grabbing a stripped-down kage-computer-control-mcp.exe to
-      # reproduce MCP behaviour locally. Short retention since these
-      # aren't shipping artifacts.
-      - name: Upload debug binaries
+      # Raw debug binaries. These won't run on their own — the Tauri
+      # frontend and resources are only bundled by `cargo tauri build` —
+      # but they're handy for sanity checks and bug repros. Short
+      # retention since these aren't shipping artifacts.
+      #
+      # Binary names differ per OS: Windows has `.exe` suffixes, macOS
+      # ships the Swift calendar helper alongside the two Rust binaries.
+      - name: Upload debug binaries (Windows)
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: kage-debug-${{ github.sha }}
+          name: kage-debug-windows-${{ github.sha }}
           path: |
             target/debug/kage.exe
             target/debug/kage-computer-control-mcp.exe
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload debug binaries (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kage-debug-macos-${{ github.sha }}
+          path: |
+            target/debug/kage
+            target/debug/kage-computer-control-mcp
+          if-no-files-found: error
+          retention-days: 7
+
+      # Calendar helper is built best-effort by build.rs (skips quietly
+      # without swiftc). Keep its upload on `warn` so a future xcodebuild
+      # outage doesn't fail the whole CI run for something optional.
+      - name: Upload calendar helper (macOS, best-effort)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: kage-calendar-helper-macos-${{ github.sha }}
+          path: target/debug/kage-calendar-helper
+          if-no-files-found: warn
           retention-days: 7

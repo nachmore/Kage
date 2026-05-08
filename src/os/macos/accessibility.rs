@@ -146,13 +146,12 @@ fn copy_string_attr(elem: ax::AXUIElementRef, attr: &str) -> String {
         return String::new();
     }
     // Take ownership — the Copy function retained.
-    let s = unsafe {
+    unsafe {
         let cfstr = value as CFStringRef;
         let result = cfstring_to_string(cfstr);
         CFRelease(value);
         result
-    };
-    s
+    }
 }
 
 /// Read an attribute whose value is a CFBooleanRef. Returns None on any
@@ -170,7 +169,7 @@ fn copy_bool_attr(elem: ax::AXUIElementRef, attr: &str) -> Option<bool> {
     }
     unsafe {
         let type_id = core_foundation::base::CFGetTypeID(value);
-        let result = if type_id == core_foundation::boolean::CFBoolean::type_id() {
+        if type_id == core_foundation::boolean::CFBoolean::type_id() {
             let cfbool: CFBoolean = CFBoolean::wrap_under_create_rule(value as _);
             Some(bool::from(cfbool))
         } else if type_id == core_foundation::number::CFNumber::type_id() {
@@ -182,8 +181,7 @@ fn copy_bool_attr(elem: ax::AXUIElementRef, attr: &str) -> Option<bool> {
         } else {
             CFRelease(value);
             None
-        };
-        result
+        }
     }
 }
 

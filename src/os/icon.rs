@@ -35,6 +35,7 @@ fn new_cache<K: std::hash::Hash + Eq, V>() -> LruCache<K, V> {
 /// exe path → extracted icon (Some(base64) on success, None when the
 /// platform impl returned no icon — also cached, so we don't re-attempt
 /// the expensive extraction every time).
+#[allow(dead_code)] // consumed only by src/os/windows/window_list.rs today; macOS/Linux wiring pending
 static ICON_BY_PATH: LazyLock<Mutex<LruCache<String, Option<String>>>> =
     LazyLock::new(|| Mutex::new(new_cache()));
 
@@ -48,6 +49,7 @@ static ICON_BY_NAME: LazyLock<Mutex<LruCache<String, String>>> =
 /// Returns the base64 data URI or None if extraction is unsupported or
 /// failed. A None result is also cached — callers shouldn't re-attempt
 /// extraction on every call for an exe that legitimately has no icon.
+#[allow(dead_code)] // consumed only by src/os/windows/window_list.rs today
 pub fn extract_icon_base64_cached(path: &str) -> Option<String> {
     if path.is_empty() {
         return None;
@@ -71,6 +73,7 @@ pub fn extract_icon_base64(path: &str) -> Option<String> {
 /// Record a (process_name, icon) pair for later quick lookup. Called
 /// during window enumeration once we've identified both the process
 /// name and (via the path cache) its icon.
+#[allow(dead_code)] // consumed only by src/os/windows/window_list.rs today
 pub fn register_process_name_icon(process_name: &str, icon: &str) {
     if process_name.is_empty() || icon.is_empty() {
         return;

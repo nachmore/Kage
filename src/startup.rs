@@ -44,6 +44,12 @@ impl CliFlags {
 /// default of 10 seconds, which matches the in-process behaviour.
 ///
 /// Returns `None` if this isn't the capture-hotkey subcommand at all.
+///
+/// The production caller is `main.rs`-gated to Windows (macOS uses
+/// in-process CGEventTap instead of a helper subprocess). The parsing
+/// logic itself is OS-independent and covered by `tests/startup_test.rs`
+/// on every platform.
+#[allow(dead_code)] // called only from Windows-cfg code in main.rs; tests cover it cross-platform
 pub fn detect_capture_hotkey_subcommand(args: &[String]) -> Option<u64> {
     if args.len() < 2 {
         return None;
