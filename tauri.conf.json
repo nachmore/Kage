@@ -111,6 +111,9 @@
       "exceptionDomain": "",
       "frameworks": []
     },
+    "externalBin": [
+      "src-tauri/macos/bin/kage-calendar-helper"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",

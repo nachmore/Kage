@@ -38,13 +38,79 @@ fn main() {
     // the icalBuddy backend in that case.
     build_macos_calendar_helper();
 
+    // Ensure the path Tauri's `bundle.externalBin` expects exists for every
+    // target, so bundling succeeds even when we don't have a real helper
+    // (non-macOS targets, macOS without swiftc, or a swiftc compile error).
+    // The stub is never invoked — the consumer is `#[cfg(target_os = "macos")]`
+    // and will already have fallen back to icalBuddy for the real macOS case.
+    stage_externalbin_placeholder_if_missing();
+
     tauri_build::build()
 }
 
+/// Write a harmless placeholder at
+/// `src-tauri/macos/bin/kage-calendar-helper-<triple>[.exe]` if no file
+/// exists there yet. Tauri's bundler validates every `externalBin` path
+/// at build time; without this, any build environment missing the real
+/// binary fails to bundle. The placeholder prints a message and exits 1
+/// if it ever runs, but it shouldn't — the macOS call site only invokes
+/// the compiled Swift helper, and other platforms don't touch it.
+fn stage_externalbin_placeholder_if_missing() {
+    let triple = match std::env::var("TARGET") {
+        Ok(t) if !t.is_empty() => t,
+        _ => return,
+    };
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let bin_dir = std::path::PathBuf::from("src-tauri/macos/bin");
+    let _ = std::fs::create_dir_all(&bin_dir);
+
+    // Tauri's Windows bundler expects the .exe suffix on disk for
+    // externalBin files; on macOS/Linux the filename has no extension.
+    let filename = if target_os == "windows" {
+        format!("kage-calendar-helper-{}.exe", triple)
+    } else {
+        format!("kage-calendar-helper-{}", triple)
+    };
+    let path = bin_dir.join(&filename);
+    if path.exists() {
+        return;
+    }
+
+    let content: &[u8] = if target_os == "windows" {
+        b"@echo off\r\necho kage-calendar-helper is macOS-only\r\nexit /b 1\r\n"
+    } else {
+        b"#!/bin/sh\necho \"kage-calendar-helper is macOS-only\" >&2\nexit 1\n"
+    };
+    if let Err(e) = std::fs::write(&path, content) {
+        println!(
+            "cargo:warning=failed to stage externalBin placeholder at {}: {}",
+            path.display(),
+            e
+        );
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if target_os != "windows" {
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    println!(
+        "cargo:warning=staged externalBin placeholder at {} \
+         (real helper not built; runtime falls back to icalBuddy)",
+        path.display()
+    );
+}
+
 /// Compile `src-tauri/macos/calendar-helper.swift` into
-/// `target/{profile}/kage-calendar-helper`. Best-effort: prints a warning
-/// and returns without failing the build if swiftc isn't available or the
-/// compile fails — the runtime gracefully falls back to icalBuddy.
+/// `target/{profile}/kage-calendar-helper` (for dev runs) and copy it to
+/// `src-tauri/macos/bin/kage-calendar-helper-<target-triple>` so Tauri's
+/// `bundle.externalBin` can pick it up during `cargo tauri build`.
+///
+/// Best-effort: prints a warning and returns without failing the build if
+/// swiftc isn't available or the compile fails — the runtime gracefully
+/// falls back to icalBuddy.
 fn build_macos_calendar_helper() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
         return;
@@ -55,15 +121,26 @@ fn build_macos_calendar_helper() {
         return;
     }
 
-    // OUT_DIR is a build-dir under target/{profile}/build/kage-*/out.
-    // We deposit the binary in CARGO_TARGET_DIR/{profile}/ so it sits next
-    // to the kage + kage-computer-control-mcp binaries at runtime — the
-    // Rust side resolves it relative to the current_exe dir.
+    // Primary output: target/{profile}/ so it sits next to the kage +
+    // kage-computer-control-mcp binaries at runtime — the Rust side
+    // resolves it relative to current_exe.parent().
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".into());
     let target_dir = std::env::var("CARGO_TARGET_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("target"));
     let out_bin = target_dir.join(&profile).join("kage-calendar-helper");
+
+    // Bundle-time output: `src-tauri/macos/bin/kage-calendar-helper-<triple>`.
+    // Tauri's externalBin mechanism appends `-<target>` to the configured
+    // path and expects the file to exist when `tauri_build::build()` runs.
+    let triple = std::env::var("TARGET").unwrap_or_default();
+    let bundle_bin = if !triple.is_empty() {
+        let bin_dir = std::path::PathBuf::from("src-tauri/macos/bin");
+        let _ = std::fs::create_dir_all(&bin_dir);
+        Some(bin_dir.join(format!("kage-calendar-helper-{}", triple)))
+    } else {
+        None
+    };
 
     let swiftc = match which_swiftc() {
         Some(p) => p,
@@ -87,6 +164,20 @@ fn build_macos_calendar_helper() {
         Ok(s) if s.success() => {
             println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
             println!("cargo:warning=built calendar-helper at {}", out_bin.display());
+            if let Some(ref bundle_path) = bundle_bin {
+                match std::fs::copy(&out_bin, bundle_path) {
+                    Ok(_) => println!(
+                        "cargo:warning=staged calendar-helper for bundling at {}",
+                        bundle_path.display()
+                    ),
+                    Err(e) => println!(
+                        "cargo:warning=failed to stage helper at {} ({}); \
+                         release bundle will be missing the binary",
+                        bundle_path.display(),
+                        e
+                    ),
+                }
+            }
         }
         Ok(s) => {
             println!(

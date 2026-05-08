@@ -42,3 +42,6 @@ www/
 
 # Agent scratch — todos, migration notes, anything not ready for commit
 .agent/
+# Staging dir for build.rs-compiled sidecar binaries (e.g. the macOS
+# EventKit calendar helper) — rebuilt on every `cargo build` on macOS.
+src-tauri/macos/bin/
