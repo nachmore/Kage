@@ -362,12 +362,40 @@ fn default_auto_compact_threshold() -> u32 {
     90
 }
 
+/// Default blocklist of processes where auto-copy would be disruptive.
+/// Terminals are the big one — Ctrl+C is overloaded with SIGINT, and even
+/// Windows Terminal's "copy-if-selection-else-interrupt" mapping trips on
+/// some edge cases. Users can extend/replace this list in settings.
+fn default_capture_selection_blocklist() -> Vec<String> {
+    vec![
+        "cmd".to_string(),
+        "powershell".to_string(),
+        "pwsh".to_string(),
+        "conhost".to_string(),
+        "WindowsTerminal".to_string(),
+        "wsl".to_string(),
+        "bash".to_string(),
+        "alacritty".to_string(),
+        "wezterm-gui".to_string(),
+        "Terminal".to_string(), // macOS Terminal.app
+        "iTerm2".to_string(),
+    ]
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemConfig {
     pub auto_start: bool,
     /// Capture selected text from the active window when the hotkey is pressed.
     #[serde(default = "default_true")]
     pub capture_selection: bool,
+    /// Process names (no extension) to skip selection capture for. When the
+    /// foreground window belongs to one of these, Kage won't inject the
+    /// Ctrl+C / Cmd+C keystroke — matters most for terminals where Ctrl+C
+    /// also means SIGINT and can cancel in-progress commands even when
+    /// text is highlighted. Matching is case-insensitive; an optional
+    /// trailing ".exe" on Windows is ignored.
+    #[serde(default = "default_capture_selection_blocklist")]
+    pub capture_selection_blocklist: Vec<String>,
     /// Show system notifications when responses complete while hidden.
     #[serde(default = "default_true")]
     pub show_notifications: bool,
@@ -684,6 +712,7 @@ impl Default for Config {
             system: SystemConfig {
                 auto_start: false,
                 capture_selection: true,
+                capture_selection_blocklist: default_capture_selection_blocklist(),
                 show_notifications: true,
                 screen_context: true,
                 log_buffer_size: 1000,

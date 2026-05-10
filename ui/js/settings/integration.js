@@ -20,6 +20,12 @@ class IntegrationSettingsModule extends SettingsModule {
                     true
                 )}
 
+                ${this.createControlRow(
+                    'Don\'t auto-copy in these apps',
+                    `One process name per line. When these apps are focused, Kage won\'t inject ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
+                    `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`
+                )}
+
                 ${this.createCheckboxRow(
                     'Show notifications',
                     'Show a system notification when a response completes while the window is hidden.',
@@ -109,6 +115,13 @@ class IntegrationSettingsModule extends SettingsModule {
     load(config) {
         const captureSel = document.getElementById('captureSelection');
         if (captureSel) captureSel.checked = config.system?.capture_selection !== false;
+        const blocklist = document.getElementById('captureSelectionBlocklist');
+        if (blocklist) {
+            const list = Array.isArray(config.system?.capture_selection_blocklist)
+                ? config.system.capture_selection_blocklist
+                : [];
+            blocklist.value = list.join('\n');
+        }
         const showNotif = document.getElementById('showNotifications');
         if (showNotif) showNotif.checked = config.system?.show_notifications !== false;
         const screenCtx = document.getElementById('screenContext');
@@ -118,6 +131,11 @@ class IntegrationSettingsModule extends SettingsModule {
     save(config) {
         config.system = config.system || {};
         config.system.capture_selection = document.getElementById('captureSelection')?.checked ?? true;
+        const blocklistText = document.getElementById('captureSelectionBlocklist')?.value ?? '';
+        config.system.capture_selection_blocklist = blocklistText
+            .split('\n')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
         config.system.show_notifications = document.getElementById('showNotifications')?.checked ?? true;
         config.system.screen_context = document.getElementById('screenContext')?.checked ?? true;
     }

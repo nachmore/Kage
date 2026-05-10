@@ -704,9 +704,30 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                 }
                 info!("Hotkey triggered: inline-assist ({})", _shortcut);
                 let source_info = crate::os::window_list::get_foreground_window_info();
-                let capture_token = crate::os::clipboard::begin_selection_capture();
+                let features: tauri::State<'_, FeatureServices> = ia_handle.state();
+                let blocklist = features
+                    .config
+                    .lock_or_recover()
+                    .system
+                    .capture_selection_blocklist
+                    .clone();
+                let fg_process = source_info
+                    .as_ref()
+                    .map(|(_, proc)| proc.as_str())
+                    .unwrap_or("");
+                let selection = if crate::os::clipboard::is_process_blocklisted(
+                    fg_process, &blocklist,
+                ) {
+                    info!(
+                        "[inline-assist] Skipping capture — foreground app '{}' is blocklisted",
+                        fg_process
+                    );
+                    None
+                } else {
+                    let capture_token = crate::os::clipboard::begin_selection_capture();
+                    crate::os::clipboard::finish_selection_capture(capture_token)
+                };
                 let cursor_pos = crate::os::cursor::get_cursor_position().unwrap_or((500, 500));
-                let selection = crate::os::clipboard::finish_selection_capture(capture_token);
                 let handle = ia_handle.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = crate::commands::window::show_inline_assist_with_context(

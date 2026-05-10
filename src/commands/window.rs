@@ -95,22 +95,36 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
 
     let config = features.config.lock_or_recover();
     let capture_enabled = config.system.capture_selection;
+    let capture_blocklist = config.system.capture_selection_blocklist.clone();
     let start_pos = config.ui.window_start_position.clone();
     let last_x = config.ui.last_window_x;
     let last_y = config.ui.last_window_y;
     drop(config);
 
-    // Phase 1: send Ctrl+C while the source window is still focused (~20ms).
-    // This must happen before we show our window.
-    let capture_token = if is_showing && capture_enabled {
-        Some(crate::os::clipboard::begin_selection_capture())
+    // Capture the foreground window info before we steal focus (~1ms).
+    // Grab it ahead of the Ctrl+C injection so we can also consult the
+    // blocklist without a second foreground lookup.
+    let source_window_info = if is_showing {
+        crate::os::window_list::get_foreground_window_info()
     } else {
         None
     };
 
-    // Capture the foreground window info before we steal focus (~1ms).
-    let source_window_info = if is_showing {
-        crate::os::window_list::get_foreground_window_info()
+    // Phase 1: send Ctrl+C while the source window is still focused (~20ms).
+    // This must happen before we show our window. Skip the injection when
+    // the foreground app is blocklisted (terminals etc.) — sending Ctrl+C
+    // there interrupts commands instead of copying text.
+    let capture_token = if is_showing && capture_enabled {
+        let fg_process = source_window_info
+            .as_ref()
+            .map(|(_, proc)| proc.as_str())
+            .unwrap_or("");
+        if crate::os::clipboard::is_process_blocklisted(fg_process, &capture_blocklist) {
+            info!("[selection] Skipping capture — foreground app '{fg_process}' is blocklisted");
+            None
+        } else {
+            Some(crate::os::clipboard::begin_selection_capture())
+        }
     } else {
         None
     };
@@ -688,9 +702,25 @@ pub async fn get_screen_context(
 pub async fn show_inline_assist(app: tauri::AppHandle) -> Result<(), AppError> {
     // When called as a Tauri command (not from hotkey), capture here
     let source_info = crate::os::window_list::get_foreground_window_info();
-    let capture_token = crate::os::clipboard::begin_selection_capture();
+    let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
+    let blocklist = features
+        .config
+        .lock_or_recover()
+        .system
+        .capture_selection_blocklist
+        .clone();
+    let fg_process = source_info
+        .as_ref()
+        .map(|(_, proc)| proc.as_str())
+        .unwrap_or("");
+    let selection = if crate::os::clipboard::is_process_blocklisted(fg_process, &blocklist) {
+        info!("[inline-assist] Skipping capture — foreground app '{fg_process}' is blocklisted");
+        None
+    } else {
+        let capture_token = crate::os::clipboard::begin_selection_capture();
+        crate::os::clipboard::finish_selection_capture(capture_token)
+    };
     let cursor_pos = get_cursor_position().unwrap_or((500, 500));
-    let selection = crate::os::clipboard::finish_selection_capture(capture_token);
 
     show_inline_assist_with_context(app, source_info, selection, cursor_pos).await
 }
