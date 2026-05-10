@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { classifyText } from '../../js/shared/quick-actions.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { classifyText, getActionsForText } from '../../js/shared/quick-actions.js';
 
 describe('classifyText', () => {
   // --- Code detection ---
@@ -140,5 +140,100 @@ describe('classifyText', () => {
     const types = classifyText('function foo() {\n  throw new Error("fail");\n}');
     expect(types).toContain('code');
     expect(types).toContain('error');
+  });
+});
+
+describe('getActionsForText — translate chip visibility', () => {
+  const qaConfig = { enabled: true, custom_actions: [] };
+
+  // Pin the OS language to English so the translate target is stable
+  beforeEach(() => {
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US');
+  });
+
+  const findTranslate = (actions) =>
+    actions.find((a) => a.icon === '🌐' && /^→/.test(a.label));
+
+  it('hides translate for clearly English prose', async () => {
+    const text = 'The quick brown fox jumps over the lazy dog and then keeps running.';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+
+  it('hides translate for short English text with proper nouns and emoji', async () => {
+    // This is the kind of response that used to get mis-labeled as non-English
+    const text = 'Hey Oren! Enjoying some late-night Slack Wyrm? 🐉 What can I help you with?';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+
+  it('hides translate for English text wrapped in markdown/code fences', async () => {
+    const text = [
+      "Here's how you can do it:",
+      '',
+      '```js',
+      'const x = 42;',
+      'console.log(x);',
+      '```',
+      '',
+      'That should print the answer you are looking for.',
+    ].join('\n');
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+
+  it('hides translate for very short snippets (not enough signal)', async () => {
+    const text = 'Yes, done.';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+
+  it('shows translate for clearly non-English prose (script detection)', async () => {
+    // Japanese script maps definitively to 'ja' via detectScript
+    const text = 'これはテストです。今日はとてもいい天気ですね。';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeDefined();
+    expect(findTranslate(actions).label).toMatch(/English/);
+  });
+
+  it('shows translate for clearly non-English Latin prose (Spanish)', async () => {
+    const text = 'Hola, ¿cómo estás? Espero que tengas un buen día y que todo vaya muy bien contigo.';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeDefined();
+  });
+
+  it('hides translate for Spanish text when OS language is Spanish', async () => {
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('es-ES');
+    const text = 'Hola, ¿cómo estás? Espero que tengas un buen día y que todo vaya muy bien contigo.';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+
+  it('does not include the translate action on non-prose content (code)', async () => {
+    const text = 'function foo() {\n  return 42;\n}';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findTranslate(actions)).toBeUndefined();
+  });
+});
+
+describe('getActionsForText — Summarize threshold', () => {
+  const qaConfig = { enabled: true, custom_actions: [] };
+
+  beforeEach(() => {
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-US');
+  });
+
+  const findSummarize = (actions) => actions.find((a) => a.label === 'Summarize');
+
+  it('hides Summarize for short text', async () => {
+    const text = 'This is a short sentence that should not get a summarize chip.';
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findSummarize(actions)).toBeUndefined();
+  });
+
+  it('shows Summarize for text with 40+ words', async () => {
+    const text = Array(45).fill('word').join(' ');
+    const actions = await getActionsForText(text, qaConfig);
+    expect(findSummarize(actions)).toBeDefined();
   });
 });

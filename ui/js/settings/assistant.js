@@ -43,7 +43,7 @@ class AssistantSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Show quick actions on selected text',
-                    'When you summon Kage with text selected, show smart action chips (Summarize, Fix grammar, Explain code, etc.) based on the content type.',
+                    'When you summon Kage with text selected, show smart action chips (Summarize, Translate, Explain code, etc.) based on the content type.',
                     'quickActionsEnabled',
                     true
                 )}

@@ -3,7 +3,7 @@
  * the floating window captures a text selection.
  */
 
-import { detectScript, detectLanguage } from './language-detect.js';
+import { detectScript, detectLanguageAll } from './language-detect.js';
 
 // --- Text classification ---
 
@@ -140,30 +140,114 @@ function _getOsLanguageCode() {
 }
 
 /**
+ * Strip markdown and code noise from text so language detection sees clean prose.
+ * AI responses often contain code fences, inline code, URLs, and headings that
+ * confuse statistical detectors.
+ */
+function _stripMarkdownForDetection(text) {
+    return text
+        .replace(/```[\s\S]*?```/g, ' ')      // fenced code blocks
+        .replace(/`[^`]*`/g, ' ')             // inline code
+        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links/images → keep label
+        .replace(/https?:\/\/\S+/g, ' ')      // raw URLs
+        .replace(/^\s*#{1,6}\s*/gm, '')       // heading markers
+        .replace(/^\s*[-*+]\s+/gm, '')        // bullet markers
+        .replace(/[*_~>]/g, ' ')              // emphasis/quote punctuation
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
+ * Very common short words per target language. If enough of these appear we can
+ * declare the text is in that language without running statistical detection —
+ * tinyld often mis-labels short text containing proper nouns, emojis, or slang.
+ * Only languages that share the Latin alphabet need an entry here; scripts like
+ * Cyrillic, Arabic, CJK, etc. are resolved via `detectScript` upstream.
+ */
+const COMMON_WORDS = {
+    en: ['the','and','is','are','was','were','you','your','this','that','with','what','have','has','not','but','for','from','about','can','will','would','should','could','there','their','they','them','here','like','just','know','want','help','please','hey','hi','hello','when','where','which','who','why','how','some','more','only','also','very','really','much','many','most','good','great','well','okay','ok','yes','no','let','make','take','get','got','see','look','think','need','use','used'],
+    es: ['el','la','los','las','de','del','y','o','pero','que','qué','es','son','está','están','en','con','sin','por','para','como','cómo','un','una','unos','unas','mi','tu','su','este','esta','esto','ese','esa','eso','hay','muy','más','menos','bien','también','pero','hola','gracias','sí','no','donde','dónde','cuando','cuándo'],
+    fr: ['le','la','les','un','une','des','de','du','et','ou','mais','que','qui','est','sont','était','étaient','dans','pour','avec','sans','par','sur','sous','ce','cette','ces','mon','ton','son','notre','votre','leur','je','tu','il','elle','nous','vous','ils','elles','pas','plus','moins','bien','très','aussi','bonjour','salut','merci','oui','non'],
+    de: ['der','die','das','den','dem','des','ein','eine','einen','einem','einer','und','oder','aber','ist','sind','war','waren','nicht','mit','von','für','auf','in','im','zu','zum','zur','auch','nur','sehr','mehr','weniger','schon','noch','hallo','danke','ja','nein','was','wer','wie','wo','wann','warum'],
+    it: ['il','la','lo','i','le','gli','un','una','uno','di','del','della','e','o','ma','che','cosa','è','sono','era','erano','con','senza','per','in','a','da','su','questo','questa','quel','quella','mio','tuo','suo','non','più','meno','anche','molto','ciao','grazie','sì','no','dove','quando'],
+    pt: ['o','a','os','as','um','uma','uns','umas','de','do','da','dos','das','e','ou','mas','que','é','são','era','eram','com','sem','para','por','em','no','na','nos','nas','este','esta','esse','essa','meu','teu','seu','não','mais','menos','também','muito','olá','obrigado','sim','onde','quando'],
+    nl: ['de','het','een','en','of','maar','dat','dit','die','deze','is','zijn','was','waren','niet','met','van','voor','op','in','naar','bij','ook','nog','zeer','meer','minder','goed','hoi','hallo','dank','ja','nee','wat','wie','hoe','waar','wanneer'],
+};
+
+function _containsEnoughCommonWords(text, langCode, threshold = 3) {
+    const list = COMMON_WORDS[langCode];
+    if (!list) return false;
+    const wordSet = new Set(list);
+    const tokens = text.toLowerCase().match(/\b[\p{L}']+\b/gu) || [];
+    if (tokens.length === 0) return false;
+    let hits = 0;
+    for (const tok of tokens) {
+        if (wordSet.has(tok)) {
+            hits++;
+            if (hits >= threshold) return true;
+        }
+    }
+    // For very short text, require proportionally fewer hits
+    if (tokens.length < 10 && hits >= 2) return true;
+    return false;
+}
+
+/**
  * Check if the text appears to be in the target language (or a variant of it).
- * Uses script detection first, then tinyld for Latin/Cyrillic text.
+ *
+ * Returns true (text IS in target → hide translate chip) when:
+ *   - The dominant Unicode script maps to the target language, or
+ *   - Enough very common target-language words are present (short-circuit), or
+ *   - Statistical detection identifies the target with reasonable confidence, or
+ *   - Detection is too ambiguous to be trusted (default to "don't nag the user").
+ *
+ * Returns false (text is NOT in target → show translate chip) only when we're
+ * confident the text is a different language.
  */
 async function _isTextInTargetLanguage(text, targetLangCode) {
-    // 1. Try script detection (instant, definitive for unique scripts)
+    // 1. Script detection (instant, definitive for non-Latin/Cyrillic scripts)
     const scriptLang = detectScript(text);
     if (scriptLang) return scriptLang === targetLangCode;
 
-    // 2. For Latin/Cyrillic — use full detection (async)
+    // 2. Clean markdown noise so detection sees prose, not code fences
+    const clean = _stripMarkdownForDetection(text);
+    if (clean.length < 20) return true; // too little signal — don't nag
+
+    // 3. Cheap common-word check — catches short/noisy text that trips tinyld
+    if (_containsEnoughCommonWords(clean, targetLangCode)) return true;
+
+    // 4. Statistical detection with confidence guardrails
     try {
-        const detected = await detectLanguage(text);
-        if (!detected) return false; // Can't tell — show translate pill
-        return detected === targetLangCode;
-    } catch {
+        const candidates = await detectLanguageAll(clean);
+        if (!candidates || candidates.length === 0) return true; // unclear — don't nag
+
+        const top = candidates[0];
+        if (top.lang === targetLangCode) return true;
+
+        // Weak top guess, or target is a close runner-up → assume target.
+        // tinyld tends to drift on short / mixed / markdown text.
+        if (top.accuracy < 0.5) return true;
+        const targetCandidate = candidates.find(c => c.lang === targetLangCode);
+        if (targetCandidate && top.accuracy - targetCandidate.accuracy < 0.2) return true;
+
         return false;
+    } catch {
+        return true; // detection failed — default to hiding the chip
     }
 }
 
+// Minimum word count for the "Summarize" action to be useful — short snippets
+// don't benefit from summarization.
+const SUMMARIZE_MIN_WORDS = 40;
+
+function countWords(text) {
+    return (text.trim().match(/\S+/g) || []).length;
+}
+
 const BUILTIN_ACTIONS = [
-    // Universal
-    { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [], mode: 'inform' },
+    // Universal — only shown when text is long enough to benefit from summarization
+    { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [], mode: 'inform', minWords: SUMMARIZE_MIN_WORDS },
     // Prose
-    { label: 'Fix grammar', icon: '✏️', prompt: 'Fix the grammar and spelling in the following text. Return only the corrected text:\n\n{text}', contentTypes: ['prose'], mode: 'replace' },
-    { label: 'Make shorter', icon: '✂️', prompt: 'Make the following text more concise while preserving the meaning. Return only the rewritten text:\n\n{text}', contentTypes: ['prose'], mode: 'replace' },
     { label: 'Translate', icon: '🌐', prompt: null, contentTypes: ['prose'], _dynamic: 'translate', mode: 'replace' },
     // Code
     { label: 'Explain', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
@@ -201,9 +285,13 @@ export async function getActionsForText(text, config) {
     const types = classifyText(text);
     const actions = [];
     const translateLang = config.translate_language || getOsLanguageName();
+    const wordCount = countWords(text);
 
     // Built-in actions: include if contentTypes is empty (universal) or matches
     for (const action of BUILTIN_ACTIONS) {
+        // Respect per-action minimum word count (e.g. Summarize needs enough content)
+        if (action.minWords && wordCount < action.minWords) continue;
+
         if (action.contentTypes.length === 0 ||
             action.contentTypes.some(t => types.includes(t))) {
             // Handle dynamic translate action — only show if text is in a different language
