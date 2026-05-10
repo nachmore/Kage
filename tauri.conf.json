@@ -4,7 +4,7 @@
   "identifier": "com.kage.app",
   "build": {
     "beforeDevCommand": "python ../../scripts/dev_server.py",
-    "beforeBuildCommand": "cargo build --release --bin kage-computer-control-mcp",
+    "beforeBuildCommand": "python ../../scripts/build_mcp.py",
     "devUrl": "http://localhost:1420",
     "frontendDist": "./ui"
   },

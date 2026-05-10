@@ -1,9 +1,17 @@
 # Debug Build + Test: gate every push to main and every PR to main on a
 # green build, clean lints, and a passing test suite (Rust + JS), then
-# publish the raw debug binaries as a short-lived workflow artifact.
+# publish a self-contained debug build as a short-lived workflow artifact.
 #
-# This is a *debug* build — no --release, no Tauri bundle, no installer.
-# Release/production builds live in a separate workflow (TBD).
+# This is a *debug* build — debug profile, assertions on, devtools enabled,
+# but the frontend is embedded (via `cargo tauri build --debug --no-bundle`)
+# so the exe runs standalone without a dev server. This is different from
+# `cargo build --bins`, which produces a debug exe that expects the dev
+# server at http://localhost:1420 (mode 1, the local edit loop).
+#
+# Modes at a glance:
+#   1. Dev:            `cargo tauri dev`                      — hot reload from Python server
+#   2. Debug-packaged: `cargo tauri build --debug --no-bundle` — standalone debug exe (this workflow)
+#   3. Production:     `cargo tauri build`                    — release + bundle (separate workflow, TBD)
 #
 # Runs on Windows and macOS. Large swaths of the codebase are
 # `#[cfg(target_os = ...)]` gated (Windows: WinRT/COM/uiautomation;
@@ -11,8 +19,9 @@
 # platform-specific regressions. Linux is a deliberate omission — the
 # Linux impls are mostly stubs and nothing ships there.
 #
-# Hard gates: cargo fmt, cargo clippy, cargo build --bins, cargo test,
-# vitest. All four together take ~5–10 min per OS warm / ~15 min cold.
+# Hard gates: cargo fmt, cargo clippy, cargo tauri build --debug, cargo
+# test, vitest. All five together take ~6–12 min per OS warm / ~15–20
+# min cold.
 
 name: Debug Build + Test
 
@@ -41,7 +50,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -57,7 +66,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install Node.js (v24) with npm cache
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
           cache: "npm"
@@ -81,13 +90,25 @@ jobs:
 
       # ----- Build + test gates ---------------------------------------
 
-      # `cargo test` doesn't build the binaries (both have `test = false`
-      # in Cargo.toml), so an error in main.rs or bin/computer_control_mcp.rs
-      # that the lib doesn't surface would slip through. Build them
-      # explicitly first. On macOS this also triggers the build.rs
-      # swiftc compile of src-tauri/macos/calendar-helper.swift.
-      - name: cargo build --bins
-        run: cargo build --bins
+      - name: Install Tauri CLI
+        # Pinned to match the local dev env. Bump deliberately when
+        # tauri itself bumps, not automatically.
+        run: cargo install tauri-cli --version 2.10.0 --locked
+
+      # `cargo tauri build --debug --no-bundle` does what we want:
+      #   - runs tauri codegen so the frontend (./ui) is embedded in the exe
+      #   - builds in debug profile (fast, assertions on, devtools)
+      #   - skips the OS bundler (NSIS / .app — that's a release concern)
+      # The result at target/debug/kage[.exe] runs standalone — no dev
+      # server required — which is what makes the uploaded artifact
+      # actually useful.
+      #
+      # This also covers the `cargo build --bins` role; `cargo tauri
+      # build` invokes cargo under the hood and will fail loudly on
+      # compile errors in either bin. On macOS this also triggers the
+      # build.rs swiftc compile of src-tauri/macos/calendar-helper.swift.
+      - name: cargo tauri build --debug --no-bundle
+        run: cargo tauri build --debug --no-bundle
 
       - name: cargo test
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
@@ -100,16 +121,22 @@ jobs:
 
       # ----- Artifact upload ------------------------------------------
 
-      # Raw debug binaries. These won't run on their own — the Tauri
-      # frontend and resources are only bundled by `cargo tauri build` —
-      # but they're handy for sanity checks and bug repros. Short
-      # retention since these aren't shipping artifacts.
+      # Self-contained debug binary from `cargo tauri build --debug
+      # --no-bundle`. Frontend is embedded, so the exe runs without a
+      # dev server — useful for smoke-testing a branch, attaching to an
+      # issue, or letting someone try a change without checking out the
+      # repo. Short retention since these aren't shipping artifacts.
+      #
+      # Both kage and the kage-computer-control-mcp sidecar are built
+      # debug here: `beforeBuildCommand` in tauri.conf.json calls
+      # scripts/build_mcp.py, which reads TAURI_ENV_DEBUG to match the
+      # main build's profile.
       #
       # Binary names differ per OS: Windows has `.exe` suffixes, macOS
       # ships the Swift calendar helper alongside the two Rust binaries.
       - name: Upload debug binaries (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kage-debug-windows-${{ github.sha }}
           path: |
@@ -120,7 +147,7 @@ jobs:
 
       - name: Upload debug binaries (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kage-debug-macos-${{ github.sha }}
           path: |
