@@ -10,11 +10,23 @@ class HotkeySettingsModule extends SettingsModule {
         this._voicePicker = null;
     }
     render() {
+        // Clipboard history is implemented on Windows only today (macOS returns
+        // an empty list by design — see src/os/macos/clipboard_history.rs). Hide
+        // the hotkey binding and quick-reference row on non-Windows so users
+        // don't set a shortcut that would never do anything.
+        const showClipboardHistory = window.kagePlatform?.isWindows?.() ?? false;
+        const clipboardHotkeyRow = showClipboardHistory
+            ? this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
+            : '';
+        const clipboardShortcutRef = showClipboardHistory
+            ? this.shortcutRow('>cb', 'Clipboard history', 'Launcher')
+            : '';
+
         return '<div class="settings-section" id="' + this.id + '-section">'
             + '<h2 class="settings-section-header">' + this.icon + ' ' + this.title + '</h2>'
             + this.createControlRow('Global Hotkey', 'The shortcut to summon Kage from anywhere.', '<div id="settingsHotkeyPicker"></div>')
             + this.createControlRow('Voice Input Hotkey', 'summon Kage with the microphone already listening. Leave empty to disable.', '<div id="settingsVoiceHotkeyPicker"></div>')
-            + this.createControlRow('Clipboard History Hotkey', 'Open clipboard history directly. Leave empty to disable.', '<div id="settingsClipboardHotkeyPicker"></div>')
+            + clipboardHotkeyRow
             + this.createControlRow('Inline Assist Hotkey', 'Trigger inline AI assist on selected text. Leave empty to disable.', '<div id="settingsInlineAssistHotkeyPicker"></div>')
             + '<div class="setting-section-label">Keyboard Shortcuts</div>'
             + '<div class="shortcuts-reference">'
@@ -28,7 +40,7 @@ class HotkeySettingsModule extends SettingsModule {
             + this.shortcutRow(window.kagePlatform.platformKeyLabel('Escape'), 'Stop generating / Hide window', 'Launcher')
             + this.shortcutRow(window.kagePlatform.platformKeyLabel('Enter'), 'Send message', 'All')
             + this.shortcutRow(window.kagePlatform.platformKeyLabel('Shift+Enter'), 'New line', 'All')
-            + this.shortcutRow('>cb', 'Clipboard history', 'Launcher')
+            + clipboardShortcutRef
             + '</div></div>';
     }
     async initialize() {

@@ -21,6 +21,31 @@
         return _isMacCached;
     }
 
+    // Windows / Linux detection mirrors the Rust-side `cfg(target_os = ...)`
+    // gating so the UI can hide OS-specific settings panes. Derived from
+    // navigator.platform (and userAgentData on Chromium) — good enough for
+    // WebView2/WKWebView, which is what Tauri ships. Linux is the default
+    // fallthrough so unrecognised platforms behave like Linux (the most
+    // feature-limited target today).
+    let _isWindowsCached = null;
+    function isWindows() {
+        if (_isWindowsCached === null) {
+            const plat = (typeof navigator !== 'undefined' && typeof navigator.platform === 'string')
+                ? navigator.platform
+                : '';
+            _isWindowsCached = plat.startsWith('Win');
+        }
+        return _isWindowsCached;
+    }
+
+    let _isLinuxCached = null;
+    function isLinux() {
+        if (_isLinuxCached === null) {
+            _isLinuxCached = !isMac() && !isWindows();
+        }
+        return _isLinuxCached;
+    }
+
     function cmdOrCtrlPressed(e) {
         // Mac: both Ctrl and ⌘ work (⌘ is idiomatic; label uses ⌘ via
         // platformKeyLabel). Windows: Ctrl only — Win+key combos are OS-
@@ -62,5 +87,5 @@
             .join('');
     }
 
-    window.kagePlatform = { isMac: isMac, cmdOrCtrlPressed: cmdOrCtrlPressed, platformKeyLabel: platformKeyLabel };
+    window.kagePlatform = { isMac: isMac, isWindows: isWindows, isLinux: isLinux, cmdOrCtrlPressed: cmdOrCtrlPressed, platformKeyLabel: platformKeyLabel };
 })();

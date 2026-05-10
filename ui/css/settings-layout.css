@@ -93,7 +93,13 @@ body {
     padding: 30px 40px 60px 40px;
 }
 .settings-section { margin-bottom: 40px; }
-.settings-section.hidden { display: none; }
+
+/* Generic hide utility — used by JS to toggle visibility of sidebar items,
+   sections, and inline rows based on platform or feature gates. A more
+   specific selector like `.settings-section.hidden` used to carry the
+   rule, but missing a generic rule meant `.sidebar-item.hidden` had no
+   effect; the generic selector covers every case. */
+.hidden { display: none; }
 .settings-section-header {
     font-size: 20px;
     font-weight: 300;

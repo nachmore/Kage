@@ -31,6 +31,31 @@ export function isMac() {
 }
 
 /**
+ * True if the browser is running on Windows. Mirrors the Rust-side
+ * `cfg(target_os = "windows")` gating so the UI can hide OS-specific
+ * panes and features.
+ */
+let _isWindowsCached = null;
+export function isWindows() {
+    if (_isWindowsCached === null) {
+        const plat = (typeof navigator !== 'undefined' && typeof navigator.platform === 'string')
+            ? navigator.platform
+            : '';
+        _isWindowsCached = plat.startsWith('Win');
+    }
+    return _isWindowsCached;
+}
+
+/** True if neither macOS nor Windows — i.e. Linux (and any other Unix fallthrough). */
+let _isLinuxCached = null;
+export function isLinux() {
+    if (_isLinuxCached === null) {
+        _isLinuxCached = !isMac() && !isWindows();
+    }
+    return _isLinuxCached;
+}
+
+/**
  * Uniform "command modifier" check for keyboard events.
  *
  * Mac: both Ctrl and ⌘ work (⌘ is idiomatic; labels rendered via

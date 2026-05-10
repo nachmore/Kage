@@ -61,6 +61,53 @@ describe('isMac (both impls)', () => {
     });
 });
 
+describe('isWindows / isLinux (both impls)', () => {
+    // isWindows and isLinux gate OS-specific settings UI (mac permissions,
+    // Windows clipboard history, etc.). They must be mutually exclusive and
+    // together with isMac cover every platform the WebView might report.
+
+    it('classifies Windows correctly', async () => {
+        setPlatform('Win32');
+        loadPlatformGlobal();
+        const shortcuts = await importShortcutsFresh();
+        expect(window.kagePlatform.isWindows()).toBe(true);
+        expect(window.kagePlatform.isMac()).toBe(false);
+        expect(window.kagePlatform.isLinux()).toBe(false);
+        expect(shortcuts.isWindows()).toBe(true);
+        expect(shortcuts.isLinux()).toBe(false);
+    });
+
+    it('classifies macOS correctly', async () => {
+        setPlatform('MacIntel');
+        loadPlatformGlobal();
+        const shortcuts = await importShortcutsFresh();
+        expect(window.kagePlatform.isWindows()).toBe(false);
+        expect(window.kagePlatform.isMac()).toBe(true);
+        expect(window.kagePlatform.isLinux()).toBe(false);
+        expect(shortcuts.isWindows()).toBe(false);
+        expect(shortcuts.isLinux()).toBe(false);
+    });
+
+    it('classifies Linux as the fallthrough', async () => {
+        setPlatform('Linux x86_64');
+        loadPlatformGlobal();
+        const shortcuts = await importShortcutsFresh();
+        expect(window.kagePlatform.isWindows()).toBe(false);
+        expect(window.kagePlatform.isMac()).toBe(false);
+        expect(window.kagePlatform.isLinux()).toBe(true);
+        expect(shortcuts.isWindows()).toBe(false);
+        expect(shortcuts.isLinux()).toBe(true);
+    });
+
+    it('treats unknown platforms as Linux (most conservative)', async () => {
+        setPlatform('FreeBSD');
+        loadPlatformGlobal();
+        const shortcuts = await importShortcutsFresh();
+        expect(window.kagePlatform.isLinux()).toBe(true);
+        expect(shortcuts.isLinux()).toBe(true);
+    });
+});
+
 describe('cmdOrCtrlPressed (both impls)', () => {
     it('accepts ctrlKey on Windows', async () => {
         setPlatform('Win32');
