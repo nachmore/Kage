@@ -105,8 +105,7 @@ fn register_native(elem: ax::AXUIElementRef) -> String {
     let handle = elem as usize as u64;
     let id = tree::register_element(handle);
     NATIVE_REGISTRY.with(|r| {
-        r.borrow_mut()
-            .insert(id.clone(), AxElem::from_ref(elem));
+        r.borrow_mut().insert(id.clone(), AxElem::from_ref(elem));
     });
     id
 }
@@ -397,10 +396,7 @@ fn normalize_role(ax_role: &str, _subrole: &str) -> String {
         "AXCell" => "dataitem".to_string(),
         "AXColumn" => "header".to_string(),
         "AXDisclosureTriangle" => "treeitem".to_string(),
-        _ => ax_role
-            .strip_prefix("AX")
-            .unwrap_or(ax_role)
-            .to_lowercase(),
+        _ => ax_role.strip_prefix("AX").unwrap_or(ax_role).to_lowercase(),
     }
 }
 
@@ -765,14 +761,8 @@ pub(super) fn get_ui_tree_inner(
     clear_native();
     let win = find_window(window_title)?;
     let mut st = WalkState::new(TREE_WALK_TIMEOUT_SECS);
-    let mut elem = build_element(
-        win.as_ref(),
-        0,
-        max_depth,
-        include_invisible,
-        &mut st,
-    )
-    .ok_or("Failed to build UI tree")?;
+    let mut elem = build_element(win.as_ref(), 0, max_depth, include_invisible, &mut st)
+        .ok_or("Failed to build UI tree")?;
 
     let mut meta = Vec::new();
     if st.truncated {
@@ -988,21 +978,14 @@ fn perform_action(elem: ax::AXUIElementRef, action: &str) -> Result<String, Stri
 /// Set an attribute value on an element. Generic over the CFType — the
 /// caller builds the CFString/CFBoolean/CFNumber wrapper. Returns the
 /// same human-readable message shape as `perform_action`.
-fn set_attribute(
-    elem: ax::AXUIElementRef,
-    attr: &str,
-    value: CFTypeRef,
-) -> Result<String, String> {
+fn set_attribute(elem: ax::AXUIElementRef, attr: &str, value: CFTypeRef) -> Result<String, String> {
     let cf_attr = CFString::new(attr);
-    let err = unsafe { ax::AXUIElementSetAttributeValue(elem, cf_attr.as_concrete_TypeRef(), value) };
+    let err =
+        unsafe { ax::AXUIElementSetAttributeValue(elem, cf_attr.as_concrete_TypeRef(), value) };
     match err {
         ax::kAXErrorSuccess => Ok(format!("Set {}", attr)),
-        ax::kAXErrorAttributeUnsupported => {
-            Err(format!("Element does not expose '{}'", attr))
-        }
-        ax::kAXErrorIllegalArgument => {
-            Err(format!("Illegal argument for '{}'", attr))
-        }
+        ax::kAXErrorAttributeUnsupported => Err(format!("Element does not expose '{}'", attr)),
+        ax::kAXErrorIllegalArgument => Err(format!("Illegal argument for '{}'", attr)),
         ax::kAXErrorCannotComplete => Err(format!(
             "Setting '{}' could not complete (element may be read-only or busy)",
             attr
@@ -1231,7 +1214,10 @@ pub fn find_elements_impl(p: &FindElementsParams) -> Result<Vec<UIElement>, Stri
 pub fn click_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::ClickElement { element_id: id, reply },
+        |reply| Job::ClickElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1239,7 +1225,10 @@ pub fn click_element_impl(id: &str) -> Result<String, String> {
 pub fn focus_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::FocusElement { element_id: id, reply },
+        |reply| Job::FocusElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1259,7 +1248,10 @@ pub fn set_element_value_impl(id: &str, val: &str) -> Result<String, String> {
 pub fn toggle_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::ToggleElement { element_id: id, reply },
+        |reply| Job::ToggleElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1267,7 +1259,10 @@ pub fn toggle_element_impl(id: &str) -> Result<String, String> {
 pub fn select_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::SelectElement { element_id: id, reply },
+        |reply| Job::SelectElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1275,7 +1270,10 @@ pub fn select_element_impl(id: &str) -> Result<String, String> {
 pub fn expand_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::ExpandElement { element_id: id, reply },
+        |reply| Job::ExpandElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1283,7 +1281,10 @@ pub fn expand_element_impl(id: &str) -> Result<String, String> {
 pub fn collapse_element_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::CollapseElement { element_id: id, reply },
+        |reply| Job::CollapseElement {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
@@ -1304,11 +1305,13 @@ pub fn scroll_element_impl(id: &str, dir: &str, amt: f64) -> Result<String, Stri
 pub fn get_element_text_impl(id: &str) -> Result<String, String> {
     let id = id.to_string();
     ax_worker::submit(
-        |reply| Job::GetElementText { element_id: id, reply },
+        |reply| Job::GetElementText {
+            element_id: id,
+            reply,
+        },
         || Err("AX worker not running".into()),
     )
 }
-
 
 #[cfg(test)]
 mod tests {

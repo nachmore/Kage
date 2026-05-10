@@ -190,7 +190,10 @@ fn build_macos_calendar_helper() {
         match status {
             Ok(s) if s.success() => {
                 println!("cargo:rustc-env=KAGE_CALENDAR_HELPER={}", out_bin.display());
-                println!("cargo:warning=built calendar-helper at {}", out_bin.display());
+                println!(
+                    "cargo:warning=built calendar-helper at {}",
+                    out_bin.display()
+                );
             }
             Ok(s) => {
                 println!(
@@ -201,9 +204,7 @@ fn build_macos_calendar_helper() {
                 return;
             }
             Err(e) => {
-                println!(
-                    "cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built"
-                );
+                println!("cargo:warning=failed to spawn swiftc ({e}) — calendar-helper not built");
                 return;
             }
         }

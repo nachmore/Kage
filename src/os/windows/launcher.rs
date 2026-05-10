@@ -463,8 +463,7 @@ pub fn shell_launch_impl(name: &str) -> Result<()> {
 
     // Detect if this is a file path (contains backslash, or drive letter
     // like C:/). Paths should not be split on the first space.
-    let is_path =
-        name.contains('\\') || (name.len() >= 3 && name.as_bytes().get(1) == Some(&b':'));
+    let is_path = name.contains('\\') || (name.len() >= 3 && name.as_bytes().get(1) == Some(&b':'));
     let (file_str, params_str) = if name.contains(' ') && !is_path {
         let mut parts = name.splitn(2, ' ');
         let prog = parts.next().unwrap_or(name);

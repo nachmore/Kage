@@ -188,11 +188,7 @@ pub fn shell_launch_impl(name: &str) -> Result<()> {
     };
 
     if !status.success() {
-        anyhow::bail!(
-            "Failed to launch '{}': `open` exited with {}",
-            name,
-            status
-        );
+        anyhow::bail!("Failed to launch '{}': `open` exited with {}", name, status);
     }
     Ok(())
 }
@@ -238,9 +234,9 @@ mod tests {
         assert!(!looks_like_uri("Safari"));
         assert!(!looks_like_uri("Google Chrome"));
         assert!(!looks_like_uri("/Applications/Safari.app"));
-        assert!(!looks_like_uri("123abc:foo"));   // must start with ALPHA
-        assert!(!looks_like_uri(":nope"));         // empty scheme
-        assert!(!looks_like_uri(""));              // empty
+        assert!(!looks_like_uri("123abc:foo")); // must start with ALPHA
+        assert!(!looks_like_uri(":nope")); // empty scheme
+        assert!(!looks_like_uri("")); // empty
         assert!(!looks_like_uri("no colon here"));
     }
 }
