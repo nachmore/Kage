@@ -20,12 +20,8 @@ const handler = createPermissionHandler(invoke, appWindow, {
         // Pause mascot animations while modal is open
         if (window._kageMascot) window._kageMascot.pause();
 
-        // Cancel any in-flight WindowManager animation/debounce that could fight our resize
-        const wm = window._floatingApp?.windowManager;
-        if (wm) {
-            if (wm.resizeTimeout) { clearTimeout(wm.resizeTimeout); wm.resizeTimeout = null; }
-            if (wm._animFrame) { cancelAnimationFrame(wm._animFrame); wm._animFrame = null; }
-        }
+        // Pause auto-resize while the modal sizes itself
+        window._floatingApp?.windowManager?.suspendAutoResize();
 
         try {
             await appWindow.setFocus();
@@ -68,9 +64,7 @@ const handler = createPermissionHandler(invoke, appWindow, {
 
         if (hasQueuedNext) return; // Next modal will handle sizing
         try {
-            if (window._floatingApp?.windowManager) {
-                await window._floatingApp.windowManager.resizeWindow();
-            }
+            window._floatingApp?.windowManager?.resumeAutoResize();
         } catch (e) { /* ignore */ }
     },
 

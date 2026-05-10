@@ -23,6 +23,27 @@ import { ExtensionToolController } from '../shared/extension-tool-controller.js'
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 
+/**
+ * Measure the natural (no-overflow) content height of a textarea without
+ * disturbing its current rendered height. Setting `height='auto'` on the
+ * live element collapses it to single-line for one paint, which the user
+ * sees as a jerk — so we mirror the value+styles into a hidden clone.
+ */
+function measureTextareaContentHeight(textarea) {
+    const clone = textarea.cloneNode(false);
+    clone.value = textarea.value;
+    clone.style.position = 'absolute';
+    clone.style.visibility = 'hidden';
+    clone.style.height = 'auto';
+    clone.style.maxHeight = 'none';
+    clone.style.width = textarea.clientWidth + 'px';
+    clone.style.overflow = 'hidden';
+    textarea.parentNode.insertBefore(clone, textarea);
+    const h = clone.scrollHeight;
+    clone.remove();
+    return h;
+}
+
 export class FloatingApp {
     constructor(invoke, appWindow, listen) {
         this.invoke = invoke;
@@ -316,6 +337,7 @@ export class FloatingApp {
                 }
             };
             this.windowManager.setupScaleChangeListener();
+            this.windowManager.setupObserver();
 
             const inputContainer = this.elements.input?.closest('.input-container');
             setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
@@ -1433,9 +1455,16 @@ export class FloatingApp {
     async handleInputChange(event) {
         const rawQuery = this.elements.input.value;
         const query = rawQuery.trim();
-        
-        this.elements.input.style.height = 'auto';
-        this.elements.input.style.height = Math.min(this.elements.input.scrollHeight, 100) + 'px';
+
+        // Resize the textarea and OS window in lockstep — see animateInputResize.
+        // We measure scrollHeight via a clone so the live textarea never has
+        // a 1-frame "single line with overflow" state.
+        const input = this.elements.input;
+        const oldH = input.offsetHeight;
+        const newH = Math.min(measureTextareaContentHeight(input), 100);
+        if (newH !== oldH) {
+            this.windowManager.animateInputResize(input, oldH, newH);
+        }
         
         // Reset tab cycle state when user types
         this._tabCycleActive = false;

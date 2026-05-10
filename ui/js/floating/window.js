@@ -1,66 +1,195 @@
-// Window management and resizing
+// Window management and resizing.
+//
+// Sizing model:
+//   1. CSS computes the natural layout. The OS window's required height is
+//      the sum of the .speech-bubble's flow children (loading dots, content
+//      area, extension bars, input, toolbar, suggestions, …).
+//   2. A ResizeObserver watches every flow child (and any added later via
+//      MutationObserver). Whenever any of them changes size, we recompute
+//      and animate the OS window to the new natural height.
+//   3. Animation reads the *actual* current OS window height each time it
+//      starts, so it never animates from a stale cached value. This is what
+//      caused the visible "jump up, then back down" on every chunk render
+//      after a manual drag / new-message reset / DPI change reset the OS
+//      window without updating the cached _currentHeight.
+//
+// The public API (resizeWindow, resetHeightForNewMessage, userSetHeight) is
+// preserved so the many explicit call sites in app.js / suggestions / timers
+// keep working as nudges — they coalesce with observer-driven reflows.
 
-const DEFAULT_HEIGHT = 76;
-const MAX_HEIGHT_PERCENT = 0.65;
-const BODY_PADDING = 16; // 8px padding on each side
+const DEFAULT_HEIGHT = 76;        // logical px — collapsed launcher
+const MAX_HEIGHT_PERCENT = 0.65;  // % of monitor height, auto-grow ceiling
+const BODY_PADDING = 16;          // 8px top + 8px bottom in floating-base.css
 
 export class WindowManager {
     constructor(invoke) {
         this.invoke = invoke;
-        this.userSetHeight = null;
-        this.autoGrowHeight = null;
-        this.resizeTimeout = null;
-        this.isResizing = false; // true while the user is dragging the resize handle
-        this._currentHeight = 0;  // track current window height for animation
+        this.userSetHeight = null;   // physical px — set by manual resize handle
+        this.isResizing = false;     // user dragging the corner handle
+        this.isDragging = false;     // user dragging the ghost
+        this._animSeq = 0;
         this._animFrame = null;
+        this._scheduled = false;
+        this._suspended = false;     // pause auto-resize (e.g. permission modal)
+        this._lastTarget = 0;        // last target we actually requested
+        this._observer = null;
+        this._mutationObserver = null;
     }
 
     /**
-     * Smoothly animate the window height to a target value.
-     * Snaps instantly for small changes; lerps over ~120ms for larger ones.
+     * Sum the natural height of the bubble's in-flow children.
+     *
+     * A naive `child.scrollHeight` works for flex-grow:0 elements but breaks
+     * for `flex: 1; overflow-y: auto` elements like `.content-area`: when the
+     * bubble is taller than the content, the element gets stretched, and
+     * `scrollHeight` returns max(content, clientHeight) — i.e. the stretched
+     * height. Using that as the target creates a runaway loop:
+     *   type → input grows → window grows → content-area stretches further
+     *   → scrollHeight grows → window grows → ...
+     * For flex-stretching elements we recurse into the children + padding,
+     * floored by the element's own min-height.
      */
-    async _animateResize(targetHeight) {
-        const target = Math.round(targetHeight);
+    _measureNaturalHeight() {
+        const bubble = document.querySelector('.speech-bubble');
+        if (!bubble) return DEFAULT_HEIGHT;
+        return this._measureChildSum(bubble) + BODY_PADDING;
+    }
 
-        // Cancel any in-progress animation
+    _measureChildSum(parent) {
+        let sum = 0;
+        for (const child of parent.children) {
+            sum += this._measureFlow(child);
+        }
+        return sum;
+    }
+
+    _measureFlow(el) {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none') return 0;
+        if (cs.position === 'absolute' || cs.position === 'fixed') return 0;
+
+        const mt = parseFloat(cs.marginTop) || 0;
+        const mb = parseFloat(cs.marginBottom) || 0;
+
+        const flexGrow = parseFloat(cs.flexGrow) || 0;
+        if (flexGrow > 0) {
+            const pt = parseFloat(cs.paddingTop) || 0;
+            const pb = parseFloat(cs.paddingBottom) || 0;
+            const minH = parseFloat(cs.minHeight) || 0;
+            const inner = this._measureChildSum(el);
+            return mt + mb + Math.max(minH, pt + pb + inner);
+        }
+
+        return el.scrollHeight + mt + mb;
+    }
+
+    async getMaxHeight() {
+        try {
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+            const monitor = await appWindow.currentMonitor();
+            if (monitor && monitor.size) {
+                return Math.floor(monitor.size.height * MAX_HEIGHT_PERCENT);
+            }
+        } catch {}
+        const scale = window.devicePixelRatio || 1;
+        return Math.floor(window.screen.height * scale * MAX_HEIGHT_PERCENT);
+    }
+
+    /** Compute the target physical height and animate. Single source of truth. */
+    async _applyNaturalHeight() {
+        if (this.isResizing || this._suspended) return;
+
+        // Don't auto-resize while the permission modal is open — it manages its own size
+        const permModal = document.getElementById('permissionModal');
+        if (permModal && permModal.style.display !== 'none') return;
+
+        const scale = window.devicePixelRatio || 1;
+        const naturalLogical = this._measureNaturalHeight();
+        const naturalPhys = Math.round(naturalLogical * scale);
+        const minPhys = Math.round(DEFAULT_HEIGHT * scale);
+        const maxPhys = await this.getMaxHeight();
+
+        let target;
+        if (this.userSetHeight) {
+            // Honor user's manual size, but grow past it if content needs more.
+            target = Math.max(this.userSetHeight, naturalPhys);
+        } else {
+            target = Math.max(minPhys, Math.min(maxPhys, naturalPhys));
+        }
+
+        // If suggestions list would push us past the cap, let it scroll.
+        const appSuggestions = document.getElementById('appSuggestions');
+        if (appSuggestions && appSuggestions.classList.contains('visible') && naturalPhys > maxPhys && !this.userSetHeight) {
+            const overflowLogical = naturalLogical - (maxPhys / scale);
+            const currentH = appSuggestions.offsetHeight;
+            const cappedH = Math.floor(currentH - overflowLogical);
+            if (cappedH > 40) appSuggestions.style.maxHeight = cappedH + 'px';
+        } else if (appSuggestions) {
+            appSuggestions.style.maxHeight = '';
+        }
+
+        if (Math.abs(target - this._lastTarget) < 2) return;
+        this._lastTarget = target;
+
+        await this._animateTo(target);
+        await this._ensureOnScreen();
+    }
+
+    /**
+     * Animate the OS window height to `target`. Reads the *actual* current
+     * window height each invocation — never relies on a cached value, which
+     * was the source of the visual glitch after manual resize / DPI / reset
+     * paths bypassed the cache.
+     *
+     * Growing always snaps: while the content-area is `flex: 1`, animating
+     * the OS window up over time leaves a window of frames where the input
+     * has already grown but the OS hasn't, so the content-area is squeezed
+     * and overflows — visible as a "jump up, scrollbar flash, jump back"
+     * during typing. Snapping eliminates that.
+     *
+     * Shrinking can animate freely: content already fits, so there's no
+     * squeeze. We use it for the response → collapsed transition.
+     *
+     *   - diff < 4 px: skip
+     *   - target > from: snap (avoid squeeze)
+     *   - target < from: ease-out cubic over 80–220 ms scaled by magnitude
+     */
+    async _animateTo(target) {
         if (this._animFrame) {
             cancelAnimationFrame(this._animFrame);
             this._animFrame = null;
         }
 
-        const current = this._currentHeight || target;
-        const diff = Math.abs(target - current);
+        let from = target;
+        try {
+            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+            const size = await appWindow.innerSize();
+            from = size.height;
+        } catch {}
 
-        // Snap instantly for small changes or first resize
-        if (diff < 20 || current === 0) {
-            this._currentHeight = target;
-            await this.invoke('resize_floating_window', { height: target });
+        const diff = Math.abs(target - from);
+        if (diff < 4) return;
+
+        if (target >= from) {
+            try { await this.invoke('resize_floating_window', { height: target }); } catch {}
             return;
         }
 
-        // Animate over ~120ms using requestAnimationFrame
-        const duration = 120;
+        const duration = Math.min(220, 80 + diff * 0.25);
         const start = performance.now();
-        const from = current;
+        const me = ++this._animSeq;
 
         return new Promise(resolve => {
             const step = async (now) => {
-                const elapsed = now - start;
-                const t = Math.min(elapsed / duration, 1);
-                // Ease-out cubic for a snappy feel
+                if (me !== this._animSeq) { resolve(); return; }
+                const t = Math.min((now - start) / duration, 1);
                 const eased = 1 - Math.pow(1 - t, 3);
                 const h = Math.round(from + (target - from) * eased);
-
-                this._currentHeight = h;
-                try {
-                    await this.invoke('resize_floating_window', { height: h });
-                } catch {}
-
-                if (t < 1) {
+                try { await this.invoke('resize_floating_window', { height: h }); } catch {}
+                if (t < 1 && me === this._animSeq) {
                     this._animFrame = requestAnimationFrame(step);
                 } else {
                     this._animFrame = null;
-                    this._currentHeight = target;
                     resolve();
                 }
             };
@@ -69,179 +198,180 @@ export class WindowManager {
     }
 
     /**
-     * Get the max height dynamically based on the current monitor.
-     * Uses the Tauri window API to get the current monitor's size.
+     * Animate textarea height and OS window size in lockstep over 80ms.
+     * Used by the input handler when a line wraps/unwraps.
+     *
+     * Why lockstep, not snap+IPC: snapping the textarea height instantly
+     * while the OS window catches up async makes the flex `.content-area`
+     * absorb the delta for one paint — every element between content-area
+     * and the textarea bounces (up if growing, down if shrinking) and then
+     * returns. With both animations on the same linear curve, the math
+     * `content-area = bubble - input - others` is invariant: content-area
+     * stays constant, nothing bounces.
+     *
+     * Observer-driven resizes are gated by `_inputAnimating` so they don't
+     * fight the in-flight animation.
      */
-    async getMaxHeight() {
-        try {
-            const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
-            const monitor = await appWindow.currentMonitor();
-            if (monitor && monitor.size) {
-                // Use logical height if available, fall back to physical
-                const scaleFactor = monitor.scaleFactor || 1;
-                const logicalHeight = monitor.size.height / scaleFactor;
-                return Math.floor(logicalHeight * MAX_HEIGHT_PERCENT);
-            }
-        } catch (e) {
-            // fallback
+    async animateInputResize(input, fromInput, toInput) {
+        const delta = toInput - fromInput;
+        if (Math.abs(delta) < 1) {
+            input.style.height = toInput + 'px';
+            return;
         }
-        return Math.floor(window.screen.height * MAX_HEIGHT_PERCENT);
+
+        if (this._animFrame) {
+            cancelAnimationFrame(this._animFrame);
+            this._animFrame = null;
+        }
+        const me = ++this._animSeq;
+        this._inputAnimating = true;
+
+        // Lock content-area + suggestions at their current height so flex
+        // redistribution can't squeeze them when input grows. Without this,
+        // every input wrap leaves a 1-frame gap where the OS window IPC has
+        // not landed but the textarea has grown — content-area absorbs the
+        // delta, its content overflows, scrollbar flashes, response shifts.
+        // With the lock, bubble's natural height = locked + input + others,
+        // so it can only fit by growing the OS window — which we do in
+        // lockstep below.
+        const contentArea = document.getElementById('contentArea');
+        const suggestions = document.getElementById('appSuggestions');
+        const lockedItems = [];
+        const tryLock = (el) => {
+            if (!el) return;
+            const cs = getComputedStyle(el);
+            if (cs.display === 'none') return;
+            lockedItems.push({
+                el,
+                flex: el.style.flex || '',
+                height: el.style.height || '',
+                overflowY: el.style.overflowY || '',
+            });
+            el.style.flex = 'none';
+            el.style.height = el.offsetHeight + 'px';
+            el.style.overflowY = 'hidden';
+        };
+        tryLock(contentArea);
+        tryLock(suggestions);
+
+        // The textarea's own scrollbar flashes during the animation: its
+        // content reflows to the wrapped layout instantly, but we're
+        // interpolating its `height` over 80ms — so for ~half the animation
+        // it's shorter than its content. Mask it for the duration.
+        const inputPrevOverflowY = input.style.overflowY || '';
+        input.style.overflowY = 'hidden';
+
+        const scale = window.devicePixelRatio || 1;
+        const fromOS = Math.round(window.innerHeight * scale);
+        const toOS = fromOS + Math.round(delta * scale);
+
+        const duration = 80;
+        const start = performance.now();
+
+        const cleanup = () => {
+            this._lastTarget = toOS;
+            this._inputAnimating = false;
+            for (const item of lockedItems) {
+                item.el.style.flex = item.flex;
+                item.el.style.height = item.height;
+                item.el.style.overflowY = item.overflowY;
+            }
+            input.style.overflowY = inputPrevOverflowY;
+        };
+
+        return new Promise(resolve => {
+            const step = (now) => {
+                if (me !== this._animSeq) { cleanup(); resolve(); return; }
+                const t = Math.min((now - start) / duration, 1);
+                input.style.height = (fromInput + delta * t) + 'px';
+                const osH = Math.round(fromOS + (toOS - fromOS) * t);
+                this.invoke('resize_floating_window', { height: osH }).catch(() => {});
+                if (t < 1 && me === this._animSeq) {
+                    this._animFrame = requestAnimationFrame(step);
+                } else {
+                    this._animFrame = null;
+                    cleanup();
+                    resolve();
+                }
+            };
+            this._animFrame = requestAnimationFrame(step);
+        });
     }
 
-    async resizeWindow() {
-        // Don't auto-resize while the user is manually dragging the resize handle
-        if (this.isResizing) return;
+    /**
+     * Public nudge — tells the manager "DOM may have changed, recompute".
+     * The ResizeObserver already covers most cases, but legacy call sites
+     * still call this and it's free to honor them: rAF-coalesced, so 10
+     * callers in one frame still produce one resize.
+     */
+    resizeWindow() {
+        if (this._scheduled) return;
+        if (this._inputAnimating) return; // animateInputResize is the source of truth
+        this._scheduled = true;
+        requestAnimationFrame(() => {
+            this._scheduled = false;
+            if (this._inputAnimating) return;
+            this._applyNaturalHeight().catch(e => console.warn('[WindowManager] resize:', e));
+        });
+    }
 
-        // Don't auto-resize while the permission modal is open — it manages its own size
+    /** Forget the cached target so the next observer fire re-animates from the OS height. */
+    async resetHeightForNewMessage() {
         const permModal = document.getElementById('permissionModal');
         if (permModal && permModal.style.display !== 'none') return;
+        this._lastTarget = 0;
+        this.resizeWindow();
+    }
 
-        if (this.resizeTimeout) {
-            clearTimeout(this.resizeTimeout);
+    /** Suspend automatic resizing — used by the permission modal which sizes itself. */
+    suspendAutoResize() {
+        this._suspended = true;
+        if (this._animFrame) {
+            cancelAnimationFrame(this._animFrame);
+            this._animFrame = null;
         }
-        
-        this.resizeTimeout = setTimeout(async () => {
-            try {
-                // Re-check permission modal — it may have opened during the debounce delay
-                const permModal2 = document.getElementById('permissionModal');
-                if (permModal2 && permModal2.style.display !== 'none') return;
+        this._animSeq++; // invalidate any in-flight step()
+    }
 
-                // Force layout reflow before measuring
-                void document.body.offsetHeight;
+    resumeAutoResize() {
+        this._suspended = false;
+        this._lastTarget = 0; // force a recompute
+        this.resizeWindow();
+    }
 
-                const loadingDots = document.getElementById('loadingDots');
-                const contentArea = document.getElementById('contentArea');
-                const responseText = document.getElementById('responseText');
-                const appSuggestions = document.getElementById('appSuggestions');
-                const inputContainer = document.querySelector('.input-container');
-                
-                const loadingVisible = loadingDots?.classList.contains('visible');
-                const contentVisible = contentArea?.classList.contains('visible');
-                const suggestionsVisible = appSuggestions?.classList.contains('visible');
-                
-                const nothingExpanded = !loadingVisible && !contentVisible && !suggestionsVisible;
+    /**
+     * Watch every flow child of the bubble. Any size change triggers a
+     * coalesced resize. New children added later (extension bars, source
+     * chip rows, banners) are picked up by the MutationObserver.
+     */
+    setupObserver() {
+        const bubble = document.querySelector('.speech-bubble');
+        if (!bubble) {
+            console.warn('[WindowManager] .speech-bubble not found — observer not installed');
+            return;
+        }
 
-                // When nothing is expanded, snap back to the appropriate base height
-                if (nothingExpanded) {
-                    const scale = window.devicePixelRatio || 1;
-                    if (this.userSetHeight) {
-                        const inputHeight = inputContainer?.offsetHeight || 0;
-                        let extraHeight = 0;
-                        document.querySelectorAll('.extension-bar').forEach(bar => {
-                            if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
-                        });
-                        const toolbar = document.getElementById('floatingToolbar');
-                        if (toolbar && toolbar.style.display !== 'none') extraHeight += toolbar.offsetHeight;
-                        const minNeeded = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
-                        const height = Math.max(this.userSetHeight, minNeeded);
-                        await this._animateResize(Math.round(height));
-                    } else {
-                        const inputHeight = inputContainer?.offsetHeight || 0;
-                        let extraHeight = 0;
-                        document.querySelectorAll('.extension-bar').forEach(bar => {
-                            if (bar.style.display !== 'none') extraHeight += bar.offsetHeight;
-                        });
-                        const toolbar = document.getElementById('floatingToolbar');
-                        if (toolbar && toolbar.style.display !== 'none') extraHeight += toolbar.offsetHeight;
-                        const baseHeight = Math.round(DEFAULT_HEIGHT * scale);
-                        const neededHeight = Math.round((inputHeight + extraHeight + BODY_PADDING) * scale);
-                        const height = Math.max(baseHeight, neededHeight);
-                        this.autoGrowHeight = height > baseHeight ? height : null;
-                        await this._animateResize(height);
-                    }
-                    return;
+        const ro = new ResizeObserver(() => this.resizeWindow());
+        for (const child of bubble.children) {
+            const cs = getComputedStyle(child);
+            if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+            ro.observe(child);
+        }
+        this._observer = ro;
+
+        const mo = new MutationObserver((muts) => {
+            for (const m of muts) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeType !== 1) continue;
+                    const cs = getComputedStyle(node);
+                    if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+                    ro.observe(node);
                 }
-
-                // All DOM measurements are in CSS/logical pixels.
-                // resize_floating_window expects physical pixels, so we scale at the end.
-                const scale = window.devicePixelRatio || 1;
-
-                let contentHeight = 0;
-
-                if (loadingVisible) {
-                    contentHeight += loadingDots.offsetHeight;
-                }
-                
-                if (contentVisible) {
-                    // Measure response text + any tool/source pills inside content area
-                    contentHeight += responseText.scrollHeight + 16; // 16px content area padding top
-                    // Floating response action buttons (copy, speak)
-                    const floatingActions = document.getElementById('floatingResponseActions');
-                    if (floatingActions && floatingActions.style.display !== 'none') {
-                        contentHeight += floatingActions.offsetHeight;
-                    }
-                    const toolSourcesEl = document.getElementById('toolSources');
-                    if (toolSourcesEl && toolSourcesEl.offsetHeight > 0) {
-                        contentHeight += toolSourcesEl.offsetHeight + 8; // 8px gap
-                    }
-                    // Account for floating banner if visible
-                    const floatingBanner = document.getElementById('floatingBanner');
-                    if (floatingBanner && floatingBanner.style.display !== 'none') {
-                        contentHeight += floatingBanner.offsetHeight + 8; // 8px margin
-                    }
-                    contentHeight += 16; // content area padding bottom
-                }
-
-                // Compact source bubbles (shown before content area during streaming)
-                const compactSources = document.getElementById('toolSourcesCompact');
-                if (compactSources && compactSources.offsetHeight > 0) {
-                    contentHeight += compactSources.offsetHeight;
-                }
-
-                // Response quick action chips
-                const responseActions = document.getElementById('responseActionsContainer');
-                if (responseActions && responseActions.style.display !== 'none') {
-                    contentHeight += responseActions.offsetHeight;
-                }
-                
-                contentHeight += inputContainer?.offsetHeight || 0;
-
-                // Extension bars (persistent, above input container)
-                document.querySelectorAll('.extension-bar').forEach(bar => {
-                    if (bar.style.display !== 'none') contentHeight += bar.offsetHeight;
-                });
-
-                // Floating toolbar (attach file/image)
-                const toolbar = document.getElementById('floatingToolbar');
-                if (toolbar && toolbar.style.display !== 'none') {
-                    contentHeight += toolbar.offsetHeight;
-                }
-
-                if (suggestionsVisible) {
-                    contentHeight += appSuggestions.offsetHeight;
-                }
-
-                // Convert logical pixels to physical pixels
-                const physicalHeight = Math.round((contentHeight + BODY_PADDING) * scale);
-
-                const maxHeight = await this.getMaxHeight();
-                const autoMaxHeight = this.userSetHeight
-                    ? Math.max(maxHeight, this.userSetHeight)
-                    : maxHeight;
-                let height = Math.max(Math.round(DEFAULT_HEIGHT * scale), Math.min(autoMaxHeight, physicalHeight));
-
-                // If content exceeds max, cap the suggestions area so it scrolls
-                if (suggestionsVisible && physicalHeight > autoMaxHeight) {
-                    const nonSuggestionsHeight = contentHeight - appSuggestions.offsetHeight;
-                    const availableForSuggestions = (autoMaxHeight / scale) - nonSuggestionsHeight - BODY_PADDING;
-                    if (availableForSuggestions > 40) {
-                        appSuggestions.style.maxHeight = Math.floor(availableForSuggestions) + 'px';
-                    }
-                } else if (suggestionsVisible) {
-                    appSuggestions.style.maxHeight = '';
-                }
-                
-                if (physicalHeight > DEFAULT_HEIGHT * scale && !this.userSetHeight) {
-                    this.autoGrowHeight = height;
-                }
-                
-                await this._animateResize(height);
-                // After resizing, ensure the window is still fully on-screen
-                await this._ensureOnScreen();
-            } catch (error) {
-                console.error('Error resizing window:', error);
             }
-        }, 50);
+            this.resizeWindow();
+        });
+        mo.observe(bubble, { childList: true });
+        this._mutationObserver = mo;
     }
 
     /** Nudge the window position if it overflows the current monitor bounds. */
@@ -251,8 +381,6 @@ export class WindowManager {
             const pos = await appWindow.outerPosition();
             const size = await appWindow.outerSize();
 
-            // Find the monitor that contains the window center — more reliable than
-            // currentMonitor() which can return the wrong monitor on multi-display setups.
             const centerX = pos.x + Math.round(size.width / 2);
             const centerY = pos.y + Math.round(size.height / 2);
 
@@ -269,7 +397,6 @@ export class WindowManager {
                             break;
                         }
                     }
-                    // Fallback to currentMonitor if center isn't inside any monitor bounds
                     if (!best) best = await appWindow.currentMonitor();
                     if (best) {
                         monX = best.position.x;
@@ -290,14 +417,8 @@ export class WindowManager {
             let y = pos.y;
             let moved = false;
 
-            if (y + size.height > monY + monH) {
-                y = monY + monH - size.height;
-                moved = true;
-            }
-            if (x + size.width > monX + monW) {
-                x = monX + monW - size.width;
-                moved = true;
-            }
+            if (y + size.height > monY + monH) { y = monY + monH - size.height; moved = true; }
+            if (x + size.width > monX + monW) { x = monX + monW - size.width; moved = true; }
             if (x < monX) { x = monX; moved = true; }
             if (y < monY) { y = monY; moved = true; }
 
@@ -309,32 +430,8 @@ export class WindowManager {
         }
     }
 
-    async resetHeightForNewMessage() {
-        // Don't reset height while the permission modal is open
-        const permModal = document.getElementById('permissionModal');
-        if (permModal && permModal.style.display !== 'none') return;
-
-        try {
-            const scale = window.devicePixelRatio || 1;
-            let height;
-            
-            if (this.userSetHeight) {
-                height = this.userSetHeight;
-            } else if (this.autoGrowHeight) {
-                height = Math.round(DEFAULT_HEIGHT * scale);
-                this.autoGrowHeight = null;
-            } else {
-                height = Math.round(DEFAULT_HEIGHT * scale);
-            }
-            
-            await this.invoke('resize_floating_window', { height });
-        } catch (error) {
-            console.error('Error resetting height:', error);
-        }
-    }
-
     setupDragging(ghostContainer) {
-        const DRAG_THRESHOLD = 5; // pixels of movement before starting drag
+        const DRAG_THRESHOLD = 5;
         let startX = 0, startY = 0;
         let pendingDrag = false;
         let moveHandler = null;
@@ -344,7 +441,6 @@ export class WindowManager {
             startY = e.screenY;
             pendingDrag = true;
 
-            // Listen for mouse movement to detect drag vs click
             moveHandler = async (me) => {
                 if (!pendingDrag) return;
                 const dx = Math.abs(me.screenX - startX);
@@ -363,7 +459,6 @@ export class WindowManager {
             document.addEventListener('mousemove', moveHandler);
         });
 
-        // Double-click — fires when two clicks happen without significant movement
         ghostContainer.addEventListener('dblclick', (e) => {
             e.preventDefault();
             pendingDrag = false;
@@ -381,27 +476,17 @@ export class WindowManager {
     /** Re-layout when the display scale factor changes (e.g. undocking from a monitor). */
     setupScaleChangeListener() {
         const appWindow = window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow?.();
-        if (!appWindow) {
-            console.warn('[WindowManager] No appWindow — cannot listen for scale changes');
-            return;
-        }
-        console.log('[WindowManager] Listening for scale factor changes');
+        if (!appWindow) return;
 
         appWindow.onScaleChanged(async ({ payload }) => {
-            const { scaleFactor, size } = payload;
-            console.log(`[WindowManager] Scale changed: factor=${scaleFactor}, size=${size.width}x${size.height}`);
-
-            // Reset cached heights — they were in the old scale's physical pixels
+            const { scaleFactor } = payload;
+            console.log(`[WindowManager] Scale changed: factor=${scaleFactor}`);
             this.userSetHeight = null;
-            this.autoGrowHeight = null;
-
-            // Recalculate the window size at the new scale
+            this._lastTarget = 0;
             try {
                 const newWidth = Math.round(570 * scaleFactor);
                 const newHeight = Math.round(DEFAULT_HEIGHT * scaleFactor);
-                console.log(`[WindowManager] Resizing to ${newWidth}x${newHeight} physical px`);
                 await this.invoke('resize_floating_window', { width: newWidth, height: newHeight });
-                // Give the layout a moment to settle, then auto-size to content
                 setTimeout(() => this.resizeWindow(), 200);
             } catch (e) {
                 console.warn('[WindowManager] DPI resize failed:', e);
@@ -418,25 +503,21 @@ export class WindowManager {
 
         const onMouseMove = async (e) => {
             const maxWidth = Math.floor(window.screen.availWidth * 0.95);
-            // No max height cap for manual resize — let user go full screen if they want
             let maxHeight;
             try {
                 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                 const monitor = await appWindow.currentMonitor();
                 if (monitor && monitor.size) {
-                    const sf = monitor.scaleFactor || 1;
-                    maxHeight = monitor.size.height; // full monitor height in physical pixels
+                    maxHeight = monitor.size.height;
                 } else {
                     maxHeight = window.screen.availHeight * scaleFactor;
                 }
             } catch {
                 maxHeight = window.screen.availHeight * scaleFactor;
             }
-            // Mouse deltas are in logical pixels, convert to physical
             const dx = (e.screenX - startX) * scaleFactor;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(570 * scaleFactor);
-            // Dynamic minimum height: at least enough for input container + extension bars
             const inputContainer = document.querySelector('.input-container');
             const inputH = inputContainer?.offsetHeight || 44;
             let minContentH = inputH + BODY_PADDING;
@@ -447,11 +528,10 @@ export class WindowManager {
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
+            this._lastTarget = newHeight; // observer would otherwise fight us
             try {
                 await this.invoke('resize_floating_window', { width: Math.round(newWidth), height: Math.round(newHeight) });
-            } catch (err) {
-                // ignore resize errors during drag
-            }
+            } catch {}
         };
 
         const onMouseUp = async () => {
@@ -459,7 +539,6 @@ export class WindowManager {
             this._resizeEndedAt = Date.now();
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-            // Persist launcher size if "remember" is enabled
             try {
                 const config = await this.invoke('get_config');
                 if (config.ui?.remember_launcher_size) {
@@ -479,7 +558,6 @@ export class WindowManager {
             this.isResizing = true;
             startX = e.screenX;
             startY = e.screenY;
-            // Get the actual physical window size from Tauri so we don't jump
             try {
                 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                 const size = await appWindow.innerSize();
@@ -487,7 +565,7 @@ export class WindowManager {
                 startHeight = size.height;
                 const monitor = await appWindow.currentMonitor();
                 scaleFactor = monitor?.scaleFactor || window.devicePixelRatio || 1;
-            } catch (err) {
+            } catch {
                 startWidth = document.documentElement.offsetWidth;
                 startHeight = document.documentElement.offsetHeight;
                 scaleFactor = window.devicePixelRatio || 1;
