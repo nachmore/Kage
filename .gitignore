@@ -34,6 +34,8 @@ config.json
 .env
 .env.*
 !.env.example
+# Aptabase analytics key — read by build.rs, never commit the real key
+.aptabase-key
 
 # Root-level local-only directories
 node_modules/

@@ -8,6 +8,7 @@ import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig } from '../shared/config-cache.js';
+import { trackEventOnce } from '../shared/telemetry.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -57,6 +58,14 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     // Extension manager will be set asynchronously after extensions load in background
     app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
     app.init();
+
+    // Telemetry: count once per process when the floating window becomes
+    // visible for the first time. Subsequent shows/hides are implicit in
+    // `app_daily_active` and `app_started` so we don't need a counter per
+    // summons. Debounced via trackEventOnce.
+    appWindow.listen('tauri://focus', () => {
+        trackEventOnce('floating_shown');
+    });
 
     // Set up mascot — use terminator variant if terminator mode is active
     let isTerminator = false;

@@ -6,8 +6,8 @@ default-run = "kage"
 authors = ["Oren Nachman (nachmano@)"]
 description = "Your AI-powered desktop companion!"
 license = "Apache-2.0"
-repository = "TBD"
-homepage = "TBD"
+repository = "https://github.com/nachmore/Kage"
+homepage = "https://github.com/nachmore/Kage"
 
 # Auto-updater endpoints. See `src/updater.rs` for the consumers.
 #
@@ -24,6 +24,17 @@ changelog_url = "https://example.com/kage/CHANGELOG.md"
 version_url = "http://localhost:1420/updates/latest-version"
 installer_url = "http://localhost:1420/updates/kage-setup"
 changelog_url = "http://localhost:1420/updates/CHANGELOG.md"
+
+# URLs surfaced to users from the UI (welcome flow, settings, about page).
+# `build.rs` forwards these into compile-time env vars so `env!()` in Rust
+# and a small Tauri command in the frontend can read them without any
+# runtime config lookup. Keeping them in one place means we never have
+# to grep for hardcoded github.com/nachmore/Kage strings when we migrate
+# to a dedicated domain or GitHub Pages site later.
+[package.metadata.links]
+repository = "https://github.com/nachmore/Kage"
+issues     = "https://github.com/nachmore/Kage/issues"
+privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
 [dependencies]
 tauri = { version = "2.10", features = ["tray-icon", "image-png"] }
@@ -58,6 +69,11 @@ rfd = "0.15"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 regex = "1"
 lru = "0.18"
+# Anonymous product analytics. Only transmits events if the user has opted in
+# at first-run or via Settings → Privacy. See src/telemetry.rs and
+# docs/PRIVACY.md for the full policy. The plugin is a no-op if the build
+# is produced without an APTABASE_KEY (see build.rs → option_env!).
+tauri-plugin-aptabase = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

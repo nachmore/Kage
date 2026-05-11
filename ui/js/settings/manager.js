@@ -564,7 +564,14 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn('Failed to load user extensions for settings:', e);
     }
 
-    // About
+    // About section — ordering here must match the sidebar in
+    // ui/settings.html (Privacy → Updates → About). Several bits of
+    // settings machinery key off registration order: the first module
+    // is the default-visible section, extension module sidebar entries
+    // are inserted relative to these, and switchSection() relies on
+    // the one-to-one mapping between sidebar data-section IDs and the
+    // module IDs registered here.
+    settingsManager.registerModule(new PrivacySettingsModule());
     settingsManager.registerModule(new UpdatesSettingsModule());
     settingsManager.registerModule(new AboutSettingsModule());
     

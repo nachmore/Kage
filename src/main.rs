@@ -26,6 +26,7 @@ mod process_manager;
 mod setup;
 mod startup;
 mod state;
+mod telemetry;
 mod tray;
 mod updater;
 
@@ -59,6 +60,11 @@ fn main() {
     // WebView2's input registration. Reaching directly into the
     // platform module is intentional here: it's not a runtime API,
     // it's a CLI mode the rest of the app never touches.
+    //
+    // Runs before `run()` so the helper mode doesn't pay for the Tokio
+    // runtime startup, Tauri builder, panic handler, or any of the
+    // normal app scaffolding. It's essentially a different program
+    // that happens to share a binary.
     #[cfg(target_os = "windows")]
     {
         let args: Vec<String> = std::env::args().collect();
@@ -67,6 +73,31 @@ fn main() {
             return;
         }
     }
+
+    // Everything else runs inside a Tokio runtime because:
+    //   1. `tauri-plugin-aptabase` calls `tokio::spawn` from its setup
+    //      hook (client.rs `start_polling`). Without an ambient runtime
+    //      the plugin panics with "no reactor running" before Tauri
+    //      even finishes initialising.
+    //   2. A handful of our own commands (`get_calendar_events`,
+    //      `search_files`, etc.) already depend on `tokio::async_runtime`
+    //      being available.
+    //
+    // We do this via a plain `Runtime::new()` + `block_on` rather than
+    // `#[tokio::main]` so the Windows helper-process dispatch above
+    // stays in a sync context — it returns before we ever construct a
+    // runtime, which keeps the cheap path cheap.
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to construct Tokio runtime for main app");
+    rt.block_on(run());
+}
+
+/// Async entry point. Split out from `main` so the helper-process
+/// subcommand can return before we spin up Tokio. See `fn main` for the
+/// rationale.
+async fn run() {
 
     #[cfg(all(windows, debug_assertions))]
     attach_parent_console();
@@ -134,7 +165,7 @@ fn main() {
     // setup closure needs the raw argv to resolve the resume marker.
     let main_args = args.clone();
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         // Single-instance enforcement. Must be the FIRST plugin registered
         // (per the plugin's docs) so the second-process exit happens before
         // any window-creation work runs in that process. The callback fires
@@ -156,7 +187,26 @@ fn main() {
             use tauri::Emitter;
             info!("Second instance signaled via single-instance plugin");
             let _ = app.emit("show-sessions", ());
-        }))
+        }));
+
+    // Aptabase plugin — only registered when a compile-time key was
+    // provided (via APTABASE_KEY env var at build time). Without a key
+    // the plugin is never in the process, so no background tasks, no
+    // network activity. Registered after single-instance so a second
+    // launch short-circuits before aptabase spins up any workers.
+    //
+    // Region routing is implicit: the plugin reads the second segment
+    // of the key (`A-EU-xxxx` → eu.aptabase.com, `A-US-xxxx` →
+    // us.aptabase.com, `A-DEV-xxxx` → localhost, `A-SH-xxxx` →
+    // self-hosted via InitOptions::host). Our key is EU so the EU
+    // endpoint is picked automatically — matches docs/PRIVACY.md.
+    //
+    // See src/telemetry.rs and docs/PRIVACY.md.
+    if let Some(key) = telemetry::APTABASE_KEY {
+        builder = builder.plugin(tauri_plugin_aptabase::Builder::new(key).build());
+    }
+
+    let app = builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
@@ -496,9 +546,29 @@ fn main() {
             commands::app_log_clear,
             commands::app_log_get_dir,
             commands::dump_thread_info,
+            commands::get_telemetry_info,
+            commands::set_telemetry_enabled,
+            commands::reset_telemetry_install_id,
+            commands::telemetry_track,
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // Record startup events (install / upgrade / daily active) now that
+    // FeatureServices (and its Config) are managed. Gated on the user
+    // having opted in and the build having a compile-time key.
+    if let Some(features) = app.try_state::<state::FeatureServices>() {
+        telemetry::record_startup_events(app.handle(), &features.config);
+    }
+
+    // Drive the Tauri event loop, flushing telemetry on exit so the
+    // final app_exited event actually reaches the server before the
+    // process dies.
+    app.run(|handler, event| {
+        if let tauri::RunEvent::Exit = event {
+            telemetry::record_shutdown(handler);
+        }
+    });
 
     info!("Application shutting down");
 }

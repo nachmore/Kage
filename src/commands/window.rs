@@ -472,6 +472,13 @@ pub async fn open_settings_window(
             let _ = window.emit("navigate_settings_subsection", sub);
         }
     }
+    crate::telemetry::track(
+        &app,
+        "settings_opened",
+        section
+            .as_deref()
+            .map(|s| serde_json::json!({ "section": s })),
+    );
     Ok(())
 }
 

@@ -390,6 +390,7 @@ pub async fn execute_shortcut(
     path: String,
     args: Vec<String>,
     working_directory: Option<String>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     info!("Executing shortcut: {} with args: {:?}", path, args);
 
@@ -430,6 +431,16 @@ pub async fn execute_shortcut(
     command
         .spawn()
         .map_err(|e| format!("Failed to execute shortcut: {}", e))?;
+
+    // Anonymous shortcut-usage event. We deliberately don't send the
+    // path or args — those can contain personal info like `~/Documents/...`.
+    // The only property is the count of args so we can see "does anyone
+    // actually use args?" in aggregate.
+    crate::telemetry::track(
+        &app,
+        "shortcut_triggered",
+        Some(serde_json::json!({ "arg_count": args.len() })),
+    );
 
     info!("Shortcut executed successfully");
     Ok(())

@@ -107,7 +107,16 @@ jobs:
       # build` invokes cargo under the hood and will fail loudly on
       # compile errors in either bin. On macOS this also triggers the
       # build.rs swiftc compile of src-tauri/macos/calendar-helper.swift.
+      #
+      # APTABASE_KEY is passed through so build.rs picks it up and
+      # `option_env!` embeds it into the binary. On fork PRs GitHub
+      # withholds secrets by default, so the var expands to empty and
+      # the build drops to "no telemetry transport" — which is exactly
+      # what we want for forks. The TODO release workflow will set the
+      # same env var for `cargo tauri build` (no --debug).
       - name: cargo tauri build --debug --no-bundle
+        env:
+          APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
         run: cargo tauri build --debug --no-bundle
 
       - name: cargo test

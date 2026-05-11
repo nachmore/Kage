@@ -22,6 +22,26 @@ macOS-specific:
 - Xcode Command Line Tools: `xcode-select --install`. Provides `swiftc` (used to compile the EventKit calendar helper) and `iconutil` (used by the icon generator).
 - Optional: [Inkscape](https://inkscape.org/) + Python Pillow if regenerating app icons from `icons/kage-icon-basic.svg`.
 
+### Analytics key (optional)
+
+Kage ships with opt-out [Aptabase](https://aptabase.com) analytics. Builds without a key have the plugin entirely absent — no events, no background worker, no network calls. See [`docs/PRIVACY.md`](docs/PRIVACY.md) for the user-facing policy.
+
+Local builds pick up the key from either (in priority order):
+
+1. `APTABASE_KEY` environment variable
+2. A `.aptabase-key` file at the repo root (gitignored)
+
+For your own local release builds, copy the example and paste your key:
+
+```bash
+cp .aptabase-key.example .aptabase-key
+# edit .aptabase-key and replace the placeholder
+```
+
+Debug builds without a key are silent — that's the normal `cargo tauri dev` path for contributors and forks. Release builds without a key emit a `cargo:warning` so you notice if you meant to ship with telemetry and forgot to set it up.
+
+CI reads `APTABASE_KEY` from a GitHub Actions secret of the same name. See `.github/workflows/ci.yml`.
+
 ### Development mode
 
 ```bash

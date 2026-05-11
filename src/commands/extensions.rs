@@ -243,6 +243,12 @@ pub async fn uninstall_extension(
     let _ = config.save();
     drop(config);
 
+    crate::telemetry::track(
+        &app,
+        "extension_uninstalled",
+        Some(serde_json::json!({ "extension_id": id, "kind": kind })),
+    );
+
     if let Err(e) = app.emit("extensions_changed", ()) {
         error!("Failed to emit extensions_changed: {}", e);
     }
@@ -556,6 +562,15 @@ pub async fn commit_extension_install(
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
     drop(config);
+
+    // Anonymous install-success event. We send only the extension id,
+    // which is a published identifier (visible in the extension store),
+    // so this doesn't leak anything the user hasn't already chosen.
+    crate::telemetry::track(
+        &app,
+        "extension_installed",
+        Some(serde_json::json!({ "extension_id": extension_id })),
+    );
 
     if let Err(e) = app.emit("extensions_changed", ()) {
         error!("Failed to emit extensions_changed: {}", e);

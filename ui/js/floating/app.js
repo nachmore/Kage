@@ -22,6 +22,7 @@ import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
+import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
 
 /**
  * Measure the natural (no-overflow) content height of a textarea without
@@ -1936,6 +1937,7 @@ export class FloatingApp {
             try {
                 // Notify the chat window so it can show the user bubble
                 window.__TAURI__.event.emit('floating_message_sent', { message });
+                trackEvent('message_sent', { source: 'floating', length: messageLengthBucket(message) });
                 await this.invoke('send_message_streaming', { message, attachments: null });
             } catch (e) {
                 this.showError('Error: ' + e);
@@ -2050,6 +2052,7 @@ export class FloatingApp {
 
                 // Notify the chat window so it can show the user bubble
                 window.__TAURI__.event.emit('floating_message_sent', { message });
+                trackEvent('message_sent', { source: 'floating', length: messageLengthBucket(message), attachments: attachments?.length || 0 });
                 await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {

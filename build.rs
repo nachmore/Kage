@@ -7,6 +7,66 @@ fn main() {
     println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
+    println!("cargo:rerun-if-changed=.aptabase-key");
+    println!("cargo:rerun-if-env-changed=APTABASE_KEY");
+
+    // Make the Aptabase analytics key available to src/telemetry.rs via
+    // `option_env!("APTABASE_KEY")`. Resolution order, highest priority first:
+    //
+    //   1. `APTABASE_KEY` env var (used by CI — set from a GitHub Actions
+    //      secret so the key is never committed to the repo).
+    //   2. `.aptabase-key` file at the repo root (gitignored — used for
+    //      local release builds without needing to export an env var).
+    //
+    // If neither is set, the Aptabase plugin is never registered at
+    // runtime and every `telemetry::track()` call is a cheap no-op. This
+    // is the correct default for third-party forks: without their own
+    // key, their users' events don't flow into anyone else's dashboard.
+    //
+    // The key itself is a public identifier (it appears in outbound
+    // network requests from the shipped app), so this is defence against
+    // accidental cross-pollination rather than protecting a secret.
+    //
+    // For release builds (where a missing key almost certainly means
+    // someone forgot to set it up) we emit a loud cargo:warning. Debug
+    // builds stay silent because running `cargo tauri dev` without a key
+    // is a normal, intended workflow.
+    let key_from_env = std::env::var("APTABASE_KEY").ok().filter(|s| !s.is_empty());
+    let key_from_file = std::fs::read_to_string(".aptabase-key")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let (source, aptabase_key) = match (key_from_env, key_from_file) {
+        (Some(k), _) => ("APTABASE_KEY env var", k),
+        (None, Some(k)) => (".aptabase-key file", k),
+        (None, None) => ("", String::new()),
+    };
+
+    let is_release = std::env::var("PROFILE")
+        .map(|p| p == "release")
+        .unwrap_or(false);
+
+    if aptabase_key.is_empty() {
+        if is_release {
+            println!(
+                "cargo:warning=No Aptabase key found (neither APTABASE_KEY env var nor \
+                 .aptabase-key file). This release binary will ship with telemetry \
+                 disabled — no events will ever reach your dashboard. If that's \
+                 intentional (local dev release, third-party fork) you can ignore \
+                 this. Otherwise, copy .aptabase-key.example to .aptabase-key and \
+                 paste your Aptabase app key."
+            );
+        }
+        // Debug build with no key: stay silent. This is the common dev path.
+    } else {
+        println!("cargo:rustc-env=APTABASE_KEY={aptabase_key}");
+        // Informational only — cargo:warning is the only channel that
+        // actually surfaces to the developer, so we use it here but
+        // keep the message short and non-alarming.
+        if is_release {
+            println!("cargo:warning=Aptabase telemetry enabled (key sourced from {source}).");
+        }
+    }
 
     // Expose update URLs from [package.metadata.update] as compile-time env vars.
     // Uses [package.metadata.update.dev] for debug builds, falling back to the
@@ -32,6 +92,36 @@ fn main() {
     println!("cargo:rustc-env=UPDATE_VERSION_URL={version_url}");
     println!("cargo:rustc-env=UPDATE_INSTALLER_URL={installer_url}");
     println!("cargo:rustc-env=UPDATE_CHANGELOG_URL={changelog_url}");
+
+    // Expose UI-facing links from [package.metadata.links] as compile-time
+    // env vars. Rust reads these via env!() in `commands::system::get_app_info`
+    // and the frontend receives them as part of the app-info payload — so
+    // no hardcoded github.com/... URLs in welcome.html, privacy.js, etc.
+    // Missing entries fall back to empty strings, which the UI treats as
+    // "link unavailable" and suppresses rendering.
+    let links = manifest
+        .get("package")
+        .and_then(|p| p.get("metadata"))
+        .and_then(|m| m.get("links"));
+    let pluck_link = |key: &str| -> String {
+        links
+            .and_then(|l| l.get(key))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    println!(
+        "cargo:rustc-env=KAGE_LINK_REPOSITORY={}",
+        pluck_link("repository")
+    );
+    println!(
+        "cargo:rustc-env=KAGE_LINK_ISSUES={}",
+        pluck_link("issues")
+    );
+    println!(
+        "cargo:rustc-env=KAGE_LINK_PRIVACY={}",
+        pluck_link("privacy")
+    );
 
     // Compile the macOS EventKit calendar helper. Skipped on other platforms
     // and skipped quietly if swiftc isn't on PATH — the runtime falls back to

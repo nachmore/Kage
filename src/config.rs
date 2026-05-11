@@ -71,6 +71,10 @@ pub struct Config {
     /// Power/battery settings for automations
     #[serde(default)]
     pub automation_power: AutomationPowerConfig,
+    /// Anonymous product analytics settings. See docs/PRIVACY.md for what
+    /// is and isn't collected.
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -667,6 +671,62 @@ impl Default for PocketTtsConfig {
     }
 }
 
+/// Anonymous product analytics configuration.
+///
+/// We collect minimum viable telemetry through Aptabase: a randomly-generated
+/// install ID, app version, OS/locale, and feature-usage event names. No
+/// prompts, file paths, clipboard contents, or PII. See docs/PRIVACY.md for
+/// the full disclosure.
+///
+/// Defaults:
+///  - `enabled`: `true`. Opt-out with clear disclosure on the welcome screen
+///    and a toggle in Settings → Privacy. Kept simple for now — if the build
+///    was produced without an APTABASE_KEY the plugin is a no-op anyway, so
+///    this flag only matters for distribution builds.
+///  - `install_id`: generated lazily on first use (not here) so resetting it
+///    via Settings actually changes the ID sent to Aptabase.
+///  - `consent_version`: bumped whenever the privacy policy materially
+///    changes. The UI compares this to the current policy version and
+///    re-prompts if it lags behind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TelemetryConfig {
+    /// Whether to send anonymous usage events. Respected by every call site
+    /// through `telemetry::track()`, which short-circuits when false.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Anonymous UUID generated on first consent. Not linked to any account
+    /// or device fingerprint — the user can reset it from Settings at any
+    /// time, which orphans all prior events for that install.
+    #[serde(default)]
+    pub install_id: Option<String>,
+    /// Version of the privacy policy the user last consented to. If the
+    /// current `PRIVACY_POLICY_VERSION` exceeds this, we re-prompt.
+    #[serde(default)]
+    pub consent_version: u32,
+    /// ISO 8601 date (YYYY-MM-DD) of the last `app_daily_active` event. Used
+    /// to throttle that event to once per UTC day per install so DAU counts
+    /// aren't skewed by users who open/close the app many times.
+    #[serde(default)]
+    pub last_daily_ping: Option<String>,
+    /// The app version that last fired `app_started`. Used to detect upgrades
+    /// (fire `app_upgraded` when this differs from the current version) and
+    /// first installs (fire `app_installed` when this is `None`).
+    #[serde(default)]
+    pub last_seen_version: Option<String>,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            install_id: None,
+            consent_version: 0,
+            last_daily_ping: None,
+            last_seen_version: None,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -741,6 +801,7 @@ impl Default for Config {
             last_extension_update_check: None,
             macros: vec![],
             automation_power: AutomationPowerConfig::default(),
+            telemetry: TelemetryConfig::default(),
         }
     }
 }

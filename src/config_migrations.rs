@@ -23,7 +23,7 @@ use serde_json::{json, Value};
 /// The highest config schema version this build understands. Bump when
 /// you add a migration; add the migration function to `migrate_one_step`
 /// below.
-pub const CURRENT_VERSION: u32 = 2;
+pub const CURRENT_VERSION: u32 = 3;
 
 /// The lowest version we can still migrate from. If a config on disk is
 /// older than this we treat it as corrupt and reset (after backing up).
@@ -94,6 +94,7 @@ fn read_version(value: &Value) -> u32 {
 fn migrate_one_step(from: u32, value: Value) -> Result<Value> {
     match from {
         1 => migrate_1_to_2(value),
+        2 => migrate_2_to_3(value),
         other => bail!("no migration registered from version {}", other),
     }
 }
@@ -107,6 +108,31 @@ fn migrate_one_step(from: u32, value: Value) -> Result<Value> {
 /// interesting. This function exists so there's always at least one
 /// migration in the chain, which exercises the code path.
 fn migrate_1_to_2(value: Value) -> Result<Value> {
+    Ok(value)
+}
+
+/// v2 → v3: telemetry rollout. Existing users (those already past the
+/// welcome flow) never saw the privacy disclosure page, so we can't
+/// treat their default `enabled=true` as consent — that would be a
+/// silent opt-in. For already-completed first-run configs, force
+/// telemetry off; the user can turn it on from Settings → Privacy
+/// after reading the disclosure there. Brand-new installs still hit
+/// the welcome step and get the documented opt-out flow.
+fn migrate_2_to_3(mut value: Value) -> Result<Value> {
+    if let Value::Object(ref mut map) = value {
+        let already_completed = map
+            .get("first_run_completed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if already_completed {
+            let telemetry = map
+                .entry("telemetry".to_string())
+                .or_insert_with(|| json!({}));
+            if let Value::Object(tmap) = telemetry {
+                tmap.insert("enabled".to_string(), json!(false));
+            }
+        }
+    }
     Ok(value)
 }
 
@@ -180,5 +206,42 @@ mod tests {
         // backup path kicks in.
         let out = migrate(v.clone()).unwrap();
         assert_eq!(out, v);
+    }
+
+    #[test]
+    fn v2_to_v3_disables_telemetry_for_existing_users() {
+        let v = json!({
+            "version": 2,
+            "first_run_completed": true,
+            "telemetry": { "enabled": true },
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(
+            out.get("telemetry").and_then(|t| t.get("enabled")),
+            Some(&json!(false)),
+            "completed-first-run users must not auto-opt-in silently"
+        );
+    }
+
+    #[test]
+    fn v2_to_v3_leaves_fresh_installs_alone() {
+        // A config that hasn't completed first run yet will hit the
+        // welcome screen's privacy step on next launch — that's where
+        // consent gets captured. Don't pre-disable on these.
+        let v = json!({
+            "version": 2,
+            "first_run_completed": false,
+        });
+        let out = migrate(v).unwrap();
+        // Either absent (default=true at deserialize time) or not set
+        // to false is acceptable. Explicitly false would be a bug.
+        let telemetry_enabled = out
+            .get("telemetry")
+            .and_then(|t| t.get("enabled"))
+            .and_then(|v| v.as_bool());
+        assert!(
+            telemetry_enabled != Some(false),
+            "first-run-in-progress configs should not have telemetry forced off"
+        );
     }
 }

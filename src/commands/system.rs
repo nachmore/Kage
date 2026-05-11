@@ -499,6 +499,9 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // First-run form has many independent toggles; packing them
+                                     // into a struct hurts readability on the frontend side more
+                                     // than it helps here.
 pub async fn complete_first_run(
     app: tauri::AppHandle,
     features: State<'_, FeatureServices>,
@@ -507,6 +510,7 @@ pub async fn complete_first_run(
     auto_update: bool,
     enable_computer_control: bool,
     enable_personalization: bool,
+    enable_telemetry: bool,
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
     let is_true_first_run = !config.first_run_completed;
@@ -519,12 +523,31 @@ pub async fn complete_first_run(
     let _ = config.save();
     drop(config);
 
+    // Apply the telemetry decision. `set_consent` generates a fresh
+    // install_id on first opt-in and records the privacy policy version
+    // the user saw — the UI re-prompts if the version ever changes.
+    crate::telemetry::set_consent(&features.config, enable_telemetry);
+
     set_startup_enabled_impl(launch_at_startup);
 
     // Register the computer-control MCP server if the user opted in
     if enable_computer_control {
         crate::mcp_registration::ensure_registered();
     }
+
+    // Track the first-run outcome. This runs *after* set_consent so it
+    // respects the user's choice — if they opted out, no event is sent.
+    crate::telemetry::track(
+        &app,
+        "first_run_completed",
+        Some(serde_json::json!({
+            "telemetry": if enable_telemetry { "opted_in" } else { "opted_out" },
+            "startup": if launch_at_startup { "on" } else { "off" },
+            "auto_update": if auto_update { "on" } else { "off" },
+            "computer_control": if enable_computer_control { "on" } else { "off" },
+            "personalization": if enable_personalization { "on" } else { "off" },
+        })),
+    );
 
     // On true first run (or dev mode), show the floating window with a welcome banner
     if is_true_first_run || ui.dev_mode {
@@ -647,6 +670,15 @@ pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
         "repository": env!("CARGO_PKG_REPOSITORY"),
         "homepage": env!("CARGO_PKG_HOMEPAGE"),
         "name": env!("CARGO_PKG_NAME"),
+        // UI-facing links sourced from [package.metadata.links] via
+        // build.rs. Empty strings here mean "link not configured" —
+        // the UI should treat them as such and avoid rendering an
+        // anchor that goes nowhere.
+        "links": {
+            "repository": env!("KAGE_LINK_REPOSITORY"),
+            "issues": env!("KAGE_LINK_ISSUES"),
+            "privacy": env!("KAGE_LINK_PRIVACY"),
+        }
     }))
 }
 
@@ -1844,4 +1876,78 @@ pub async fn get_permission_audit_log_path() -> Result<String, AppError> {
     Ok(crate::permission_audit::default_log_path()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default())
+}
+
+
+// ---------------------------------------------------------------------------
+// Telemetry commands
+//
+// The Aptabase plugin is registered (or not) in main.rs based on the
+// compile-time APTABASE_KEY. These commands let the UI surface the
+// current telemetry state and change it without needing to poke at
+// `config.telemetry` fields directly from the frontend.
+// ---------------------------------------------------------------------------
+
+/// Return the current telemetry snapshot for the Settings → Privacy UI.
+#[tauri::command]
+pub async fn get_telemetry_info(
+    features: State<'_, FeatureServices>,
+) -> Result<crate::telemetry::TelemetryInfo, AppError> {
+    Ok(crate::telemetry::snapshot(&features.config))
+}
+
+/// Enable or disable anonymous telemetry. Applies immediately — any
+/// subsequent calls to `telemetry::track()` respect the new value.
+#[tauri::command]
+pub async fn set_telemetry_enabled(
+    app: tauri::AppHandle,
+    features: State<'_, FeatureServices>,
+    enabled: bool,
+) -> Result<(), AppError> {
+    // Track the toggle *before* applying it so an opt-out still sends a
+    // single "telemetry_disabled" event — useful for measuring opt-out
+    // rates. Opt-in cannot fire a pre-change event because telemetry
+    // was off; we fire "telemetry_enabled" right after set_consent
+    // instead.
+    let was_enabled = features.config.lock_or_recover().telemetry.enabled;
+    if was_enabled && !enabled {
+        crate::telemetry::track(&app, "telemetry_disabled", None);
+    }
+
+    crate::telemetry::set_consent(&features.config, enabled);
+
+    if !was_enabled && enabled {
+        crate::telemetry::track(&app, "telemetry_enabled", None);
+    }
+    Ok(())
+}
+
+/// Generate a fresh anonymous install ID. The returned value is the new
+/// ID (kept for UI display only — the plugin already uses it on the next
+/// event).
+#[tauri::command]
+pub async fn reset_telemetry_install_id(
+    features: State<'_, FeatureServices>,
+) -> Result<String, AppError> {
+    Ok(crate::telemetry::reset_install_id(&features.config))
+}
+
+/// Pass-through for the frontend to fire arbitrary telemetry events.
+/// Gated by `telemetry.enabled` on the Rust side — calls from an opted-out
+/// user become no-ops. Props are restricted to string/number values by
+/// Aptabase's plugin, but we don't re-validate here because the plugin
+/// already does.
+///
+/// Event names MUST be drawn from the known list in
+/// `ui/js/shared/telemetry.js`. Unknown names are still accepted but
+/// logged so accidental PII leakage through a misnamed event surfaces
+/// during development.
+#[tauri::command]
+pub async fn telemetry_track(
+    app: tauri::AppHandle,
+    event: String,
+    props: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    crate::telemetry::track(&app, &event, props);
+    Ok(())
 }

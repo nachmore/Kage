@@ -111,3 +111,39 @@ Use `log::*` macros (`info!`, `warn!`, `error!`, `debug!`). Avoid `println!` out
 - **Build output**: when a build/test fails, read the **full** output, not just the last 30 lines. Errors and warnings can appear anywhere.
 - **Inclusive language**: don't use master/slave/whitelist/blacklist. See `~/.claude/rules/amazon-builder-context-do-not-delete.md` for the substitutions table.
 - **Commits**: never commit unless the user explicitly says "commit". Don't commit on task completion or on "go ahead" / "do it".
+
+
+## Telemetry
+
+Anonymous product analytics via [Aptabase](https://aptabase.com). See `docs/PRIVACY.md` for the user-facing policy.
+
+### Setting the Aptabase key
+
+The key is not secret (it appears in outbound network traffic), but we keep it out of source so third-party forks don't send events to our dashboard.
+
+Resolution order (first match wins):
+1. `APTABASE_KEY` env var — set this in CI from a repo secret.
+2. `.aptabase-key` file at the repo root — gitignored, used for local release builds. Copy `.aptabase-key.example` and paste your key.
+
+If neither is set, the plugin is never registered and `telemetry::track()` is a no-op. Dev builds without a key still work — everything else just runs quietly.
+
+### Implementation
+
+Lives in `src/telemetry.rs`. Every call site goes through `telemetry::track(&app, "event_name", props)` which short-circuits when:
+- The build has no key (via `option_env!` in `src/telemetry.rs`).
+- The user has opted out (`config.telemetry.enabled == false`) or not consented yet (`install_id == None`).
+
+The plugin is only registered in `main.rs` when the key exists, so disabled builds don't ship the background worker.
+
+Events fire from:
+- Startup (`main.rs` after `.build()`): `app_installed` | `app_upgraded` | `app_started`, plus `app_daily_active` once per UTC day.
+- Shutdown (`.run(|h, event|)` → `RunEvent::Exit`): `app_exited` with a blocking flush.
+- Specific command handlers (`execute_shortcut`, `commit_extension_install`, `open_settings_window`, …).
+- Frontend via `ui/js/shared/telemetry.js` → `trackEvent(name, props?)` → `telemetry_track` command. Allow-listed event names live in `KNOWN_EVENTS` in that file.
+
+Adding a new event:
+1. Add the name to `KNOWN_EVENTS` in `ui/js/shared/telemetry.js` (or none — the list is advisory).
+2. Ensure props are string/number only. Bucket lengths, never send raw text or paths.
+3. Update `docs/PRIVACY.md` if the disclosure list needs to change.
+
+Settings → Privacy (`ui/js/settings/privacy.js`) lets users toggle and reset their install ID. The welcome screen's privacy step is the initial opt-out surface; `complete_first_run` records their decision via `telemetry::set_consent`. The `v2 → v3` migration explicitly disables telemetry for existing users so they aren't auto-opted-in silently.

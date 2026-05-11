@@ -291,8 +291,55 @@
             </div>
         </div>
 
-        <!-- Step 5: macOS Permissions (shown on macOS only; removed at init on other platforms) -->
-        <div class="wizard-step" data-step="4" data-mac-only="true">
+        <!-- Step 5: Privacy & Analytics -->
+        <div class="wizard-step" data-step="4">
+            <div class="step-header">
+                <div class="step-title">Help improve Kage</div>
+                <div class="step-subtitle">Share anonymous usage data so we know what to fix and build next</div>
+            </div>
+            <div class="step-content">
+                <div class="section-desc" style="margin-bottom:16px;line-height:1.6;">
+                    Kage is built for privacy-conscious users. If you'd rather not share anything, flip the toggle off — everything else still works. You can change this anytime in <strong>Settings → Privacy</strong>.
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:rgba(113,56,204,0.08);border:1px solid rgba(113,56,204,0.25);border-radius:8px;cursor:pointer;" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="enableTelemetry" checked style="width:18px;height:18px;accent-color:var(--kage-accent);margin-top:1px;flex-shrink:0;">
+                        <div style="flex:1;">
+                            <span style="font-size:14px;font-weight:600;">Send anonymous usage data</span>
+                            <div style="font-size:12px;color:#938F9B;margin-top:4px;line-height:1.5;">
+                                Helps us understand which features matter and catch bugs early. Data is stored in the EU via <a href="https://aptabase.com" target="_blank" style="color:var(--kage-accent-light);">Aptabase</a>, a privacy-first analytics service.
+                            </div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <div class="section-label" style="margin-bottom:8px;">What we collect</div>
+                    <ul style="font-size:12px;color:#b0adb5;line-height:1.8;padding-left:20px;margin:0;">
+                        <li>A random install ID (not linked to you or your account)</li>
+                        <li>App version, OS and version, language, country</li>
+                        <li>High-level feature usage — which features are used and how often</li>
+                    </ul>
+                </div>
+
+                <div class="form-group">
+                    <div class="section-label" style="margin-bottom:8px;">What we never collect</div>
+                    <ul style="font-size:12px;color:#b0adb5;line-height:1.8;padding-left:20px;margin:0;">
+                        <li>Your messages, prompts, or AI responses</li>
+                        <li>File names, paths, or clipboard contents</li>
+                        <li>Your name, email, or IP address (stripped at ingest)</li>
+                    </ul>
+                </div>
+
+                <div style="font-size:11px;color:#938F9B;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+                    Read the full <a href="#" id="wOpenPrivacyPolicy" style="color:var(--kage-accent-light);">privacy policy</a> for details.
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 6: macOS Permissions (shown on macOS only; removed at init on other platforms) -->
+        <div class="wizard-step" data-step="5" data-mac-only="true">
             <div class="step-header">
                 <div class="step-title">macOS Permissions</div>
                 <div class="step-subtitle">Grant a few privacy permissions so Kage can do its job</div>
@@ -318,7 +365,8 @@
             <div class="wizard-dot" data-dot="1"></div>
             <div class="wizard-dot" data-dot="2"></div>
             <div class="wizard-dot" data-dot="3"></div>
-            <div class="wizard-dot" data-dot="4" data-mac-only="true"></div>
+            <div class="wizard-dot" data-dot="4"></div>
+            <div class="wizard-dot" data-dot="5" data-mac-only="true"></div>
         </div>
         <div class="wizard-btns">
             <button class="wiz-btn wiz-btn-secondary" id="backBtn" style="display:none;">Back</button>
@@ -504,6 +552,25 @@
         // Start agent detection early (runs in background)
         runAgentDetection();
 
+        // Privacy policy link — resolves via get_app_info() so we don't
+        // hardcode the URL. Populated from [package.metadata.links] in
+        // Cargo.toml → build.rs → env!() → get_app_info → here.
+        const privacyLink = document.getElementById('wOpenPrivacyPolicy');
+        if (privacyLink) {
+            privacyLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const info = await invoke('get_app_info');
+                    const url = info?.links?.privacy;
+                    if (!url) return; // not configured — silently no-op
+                    const { open } = window.__TAURI__.shell || {};
+                    if (open) await open(url);
+                } catch (err) {
+                    console.warn('Failed to open privacy policy:', err);
+                }
+            });
+        }
+
         backBtn.addEventListener('click', () => { if (currentStep > 0) showStep(currentStep - 1); });
 
         // Load recommended extensions for the extensions step
@@ -617,8 +684,8 @@
                 if (currentStep + 1 === 3) {
                     loadExtensionCatalog();
                 }
-                // Render macOS permission cards when entering step 4 (mac only)
-                if (isMacOS && currentStep + 1 === 4 && !macPermsRendered) {
+                // Render macOS permission cards when entering step 5 (mac only)
+                if (isMacOS && currentStep + 1 === 5 && !macPermsRendered) {
                     const container = document.getElementById('wMacPermCards');
                     if (container && window.kageMacPermissions) {
                         window.kageMacPermissions.renderAllInto(container, invoke, 'wMacPerm');
@@ -691,6 +758,7 @@
                         autoUpdate: document.getElementById('autoUpdate').checked,
                         enableComputerControl: document.getElementById('computerControl').checked,
                         enablePersonalization: document.getElementById('enablePersonalization').checked,
+                        enableTelemetry: document.getElementById('enableTelemetry')?.checked ?? true,
                     });
                 } catch (e) { console.error('Failed to complete first run:', e); }
                 await appWindow.close();

@@ -9,10 +9,16 @@ import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig } from '../shared/config-cache.js';
+import { trackEventOnce } from '../shared/telemetry.js';
 
 let app = null;
 
 waitForTauri(async ({ invoke, appWindow, listen }) => {
+    // One-shot telemetry for the chat window opening. Fired here (not on
+    // focus) because the chat window is typically opened deliberately,
+    // unlike the floating window which can flash open-close as users
+    // dismiss it.
+    trackEventOnce('chat_opened');
     // Read the "Log all messages" preference before intercepting console so
     // we honour the saved toggle from the About > Logging settings panel.
     // Safe to default to quiet on any read failure.

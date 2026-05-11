@@ -34,6 +34,8 @@ pub mod setup;
 #[cfg(not(test))]
 pub mod state;
 #[cfg(not(test))]
+pub mod telemetry;
+#[cfg(not(test))]
 pub mod tray;
 #[cfg(not(test))]
 pub mod updater;
