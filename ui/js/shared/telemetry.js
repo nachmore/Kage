@@ -55,6 +55,7 @@ export const KNOWN_EVENTS = Object.freeze([
 
     // First-run flow
     'first_run_completed',
+    'first_run_extensions_provisioned',
     'telemetry_enabled',
     'telemetry_disabled',
 

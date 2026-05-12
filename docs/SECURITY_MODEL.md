@@ -100,11 +100,22 @@ today.
 
 ### Install flow
 
-1. User clicks **Install** in the store.
-2. `store_install` downloads the archive, extracts it to the user
-   extension directory, and enables the extension in config — but
-   does **not** emit `extensions_changed`, so the loader doesn't
-   pick it up yet.
+There are two install paths, both of which end with a recorded grant
+in `config.extension_grants`. The trust invariant — a grant only ever
+contains capabilities that the user has (implicitly or explicitly)
+accepted, normalised against the known-capabilities list — holds
+across both.
+
+#### Path A: Store / manual install (modal-per-extension)
+
+Used when the user installs from the extension store, drags in a
+local zip or directory, or when an upgrade requests new capabilities.
+
+1. User clicks **Install** in the store (or equivalent).
+2. `store_install` / `install_extension_from_path` downloads the
+   archive, extracts it to the user extension directory, and enables
+   the extension in config — but does **not** emit
+   `extensions_changed`, so the loader doesn't pick it up yet.
 3. The frontend reads the installed manifest and opens the
    permission prompt.
 4. If the user approves: `commit_extension_install` saves the
@@ -113,9 +124,53 @@ today.
 5. If the user cancels: `uninstall_extension` rolls back, and
    nothing ever got loaded.
 
-The same flow is used for `install_extension_from_path` (local zip
-or directory) and `install_bundled_package` (first-run wizard).
-There is no install path that skips the prompt.
+#### Path B: First-run welcome (batch approval, no modal)
+
+Used for the extensions shown on the welcome screen, drawn from
+`ui/extensions/recommended.json`. The welcome screen renders each
+extension's declared capabilities as pills on the card, so the user
+sees exactly what each box they tick is agreeing to. Clicking
+**Finish** is the approval signal for every ticked box.
+
+1. Welcome screen renders each extension card with capability pills
+   sourced from the manifest's `permissions` field.
+2. User ticks/unticks boxes to opt in/out.
+3. User clicks **Finish**. First-run config + telemetry consent
+   apply synchronously; the window hides.
+4. For each ticked non-bundled extension, the renderer calls
+   `install_and_commit_bundled(id)`. The Rust handler:
+   - Verifies a matching zip exists in the bundled packages
+     directory. If not, the call is rejected with an explicit error
+     identifying the security boundary. **This is what stops a
+     compromised welcome page from batch-granting caps to arbitrary
+     store extensions.**
+   - Extracts the zip and reads the on-disk manifest.
+   - Pulls the capability list from the manifest (not the renderer)
+     and normalises it through `extensions::normalize_permissions`.
+   - Writes the grant and emits `extensions_changed` atomically.
+
+Why this path is safe to skip the modal: the zip lives inside our
+signed installer, the capability list comes off the extracted
+manifest (not the renderer), and the user has already seen each
+extension's cap list on its welcome card. The modal's job — display
+the manifest's caps to the user, then let them approve — is done
+inline across the whole selection instead of serially per extension.
+
+### Capability normalisation
+
+Every recorded grant is funneled through
+[`extensions::normalize_permissions`](../src/extensions.rs), which
+drops anything not in `VALID_CAPABILITIES` with a warning. The Rust
+list is authoritative; `CAPABILITIES` in
+`ui/js/shared/extension-permissions.js` mirrors it for rendering the
+install modal and settings badges.
+
+This matters because it closes a small drift window: previously, JS
+`normalizePermissions` filtered unknown caps when building the modal,
+but the Rust commit path trusted whatever list the renderer passed
+in. A typo in a bundled manifest (`"strage"`) could have ended up
+recorded as a grant. It can no longer — both paths dedupe, lowercase,
+and filter against the canonical list.
 
 ### Grant persistence
 
@@ -213,7 +268,9 @@ mitigations are in place:
 | Extension reaches `window.__TAURI__` to bypass check  | ✅ Blocked | Iframe has null origin, no Tauri global. |
 | Extension reads files outside its directory           | ✅ Blocked | `read_extension_file` is path-bounded. |
 | New Tauri command silently exposed to extensions      | ✅ Blocked | Missing from table = blocked. |
-| Extension installs without user approving its caps    | ✅ Blocked | Install is two-phase; no grant = no load. |
+| Extension installs without user approving its caps    | ✅ Blocked | Install is two-phase; no grant = no load. First-run welcome uses batch approval with caps shown on-card before Finish. |
+| Renderer inflates caps beyond what a manifest declares| ✅ Blocked | Welcome path reads caps from on-disk manifest, not renderer. Store path validates user-approved list against canonical capability set. |
+| Typo or unknown capability in manifest persisted as grant | ✅ Blocked | All grants go through `normalize_permissions` against `VALID_CAPABILITIES`. |
 | Extension updates silently expand capabilities        | ✅ Blocked | Extras dropped until user re-approves. |
 | Zip Slip during extension install                     | ✅ Blocked | Canonical-path + symlink checks. |
 | Malicious markdown injecting script tags              | ✅ Blocked | Rendering pipeline strips document markers. |

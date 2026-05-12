@@ -160,6 +160,62 @@ pub fn resolve_extension_data_path(
 // Manifest types
 // ---------------------------------------------------------------------------
 
+/// Canonical list of valid capability names. Must stay in sync with
+/// `CAPABILITIES` in `ui/js/shared/extension-permissions.js` — the Rust
+/// side is now authoritative; the JS list is a mirror for rendering.
+///
+/// Unknown / misspelled capabilities in a manifest are dropped by
+/// [`normalize_permissions`] at install time. This means a typo like
+/// `"strage"` can never become a recorded grant, regardless of which
+/// install path a package came through.
+pub const VALID_CAPABILITIES: &[&str] = &[
+    "storage",
+    "clipboard",
+    "shell",
+    "filesystem",
+    "window",
+    "windows",
+    "notifications",
+    "calendar",
+    "session",
+    "agent",
+    "activity",
+    "automation",
+    "tts",
+];
+
+/// Filter a raw permission list from a manifest down to a deduped,
+/// lowercase set of known capabilities. Unknown entries are logged
+/// and dropped; the returned vector is safe to store as a grant.
+///
+/// This is the single point of authority for what can land in
+/// `config.extension_grants[*].granted`. Both the welcome batch path
+/// (`install_and_commit_bundled`) and the store path
+/// (`commit_extension_install`) should funnel through it — drift
+/// between the two is what lets silent privilege escalation sneak in.
+pub fn normalize_permissions(raw: &[String], context: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::with_capacity(raw.len());
+    for entry in raw {
+        let cap = entry.trim().to_lowercase();
+        if cap.is_empty() {
+            continue;
+        }
+        if !VALID_CAPABILITIES.contains(&cap.as_str()) {
+            log::warn!(
+                "Extension '{}': unknown capability '{}' — ignored",
+                context,
+                cap
+            );
+            continue;
+        }
+        if seen.insert(cap.clone()) {
+            out.push(cap);
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtensionManifest {
     pub id: String,
@@ -655,4 +711,60 @@ fn try_load_theme_variant(
     let content = fs::read_to_string(&variant_path)?;
     let theme_data: serde_json::Value = serde_json::from_str(&content)?;
     Ok(theme_data.get("colors").cloned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_permissions_drops_unknown() {
+        let raw = vec![
+            "storage".to_string(),
+            "strage".to_string(), // typo
+            "clipboard".to_string(),
+        ];
+        let out = normalize_permissions(&raw, "test");
+        assert_eq!(out, vec!["storage", "clipboard"]);
+    }
+
+    #[test]
+    fn normalize_permissions_dedupes_and_lowercases() {
+        let raw = vec![
+            "Storage".to_string(),
+            "  storage  ".to_string(),
+            "STORAGE".to_string(),
+        ];
+        let out = normalize_permissions(&raw, "test");
+        assert_eq!(out, vec!["storage"]);
+    }
+
+    #[test]
+    fn normalize_permissions_preserves_order() {
+        let raw = vec![
+            "calendar".to_string(),
+            "storage".to_string(),
+            "agent".to_string(),
+        ];
+        let out = normalize_permissions(&raw, "test");
+        assert_eq!(out, vec!["calendar", "storage", "agent"]);
+    }
+
+    #[test]
+    fn normalize_permissions_handles_empty_and_whitespace() {
+        let raw = vec![
+            "".to_string(),
+            "   ".to_string(),
+            "storage".to_string(),
+        ];
+        let out = normalize_permissions(&raw, "test");
+        assert_eq!(out, vec!["storage"]);
+    }
+
+    #[test]
+    fn every_valid_capability_passes() {
+        let raw: Vec<String> = VALID_CAPABILITIES.iter().map(|s| s.to_string()).collect();
+        let out = normalize_permissions(&raw, "test");
+        assert_eq!(out.len(), VALID_CAPABILITIES.len());
+    }
 }

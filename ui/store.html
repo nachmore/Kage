@@ -578,7 +578,7 @@
      * for capability approval, either commit (writes grant + emits changed)
      * or roll back (uninstall). `stager` is a function that takes no args and
      * returns a Promise<InstalledItem> from the chosen Tauri command
-     * (store_install, install_extension_from_path, install_bundled_package).
+     * (store_install or install_extension_from_path).
      *
      * For updates: we fetch the prior grant first so the prompt can mark
      * already-approved caps differently from new ones, and flag the

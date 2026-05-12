@@ -547,6 +547,14 @@ pub async fn commit_extension_install(
     extensions::validate_extension_id(&extension_id)
         .map_err(|e| format!("Invalid extension id: {}", e))?;
 
+    // Normalize the grant list. The renderer shows a modal built from
+    // `CAPABILITIES` in extension-permissions.js, which should already
+    // match the manifest — but Rust is authoritative. If the two ever
+    // drift (bug in JS, manifest tampering between install and commit,
+    // user-installed extension with a typo), we still store a clean
+    // set. Dropped entries log a warning so the drift gets noticed.
+    let granted = extensions::normalize_permissions(&granted, &extension_id);
+
     let mut config = features.config.lock_or_recover();
     let record = crate::config::ExtensionGrant {
         granted,
@@ -866,40 +874,245 @@ fn bundled_packages_dir() -> Option<std::path::PathBuf> {
 /// network access. Like `store_install`, this is a staged install: the
 /// caller must show the permission prompt and call
 /// `commit_extension_install` before the extension will load.
-#[tauri::command]
-pub async fn install_bundled_package(
-    id: String,
-    features: State<'_, FeatureServices>,
-    _app: tauri::AppHandle,
-) -> Result<extensions::InstalledItem, AppError> {
-    let packages_dir = bundled_packages_dir()
-        .ok_or_else(|| AppError::from("Bundled packages directory not found"))?;
+// ---------------------------------------------------------------------------
+// First-run welcome: batch provisioning
+// ---------------------------------------------------------------------------
 
-    // Try common naming patterns: id.zip, id-theme.zip
+#[derive(Debug, serde::Deserialize)]
+pub struct WelcomeExtensionDecision {
+    pub id: String,
+    /// True for extensions whose code ships inside the binary (math,
+    /// calendar, window-walker) — these only need an `enabled` flag
+    /// flipped. False for everything else; those get an atomic install
+    /// via `install_and_commit_bundled`.
+    pub bundled: bool,
+    /// Whether the user ticked the box on the welcome screen.
+    pub checked: bool,
+}
+
+#[derive(Debug, serde::Serialize, Default)]
+pub struct WelcomeProvisionReport {
+    pub installed: u32,
+    pub enabled: u32,
+    pub disabled: u32,
+    pub skipped: u32,
+    pub failed: u32,
+}
+
+/// Apply the extension decisions the user made on the welcome screen.
+///
+/// Fire-and-forget from the caller's perspective: the command returns
+/// immediately after spawning a blocking task, so the welcome window can
+/// transition to a "Launching Kage…" state and close without waiting on
+/// local disk I/O.
+///
+/// The work runs on `spawn_blocking` because it's all synchronous disk
+/// I/O (zip extraction, config writes). Putting it on the main Tokio
+/// runtime would tie up a thread that other Tauri commands need.
+///
+/// Individual failures are logged but do not short-circuit the batch —
+/// we'd rather enable 4 of 5 extensions than fail atomically on the 3rd.
+/// Aggregate counts land in the `first_run_extensions_provisioned`
+/// telemetry event; there's no cross-window signal because no caller
+/// needs one today.
+#[tauri::command]
+pub async fn welcome_provision_extensions(
+    decisions: Vec<WelcomeExtensionDecision>,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle,
+) -> Result<(), AppError> {
+    info!(
+        "welcome_provision_extensions: dispatching {} decisions to background task",
+        decisions.len()
+    );
+
+    // Clone the state we need to move into the blocking task. The Tauri
+    // State can't cross the spawn boundary directly — it's tied to the
+    // command invocation — so we pull the Arc<Mutex<Config>> out and
+    // move that instead.
+    let config = features.config.clone();
+    let app_handle = app.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let report = provision_decisions(&decisions, &config, &app_handle);
+
+        info!(
+            "welcome_provision: done — installed={} enabled={} disabled={} skipped={} failed={}",
+            report.installed, report.enabled, report.disabled, report.skipped, report.failed
+        );
+
+        // Aggregate telemetry. Opt-out is already respected inside track().
+        crate::telemetry::track(
+            &app_handle,
+            "first_run_extensions_provisioned",
+            Some(serde_json::json!({
+                "installed": report.installed,
+                "enabled": report.enabled,
+                "disabled": report.disabled,
+                "skipped": report.skipped,
+                "failed": report.failed,
+            })),
+        );
+    });
+
+    Ok(())
+}
+
+/// Core provisioning loop — pulled into its own function so the
+/// spawn_blocking task in [`welcome_provision_extensions`] can call it
+/// with a plain Arc<Mutex<Config>> rather than needing a Tauri State.
+fn provision_decisions(
+    decisions: &[WelcomeExtensionDecision],
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    app: &tauri::AppHandle,
+) -> WelcomeProvisionReport {
+    // Snapshot what's already installed so we don't re-stage duplicates.
+    let already_installed: std::collections::HashSet<String> = {
+        let states = {
+            let cfg = config.lock_or_recover();
+            cfg.extension_states.clone()
+        };
+        let mut set = std::collections::HashSet::new();
+        for kind in &["extension", "theme"] {
+            for item in extensions::discover_items(kind, None, &states) {
+                set.insert(item.manifest.id);
+            }
+        }
+        set
+    };
+
+    let mut report = WelcomeProvisionReport::default();
+
+    for decision in decisions {
+        if decision.bundled {
+            let want_enabled = decision.checked;
+            match toggle_enabled_direct(config, app, &decision.id, want_enabled) {
+                Ok(()) => {
+                    if want_enabled {
+                        report.enabled += 1;
+                        info!("welcome_provision: enabled bundled '{}'", decision.id);
+                    } else {
+                        report.disabled += 1;
+                        info!("welcome_provision: disabled bundled '{}'", decision.id);
+                    }
+                }
+                Err(e) => {
+                    report.failed += 1;
+                    warn!(
+                        "welcome_provision: toggle '{}' failed: {}",
+                        decision.id, e
+                    );
+                }
+            }
+        } else if decision.checked && !already_installed.contains(&decision.id) {
+            match install_and_commit_direct(config, app, &decision.id) {
+                Ok(installed_id) => {
+                    report.installed += 1;
+                    info!("welcome_provision: installed '{}'", installed_id);
+                }
+                Err(e) => {
+                    report.failed += 1;
+                    warn!(
+                        "welcome_provision: install '{}' failed: {}",
+                        decision.id, e
+                    );
+                }
+            }
+        } else {
+            report.skipped += 1;
+        }
+    }
+
+    report
+}
+
+/// Toggle `extension_states[id]` directly against the shared config.
+/// Mirror of [`set_extension_enabled`] but without the Tauri State /
+/// async wrapping so it can be called from a spawn_blocking context.
+fn toggle_enabled_direct(
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    app: &tauri::AppHandle,
+    id: &str,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut cfg = config.lock_or_recover();
+    cfg.extension_states.insert(id.to_string(), enabled);
+    cfg.save()
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+    drop(cfg);
+    if let Err(e) = app.emit("config_updated", ()) {
+        error!("Failed to emit config_updated: {}", e);
+    }
+    Ok(())
+}
+
+/// Install + commit in one go, pulling caps from the on-disk manifest.
+/// The zip must live in `bundled_packages_dir()` (our trust boundary),
+/// and the capability list comes from the manifest — the renderer can
+/// only supply the id.
+fn install_and_commit_direct(
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    app: &tauri::AppHandle,
+    id: &str,
+) -> Result<String, String> {
+    extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;
+
+    let packages_dir = bundled_packages_dir()
+        .ok_or_else(|| "Bundled packages directory not found".to_string())?;
+
     let candidates = vec![
         packages_dir.join(format!("{}.zip", id)),
         packages_dir.join(format!("{}-theme.zip", id)),
     ];
-
     let zip_path = candidates
         .into_iter()
         .find(|p| p.exists())
-        .ok_or_else(|| AppError::from(format!("Bundled package not found for '{}'", id)))?;
+        .ok_or_else(|| {
+            format!(
+                "welcome_provision: '{}' is not a bundled package. The welcome flow only accepts \
+                 ids whose zip lives in the bundled packages directory. Non-bundled extensions \
+                 must go through store_install + commit_extension_install.",
+                id
+            )
+        })?;
 
-    info!("Installing bundled package '{}' from {:?}", id, zip_path);
+    let item = extensions::install_from_zip(&zip_path)
+        .map_err(|e| format!("Failed to install bundled package '{}': {}", id, e))?;
 
-    let item = extensions::install_from_zip(&zip_path).map_err(|e| {
-        AppError::from(format!("Failed to install bundled package '{}': {}", id, e))
-    })?;
+    let raw_perms: Vec<String> = item.manifest.permissions.clone().unwrap_or_default();
+    let granted = extensions::normalize_permissions(&raw_perms, &item.manifest.id);
+    let approved_version = item.manifest.version.clone();
+    let installed_id = item.manifest.id.clone();
 
-    let mut config = features.config.lock_or_recover();
-    config
-        .extension_states
-        .insert(item.manifest.id.clone(), true);
-    let _ = config.save();
-    drop(config);
+    {
+        let mut cfg = config.lock_or_recover();
+        cfg.extension_states.insert(installed_id.clone(), true);
+        cfg.extension_grants.insert(
+            installed_id.clone(),
+            crate::config::ExtensionGrant {
+                granted: granted.clone(),
+                approved_version,
+                approved_at: chrono::Utc::now().to_rfc3339(),
+            },
+        );
+        cfg.save()
+            .map_err(|e| format!("Failed to save config: {}", e))?;
+    }
 
-    Ok(item)
+    crate::telemetry::track(
+        app,
+        "extension_installed",
+        Some(serde_json::json!({
+            "extension_id": installed_id,
+            "source": "bundled_batch",
+        })),
+    );
+
+    if let Err(e) = app.emit("extensions_changed", ()) {
+        error!("Failed to emit extensions_changed: {}", e);
+    }
+
+    Ok(installed_id)
 }
 
 // ---------------------------------------------------------------------------

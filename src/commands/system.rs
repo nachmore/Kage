@@ -499,13 +499,9 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
 }
 
 #[tauri::command]
-#[allow(clippy::too_many_arguments)] // First-run form has many independent toggles; packing them
-                                     // into a struct hurts readability on the frontend side more
-                                     // than it helps here.
 pub async fn complete_first_run(
     app: tauri::AppHandle,
     features: State<'_, FeatureServices>,
-    ui: State<'_, UiState>,
     launch_at_startup: bool,
     auto_update: bool,
     enable_computer_control: bool,
@@ -513,7 +509,6 @@ pub async fn complete_first_run(
     enable_telemetry: bool,
 ) -> Result<(), AppError> {
     let mut config = features.config.lock_or_recover();
-    let is_true_first_run = !config.first_run_completed;
     config.first_run_completed = true;
     if auto_update {
         config.updates.auto_check = true;
@@ -549,11 +544,22 @@ pub async fn complete_first_run(
         })),
     );
 
-    // On true first run (or dev mode), show the floating window with a welcome banner
-    if is_true_first_run || ui.dev_mode {
-        show_welcome_banner(&app);
-    }
+    // NOTE: the welcome banner / floating window display used to be
+    // triggered from here. That's moved to the `trigger_welcome_banner`
+    // command so the welcome UI can pick the precise moment — part of
+    // a fade-in choreography where the floating window appears midway
+    // through the welcome window's fade-out.
 
+    Ok(())
+}
+
+/// Show the floating window and welcome banner. Called from the welcome
+/// UI's Finish-flow choreography (not automatically from
+/// `complete_first_run` — we want precise control over when the
+/// floating UI appears relative to the welcome window's fade-out).
+#[tauri::command]
+pub async fn trigger_welcome_banner(app: tauri::AppHandle) -> Result<(), AppError> {
+    show_welcome_banner(&app);
     Ok(())
 }
 
