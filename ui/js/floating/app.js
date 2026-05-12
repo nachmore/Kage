@@ -968,6 +968,7 @@ export class FloatingApp {
         this._toolCallIds = new Set();
         this.attachmentManager.clear();
         this.elements.contentArea.classList.remove('visible');
+        this.elements.contentArea.classList.remove('banner-only');
         const responseActions = document.getElementById('responseActionsContainer');
         if (responseActions) { responseActions.innerHTML = ''; responseActions.style.display = 'none'; }
         const floatingActions = document.getElementById('floatingResponseActions');
@@ -993,6 +994,10 @@ export class FloatingApp {
     startThinking() {
         this.elements.mascotContainer.classList.add('thinking');
         this.elements.loadingDots.classList.add('visible');
+        // A response is about to arrive — drop banner-only mode so the
+        // content-area's overflow:auto comes back for scrollable replies.
+        // Cheap no-op if the class wasn't set.
+        this.elements.contentArea?.classList.remove('banner-only');
         // Switch mascot to jumping animation at larger size
         if (window._kageMascot) {
             import('../shared/mascot-animations.js').then(m => window._kageMascot.setActive(m.ANIMATIONS.jumping, 60));
@@ -1324,7 +1329,14 @@ export class FloatingApp {
         banner.onclick = () => this.handleBannerClick();
         banner.style.display = 'flex';
         // Ensure the content area is visible so the banner shows
-        if (contentArea) contentArea.classList.add('visible');
+        if (contentArea) {
+            contentArea.classList.add('visible');
+            // Banner-only mode: the content-area has nothing scrollable
+            // in it, so drop overflow:auto to keep the scrollbar away.
+            // The flag is cleared in dismissBanner and on the first
+            // streaming chunk, so long responses still scroll normally.
+            contentArea.classList.add('banner-only');
+        }
         // Resize the window to fit the banner after DOM updates
         requestAnimationFrame(() => this.windowManager.resizeWindow());
     }
@@ -1356,6 +1368,10 @@ export class FloatingApp {
         this._bannerVisible = false;
         const banner = document.getElementById('floatingBanner');
         if (banner) banner.style.display = 'none';
+        // Drop banner-only mode whether we're collapsing or about to
+        // receive a real response; subsequent content needs its
+        // scrollbar back.
+        document.getElementById('contentArea')?.classList.remove('banner-only');
         // If the banner was the only content, collapse the content area
         const responseText = document.getElementById('responseText');
         if (!this.isWaitingForResponse && (!responseText || !responseText.textContent.trim())) {

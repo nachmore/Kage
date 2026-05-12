@@ -70,6 +70,17 @@
     min-width: 0;
 }
 
+/* Banner-only mode: when the welcome/update banner is the sole content
+ * (no response text yet), the content-area has nothing long to scroll.
+ * Drop overflow so the natural-height measurement matches what's rendered
+ * and the scrollbar never appears. The moment a response streams in,
+ * .response-text gets content and we flip back to overflow:auto so long
+ * answers can still scroll. Toggled from app.js showBanner/dismissBanner
+ * and the streaming entrypoint. */
+.content-area.banner-only {
+    overflow-y: visible;
+}
+
 .content-area.visible {
     display: block;
 }
