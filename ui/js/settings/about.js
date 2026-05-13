@@ -31,6 +31,7 @@ class AboutSettingsModule extends SettingsModule {
                     <div class="about-actions">
                         <button class="setting-button" id="showWelcomeBtn">Show Welcome Screen</button>
                         <button class="setting-button" id="openConfigFolderBtn" style="margin-left:8px;">Open Config Folder</button>
+                        <button class="setting-button" id="sendFeedbackBtn" style="margin-left:8px;">Send Feedback</button>
                     </div>
                 </div>
 
@@ -163,6 +164,12 @@ class AboutSettingsModule extends SettingsModule {
                 rows.push(this.infoRow('Copyright', '© 2025 ' + (info.authors || 'Kage Team')));
                 infoEl.innerHTML = rows.join('');
             }
+            // Wire Send Feedback once we know the version + issues URL.
+            // Done here (rather than in parallel with the other button
+            // wiring above) so the URL builder always has the info
+            // payload — no race where a fast click would open a
+            // bare github.com/issues/new without the env block.
+            this._wireFeedbackButton(info);
         } catch (e) {
             // Don't use console.log here to avoid recursive logging in settings
         }
@@ -218,6 +225,72 @@ class AboutSettingsModule extends SettingsModule {
                 this._toggleLogging();
             }
         });
+    }
+
+    /** Build a GitHub issue URL prefilled with environment info using
+     *  the `feedback.yml` issue template at
+     *  `.github/ISSUE_TEMPLATE/feedback.yml`. The template handles
+     *  title, labels, and the structured form; we just supply the
+     *  values for the auto-filled fields via query params.
+     *
+     *  We use the template route (rather than freeform `body=...`)
+     *  because it gives us the structured form (dropdowns, sections)
+     *  and keeps the labels in one place — the template file. If the
+     *  template ever evolves, no code change here is needed. */
+    _wireFeedbackButton(info) {
+        const btn = document.getElementById('sendFeedbackBtn');
+        if (!btn) return;
+        const issuesUrl = info?.links?.issues || '';
+        if (!issuesUrl) {
+            // Repo isn't configured to expose an issues URL; hide the
+            // button rather than open something broken.
+            btn.style.display = 'none';
+            return;
+        }
+        btn.addEventListener('click', async () => {
+            try {
+                const url = this._buildFeedbackUrl(info);
+                await window.__TAURI__.core.invoke('open_url', { url });
+            } catch (e) {
+                console.error('Failed to open feedback URL:', e);
+            }
+        });
+    }
+
+    /** Compose the github.com/.../issues/new URL using the feedback
+     *  template. Autofills the Environment textarea with version + OS
+     *  info so triage knows exactly what the user is running.
+     *
+     *  GitHub's issue-template form maps query params to fields by
+     *  the `id` attribute on each form element. See
+     *  `.github/ISSUE_TEMPLATE/feedback.yml` for the canonical IDs. */
+    _buildFeedbackUrl(info) {
+        const issuesUrl = info?.links?.issues || '';
+        const base = issuesUrl.replace(/\/+$/, '');
+        const newUrl = base.endsWith('/new') ? base : base + '/new';
+
+        const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || 'unknown';
+        // navigator.platform is deprecated but still useful for a
+        // human-readable OS hint; userAgent has the long form anyway.
+        const platform = (typeof navigator !== 'undefined' && navigator.platform) || 'unknown';
+        const version = info?.version || 'unknown';
+
+        const environment = [
+            '- Kage version: `' + version + '`',
+            '- Platform: `' + platform + '`',
+            '- User agent: `' + ua + '`',
+            '- How you opened this issue: in-app button',
+        ].join('\n');
+
+        // `template=feedback.yml` selects the form; the remaining
+        // params target individual fields by their `id`. Fields the
+        // template marks as required (e.g. summary) stay empty so the
+        // user has to fill them in — that's the whole point.
+        const params = new URLSearchParams({
+            template: 'feedback.yml',
+            environment,
+        });
+        return newUrl + '?' + params.toString();
     }
 
     _toggleLogging() {

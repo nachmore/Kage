@@ -1,0 +1,82 @@
+name: 🐛 Bug Report
+description: Something isn't working the way it should.
+title: "Bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. The more we know about
+        the situation, the faster we can fix it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: |
+        When I do X, Y happens instead of Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What did you think would happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step so we can see what you saw.
+      placeholder: |
+        1. Open Kage
+        2. Press Alt+Space
+        3. Type ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Paste any relevant log output. You can find logs via Settings → About →
+        Logging, or the "Open Logs Folder" button in the same place.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Optional. Drag and drop images or short clips here.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        The in-app "Send Feedback" button autofills this. If you got here by another
+        route, fill in what you can.
+      value: |
+        - Kage version: 
+        - Platform: 
+        - Reproducible on a fresh install: yes / no / unsure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Conduct
+      options:
+        - label: I've searched existing issues and this isn't a duplicate.
+          required: true
+        - label: I'll keep the discussion respectful and constructive.
+          required: true

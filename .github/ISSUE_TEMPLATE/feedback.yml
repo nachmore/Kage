@@ -1,0 +1,87 @@
+name: 💬 Feedback
+description: General feedback, suggestions, or first impressions about Kage.
+title: "Feedback: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to share your thoughts. The fields below are
+        optional unless marked otherwise — fill in whatever feels useful.
+
+        For bug reports or feature requests, the dedicated templates capture
+        more structured detail and help us triage faster.
+
+  - type: dropdown
+    id: feedback-type
+    attributes:
+      label: What kind of feedback is this?
+      description: Pick the closest fit. If nothing matches, choose "Other".
+      options:
+        - First impressions / general thoughts
+        - Workflow or UX friction
+        - Performance observation
+        - Documentation gap
+        - Suggestion or idea (not a full feature request)
+        - Praise or what's working well
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What's on your mind?
+      description: |
+        A few sentences is fine. If you're describing friction, tell us
+        what you were trying to do and where Kage got in the way.
+      placeholder: |
+        Example: When I press my hotkey while a video call is active, the
+        floating window steals focus from the call. I'd expect it to layer
+        on top without taking focus.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else useful?
+      description: |
+        Optional. Workflows, comparison to other tools you've used, screenshots,
+        anything that helps us see the situation the way you do.
+
+  - type: input
+    id: contact
+    attributes:
+      label: Want a follow-up?
+      description: |
+        Optional. If you're open to us reaching out for a 15-minute chat,
+        drop a contact (email, Discord, etc). Skip this if you'd rather not.
+      placeholder: name@example.com (optional)
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **Environment** — please leave the auto-filled block from the app intact
+        (or fill in manually if you got here by another route).
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Auto-filled by the in-app "Send Feedback" button. Leave as-is, or fill in manually.
+      value: |
+        - Kage version: 
+        - Platform: 
+        - How you opened this issue: in-app button / direct link / other
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Conduct
+      options:
+        - label: I'll keep the discussion respectful and constructive.
+          required: true

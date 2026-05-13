@@ -1,0 +1,10 @@
+# Disabling blank issues steers reporters into the structured templates,
+# which makes triage faster and dramatically reduces incomplete reports.
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/nachmore/Kage/tree/main/docs
+    about: Browse the docs before filing — your question may already be answered.
+  - name: 🔒 Security issue
+    url: https://github.com/nachmore/Kage/security/advisories/new
+    about: Report security vulnerabilities privately. Please don't open a public issue for these.

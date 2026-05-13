@@ -1,0 +1,57 @@
+name: ✨ Feature Request
+description: Suggest a new capability or enhancement.
+title: "Feature: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Telling us what problem you're trying to
+        solve (rather than the specific solution you had in mind) gives us
+        the most room to design something that fits.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Tell us what you were doing and where the rough edge is.
+      placeholder: |
+        I'm trying to ... but the current behaviour makes that hard because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What did you have in mind?
+      description: |
+        Optional. If you have a specific solution in mind, describe it. If not,
+        skip this — we'd rather hear the problem first.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other approaches you've tried, or other apps that solve this differently.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - Nice to have
+        - Would noticeably improve my workflow
+        - I'm currently working around it
+        - I can't use Kage effectively without it
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Conduct
+      options:
+        - label: I've searched existing issues and this isn't a duplicate.
+          required: true
+        - label: I'll keep the discussion respectful and constructive.
+          required: true
