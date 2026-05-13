@@ -38,6 +38,11 @@ use tauri_plugin_updater::{Update, UpdaterExt};
 pub const ENDPOINT_STABLE: &str = env!("UPDATE_ENDPOINT_STABLE");
 pub const ENDPOINT_BETA: &str = env!("UPDATE_ENDPOINT_BETA");
 pub const ENDPOINT_DEV: &str = env!("UPDATE_ENDPOINT_DEV");
+/// Legacy raw-CHANGELOG.md URL. Still surfaced via `get_update_urls`
+/// for diagnostic display, but no longer consumed by [`fetch_changelog`]
+/// — that function now hits the GitHub Releases API so the in-app
+/// changelog stays version-pinned and doesn't leak unreleased commits
+/// from `main`.
 pub const CHANGELOG_URL: &str = env!("UPDATE_CHANGELOG_URL");
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -214,38 +219,264 @@ pub async fn plugin_download_and_install(update: Update) -> Result<()> {
     Ok(())
 }
 
-/// Fetch the changelog markdown (first 10KB).
-/// Kept separate from the updater plugin — the plugin's `Update.body`
-/// field holds per-release notes, but the full CHANGELOG lives at its
-/// own URL independent of any specific release.
-pub fn fetch_changelog() -> Result<String> {
-    if CHANGELOG_URL.is_empty() {
-        return Ok("No changelog URL configured.".to_string());
+/// Maximum bytes of rendered markdown returned to the UI. Caps the
+/// payload regardless of how chatty the release notes are — without
+/// this, a 50-release fetch with verbose bodies could push hundreds of
+/// KB of HTML into the settings webview and stutter the renderer.
+const RELEASE_NOTES_BUDGET: usize = 30 * 1024;
+
+/// How many releases to surface. Older history is still on GitHub; this
+/// is the in-app "what changed recently" view, not a full archive.
+const RELEASE_NOTES_LIMIT: usize = 10;
+
+/// Parse `owner/repo` out of `CARGO_PKG_REPOSITORY`. Returns `None`
+/// for any value that isn't a recognisable github.com URL — release
+/// notes are GitHub-specific so a non-GitHub repo URL means we have
+/// nothing to fetch.
+fn parse_github_repo(url: &str) -> Option<(String, String)> {
+    let path = url
+        .trim()
+        .trim_end_matches('/')
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("http://github.com/"))
+        .or_else(|| url.strip_prefix("git@github.com:"))?;
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let mut parts = path.splitn(2, '/');
+    let owner = parts.next()?.trim();
+    let repo = parts.next()?.trim();
+    if owner.is_empty() || repo.is_empty() {
+        return None;
     }
+    Some((owner.to_string(), repo.to_string()))
+}
 
-    let response = reqwest::blocking::Client::new()
-        .get(CHANGELOG_URL)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .context("Failed to fetch changelog")?
-        .text()
-        .context("Failed to read changelog")?;
+/// Format an ISO-8601 timestamp from the GitHub API into a short
+/// human-readable date. Falls back to the raw input on parse failure
+/// so we never strip useful information.
+fn format_release_date(published_at: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(published_at)
+        .map(|dt| dt.format("%b %-d, %Y").to_string())
+        .unwrap_or_else(|_| published_at.to_string())
+}
 
-    let truncated = if response.len() > 10240 {
-        let mut end = 10240;
-        // Don't cut in the middle of a UTF-8 char
-        while end > 0 && !response.is_char_boundary(end) {
-            end -= 1;
-        }
-        format!(
-            "{}\n\n---\n*Changelog truncated. Full version available online.*",
-            &response[..end]
-        )
-    } else {
-        response
+/// Fetch the most recent releases from the GitHub API and render them
+/// as a single markdown document, scoped to the user's channel.
+///
+/// Channel semantics:
+///   - `stable` — only published releases where `prerelease=false`.
+///   - `beta` / `dev` — include prereleases too. These channels track
+///     rolling alias tags (`beta-latest`, `dev-latest`), so the user
+///     is opted into seeing every cut, not just the curated stable
+///     ones.
+///
+/// We fetch from `api.github.com/repos/{owner}/{repo}/releases` rather
+/// than the raw `CHANGELOG.md` so the notes shown match the version
+/// the user actually has, and an in-flight docs PR on `main` doesn't
+/// leak unreleased prose into the about page.
+///
+/// Anonymous API calls are bound by GitHub's 60/hr per-IP rate limit,
+/// which is plenty for the "open settings → fetch once" path. The
+/// frontend already gates this on the changelog UI being visible.
+pub fn fetch_changelog(channel: &str) -> Result<String> {
+    let repo_url = env!("CARGO_PKG_REPOSITORY");
+    let Some((owner, repo)) = parse_github_repo(repo_url) else {
+        return Ok(format!(
+            "No GitHub repository configured (got `{}`). Release notes are unavailable.",
+            repo_url
+        ));
     };
 
-    Ok(truncated)
+    let api_url = format!(
+        "https://api.github.com/repos/{}/{}/releases?per_page=30",
+        owner, repo
+    );
+
+    // GitHub rejects anonymous requests without a User-Agent and
+    // expects the documented Accept header for the v3 API. Both
+    // headers must be set or the response is a 403, not the JSON
+    // payload we'd expect.
+    let response = reqwest::blocking::Client::new()
+        .get(&api_url)
+        .header("User-Agent", format!("Kage/{}", CURRENT_VERSION))
+        .header("Accept", "application/vnd.github+json")
+        .header("X-GitHub-Api-Version", "2022-11-28")
+        .timeout(std::time::Duration::from_secs(10))
+        .send()
+        .context("Failed to reach GitHub releases API")?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        // Surface the rate-limit case explicitly so the UI can show
+        // something useful instead of a generic "fetch failed". 403
+        // with `rate limit` in the body is the canonical signal.
+        if status.as_u16() == 403 && body.to_lowercase().contains("rate limit") {
+            return Ok(
+                "GitHub API rate limit reached. Please try again in an hour, or view release notes on GitHub directly."
+                    .to_string(),
+            );
+        }
+        return Err(anyhow::anyhow!(
+            "GitHub API returned {}: {}",
+            status,
+            body.chars().take(200).collect::<String>()
+        ));
+    }
+
+    let releases: Vec<serde_json::Value> = response
+        .json()
+        .context("Failed to parse GitHub releases JSON")?;
+
+    let normalized = normalize_channel(channel);
+    let include_prereleases = normalized != "stable";
+
+    let mut rendered = String::new();
+    let mut count = 0;
+
+    for release in releases.iter() {
+        if count >= RELEASE_NOTES_LIMIT {
+            break;
+        }
+
+        // Skip drafts unconditionally — they're not visible to end
+        // users and shouldn't show up in the in-app changelog.
+        if release
+            .get("draft")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        let is_prerelease = release
+            .get("prerelease")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if is_prerelease && !include_prereleases {
+            continue;
+        }
+
+        let name = release
+            .get("name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| release.get("tag_name").and_then(|v| v.as_str()))
+            .unwrap_or("(untitled)");
+        let published = release
+            .get("published_at")
+            .and_then(|v| v.as_str())
+            .map(format_release_date);
+        let body = release
+            .get("body")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        let html_url = release
+            .get("html_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        // Heading line with a date suffix when available. The "[link]"
+        // tail gives the user a direct route to the full release on
+        // GitHub for assets, comments, etc.
+        if let Some(date) = published {
+            rendered.push_str(&format!("## {} — {}", name, date));
+        } else {
+            rendered.push_str(&format!("## {}", name));
+        }
+        if is_prerelease {
+            rendered.push_str(" *(prerelease)*");
+        }
+        rendered.push('\n');
+
+        if !html_url.is_empty() {
+            rendered.push_str(&format!("[View on GitHub]({})\n\n", html_url));
+        } else {
+            rendered.push('\n');
+        }
+
+        if body.is_empty() {
+            rendered.push_str("_No release notes._\n\n");
+        } else {
+            rendered.push_str(body);
+            rendered.push_str("\n\n");
+        }
+        rendered.push_str("---\n\n");
+
+        count += 1;
+
+        // Cap total size to keep the webview snappy. We trim on a
+        // UTF-8 boundary so the markdown parser doesn't trip over a
+        // half-character at the end.
+        if rendered.len() >= RELEASE_NOTES_BUDGET {
+            let mut end = RELEASE_NOTES_BUDGET;
+            while end > 0 && !rendered.is_char_boundary(end) {
+                end -= 1;
+            }
+            rendered.truncate(end);
+            rendered.push_str("\n\n*Older releases truncated. View the full history on GitHub.*\n");
+            return Ok(rendered);
+        }
+    }
+
+    if rendered.is_empty() {
+        return Ok(format!(
+            "No releases found for the **{}** channel yet.",
+            normalized
+        ));
+    }
+
+    Ok(rendered)
+}
+
+#[cfg(test)]
+mod tests {
+    // NOTE: This module is currently unreachable because src/lib.rs
+    // gates the updater module on `#[cfg(not(test))]`. Kept here so
+    // that if the gating is ever relaxed (e.g. via a test-friendly
+    // mock plugin) the parser invariants are already documented as
+    // executable specs. Keep the test fns small and pure-logic so
+    // they never need the runtime to compile.
+    use super::*;
+
+    #[test]
+    fn parses_https_github_url() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_https_github_url_with_trailing_slash() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage/"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_git_suffix() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage.git"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_ssh_url() {
+        assert_eq!(
+            parse_github_repo("git@github.com:nachmore/Kage.git"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn rejects_non_github_url() {
+        assert_eq!(parse_github_repo("https://gitlab.com/foo/bar"), None);
+        assert_eq!(parse_github_repo(""), None);
+        assert_eq!(parse_github_repo("https://github.com/"), None);
+        assert_eq!(parse_github_repo("https://github.com/onlyowner"), None);
+    }
 }
 
 /// Persist the current session id so the post-restart process can

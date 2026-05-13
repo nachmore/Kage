@@ -1391,9 +1391,17 @@ pub async fn check_for_update(
 }
 
 #[tauri::command]
-pub async fn fetch_changelog() -> Result<String, AppError> {
+pub async fn fetch_changelog(features: State<'_, FeatureServices>) -> Result<String, AppError> {
+    // Channel scopes prereleases — stable users see only published
+    // releases, beta/dev see prereleases too. Read here rather than
+    // baking it into the updater module so the command stays the
+    // single channel-aware caller.
+    let channel = {
+        let cfg = features.config.lock_or_recover();
+        cfg.updates.channel.clone()
+    };
     Ok(
-        tauri::async_runtime::spawn_blocking(crate::updater::fetch_changelog)
+        tauri::async_runtime::spawn_blocking(move || crate::updater::fetch_changelog(&channel))
             .await
             .map_err(|e| format!("Task error: {}", e))?
             .map_err(|e| format!("Fetch failed: {}", e))?,
