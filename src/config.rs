@@ -184,7 +184,7 @@ pub struct StoreSource {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateConfig {
     /// Automatically check for updates once per day
     #[serde(default)]
@@ -198,6 +198,29 @@ pub struct UpdateConfig {
     /// Version that was last installed via auto-update (to detect fresh updates)
     #[serde(default)]
     pub last_updated_version: Option<String>,
+    /// Which release channel this install tracks. One of `stable`, `beta`,
+    /// `dev`. Resolved to a concrete endpoint URL by
+    /// `updater::endpoint_for_channel`. Unknown values fall back to
+    /// stable so a stale / corrupted config can't silently trap the
+    /// user on a dead channel.
+    #[serde(default = "default_update_channel")]
+    pub channel: String,
+}
+
+fn default_update_channel() -> String {
+    "stable".to_string()
+}
+
+impl Default for UpdateConfig {
+    fn default() -> Self {
+        Self {
+            auto_check: false,
+            silent_update: false,
+            last_check_time: None,
+            last_updated_version: None,
+            channel: default_update_channel(),
+        }
+    }
 }
 
 impl Default for AgentConfig {

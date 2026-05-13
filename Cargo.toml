@@ -11,19 +11,33 @@ homepage = "https://github.com/nachmore/Kage"
 
 # Auto-updater endpoints. See `src/updater.rs` for the consumers.
 #
-# `installer_url` is a BASE URL — the updater appends the platform-specific
-# extension at runtime (`.exe` on Windows, `.dmg` on macOS, `.AppImage` on
-# Linux), so a single shared server path fans out per-OS. Do NOT include an
-# extension in this value; the server must serve all three filenames.
+# The updater is wired through `tauri-plugin-updater`, which fetches a
+# `latest.json` manifest from the configured endpoint and verifies the
+# downloaded installer against a signature embedded in the manifest
+# using the public key provisioned at build time (see build.rs and
+# docs/RELEASE.md).
+#
+# Three release channels, each served from a fixed GitHub Release tag
+# alias that CI force-moves to the most recent build for that channel:
+#   - stable  — cut from a signed v*.*.* tag
+#   - beta    — staged pre-release
+#   - dev     — every commit to main
+# Users pick a channel in Settings → Updates; the resolver in
+# src/updater.rs::endpoint_for_channel maps the string to the right URL.
+#
+# The {{target}}, {{arch}}, and {{current_version}} placeholders are
+# substituted at request time by the plugin.
 [package.metadata.update]
-version_url = "https://example.com/kage/latest-version.txt"
-installer_url = "https://example.com/kage/kage-setup"
-changelog_url = "https://example.com/kage/CHANGELOG.md"
+endpoint_stable = "https://github.com/nachmore/Kage/releases/latest/download/latest.json"
+endpoint_beta   = "https://github.com/nachmore/Kage/releases/download/beta-latest/latest.json"
+endpoint_dev    = "https://github.com/nachmore/Kage/releases/download/dev-latest/latest.json"
+changelog_url   = "https://raw.githubusercontent.com/nachmore/Kage/main/CHANGELOG.md"
 
 [package.metadata.update.dev]
-version_url = "http://localhost:1420/updates/latest-version"
-installer_url = "http://localhost:1420/updates/kage-setup"
-changelog_url = "http://localhost:1420/updates/CHANGELOG.md"
+endpoint_stable = "http://localhost:1420/updates/latest.json"
+endpoint_beta   = "http://localhost:1420/updates/latest.json"
+endpoint_dev    = "http://localhost:1420/updates/latest.json"
+changelog_url   = "http://localhost:1420/updates/CHANGELOG.md"
 
 # URLs surfaced to users from the UI (welcome flow, settings, about page).
 # `build.rs` forwards these into compile-time env vars so `env!()` in Rust
@@ -65,6 +79,10 @@ semver = "1.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-dialog = "2"
+# Signed in-app updates. The plugin verifies a .sig file against a
+# compile-time public key before running any installer, replacing the
+# older hand-rolled updater. See src/updater.rs and docs/RELEASE.md.
+tauri-plugin-updater = "2"
 rfd = "0.15"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 regex = "1"

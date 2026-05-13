@@ -98,7 +98,6 @@ fn main() {
 /// subcommand can return before we spin up Tokio. See `fn main` for the
 /// rationale.
 async fn run() {
-
     #[cfg(all(windows, debug_assertions))]
     attach_parent_console();
 
@@ -211,6 +210,13 @@ async fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        // Signed in-app updates. The plugin verifies every downloaded
+        // installer against the compile-time public key embedded via
+        // build.rs; a missing signature or wrong key aborts the install
+        // before any bytes execute. Endpoint + pubkey are configured at
+        // runtime in `updater::plugin_check` so we can honour the
+        // user's channel choice (stable / beta / dev). See docs/RELEASE.md.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 setup::handle_window_close(window, api);

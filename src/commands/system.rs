@@ -224,6 +224,12 @@ pub async fn save_config(
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         *state_config = config;
+        // Normalize the update channel — unknown values collapse to
+        // "stable". This guards against a frontend bug, a stale config
+        // migration, or an end-user hand-editing config.json to a
+        // channel we don't understand.
+        state_config.updates.channel =
+            crate::updater::normalize_channel(&state_config.updates.channel).to_string();
         state_config.save().map_err(|e| {
             error!("Failed to save config: {}", e);
             format!("Failed to save configuration: {}", e)
@@ -684,7 +690,12 @@ pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
             "repository": env!("KAGE_LINK_REPOSITORY"),
             "issues": env!("KAGE_LINK_ISSUES"),
             "privacy": env!("KAGE_LINK_PRIVACY"),
-        }
+        },
+        // Update channel allow-list — surfaced so the Settings UI can
+        // render the dropdown from a single source of truth (Rust)
+        // rather than maintaining a parallel hardcoded list. See
+        // updater::VALID_CHANNELS.
+        "update_channels": crate::updater::VALID_CHANNELS,
     }))
 }
 
@@ -753,18 +764,17 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
                     .as_ref()
                     .map(|(_, proc)| proc.as_str())
                     .unwrap_or("");
-                let selection = if crate::os::clipboard::is_process_blocklisted(
-                    fg_process, &blocklist,
-                ) {
-                    info!(
-                        "[inline-assist] Skipping capture — foreground app '{}' is blocklisted",
-                        fg_process
-                    );
-                    None
-                } else {
-                    let capture_token = crate::os::clipboard::begin_selection_capture();
-                    crate::os::clipboard::finish_selection_capture(capture_token)
-                };
+                let selection =
+                    if crate::os::clipboard::is_process_blocklisted(fg_process, &blocklist) {
+                        info!(
+                            "[inline-assist] Skipping capture — foreground app '{}' is blocklisted",
+                            fg_process
+                        );
+                        None
+                    } else {
+                        let capture_token = crate::os::clipboard::begin_selection_capture();
+                        crate::os::clipboard::finish_selection_capture(capture_token)
+                    };
                 let cursor_pos = crate::os::cursor::get_cursor_position().unwrap_or((500, 500));
                 let handle = ia_handle.clone();
                 tauri::async_runtime::spawn(async move {
@@ -1317,20 +1327,44 @@ pub async fn get_auto_steering_path() -> Result<String, AppError> {
 // --- Update commands ---
 
 #[tauri::command]
-pub async fn check_for_update(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
-    let result = tauri::async_runtime::spawn_blocking(crate::updater::check_for_update)
+pub async fn check_for_update(
+    app: tauri::AppHandle,
+    features: State<'_, FeatureServices>,
+) -> Result<serde_json::Value, AppError> {
+    let channel = {
+        let cfg = features.config.lock_or_recover();
+        cfg.updates.channel.clone()
+    };
+
+    let result = crate::updater::plugin_check(&app, &channel)
         .await
-        .map_err(|e| format!("Task error: {}", e))?
         .map_err(|e| format!("Check failed: {}", e))?;
 
-    // Emit event so the floating window can show a banner too
-    if let Some(ref version) = result {
+    let available = result.as_ref().map(|u| u.version.clone());
+
+    // Cache the Update handle so download_and_install_update can
+    // consume it without re-checking.
+    if let Some(update) = result {
+        if let Ok(mut v) = features.updater.available_version.lock() {
+            *v = Some(update.version.clone());
+        }
+        if let Ok(mut p) = features.updater.pending_update.lock() {
+            *p = Some(update);
+        }
+        features
+            .updater
+            .update_ready
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    // Emit event so the floating window can show a banner too.
+    if let Some(ref version) = available {
         let _ = app.emit("update_available", version);
     }
 
     Ok(serde_json::json!({
         "current_version": crate::updater::CURRENT_VERSION,
-        "available_version": result,
+        "available_version": available,
     }))
 }
 
@@ -1345,25 +1379,79 @@ pub async fn fetch_changelog() -> Result<String, AppError> {
 }
 
 #[tauri::command]
-pub async fn get_update_urls() -> Result<serde_json::Value, AppError> {
+pub async fn get_update_urls(
+    features: State<'_, FeatureServices>,
+) -> Result<serde_json::Value, AppError> {
+    let channel = {
+        let cfg = features.config.lock_or_recover();
+        cfg.updates.channel.clone()
+    };
     Ok(serde_json::json!({
-        "version_url": crate::updater::VERSION_URL,
-        "installer_url": crate::updater::installer_url(),
+        "channel": channel,
+        "endpoint": crate::updater::endpoint_for_channel(&channel),
         "changelog_url": crate::updater::CHANGELOG_URL,
     }))
 }
 
 #[tauri::command]
-pub async fn download_and_install_update(ui: State<'_, UiState>) -> Result<(), AppError> {
-    let session_id = ui.floating_session_id.lock().ok().and_then(|s| s.clone());
+pub async fn download_and_install_update(
+    app: tauri::AppHandle,
+    features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
+    acp: State<'_, AcpHandles>,
+) -> Result<(), AppError> {
+    // Prefer the Update cached from a previous check_for_update call —
+    // it might carry channel-specific metadata the plugin would need to
+    // re-fetch otherwise. Fall back to a fresh check if nothing cached.
+    let update = {
+        let mut slot = features.updater.pending_update.lock_or_recover();
+        slot.take()
+    };
+    let update = if let Some(u) = update {
+        u
+    } else {
+        let channel = {
+            let cfg = features.config.lock_or_recover();
+            cfg.updates.channel.clone()
+        };
+        crate::updater::plugin_check(&app, &channel)
+            .await
+            .map_err(|e| format!("Check failed: {}", e))?
+            .ok_or_else(|| AppError::from("No update available"))?
+    };
 
-    Ok(tauri::async_runtime::spawn_blocking(move || {
-        let path = crate::updater::download_installer().map_err(|e| e.to_string())?;
-        crate::updater::run_installer_and_exit(&path, session_id.as_deref())
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())??)
+    // Stamp last_updated_version so the post-restart launch can show
+    // the "welcome back after update" banner. Same story as the idle
+    // path in start_update_loop.
+    {
+        let mut cfg = features.config.lock_or_recover();
+        if let Ok(v) = features.updater.available_version.lock() {
+            cfg.updates.last_updated_version = v.clone();
+        }
+        let _ = cfg.save();
+    }
+
+    // Write the resume marker so the relaunch restores the session.
+    let session_id = ui
+        .floating_session_id
+        .lock()
+        .ok()
+        .and_then(|s| s.clone())
+        .or_else(|| acp.client.get_session_id());
+    crate::updater::persist_resume_marker(session_id.as_deref());
+
+    crate::updater::plugin_download_and_install(update)
+        .await
+        .map_err(|e| format!("Install failed: {}", e))?;
+
+    // On Windows the plugin called process::exit(0) inside
+    // download_and_install and we never reached this line. On macOS
+    // it returned cleanly after swapping the .app on disk; we exit
+    // ourselves so launchd / the user relaunches into the new binary.
+    // See plugin_download_and_install's doc-comment for the full
+    // per-platform breakdown verified against the plugin source.
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -1883,7 +1971,6 @@ pub async fn get_permission_audit_log_path() -> Result<String, AppError> {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default())
 }
-
 
 // ---------------------------------------------------------------------------
 // Telemetry commands

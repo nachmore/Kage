@@ -998,10 +998,7 @@ fn provision_decisions(
                 }
                 Err(e) => {
                     report.failed += 1;
-                    warn!(
-                        "welcome_provision: toggle '{}' failed: {}",
-                        decision.id, e
-                    );
+                    warn!("welcome_provision: toggle '{}' failed: {}", decision.id, e);
                 }
             }
         } else if decision.checked && !already_installed.contains(&decision.id) {
@@ -1012,10 +1009,7 @@ fn provision_decisions(
                 }
                 Err(e) => {
                     report.failed += 1;
-                    warn!(
-                        "welcome_provision: install '{}' failed: {}",
-                        decision.id, e
-                    );
+                    warn!("welcome_provision: install '{}' failed: {}", decision.id, e);
                 }
             }
         } else {
@@ -1057,24 +1051,21 @@ fn install_and_commit_direct(
 ) -> Result<String, String> {
     extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    let packages_dir = bundled_packages_dir()
-        .ok_or_else(|| "Bundled packages directory not found".to_string())?;
+    let packages_dir =
+        bundled_packages_dir().ok_or_else(|| "Bundled packages directory not found".to_string())?;
 
     let candidates = vec![
         packages_dir.join(format!("{}.zip", id)),
         packages_dir.join(format!("{}-theme.zip", id)),
     ];
-    let zip_path = candidates
-        .into_iter()
-        .find(|p| p.exists())
-        .ok_or_else(|| {
-            format!(
-                "welcome_provision: '{}' is not a bundled package. The welcome flow only accepts \
+    let zip_path = candidates.into_iter().find(|p| p.exists()).ok_or_else(|| {
+        format!(
+            "welcome_provision: '{}' is not a bundled package. The welcome flow only accepts \
                  ids whose zip lives in the bundled packages directory. Non-bundled extensions \
                  must go through store_install + commit_extension_install.",
-                id
-            )
-        })?;
+            id
+        )
+    })?;
 
     let item = extensions::install_from_zip(&zip_path)
         .map_err(|e| format!("Failed to install bundled package '{}': {}", id, e))?;

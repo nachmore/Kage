@@ -42,6 +42,19 @@ Debug builds without a key are silent — that's the normal `cargo tauri dev` pa
 
 CI reads `APTABASE_KEY` from a GitHub Actions secret of the same name. See `.github/workflows/ci.yml`.
 
+### Release signing key
+
+Kage ships signed in-app updates. Every release artefact is signed with a private key held only in CI; every binary embeds the matching public key at build time so the updater can verify what it downloads. Release builds **fail** if no public key is configured (we never want to ship a binary that can't verify updates).
+
+For local release builds, copy the example and paste your public key:
+
+```bash
+cp .tauri-updater-pubkey.example .tauri-updater-pubkey
+# edit and paste the contents of .tauri-updater.key.pub
+```
+
+Full release + signing documentation lives in [`docs/RELEASE.md`](docs/RELEASE.md).
+
 ### Development mode
 
 ```bash

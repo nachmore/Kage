@@ -130,6 +130,15 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     check_for_update: null,
     download_and_install_update: null,
     clear_update_flag: null,
+
+    // --- telemetry (user privacy) — controls Aptabase analytics. Never
+    // callable from extensions; the install ID and opt-in state are
+    // user-facing settings only the host chrome should touch.
+    telemetry_track: null,
+    get_telemetry_info: null,
+    set_telemetry_enabled: null,
+    reset_telemetry_install_id: null,
+
     pocket_tts_install: null,
     pocket_tts_cancel_install: null,
     pocket_tts_start: null,

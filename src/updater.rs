@@ -1,9 +1,25 @@
-//! Auto-update system.
+//! Auto-update system, backed by `tauri-plugin-updater`.
 //!
-//! Checks for new versions, downloads installers, and applies updates
-//! when the user is idle (floating window not shown for 5+ minutes).
+//! The plugin handles the part that actually matters for security:
+//! fetching a signed `latest.json` manifest, verifying the signature on
+//! the installer with a compile-time public key, and running the right
+//! per-OS install flow. This module wraps the plugin with the scheduling
+//! and UX concerns the plugin doesn't care about:
 //!
-//! Update URLs are compiled in from [package.metadata.update] in Cargo.toml.
+//!   - Channel-aware endpoint routing (`stable` / `beta` / `dev`).
+//!   - Daily-check schedule and a "silent install on idle" gate so the
+//!     user isn't interrupted mid-conversation.
+//!   - Session resume across the install-and-restart boundary (a
+//!     `last-session.txt` file the next launch picks up).
+//!   - A `was_just_updated` flag the welcome banner consumes.
+//!   - Changelog fetch for Settings → Updates.
+//!
+//! The old hand-rolled updater used to live here; its core flaw was no
+//! signature check — a network-MITM attacker could swap the installer
+//! for anything. This module keeps all of that old public API name
+//! surface but delegates the actual network + install work to the
+//! plugin, so every call site at main.rs / commands / setup stays
+//! unchanged while the trust story gets correct-by-construction.
 
 use crate::config::Config;
 use crate::lock_ext::LockExt;
@@ -13,44 +29,85 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use tauri::Emitter;
+use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// Compile-time update URLs from Cargo.toml [package.metadata.update].
-///
-/// `INSTALLER_URL` is a BASE URL (no extension). Use `installer_url()` to get
-/// the full URL for the current platform — it appends `.exe` / `.dmg` /
-/// `.AppImage` so a single shared server path fans out per-OS.
-pub const VERSION_URL: &str = env!("UPDATE_VERSION_URL");
-pub const INSTALLER_URL: &str = env!("UPDATE_INSTALLER_URL");
+/// Compile-time endpoint URLs per channel (from Cargo.toml
+/// `[package.metadata.update]`). An empty value means the channel isn't
+/// configured for this build — [`endpoint_for_channel`] falls back to
+/// stable in that case.
+pub const ENDPOINT_STABLE: &str = env!("UPDATE_ENDPOINT_STABLE");
+pub const ENDPOINT_BETA: &str = env!("UPDATE_ENDPOINT_BETA");
+pub const ENDPOINT_DEV: &str = env!("UPDATE_ENDPOINT_DEV");
 pub const CHANGELOG_URL: &str = env!("UPDATE_CHANGELOG_URL");
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Installer file extension for the current platform, including the leading dot.
-/// Used both for the remote URL and the cached download filename so they stay
-/// in sync.
-pub fn installer_extension() -> &'static str {
-    if cfg!(windows) {
-        ".exe"
-    } else if cfg!(target_os = "macos") {
-        ".dmg"
+/// Optional compile-time updater public key. Provisioned by build.rs
+/// from either `TAURI_UPDATER_PUBKEY` env or `.tauri-updater-pubkey`
+/// file. Release builds fail the build if this is absent (we never ship
+/// release binaries that can't verify updates); debug builds tolerate
+/// `None` so the app still runs without update infra configured.
+pub const PUBKEY: Option<&str> = option_env!("TAURI_UPDATER_PUBKEY");
+
+/// Valid channel values. Must stay in sync with the keys in
+/// `[package.metadata.update]` and with the dropdown in
+/// `ui/js/settings/updates.js`.
+pub const VALID_CHANNELS: &[&str] = &["stable", "beta", "dev"];
+
+/// Normalise a channel string to a known value. Unknown / empty input
+/// collapses to `"stable"`. Used by `save_config` validation and by
+/// `endpoint_for_channel` so both code paths agree on what counts as
+/// valid.
+pub fn normalize_channel(channel: &str) -> &'static str {
+    let trimmed = channel.trim();
+    for &known in VALID_CHANNELS {
+        if known == trimmed {
+            return known;
+        }
+    }
+    "stable"
+}
+
+/// Resolve a channel string to its endpoint URL. Unknown values collapse
+/// to stable via [`normalize_channel`] — a stale or corrupted config
+/// shouldn't silently trap the user on a dead channel. An empty URL
+/// means the channel isn't configured at compile time; we fall through
+/// to stable in that case too.
+pub fn endpoint_for_channel(channel: &str) -> &'static str {
+    let url = match normalize_channel(channel) {
+        "beta" => ENDPOINT_BETA,
+        "dev" => ENDPOINT_DEV,
+        _ => ENDPOINT_STABLE,
+    };
+    if url.is_empty() {
+        ENDPOINT_STABLE
     } else {
-        ".AppImage"
+        url
     }
 }
 
-/// Full installer URL for the current platform — base URL + extension.
-pub fn installer_url() -> String {
-    format!("{}{}", INSTALLER_URL, installer_extension())
-}
-
-/// Shared state for the updater
+/// Shared state for the updater.
+///
+/// Stores the cached [`Update`] handle returned by the plugin's
+/// `check()`. We keep it around (instead of re-checking right before
+/// install) so the download + install sequence can be triggered the
+/// moment the user is idle, without an extra network round trip that
+/// might time out or change the available version.
 pub struct UpdaterState {
-    /// Timestamp of the last time the floating window was shown
+    /// Timestamp of the last time the floating window was shown.
+    /// Updated from `commands::touch_floating_activity`.
     pub last_floating_activity: std::sync::Mutex<Instant>,
-    /// Whether an update has been downloaded and is ready to install
+    /// True when `pending_update` holds an `Update` ready to install.
     pub update_ready: AtomicBool,
-    /// Path to the downloaded installer
-    pub installer_path: std::sync::Mutex<Option<String>>,
-    /// The new version available
+    /// The [`Update`] returned by the plugin when a newer version was
+    /// found. `None` either because no check has happened yet, or the
+    /// last check reported up-to-date.
+    ///
+    /// Wrapped in `Mutex<Option<...>>` (not `RwLock`) because the only
+    /// access patterns are "take it out to install" or "swap in a new
+    /// one after check" — read-heavy workloads don't exist here.
+    pub pending_update: std::sync::Mutex<Option<Update>>,
+    /// Cached version string from the last successful check.
+    /// Surfaced to the Settings UI without re-checking.
     pub available_version: std::sync::Mutex<Option<String>>,
 }
 
@@ -65,19 +122,21 @@ impl UpdaterState {
         Self {
             last_floating_activity: std::sync::Mutex::new(Instant::now()),
             update_ready: AtomicBool::new(false),
-            installer_path: std::sync::Mutex::new(None),
+            pending_update: std::sync::Mutex::new(None),
             available_version: std::sync::Mutex::new(None),
         }
     }
 
-    /// Record that the floating window was just shown
+    /// Record that the floating window was just shown.
     pub fn touch_activity(&self) {
         if let Ok(mut t) = self.last_floating_activity.lock() {
             *t = Instant::now();
         }
     }
 
-    /// Check if the user has been idle (no floating window activity) for 5+ minutes
+    /// True when the user hasn't touched the floating window for 5+
+    /// minutes — the gate for silent auto-install so we don't yank the
+    /// app out from under an active session.
     pub fn is_idle(&self) -> bool {
         self.last_floating_activity
             .lock()
@@ -86,86 +145,79 @@ impl UpdaterState {
     }
 }
 
-/// Check if a newer version is available.
-/// Returns Some(version_string) if newer, None otherwise.
-pub fn check_for_update() -> Result<Option<String>> {
-    if VERSION_URL.is_empty() {
+/// Run a plugin `check()` for the given channel and return the resulting
+/// `Update`. The plugin takes care of fetching the manifest, filtering
+/// by target / arch / current version, and verifying the signature
+/// coverage on the returned blob.
+///
+/// Pubkey resolution: if a compile-time key is present we pass it at
+/// runtime via `updater_builder().pubkey(...)`. A missing key means we
+/// don't check for updates at all — safer to silently no-op than to
+/// ship updates with no verification.
+pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Option<Update>> {
+    let Some(pubkey) = PUBKEY else {
+        warn!("Updater: no public key configured — skipping check");
+        return Ok(None);
+    };
+
+    let endpoint = endpoint_for_channel(channel);
+    if endpoint.is_empty() {
+        warn!("Updater: no endpoint configured for channel '{}'", channel);
         return Ok(None);
     }
 
-    info!("Checking for updates at {}", VERSION_URL);
-
-    let response = reqwest::blocking::Client::new()
-        .get(VERSION_URL)
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .context("Failed to fetch version")?
-        .text()
-        .context("Failed to read version response")?;
-
-    let remote_version = response.trim();
     info!(
-        "Remote version: {}, current: {}",
-        remote_version, CURRENT_VERSION
+        "Checking for updates (channel={}, endpoint={})",
+        channel, endpoint
     );
 
-    let remote = semver::Version::parse(remote_version)
-        .with_context(|| format!("Invalid remote version: {}", remote_version))?;
-    let current = semver::Version::parse(CURRENT_VERSION)
-        .with_context(|| format!("Invalid current version: {}", CURRENT_VERSION))?;
+    let endpoint_url = reqwest::Url::parse(endpoint)
+        .with_context(|| format!("Invalid endpoint URL: {}", endpoint))?;
 
-    if remote > current {
-        info!(
-            "Update available: {} -> {}",
-            CURRENT_VERSION, remote_version
-        );
-        Ok(Some(remote_version.to_string()))
-    } else {
-        info!(
-            "Already up to date (current: {}, remote: {})",
-            CURRENT_VERSION, remote_version
-        );
-        Ok(None)
-    }
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![endpoint_url])
+        .context("Failed to configure updater endpoints")?
+        .pubkey(pubkey)
+        .build()
+        .context("Failed to build updater")?;
+
+    updater.check().await.context("Update check failed")
 }
 
-/// Download the installer to a temp file. Returns the path.
-pub fn download_installer() -> Result<String> {
-    if INSTALLER_URL.is_empty() {
-        anyhow::bail!("No installer URL configured");
-    }
-
-    let url = installer_url();
-    info!("Downloading installer from {}", url);
-
-    let response = reqwest::blocking::Client::new()
-        .get(&url)
-        .timeout(std::time::Duration::from_secs(300))
-        .send()
-        .context("Failed to download installer")?;
-
-    let bytes = response.bytes().context("Failed to read installer bytes")?;
-
-    let download_dir = dirs::cache_dir()
-        .or_else(dirs::home_dir)
-        .context("Failed to get cache directory")?
-        .join("kage");
-
-    std::fs::create_dir_all(&download_dir)?;
-
-    let installer_path = download_dir.join(format!("kage-update{}", installer_extension()));
-
-    std::fs::write(&installer_path, &bytes).context("Failed to write installer")?;
-
+/// Download + install a previously-checked `Update`. The plugin streams
+/// bytes to a temp file, verifies the signature, and then runs the
+/// platform installer. Verified against tauri-plugin-updater 2.10.1:
+///
+///   - Windows: spawns the NSIS installer and calls `process::exit(0)`
+///     internally — this function never returns on Windows.
+///   - macOS: extracts the new `.app.tar.gz`, swaps it on disk via
+///     `fs::rename` (escalates to AppleScript admin if needed), then
+///     RETURNS. The caller is responsible for exiting so the user
+///     relaunches into the freshly-installed binary.
+///   - Linux: not built for Kage (we don't ship Linux today).
+///
+/// Treat success as "process is about to exit" — even when this returns
+/// on macOS, the right move is to call `app.exit(0)` immediately. The
+/// running binary's executable was just replaced on disk; continuing
+/// to run it produces undefined behaviour the moment any file inside
+/// the bundle is referenced.
+pub async fn plugin_download_and_install(update: Update) -> Result<()> {
     info!(
-        "Installer downloaded to {:?} ({} bytes)",
-        installer_path,
-        bytes.len()
+        "Downloading update v{} (body: {:?})",
+        update.version, update.body
     );
-    Ok(installer_path.to_string_lossy().to_string())
+    update
+        .download_and_install(|_, _| {}, || info!("Update downloaded, starting installer"))
+        .await
+        .context("Failed to download and install update")?;
+    Ok(())
 }
 
 /// Fetch the changelog markdown (first 10KB).
+/// Kept separate from the updater plugin — the plugin's `Update.body`
+/// field holds per-release notes, but the full CHANGELOG lives at its
+/// own URL independent of any specific release.
 pub fn fetch_changelog() -> Result<String> {
     if CHANGELOG_URL.is_empty() {
         return Ok("No changelog URL configured.".to_string());
@@ -179,7 +231,6 @@ pub fn fetch_changelog() -> Result<String> {
         .text()
         .context("Failed to read changelog")?;
 
-    // Limit to first 10KB
     let truncated = if response.len() > 10240 {
         let mut end = 10240;
         // Don't cut in the middle of a UTF-8 char
@@ -197,32 +248,44 @@ pub fn fetch_changelog() -> Result<String> {
     Ok(truncated)
 }
 
-/// Run the installer silently and exit.
-/// On Windows: runs NSIS installer with /S flag.
-/// On macOS: opens the .dmg.
-/// On Linux: makes the AppImage executable and runs it.
-pub fn run_installer_and_exit(installer_path: &str, session_id: Option<&str>) -> Result<()> {
-    info!("Running installer: {}", installer_path);
-
-    // Write session ID to the lock file so the new instance can resume
+/// Persist the current session id so the post-restart process can
+/// resume it. Written to `<config_dir>/kage/last-session.txt`, consumed
+/// (and deleted) by `startup::resolve_resume_session_id`.
+///
+/// Semantics: this is "we're about to attempt an install" rather than
+/// "we just installed successfully." We write it *before* calling
+/// `download_and_install` because on Windows the plugin spawns the
+/// installer and immediately `process::exit(0)`s — there's no return
+/// path where we could persist the marker afterward. The cost is that
+/// a failed install leaves a stale marker; the next launch will
+/// auto-resume the user into their previous session, which is benign
+/// (it's the session they were on anyway, not a foreign one). The
+/// `last-session.txt` consumer deletes the file on every read so a
+/// stale marker only fires once.
+pub fn persist_resume_marker(session_id: Option<&str>) {
     if let Some(sid) = session_id {
-        if let Ok(lock_dir) = dirs::config_dir().context("config dir") {
-            let session_file = lock_dir.join("kage").join("last-session.txt");
-            let _ = std::fs::write(&session_file, sid);
-            info!("Wrote session ID to {:?}", session_file);
+        if let Ok(cfg_dir) = dirs::config_dir().context("config dir") {
+            let marker = cfg_dir.join("kage").join("last-session.txt");
+            if let Some(parent) = marker.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            match std::fs::write(&marker, sid) {
+                Ok(()) => info!("Wrote resume marker to {:?}", marker),
+                Err(e) => warn!("Failed to write resume marker: {}", e),
+            }
         }
     }
-
-    crate::os::run_installer(installer_path)?;
-
-    // Give the installer a moment to start, then exit
-    std::thread::sleep(std::time::Duration::from_millis(500));
-    std::process::exit(0);
 }
 
 /// Start the background update checker loop.
-/// Runs on a tokio task, checks once per hour if auto_check is enabled,
-/// but only actually hits the network once per day.
+///
+/// Two tasks:
+///  1. A periodic check that hits the plugin once per 24 hours (or the
+///     first time if we've never checked). On success it caches the
+///     `Update` handle; if the user has `silent_update` enabled it also
+///     kicks off a background download + install when idle.
+///  2. A minute-poll idle-watcher that pulls the cached `Update` out
+///     and applies it once the user has been quiet for 5+ minutes.
 pub fn start_update_loop(
     updater_state: Arc<UpdaterState>,
     config: Arc<std::sync::Mutex<Config>>,
@@ -232,18 +295,21 @@ pub fn start_update_loop(
 ) {
     let updater_for_idle = updater_state.clone();
     let config_for_idle = config.clone();
+    let app_for_idle = app_handle.clone();
     let floating_session_for_idle = floating_session_id;
     let acp_client_for_idle = acp_client;
 
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("updater-check");
-        // Initial delay — let the app finish starting
+        // Initial delay — let the app finish starting before we hit the
+        // network. Matters on slow networks where a failed check at
+        // launch used to block tray-ready UI for 10+ seconds.
         tokio::time::sleep(std::time::Duration::from_secs(15)).await;
 
         let mut first_check = true;
 
         loop {
-            let (auto_check, should_check, silent_update) = {
+            let (auto_check, should_check, silent_update, channel) = {
                 let cfg = config.lock_or_recover();
                 let auto = cfg.updates.auto_check;
                 let should = if !auto {
@@ -259,76 +325,63 @@ pub fn start_update_loop(
                             .unwrap_or(true)
                     })
                 };
-                let silent = cfg.updates.silent_update;
-                (auto, should, silent)
+                (
+                    auto,
+                    should,
+                    cfg.updates.silent_update,
+                    cfg.updates.channel.clone(),
+                )
             };
 
-            if !auto_check {
+            if !auto_check || !should_check {
                 first_check = false;
-                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-                continue;
-            }
-
-            if !should_check {
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
                 continue;
             }
 
             first_check = false;
 
-            // Check for update (blocking HTTP in spawn_blocking)
-            let update_result = tauri::async_runtime::spawn_blocking(check_for_update).await;
+            match plugin_check(&app_handle, &channel).await {
+                Ok(Some(update)) => {
+                    let version = update.version.clone();
+                    info!("Update available: {} (channel {})", version, channel);
 
-            match update_result {
-                Ok(Ok(Some(new_version))) => {
-                    info!("Update available: {}", new_version);
                     if let Ok(mut v) = updater_state.available_version.lock() {
-                        *v = Some(new_version.clone());
+                        *v = Some(version.clone());
                     }
+                    if let Ok(mut p) = updater_state.pending_update.lock() {
+                        *p = Some(update);
+                    }
+                    updater_state.update_ready.store(true, Ordering::SeqCst);
 
-                    // Emit event so UI can show indicator
-                    let _ = app_handle.emit("update_available", &new_version);
+                    // Notify the UI so the banner can light up.
+                    let _ = app_handle.emit("update_available", &version);
 
-                    // Update last check time
                     if let Ok(mut cfg) = config.try_lock() {
                         cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
                         let _ = cfg.save();
                     }
 
-                    // If silent update enabled, download
-                    if silent_update {
-                        let dl_result =
-                            tauri::async_runtime::spawn_blocking(download_installer).await;
-                        match dl_result {
-                            Ok(Ok(path)) => {
-                                info!("Installer downloaded, waiting for idle to install");
-                                if let Ok(mut p) = updater_state.installer_path.lock() {
-                                    *p = Some(path);
-                                }
-                                updater_state.update_ready.store(true, Ordering::SeqCst);
-                            }
-                            Ok(Err(e)) => error!("Failed to download installer: {}", e),
-                            Err(e) => error!("Download task failed: {}", e),
-                        }
-                    }
+                    let _ = silent_update; // silent_update is consumed by the idle loop below
                 }
-                Ok(Ok(None)) => {
-                    // Up to date — record check time
+                Ok(None) => {
                     if let Ok(mut cfg) = config.try_lock() {
                         cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
                         let _ = cfg.save();
                     }
                 }
-                Ok(Err(e)) => warn!("Update check failed: {}", e),
-                Err(e) => warn!("Update check task failed: {}", e),
+                Err(e) => warn!("Update check failed: {}", e),
             }
 
-            // Wait before next check
             tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
         }
     });
 
-    // Separate loop: check if idle and update is ready → install
+    // Idle-install loop: every minute, check if we have a pending
+    // update AND the user is idle AND silent-update is enabled. If all
+    // three, pull the Update out of the state and apply it. The
+    // download+install runs on the Tokio runtime; the plugin exits the
+    // process when the installer is handed off.
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("updater-idle");
         loop {
@@ -337,11 +390,9 @@ pub fn start_update_loop(
             if !updater_for_idle.update_ready.load(Ordering::SeqCst) {
                 continue;
             }
-
             if !updater_for_idle.is_idle() {
                 continue;
             }
-
             let silent = {
                 let cfg = config_for_idle.lock_or_recover();
                 cfg.updates.silent_update
@@ -350,40 +401,67 @@ pub fn start_update_loop(
                 continue;
             }
 
-            if let Ok(path) = updater_for_idle.installer_path.lock() {
-                if let Some(ref installer) = *path {
-                    info!("User is idle, applying update...");
+            // Take ownership of the Update — install consumes it, and
+            // even if it fails we don't want to retry forever on the
+            // same stale handle (the plugin would happily re-verify it,
+            // but a permanent error like "installer can't elevate"
+            // shouldn't monopolize the idle window).
+            let update = {
+                let mut slot = updater_for_idle.pending_update.lock_or_recover();
+                slot.take()
+            };
+            let Some(update) = update else {
+                updater_for_idle.update_ready.store(false, Ordering::SeqCst);
+                continue;
+            };
 
-                    // Save the version we're updating to
-                    if let Ok(mut cfg) = config_for_idle.try_lock() {
-                        if let Ok(v) = updater_for_idle.available_version.lock() {
-                            cfg.updates.last_updated_version = v.clone();
-                        }
-                        let _ = cfg.save();
-                    }
+            info!("User is idle, applying update...");
 
-                    // Resolve session ID: prefer floating session, fall back
-                    // to ACP client's current session. The ACP lookup is now
-                    // an unconditional read (the outer mutex used to require
-                    // try_lock to avoid blocking behind a long prompt).
-                    let session_id = floating_session_for_idle
-                        .lock()
-                        .ok()
-                        .and_then(|s| s.clone())
-                        .or_else(|| acp_client_for_idle.get_session_id());
+            // Stamp last_updated_version before the installer yanks the
+            // process. Read via try_lock to avoid blocking behind a
+            // long-running config save; if the lock is contended we
+            // just skip the stamp — the next launch will still work,
+            // we just won't show the "welcome back after update"
+            // banner. Better than blocking the install.
+            if let Ok(mut cfg) = config_for_idle.try_lock() {
+                if let Ok(v) = updater_for_idle.available_version.lock() {
+                    cfg.updates.last_updated_version = v.clone();
+                }
+                let _ = cfg.save();
+            }
 
-                    if let Err(e) = run_installer_and_exit(installer, session_id.as_deref()) {
-                        error!("Failed to run installer: {}", e);
-                        updater_for_idle.update_ready.store(false, Ordering::SeqCst);
-                    }
+            // Write the resume marker so the restarted process picks
+            // up the session the user was on.
+            let session_id = floating_session_for_idle
+                .lock()
+                .ok()
+                .and_then(|s| s.clone())
+                .or_else(|| acp_client_for_idle.get_session_id());
+            persist_resume_marker(session_id.as_deref());
+
+            match plugin_download_and_install(update).await {
+                Ok(()) => {
+                    // On Windows the plugin kills us before this
+                    // returns. If we get here it's macOS: the plugin
+                    // downloaded + installed into Applications and
+                    // we're expected to quit or relaunch. Quit cleanly
+                    // so launchd / the user restarts us with the new
+                    // binary.
+                    info!("Update installed; exiting to pick up new version");
+                    app_for_idle.exit(0);
+                }
+                Err(e) => {
+                    error!("Failed to install update: {}", e);
+                    updater_for_idle.update_ready.store(false, Ordering::SeqCst);
                 }
             }
         }
     });
 }
 
-/// Check if the app was just updated (current version matches last_updated_version
-/// but differs from what was running before).
+/// Check if the app was just updated (current version matches
+/// last_updated_version, meaning the process that stamped that field
+/// is the one currently running).
 pub fn was_just_updated(config: &Config) -> bool {
     config
         .updates

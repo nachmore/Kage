@@ -147,3 +147,26 @@ Adding a new event:
 3. Update `docs/PRIVACY.md` if the disclosure list needs to change.
 
 Settings → Privacy (`ui/js/settings/privacy.js`) lets users toggle and reset their install ID. The welcome screen's privacy step is the initial opt-out surface; `complete_first_run` records their decision via `telemetry::set_consent`. The `v2 → v3` migration explicitly disables telemetry for existing users so they aren't auto-opted-in silently.
+
+
+## Auto-updates
+
+Signed in-app updates via `tauri-plugin-updater`. See `docs/RELEASE.md` for the full release + signing flow.
+
+Key points for engineers touching the updater:
+
+- Three channels: `stable`, `beta`, `dev`. Endpoint URLs per channel live in `Cargo.toml [package.metadata.update]`; build.rs exposes them as compile-time env vars; `src/updater.rs::endpoint_for_channel` routes.
+- The private signing key lives only in CI (GitHub Actions secret `TAURI_SIGNING_PRIVATE_KEY`). The matching public key is baked into every binary via `build.rs` (from `.tauri-updater-pubkey` file or `TAURI_UPDATER_PUBKEY` env). Release builds fail loudly if no pubkey is configured.
+- The plugin handles: manifest fetch, signature verification, download, and per-platform install + relaunch. `src/updater.rs` wraps it with our scheduling layer (daily check, 5-minute-idle gate for silent installs) and session-resume-after-update (`last-session.txt` handoff via `startup::resolve_resume_session_id`).
+- Never call `run_installer` — the plugin owns that now. Deleted from `src/os/mod.rs` in the migration.
+- `VALID_CHANNELS` in `src/updater.rs` is the authority; the JS dropdown in `ui/js/settings/updates.js` mirrors the list and normalises unknown values to stable. `save_config` also normalises on the way in so a hand-edited config.json can't trap a user on a dead channel.
+
+Adding a new channel:
+1. Add entry to `[package.metadata.update]` and `[package.metadata.update.dev]` in `Cargo.toml`.
+2. Add the corresponding `UPDATE_ENDPOINT_<NAME>` handling to `build.rs`.
+3. Add to `VALID_CHANNELS` in `src/updater.rs` and a match arm in `endpoint_for_channel`.
+4. Add a label entry in the `_renderChannelOptions` map in `ui/js/settings/updates.js` (the channel list itself is fetched from Rust via `get_app_info`).
+5. Add the CI workflow trigger in `.github/workflows/release.yml`.
+6. **Decide migration policy**: should existing users move to the new channel, or stay where they are until they opt in? The `v3→v4` migration set the precedent — default existing configs to `stable`. Adding a new channel almost always means "leave existing users alone" (they didn't ask for it), so usually no migration is needed. The exception is if you're *splitting* an existing channel — then you need a migration to redirect users to the appropriate replacement.
+
+Removing the update plugin: the easiest partial rollback is to `option_env!("TAURI_UPDATER_PUBKEY")` → `None`, which makes `plugin_check` a no-op and quietly disables updates. Full removal requires dropping the plugin registration in `main.rs` and the `updater:default` capability — but don't unless you're sure there's no MITM-safe alternative.

@@ -70,7 +70,7 @@ mod tests {
         let list = vec!["cmd".to_string(), "PowerShell".to_string()];
         assert!(is_process_blocklisted("CMD", &list));
         assert!(is_process_blocklisted("powershell", &list));
-        assert!(is_process_blocklisted("pwsh", &list) == false);
+        assert!(!is_process_blocklisted("pwsh", &list));
     }
 
     #[test]

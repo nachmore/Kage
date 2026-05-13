@@ -752,11 +752,7 @@ mod tests {
 
     #[test]
     fn normalize_permissions_handles_empty_and_whitespace() {
-        let raw = vec![
-            "".to_string(),
-            "   ".to_string(),
-            "storage".to_string(),
-        ];
+        let raw = vec!["".to_string(), "   ".to_string(), "storage".to_string()];
         let out = normalize_permissions(&raw, "test");
         assert_eq!(out, vec!["storage"]);
     }

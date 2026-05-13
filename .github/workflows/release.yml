@@ -1,0 +1,329 @@
+# Release workflow.
+#
+# Three channels, all driven by different triggers:
+#   - stable — cut on a git tag matching `v*.*.*`. Human-initiated.
+#   - beta   — manual workflow_dispatch with channel=beta. Moves the
+#              `beta-latest` release to whatever ref you pick.
+#   - dev    — automatic on every push to main. Moves the `dev-latest`
+#              release to HEAD of main so devs can grab bleeding-edge
+#              builds without waiting for a curated release.
+#
+# Each run:
+#   1. Builds the app on Windows + macOS.
+#   2. Signs the update artefacts with the Tauri updater private key
+#      (sourced from the TAURI_SIGNING_PRIVATE_KEY repo secret). The
+#      matching public key is baked into every binary via build.rs.
+#   3. Uploads a per-platform `latest.json` manifest and the signed
+#      installer to a GitHub Release keyed by the channel alias tag.
+#
+# The app-side updater (src/updater.rs) fetches `latest.json` from the
+# GitHub release download URL for the user's channel, hands it to
+# `tauri-plugin-updater`, and the plugin verifies the signature before
+# running any installer. The result: a MITM attacker who swaps the
+# download in flight still can't ship malicious code, because the
+# signature won't verify.
+#
+# What IS NOT yet in this workflow:
+#   - Linux (Kage ships only Windows + macOS today).
+#   - Universal Apple binaries (we build Intel + Apple Silicon
+#     separately; revisit if we ever ship an arch-agnostic .dmg).
+#   - Code-signing certificates for Windows/macOS OS-level trust (the
+#     updater plugin signature is cryptographically strong, but Windows
+#     SmartScreen and macOS notarization are separate, orthogonal
+#     topics that this workflow doesn't attempt to address yet).
+
+name: Release
+
+on:
+  push:
+    # Semver tags like v1.2.3 or v1.2.3-rc.1 trigger a stable release.
+    tags:
+      - "v*.*.*"
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - stable
+          - dev
+
+concurrency:
+  # Only one release-per-channel at a time. Stable runs queue (never
+  # cancel) so a tag race never gets dropped. Non-stable channels cancel
+  # superseded runs because each force-moves the channel's alias tag —
+  # only the latest matters, and 4 in-flight redundant builds is just
+  # CI minutes wasted.
+  group: release-${{ github.event.inputs.channel || (startsWith(github.ref, 'refs/tags/v') && 'stable') || 'dev' }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+jobs:
+  # Resolve once up-front which channel this run targets. Downstream
+  # jobs just read the outputs so the channel-detection logic lives in
+  # exactly one place.
+  plan:
+    name: Resolve channel
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.pick.outputs.channel }}
+      release_tag: ${{ steps.pick.outputs.release_tag }}
+      release_name: ${{ steps.pick.outputs.release_name }}
+      is_prerelease: ${{ steps.pick.outputs.is_prerelease }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "release_name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CH="${{ github.event.inputs.channel }}"
+            echo "channel=$CH" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${CH}-latest" >> "$GITHUB_OUTPUT"
+            echo "release_name=Kage ${CH} (latest)" >> "$GITHUB_OUTPUT"
+            if [[ "$CH" == "stable" ]]; then
+              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # push to main → dev channel
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+            echo "release_tag=dev-latest" >> "$GITHUB_OUTPUT"
+            echo "release_name=Kage dev (latest)" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Full history so cargo can stamp version info if ever needed
+          # AND so the tag-on-main guard below has the main branch to
+          # compare against. Without this the merge-base check would
+          # always fail on a shallow checkout.
+          fetch-depth: 0
+          # Explicit so future maintainers don't wonder why a force-tag
+          # in the publish job works without a PAT — checkout's default
+          # credentials are what authorise the rolling-tag move.
+          persist-credentials: true
+
+      # Refuse to release a v*.*.* tag that points at a commit not on
+      # main. Catches "I tagged from the wrong branch" and force-pushed
+      # tags that got reparented to a feature ref. Stable releases must
+      # be cut from main and only main; if a hotfix branch needs a
+      # stable release, merge it to main first, then tag.
+      - name: Verify stable tag is on main
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=200
+          if ! git merge-base --is-ancestor "${{ github.sha }}" origin/main; then
+            echo "::error::Tag ${{ github.ref_name }} (${{ github.sha }}) is not reachable from main. Stable releases must be cut from main; merge first, then re-tag."
+            exit 1
+          fi
+          echo "✓ Tag is reachable from main"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version 2.10.0 --locked
+
+      - name: Build signed release
+        env:
+          # The Tauri bundler reads these to sign the updater artefacts
+          # (the `.sig` sidecar next to each installer). Without them
+          # createUpdaterArtifacts:true in tauri.conf.json would produce
+          # unsigned .sig files and every updater client would reject
+          # the update.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Our build.rs bakes the matching public key into every
+          # binary so the updater plugin can verify signatures at
+          # runtime. Same secret mechanism as APTABASE_KEY.
+          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+          APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
+        run: cargo tauri build --target ${{ matrix.target }}
+
+      - name: Upload Windows artefacts
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-windows-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload macOS artefacts
+        if: startsWith(matrix.os, 'macos')
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-macos-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+          if-no-files-found: error
+          retention-days: 3
+
+  # Single assembly job: pull the matrix artefacts, stitch together the
+  # `latest.json` manifest, and upsert the release + its assets. Doing
+  # this in one job keeps the manifest generation and the upload
+  # atomic — a partial publish would leave users fetching a broken
+  # manifest that references missing files.
+  publish:
+    name: Publish release
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Force-pushing the rolling tag below uses the default
+          # GITHUB_TOKEN that checkout writes into the local git config.
+          # Explicit so future maintainers don't wonder why a force-tag
+          # works without a PAT.
+          persist-credentials: true
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Download artefacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artefacts
+
+      - name: Assemble latest.json
+        id: manifest
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          TAG: ${{ needs.plan.outputs.release_tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pull version from Cargo.toml for stable releases; use the
+          # short SHA for rolling channels so the manifest version
+          # bumps on every build.
+          if [[ "$CHANNEL" == "stable" ]]; then
+            VERSION="${TAG#v}"
+          else
+            CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+            VERSION="${CARGO_VERSION}-${CHANNEL}.$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          # Build per-platform JSON via jq's --rawfile, which preserves
+          # the .sig contents exactly. No string escaping by hand, no
+          # awk/sed quoting hazards — get this wrong and every client
+          # silently rejects the update with no server-side signal.
+          # Tauri's manifest format keys on "{OS}-{arch}" where OS is
+          # one of darwin|windows|linux.
+          tmp=$(mktemp -d)
+          : > "$tmp/platforms.json"
+          echo "{}" > "$tmp/platforms.json"
+
+          build_platform() {
+            local key="$1" dir="$2" pattern="$3"
+            local file
+            file=$(find "$dir" -type f -name "$pattern" 2>/dev/null | head -n 1 || true)
+            if [[ -z "$file" || ! -f "${file}.sig" ]]; then
+              echo "  skip $key (no $pattern under $dir)" >&2
+              return
+            fi
+            local url="https://github.com/${REPO}/releases/download/${TAG}/$(basename "$file")"
+            jq --arg key "$key" \
+               --arg url "$url" \
+               --rawfile sig "${file}.sig" \
+               '. + {($key): {signature: $sig, url: $url}}' \
+               "$tmp/platforms.json" > "$tmp/platforms.next.json"
+            mv "$tmp/platforms.next.json" "$tmp/platforms.json"
+            echo "  added $key" >&2
+          }
+
+          build_platform "windows-x86_64"  "artefacts/bundle-windows-x86_64-pc-windows-msvc" "*.exe"
+          build_platform "darwin-aarch64"  "artefacts/bundle-macos-aarch64-apple-darwin"     "*.app.tar.gz"
+          build_platform "darwin-x86_64"   "artefacts/bundle-macos-x86_64-apple-darwin"      "*.app.tar.gz"
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$PUB_DATE" \
+            --slurpfile platforms "$tmp/platforms.json" \
+            '{version: $version, notes: "See release notes on GitHub.", pub_date: $pub_date, platforms: $platforms[0]}' \
+            > latest.json
+          echo "--- latest.json ---"
+          cat latest.json
+
+      # For rolling channels (beta / dev) we force-move the alias tag
+      # to the current HEAD so the GitHub Release's "this tag" link
+      # reflects what's actually in the release.
+      - name: Move rolling tag
+        if: needs.plan.outputs.channel != 'stable'
+        env:
+          TAG: ${{ needs.plan.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
+
+      - name: Collect assets
+        run: |
+          mkdir -p release
+          find artefacts -type f \( -name '*.exe' -o -name '*.exe.sig' -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -exec cp {} release/ \;
+          cp latest.json release/
+          ls -la release/
+
+      - name: Upsert GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.plan.outputs.release_tag }}
+          name: ${{ needs.plan.outputs.release_name }}
+          prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
+          # For rolling channels we overwrite the release's assets each
+          # run. For stable releases the action naturally fails if the
+          # tag already has assets, which is what we want — re-running
+          # a stable release by accident should be loud.
+          files: release/*
+          fail_on_unmatched_files: true

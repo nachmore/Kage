@@ -23,7 +23,7 @@ use serde_json::{json, Value};
 /// The highest config schema version this build understands. Bump when
 /// you add a migration; add the migration function to `migrate_one_step`
 /// below.
-pub const CURRENT_VERSION: u32 = 3;
+pub const CURRENT_VERSION: u32 = 4;
 
 /// The lowest version we can still migrate from. If a config on disk is
 /// older than this we treat it as corrupt and reset (after backing up).
@@ -95,6 +95,7 @@ fn migrate_one_step(from: u32, value: Value) -> Result<Value> {
     match from {
         1 => migrate_1_to_2(value),
         2 => migrate_2_to_3(value),
+        3 => migrate_3_to_4(value),
         other => bail!("no migration registered from version {}", other),
     }
 }
@@ -131,6 +132,24 @@ fn migrate_2_to_3(mut value: Value) -> Result<Value> {
             if let Value::Object(tmap) = telemetry {
                 tmap.insert("enabled".to_string(), json!(false));
             }
+        }
+    }
+    Ok(value)
+}
+
+/// v3 → v4: add `updates.channel` defaulting to "stable". Existing users
+/// who opted into auto-updates did so under the single-track assumption;
+/// they keep getting the stable channel unless they explicitly opt into
+/// beta/dev in Settings → Updates. Fresh installs get stable by the
+/// config default, which matches this migration exactly.
+fn migrate_3_to_4(mut value: Value) -> Result<Value> {
+    if let Value::Object(ref mut map) = value {
+        let updates = map
+            .entry("updates".to_string())
+            .or_insert_with(|| json!({}));
+        if let Value::Object(umap) = updates {
+            umap.entry("channel".to_string())
+                .or_insert_with(|| json!("stable"));
         }
     }
     Ok(value)
@@ -220,6 +239,32 @@ mod tests {
             out.get("telemetry").and_then(|t| t.get("enabled")),
             Some(&json!(false)),
             "completed-first-run users must not auto-opt-in silently"
+        );
+    }
+
+    #[test]
+    fn v3_to_v4_adds_channel_default_stable() {
+        let v = json!({
+            "version": 3,
+            "updates": { "auto_check": true },
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(
+            out.get("updates").and_then(|u| u.get("channel")),
+            Some(&json!("stable"))
+        );
+    }
+
+    #[test]
+    fn v3_to_v4_preserves_existing_channel() {
+        let v = json!({
+            "version": 3,
+            "updates": { "channel": "beta" },
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(
+            out.get("updates").and_then(|u| u.get("channel")),
+            Some(&json!("beta"))
         );
     }
 

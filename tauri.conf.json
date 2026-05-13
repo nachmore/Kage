@@ -93,6 +93,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "app", "dmg"],
+    "createUpdaterArtifacts": true,
     "resources": ["pocket_tts/*", "store/packages/*"],
     "icon": [
       "icons/32x32.png",

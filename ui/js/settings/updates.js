@@ -26,6 +26,16 @@ class UpdatesSettingsModule extends SettingsModule {
 
                 <div class="setting-section-label">Preferences</div>
 
+                ${this.createControlRow(
+                    'Update Channel',
+                    'Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Beta</strong> is for previewing what\'s coming next. <strong>Dev</strong> tracks every commit — expect rough edges.',
+                    `<select class="setting-input" id="updateChannel">
+                        <option value="stable">Stable (recommended)</option>
+                        <option value="beta">Beta</option>
+                        <option value="dev">Dev (bleeding edge)</option>
+                    </select>`
+                )}
+
                 ${this.createCheckboxRow(
                     'Automatically Check for Updates',
                     'Periodically check for updates.',
@@ -53,13 +63,57 @@ class UpdatesSettingsModule extends SettingsModule {
     }
 
     async initialize() {
-        // Cache current version for display
+        // Cache current version + valid channel list for display.
+        // The channel list comes from Rust (updater::VALID_CHANNELS)
+        // so the dropdown stays in sync with the backend allow-list
+        // automatically — adding a new channel only requires Rust
+        // changes plus the Cargo.toml endpoint, no JS edit.
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
             window._kageVersion = info.version;
-        } catch (e) { console.warn('[Updates] Failed to get app info:', e); }
+            this._validChannels = Array.isArray(info.update_channels) && info.update_channels.length > 0
+                ? info.update_channels
+                : ['stable', 'beta', 'dev'];
+            this._renderChannelOptions();
+        } catch (e) {
+            console.warn('[Updates] Failed to get app info:', e);
+            this._validChannels = ['stable', 'beta', 'dev'];
+        }
 
         this.loadChangelog();
+
+        // Channel changes invalidate any cached "update available"
+        // state because a different channel may have a different
+        // latest version. Re-check after the settings save completes.
+        const channelEl = document.getElementById('updateChannel');
+        if (channelEl) {
+            channelEl.addEventListener('change', () => {
+                this._knownUpdate = null;
+                // The outer save-settings flow will persist the new
+                // channel; we re-check on the next onShow which fires
+                // right after. A manual re-check here would race the
+                // save — let the normal lifecycle handle it.
+            });
+        }
+    }
+
+    /** Replace the static stable/beta/dev <option> tags with whatever
+     *  the backend reports. Idempotent — safe to call before load(). */
+    _renderChannelOptions() {
+        const channelEl = document.getElementById('updateChannel');
+        if (!channelEl || !Array.isArray(this._validChannels)) return;
+        const labels = {
+            stable: 'Stable (recommended)',
+            beta: 'Beta',
+            dev: 'Dev (bleeding edge)',
+        };
+        const previous = channelEl.value;
+        channelEl.innerHTML = this._validChannels
+            .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(labels[c] || c)}</option>`)
+            .join('');
+        if (previous && this._validChannels.includes(previous)) {
+            channelEl.value = previous;
+        }
     }
 
     /** Called each time the Updates tab is shown */
@@ -172,8 +226,16 @@ class UpdatesSettingsModule extends SettingsModule {
         const u = config.updates || {};
         const autoCheck = document.getElementById('updateAutoCheck');
         const silentUpdate = document.getElementById('updateSilentUpdate');
+        const channel = document.getElementById('updateChannel');
         if (autoCheck) autoCheck.checked = u.auto_check || false;
         if (silentUpdate) silentUpdate.checked = u.silent_update || false;
+        // Allow-list sourced from get_app_info (mirrors
+        // src/updater.rs::VALID_CHANNELS). Unknown values collapse
+        // to stable so a stale config can't orphan the user on a
+        // dead channel — the Rust save_config also normalises on the
+        // way in for defense in depth.
+        const known = this._validChannels || ['stable', 'beta', 'dev'];
+        if (channel) channel.value = known.includes(u.channel) ? u.channel : 'stable';
 
         // Only auto-check when the Updates tab is actually visible
         const section = document.querySelector('[data-section-content="updates"]');
@@ -186,6 +248,8 @@ class UpdatesSettingsModule extends SettingsModule {
         if (!config.updates) config.updates = {};
         config.updates.auto_check = document.getElementById('updateAutoCheck')?.checked || false;
         config.updates.silent_update = document.getElementById('updateSilentUpdate')?.checked || false;
+        const channelEl = document.getElementById('updateChannel');
+        if (channelEl) config.updates.channel = channelEl.value || 'stable';
     }
 
     validate() { return { valid: true }; }

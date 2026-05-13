@@ -9,6 +9,8 @@ fn main() {
     println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
     println!("cargo:rerun-if-changed=.aptabase-key");
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
+    println!("cargo:rerun-if-changed=.tauri-updater-pubkey");
+    println!("cargo:rerun-if-env-changed=TAURI_UPDATER_PUBKEY");
 
     // Make the Aptabase analytics key available to src/telemetry.rs via
     // `option_env!("APTABASE_KEY")`. Resolution order, highest priority first:
@@ -85,13 +87,55 @@ fn main() {
         update
     };
 
-    let version_url = pluck_url(urls, "version_url", is_release);
-    let installer_url = pluck_url(urls, "installer_url", is_release);
+    let endpoint_stable = pluck_url(urls, "endpoint_stable", is_release);
+    let endpoint_beta = pluck_url(urls, "endpoint_beta", is_release);
+    let endpoint_dev = pluck_url(urls, "endpoint_dev", is_release);
     let changelog_url = pluck_url(urls, "changelog_url", is_release);
 
-    println!("cargo:rustc-env=UPDATE_VERSION_URL={version_url}");
-    println!("cargo:rustc-env=UPDATE_INSTALLER_URL={installer_url}");
+    println!("cargo:rustc-env=UPDATE_ENDPOINT_STABLE={endpoint_stable}");
+    println!("cargo:rustc-env=UPDATE_ENDPOINT_BETA={endpoint_beta}");
+    println!("cargo:rustc-env=UPDATE_ENDPOINT_DEV={endpoint_dev}");
     println!("cargo:rustc-env=UPDATE_CHANGELOG_URL={changelog_url}");
+
+    // Tauri updater public key — provisioned the same way as APTABASE_KEY:
+    //
+    //   1. `TAURI_UPDATER_PUBKEY` env var (used by CI — set from a GitHub
+    //      Actions secret so the key is never committed).
+    //   2. `.tauri-updater-pubkey` file at the repo root (gitignored).
+    //
+    // The pubkey corresponds to the private key CI signs releases with
+    // (`cargo tauri signer generate`). The plugin compares the manifest's
+    // signature against this pubkey before running anything; a missing or
+    // mismatched signature aborts the install. See docs/RELEASE.md.
+    //
+    // Absent key is fatal for release builds — an unsigned release would
+    // mean the updater silently refuses every update forever. Debug builds
+    // tolerate a missing key because `cargo tauri dev` is useful even
+    // without update infrastructure.
+    let pubkey_from_env = std::env::var("TAURI_UPDATER_PUBKEY")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let pubkey_from_file = std::fs::read_to_string(".tauri-updater-pubkey")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let updater_pubkey = pubkey_from_env.or(pubkey_from_file).unwrap_or_default();
+
+    if updater_pubkey.is_empty() {
+        if is_release {
+            panic!(
+                "No Tauri updater public key found (neither TAURI_UPDATER_PUBKEY env \
+                 var nor .tauri-updater-pubkey file). Release builds must ship with a \
+                 public key so the updater can verify signed artifacts — without one, \
+                 every update check would fail. Copy .tauri-updater-pubkey.example to \
+                 .tauri-updater-pubkey and paste your public key, or set the env var."
+            );
+        }
+        // Debug: silently permit — the runtime simply disables the updater
+        // (no endpoint is configured anyway for a bare `cargo tauri dev`).
+    } else {
+        println!("cargo:rustc-env=TAURI_UPDATER_PUBKEY={updater_pubkey}");
+    }
 
     // Expose UI-facing links from [package.metadata.links] as compile-time
     // env vars. Rust reads these via env!() in `commands::system::get_app_info`
@@ -114,10 +158,7 @@ fn main() {
         "cargo:rustc-env=KAGE_LINK_REPOSITORY={}",
         pluck_link("repository")
     );
-    println!(
-        "cargo:rustc-env=KAGE_LINK_ISSUES={}",
-        pluck_link("issues")
-    );
+    println!("cargo:rustc-env=KAGE_LINK_ISSUES={}", pluck_link("issues"));
     println!(
         "cargo:rustc-env=KAGE_LINK_PRIVACY={}",
         pluck_link("privacy")

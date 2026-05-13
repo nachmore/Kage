@@ -36,6 +36,11 @@ config.json
 !.env.example
 # Aptabase analytics key — read by build.rs, never commit the real key
 .aptabase-key
+# Tauri updater public key — read by build.rs. Not secret (it ships in
+# every binary) but kept out of source control so third-party forks
+# don't accidentally inherit our trust anchor. The matching PRIVATE key
+# lives only in CI secrets.
+.tauri-updater-pubkey
 
 # Root-level local-only directories
 node_modules/

@@ -148,39 +148,6 @@ pub fn configure_no_window(cmd: &mut std::process::Command) -> &mut std::process
     }
 }
 
-/// Launch an installer/update package appropriate for the current platform.
-/// Windows: runs NSIS installer with /S (silent). macOS: opens .dmg. Linux: chmod +x and run.
-pub fn run_installer(path: &str) -> anyhow::Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        std::process::Command::new(path)
-            .arg("/S")
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to run installer: {}", e))?;
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(path)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to open installer: {}", e))?;
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755));
-        std::process::Command::new(path)
-            .spawn()
-            .map_err(|e| anyhow::anyhow!("Failed to run installer: {}", e))?;
-    }
-
-    Ok(())
-}
-
 /// Set the current thread's name/description so it shows up in debuggers
 /// and in the thread dump diagnostic command. No-op on non-Windows.
 #[allow(unused)]
