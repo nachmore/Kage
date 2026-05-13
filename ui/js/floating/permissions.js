@@ -36,10 +36,10 @@ const handler = createPermissionHandler(invoke, appWindow, {
 
             await invoke('resize_floating_window', {
                 width: Math.round(540 * scale),
-                height: Math.round(700 * scale)
+                height: Math.round(700 * scale),
             });
 
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             const modalEl = modal.querySelector('.permission-modal');
             if (modalEl) {
@@ -49,7 +49,7 @@ const handler = createPermissionHandler(invoke, appWindow, {
                 const finalHeight = Math.max(neededHeight, Math.round(600 * scale));
                 await invoke('resize_floating_window', {
                     width: neededWidth,
-                    height: finalHeight
+                    height: finalHeight,
                 });
             }
         } catch (error) {
@@ -65,7 +65,9 @@ const handler = createPermissionHandler(invoke, appWindow, {
         if (hasQueuedNext) return; // Next modal will handle sizing
         try {
             window._floatingApp?.windowManager?.resumeAutoResize();
-        } catch (e) { /* ignore */ }
+        } catch (_e) {
+            /* ignore */
+        }
     },
 
     // Only handle requests for the floating window's own session
@@ -76,14 +78,18 @@ const handler = createPermissionHandler(invoke, appWindow, {
         let floatingSessionId = null;
         try {
             floatingSessionId = await invoke('get_floating_session_id');
-        } catch (e) { console.warn('[Permissions] Failed to get floating session ID:', e); }
+        } catch (e) {
+            console.warn('[Permissions] Failed to get floating session ID:', e);
+        }
 
         const source = event.payload.source || '';
-        const isFloatingSession = requestSessionId && floatingSessionId
-            && requestSessionId === floatingSessionId;
+        const isFloatingSession =
+            requestSessionId && floatingSessionId && requestSessionId === floatingSessionId;
 
         let isVisible = false;
-        try { isVisible = await appWindow.isVisible(); } catch {}
+        try {
+            isVisible = await appWindow.isVisible();
+        } catch {}
 
         if (source !== 'floating' && !isVisible) {
             console.log('Ignoring permission request — originated from chat, floating hidden');
@@ -103,7 +109,9 @@ const handler = createPermissionHandler(invoke, appWindow, {
         let stillPending = false;
         try {
             stillPending = await invoke('has_pending_permission');
-        } catch (e) { stillPending = true; }
+        } catch (_e) {
+            stillPending = true;
+        }
 
         if (!stillPending) {
             console.log('Permission request already handled, skipping modal');
@@ -129,11 +137,13 @@ const handler = createPermissionHandler(invoke, appWindow, {
                     if (granted) {
                         notif.sendNotification({
                             title: '🔐 Tool Permission Required',
-                            body: body
+                            body: body,
                         });
                     }
                 }
-            } catch { /* ignore */ }
+            } catch {
+                /* ignore */
+            }
             await appWindow.show();
             await appWindow.setFocus();
         }
@@ -150,7 +160,7 @@ const handler = createPermissionHandler(invoke, appWindow, {
         window._floatingApp?.flushStreamingRender();
 
         return { handle: true };
-    }
+    },
 });
 
 // Initialize

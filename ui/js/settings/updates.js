@@ -28,7 +28,7 @@ class UpdatesSettingsModule extends SettingsModule {
 
                 ${this.createControlRow(
                     'Update Channel',
-                    'Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Beta</strong> is for previewing what\'s coming next. <strong>Dev</strong> tracks every commit — expect rough edges.',
+                    "Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Beta</strong> is for previewing what's coming next. <strong>Dev</strong> tracks every commit — expect rough edges.",
                     `<select class="setting-input" id="updateChannel">
                         <option value="stable">Stable (recommended)</option>
                         <option value="beta">Beta</option>
@@ -71,9 +71,10 @@ class UpdatesSettingsModule extends SettingsModule {
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
             window._kageVersion = info.version;
-            this._validChannels = Array.isArray(info.update_channels) && info.update_channels.length > 0
-                ? info.update_channels
-                : ['stable', 'beta', 'dev'];
+            this._validChannels =
+                Array.isArray(info.update_channels) && info.update_channels.length > 0
+                    ? info.update_channels
+                    : ['stable', 'beta', 'dev'];
             this._renderChannelOptions();
         } catch (e) {
             console.warn('[Updates] Failed to get app info:', e);
@@ -109,7 +110,7 @@ class UpdatesSettingsModule extends SettingsModule {
         };
         const previous = channelEl.value;
         channelEl.innerHTML = this._validChannels
-            .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(labels[c] || c)}</option>`)
+            .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(labels[c] || c)}</option>`)
             .join('');
         if (previous && this._validChannels.includes(previous)) {
             channelEl.value = previous;
@@ -160,7 +161,9 @@ class UpdatesSettingsModule extends SettingsModule {
         if (icon) icon.innerHTML = '<span class="update-check-icon">✓</span>';
         if (title) title.textContent = 'Kage is up to date';
         if (detail) detail.textContent = 'Version ' + escapeHtml(version);
-        if (action) action.innerHTML = '<button class="setting-button" id="recheckBtn">Check again</button>';
+        if (action)
+            action.innerHTML =
+                '<button class="setting-button" id="recheckBtn">Check again</button>';
         document.getElementById('recheckBtn')?.addEventListener('click', () => {
             this._knownUpdate = null;
             this.autoCheck();
@@ -175,8 +178,12 @@ class UpdatesSettingsModule extends SettingsModule {
         if (icon) icon.innerHTML = '<span class="update-available-icon">⬆</span>';
         if (title) title.textContent = 'Update available — v' + escapeHtml(version);
         if (detail) detail.textContent = 'Current version: ' + (window._kageVersion || '...');
-        if (action) action.innerHTML = '<button class="setting-button update-install-btn" id="installNowBtn">Install Now</button>';
-        document.getElementById('installNowBtn')?.addEventListener('click', () => this.installUpdate());
+        if (action)
+            action.innerHTML =
+                '<button class="setting-button update-install-btn" id="installNowBtn">Install Now</button>';
+        document
+            .getElementById('installNowBtn')
+            ?.addEventListener('click', () => this.installUpdate());
     }
 
     showCheckFailed(error) {
@@ -187,7 +194,8 @@ class UpdatesSettingsModule extends SettingsModule {
         if (icon) icon.innerHTML = '<span class="update-error-icon">✕</span>';
         if (title) title.textContent = 'Update check failed';
         if (detail) detail.textContent = error;
-        if (action) action.innerHTML = '<button class="setting-button" id="retryBtn">Retry</button>';
+        if (action)
+            action.innerHTML = '<button class="setting-button" id="retryBtn">Retry</button>';
         document.getElementById('retryBtn')?.addEventListener('click', () => this.autoCheck());
     }
 
@@ -217,7 +225,7 @@ class UpdatesSettingsModule extends SettingsModule {
             } else {
                 container.textContent = markdown;
             }
-        } catch (e) {
+        } catch (_e) {
             container.innerHTML = '<em>Failed to load changelog.</em>';
         }
     }
@@ -247,11 +255,14 @@ class UpdatesSettingsModule extends SettingsModule {
     save(config) {
         if (!config.updates) config.updates = {};
         config.updates.auto_check = document.getElementById('updateAutoCheck')?.checked || false;
-        config.updates.silent_update = document.getElementById('updateSilentUpdate')?.checked || false;
+        config.updates.silent_update =
+            document.getElementById('updateSilentUpdate')?.checked || false;
         const channelEl = document.getElementById('updateChannel');
         if (channelEl) config.updates.channel = channelEl.value || 'stable';
     }
 
-    validate() { return { valid: true }; }
+    validate() {
+        return { valid: true };
+    }
     destroy() {}
 }

@@ -1,18 +1,44 @@
 // Expanded chat application logic
-import { renderMarkdown, initMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
-import { AttachmentManager, handlePasteEvent, setupDragDrop, renderAttachmentPreviews, attachmentPreviewHtml, sessionImageToDataUrl } from '../shared/attachments.js';
-import { matchCommands, matchSlashCommands, loadSlashCommands, executeCommand } from '../shared/commands.js';
+import {
+    renderMarkdown,
+    initMarkdown,
+    createTaskPlanElement,
+    setAppIconInvoke,
+} from '../shared/markdown.js';
+import {
+    AttachmentManager,
+    handlePasteEvent,
+    setupDragDrop,
+    renderAttachmentPreviews,
+    attachmentPreviewHtml,
+    sessionImageToDataUrl,
+} from '../shared/attachments.js';
+import { loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { mascotHTML } from '../shared/mascot.js';
-import { isOnline, checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
-import { renderToolChipsHtml, renderSourceChipsHtml, extractSuggestedActions } from '../shared/streaming-utils.js';
+import {
+    isOnline,
+    checkOnline,
+    markOnline,
+    onNetworkChange,
+    OFFLINE_MESSAGE,
+} from '../shared/network.js';
+import { renderToolChipsHtml, renderSourceChipsHtml } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
-import { unifiedSearch, loadFrecency, setExtensionManager, recordSelection, getExtensionManager } from '../shared/search-engine.js';
-import { matchShortcut, buildShortcutCommand, cmdOrCtrlPressed } from '../shared/shortcuts.js';
-import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
-import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
+import {
+    unifiedSearch,
+    loadFrecency,
+    setExtensionManager,
+    getExtensionManager,
+} from '../shared/search-engine.js';
+import { cmdOrCtrlPressed } from '../shared/shortcuts.js';
+import {
+    executeResult as executeResultShared,
+    handleEnterAction,
+} from '../shared/result-executor.js';
+import { getActionsForText } from '../shared/quick-actions.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { sanitizeExtensionHtml as sanitizeExtensionHtmlStatic } from '../shared/extension-html-sanitizer.js';
 import { getConfig } from '../shared/config-cache.js';
@@ -21,8 +47,6 @@ import { AutomationPlanController } from '../shared/automation-plan-controller.j
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
 import {
-    STEERING_MSG_PREFIX,
-    buildMsgMeta as _buildMsgMeta,
     buildRenderQueue,
     formatDuration,
     formatRelativeDate,
@@ -66,8 +90,13 @@ export class ChatApp {
         const app = this;
         this.extensionToolController = new ExtensionToolController({
             invoke,
-            get extensionManager() { return app.extensionManager; },
-            permissionModal: { showForExtensionTool: (...args) => window.ChatPermissions.showForExtensionTool(...args) },
+            get extensionManager() {
+                return app.extensionManager;
+            },
+            permissionModal: {
+                showForExtensionTool: (...args) =>
+                    window.ChatPermissions.showForExtensionTool(...args),
+            },
             addToolUsage: (entry) => {
                 if (!app._toolCallIds) app._toolCallIds = new Set();
                 if (app._toolCallIds.has(entry.toolCallId)) return;
@@ -77,14 +106,17 @@ export class ChatApp {
                     app.renderSourcesInMessage(app._extensionToolContentDiv);
                 }
             },
-            renderIndicator: (info) => app._renderExtensionToolIndicator(info, app._extensionToolContentDiv),
+            renderIndicator: (info) =>
+                app._renderExtensionToolIndicator(info, app._extensionToolContentDiv),
             onExecuteStart: () => {},
             onExecuteEnd: () => {},
             onWaitForFollowup: () => {
                 app.isWaitingForResponse = true;
                 app.showTypingIndicator();
             },
-            resetAccumulator: () => { app.currentStreamingContent = ''; },
+            resetAccumulator: () => {
+                app.currentStreamingContent = '';
+            },
         });
 
         // Per-message DOM target the automation-plan controller renders into.
@@ -137,8 +169,12 @@ export class ChatApp {
             // for why this is needed in addition to the backend filter.
             acceptSessionId: (sid) => !sid || !app.activeSessionId || sid === app.activeSessionId,
             getAccumulator: () => app.currentStreamingContent,
-            appendToAccumulator: (delta) => { app.currentStreamingContent = (app.currentStreamingContent || '') + delta; },
-            resetAccumulator: () => { app.currentStreamingContent = ''; },
+            appendToAccumulator: (delta) => {
+                app.currentStreamingContent = (app.currentStreamingContent || '') + delta;
+            },
+            resetAccumulator: () => {
+                app.currentStreamingContent = '';
+            },
             automationPlanController: this.automationPlanController,
             extensionToolController: this.extensionToolController,
             onChunkAppended: () => {
@@ -165,7 +201,9 @@ export class ChatApp {
                 }
                 app.scrollToBottom();
             },
-            feedTTS: (text) => { if (app.speech) app.speech.feedStreamingText(text); },
+            feedTTS: (text) => {
+                if (app.speech) app.speech.feedStreamingText(text);
+            },
             onCompleteHeader: () => {
                 markOnline();
                 app.isConnected = true;
@@ -177,7 +215,8 @@ export class ChatApp {
             onBeforeFinalRender: () => {
                 app.hideTypingIndicator();
                 if (app.currentStreamingMessage) {
-                    const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                    const contentDiv =
+                        app.currentStreamingMessage.querySelector('.message-content');
                     const indicator = contentDiv?.querySelector('.streaming-indicator');
                     if (indicator) indicator.remove();
                     // Stash the contentDiv so the automation-plan fallback
@@ -213,10 +252,15 @@ export class ChatApp {
 
                 // Set timestamp on the message actions bar
                 if (app.elements.messagesArea.lastElementChild) {
-                    const msgEl = app.elements.messagesArea.querySelector('.message.agent:last-of-type');
+                    const msgEl = app.elements.messagesArea.querySelector(
+                        '.message.agent:last-of-type'
+                    );
                     const ts = msgEl?.querySelector('.msg-timestamp');
                     if (ts) {
-                        let label = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        let label = new Date().toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        });
                         if (app._streamStartTime) {
                             const durSecs = (Date.now() - app._streamStartTime) / 1000;
                             label += ` (${app._formatDuration(durSecs)})`;
@@ -229,10 +273,20 @@ export class ChatApp {
 
                 try {
                     if (app.isWaitingForResponse && !app._windowFocused) {
-                        const preview = finalContent.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                        await sendAppNotification(app.invoke, 'Kage', preview || 'Response ready', 'main');
+                        const preview = finalContent
+                            .substring(0, 100)
+                            .replace(/[#*`\n]/g, ' ')
+                            .trim();
+                        await sendAppNotification(
+                            app.invoke,
+                            'Kage',
+                            preview || 'Response ready',
+                            'main'
+                        );
                     }
-                } catch { /* ignore */ }
+                } catch {
+                    /* ignore */
+                }
             },
             onError: async (event, online) => {
                 app.hideTypingIndicator();
@@ -273,7 +327,8 @@ export class ChatApp {
             },
             flushPendingMarkdown: () => {
                 if (app.currentStreamingMessage && app.currentStreamingContent) {
-                    const contentDiv = app.currentStreamingMessage.querySelector('.message-content');
+                    const contentDiv =
+                        app.currentStreamingMessage.querySelector('.message-content');
                     if (contentDiv) renderMarkdown(app.currentStreamingContent, contentDiv);
                 }
             },
@@ -297,18 +352,40 @@ export class ChatApp {
         this.elements = {};
     }
 
-    get _extensionToolCallHandled() { return this.extensionToolController.handled; }
-    set _extensionToolCallHandled(v) { this.extensionToolController.handled = v; }
-    get _extensionToolExecuting() { return this.extensionToolController.executing; }
-    set _extensionToolExecuting(v) { this.extensionToolController.executing = v; }
+    get _extensionToolCallHandled() {
+        return this.extensionToolController.handled;
+    }
+    set _extensionToolCallHandled(v) {
+        this.extensionToolController.handled = v;
+    }
+    get _extensionToolExecuting() {
+        return this.extensionToolController.executing;
+    }
+    set _extensionToolExecuting(v) {
+        this.extensionToolController.executing = v;
+    }
 
-    get _automationPlanStarted() { return this.automationPlanController.started; }
-    set _automationPlanStarted(v) { this.automationPlanController.started = v; }
-    get _automationPlan() { return this.automationPlanController.plan; }
-    get _automationStatuses() { return this.automationPlanController.statuses; }
-    get _automationCleanup() { return this.automationPlanController.cleanup; }
-    get _pendingPlanRevision() { return this.automationPlanController.pendingRevision; }
-    set _pendingPlanRevision(v) { this.automationPlanController.pendingRevision = v; }
+    get _automationPlanStarted() {
+        return this.automationPlanController.started;
+    }
+    set _automationPlanStarted(v) {
+        this.automationPlanController.started = v;
+    }
+    get _automationPlan() {
+        return this.automationPlanController.plan;
+    }
+    get _automationStatuses() {
+        return this.automationPlanController.statuses;
+    }
+    get _automationCleanup() {
+        return this.automationPlanController.cleanup;
+    }
+    get _pendingPlanRevision() {
+        return this.automationPlanController.pendingRevision;
+    }
+    set _pendingPlanRevision(v) {
+        this.automationPlanController.pendingRevision = v;
+    }
 
     async init() {
         initMarkdown();
@@ -346,7 +423,10 @@ export class ChatApp {
         console.log('[CHAT] Init - currentAcpSessionId:', this.currentAcpSessionId);
         console.log('[CHAT] Init - floatingSessionId:', this.floatingSessionId);
         console.log('[CHAT] Init - sessions count:', this.sessions.length);
-        console.log('[CHAT] Init - session IDs:', this.sessions.map(s => s.session_id));
+        console.log(
+            '[CHAT] Init - session IDs:',
+            this.sessions.map((s) => s.session_id)
+        );
 
         // Auto-select the current ACP session if one exists
         if (this.currentAcpSessionId) {
@@ -354,15 +434,18 @@ export class ChatApp {
             if (this.sessions.length === 0) {
                 await this.loadSessions();
             }
-            let exists = this.sessions.find(s => s.session_id === this.currentAcpSessionId);
+            const exists = this.sessions.find((s) => s.session_id === this.currentAcpSessionId);
             if (!exists) {
                 // Session not on disk yet — add a synthetic entry so it appears in the list
-                console.log('[CHAT] Current session not on disk, adding synthetic entry:', this.currentAcpSessionId);
+                console.log(
+                    '[CHAT] Current session not on disk, adding synthetic entry:',
+                    this.currentAcpSessionId
+                );
                 const synthetic = {
                     session_id: this.currentAcpSessionId,
                     title: 'Current Session',
                     created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
                 };
                 this.sessions.unshift(synthetic);
                 this.renderSessionList();
@@ -371,14 +454,18 @@ export class ChatApp {
             this.activeSessionId = this.currentAcpSessionId;
             this.renderSessionList();
             try {
-                const sessionData = await this.invoke('load_session', { sessionId: this.currentAcpSessionId });
+                const sessionData = await this.invoke('load_session', {
+                    sessionId: this.currentAcpSessionId,
+                });
                 this.displaySession(sessionData);
             } catch (e) {
                 console.log('[CHAT] Could not load session from disk (may be new):', e);
                 // Session is new / not on disk — just show empty chat
-                this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Continue your conversation...</div>';
+                this.elements.messagesArea.innerHTML =
+                    '<div class="message-placeholder">Continue your conversation...</div>';
             }
-            this.elements.chatHeaderTitle.textContent = stripKageTags(exists?.title) || 'Current Session';
+            this.elements.chatHeaderTitle.textContent =
+                stripKageTags(exists?.title) || 'Current Session';
         }
 
         this.elements.chatInput.focus();
@@ -415,14 +502,15 @@ export class ChatApp {
             modelName: document.getElementById('modelName'),
             modelDropdown: document.getElementById('modelDropdown'),
             chatSpeechBtn: document.getElementById('chatSpeechBtn'),
-            chatSpeechWave: document.getElementById('chatSpeechWave')
+            chatSpeechWave: document.getElementById('chatSpeechWave'),
         };
     }
 
     setupEventListeners() {
         this.elements.chatInput.addEventListener('input', () => {
             this.elements.chatInput.style.height = 'auto';
-            this.elements.chatInput.style.height = Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
+            this.elements.chatInput.style.height =
+                Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
             this._tabCycleActive = false;
             this.updateSuggestions();
         });
@@ -433,7 +521,8 @@ export class ChatApp {
                 if (this.currentSuggestions.length > 0) {
                     // Cycle through suggestions on repeated Tab presses
                     if (this._tabCycleActive) {
-                        this._tabCycleIndex = (this._tabCycleIndex + 1) % this.currentSuggestions.length;
+                        this._tabCycleIndex =
+                            (this._tabCycleIndex + 1) % this.currentSuggestions.length;
                     } else {
                         this._tabCycleIndex = 0;
                         this._tabCycleActive = true;
@@ -453,7 +542,10 @@ export class ChatApp {
                 this.renderSuggestions();
             } else if (e.key === 'ArrowUp' && this.currentSuggestions.length > 0) {
                 e.preventDefault();
-                this.suggestionIndex = this.suggestionIndex <= 0 ? this.currentSuggestions.length - 1 : this.suggestionIndex - 1;
+                this.suggestionIndex =
+                    this.suggestionIndex <= 0
+                        ? this.currentSuggestions.length - 1
+                        : this.suggestionIndex - 1;
                 this.renderSuggestions();
             } else if (e.key === 'Escape' && this.currentSuggestions.length > 0) {
                 e.preventDefault();
@@ -501,14 +593,21 @@ export class ChatApp {
         });
 
         // Paste handler for images
-        this.elements.chatInput.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
+        this.elements.chatInput.addEventListener('paste', (e) =>
+            handlePasteEvent(e, this.attachmentManager)
+        );
 
         // Double-click header title to rename session
         this.elements.chatHeaderTitle.addEventListener('dblclick', () => this.startTitleEdit());
         this.elements.chatHeaderTitleInput.addEventListener('blur', () => this.finishTitleEdit());
         this.elements.chatHeaderTitleInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); this.finishTitleEdit(); }
-            if (e.key === 'Escape') { this.cancelTitleEdit(); }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.finishTitleEdit();
+            }
+            if (e.key === 'Escape') {
+                this.cancelTitleEdit();
+            }
         });
 
         // Drag-and-drop for files on the main chat area
@@ -516,21 +615,32 @@ export class ChatApp {
 
         // Re-render previews when attachments change
         this.attachmentManager.onChange((attachments) => {
-            renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+            renderAttachmentPreviews(
+                this.elements.attachmentPreviews,
+                attachments,
+                this.attachmentManager
+            );
         });
 
         // Toolbar: attach file
-        this.elements.attachFileBtn.addEventListener('click', () => this.elements.fileInput.click());
+        this.elements.attachFileBtn.addEventListener('click', () =>
+            this.elements.fileInput.click()
+        );
         this.elements.fileInput.addEventListener('change', (e) => this.handleFileAttach(e));
 
         // Toolbar: attach image
-        this.elements.attachImageBtn.addEventListener('click', () => this.elements.imageInput.click());
+        this.elements.attachImageBtn.addEventListener('click', () =>
+            this.elements.imageInput.click()
+        );
         this.elements.imageInput.addEventListener('change', (e) => this.handleImageAttach(e));
 
         // Toolbar: model selector
         this.elements.modelSelector.addEventListener('click', () => this.toggleModelDropdown());
         document.addEventListener('click', (e) => {
-            if (!this.elements.modelSelector.contains(e.target) && !this.elements.modelDropdown.contains(e.target)) {
+            if (
+                !this.elements.modelSelector.contains(e.target) &&
+                !this.elements.modelDropdown.contains(e.target)
+            ) {
                 this.elements.modelDropdown.style.display = 'none';
             }
         });
@@ -603,8 +713,12 @@ export class ChatApp {
     setupStreamingListeners() {
         // Track focus for notification suppression
         this._windowFocused = false; // chat starts hidden
-        this.appWindow.listen('tauri://focus', () => { this._windowFocused = true; });
-        this.appWindow.listen('tauri://blur', () => { this._windowFocused = false; });
+        this.appWindow.listen('tauri://focus', () => {
+            this._windowFocused = true;
+        });
+        this.appWindow.listen('tauri://blur', () => {
+            this._windowFocused = false;
+        });
 
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
         this.listen('message_complete', () => this.handleMessageComplete());
@@ -620,8 +734,9 @@ export class ChatApp {
             const { message } = event.payload || {};
             if (!message) return;
             // Only show if we're viewing the default/floating session
-            const isDefaultSession = this.activeSessionId === this.floatingSessionId
-                || this.activeSessionId === this.currentAcpSessionId;
+            const isDefaultSession =
+                this.activeSessionId === this.floatingSessionId ||
+                this.activeSessionId === this.currentAcpSessionId;
             if (!isDefaultSession) return;
             this.addUserMessage(message);
             this.startStreaming();
@@ -674,7 +789,7 @@ export class ChatApp {
 
             const container = document.createElement('div');
             container.className = 'session-reset-notice';
-            options.forEach(opt => {
+            options.forEach((opt) => {
                 const btn = document.createElement('button');
                 btn.className = 'chat-error-btn reconnect';
                 btn.style.margin = '4px';
@@ -683,7 +798,7 @@ export class ChatApp {
                     try {
                         const result = await this.invoke('execute_slash_command', {
                             command,
-                            args: { input: opt.value }
+                            args: { input: opt.value },
                         });
                         container.remove();
                         const msg = result?.message || 'Done';
@@ -732,8 +847,9 @@ export class ChatApp {
     async loadActionButtonConfig() {
         try {
             const config = await getConfig(this.invoke);
-            this._showSpeakBtn = config.ui?.show_speech_button === true || config.pocket_tts?.enabled === true;
-            this._showTranslateBtn = !!(config.quick_actions?.translate_language);
+            this._showSpeakBtn =
+                config.ui?.show_speech_button === true || config.pocket_tts?.enabled === true;
+            this._showTranslateBtn = !!config.quick_actions?.translate_language;
             this._translateLang = config.quick_actions?.translate_language || 'English';
         } catch (e) {
             console.warn('[CHAT] Failed to load action button config:', e);
@@ -748,7 +864,7 @@ export class ChatApp {
         if (!area || this.messages.length === 0) return;
 
         // Get the last assistant message content for context-aware actions
-        const lastMsg = [...this.messages].reverse().find(m => m.role === 'assistant');
+        const lastMsg = [...this.messages].reverse().find((m) => m.role === 'assistant');
         const responseText = lastMsg?.content || '';
 
         try {
@@ -776,7 +892,9 @@ export class ChatApp {
 
             area.appendChild(chips);
             this.scrollToBottom();
-        } catch (e) { console.warn('Suggestion chips error:', e); }
+        } catch (e) {
+            console.warn('Suggestion chips error:', e);
+        }
     }
 
     hideSuggestionChips() {
@@ -815,12 +933,16 @@ export class ChatApp {
         if (!loader) {
             loader = document.createElement('div');
             loader.className = 'session-list-loader';
-            loader.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
+            loader.innerHTML =
+                '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
             list.appendChild(loader);
         }
 
         try {
-            const more = await this.invoke('list_sessions', { limit: 50, offset: this.sessions.length });
+            const more = await this.invoke('list_sessions', {
+                limit: 50,
+                offset: this.sessions.length,
+            });
             if (more.length > 0) {
                 // Mark loaded sessions as seen (they're not new — just paginated in)
                 for (const s of more) this._seenSessionIds.add(s.session_id);
@@ -837,153 +959,182 @@ export class ChatApp {
     }
 
     renderSessionList() {
-            // Don't overwrite the list if we're viewing Kage Desktop sessions
-            if (window._kageSessionSource === 'desktop') return;
+        // Don't overwrite the list if we're viewing Kage Desktop sessions
+        if (window._kageSessionSource === 'desktop') return;
 
-            const list = this.elements.sessionList;
-            const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
+        const list = this.elements.sessionList;
+        const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
-            if (this.sessions.length === 0) {
-                if (this._loadingMore) return; // Still loading — don't show empty state
-                list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
+        if (this.sessions.length === 0) {
+            if (this._loadingMore) return; // Still loading — don't show empty state
+            list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
+            return;
+        }
+
+        // Sort: default session first, then by updated_at descending
+        const defaultId = this.currentAcpSessionId || this.floatingSessionId;
+        const sorted = [...this.sessions].sort((a, b) => {
+            const aIsDefault = a.session_id === defaultId;
+            const bIsDefault = b.session_id === defaultId;
+            if (aIsDefault && !bIsDefault) return -1;
+            if (!aIsDefault && bIsDefault) return 1;
+            return (b.updated_at || '').localeCompare(a.updated_at || '');
+        });
+
+        // Filter by search query
+        const filtered = searchQuery
+            ? sorted.filter((s) => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
+            : sorted.filter((s) => {
+                  // Hide steering-only sessions ("New Chat") unless it's the current session
+                  if ((s.title || 'New Chat') === 'New Chat' && s.session_id !== defaultId)
+                      return false;
+                  return true;
+              });
+
+        if (filtered.length === 0) {
+            if (this._loadingMore || !this._sessionsFullyLoaded) {
+                // Still loading — show dots instead of empty state
+                if (!list.querySelector('.session-list-loader')) {
+                    list.innerHTML =
+                        '<div class="session-list-loader"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+                }
                 return;
             }
+            list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
+            return;
+        }
 
-            // Sort: default session first, then by updated_at descending
-            const defaultId = this.currentAcpSessionId || this.floatingSessionId;
-            const sorted = [...this.sessions].sort((a, b) => {
-                const aIsDefault = a.session_id === defaultId;
-                const bIsDefault = b.session_id === defaultId;
-                if (aIsDefault && !bIsDefault) return -1;
-                if (!aIsDefault && bIsDefault) return 1;
-                return (b.updated_at || '').localeCompare(a.updated_at || '');
-            });
+        // Build map of existing DOM items by session_id for diffing
+        const existingById = new Map();
+        list.querySelectorAll('.session-item[data-session-id]').forEach((el) => {
+            existingById.set(el.dataset.sessionId, el);
+        });
 
-            // Filter by search query
-            const filtered = searchQuery
-                ? sorted.filter(s => (s.title || 'New Chat').toLowerCase().includes(searchQuery))
-                : sorted.filter(s => {
-                    // Hide steering-only sessions ("New Chat") unless it's the current session
-                    if ((s.title || 'New Chat') === 'New Chat' && s.session_id !== defaultId) return false;
-                    return true;
-                });
-
-            if (filtered.length === 0) {
-                if (this._loadingMore || !this._sessionsFullyLoaded) {
-                    // Still loading — show dots instead of empty state
-                    if (!list.querySelector('.session-list-loader')) {
-                        list.innerHTML = '<div class="session-list-loader"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
-                    }
-                    return;
-                }
-                list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
-                return;
-            }
-
-            // Build map of existing DOM items by session_id for diffing
-            const existingById = new Map();
-            list.querySelectorAll('.session-item[data-session-id]').forEach(el => {
-                existingById.set(el.dataset.sessionId, el);
-            });
-
-            // Build the desired ordered list of session_ids + separator positions
-            const desiredIds = [];
-            for (const session of filtered) {
-                desiredIds.push(session.session_id);
-                const isDefault = session.session_id === this.currentAcpSessionId || session.session_id === this.floatingSessionId;
-                if (isDefault && !searchQuery) {
-                    desiredIds.push('__separator__');
-                }
-            }
-
-            // Remove items no longer in the filtered list
-            const desiredSet = new Set(filtered.map(s => s.session_id));
-            for (const [id, el] of existingById) {
-                if (!desiredSet.has(id)) el.remove();
-            }
-            // Remove stale empty-state messages and separators (will re-add separator if needed)
-            list.querySelectorAll('.session-list-empty, .session-list-separator').forEach(el => el.remove());
-
-            // Create or update each item, then ensure correct DOM order
-            let insertionIndex = 0;
-            for (const key of desiredIds) {
-                if (key === '__separator__') {
-                    // Insert separator if not already at this position
-                    const current = list.children[insertionIndex];
-                    if (!current || !current.classList.contains('session-list-separator')) {
-                        const sep = document.createElement('div');
-                        sep.className = 'session-list-separator';
-                        if (current) list.insertBefore(sep, current);
-                        else list.appendChild(sep);
-                    }
-                    insertionIndex++;
-                    continue;
-                }
-
-                const session = filtered.find(s => s.session_id === key);
-                const isFloating = session.session_id === this.floatingSessionId;
-                const isCurrent = session.session_id === this.currentAcpSessionId;
-                const isActive = session.session_id === this.activeSessionId;
-                const isNew = !this._seenSessionIds.has(session.session_id);
-                const title = stripKageTags(session.title) || 'New Chat';
-                const date = new Date(session.updated_at || session.created_at);
-                const dateStr = this.formatDate(date);
-
-                let item = existingById.get(key);
-                if (item) {
-                    // Reuse existing DOM node — update only what changed
-                    item.classList.toggle('active', isActive);
-                    item.classList.toggle('session-new', isNew);
-
-                    const titleEl = item.querySelector('.session-item-title');
-                    const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
-                    const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
-                    const newTitleHtml = `${newDot}${escapeHtml(title)}${badges}`;
-                    if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
-
-                    const dateEl = item.querySelector('.session-item-date');
-                    const dateSuffix = (isCurrent || isFloating) ? ' · <span class="session-default-label">default session</span>' : '';
-                    const newDateHtml = `${dateStr}${dateSuffix}`;
-                    if (dateEl && dateEl.innerHTML !== newDateHtml) dateEl.innerHTML = newDateHtml;
-                } else {
-                    // Create new item
-                    item = this._createSessionItem(session, { isFloating, isCurrent, isActive, isNew, title, dateStr });
-                    existingById.set(key, item);
-                }
-
-                // Ensure correct position in DOM
-                if (list.children[insertionIndex] !== item) {
-                    if (insertionIndex < list.children.length) {
-                        list.insertBefore(item, list.children[insertionIndex]);
-                    } else {
-                        list.appendChild(item);
-                    }
-                }
-                insertionIndex++;
-            }
-
-            // Remove any trailing stale children
-            while (list.children.length > insertionIndex) {
-                list.lastChild.remove();
-            }
-
-            // If the filtered list is too short to scroll, auto-load more
-            if (!searchQuery && filtered.length < 15 && !this._sessionsFullyLoaded && !this._loadingMore) {
-                this.loadMoreSessions();
+        // Build the desired ordered list of session_ids + separator positions
+        const desiredIds = [];
+        for (const session of filtered) {
+            desiredIds.push(session.session_id);
+            const isDefault =
+                session.session_id === this.currentAcpSessionId ||
+                session.session_id === this.floatingSessionId;
+            if (isDefault && !searchQuery) {
+                desiredIds.push('__separator__');
             }
         }
 
+        // Remove items no longer in the filtered list
+        const desiredSet = new Set(filtered.map((s) => s.session_id));
+        for (const [id, el] of existingById) {
+            if (!desiredSet.has(id)) el.remove();
+        }
+        // Remove stale empty-state messages and separators (will re-add separator if needed)
+        list.querySelectorAll('.session-list-empty, .session-list-separator').forEach((el) =>
+            el.remove()
+        );
+
+        // Create or update each item, then ensure correct DOM order
+        let insertionIndex = 0;
+        for (const key of desiredIds) {
+            if (key === '__separator__') {
+                // Insert separator if not already at this position
+                const current = list.children[insertionIndex];
+                if (!current?.classList.contains('session-list-separator')) {
+                    const sep = document.createElement('div');
+                    sep.className = 'session-list-separator';
+                    if (current) list.insertBefore(sep, current);
+                    else list.appendChild(sep);
+                }
+                insertionIndex++;
+                continue;
+            }
+
+            const session = filtered.find((s) => s.session_id === key);
+            const isFloating = session.session_id === this.floatingSessionId;
+            const isCurrent = session.session_id === this.currentAcpSessionId;
+            const isActive = session.session_id === this.activeSessionId;
+            const isNew = !this._seenSessionIds.has(session.session_id);
+            const title = stripKageTags(session.title) || 'New Chat';
+            const date = new Date(session.updated_at || session.created_at);
+            const dateStr = this.formatDate(date);
+
+            let item = existingById.get(key);
+            if (item) {
+                // Reuse existing DOM node — update only what changed
+                item.classList.toggle('active', isActive);
+                item.classList.toggle('session-new', isNew);
+
+                const titleEl = item.querySelector('.session-item-title');
+                const newDot = isNew
+                    ? '<span class="session-new-dot" title="New session">●</span>'
+                    : '';
+                const badges =
+                    isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
+                const newTitleHtml = `${newDot}${escapeHtml(title)}${badges}`;
+                if (titleEl && titleEl.innerHTML !== newTitleHtml) titleEl.innerHTML = newTitleHtml;
+
+                const dateEl = item.querySelector('.session-item-date');
+                const dateSuffix =
+                    isCurrent || isFloating
+                        ? ' · <span class="session-default-label">default session</span>'
+                        : '';
+                const newDateHtml = `${dateStr}${dateSuffix}`;
+                if (dateEl && dateEl.innerHTML !== newDateHtml) dateEl.innerHTML = newDateHtml;
+            } else {
+                // Create new item
+                item = this._createSessionItem(session, {
+                    isFloating,
+                    isCurrent,
+                    isActive,
+                    isNew,
+                    title,
+                    dateStr,
+                });
+                existingById.set(key, item);
+            }
+
+            // Ensure correct position in DOM
+            if (list.children[insertionIndex] !== item) {
+                if (insertionIndex < list.children.length) {
+                    list.insertBefore(item, list.children[insertionIndex]);
+                } else {
+                    list.appendChild(item);
+                }
+            }
+            insertionIndex++;
+        }
+
+        // Remove any trailing stale children
+        while (list.children.length > insertionIndex) {
+            list.lastChild.remove();
+        }
+
+        // If the filtered list is too short to scroll, auto-load more
+        if (
+            !searchQuery &&
+            filtered.length < 15 &&
+            !this._sessionsFullyLoaded &&
+            !this._loadingMore
+        ) {
+            this.loadMoreSessions();
+        }
+    }
+
     /** Create a new session-item DOM element with event listeners. */
     _createSessionItem(session, { isFloating, isCurrent, isActive, isNew, title, dateStr }) {
-            const item = document.createElement('div');
-            item.className = 'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
-            item.dataset.sessionId = session.session_id;
+        const item = document.createElement('div');
+        item.className =
+            'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
+        item.dataset.sessionId = session.session_id;
 
-            const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
-            const badges = (isCurrent || isFloating) ? '<span class="session-current-badge">●</span>' : '';
-            const dateSuffix = (isCurrent || isFloating) ? ' · <span class="session-default-label">default session</span>' : '';
+        const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
+        const badges =
+            isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
+        const dateSuffix =
+            isCurrent || isFloating
+                ? ' · <span class="session-default-label">default session</span>'
+                : '';
 
-            item.innerHTML = `
+        item.innerHTML = `
                 <div class="session-item-content">
                     <div class="session-item-title">${newDot}${escapeHtml(title)}${badges}</div>
                     <div class="session-item-date">${dateStr}${dateSuffix}</div>
@@ -1001,86 +1152,89 @@ export class ChatApp {
                 </div>
             `;
 
-            item.querySelector('.session-action-edit').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.startInlineRename(session.session_id, item);
-            });
-            item.querySelector('.session-action-reveal').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.revealSessionFile(session.session_id);
-            });
-            item.querySelector('.session-action-delete').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.deleteSession(session.session_id, title);
-            });
+        item.querySelector('.session-action-edit').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.startInlineRename(session.session_id, item);
+        });
+        item.querySelector('.session-action-reveal').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.revealSessionFile(session.session_id);
+        });
+        item.querySelector('.session-action-delete').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.deleteSession(session.session_id, title);
+        });
 
-            item.addEventListener('click', () => this.selectSession(session.session_id));
-            return item;
-        }
+        item.addEventListener('click', () => this.selectSession(session.session_id));
+        return item;
+    }
 
     formatDate(date) {
         return formatRelativeDate(date);
     }
 
     async selectSession(sessionId) {
-            if (sessionId === this.activeSessionId) return;
+        if (sessionId === this.activeSessionId) return;
 
-            // Mark as seen (removes the "new" indicator)
-            this._seenSessionIds.add(sessionId);
+        // Mark as seen (removes the "new" indicator)
+        this._seenSessionIds.add(sessionId);
 
-            this.activeSessionId = sessionId;
-            this.renderSessionList();
+        this.activeSessionId = sessionId;
+        this.renderSessionList();
 
-            // Clear any previous error
-            this.elements.errorContainer.innerHTML = '';
+        // Clear any previous error
+        this.elements.errorContainer.innerHTML = '';
 
-            // Hide/show permission modal based on which session is active
-            if (window.ChatPermissions) {
-                window.ChatPermissions.onSessionSwitch(sessionId);
-            }
-
-            // Load and display session messages from files immediately
-            try {
-                const sessionData = await this.invoke('load_session', { sessionId });
-                this.displaySession(sessionData);
-            } catch (error) {
-                console.error('Failed to load session files:', error);
-                this.showError('Failed to load session: ' + this.formatError(error));
-            }
-
-            // Show connecting state in the input
-            this.elements.chatInput.disabled = true;
-            this.elements.chatInput.placeholder = 'Connecting to session...';
-            this.elements.sendBtn.disabled = true;
-
-            // Switch ACP session in parallel
-            try {
-                await this.invoke('switch_acp_session', { sessionId });
-                console.log('ACP session switched to:', sessionId);
-                this.isConnected = true;
-                this.updateConnectionStatus();
-                this.elements.chatInput.disabled = false;
-                this.elements.chatInput.placeholder = 'Type your message...';
-                this.elements.sendBtn.disabled = false;
-                this.elements.chatInput.focus();
-            } catch (error) {
-                console.error('Failed to switch ACP session:', error);
-                const msg = this.formatError(error);
-                const isLocked = msg.includes('active in another process') || msg.includes('Session is active');
-                if (isLocked) {
-                    const pidMatch = msg.match(/PID\s+(\d+)/);
-                    this.showSessionLocked(sessionId, pidMatch ? pidMatch[1] : null);
-                } else {
-                    this.showError(msg);
-                }
-                this.isConnected = false;
-                this.updateConnectionStatus();
-                // Keep input disabled on session error
-                this.elements.chatInput.disabled = true;
-                this.elements.chatInput.placeholder = isLocked ? 'Session is read-only' : 'Session unavailable';
-                this.elements.sendBtn.disabled = true;
-            }
+        // Hide/show permission modal based on which session is active
+        if (window.ChatPermissions) {
+            window.ChatPermissions.onSessionSwitch(sessionId);
         }
+
+        // Load and display session messages from files immediately
+        try {
+            const sessionData = await this.invoke('load_session', { sessionId });
+            this.displaySession(sessionData);
+        } catch (error) {
+            console.error('Failed to load session files:', error);
+            this.showError('Failed to load session: ' + this.formatError(error));
+        }
+
+        // Show connecting state in the input
+        this.elements.chatInput.disabled = true;
+        this.elements.chatInput.placeholder = 'Connecting to session...';
+        this.elements.sendBtn.disabled = true;
+
+        // Switch ACP session in parallel
+        try {
+            await this.invoke('switch_acp_session', { sessionId });
+            console.log('ACP session switched to:', sessionId);
+            this.isConnected = true;
+            this.updateConnectionStatus();
+            this.elements.chatInput.disabled = false;
+            this.elements.chatInput.placeholder = 'Type your message...';
+            this.elements.sendBtn.disabled = false;
+            this.elements.chatInput.focus();
+        } catch (error) {
+            console.error('Failed to switch ACP session:', error);
+            const msg = this.formatError(error);
+            const isLocked =
+                msg.includes('active in another process') || msg.includes('Session is active');
+            if (isLocked) {
+                const pidMatch = msg.match(/PID\s+(\d+)/);
+                this.showSessionLocked(sessionId, pidMatch ? pidMatch[1] : null);
+            } else {
+                this.showError(msg);
+            }
+            this.isConnected = false;
+            this.updateConnectionStatus();
+            // Keep input disabled on session error
+            this.elements.chatInput.disabled = true;
+            this.elements.chatInput.placeholder = isLocked
+                ? 'Session is read-only'
+                : 'Session unavailable';
+            this.elements.sendBtn.disabled = true;
+        }
+    }
 
     displaySession(sessionData) {
         this.messages = [];
@@ -1092,7 +1246,8 @@ export class ChatApp {
         const durations = sessionData.message_durations || {};
 
         if (!sessionData.messages || sessionData.messages.length === 0) {
-            this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
+            this.elements.messagesArea.innerHTML =
+                '<div class="message-placeholder">Empty session</div>';
             return;
         }
 
@@ -1100,7 +1255,8 @@ export class ChatApp {
         const renderQueue = this._buildRenderQueue(sessionData.messages, timestamps, durations);
 
         if (renderQueue.length === 0) {
-            this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Empty session</div>';
+            this.elements.messagesArea.innerHTML =
+                '<div class="message-placeholder">Empty session</div>';
             return;
         }
 
@@ -1123,9 +1279,10 @@ export class ChatApp {
             } else {
                 this._displaySessionRafId = null;
                 // All messages rendered — finalize
-                const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+                const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
                 if (session) {
-                    this.elements.chatHeaderTitle.textContent = stripKageTags(session.title) || 'Chat';
+                    this.elements.chatHeaderTitle.textContent =
+                        stripKageTags(session.title) || 'Chat';
                 }
                 this.scrollToBottom();
                 if (this.messages.length > 0) {
@@ -1135,7 +1292,7 @@ export class ChatApp {
         };
 
         // Update header title immediately (don't wait for batches)
-        const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+        const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
         if (session) {
             this.elements.chatHeaderTitle.textContent = stripKageTags(session.title) || 'Chat';
         }
@@ -1175,7 +1332,9 @@ export class ChatApp {
                 break;
             }
             case 'steering_ack': {
-                const lastSteering = this.elements.messagesArea.querySelector('.steering-message:last-of-type');
+                const lastSteering = this.elements.messagesArea.querySelector(
+                    '.steering-message:last-of-type'
+                );
                 if (lastSteering) {
                     const ackEl = document.createElement('div');
                     ackEl.className = 'steering-ack';
@@ -1211,7 +1370,7 @@ export class ChatApp {
             const ts = msgEl.querySelector('.msg-timestamp');
             if (ts && meta.timestamp) {
                 const date = new Date(meta.timestamp);
-                if (!isNaN(date)) {
+                if (!Number.isNaN(date)) {
                     let label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     if (role === 'assistant' && meta.durationSecs) {
                         label += ` (${this._formatDuration(meta.durationSecs)})`;
@@ -1233,7 +1392,8 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
-        this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Start a conversation with Kage...</div>';
+        this.elements.messagesArea.innerHTML =
+            '<div class="message-placeholder">Start a conversation with Kage...</div>';
         this.elements.chatHeaderTitle.textContent = 'New Chat';
         this.elements.chatInput.focus();
 
@@ -1242,12 +1402,12 @@ export class ChatApp {
             this.activeSessionId = newId;
             this._seenSessionIds.add(newId);
             // Add the new session to the list so it appears immediately
-            if (!this.sessions.find(s => s.session_id === newId)) {
+            if (!this.sessions.find((s) => s.session_id === newId)) {
                 this.sessions.push({
                     session_id: newId,
                     title: 'New Chat',
                     created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    updated_at: new Date().toISOString(),
                 });
             }
             this.renderSessionList();
@@ -1267,27 +1427,35 @@ export class ChatApp {
 
     async deleteSession(sessionId, title) {
         const isActive = sessionId === this.activeSessionId;
-        const isCurrent = sessionId === this.currentAcpSessionId || sessionId === this.floatingSessionId;
+        const isCurrent =
+            sessionId === this.currentAcpSessionId || sessionId === this.floatingSessionId;
 
         if (isCurrent) {
-            this.showError('Cannot delete the active session. Switch to a different session first.');
+            this.showError(
+                'Cannot delete the active session. Switch to a different session first.'
+            );
             return;
         }
 
         let dir = '';
-        try { dir = await this.invoke('get_sessions_directory'); } catch { /* ignore */ }
+        try {
+            dir = await this.invoke('get_sessions_directory');
+        } catch {
+            /* ignore */
+        }
 
         const msg = `Delete session "${title} from ${dir || 'sessions directory'}?\n\n• ${sessionId}.json\n• ${sessionId}.jsonl\n• ${sessionId}.lock\n\nThis cannot be undone.`;
         if (!confirm(msg)) return;
 
         try {
             await this.invoke('delete_session', { sessionId });
-            this.sessions = this.sessions.filter(s => s.session_id !== sessionId);
+            this.sessions = this.sessions.filter((s) => s.session_id !== sessionId);
 
             if (isActive) {
                 // Clear the display
                 this.activeSessionId = null;
-                this.elements.messagesArea.innerHTML = '<div class="message-placeholder">Select a session to continue...</div>';
+                this.elements.messagesArea.innerHTML =
+                    '<div class="message-placeholder">Select a session to continue...</div>';
                 this.elements.chatHeaderTitle.textContent = 'Kage';
             }
 
@@ -1305,18 +1473,19 @@ export class ChatApp {
             elements: {
                 input: this.elements.chatInput,
                 speechBtn: this.elements.chatSpeechBtn,
-                speechWave: this.elements.chatSpeechWave
+                speechWave: this.elements.chatSpeechWave,
             },
             onSend: (text) => {
                 this.elements.chatInput.value = text;
                 this.sendMessage();
             },
             onVisibilityUpdate: () => {},
-            barContainer: document.querySelector('.chat-input-container') || document.querySelector('.chat-input'),
+            barContainer:
+                document.querySelector('.chat-input-container') ||
+                document.querySelector('.chat-input'),
         });
         this.speech.setup();
     }
-
 
     // --- Messaging ---
 
@@ -1362,7 +1531,10 @@ export class ChatApp {
             this.scrollToBottom();
 
             try {
-                trackEvent('message_sent', { source: 'chat', length: messageLengthBucket(message) });
+                trackEvent('message_sent', {
+                    source: 'chat',
+                    length: messageLengthBucket(message),
+                });
                 await this.invoke('send_message_streaming', { message, attachments: null });
             } catch (e) {
                 this.handleMessageError({ payload: 'Error: ' + e });
@@ -1380,7 +1552,10 @@ export class ChatApp {
             for (const file of this._pendingFiles) {
                 try {
                     const text = await file.text();
-                    const truncated = text.length > 100000 ? text.substring(0, 100000) + '\n\n[...truncated at 100k chars]' : text;
+                    const truncated =
+                        text.length > 100000
+                            ? text.substring(0, 100000) + '\n\n[...truncated at 100k chars]'
+                            : text;
                     fileParts.push(`Contents of \`${file.name}\`:\n\`\`\`\n${truncated}\n\`\`\``);
                 } catch (e) {
                     fileParts.push(`Could not read \`${file.name}\`: ${e.message}`);
@@ -1401,7 +1576,7 @@ export class ChatApp {
         // Handle > local commands
         if (!hasAttachments && message.startsWith('>')) {
             const cmdText = message.substring(1).trim();
-            if (cmdText && await executeCommand(cmdText, this.invoke, this.appWindow)) {
+            if (cmdText && (await executeCommand(cmdText, this.invoke, this.appWindow))) {
                 return;
             }
         }
@@ -1414,7 +1589,7 @@ export class ChatApp {
                 const cmdArgs = parts.length > 1 ? { input: parts.slice(1).join(' ') } : {};
                 const result = await this.invoke('execute_slash_command', {
                     command: cmdName,
-                    args: cmdArgs
+                    args: cmdArgs,
                 });
                 // Show the command and result in the chat (suppress compact — handled by compaction_status)
                 this.addUserMessage(message);
@@ -1437,7 +1612,11 @@ export class ChatApp {
         this.startStreaming();
 
         try {
-            trackEvent('message_sent', { source: 'chat', length: messageLengthBucket(message), attachments: attachments?.length || 0 });
+            trackEvent('message_sent', {
+                source: 'chat',
+                length: messageLengthBucket(message),
+                attachments: attachments?.length || 0,
+            });
             await this.invoke('send_message_streaming', { message, attachments });
             this.isConnected = true;
             this.updateConnectionStatus();
@@ -1467,13 +1646,20 @@ export class ChatApp {
 
         // Set timestamp
         const ts = msgEl.querySelector('.msg-timestamp');
-        if (ts) ts.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (ts)
+            ts.textContent = new Date().toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+            });
 
         // Append attachment previews to the message bubble
         if (attachmentSnapshots && attachmentSnapshots.length > 0) {
             const contentDiv = msgEl.querySelector('.message-content');
             if (contentDiv) {
-                contentDiv.insertAdjacentHTML('beforeend', attachmentPreviewHtml(attachmentSnapshots));
+                contentDiv.insertAdjacentHTML(
+                    'beforeend',
+                    attachmentPreviewHtml(attachmentSnapshots)
+                );
             }
         }
 
@@ -1482,21 +1668,21 @@ export class ChatApp {
     }
 
     startStreaming() {
-            this.currentStreamingContent = '';
-            this.toolSources = [];
-            this.toolUsages = [];
-            this._toolCallIds = new Set();
-            this.isWaitingForResponse = true;
-            this.extensionToolController.reset();
-            this.automationPlanController.reset();
-            this._streamStartTime = Date.now();
-            this.updateInputState();
-            this.showTypingIndicator();
+        this.currentStreamingContent = '';
+        this.toolSources = [];
+        this.toolUsages = [];
+        this._toolCallIds = new Set();
+        this.isWaitingForResponse = true;
+        this.extensionToolController.reset();
+        this.automationPlanController.reset();
+        this._streamStartTime = Date.now();
+        this.updateInputState();
+        this.showTypingIndicator();
 
-            this.currentStreamingMessage = this.createMessageElement('assistant', '');
-            this.elements.messagesArea.appendChild(this.currentStreamingMessage);
-            this.scrollToBottom();
-        }
+        this.currentStreamingMessage = this.createMessageElement('assistant', '');
+        this.elements.messagesArea.appendChild(this.currentStreamingMessage);
+        this.scrollToBottom();
+    }
 
     stopGenerating() {
         if (!this.isWaitingForResponse) return;
@@ -1525,9 +1711,8 @@ export class ChatApp {
         this.updateInputState();
         this.elements.chatInput.focus();
         this.scrollToBottom();
-        this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
+        this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
     }
-
 
     createMessageElement(role, content) {
         const msg = document.createElement('div');
@@ -1542,7 +1727,10 @@ export class ChatApp {
                 const img = document.createElement('img');
                 img.src = this.userInfo.avatar_base64;
                 img.style.cssText = 'width:100%;height:100%;border-radius:50%;object-fit:cover';
-                img.onerror = () => { avatar.textContent = this.userInfo?.initials || '?'; img.remove(); };
+                img.onerror = () => {
+                    avatar.textContent = this.userInfo?.initials || '?';
+                    img.remove();
+                };
                 avatar.appendChild(img);
             } else {
                 avatar.textContent = this.userInfo?.initials || '?';
@@ -1590,8 +1778,12 @@ export class ChatApp {
                 const text = contentDiv.textContent || '';
                 navigator.clipboard.writeText(text).then(() => {
                     const btn = actions.querySelector('[data-action="copy"]');
-                    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-                    setTimeout(() => { btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }, 1500);
+                    btn.innerHTML =
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => {
+                        btn.innerHTML =
+                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+                    }, 1500);
                 });
             };
             actions.querySelector('[data-action="speak"]').onclick = () => {
@@ -1611,7 +1803,9 @@ export class ChatApp {
                     const lang = config.quick_actions?.translate_language || 'English';
                     this.elements.chatInput.value = `Translate the following to ${lang}:\n\n${text.substring(0, 500)}`;
                     this.elements.chatInput.focus();
-                } catch (e) { console.warn('Translate failed:', e); }
+                } catch (e) {
+                    console.warn('Translate failed:', e);
+                }
             };
             bubble.appendChild(actions);
         }
@@ -1627,30 +1821,40 @@ export class ChatApp {
     /** Force the streaming renderer to paint the full accumulated text now.
      *  Called by the permission modal handler before showing the dialog so
      *  the user sees the complete streamed text behind it. */
-    flushStreamingRender() { this.messageStreamController.flushStreamingRender(); }
+    flushStreamingRender() {
+        this.messageStreamController.flushStreamingRender();
+    }
 
-    handleMessageChunk(event) { return this.messageStreamController.handleChunk(event); }
+    handleMessageChunk(event) {
+        return this.messageStreamController.handleChunk(event);
+    }
 
-    async handleMessageComplete() { return this.messageStreamController.handleComplete(); }
+    async handleMessageComplete() {
+        return this.messageStreamController.handleComplete();
+    }
 
-    async handleMessageError(event) { return this.messageStreamController.handleError(event); }
+    async handleMessageError(event) {
+        return this.messageStreamController.handleError(event);
+    }
 
-    handleSessionReset(event) { return this.messageStreamController.handleSessionReset(event); }
+    handleSessionReset(event) {
+        return this.messageStreamController.handleSessionReset(event);
+    }
 
-    handleToolCallUpdate(event) { return this.messageStreamController.handleToolCallUpdate(event); }
-
-
-
+    handleToolCallUpdate(event) {
+        return this.messageStreamController.handleToolCallUpdate(event);
+    }
 
     renderSourcesInMessage(contentDiv) {
-            let sourcesEl = contentDiv.querySelector('.tool-sources');
-            if (!sourcesEl) {
-                sourcesEl = document.createElement('div');
-                sourcesEl.className = 'tool-sources';
-                contentDiv.appendChild(sourcesEl);
-            }
-            sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+        let sourcesEl = contentDiv.querySelector('.tool-sources');
+        if (!sourcesEl) {
+            sourcesEl = document.createElement('div');
+            sourcesEl.className = 'tool-sources';
+            contentDiv.appendChild(sourcesEl);
         }
+        sourcesEl.innerHTML =
+            renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+    }
 
     /**
      * Render a loading indicator for an extension tool call into the per-message div.
@@ -1659,11 +1863,16 @@ export class ChatApp {
      */
     _renderExtensionToolIndicator(info, contentDiv) {
         if (!contentDiv) return;
-        const beforeFence = (this.currentStreamingContent || '').split('```extension_tool_call')[0].trim();
+        const beforeFence = (this.currentStreamingContent || '')
+            .split('```extension_tool_call')[0]
+            .trim();
         if (beforeFence) {
             renderMarkdown(beforeFence, contentDiv, true);
         } else {
-            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(info.extension, info.tool);
+            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(
+                info.extension,
+                info.tool
+            );
             contentDiv.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
     }
@@ -1675,7 +1884,8 @@ export class ChatApp {
         const indicator = document.createElement('div');
         indicator.className = 'typing-indicator';
         indicator.id = 'typingIndicator';
-        indicator.innerHTML = '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
+        indicator.innerHTML =
+            '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>';
         this.elements.messagesArea.appendChild(indicator);
         this.scrollToBottom();
     }
@@ -1710,7 +1920,7 @@ export class ChatApp {
     async checkConnection() {
         try {
             this.isConnected = await this.invoke('check_connection');
-        } catch (e) {
+        } catch (_e) {
             this.isConnected = false;
         }
         this.updateConnectionStatus();
@@ -1729,7 +1939,7 @@ export class ChatApp {
             }
         });
         // Do a real connectivity check on startup
-        checkOnline().then(online => {
+        checkOnline().then((online) => {
             if (!online) {
                 this.isConnected = false;
                 this.updateConnectionStatus();
@@ -1783,16 +1993,16 @@ export class ChatApp {
     }
 
     async showSessionLocked(sessionId, pid) {
-            let processInfo = '';
-            if (pid) {
-                try {
-                    const name = await this.invoke('get_process_name', { pid: parseInt(pid) });
-                    processInfo = name ? ` (${name}, PID ${pid})` : ` (PID ${pid})`;
-                } catch {
-                    processInfo = ` (PID ${pid})`;
-                }
+        let processInfo = '';
+        if (pid) {
+            try {
+                const name = await this.invoke('get_process_name', { pid: parseInt(pid, 10) });
+                processInfo = name ? ` (${name}, PID ${pid})` : ` (PID ${pid})`;
+            } catch {
+                processInfo = ` (PID ${pid})`;
             }
-            this.elements.errorContainer.innerHTML = `
+        }
+        this.elements.errorContainer.innerHTML = `
                 <div class="chat-error chat-warning">
                     <span>This session is read-only as it is open in another process${escapeHtml(processInfo)}.</span>
                     <div class="chat-error-actions">
@@ -1801,29 +2011,29 @@ export class ChatApp {
                 </div>
             `;
 
-            document.getElementById('errorRetryBtn')?.addEventListener('click', async () => {
-                this.elements.errorContainer.innerHTML = '';
-                try {
-                    await this.invoke('switch_acp_session', { sessionId });
-                    this.isConnected = true;
-                    this.updateConnectionStatus();
-                    this.elements.chatInput.disabled = false;
-                    this.elements.chatInput.placeholder = 'Type your message...';
-                    this.elements.sendBtn.disabled = false;
-                    this.elements.chatInput.focus();
-                } catch (error) {
-                    const msg = this.formatError(error);
-                    const isLocked = msg.includes('active in another process') || msg.includes('Session is active');
-                    if (isLocked) {
-                        const retryPidMatch = msg.match(/PID\s+(\d+)/);
-                        this.showSessionLocked(sessionId, retryPidMatch ? retryPidMatch[1] : null);
-                    } else {
-                        this.showError(msg);
-                    }
+        document.getElementById('errorRetryBtn')?.addEventListener('click', async () => {
+            this.elements.errorContainer.innerHTML = '';
+            try {
+                await this.invoke('switch_acp_session', { sessionId });
+                this.isConnected = true;
+                this.updateConnectionStatus();
+                this.elements.chatInput.disabled = false;
+                this.elements.chatInput.placeholder = 'Type your message...';
+                this.elements.sendBtn.disabled = false;
+                this.elements.chatInput.focus();
+            } catch (error) {
+                const msg = this.formatError(error);
+                const isLocked =
+                    msg.includes('active in another process') || msg.includes('Session is active');
+                if (isLocked) {
+                    const retryPidMatch = msg.match(/PID\s+(\d+)/);
+                    this.showSessionLocked(sessionId, retryPidMatch ? retryPidMatch[1] : null);
+                } else {
+                    this.showError(msg);
                 }
-            });
-        }
-
+            }
+        });
+    }
 
     showSessionResetMessage(message) {
         // Show as an inline system message in the chat area
@@ -1843,7 +2053,6 @@ export class ChatApp {
     formatError(error) {
         return formatErrorShared(error);
     }
-
 
     startTitleEdit() {
         if (!this.activeSessionId) return;
@@ -1874,11 +2083,11 @@ export class ChatApp {
         try {
             await this.invoke('rename_session', {
                 sessionId: this.activeSessionId,
-                title: newTitle
+                title: newTitle,
             });
             titleEl.textContent = newTitle;
             // Update in the sessions list too
-            const session = this.sessions.find(s => s.session_id === this.activeSessionId);
+            const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
             if (session) session.title = newTitle;
             this.renderSessionList();
         } catch (e) {
@@ -1921,7 +2130,7 @@ export class ChatApp {
             if (newTitle && newTitle !== currentTitle) {
                 try {
                     await this.invoke('rename_session', { sessionId, title: newTitle });
-                    const session = this.sessions.find(s => s.session_id === sessionId);
+                    const session = this.sessions.find((s) => s.session_id === sessionId);
                     if (session) session.title = newTitle;
                     if (sessionId === this.activeSessionId) {
                         this.elements.chatHeaderTitle.textContent = newTitle;
@@ -1935,11 +2144,16 @@ export class ChatApp {
 
         input.addEventListener('blur', finish);
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-            if (e.key === 'Escape') { input.value = currentTitle; input.blur(); }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            }
+            if (e.key === 'Escape') {
+                input.value = currentTitle;
+                input.blur();
+            }
         });
     }
-
 
     async loadShortcuts() {
         try {
@@ -1961,35 +2175,40 @@ export class ChatApp {
 
         this._searchGeneration = (this._searchGeneration || 0) + 1;
         const gen = this._searchGeneration;
-        const results = await unifiedSearch(trimmed, this.invoke, this.shortcuts, (partial, { done, pending }) => {
-            if (gen !== this._searchGeneration) return;
-            if (partial.length > 0) {
-                this.currentSuggestions = partial;
-                this.suggestionIndex = 0;
-                this.renderSuggestions();
-            }
-            // Show/hide loading indicator with provider names
-            const container = this.elements.chatSuggestions;
-            const existing = container.querySelector('.suggestions-loading');
-            if (done) {
-                if (existing) existing.remove();
-            } else if (container.classList.contains('visible')) {
-                let label = 'Loading more results';
-                if (pending && pending.length > 0) {
-                    const shown = pending.slice(0, 2).join(', ');
-                    label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+        const results = await unifiedSearch(
+            trimmed,
+            this.invoke,
+            this.shortcuts,
+            (partial, { done, pending }) => {
+                if (gen !== this._searchGeneration) return;
+                if (partial.length > 0) {
+                    this.currentSuggestions = partial;
+                    this.suggestionIndex = 0;
+                    this.renderSuggestions();
                 }
-                label += '\u2026';
-                if (existing) {
-                    existing.textContent = label;
-                } else {
-                    const hint = document.createElement('div');
-                    hint.className = 'suggestions-hint suggestions-loading';
-                    hint.textContent = label;
-                    container.appendChild(hint);
+                // Show/hide loading indicator with provider names
+                const container = this.elements.chatSuggestions;
+                const existing = container.querySelector('.suggestions-loading');
+                if (done) {
+                    if (existing) existing.remove();
+                } else if (container.classList.contains('visible')) {
+                    let label = 'Loading more results';
+                    if (pending && pending.length > 0) {
+                        const shown = pending.slice(0, 2).join(', ');
+                        label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+                    }
+                    label += '\u2026';
+                    if (existing) {
+                        existing.textContent = label;
+                    } else {
+                        const hint = document.createElement('div');
+                        hint.className = 'suggestions-hint suggestions-loading';
+                        hint.textContent = label;
+                        container.appendChild(hint);
+                    }
                 }
             }
-        });
+        );
         if (gen !== this._searchGeneration) return;
         // Remove loading indicator — all providers have resolved
         const loadingEl = this.elements.chatSuggestions.querySelector('.suggestions-loading');
@@ -2017,12 +2236,15 @@ export class ChatApp {
         // Prime the custom-render cache so the synchronous renderResult()
         // calls below can resolve from cache.
         if (extMgr?.prefetchCustomRender) {
-            try { await extMgr.prefetchCustomRender(this.currentSuggestions); } catch {}
+            try {
+                await extMgr.prefetchCustomRender(this.currentSuggestions);
+            } catch {}
         }
 
         this.currentSuggestions.forEach((cmd, index) => {
             const item = document.createElement('div');
-            item.className = 'chat-suggestion-item' + (index === this.suggestionIndex ? ' selected' : '');
+            item.className =
+                'chat-suggestion-item' + (index === this.suggestionIndex ? ' selected' : '');
 
             // Let extensions render their own results
             if (cmd._extensionId && extMgr) {
@@ -2039,7 +2261,9 @@ export class ChatApp {
             // Default rendering for non-extension results
             let iconHtml;
             if (cmd.type === 'app' && cmd.data?.icon_base64) {
-                const src = cmd.data.icon_base64.startsWith('data:') ? cmd.data.icon_base64 : 'data:image/png;base64,' + cmd.data.icon_base64;
+                const src = cmd.data.icon_base64.startsWith('data:')
+                    ? cmd.data.icon_base64
+                    : 'data:image/png;base64,' + cmd.data.icon_base64;
                 iconHtml = `<img src="${src}" style="width:20px;height:20px;border-radius:4px;" onerror="this.replaceWith(document.createTextNode('${cmd.icon || cmd.label.charAt(0)}'))">`;
             } else {
                 iconHtml = `<span class="chat-suggestion-icon">${cmd.icon || cmd.label?.charAt(0) || '?'}</span>`;
@@ -2081,7 +2305,11 @@ export class ChatApp {
                 this.addMessageFromHistory('assistant', text);
                 this.scrollToBottom();
             },
-            onCopy: async (text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+            onCopy: async (text) => {
+                try {
+                    await navigator.clipboard.writeText(text);
+                } catch {}
+            },
         };
     }
 
@@ -2146,7 +2374,6 @@ export class ChatApp {
         });
     }
 
-
     convertFileSrc(path) {
         // Tauri 2 uses asset protocol for local files
         if (window.__TAURI__?.core?.convertFileSrc) {
@@ -2206,7 +2433,7 @@ export class ChatApp {
         try {
             const result = await this.invoke('execute_slash_command', {
                 command: 'context',
-                args: {}
+                args: {},
             });
             const msg = result?.message || JSON.stringify(result);
             const match = msg.match(/(\d+)%/);
@@ -2226,7 +2453,9 @@ export class ChatApp {
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         const size = 16;
-        const cx = size / 2, cy = size / 2, r = 6;
+        const cx = size / 2,
+            cy = size / 2,
+            r = 6;
         const lineWidth = 2;
         ctx.clearRect(0, 0, size, size);
 
@@ -2241,10 +2470,11 @@ export class ChatApp {
         // Filled arc
         if (percent > 0) {
             let color = '#22c55e'; // green
-            if (percent >= 90) color = '#ef4444'; // red
+            if (percent >= 90)
+                color = '#ef4444'; // red
             else if (percent >= 75) color = '#eab308'; // yellow
             const startAngle = -Math.PI / 2;
-            const endAngle = startAngle + (Math.PI * 2 * Math.min(percent, 100) / 100);
+            const endAngle = startAngle + (Math.PI * 2 * Math.min(percent, 100)) / 100;
             ctx.beginPath();
             ctx.arc(cx, cy, r, startAngle, endAngle);
             ctx.strokeStyle = color;
@@ -2262,13 +2492,15 @@ export class ChatApp {
             const config = await getConfig(this.invoke);
             const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;
             if (threshold === 0 || percent < threshold) return;
-        } catch { return; }
+        } catch {
+            return;
+        }
 
         this._isCompacting = true;
         try {
             await this.invoke('execute_slash_command', {
                 command: 'compact',
-                args: {}
+                args: {},
             });
         } catch (e) {
             console.error('[COMPACT] Auto-compact failed:', e);
@@ -2328,13 +2560,16 @@ export class ChatApp {
         }
         dd.innerHTML = '';
         if (!this.availableModels || this.availableModels.length === 0) {
-            dd.innerHTML = '<div class="chat-model-dropdown-item"><span class="chat-model-dropdown-item-name">No models available</span></div>';
+            dd.innerHTML =
+                '<div class="chat-model-dropdown-item"><span class="chat-model-dropdown-item-name">No models available</span></div>';
             dd.style.display = '';
             return;
         }
         for (const model of this.availableModels) {
             const item = document.createElement('div');
-            item.className = 'chat-model-dropdown-item' + (model.modelId === this.currentModelId ? ' active' : '');
+            item.className =
+                'chat-model-dropdown-item' +
+                (model.modelId === this.currentModelId ? ' active' : '');
             item.innerHTML = `
                 <span class="chat-model-dropdown-item-name">${escapeHtml(model.name || model.modelId)}</span>
                 <span class="chat-model-dropdown-item-desc">${escapeHtml(model.description || '')}</span>
@@ -2352,7 +2587,7 @@ export class ChatApp {
         try {
             await this.invoke('execute_slash_command', {
                 command: 'model',
-                args: { modelName: model.modelId }
+                args: { modelName: model.modelId },
             });
         } catch (e) {
             console.error('[MODELS] Failed to switch model:', e);
@@ -2376,7 +2611,7 @@ export class ChatApp {
         if (!toolbarLeft) return;
 
         // Remove any previously rendered extension buttons
-        toolbarLeft.querySelectorAll('.ext-toolbar-btn').forEach(el => el.remove());
+        toolbarLeft.querySelectorAll('.ext-toolbar-btn').forEach((el) => el.remove());
 
         if (buttons.length === 0) return;
 
@@ -2392,13 +2627,13 @@ export class ChatApp {
                 try {
                     const ctx = {
                         input: this.elements.chatInput?.value || '',
-                        messages: (this.messages || []).map(m => ({
+                        messages: (this.messages || []).map((m) => ({
                             role: m?.role || '',
                             content: typeof m?.content === 'string' ? m.content : '',
                         })),
                     };
                     const out = await btn.onClick(ctx);
-                    if (out && out.host) {
+                    if (out?.host) {
                         // Stamp the origin so the host effect handler can
                         // scope ephemeral bubbles / side effects to the
                         // right extension.
@@ -2462,14 +2697,14 @@ export class ChatApp {
      * replace the previous one rather than piling up.
      */
     _renderEphemeralMessage(host) {
-        const messagesArea = document.querySelector('.messages-area')
-                          || document.querySelector('.chat-messages');
+        const messagesArea =
+            document.querySelector('.messages-area') || document.querySelector('.chat-messages');
         if (!messagesArea) return;
 
         const tag = String(host.tag || 'default');
         const extensionId = String(host.extensionId || 'unknown');
         const selector = `.ext-ephemeral-bubble[data-ext-bubble="${extensionId}:${tag}"]`;
-        messagesArea.querySelectorAll(selector).forEach(el => el.remove());
+        messagesArea.querySelectorAll(selector).forEach((el) => el.remove());
 
         const bubble = document.createElement('div');
         bubble.className = 'ext-ephemeral-bubble';

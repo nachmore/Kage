@@ -4,7 +4,12 @@ import { KageDesktopViewer } from './kage-desktop.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
-import { createMascotController, createMascot, getMascotThemeSettings, setTerminatorMode, mascotHTML } from '../shared/mascot.js';
+import {
+    createMascotController,
+    createMascot,
+    getMascotThemeSettings,
+    setTerminatorMode,
+} from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
@@ -34,7 +39,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     // Check terminator mode and set it globally for mascot rendering
     let isTerminator = false;
-    try { isTerminator = await invoke('is_terminator_mode'); } catch {}
+    try {
+        isTerminator = await invoke('is_terminator_mode');
+    } catch {}
     setTerminatorMode(isTerminator);
 
     // Render sidebar mascot and title — extracted so it can be refreshed on config change
@@ -95,7 +102,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
         // Refresh terminator mode (may have been toggled in settings)
         let newTerminator = false;
-        try { newTerminator = await invoke('is_terminator_mode'); } catch {}
+        try {
+            newTerminator = await invoke('is_terminator_mode');
+        } catch {}
         if (newTerminator !== isTerminator) {
             isTerminator = newTerminator;
             setTerminatorMode(isTerminator);
@@ -136,13 +145,15 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             desktopViewer = viewer;
             const toggle = document.getElementById('sessionSourceToggle');
             if (toggle) {
-                toggle.querySelectorAll('.source-toggle-btn').forEach(btn => {
+                toggle.querySelectorAll('.source-toggle-btn').forEach((btn) => {
                     btn.addEventListener('click', async () => {
                         const source = btn.dataset.source;
                         if (source === currentSource) return;
                         currentSource = source;
                         window._kageSessionSource = source;
-                        toggle.querySelectorAll('.source-toggle-btn').forEach(b => b.classList.remove('active'));
+                        toggle
+                            .querySelectorAll('.source-toggle-btn')
+                            .forEach((b) => b.classList.remove('active'));
                         btn.classList.add('active');
 
                         if (source === 'desktop') {
@@ -214,7 +225,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                 x: pos.x,
                 y: pos.y,
             });
-        } catch (e) { console.warn('[Chat] Failed to save window geometry:', e); }
+        } catch (e) {
+            console.warn('[Chat] Failed to save window geometry:', e);
+        }
     }
     appWindow.listen('tauri://blur', saveChatGeometry);
     appWindow.listen('tauri://close-requested', saveChatGeometry);
@@ -231,7 +244,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
             app.refreshContextUsage();
 
             if (!app.activeSessionId && app.currentAcpSessionId) {
-                const exists = app.sessions.find(s => s.session_id === app.currentAcpSessionId);
+                const exists = app.sessions.find((s) => s.session_id === app.currentAcpSessionId);
                 if (exists) {
                     await app.selectSession(app.currentAcpSessionId);
                 } else {
@@ -239,12 +252,14 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
                         session_id: app.currentAcpSessionId,
                         title: 'Current Session',
                         created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString(),
                     });
                     app.activeSessionId = app.currentAcpSessionId;
                     app.renderSessionList();
                     try {
-                        const data = await app.invoke('load_session', { sessionId: app.currentAcpSessionId });
+                        const data = await app.invoke('load_session', {
+                            sessionId: app.currentAcpSessionId,
+                        });
                         app.displaySession(data);
                     } catch (e) {
                         console.log('[CHAT] Could not load current session from disk:', e);

@@ -11,33 +11,46 @@
 // Capability → (icon, description) used to render permission badges on
 // extension settings pages. Keep in sync with ui/js/shared/extension-permissions.js.
 const CAPABILITY_INFO = Object.freeze({
-    storage:       { icon: '💾', label: 'Storage',       desc: 'Read/write its own sandboxed data and config' },
-    clipboard:     { icon: '📋', label: 'Clipboard',     desc: 'Read clipboard contents and history' },
-    shell:         { icon: '🌐', label: 'Shell',         desc: 'Open URLs, paths, and apps externally' },
-    filesystem:    { icon: '📂', label: 'Filesystem',    desc: 'Scan folders and search files' },
-    window:        { icon: '🪟', label: 'Window',        desc: 'Resize and reposition Kage windows' },
-    windows:       { icon: '🧿', label: 'Open windows',  desc: 'List and focus other apps\' windows' },
+    storage: { icon: '💾', label: 'Storage', desc: 'Read/write its own sandboxed data and config' },
+    clipboard: { icon: '📋', label: 'Clipboard', desc: 'Read clipboard contents and history' },
+    shell: { icon: '🌐', label: 'Shell', desc: 'Open URLs, paths, and apps externally' },
+    filesystem: { icon: '📂', label: 'Filesystem', desc: 'Scan folders and search files' },
+    window: { icon: '🪟', label: 'Window', desc: 'Resize and reposition Kage windows' },
+    windows: { icon: '🧿', label: 'Open windows', desc: "List and focus other apps' windows" },
     notifications: { icon: '🔔', label: 'Notifications', desc: 'Show system notifications' },
-    calendar:      { icon: '📅', label: 'Calendar',      desc: 'Read calendar events' },
-    session:       { icon: '💬', label: 'Sessions',      desc: 'List and read chat sessions' },
-    agent:         { icon: '🤖', label: 'Agent',         desc: 'Send messages to the AI agent' },
-    activity:      { icon: '📊', label: 'Activity',      desc: 'Read app usage statistics' },
-    automation:    { icon: '⚡', label: 'Automation',    desc: 'Emit signals that can trigger automations' },
-    tts:           { icon: '🔈', label: 'TTS',           desc: 'Use text-to-speech' },
+    calendar: { icon: '📅', label: 'Calendar', desc: 'Read calendar events' },
+    session: { icon: '💬', label: 'Sessions', desc: 'List and read chat sessions' },
+    agent: { icon: '🤖', label: 'Agent', desc: 'Send messages to the AI agent' },
+    activity: { icon: '📊', label: 'Activity', desc: 'Read app usage statistics' },
+    automation: {
+        icon: '⚡',
+        label: 'Automation',
+        desc: 'Emit signals that can trigger automations',
+    },
+    tts: { icon: '🔈', label: 'TTS', desc: 'Use text-to-speech' },
 });
 
 function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    return String(s).replace(
+        /[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    );
 }
 
 function renderCapabilityBadges(capabilities, legacy) {
     if (!Array.isArray(capabilities) || capabilities.length === 0) {
         return '<div class="ext-capabilities ext-capabilities-none" title="This extension requested no capabilities">🔒 No capabilities</div>';
     }
-    const pills = capabilities.map(cap => {
-        const info = CAPABILITY_INFO[cap] || { icon: '❓', label: cap, desc: 'Unknown capability' };
-        return `<span class="ext-capability-pill" title="${escapeHtml(info.desc)}">${info.icon} ${escapeHtml(info.label)}</span>`;
-    }).join('');
+    const pills = capabilities
+        .map((cap) => {
+            const info = CAPABILITY_INFO[cap] || {
+                icon: '❓',
+                label: cap,
+                desc: 'Unknown capability',
+            };
+            return `<span class="ext-capability-pill" title="${escapeHtml(info.desc)}">${info.icon} ${escapeHtml(info.label)}</span>`;
+        })
+        .join('');
     const legacyBanner = legacy
         ? `<div class="ext-capabilities-legacy">⚠ Extension manifest does not declare 'permissions' — running with default set. Ask the author to specify.</div>`
         : '';
@@ -76,10 +89,12 @@ class SandboxedExtensionSettingsModule {
         return `<div id="ext-sandbox-slot-${this._extensionId}"></div>`;
     }
 
-    render() { return this.renderContent(); }
+    render() {
+        return this.renderContent();
+    }
 
     load(config) {
-        const stored = (config.extensions && config.extensions[this._extensionId]) || {};
+        const stored = config.extensions?.[this._extensionId] || {};
         this._rendered.load(stored);
     }
 
@@ -92,10 +107,14 @@ class SandboxedExtensionSettingsModule {
         return this._rendered.validate();
     }
 
-    initialize() { /* event wiring happens inside RenderedSettings */ }
+    initialize() {
+        /* event wiring happens inside RenderedSettings */
+    }
 
     destroy() {
-        try { this._rendered.destroy(); } catch {}
+        try {
+            this._rendered.destroy();
+        } catch {}
     }
 }
 
@@ -103,14 +122,20 @@ class SandboxedExtensionSettingsModule {
  * Given a manifest and its source paths, boot a sandbox for settings
  * rendering, fetch the declared schema, and build the adapter module.
  */
-async function buildSandboxedSettingsModule({ pool, manifest, capabilities, settingsProviderSource, currentConfig }) {
+async function buildSandboxedSettingsModule({
+    pool,
+    manifest,
+    capabilities,
+    settingsProviderSource,
+    currentConfig,
+}) {
     // Collect sources: only the settings provider is needed for the
     // settings window. Search/tool/trigger providers are already loaded
     // in the floating/chat windows' own sandbox pools.
     const sources = { settingsProvider: settingsProviderSource };
 
     // Extension config values the provider should see.
-    const extConfig = (currentConfig?.extensions && currentConfig.extensions[manifest.id]) || {};
+    const extConfig = currentConfig?.extensions?.[manifest.id] || {};
 
     const sandbox = await pool.load({
         extensionId: manifest.id,
@@ -121,7 +146,9 @@ async function buildSandboxedSettingsModule({ pool, manifest, capabilities, sett
 
     if (!sandbox.hasSettings) {
         pool.unload(manifest.id);
-        throw new Error(`extension '${manifest.id}' declared a settingsProvider but the sandbox didn't report one`);
+        throw new Error(
+            `extension '${manifest.id}' declared a settingsProvider but the sandbox didn't report one`
+        );
     }
 
     const schema = await sandbox.call('getSettings', {});
@@ -160,10 +187,12 @@ class SettingsManager {
      * SandboxedExtensionSettingsModule (used by all extensions).
      */
     registerModule(module) {
-        const isLegacy = (typeof SettingsModule !== 'undefined') && (module instanceof SettingsModule);
+        const isLegacy = typeof SettingsModule !== 'undefined' && module instanceof SettingsModule;
         const isSandboxed = module instanceof SandboxedExtensionSettingsModule;
         if (!isLegacy && !isSandboxed) {
-            throw new Error('Module must extend SettingsModule or SandboxedExtensionSettingsModule');
+            throw new Error(
+                'Module must extend SettingsModule or SandboxedExtensionSettingsModule'
+            );
         }
         this.modules.push(module);
     }
@@ -211,10 +240,10 @@ class SettingsManager {
         // Mount sandboxed-extension-settings rendered containers into their
         // placeholder slots. The renderer wrote into a floating div we
         // created earlier; we just move those children into the live DOM.
-        this.modules.forEach(module => {
+        this.modules.forEach((module) => {
             if (module instanceof SandboxedExtensionSettingsModule) {
                 const slot = document.getElementById(`ext-sandbox-slot-${module._extensionId}`);
-                if (slot && module._rendered && module._rendered.container) {
+                if (slot && module._rendered?.container) {
                     while (module._rendered.container.firstChild) {
                         slot.appendChild(module._rendered.container.firstChild);
                     }
@@ -231,7 +260,7 @@ class SettingsManager {
         });
 
         // Initialize all modules
-        this.modules.forEach(module => module.initialize());
+        this.modules.forEach((module) => module.initialize());
     }
 
     /**
@@ -239,7 +268,7 @@ class SettingsManager {
      */
     switchSection(sectionId) {
         // Update sidebar active state
-        document.querySelectorAll('.sidebar-item').forEach(item => {
+        document.querySelectorAll('.sidebar-item').forEach((item) => {
             if (item.dataset.section === sectionId) {
                 item.classList.add('active');
             } else {
@@ -248,7 +277,7 @@ class SettingsManager {
         });
 
         // Show/hide section content
-        document.querySelectorAll('[data-section-content]').forEach(section => {
+        document.querySelectorAll('[data-section-content]').forEach((section) => {
             if (section.dataset.sectionContent === sectionId) {
                 section.classList.remove('hidden');
             } else {
@@ -270,7 +299,7 @@ class SettingsManager {
     async load() {
         try {
             const config = await this.invoke('get_config');
-            this.modules.forEach(module => {
+            this.modules.forEach((module) => {
                 module.load(config);
                 // Load extension enabled state
                 if (module._extensionId) {
@@ -296,13 +325,19 @@ class SettingsManager {
             // Validate all modules (legacy sync, sandboxed async)
             for (const module of this.modules) {
                 const raw = module.validate();
-                const validation = (raw && typeof raw.then === 'function') ? await raw : raw;
+                const validation = raw && typeof raw.then === 'function' ? await raw : raw;
                 if (!validation || typeof validation !== 'object' || !('valid' in validation)) {
-                    this.showStatus(`[${module.title}] validate() must return { valid: true/false, error?: string }`, 'error');
+                    this.showStatus(
+                        `[${module.title}] validate() must return { valid: true/false, error?: string }`,
+                        'error'
+                    );
                     return false;
                 }
                 if (!validation.valid) {
-                    this.showStatus(`[${module.title}] ${validation.error || 'Validation failed'}`, 'error');
+                    this.showStatus(
+                        `[${module.title}] ${validation.error || 'Validation failed'}`,
+                        'error'
+                    );
                     return false;
                 }
             }
@@ -311,7 +346,7 @@ class SettingsManager {
             // (e.g. first_run_completed) are preserved across saves.
             const config = await this.invoke('get_config');
             config.version = 1;
-            this.modules.forEach(module => {
+            this.modules.forEach((module) => {
                 module.save(config);
                 // Save extension enabled state
                 if (module._extensionId) {
@@ -325,21 +360,29 @@ class SettingsManager {
 
             // Save to backend
             await this.invoke('save_config', { config });
-            
+
             // Check if any module needs a restart
-            const needsRestart = this.modules.some(m => m._needsRestart);
+            const needsRestart = this.modules.some((m) => m._needsRestart);
             if (needsRestart) {
                 // Reset the flag so it doesn't trigger again on next save
-                this.modules.forEach(m => { m._needsRestart = false; });
-                this.showStatus('Settings saved. Restart required for connection changes.', 'success');
+                this.modules.forEach((m) => {
+                    m._needsRestart = false;
+                });
+                this.showStatus(
+                    'Settings saved. Restart required for connection changes.',
+                    'success'
+                );
                 // Use setTimeout to let the status message render before showing dialog
                 setTimeout(async () => {
                     try {
                         const { ask } = window.__TAURI__.dialog;
-                        const restart = await ask('Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?', {
-                            title: 'Restart Required',
-                            kind: 'info',
-                        });
+                        const restart = await ask(
+                            'Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?',
+                            {
+                                title: 'Restart Required',
+                                kind: 'info',
+                            }
+                        );
                         if (restart) {
                             this.invoke('restart_app');
                         }
@@ -357,8 +400,13 @@ class SettingsManager {
             return true;
         } catch (error) {
             console.error('[Settings] Save failed:', error);
-            const msg = typeof error === 'string' ? error 
-                : error?.message || error?.toString() || JSON.stringify(error) || 'Unknown error';
+            const msg =
+                typeof error === 'string'
+                    ? error
+                    : error?.message ||
+                      error?.toString() ||
+                      JSON.stringify(error) ||
+                      'Unknown error';
             this.showStatus('Failed to save: ' + msg, 'error');
             return false;
         }
@@ -376,7 +424,7 @@ class SettingsManager {
         statusEl.textContent = message;
         statusEl.className = 'status-message ' + type;
         statusEl.style.display = 'block';
-        
+
         setTimeout(() => {
             statusEl.style.display = 'none';
         }, 5000);
@@ -393,7 +441,7 @@ class SettingsManager {
      * Cleanup all modules
      */
     destroy() {
-        this.modules.forEach(module => module.destroy());
+        this.modules.forEach((module) => module.destroy());
         this.modules = [];
     }
 }
@@ -428,7 +476,7 @@ function addExtensionSidebarItem(id, icon, label) {
     // Insert alphabetically among other dynamic extension items
     const extItems = [...section.querySelectorAll('.sidebar-item[data-ext-sidebar="true"]')];
     const lowerLabel = label.toLowerCase();
-    const insertBefore = extItems.find(el => {
+    const insertBefore = extItems.find((el) => {
         const elLabel = el.querySelector('span:last-child')?.textContent?.toLowerCase() || '';
         return elLabel > lowerLabel;
     });
@@ -446,7 +494,7 @@ function addExtensionSidebarItem(id, icon, label) {
 window.addEventListener('DOMContentLoaded', async () => {
     settingsManager = new SettingsManager();
     const invoke = window.__TAURI__.core.invoke;
-    
+
     // Register core modules (order matches sidebar)
     settingsManager.registerModule(new AppearanceSettingsModule());
     settingsManager.registerModule(new HotkeySettingsModule());
@@ -476,12 +524,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Preload current config so we can hand each sandbox the right initial values.
     let currentConfig = {};
-    try { currentConfig = await invoke('get_config'); } catch (e) { console.warn('Failed to preload config:', e); }
+    try {
+        currentConfig = await invoke('get_config');
+    } catch (e) {
+        console.warn('Failed to preload config:', e);
+    }
 
     // Read all user-installed extensions once — we'll iterate over both
     // bundled and user-installed lists with a single loader path.
     let installedUser = [];
-    try { installedUser = await invoke('list_extensions'); } catch {}
+    try {
+        installedUser = await invoke('list_extensions');
+    } catch {}
 
     // Helper: resolve granted capabilities for an extension. Bundled ones
     // get what their manifest declares (implicit grant); user-installed
@@ -490,12 +544,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     function resolveCaps(manifest, bundled) {
         const requested = window.__kageSettingsSandbox.normalize(manifest.permissions, manifest.id);
         if (bundled) return requested;
-        const record = (currentConfig.extension_grants || {})[manifest.id];
+        const record = currentConfig.extension_grants?.[manifest.id];
         if (!record) return [];
         const grantedSet = new Set(
-            window.__kageSettingsSandbox.normalize(record.granted, manifest.id),
+            window.__kageSettingsSandbox.normalize(record.granted, manifest.id)
         );
-        return requested.filter(cap => grantedSet.has(cap));
+        return requested.filter((cap) => grantedSet.has(cap));
     }
 
     async function loadSandboxedSettings({ manifest, sourceCode, bundled }) {
@@ -523,7 +577,9 @@ window.addEventListener('DOMContentLoaded', async () => {
                     const manifest = await manifestResp.json();
                     const settingsPath = manifest.contributes?.settingsProvider;
                     if (!settingsPath) continue; // extension has no settings UI
-                    const srcResp = await fetch(`extensions/${entry.id}/${settingsPath.replace('./', '')}`);
+                    const srcResp = await fetch(
+                        `extensions/${entry.id}/${settingsPath.replace('./', '')}`
+                    );
                     if (!srcResp.ok) throw new Error(`HTTP ${srcResp.status}`);
                     const sourceCode = await srcResp.text();
                     await loadSandboxedSettings({ manifest, sourceCode, bundled: true });
@@ -541,7 +597,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const bundledIds = new Set();
         try {
             const resp = await fetch('extensions/bundled.json');
-            if (resp.ok) (await resp.json()).forEach(e => bundledIds.add(e.id));
+            if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
         } catch {}
 
         for (const item of installedUser) {
@@ -574,7 +630,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.registerModule(new PrivacySettingsModule());
     settingsManager.registerModule(new UpdatesSettingsModule());
     settingsManager.registerModule(new AboutSettingsModule());
-    
+
     // Render and load
     settingsManager.render();
     await settingsManager.load();
@@ -586,12 +642,14 @@ window.addEventListener('DOMContentLoaded', async () => {
         try {
             const userExts = await invoke('list_extensions');
             // Refresh config so grants are current
-            try { currentConfig = await invoke('get_config'); } catch {}
+            try {
+                currentConfig = await invoke('get_config');
+            } catch {}
 
             const bundledIds = new Set();
             try {
                 const resp = await fetch('extensions/bundled.json');
-                if (resp.ok) (await resp.json()).forEach(e => bundledIds.add(e.id));
+                if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
             } catch {}
 
             let added = false;
@@ -600,15 +658,23 @@ window.addEventListener('DOMContentLoaded', async () => {
                 const manifest = item.manifest;
                 if (!manifest.contributes?.settingsProvider) continue;
 
-                const existingMod = settingsManager.modules.find(m => m._extensionId === manifest.id);
+                const existingMod = settingsManager.modules.find(
+                    (m) => m._extensionId === manifest.id
+                );
                 if (existingMod) {
                     if (existingMod._extensionVersion === manifest.version) continue;
-                    console.log(`[Settings] Updating '${manifest.id}' from ${existingMod._extensionVersion} to ${manifest.version}`);
+                    console.log(
+                        `[Settings] Updating '${manifest.id}' from ${existingMod._extensionVersion} to ${manifest.version}`
+                    );
                     const idx = settingsManager.modules.indexOf(existingMod);
                     if (idx !== -1) settingsManager.modules.splice(idx, 1);
-                    const sidebarItem = document.querySelector(`.sidebar-item[data-section="${existingMod.id}"]`);
+                    const sidebarItem = document.querySelector(
+                        `.sidebar-item[data-section="${existingMod.id}"]`
+                    );
                     if (sidebarItem) sidebarItem.remove();
-                    try { existingMod.destroy?.(); } catch {}
+                    try {
+                        existingMod.destroy?.();
+                    } catch {}
                     sandboxPool.unload(manifest.id);
                 }
 
@@ -631,24 +697,33 @@ window.addEventListener('DOMContentLoaded', async () => {
                     settingsManager.modules.splice(insertIdx, 0, mod);
                     addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
                     added = true;
-                    console.log(`[Settings] Hot-loaded extension settings: ${manifest.id} v${manifest.version}`);
+                    console.log(
+                        `[Settings] Hot-loaded extension settings: ${manifest.id} v${manifest.version}`
+                    );
                 } catch (e) {
                     console.warn(`[Settings] Failed to hot-load '${manifest.id}':`, e);
                 }
             }
 
             // Remove modules for uninstalled extensions
-            const installedIds = new Set(userExts.map(e => e.manifest.id));
-            const toRemove = settingsManager.modules.filter(m =>
-                m._extensionId && !bundledIds.has(m._extensionId) && !installedIds.has(m._extensionId),
+            const installedIds = new Set(userExts.map((e) => e.manifest.id));
+            const toRemove = settingsManager.modules.filter(
+                (m) =>
+                    m._extensionId &&
+                    !bundledIds.has(m._extensionId) &&
+                    !installedIds.has(m._extensionId)
             );
             for (const mod of toRemove) {
                 const idx = settingsManager.modules.indexOf(mod);
                 if (idx !== -1) {
                     settingsManager.modules.splice(idx, 1);
-                    const sidebarItem = document.querySelector(`.sidebar-item[data-section="${mod.id}"]`);
+                    const sidebarItem = document.querySelector(
+                        `.sidebar-item[data-section="${mod.id}"]`
+                    );
                     if (sidebarItem) sidebarItem.remove();
-                    try { mod.destroy?.(); } catch {}
+                    try {
+                        mod.destroy?.();
+                    } catch {}
                     sandboxPool.unload(mod._extensionId);
                     added = true;
                     console.log(`[Settings] Removed uninstalled extension: ${mod._extensionId}`);
@@ -668,7 +743,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 /**
  * Global functions for UI
  */
-function saveSettings() {
+function _saveSettings() {
     return settingsManager.save();
 }
 

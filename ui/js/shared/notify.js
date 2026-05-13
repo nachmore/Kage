@@ -30,6 +30,10 @@ export async function sendAppNotification(invoke, title, body, source) {
         // we emit the source so the right window can be shown)
         try {
             await invoke('set_notification_source', { source: source || 'floating' });
-        } catch { /* command may not exist yet */ }
-    } catch { /* ignore */ }
+        } catch {
+            /* command may not exist yet */
+        }
+    } catch {
+        /* ignore */
+    }
 }

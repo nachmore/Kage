@@ -89,7 +89,10 @@ export function createScriptEditor(container, opts = {}) {
         const aiStatus = document.getElementById(`${id}_aiStatus`);
 
         aiPrompt?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); generate(); }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                generate();
+            }
         });
         aiBtn?.addEventListener('click', generate);
         aiUndo?.addEventListener('click', () => {
@@ -102,7 +105,10 @@ export function createScriptEditor(container, opts = {}) {
 
         async function generate() {
             const userPrompt = aiPrompt?.value.trim();
-            if (!userPrompt) { if (aiStatus) aiStatus.textContent = 'Enter a description first.'; return; }
+            if (!userPrompt) {
+                if (aiStatus) aiStatus.textContent = 'Enter a description first.';
+                return;
+            }
 
             const currentScript = textarea?.value.trim() || '';
             const parts = [
@@ -115,11 +121,15 @@ export function createScriptEditor(container, opts = {}) {
                 'Respond with only the raw code. No explanation, no markdown fences, no comments.',
                 '</instructions>',
             ];
-            if (currentScript) parts.push('', '<current_script>', currentScript, '</current_script>');
+            if (currentScript)
+                parts.push('', '<current_script>', currentScript, '</current_script>');
             parts.push('', '<task>' + userPrompt + '</task>');
 
             previousScript = textarea?.value || '';
-            if (aiBtn) { aiBtn.disabled = true; aiBtn.textContent = 'Generating...'; }
+            if (aiBtn) {
+                aiBtn.disabled = true;
+                aiBtn.textContent = 'Generating...';
+            }
             if (aiStatus) aiStatus.textContent = 'Sending to agent...';
             if (aiUndo) aiUndo.style.display = 'none';
 
@@ -130,19 +140,23 @@ export function createScriptEditor(container, opts = {}) {
 
                 let response = '';
                 const unlisten = await listen('message_chunk', (event) => {
-                    const delta = (event.payload && typeof event.payload === 'object')
-                        ? (event.payload.text || '')
-                        : String(event.payload || '');
+                    const delta =
+                        event.payload && typeof event.payload === 'object'
+                            ? event.payload.text || ''
+                            : String(event.payload || '');
                     response += delta;
                     if (aiStatus) aiStatus.textContent = 'Receiving...';
                 });
                 const completionPromise = new Promise((resolve) => {
-                    listen('message_complete', () => resolve()).then(fn => {
+                    listen('message_complete', () => resolve()).then((fn) => {
                         // Store unlisten for cleanup
                         completionPromise._unlisten = fn;
                     });
                 });
-                await invoke('send_message_streaming', { message: parts.join('\n'), attachments: null });
+                await invoke('send_message_streaming', {
+                    message: parts.join('\n'),
+                    attachments: null,
+                });
                 await completionPromise;
                 unlisten();
                 if (completionPromise._unlisten) completionPromise._unlisten();
@@ -150,24 +164,46 @@ export function createScriptEditor(container, opts = {}) {
                 let code = response.trim();
                 const fenceMatch = code.match(/```(?:javascript|js)?\s*\n([\s\S]*?)```/);
                 if (fenceMatch) code = fenceMatch[1].trim();
-                code = code.replace(/^```\w*\n?/, '').replace(/\n?```$/, '').trim();
+                code = code
+                    .replace(/^```\w*\n?/, '')
+                    .replace(/\n?```$/, '')
+                    .trim();
 
-                if (textarea) { textarea.value = code; updateHighlight(); }
+                if (textarea) {
+                    textarea.value = code;
+                    updateHighlight();
+                }
                 if (aiStatus) aiStatus.textContent = 'Script generated. Review and save.';
                 if (aiUndo) aiUndo.style.display = '';
             } catch (e) {
                 if (aiStatus) aiStatus.textContent = 'Error: ' + e;
             } finally {
-                if (aiBtn) { aiBtn.disabled = false; aiBtn.textContent = '✨ Generate'; }
+                if (aiBtn) {
+                    aiBtn.disabled = false;
+                    aiBtn.textContent = '✨ Generate';
+                }
             }
         }
     }
 
     return {
         getValue: () => textarea?.value || '',
-        setValue: (v) => { if (textarea) { textarea.value = v; updateHighlight(); } },
-        destroy: () => { container.innerHTML = ''; },
+        setValue: (v) => {
+            if (textarea) {
+                textarea.value = v;
+                updateHighlight();
+            }
+        },
+        destroy: () => {
+            container.innerHTML = '';
+        },
     };
 }
 
-function _esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _esc(s) {
+    return (s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}

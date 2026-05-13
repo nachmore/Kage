@@ -46,32 +46,40 @@
     function findActionElement(start, attr) {
         // Walk up to a parent carrying the requested data-attr. We use
         // closest() so clicks on inner spans/icons still trigger.
-        if (!start || !start.closest) return null;
+        if (!start?.closest) return null;
         return start.closest(`[${attr}]`);
     }
 
-    document.addEventListener('click', (event) => {
-        const el = findActionElement(event.target, 'data-action');
-        if (!el) return;
-        const name = el.getAttribute('data-action');
-        if (!name) return;
-        // For button/anchor inside a form, prevent the default submit.
-        // It's a settings click, never a navigation.
-        const tag = el.tagName;
-        if (tag === 'BUTTON' || tag === 'A') event.preventDefault();
-        dispatchSettingsAction(name, el.dataset.arg, el, event);
-    }, true);
+    document.addEventListener(
+        'click',
+        (event) => {
+            const el = findActionElement(event.target, 'data-action');
+            if (!el) return;
+            const name = el.getAttribute('data-action');
+            if (!name) return;
+            // For button/anchor inside a form, prevent the default submit.
+            // It's a settings click, never a navigation.
+            const tag = el.tagName;
+            if (tag === 'BUTTON' || tag === 'A') event.preventDefault();
+            dispatchSettingsAction(name, el.dataset.arg, el, event);
+        },
+        true
+    );
 
-    document.addEventListener('change', (event) => {
-        // Selects/inputs use data-action-change for change events.
-        // Routed separately so a button with data-action doesn't ALSO
-        // fire on bubbling change events from inside it.
-        const el = findActionElement(event.target, 'data-action-change');
-        if (!el) return;
-        const name = el.getAttribute('data-action-change');
-        if (!name) return;
-        dispatchSettingsAction(name, el.dataset.arg, el, event);
-    }, true);
+    document.addEventListener(
+        'change',
+        (event) => {
+            // Selects/inputs use data-action-change for change events.
+            // Routed separately so a button with data-action doesn't ALSO
+            // fire on bubbling change events from inside it.
+            const el = findActionElement(event.target, 'data-action-change');
+            if (!el) return;
+            const name = el.getAttribute('data-action-change');
+            if (!name) return;
+            dispatchSettingsAction(name, el.dataset.arg, el, event);
+        },
+        true
+    );
 
     window.registerSettingsActions = registerSettingsActions;
     window.dispatchSettingsAction = dispatchSettingsAction;

@@ -12,8 +12,12 @@
     cursor: pointer;
     transition: background 0.15s;
 }
-.setting-button:hover { background: var(--kage-accent-hover); }
-.setting-button:active { background: var(--kage-accent-active); }
+.setting-button:hover {
+    background: var(--kage-accent-hover);
+}
+.setting-button:active {
+    background: var(--kage-accent-active);
+}
 
 /* Text Input */
 .setting-input {
@@ -72,7 +76,9 @@
     cursor: pointer;
     position: relative;
     flex-shrink: 0;
-    transition: background 0.15s, border-color 0.15s;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
 }
 .kage-checkbox input[type="checkbox"]:checked {
     background: var(--kage-accent);
@@ -86,7 +92,7 @@
     border-color: var(--kage-accent);
 }
 .kage-checkbox input[type="checkbox"]:checked::after {
-    content: '\2713';
+    content: "\2713";
     position: absolute;
     top: 50%;
     left: 50%;
@@ -108,11 +114,18 @@
     width: 40px;
     height: 20px;
 }
-.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
 .toggle-slider {
     position: absolute;
     cursor: pointer;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background-color: var(--kage-border);
     transition: 0.2s;
     border-radius: 10px;
@@ -188,7 +201,9 @@ input:checked + .toggle-slider:before {
     display: flex;
     gap: 8px;
 }
-.input-group .setting-input { flex: 1; }
+.input-group .setting-input {
+    flex: 1;
+}
 
 /* Hotkey Display */
 .hotkey-display {
@@ -209,7 +224,7 @@ input:checked + .toggle-slider:before {
 
 /* Script Editor — shared syntax-highlighted code editor */
 .script-editor {
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
     font-size: 12px;
     line-height: 1.5;
     resize: vertical;
@@ -224,7 +239,7 @@ input:checked + .toggle-slider:before {
 .script-editor-container .script-editor,
 .script-editor-container .script-highlight {
     grid-area: 1 / 1 / 2 / 2;
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
     font-size: 12px;
     line-height: 1.5;
     padding: 8px 10px;
@@ -257,7 +272,7 @@ input:checked + .toggle-slider:before {
     font-family: inherit;
     font-size: inherit;
     line-height: inherit;
-    background: none !important;
-    padding: 0 !important;
+    background: none;
+    padding: 0;
     white-space: pre;
 }

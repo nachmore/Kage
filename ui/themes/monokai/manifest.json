@@ -1,16 +1,16 @@
 {
-  "id": "monokai",
-  "name": "Monokai",
-  "version": "1.0.0",
-  "type": "theme",
-  "description": "Classic Monokai color scheme",
-  "icon": "🎨",
-  "author": "community",
+    "id": "monokai",
+    "name": "Monokai",
+    "version": "1.0.0",
+    "type": "theme",
+    "description": "Classic Monokai color scheme",
+    "icon": "🎨",
+    "author": "community",
 
-  "contributes": {
-    "themes": {
-      "dark": "./dark.json",
-      "light": "./light.json"
+    "contributes": {
+        "themes": {
+            "dark": "./dark.json",
+            "light": "./light.json"
+        }
     }
-  }
 }

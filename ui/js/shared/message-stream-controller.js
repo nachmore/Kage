@@ -56,10 +56,7 @@
  *   - onToolCallTracked(update, updated)  after processToolCallUpdate
  */
 
-import {
-    processToolCallUpdate,
-    getSessionResetMessage,
-} from './streaming-utils.js';
+import { processToolCallUpdate, getSessionResetMessage } from './streaming-utils.js';
 import { getToolFriendlyName } from './tool-utils.js';
 import { checkOnError } from './network.js';
 
@@ -68,9 +65,9 @@ import { checkOnError } from './network.js';
  * Handles both shapes: `{text, sessionId}` (current) and bare strings.
  */
 export function extractChunkDelta(event) {
-    const payload = (event && event.payload && typeof event.payload === 'object') ? event.payload : null;
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
     if (payload) return { text: payload.text || '', sessionId: payload.sessionId || null };
-    return { text: String((event && event.payload) || ''), sessionId: null };
+    return { text: String(event?.payload || ''), sessionId: null };
 }
 
 export class MessageStreamController {
@@ -119,7 +116,9 @@ export class MessageStreamController {
 
         host.onBeforeFinalRender?.();
 
-        if (host.automationPlanController.tryHandleCompleteFallback(host.getAccumulator()).handled) {
+        if (
+            host.automationPlanController.tryHandleCompleteFallback(host.getAccumulator()).handled
+        ) {
             return;
         }
 

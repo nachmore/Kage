@@ -1,0 +1,16 @@
+{
+  "name": "kage-tooling",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repo-root JS tooling for Kage (linter/formatter). Application code lives in ui/.",
+  "scripts": {
+    "lint": "biome check ui --error-on-warnings",
+    "lint:fix": "biome check --write ui --error-on-warnings",
+    "format": "biome format --write ui",
+    "format:check": "biome format ui",
+    "ci": "biome ci ui --error-on-warnings"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15"
+  }
+}

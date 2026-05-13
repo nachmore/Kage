@@ -54,18 +54,19 @@ class StoreSettingsModule extends SettingsModule {
         if (autoUpdate) autoUpdate.checked = config.auto_update_extensions === true;
         if (storeUrl) storeUrl.value = config.store_url || '';
 
-        this._sources = (config.store_sources || []).map(s => ({ ...s }));
+        this._sources = (config.store_sources || []).map((s) => ({ ...s }));
         this._renderSources();
     }
 
     save(config) {
-        config.auto_update_extensions = document.getElementById('autoUpdateExtensions')?.checked ?? false;
+        config.auto_update_extensions =
+            document.getElementById('autoUpdateExtensions')?.checked ?? false;
         const url = document.getElementById('storeUrl')?.value?.trim() || '';
         config.store_url = url || null;
 
         // Collect sources from DOM
         config.store_sources = [];
-        document.querySelectorAll('.store-source-row').forEach(row => {
+        document.querySelectorAll('.store-source-row').forEach((row) => {
             const name = row.querySelector('.source-name')?.value?.trim();
             const url = row.querySelector('.source-url')?.value?.trim();
             const enabled = row.querySelector('.source-enabled')?.checked ?? true;
@@ -102,13 +103,17 @@ class StoreSettingsModule extends SettingsModule {
                         status.textContent = '✓ All extensions up to date';
                         status.style.color = 'var(--kage-accent)';
                     }
-                    setTimeout(() => { if (status) status.textContent = ''; }, 5000);
+                    setTimeout(() => {
+                        if (status) status.textContent = '';
+                    }, 5000);
                 }
             } catch (e) {
                 if (status) {
                     status.textContent = '✗ ' + e;
                     status.style.color = '#e55';
-                    setTimeout(() => { if (status) status.textContent = ''; }, 5000);
+                    setTimeout(() => {
+                        if (status) status.textContent = '';
+                    }, 5000);
                 }
             }
         });
@@ -117,21 +122,30 @@ class StoreSettingsModule extends SettingsModule {
     _renderSources() {
         const container = document.getElementById('storeSources');
         if (!container) return;
-        container.innerHTML = this._sources.map((s, i) => `
+        container.innerHTML = this._sources
+            .map(
+                (s, _i) => `
             <div class="store-source-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
                 <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="Enable/disable this source">
                 <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="Name" style="width:120px;">
                 <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" style="flex:1;">
                 <button class="setting-button" style="font-size:11px;padding:4px 8px;" data-action="store.removeSourceRow">✕</button>
             </div>
-        `).join('');
+        `
+            )
+            .join('');
     }
 
     _esc(s) {
-        return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
     }
 
-    validate() { return { valid: true }; }
+    validate() {
+        return { valid: true };
+    }
 }
 
 // Register the store section's row-removal handler with the delegated

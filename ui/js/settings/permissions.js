@@ -47,7 +47,13 @@ class MacPermissionsSettingsModule extends SettingsModule {
 
     // This module has no persisted settings — the TCC state lives in the OS,
     // not in Kage's config. load/save are no-ops.
-    load(_config) { /* noop */ }
-    save(_config) { /* noop */ }
-    validate() { return { valid: true }; }
+    load(_config) {
+        /* noop */
+    }
+    save(_config) {
+        /* noop */
+    }
+    validate() {
+        return { valid: true };
+    }
 }

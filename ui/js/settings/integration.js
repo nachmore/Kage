@@ -21,8 +21,8 @@ class IntegrationSettingsModule extends SettingsModule {
                 )}
 
                 ${this.createControlRow(
-                    'Don\'t auto-copy in these apps',
-                    `One process name per line. When these apps are focused, Kage won\'t inject ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
+                    "Don't auto-copy in these apps",
+                    `One process name per line. When these apps are focused, Kage won't inject ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
                     `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`
                 )}
 
@@ -78,9 +78,12 @@ class IntegrationSettingsModule extends SettingsModule {
                 const dirs = await invoke('resolve_directories');
                 const tbody = document.getElementById('dirReferenceBody');
                 if (tbody) {
-                    tbody.innerHTML = dirs.map(d =>
-                        `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || '<span style="color:var(--kage-text-muted)">not available</span>'}</td></tr>`
-                    ).join('');
+                    tbody.innerHTML = dirs
+                        .map(
+                            (d) =>
+                                `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || '<span style="color:var(--kage-text-muted)">not available</span>'}</td></tr>`
+                        )
+                        .join('');
                 }
             } catch (e) {
                 console.warn('Failed to resolve directories:', e);
@@ -104,7 +107,8 @@ class IntegrationSettingsModule extends SettingsModule {
                     notif.sendNotification({ title: 'Kage', body: 'Notifications are working!' });
                     statusEl.textContent = '✅ Notification sent!';
                 } else {
-                    statusEl.textContent = '❌ Permission denied. Check your OS notification settings.';
+                    statusEl.textContent =
+                        '❌ Permission denied. Check your OS notification settings.';
                 }
             } catch (e) {
                 statusEl.textContent = '❌ Error: ' + e;
@@ -130,13 +134,15 @@ class IntegrationSettingsModule extends SettingsModule {
 
     save(config) {
         config.system = config.system || {};
-        config.system.capture_selection = document.getElementById('captureSelection')?.checked ?? true;
+        config.system.capture_selection =
+            document.getElementById('captureSelection')?.checked ?? true;
         const blocklistText = document.getElementById('captureSelectionBlocklist')?.value ?? '';
         config.system.capture_selection_blocklist = blocklistText
             .split('\n')
-            .map(s => s.trim())
-            .filter(s => s.length > 0);
-        config.system.show_notifications = document.getElementById('showNotifications')?.checked ?? true;
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        config.system.show_notifications =
+            document.getElementById('showNotifications')?.checked ?? true;
         config.system.screen_context = document.getElementById('screenContext')?.checked ?? true;
     }
 }

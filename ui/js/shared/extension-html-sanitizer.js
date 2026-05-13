@@ -30,25 +30,89 @@
 // --- Tag allow-lists --------------------------------------------------------
 
 const RICH_TAGS = new Set([
-    'A', 'ABBR', 'B', 'BLOCKQUOTE', 'BR', 'BUTTON', 'CAPTION', 'CODE',
-    'DETAILS', 'DIV', 'DL', 'DD', 'DT', 'EM', 'FIGURE', 'FIGCAPTION', 'H1',
-    'H2', 'H3', 'H4', 'H5', 'H6', 'HR', 'I', 'IMG', 'LI', 'MARK', 'OL',
-    'P', 'PRE', 'S', 'SMALL', 'SPAN', 'STRONG', 'SUB', 'SUMMARY', 'SUP',
-    'TABLE', 'TBODY', 'TD', 'TH', 'THEAD', 'TR', 'U', 'UL',
+    'A',
+    'ABBR',
+    'B',
+    'BLOCKQUOTE',
+    'BR',
+    'BUTTON',
+    'CAPTION',
+    'CODE',
+    'DETAILS',
+    'DIV',
+    'DL',
+    'DD',
+    'DT',
+    'EM',
+    'FIGURE',
+    'FIGCAPTION',
+    'H1',
+    'H2',
+    'H3',
+    'H4',
+    'H5',
+    'H6',
+    'HR',
+    'I',
+    'IMG',
+    'LI',
+    'MARK',
+    'OL',
+    'P',
+    'PRE',
+    'S',
+    'SMALL',
+    'SPAN',
+    'STRONG',
+    'SUB',
+    'SUMMARY',
+    'SUP',
+    'TABLE',
+    'TBODY',
+    'TD',
+    'TH',
+    'THEAD',
+    'TR',
+    'U',
+    'UL',
     // Inline SVG for icons — SVG itself is allow-listed and its
     // child tags are filtered by SVG_TAGS.
     'SVG',
 ]);
 
 const INLINE_TAGS = new Set([
-    'A', 'B', 'BR', 'BUTTON', 'CODE', 'EM', 'I', 'IMG', 'S', 'SMALL',
-    'SPAN', 'STRONG', 'SVG',
+    'A',
+    'B',
+    'BR',
+    'BUTTON',
+    'CODE',
+    'EM',
+    'I',
+    'IMG',
+    'S',
+    'SMALL',
+    'SPAN',
+    'STRONG',
+    'SVG',
 ]);
 
 const SVG_TAGS = new Set([
-    'CIRCLE', 'DEFS', 'ELLIPSE', 'G', 'LINE', 'LINEARGRADIENT', 'PATH',
-    'POLYGON', 'POLYLINE', 'RADIALGRADIENT', 'RECT', 'STOP', 'SVG',
-    'TEXT', 'TITLE', 'USE',
+    'CIRCLE',
+    'DEFS',
+    'ELLIPSE',
+    'G',
+    'LINE',
+    'LINEARGRADIENT',
+    'PATH',
+    'POLYGON',
+    'POLYLINE',
+    'RADIALGRADIENT',
+    'RECT',
+    'STOP',
+    'SVG',
+    'TEXT',
+    'TITLE',
+    'USE',
 ]);
 
 // --- Attribute allow-lists --------------------------------------------------
@@ -57,34 +121,42 @@ const SVG_TAGS = new Set([
 // these tags may carry this attribute". The `data-ext-*` family is
 // always preserved because that's how extensions hook interactivity.
 
-const UNIVERSAL_ATTRS = new Set([
-    'class', 'title', 'lang', 'dir', 'role', 'aria-label',
-]);
+const UNIVERSAL_ATTRS = new Set(['class', 'title', 'lang', 'dir', 'role', 'aria-label']);
 
 const ATTR_POLICY = {
-    A:      new Set(['href', 'target', 'rel']),
-    IMG:    new Set(['src', 'alt', 'width', 'height']),
+    A: new Set(['href', 'target', 'rel']),
+    IMG: new Set(['src', 'alt', 'width', 'height']),
     BUTTON: new Set(['type', 'disabled']),
     // SVG and its kids need their full geometry/style attributes — we
     // allow a broad set here because these values are inert (they can't
     // execute script, only render pixels).
-    SVG:    new Set(['xmlns', 'width', 'height', 'viewbox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']),
-    PATH:   new Set(['d', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']),
+    SVG: new Set([
+        'xmlns',
+        'width',
+        'height',
+        'viewbox',
+        'fill',
+        'stroke',
+        'stroke-width',
+        'stroke-linecap',
+        'stroke-linejoin',
+    ]),
+    PATH: new Set(['d', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin']),
     CIRCLE: new Set(['cx', 'cy', 'r', 'fill', 'stroke', 'stroke-width']),
-    RECT:   new Set(['x', 'y', 'width', 'height', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
-    LINE:   new Set(['x1', 'y1', 'x2', 'y2', 'stroke', 'stroke-width', 'stroke-linecap']),
+    RECT: new Set(['x', 'y', 'width', 'height', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
+    LINE: new Set(['x1', 'y1', 'x2', 'y2', 'stroke', 'stroke-width', 'stroke-linecap']),
     POLYLINE: new Set(['points', 'fill', 'stroke', 'stroke-width']),
-    POLYGON:  new Set(['points', 'fill', 'stroke', 'stroke-width']),
-    ELLIPSE:  new Set(['cx', 'cy', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
-    G:      new Set(['fill', 'stroke', 'stroke-width', 'transform']),
-    USE:    new Set(['href', 'x', 'y', 'width', 'height']),
-    TEXT:   new Set(['x', 'y', 'fill', 'stroke', 'font-size', 'text-anchor']),
-    STOP:   new Set(['offset', 'stop-color', 'stop-opacity']),
+    POLYGON: new Set(['points', 'fill', 'stroke', 'stroke-width']),
+    ELLIPSE: new Set(['cx', 'cy', 'rx', 'ry', 'fill', 'stroke', 'stroke-width']),
+    G: new Set(['fill', 'stroke', 'stroke-width', 'transform']),
+    USE: new Set(['href', 'x', 'y', 'width', 'height']),
+    TEXT: new Set(['x', 'y', 'fill', 'stroke', 'font-size', 'text-anchor']),
+    STOP: new Set(['offset', 'stop-color', 'stop-opacity']),
     LINEARGRADIENT: new Set(['x1', 'y1', 'x2', 'y2']),
     RADIALGRADIENT: new Set(['cx', 'cy', 'r', 'fx', 'fy']),
-    TABLE:  new Set(['class']),
-    TH:     new Set(['scope', 'colspan', 'rowspan']),
-    TD:     new Set(['colspan', 'rowspan']),
+    TABLE: new Set(['class']),
+    TH: new Set(['scope', 'colspan', 'rowspan']),
+    TD: new Set(['colspan', 'rowspan']),
     IMG_BLOCKED_SCHEMES: new Set(['javascript:', 'vbscript:', 'data:text/html', 'file:']),
     DETAILS: new Set(['open']),
 };
@@ -114,15 +186,46 @@ function isSafeImgSrc(value) {
 // hide/obscure the page (position: fixed, z-index: 999999) is blocked.
 
 const SAFE_STYLE_PROPS = new Set([
-    'color', 'background', 'background-color',
-    'font-weight', 'font-style', 'font-size', 'font-family',
-    'text-align', 'text-decoration', 'text-transform',
-    'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-    'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-    'display', 'flex', 'flex-direction', 'gap', 'align-items', 'justify-content',
-    'border', 'border-radius', 'border-color', 'border-style', 'border-width',
-    'width', 'height', 'max-width', 'max-height', 'min-width', 'min-height',
-    'opacity', 'overflow', 'white-space',
+    'color',
+    'background',
+    'background-color',
+    'font-weight',
+    'font-style',
+    'font-size',
+    'font-family',
+    'text-align',
+    'text-decoration',
+    'text-transform',
+    'margin',
+    'margin-top',
+    'margin-right',
+    'margin-bottom',
+    'margin-left',
+    'padding',
+    'padding-top',
+    'padding-right',
+    'padding-bottom',
+    'padding-left',
+    'display',
+    'flex',
+    'flex-direction',
+    'gap',
+    'align-items',
+    'justify-content',
+    'border',
+    'border-radius',
+    'border-color',
+    'border-style',
+    'border-width',
+    'width',
+    'height',
+    'max-width',
+    'max-height',
+    'min-width',
+    'min-height',
+    'opacity',
+    'overflow',
+    'white-space',
 ]);
 
 const DANGEROUS_STYLE_VALUE = /url\s*\(|expression\s*\(|javascript:|vbscript:|<|>|@import/i;
@@ -218,9 +321,15 @@ function processElement(el, opts) {
         // Drop disallowed tags but keep their text content so visible
         // copy survives. Scripts, styles, iframes therefore always lose
         // their bodies (script bodies aren't text nodes that render).
-        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'IFRAME' ||
-            tag === 'OBJECT' || tag === 'EMBED' || tag === 'LINK' ||
-            tag === 'META') {
+        if (
+            tag === 'SCRIPT' ||
+            tag === 'STYLE' ||
+            tag === 'IFRAME' ||
+            tag === 'OBJECT' ||
+            tag === 'EMBED' ||
+            tag === 'LINK' ||
+            tag === 'META'
+        ) {
             el.remove();
         } else {
             const text = document.createTextNode(el.textContent || '');
@@ -240,7 +349,10 @@ function processElement(el, opts) {
 
         // Never preserve ids — they could collide with host-owned
         // selectors (e.g. `#floatingInput`).
-        if (name === 'id') { toRemove.push(attr.name); continue; }
+        if (name === 'id') {
+            toRemove.push(attr.name);
+            continue;
+        }
 
         // data-ext-action is the only recognised extension-side hook;
         // other data-* attributes are dropped so extensions can't
@@ -253,10 +365,16 @@ function processElement(el, opts) {
             }
             continue;
         }
-        if (name.startsWith('data-')) { toRemove.push(attr.name); continue; }
+        if (name.startsWith('data-')) {
+            toRemove.push(attr.name);
+            continue;
+        }
 
         // Event handler attributes (onclick, onload, etc.) — always drop.
-        if (name.startsWith('on')) { toRemove.push(attr.name); continue; }
+        if (name.startsWith('on')) {
+            toRemove.push(attr.name);
+            continue;
+        }
 
         // Style attribute — filter with property allow-list.
         if (name === 'style') {

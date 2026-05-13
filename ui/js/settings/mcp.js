@@ -40,7 +40,7 @@ class McpSettingsModule extends SettingsModule {
         try {
             // Use custom path from config if set, otherwise default
             const customPath = config.mcp_config_path || null;
-            this._mcpPath = customPath || await invoke('get_mcp_json_path');
+            this._mcpPath = customPath || (await invoke('get_mcp_json_path'));
             const pathEl = document.getElementById('mcpPathDisplay');
             if (pathEl) pathEl.textContent = this._mcpPath;
 
@@ -51,14 +51,18 @@ class McpSettingsModule extends SettingsModule {
         }
     }
 
-    save(config) {
+    save(_config) {
         // MCP config is saved immediately on each change, not via the global save
     }
 
-    validate() { return { valid: true }; }
+    validate() {
+        return { valid: true };
+    }
 
     initialize() {
-        document.getElementById('mcpAddServerBtn')?.addEventListener('click', () => this._showAddDialog());
+        document
+            .getElementById('mcpAddServerBtn')
+            ?.addEventListener('click', () => this._showAddDialog());
         document.getElementById('mcpOpenFileBtn')?.addEventListener('click', async () => {
             const invoke = window.__TAURI__?.core?.invoke;
             if (!invoke) return;
@@ -97,7 +101,9 @@ class McpSettingsModule extends SettingsModule {
                 getCommand: () => {
                     // The command is the path to the MCP binary next to the main exe
                     const invoke = window.__TAURI__?.core?.invoke;
-                    return invoke ? invoke('get_computer_control_enabled').then(() => true) : Promise.resolve(false);
+                    return invoke
+                        ? invoke('get_computer_control_enabled').then(() => true)
+                        : Promise.resolve(false);
                 },
             },
         ];
@@ -134,7 +140,7 @@ class McpSettingsModule extends SettingsModule {
         }
 
         // Render user-defined servers
-        const builtinKeys = new Set(builtins.map(b => b.key));
+        const builtinKeys = new Set(builtins.map((b) => b.key));
         for (const [key, entry] of Object.entries(servers)) {
             if (builtinKeys.has(key)) continue;
             const enabled = !entry.disabled;
@@ -165,13 +171,18 @@ class McpSettingsModule extends SettingsModule {
         }
 
         if (!html) {
-            html = '<div style="color: var(--kage-text-muted); font-size: 12px; padding: 8px 0;">No MCP servers configured.</div>';
+            html =
+                '<div style="color: var(--kage-text-muted); font-size: 12px; padding: 8px 0;">No MCP servers configured.</div>';
         }
 
         list.innerHTML = html;
         this._bindServerEvents(list);
 
-        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
     }
 
     _bindServerEvents(list) {
@@ -179,7 +190,7 @@ class McpSettingsModule extends SettingsModule {
         if (!invoke) return;
 
         // Toggle switches
-        list.querySelectorAll('input[type="checkbox"]').forEach(toggle => {
+        list.querySelectorAll('input[type="checkbox"]').forEach((toggle) => {
             toggle.addEventListener('change', async () => {
                 const key = toggle.dataset.key;
                 const isBuiltin = toggle.dataset.builtin === 'true';
@@ -192,8 +203,11 @@ class McpSettingsModule extends SettingsModule {
                 } else {
                     const servers = this._mcpConfig.mcpServers || {};
                     if (servers[key]) {
-                        if (enabled) { delete servers[key].disabled; }
-                        else { servers[key].disabled = true; }
+                        if (enabled) {
+                            delete servers[key].disabled;
+                        } else {
+                            servers[key].disabled = true;
+                        }
                         await invoke('save_mcp_config', { path: null, config: this._mcpConfig });
                         this._renderServerList();
                     }
@@ -202,12 +216,12 @@ class McpSettingsModule extends SettingsModule {
         });
 
         // Edit buttons
-        list.querySelectorAll('.mcp-server-edit-btn').forEach(btn => {
+        list.querySelectorAll('.mcp-server-edit-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._showEditDialog(btn.dataset.key));
         });
 
         // Delete buttons
-        list.querySelectorAll('.mcp-server-delete-btn').forEach(btn => {
+        list.querySelectorAll('.mcp-server-delete-btn').forEach((btn) => {
             btn.addEventListener('click', async () => {
                 const key = btn.dataset.key;
                 if (!confirm(`Remove MCP server "${key}"?`)) return;
@@ -219,11 +233,15 @@ class McpSettingsModule extends SettingsModule {
         });
     }
 
-    _showAddDialog() { this._showServerDialog(null); }
-    _showEditDialog(key) { this._showServerDialog(key); }
+    _showAddDialog() {
+        this._showServerDialog(null);
+    }
+    _showEditDialog(key) {
+        this._showServerDialog(key);
+    }
 
     _showServerDialog(editKey) {
-        const existing = editKey ? (this._mcpConfig?.mcpServers?.[editKey] || {}) : {};
+        const existing = editKey ? this._mcpConfig?.mcpServers?.[editKey] || {} : {};
         const isEdit = !!editKey;
 
         const overlay = document.createElement('div');
@@ -248,15 +266,24 @@ class McpSettingsModule extends SettingsModule {
         document.body.appendChild(overlay);
 
         overlay.querySelector('#mcpDialogCancel').addEventListener('click', () => overlay.remove());
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
 
         overlay.querySelector('#mcpDialogSave').addEventListener('click', async () => {
             const key = document.getElementById('mcpDialogKey').value.trim();
             const cmd = document.getElementById('mcpDialogCmd').value.trim();
-            const args = document.getElementById('mcpDialogArgs').value.trim().split('\n').filter(a => a.trim());
+            const args = document
+                .getElementById('mcpDialogArgs')
+                .value.trim()
+                .split('\n')
+                .filter((a) => a.trim());
             const cwd = document.getElementById('mcpDialogCwd').value.trim();
 
-            if (!key || !cmd) { alert('Name and command are required.'); return; }
+            if (!key || !cmd) {
+                alert('Name and command are required.');
+                return;
+            }
 
             if (!this._mcpConfig.mcpServers) this._mcpConfig.mcpServers = {};
             this._mcpConfig.mcpServers[key] = { command: cmd, args, disabled: false };

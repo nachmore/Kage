@@ -57,14 +57,15 @@ class MathSettingsModule extends SettingsModule {
     save(config) {
         config.math = {
             enabled: document.getElementById('mathEnabled')?.checked ?? true,
-            precision: parseInt(document.getElementById('mathPrecision')?.value ?? '0'),
+            precision: parseInt(document.getElementById('mathPrecision')?.value ?? '0', 10),
             auto_copy: document.getElementById('mathAutoCopy')?.checked ?? true,
-            thousands_separator: document.getElementById('mathThousandsSeparator')?.checked ?? false,
+            thousands_separator:
+                document.getElementById('mathThousandsSeparator')?.checked ?? false,
         };
     }
 
     validate() {
-        const precision = parseInt(document.getElementById('mathPrecision')?.value ?? '0');
+        const precision = parseInt(document.getElementById('mathPrecision')?.value ?? '0', 10);
         if (precision < 0 || precision > 15) {
             return { valid: false, error: 'Math precision must be between 0 and 15' };
         }

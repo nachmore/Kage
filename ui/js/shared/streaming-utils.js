@@ -25,7 +25,7 @@ export function processToolCallUpdate(event, state) {
             state.toolUsages.push({
                 toolCallId: update.toolCallId,
                 title: update.title,
-                kind: update.kind
+                kind: update.kind,
             });
             updated = true;
         }
@@ -101,14 +101,17 @@ export function addSource(url, title, domainHint, state) {
             }
             const hue = Math.abs(hash) % 360;
             state.toolSources.push({
-                url, domain,
+                url,
+                domain,
                 title: title || domain,
                 initials,
                 color: `hsl(${hue}, 55%, 45%)`,
-                favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+                favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
             });
         }
-    } catch { /* invalid URL */ }
+    } catch {
+        /* invalid URL */
+    }
 }
 
 import { getToolIcon, escapeHtml } from './tool-utils.js';
@@ -129,25 +132,29 @@ export function renderToolChipsHtml(toolUsages) {
             grouped.set(key, { ...t, count: 1 });
         }
     }
-    return Array.from(grouped.values()).map(t => {
-        const isExt = t.title.startsWith('ext:');
-        let displayName, tooltip;
-        if (isExt) {
-            const parts = t.title.substring(4); // remove "ext:"
-            const extId = parts.split('/')[0];
-            displayName = extId.charAt(0).toUpperCase() + extId.slice(1);
-            tooltip = `Extension: ${parts}`;
-        } else {
-            displayName = t.title;
-            tooltip = `Tool: ${t.title}`;
-        }
-        const badge = t.count > 1 ? `<span class="tool-chip-count">\u00d7${t.count}</span>` : '';
-        return `
+    return Array.from(grouped.values())
+        .map((t) => {
+            const isExt = t.title.startsWith('ext:');
+            let displayName, tooltip;
+            if (isExt) {
+                const parts = t.title.substring(4); // remove "ext:"
+                const extId = parts.split('/')[0];
+                displayName = extId.charAt(0).toUpperCase() + extId.slice(1);
+                tooltip = `Extension: ${parts}`;
+            } else {
+                displayName = t.title;
+                tooltip = `Tool: ${t.title}`;
+            }
+            const badge =
+                t.count > 1 ? `<span class="tool-chip-count">\u00d7${t.count}</span>` : '';
+            return `
         <span class="source-chip tool-chip" title="${escapeHtml(tooltip)}${t.count > 1 ? ' (' + t.count + ' calls)' : ''}">
             <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
             <span class="source-domain">${escapeHtml(displayName)}</span>${badge}
         </span>
-    `}).join('');
+    `;
+        })
+        .join('');
 }
 
 /**
@@ -156,7 +163,9 @@ export function renderToolChipsHtml(toolUsages) {
  * @returns {string} HTML string
  */
 export function renderSourceChipsHtml(toolSources) {
-    return toolSources.map(s => `
+    return toolSources
+        .map(
+            (s) => `
         <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}">
             <span class="source-icon-wrapper">
                 <span class="source-initials" style="background:${s.color}">${s.initials}</span>
@@ -164,7 +173,9 @@ export function renderSourceChipsHtml(toolSources) {
             </span>
             <span class="source-domain">${escapeHtml(s.domain)}</span>
         </a>
-    `).join('');
+    `
+        )
+        .join('');
 }
 
 /**
@@ -181,21 +192,29 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
     }
     const uniqueTools = Array.from(grouped.values());
 
-    const toolBubbles = uniqueTools.map((t, i) => `
+    const toolBubbles = uniqueTools
+        .map(
+            (t, i) => `
         <span class="source-bubble tool-bubble" title="${escapeHtml(t.title)}" style="animation-delay: ${i * 0.08}s">
             <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
         </span>
-    `).join('');
+    `
+        )
+        .join('');
 
     const offset = uniqueTools.length;
-    const sourceBubbles = toolSources.map((s, i) => `
+    const sourceBubbles = toolSources
+        .map(
+            (s, i) => `
         <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
             <span class="source-icon-wrapper">
                 <span class="source-initials" style="background:${s.color}">${s.initials}</span>
                 <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
             </span>
         </a>
-    `).join('');
+    `
+        )
+        .join('');
 
     return toolBubbles + sourceBubbles;
 }
@@ -208,12 +227,11 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
 export function getSessionResetMessage(data) {
     if (data?.reason === 'image_unsupported') {
         return data.reconnected
-            ? '🖼️ The current model doesn\'t support images. A new session has been started — try switching to a vision-capable model.'
-            : '🖼️ The current model doesn\'t support images and the connection could not be restored. Please reconnect manually.';
+            ? "🖼️ The current model doesn't support images. A new session has been started — try switching to a vision-capable model."
+            : "🖼️ The current model doesn't support images and the connection could not be restored. Please reconnect manually.";
     }
     return 'Session was reset due to an error.';
 }
-
 
 /**
  * Detect an automation plan in the LLM response text.
@@ -232,7 +250,9 @@ export function detectAutomationPlan(text) {
         if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].task) {
             return parsed;
         }
-    } catch { /* invalid JSON */ }
+    } catch {
+        /* invalid JSON */
+    }
     return null;
 }
 
@@ -243,7 +263,7 @@ export function detectAutomationPlan(text) {
  * @returns {Array|null} Array of parsed steps so far, or null if no plan block detected
  */
 export function detectAutomationPlanIncremental(text) {
-    if (!text || !text.includes('```automation_plan')) return null;
+    if (!text?.includes('```automation_plan')) return null;
 
     // Extract everything after the code fence opener
     const fenceStart = text.indexOf('```automation_plan');
@@ -251,14 +271,15 @@ export function detectAutomationPlanIncremental(text) {
     const afterFence = text.substring(fenceStart + '```automation_plan'.length);
 
     // Try to find individual step objects using regex
-    const stepRegex = /\{\s*"step"\s*:\s*(\d+)\s*,\s*"task"\s*:\s*"([^"]*)"(?:\s*,\s*"details"\s*:\s*"([^"]*)")?\s*\}/g;
+    const stepRegex =
+        /\{\s*"step"\s*:\s*(\d+)\s*,\s*"task"\s*:\s*"([^"]*)"(?:\s*,\s*"details"\s*:\s*"([^"]*)")?\s*\}/g;
     const steps = [];
     let match;
     while ((match = stepRegex.exec(afterFence)) !== null) {
         steps.push({
-            step: parseInt(match[1]),
+            step: parseInt(match[1], 10),
             task: match[2],
-            details: match[3] || ''
+            details: match[3] || '',
         });
     }
 
@@ -274,10 +295,16 @@ export function detectAutomationPlanIncremental(text) {
  * @returns {Array<{status: string, description: string, detail: string}>}
  */
 export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {}) {
-    return plan.map(s => {
+    return plan.map((s) => {
         const rawStatus = stepStatuses[s.step] || 'pending';
         // Map our statuses to taskplan statuses
-        const statusMap = { pending: 'pending', running: 'active', done: 'done', failed: 'error', stopped: 'stopped' };
+        const statusMap = {
+            pending: 'pending',
+            running: 'active',
+            done: 'done',
+            failed: 'error',
+            stopped: 'stopped',
+        };
         const status = statusMap[rawStatus] || 'pending';
         const result = stepResults[s.step] || '';
         const cancelled = rawStatus === 'stopped';
@@ -297,7 +324,7 @@ export function automationPlanToTasks(plan, stepStatuses = {}, stepResults = {})
  * @returns {{ extension: string, tool: string, params: object }|null}
  */
 export function detectExtensionToolCall(text) {
-    if (!text || !text.includes('```extension_tool_call')) return null;
+    if (!text?.includes('```extension_tool_call')) return null;
 
     const fenceStart = text.indexOf('```extension_tool_call');
     const afterOpener = text.substring(fenceStart + '```extension_tool_call'.length);
@@ -318,7 +345,14 @@ export function detectExtensionToolCall(text) {
         }
     } catch (e) {
         // JSON parse failed — log for debugging
-        console.warn('[ExtToolCall] JSON parse failed:', e.message, 'length:', jsonStr.length, 'start:', jsonStr.substring(0, 100));
+        console.warn(
+            '[ExtToolCall] JSON parse failed:',
+            e.message,
+            'length:',
+            jsonStr.length,
+            'start:',
+            jsonStr.substring(0, 100)
+        );
     }
     return null;
 }
@@ -330,7 +364,7 @@ export function detectExtensionToolCall(text) {
  * @returns {{ extension?: string, tool?: string, inProgress: boolean }}
  */
 export function detectExtensionToolCallIncremental(text) {
-    if (!text || !text.includes('```extension_tool_call')) return null;
+    if (!text?.includes('```extension_tool_call')) return null;
 
     const fenceStart = text.indexOf('```extension_tool_call');
     const afterOpener = text.substring(fenceStart + '```extension_tool_call'.length);
@@ -380,7 +414,7 @@ export function renderExtensionToolChipHtml(info) {
  * Returns { actions: Array<{label, prompt}>, cleanText: string } or null.
  */
 export function extractSuggestedActions(text) {
-    if (!text || !text.includes('```suggested_actions')) return null;
+    if (!text?.includes('```suggested_actions')) return null;
 
     const regex = /```suggested_actions\s*\n([\s\S]*?)```/;
     const match = text.match(regex);
@@ -393,6 +427,8 @@ export function extractSuggestedActions(text) {
             const cleanText = text.replace(regex, '').trim();
             return { actions: parsed, cleanText };
         }
-    } catch { /* invalid JSON */ }
+    } catch {
+        /* invalid JSON */
+    }
     return null;
 }

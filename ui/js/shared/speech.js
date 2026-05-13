@@ -94,9 +94,11 @@ export class SpeechController {
     start() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            document.dispatchEvent(new CustomEvent('kage-show-response', {
-                detail: 'Speech recognition is not supported in this environment.'
-            }));
+            document.dispatchEvent(
+                new CustomEvent('kage-show-response', {
+                    detail: 'Speech recognition is not supported in this environment.',
+                })
+            );
             return;
         }
 
@@ -153,12 +155,17 @@ export class SpeechController {
         recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
             if (event.error === 'not-allowed') {
-                document.dispatchEvent(new CustomEvent('kage-show-response', {
-                    detail: 'Microphone access denied. Please allow microphone access in your system settings.'
-                }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', {
+                        detail: 'Microphone access denied. Please allow microphone access in your system settings.',
+                    })
+                );
                 this.voiceMode = false;
                 this.stop();
-            } else if (this.voiceMode && (event.error === 'no-speech' || event.error === 'aborted')) {
+            } else if (
+                this.voiceMode &&
+                (event.error === 'no-speech' || event.error === 'aborted')
+            ) {
                 // Transient errors in voice mode — onend will restart
             } else {
                 this.stop();
@@ -168,7 +175,7 @@ export class SpeechController {
         recognition.onend = () => {
             clearTimeout(this._silenceTimer);
             const hadTranscript = finalTranscript.trim();
-            
+
             if (this.isListening) {
                 this.isListening = false;
                 this._updateUI(false);
@@ -236,7 +243,10 @@ export class SpeechController {
     /** Exit voice conversation mode entirely. */
     stopVoiceMode() {
         this.voiceMode = false;
-        if (this._vad) { this._vad.stop(); this._vad = null; }
+        if (this._vad) {
+            this._vad.stop();
+            this._vad = null;
+        }
         this.stop();
     }
 
@@ -317,12 +327,12 @@ export class SpeechController {
             return;
         }
 
-        const clean = text.replace(/```[\s\S]*?```/g, ' code block ')
+        const clean = text
+            .replace(/```[\s\S]*?```/g, ' code block ')
             .replace(/`([^`]+)`/g, '$1')
-            .replace(/[#*_~>\[\]()]/g, '')
+            .replace(/[#*_~>[\]()]/g, '')
             .replace(/\n+/g, '. ')
             .trim();
-
 
         // For Pocket TTS — use the queue system (handles warmup, dedup, replacement)
         if (this.pocketTtsEnabled && this.pocketTtsPort) {
@@ -376,8 +386,14 @@ export class SpeechController {
     /** Show the warmup bar immediately — pure frontend, no Rust calls */
     _showWarmupBar() {
         // Clean up any existing bars first
-        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
-        if (this._ttsStreamer) { this._ttsStreamer.stop(); this._ttsStreamer = null; }
+        if (this._warmupBar) {
+            this._warmupBar.hide();
+            this._warmupBar = null;
+        }
+        if (this._ttsStreamer) {
+            this._ttsStreamer.stop();
+            this._ttsStreamer = null;
+        }
 
         if (this.barContainer) {
             this._warmupBar = new TtsPlaybackBar(this.barContainer, this.onVisibilityUpdate, {
@@ -385,7 +401,10 @@ export class SpeechController {
                 onStop: () => {
                     this._ttsState = 'idle';
                     this._ttsPendingText = null;
-                    if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+                    if (this._warmupBar) {
+                        this._warmupBar.hide();
+                        this._warmupBar = null;
+                    }
                 },
             });
             this._warmupBar.show();
@@ -404,8 +423,13 @@ export class SpeechController {
                 if (resp.ok) {
                     const data = await resp.json();
                     if (data.model_loaded) {
-                        if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
-                            console.log(`[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`);
+                        if (
+                            data.voices_loaded?.length > 0 &&
+                            !data.voices_loaded.includes(this.pocketTtsVoice)
+                        ) {
+                            console.log(
+                                `[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`
+                            );
                             this.pocketTtsVoice = data.voices_loaded[0];
                         }
                         this._ttsServerReady = true;
@@ -413,32 +437,56 @@ export class SpeechController {
                         return;
                     }
                 }
-            } catch { /* server not running — fall through to start it */ }
+            } catch {
+                /* server not running — fall through to start it */
+            }
 
             // Start the server (fire-and-forget — this blocks in Rust until ready)
             if (this._warmupBar) this._warmupBar.setStatus('Loading voice model...');
-            this.invoke('pocket_tts_start').then((result) => {
-                // Server is ready — poll the /status endpoint to confirm
-                this._pollServerReady();
-            }).catch(e => {
-                console.warn('[Speech] Failed to start Pocket TTS:', e);
-                this._ttsState = 'idle';
-                if (this._warmupBar) { this._warmupBar.setStatus('Failed to start'); setTimeout(() => { if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; } }, 2000); }
-            });
+            this.invoke('pocket_tts_start')
+                .then((_result) => {
+                    // Server is ready — poll the /status endpoint to confirm
+                    this._pollServerReady();
+                })
+                .catch((e) => {
+                    console.warn('[Speech] Failed to start Pocket TTS:', e);
+                    this._ttsState = 'idle';
+                    if (this._warmupBar) {
+                        this._warmupBar.setStatus('Failed to start');
+                        setTimeout(() => {
+                            if (this._warmupBar) {
+                                this._warmupBar.hide();
+                                this._warmupBar = null;
+                            }
+                        }, 2000);
+                    }
+                });
         } catch (e) {
             console.warn('[Speech] Failed during warmup:', e);
             this._ttsState = 'idle';
-            if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+            if (this._warmupBar) {
+                this._warmupBar.hide();
+                this._warmupBar = null;
+            }
         }
     }
 
     /** Poll the TTS server's /status endpoint until it reports model_loaded */
     async _pollServerReady(attempts = 0) {
         if (this._ttsState !== 'warming') return; // Cancelled
-        if (attempts > 30) { // Give up after ~30 seconds
+        if (attempts > 30) {
+            // Give up after ~30 seconds
             console.warn('[Speech] TTS server did not become ready after 30 attempts');
             this._ttsState = 'idle';
-            if (this._warmupBar) { this._warmupBar.setStatus('Server timeout'); setTimeout(() => { if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; } }, 2000); }
+            if (this._warmupBar) {
+                this._warmupBar.setStatus('Server timeout');
+                setTimeout(() => {
+                    if (this._warmupBar) {
+                        this._warmupBar.hide();
+                        this._warmupBar = null;
+                    }
+                }, 2000);
+            }
             return;
         }
 
@@ -448,8 +496,13 @@ export class SpeechController {
                 const data = await resp.json();
                 if (data.model_loaded) {
                     // Use a voice that's already loaded if our configured voice isn't available
-                    if (data.voices_loaded?.length > 0 && !data.voices_loaded.includes(this.pocketTtsVoice)) {
-                        console.log(`[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`);
+                    if (
+                        data.voices_loaded?.length > 0 &&
+                        !data.voices_loaded.includes(this.pocketTtsVoice)
+                    ) {
+                        console.log(
+                            `[Speech] Configured voice "${this.pocketTtsVoice}" not loaded, using "${data.voices_loaded[0]}" instead`
+                        );
                         this.pocketTtsVoice = data.voices_loaded[0];
                     }
                     this._ttsServerReady = true;
@@ -457,7 +510,9 @@ export class SpeechController {
                     return;
                 }
             }
-        } catch { /* server not ready yet */ }
+        } catch {
+            /* server not ready yet */
+        }
 
         // Retry in 1 second
         if (this._warmupBar) this._warmupBar.setStatus(`Loading voice model... (${attempts + 1}s)`);
@@ -467,7 +522,10 @@ export class SpeechController {
     /** Called when server is confirmed ready — speak the pending text */
     _onServerReady() {
         // Hide warmup bar
-        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
+        if (this._warmupBar) {
+            this._warmupBar.hide();
+            this._warmupBar = null;
+        }
 
         // Speak the pending text (latest click wins)
         const text = this._ttsPendingText;
@@ -494,7 +552,11 @@ export class SpeechController {
             voice: this.pocketTtsVoice,
             barContainer: this.barContainer,
             onBarChange: this.onVisibilityUpdate,
-            onFinished: () => { this._ttsState = 'idle'; this._ttsStreamer = null; this.onTtsFinished(); },
+            onFinished: () => {
+                this._ttsState = 'idle';
+                this._ttsStreamer = null;
+                this.onTtsFinished();
+            },
         });
         this._ttsStreamer.finishText(text);
     }
@@ -512,14 +574,23 @@ export class SpeechController {
             const resp = await fetch(`http://127.0.0.1:${this.pocketTtsPort}/status`);
             if (resp.ok) {
                 const data = await resp.json();
-                if (data.model_loaded) { this._ttsServerReady = true; return; }
+                if (data.model_loaded) {
+                    this._ttsServerReady = true;
+                    return;
+                }
             }
-        } catch { /* server not running */ }
+        } catch {
+            /* server not running */
+        }
 
         try {
-            this.invoke('pocket_tts_start').then(() => {
-                setTimeout(() => { this._ttsServerReady = true; }, 1500);
-            }).catch(e => console.warn('[Speech] Failed to start Pocket TTS:', e));
+            this.invoke('pocket_tts_start')
+                .then(() => {
+                    setTimeout(() => {
+                        this._ttsServerReady = true;
+                    }, 1500);
+                })
+                .catch((e) => console.warn('[Speech] Failed to start Pocket TTS:', e));
         } catch (e) {
             console.warn('[Speech] Failed to start Pocket TTS:', e);
         }
@@ -549,7 +620,11 @@ export class SpeechController {
                 voice: this.pocketTtsVoice,
                 barContainer: this.barContainer,
                 onBarChange: this.onVisibilityUpdate,
-                onFinished: () => { this._ttsState = 'idle'; this._ttsStreamer = null; this.onTtsFinished(); },
+                onFinished: () => {
+                    this._ttsState = 'idle';
+                    this._ttsStreamer = null;
+                    this.onTtsFinished();
+                },
             });
         }
 
@@ -577,7 +652,7 @@ export class SpeechController {
         utterance.lang = navigator.language || 'en-US';
 
         if (this.voiceName) {
-            const voice = speechSynthesis.getVoices().find(v => v.name === this.voiceName);
+            const voice = speechSynthesis.getVoices().find((v) => v.name === this.voiceName);
             if (voice) utterance.voice = voice;
         }
 
@@ -585,20 +660,35 @@ export class SpeechController {
         if (this.barContainer) {
             this._browserBar = new TtsPlaybackBar(this.barContainer, this.onVisibilityUpdate, {
                 onPause: () => {
-                    if (speechSynthesis.paused) { speechSynthesis.resume(); this._browserBar.setPauseIcon(false); this._browserBar.setStatus('Speaking...'); }
-                    else { speechSynthesis.pause(); this._browserBar.setPauseIcon(true); this._browserBar.setStatus('Paused'); }
+                    if (speechSynthesis.paused) {
+                        speechSynthesis.resume();
+                        this._browserBar.setPauseIcon(false);
+                        this._browserBar.setStatus('Speaking...');
+                    } else {
+                        speechSynthesis.pause();
+                        this._browserBar.setPauseIcon(true);
+                        this._browserBar.setStatus('Paused');
+                    }
                 },
-                onStop: () => { speechSynthesis.cancel(); },
+                onStop: () => {
+                    speechSynthesis.cancel();
+                },
             });
             this._browserBar.show();
             this._browserBar.setStatus('Speaking...');
         }
 
         utterance.onend = () => {
-            if (this._browserBar) { this._browserBar.hideAfterDelay(); this._browserBar = null; }
+            if (this._browserBar) {
+                this._browserBar.hideAfterDelay();
+                this._browserBar = null;
+            }
         };
         utterance.onerror = () => {
-            if (this._browserBar) { this._browserBar.hide(); this._browserBar = null; }
+            if (this._browserBar) {
+                this._browserBar.hide();
+                this._browserBar = null;
+            }
         };
 
         speechSynthesis.speak(utterance);
@@ -609,8 +699,14 @@ export class SpeechController {
         speechSynthesis.cancel();
         this._ttsState = 'idle';
         this._ttsPendingText = null;
-        if (this._warmupBar) { this._warmupBar.hide(); this._warmupBar = null; }
-        if (this._browserBar) { this._browserBar.hide(); this._browserBar = null; }
+        if (this._warmupBar) {
+            this._warmupBar.hide();
+            this._warmupBar = null;
+        }
+        if (this._browserBar) {
+            this._browserBar.hide();
+            this._browserBar = null;
+        }
         if (this._pocketTtsAudio) {
             this._pocketTtsAudio.pause();
             this._pocketTtsAudio = null;
@@ -623,9 +719,12 @@ export class SpeechController {
 
     /** Returns true if speech or TTS is active (for Escape key handling). */
     get isActive() {
-        return this.isListening || speechSynthesis.speaking
-            || (this._pocketTtsAudio && !this._pocketTtsAudio.paused)
-            || (this._ttsStreamer && this._ttsStreamer.isActive)
-            || (this._browserBar && this._browserBar.visible);
+        return (
+            this.isListening ||
+            speechSynthesis.speaking ||
+            (this._pocketTtsAudio && !this._pocketTtsAudio.paused) ||
+            this._ttsStreamer?.isActive ||
+            this._browserBar?.visible
+        );
     }
 }

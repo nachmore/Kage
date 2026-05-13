@@ -102,11 +102,23 @@ export class ExtensionManager {
 
         // Prime caches so synchronous callers can read latest state
         // without incurring a round-trip per render.
-        try { await this.getToolDefinitions(); } catch (e) { console.warn('Tool-defs prime failed:', e); }
-        try { await this._refreshToolbarButtons(); } catch (e) { console.warn('Toolbar prime failed:', e); }
+        try {
+            await this.getToolDefinitions();
+        } catch (e) {
+            console.warn('Tool-defs prime failed:', e);
+        }
+        try {
+            await this._refreshToolbarButtons();
+        } catch (e) {
+            console.warn('Toolbar prime failed:', e);
+        }
 
         // Mount widgets contributed by any loaded extensions.
-        try { await this._mountAllWidgets(); } catch (e) { console.warn('Widget mount failed:', e); }
+        try {
+            await this._mountAllWidgets();
+        } catch (e) {
+            console.warn('Widget mount failed:', e);
+        }
     }
 
     async _loadBundledExtension(id) {
@@ -232,14 +244,11 @@ export class ExtensionManager {
     async _fetchProviderSourcesUser(id, manifest) {
         const out = {};
         const c = manifest.contributes || {};
-        if (c.searchProvider)
-            out.searchProvider = await this._fetchTextUser(id, c.searchProvider);
-        if (c.toolProvider)
-            out.toolProvider = await this._fetchTextUser(id, c.toolProvider);
+        if (c.searchProvider) out.searchProvider = await this._fetchTextUser(id, c.searchProvider);
+        if (c.toolProvider) out.toolProvider = await this._fetchTextUser(id, c.toolProvider);
         if (c.triggerProvider)
             out.triggerProvider = await this._fetchTextUser(id, c.triggerProvider);
-        if (c.toolbarButtons)
-            out.toolbarProvider = await this._fetchTextUser(id, c.toolbarButtons);
+        if (c.toolbarButtons) out.toolbarProvider = await this._fetchTextUser(id, c.toolbarButtons);
         if (c.messageFormatters)
             out.messageFormatter = await this._fetchTextUser(id, c.messageFormatters);
         if (Array.isArray(c.widgets) && c.widgets.length) {
@@ -297,9 +306,10 @@ export class ExtensionManager {
         while (queue.length) {
             const rel = queue.shift();
             if (collected.has(rel)) continue;
-            const text = basePath !== null
-                ? await this._fetchTextBundled(basePath, rel)
-                : await this._fetchTextUser(extensionId, rel);
+            const text =
+                basePath !== null
+                    ? await this._fetchTextBundled(basePath, rel)
+                    : await this._fetchTextUser(extensionId, rel);
             if (text == null) continue;
             collected.set(rel, text);
             scan(text);
@@ -335,13 +345,17 @@ export class ExtensionManager {
             if (typeof name !== 'string') continue;
             const url = SANDBOX_VENDOR_ALLOWLIST[name];
             if (!url) {
-                console.warn(`Extension '${manifest.id}': unknown sandboxVendor '${name}', ignored`);
+                console.warn(
+                    `Extension '${manifest.id}': unknown sandboxVendor '${name}', ignored`
+                );
                 continue;
             }
             try {
                 const resp = await fetch(url);
                 if (!resp.ok) {
-                    console.warn(`Failed to fetch vendor '${name}' from ${url}: HTTP ${resp.status}`);
+                    console.warn(
+                        `Failed to fetch vendor '${name}' from ${url}: HTTP ${resp.status}`
+                    );
                     continue;
                 }
                 out[name] = await resp.text();
@@ -413,7 +427,7 @@ export class ExtensionManager {
             // handle it defensively: grant nothing and log loudly.
             console.warn(
                 `Extension '${id}': no user grant recorded, running with no capabilities. ` +
-                `The extension may be broken until it is reinstalled.`,
+                    `The extension may be broken until it is reinstalled.`
             );
             return [];
         }
@@ -422,7 +436,7 @@ export class ExtensionManager {
         // is updated to request new capabilities, we drop the extras
         // until the user approves them.
         const grantedSet = new Set(normalizePermissions(record.granted, id));
-        return requested.filter(cap => grantedSet.has(cap));
+        return requested.filter((cap) => grantedSet.has(cap));
     }
 
     _loadBundledCss(id, basePath, manifest) {
@@ -446,7 +460,8 @@ export class ExtensionManager {
             if (document.querySelector(`style[data-ext-css="${id}"]`)) continue;
             try {
                 const cssCode = await this.invoke('read_extension_file', {
-                    extensionId: id, kind: 'extension',
+                    extensionId: id,
+                    kind: 'extension',
                     filePath: cssPath.replace('./', ''),
                 });
                 const style = document.createElement('style');
@@ -510,12 +525,13 @@ export class ExtensionManager {
             const trigger = this._getExtensionTrigger(id, ext.manifest);
             if (trigger && !lowerQuery.startsWith(trigger)) continue;
             promises.push(
-                ext.sandbox.call('match', { query })
-                    .then(matches => (matches || []).map(m => ({ ...m, _extensionId: id })))
-                    .catch(e => {
+                ext.sandbox
+                    .call('match', { query })
+                    .then((matches) => (matches || []).map((m) => ({ ...m, _extensionId: id })))
+                    .catch((e) => {
                         console.warn(`match() in '${id}' failed:`, e);
                         return [];
-                    }),
+                    })
             );
         }
         const results = await Promise.all(promises);
@@ -532,12 +548,13 @@ export class ExtensionManager {
             const trigger = this._getExtensionTrigger(id, ext.manifest);
             if (trigger && !lowerQuery.startsWith(trigger)) continue;
             promises.push(
-                ext.sandbox.call('matchAsync', { query })
-                    .then(matches => (matches || []).map(m => ({ ...m, _extensionId: id })))
-                    .catch(e => {
+                ext.sandbox
+                    .call('matchAsync', { query })
+                    .then((matches) => (matches || []).map((m) => ({ ...m, _extensionId: id })))
+                    .catch((e) => {
                         console.warn(`matchAsync() in '${id}' failed:`, e);
                         return [];
-                    }),
+                    })
             );
         }
         const results = await Promise.all(promises);
@@ -579,7 +596,8 @@ export class ExtensionManager {
         // Result rows are structural — use rich sanitization so the
         // extension can lay out its own row (icon + label + buttons).
         const frag = sanitizeExtensionHtml(cached.html, 'rich');
-        if (cached.className) element.classList.add(...cached.className.split(/\s+/).filter(Boolean));
+        if (cached.className)
+            element.classList.add(...cached.className.split(/\s+/).filter(Boolean));
         element.appendChild(frag);
         this._wireExtActionsFor(id, element);
         return true;
@@ -622,13 +640,16 @@ export class ExtensionManager {
             // Strip host-only stamp.
             const { _extensionId: _ig, ...clean } = r;
             tasks.push(
-                ext.sandbox.call('renderCustom', { result: clean })
-                    .then(out => {
+                ext.sandbox
+                    .call('renderCustom', { result: clean })
+                    .then((out) => {
                         if (out && typeof out.html === 'string') {
                             this._customRenderCache.set(r.id, out);
                         }
                     })
-                    .catch(() => { /* null/throw → fall back to default */ }),
+                    .catch(() => {
+                        /* null/throw → fall back to default */
+                    })
             );
         }
         if (tasks.length) await Promise.all(tasks);
@@ -639,7 +660,9 @@ export class ExtensionManager {
     async onConfigUpdate() {
         try {
             this._configCache = await this.invoke('get_config');
-        } catch { return; }
+        } catch {
+            return;
+        }
         // Invalidate caches whose contents depend on extension config.
         this._customRenderCache?.clear();
         this._toolbarButtonsCache = null;
@@ -659,7 +682,9 @@ export class ExtensionManager {
                     // Unmount just this widget, not the whole extension.
                     ctrl.destroyed = true;
                     if (ctrl.timer) clearInterval(ctrl.timer);
-                    try { ctrl.host.remove(); } catch {}
+                    try {
+                        ctrl.host.remove();
+                    } catch {}
                     this._widgetInstances.delete(key);
                 }
             }
@@ -671,15 +696,21 @@ export class ExtensionManager {
                 if (!w?.id || !w?.slot) continue;
                 const key = `${id}:${w.id}`;
                 if (this._widgetInstances?.has(key)) continue; // already mounted
-                try { await this._mountWidget(id, ext, w); } catch (e) {
+                try {
+                    await this._mountWidget(id, ext, w);
+                } catch (e) {
                     console.warn(`Failed to remount widget '${key}':`, e);
                 }
             }
         }
         // Tool definitions may change when config updates (e.g. a tool
         // is enabled/disabled). Refresh the cache.
-        try { await this.getToolDefinitions(); } catch {}
-        try { await this._refreshToolbarButtons(); } catch {}
+        try {
+            await this.getToolDefinitions();
+        } catch {}
+        try {
+            await this._refreshToolbarButtons();
+        } catch {}
     }
 
     // --- Tool providers ----------------------------------------------------
@@ -740,12 +771,18 @@ export class ExtensionManager {
             if (typeof declared === 'number' && declared > 0) {
                 timeoutMs = Math.min(declared, 60_000);
             }
-        } catch { /* non-fatal */ }
+        } catch {
+            /* non-fatal */
+        }
 
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error(
-                `Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`,
-            )), timeoutMs),
+            setTimeout(
+                () =>
+                    reject(
+                        new Error(`Extension tool timed out (${Math.round(timeoutMs / 1000)}s)`)
+                    ),
+                timeoutMs
+            )
         );
         try {
             return await Promise.race([
@@ -766,14 +803,19 @@ export class ExtensionManager {
         if (defs.length === 0) return '';
 
         let block = '<extension_tools>\n';
-        block += 'You have access to local extension tools that run instantly on the user\'s machine.\n';
+        block +=
+            "You have access to local extension tools that run instantly on the user's machine.\n";
         block += 'To call one, emit a JSON block with this exact format:\n\n';
         block += '```extension_tool_call\n';
-        block += '{"extension": "<extension_id>", "tool": "<tool_name>", "params": {<parameters>}}\n';
+        block +=
+            '{"extension": "<extension_id>", "tool": "<tool_name>", "params": {<parameters>}}\n';
         block += '```\n\n';
-        block += 'IMPORTANT: After emitting the tool call block, STOP generating and wait for the result.\n';
-        block += 'The result will be provided as a follow-up message. Then continue your response.\n';
-        block += 'Only call ONE tool at a time. Do not call multiple tools in a single message.\n\n';
+        block +=
+            'IMPORTANT: After emitting the tool call block, STOP generating and wait for the result.\n';
+        block +=
+            'The result will be provided as a follow-up message. Then continue your response.\n';
+        block +=
+            'Only call ONE tool at a time. Do not call multiple tools in a single message.\n\n';
         block += 'Available extension tools:\n\n';
 
         for (const def of defs) {
@@ -782,7 +824,10 @@ export class ExtensionManager {
                 block += `  - ${tool.name}: ${tool.description}\n`;
                 if (tool.parameters && Object.keys(tool.parameters).length > 0) {
                     const paramDescs = Object.entries(tool.parameters)
-                        .map(([k, v]) => `${k} (${v.type}${v.default !== undefined ? ', default: ' + v.default : ''})${v.description ? ' — ' + v.description : ''}`)
+                        .map(
+                            ([k, v]) =>
+                                `${k} (${v.type}${v.default !== undefined ? ', default: ' + v.default : ''})${v.description ? ' — ' + v.description : ''}`
+                        )
                         .join('; ');
                     block += `    Parameters: ${paramDescs}\n`;
                 }
@@ -795,15 +840,17 @@ export class ExtensionManager {
         block += '<suggested_actions_format>\n';
         block += 'When your response presents options or asks the user what to do next, ';
         block += 'you can emit a hidden actions block at the END of your response. ';
-        block += 'The frontend will strip this from the visible text and render the actions as clickable buttons.\n\n';
+        block +=
+            'The frontend will strip this from the visible text and render the actions as clickable buttons.\n\n';
         block += '```suggested_actions\n';
         block += '[{"label": "Short button text", "prompt": "The message to send when clicked"}]\n';
         block += '```\n\n';
         block += 'Rules:\n';
         block += '- Place this block at the very end of your response, after all visible text.\n';
         block += '- Keep labels short (2-5 words). Use an emoji prefix if appropriate.\n';
-        block += '- The prompt is what gets sent as the user\'s next message when they click.\n';
-        block += '- Include 2-4 actions max. Always include one that proceeds with the proposed plan.\n';
+        block += "- The prompt is what gets sent as the user's next message when they click.\n";
+        block +=
+            '- Include 2-4 actions max. Always include one that proceeds with the proposed plan.\n';
         block += '- Only use this when you are asking the user to choose between options.\n';
         block += '</suggested_actions_format>';
 
@@ -836,7 +883,7 @@ export class ExtensionManager {
     // --- Lifecycle ---------------------------------------------------------
 
     getLoadedExtensions() {
-        return Array.from(this.extensions.values()).map(ext => ({
+        return Array.from(this.extensions.values()).map((ext) => ({
             ...ext.manifest,
             _capabilities: ext.capabilities,
         }));
@@ -850,11 +897,13 @@ export class ExtensionManager {
     async reload() {
         try {
             this._configCache = await this.invoke('get_config');
-        } catch { return; }
+        } catch {
+            return;
+        }
 
         try {
             const userExts = await this.invoke('list_extensions');
-            const installedIds = new Set(userExts.map(e => e.manifest.id));
+            const installedIds = new Set(userExts.map((e) => e.manifest.id));
             const states = this._configCache?.extension_states || {};
 
             for (const [id, ext] of this.extensions) {
@@ -869,7 +918,9 @@ export class ExtensionManager {
                 const existing = this.extensions.get(item.manifest.id);
                 if (existing) {
                     if (existing.manifest?.version === item.manifest.version) continue;
-                    console.log(`ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`);
+                    console.log(
+                        `ExtensionManager: updating '${item.manifest.id}' from ${existing.manifest?.version} to ${item.manifest.version}`
+                    );
                     this._unloadExtension(item.manifest.id);
                 }
                 try {
@@ -898,7 +949,7 @@ export class ExtensionManager {
         console.log(`ExtensionManager: unloading '${id}'`);
         this._unmountWidgetsFor(id);
         this._pool.unload(id);
-        document.querySelectorAll(`[data-ext-css="${id}"]`).forEach(el => el.remove());
+        document.querySelectorAll(`[data-ext-css="${id}"]`).forEach((el) => el.remove());
         this.extensions.delete(id);
     }
 
@@ -919,7 +970,11 @@ export class ExtensionManager {
         if (this._pendingWidgetMounts?.has(slotName)) {
             const pending = this._pendingWidgetMounts.get(slotName);
             this._pendingWidgetMounts.delete(slotName);
-            pending.forEach(fn => { try { fn(); } catch {} });
+            pending.forEach((fn) => {
+                try {
+                    fn();
+                } catch {}
+            });
         }
     }
 
@@ -976,7 +1031,9 @@ export class ExtensionManager {
 
         // Fetch the extension's refresh interval and do an initial render.
         try {
-            const ms = await ext.sandbox.call('getWidgetRefreshInterval', { widgetId: widgetManifest.id });
+            const ms = await ext.sandbox.call('getWidgetRefreshInterval', {
+                widgetId: widgetManifest.id,
+            });
             const n = Number(ms);
             if (Number.isFinite(n) && n > 0) {
                 // Clamp to sensible bounds: >= 1 second (so the extension
@@ -1002,7 +1059,7 @@ export class ExtensionManager {
         if (controller.refreshIntervalMs > 0) {
             controller.timer = setInterval(
                 () => this._renderWidget(controller),
-                controller.refreshIntervalMs,
+                controller.refreshIntervalMs
             );
         }
     }
@@ -1058,7 +1115,10 @@ export class ExtensionManager {
                 }
             }
         } catch (e) {
-            console.warn(`widget render for '${controller.extensionId}:${controller.widgetId}' failed:`, e);
+            console.warn(
+                `widget render for '${controller.extensionId}:${controller.widgetId}' failed:`,
+                e
+            );
         }
     }
 
@@ -1086,7 +1146,9 @@ export class ExtensionManager {
             if (ctrl.extensionId !== extensionId) continue;
             ctrl.destroyed = true;
             if (ctrl.timer) clearInterval(ctrl.timer);
-            try { ctrl.host.remove(); } catch {}
+            try {
+                ctrl.host.remove();
+            } catch {}
             this._widgetInstances.delete(key);
         }
     }
@@ -1128,7 +1190,7 @@ export class ExtensionManager {
      */
     getToolbarButtons() {
         if (!this._toolbarButtonsCache) return [];
-        return this._toolbarButtonsCache.map(b => ({
+        return this._toolbarButtonsCache.map((b) => ({
             ...b,
             // The onClick callback bridges to the sandbox RPC. The call
             // site provides the current chat context (input + messages).
@@ -1151,17 +1213,17 @@ export class ExtensionManager {
             const safeCtx = {
                 input: typeof ctx.input === 'string' ? ctx.input : '',
                 messages: Array.isArray(ctx.messages)
-                    ? ctx.messages.map(m => ({
-                        role: String(m?.role || ''),
-                        content: typeof m?.content === 'string' ? m.content : '',
-                    }))
+                    ? ctx.messages.map((m) => ({
+                          role: String(m?.role || ''),
+                          content: typeof m?.content === 'string' ? m.content : '',
+                      }))
                     : [],
             };
             const out = await ext.sandbox.call('onToolbarClick', {
                 buttonId,
                 context: safeCtx,
             });
-            return (out && typeof out === 'object') ? out : null;
+            return out && typeof out === 'object' ? out : null;
         } catch (e) {
             console.warn(`toolbar onClick in '${extensionId}' failed:`, e);
             return null;
@@ -1230,10 +1292,12 @@ export class ExtensionManager {
                 // don't yet have a `onRenderAction` — in Commit C we route
                 // them through the search provider's execute() with a
                 // synthetic result carrying { action: actionId }.
-                ext.sandbox.call('onResultAction', {
-                    actionId,
-                    resultId: root.dataset?.extResultId || null,
-                }).catch(e => console.warn(`onResultAction '${actionId}' failed:`, e));
+                ext.sandbox
+                    .call('onResultAction', {
+                        actionId,
+                        resultId: root.dataset?.extResultId || null,
+                    })
+                    .catch((e) => console.warn(`onResultAction '${actionId}' failed:`, e));
             });
         }
     }

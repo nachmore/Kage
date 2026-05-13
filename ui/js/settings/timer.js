@@ -75,7 +75,10 @@ class TimerSettingsModule extends SettingsModule {
 
     load(config) {
         const t = config.timer || {};
-        const set = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val !== false; };
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = val !== false;
+        };
         set('timerEnabled', t.enabled);
         set('timerNotify', t.notify_on_complete);
         set('timerSound', t.sound_on_complete);
@@ -103,8 +106,9 @@ class TimerSettingsModule extends SettingsModule {
             notify_on_complete: document.getElementById('timerNotify')?.checked ?? true,
             sound_on_complete: document.getElementById('timerSound')?.checked ?? true,
             sound_id: document.getElementById('timerSoundId')?.value || 'two-tone',
-            custom_sound_path: document.getElementById('timerCustomSoundPath')?.value?.trim() || null,
-            sound_repeats: parseInt(document.getElementById('timerSoundRepeats')?.value || '3'),
+            custom_sound_path:
+                document.getElementById('timerCustomSoundPath')?.value?.trim() || null,
+            sound_repeats: parseInt(document.getElementById('timerSoundRepeats')?.value || '3', 10),
             show_window_on_complete: document.getElementById('timerShowWindow')?.checked ?? true,
         };
     }
@@ -141,24 +145,34 @@ class TimerSettingsModule extends SettingsModule {
         const btn = document.getElementById('timerSoundPreview');
         const soundId = document.getElementById('timerSoundId')?.value || 'two-tone';
         const customPath = document.getElementById('timerCustomSoundPath')?.value?.trim() || '';
-        const repeats = parseInt(document.getElementById('timerSoundRepeats')?.value || '3');
+        const repeats = parseInt(document.getElementById('timerSoundRepeats')?.value || '3', 10);
 
         try {
-            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import('../shared/timer-sounds.js');
+            const { playTimerSound, stopTimerSound, isSoundPlaying } = await import(
+                '../shared/timer-sounds.js'
+            );
 
             if (isSoundPlaying()) {
                 stopTimerSound();
-                if (btn) { btn.textContent = '▶ Preview'; }
+                if (btn) {
+                    btn.textContent = '▶ Preview';
+                }
                 return;
             }
 
-            if (btn) { btn.textContent = '⏹ Stop'; }
+            if (btn) {
+                btn.textContent = '⏹ Stop';
+            }
             playTimerSound(soundId, customPath, repeats, () => {
-                if (btn) { btn.textContent = '▶ Preview'; }
+                if (btn) {
+                    btn.textContent = '▶ Preview';
+                }
             });
         } catch (e) {
             console.error('Failed to preview sound:', e);
-            if (btn) { btn.textContent = '▶ Preview'; }
+            if (btn) {
+                btn.textContent = '▶ Preview';
+            }
         }
     }
 }

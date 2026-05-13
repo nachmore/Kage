@@ -1,22 +1,22 @@
 /**
  * Echo-cancelled voice activity detector (VAD).
- * 
+ *
  * Uses WebRTC's getUserMedia with echoCancellation to get a clean audio stream,
  * then monitors volume levels to detect real human speech even while TTS is playing.
- * 
+ *
  * This solves the problem of the microphone picking up speaker output:
  * - WebRTC's AEC removes the TTS audio from the mic signal
  * - Only genuine human speech triggers the activity callback
- * 
+ *
  * Usage:
  *   const vad = new EchoCancelledVAD({ onSpeechDetected: () => { ... } });
  *   await vad.start();
  *   vad.stop();
  */
 
-const DEFAULT_THRESHOLD = 0.04;   // RMS threshold — higher to reject echo residual
-const CHECK_INTERVAL_MS = 50;     // How often to check audio levels
-const CONFIRM_FRAMES = 5;         // Consecutive frames above threshold (~250ms of real speech)
+const DEFAULT_THRESHOLD = 0.04; // RMS threshold — higher to reject echo residual
+const CHECK_INTERVAL_MS = 50; // How often to check audio levels
+const CONFIRM_FRAMES = 5; // Consecutive frames above threshold (~250ms of real speech)
 
 export class EchoCancelledVAD {
     /**
@@ -45,7 +45,7 @@ export class EchoCancelledVAD {
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true,
-                }
+                },
             });
 
             this._audioCtx = new AudioContext();
@@ -72,7 +72,7 @@ export class EchoCancelledVAD {
             this._checkInterval = null;
         }
         if (this._stream) {
-            this._stream.getTracks().forEach(t => t.stop());
+            this._stream.getTracks().forEach((t) => t.stop());
             this._stream = null;
         }
         if (this._audioCtx) {
@@ -84,7 +84,9 @@ export class EchoCancelledVAD {
     }
 
     /** Pause detection (e.g. while user is already speaking via SpeechRecognition) */
-    pause() { this._paused = true; }
+    pause() {
+        this._paused = true;
+    }
 
     /** Resume detection (e.g. when TTS starts playing) */
     resume() {
@@ -92,7 +94,9 @@ export class EchoCancelledVAD {
         this._consecutiveFrames = 0;
     }
 
-    get isActive() { return this._active; }
+    get isActive() {
+        return this._active;
+    }
 
     _startMonitoring() {
         const dataArray = new Float32Array(this._analyser.fftSize);
@@ -113,7 +117,9 @@ export class EchoCancelledVAD {
             if (rms > this.threshold) {
                 this._consecutiveFrames++;
                 if (this._consecutiveFrames >= CONFIRM_FRAMES) {
-                    console.log(`[VAD] Speech confirmed (RMS: ${rms.toFixed(4)}, ${this._consecutiveFrames} frames)`);
+                    console.log(
+                        `[VAD] Speech confirmed (RMS: ${rms.toFixed(4)}, ${this._consecutiveFrames} frames)`
+                    );
                     this._consecutiveFrames = 0;
                     this._paused = true;
                     this._cooldownUntil = Date.now() + 3000; // 3s cooldown

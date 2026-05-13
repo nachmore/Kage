@@ -12,7 +12,7 @@
  * future work.
  */
 
-import { CAPABILITIES, KNOWN_CAPABILITIES, normalizePermissions } from './extension-permissions.js';
+import { CAPABILITIES, normalizePermissions } from './extension-permissions.js';
 
 const MODAL_ID = 'kage-extension-permission-modal';
 
@@ -43,7 +43,9 @@ export function showPermissionPrompt(manifest, opts = {}) {
         document.body.appendChild(backdrop);
 
         const cleanup = (result) => {
-            try { backdrop.remove(); } catch {}
+            try {
+                backdrop.remove();
+            } catch {}
             document.removeEventListener('keydown', onKey);
             resolve(result);
         };
@@ -57,10 +59,12 @@ export function showPermissionPrompt(manifest, opts = {}) {
             if (e.target === backdrop) cleanup({ approved: false, granted: [] });
         });
 
-        backdrop.querySelector('[data-action="cancel"]')
+        backdrop
+            .querySelector('[data-action="cancel"]')
             .addEventListener('click', () => cleanup({ approved: false, granted: [] }));
 
-        backdrop.querySelector('[data-action="approve"]')
+        backdrop
+            .querySelector('[data-action="approve"]')
             .addEventListener('click', () => cleanup({ approved: true, granted: requested }));
 
         // Focus the approve button for keyboard users — but only after a tick
@@ -72,9 +76,10 @@ export function showPermissionPrompt(manifest, opts = {}) {
 }
 
 function escape(s) {
-    return String(s).replace(/[&<>"']/g, c => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
+    return String(s).replace(
+        /[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    );
 }
 
 function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
@@ -82,8 +87,12 @@ function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
     const name = escape(manifest?.name || id);
     const version = escape(manifest?.version || '');
     const icon = escape(manifest?.icon || '🧩');
-    const author = manifest?.author ? `<span class="kage-ext-perm-author">by ${escape(manifest.author)}</span>` : '';
-    const description = manifest?.description ? `<div class="kage-ext-perm-description">${escape(manifest.description)}</div>` : '';
+    const author = manifest?.author
+        ? `<span class="kage-ext-perm-author">by ${escape(manifest.author)}</span>`
+        : '';
+    const description = manifest?.description
+        ? `<div class="kage-ext-perm-description">${escape(manifest.description)}</div>`
+        : '';
 
     let permsSection;
     if (requested.length === 0) {
@@ -93,7 +102,7 @@ function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
                 It cannot access your clipboard, files, calendar, or the AI agent.
             </div>`;
     } else {
-        const rows = requested.map(cap => renderCapRow(cap, previouslyGranted.has(cap))).join('');
+        const rows = requested.map((cap) => renderCapRow(cap, previouslyGranted.has(cap))).join('');
         permsSection = `
             <div class="kage-ext-perm-list">${rows}</div>
             <div class="kage-ext-perm-footnote">
@@ -101,9 +110,7 @@ function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
             </div>`;
     }
 
-    const title = isUpgrade
-        ? `${name} has requested new permissions`
-        : `Install ${name}`;
+    const title = isUpgrade ? `${name} has requested new permissions` : `Install ${name}`;
     const subtitle = isUpgrade
         ? 'The extension was updated and is asking for additional access. Review the list below.'
         : 'This extension is asking for the following access. Review the list and approve only if you trust it.';

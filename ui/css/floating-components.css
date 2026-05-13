@@ -1,5 +1,5 @@
 /* Floating-specific component styles */
-@import url('shared-components.css');
+@import url("shared-components.css");
 
 /* Ghost Container */
 .mascot-container {
@@ -158,7 +158,7 @@
 }
 
 body.dark-theme .selection-checkbox {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 /* Quick Action Chips */
@@ -177,17 +177,20 @@ body.dark-theme .selection-checkbox {
     border: 1px solid var(--kage-border, #3a3640);
     border-radius: 16px;
     background: transparent;
-    color: var(--kage-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938f9b);
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        border-color 0.15s,
+        color 0.15s;
     white-space: nowrap;
 }
 
 .quick-action-chip:hover {
-    background: var(--kage-surface-hover, #352F3D);
-    border-color: var(--kage-accent, #C09CFF);
-    color: var(--kage-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352f3d);
+    border-color: var(--kage-accent, #c09cff);
+    color: var(--kage-text-primary, #e5e7eb);
 }
 
 .quick-action-icon {
@@ -203,7 +206,7 @@ body.dark-theme .selection-checkbox {
 body.clipboard-mode .extension-bar,
 body.clipboard-mode .ext-widget-slot,
 body.clipboard-mode .floating-banner {
-    display: none !important;
+    display: none;
 }
 
 /* Extension widget slots.
@@ -215,7 +218,9 @@ body.clipboard-mode .floating-banner {
     flex-direction: column;
     gap: 0;
 }
-.ext-widget-slot:empty { display: none; }
+.ext-widget-slot:empty {
+    display: none;
+}
 .ext-widget {
     display: block;
     animation: fadeIn 120ms ease-out;
@@ -244,7 +249,7 @@ body.clipboard-mode .floating-banner {
     left: 0;
     top: 0;
     bottom: 0;
-    background: var(--kage-accent, #C09CFF);
+    background: var(--kage-accent, #c09cff);
     opacity: 0.12;
     transition: width 0.2s linear;
     pointer-events: none;
@@ -256,10 +261,10 @@ body.clipboard-mode .floating-banner {
 }
 
 .extension-bar-text {
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
     font-size: 18px;
     font-weight: 600;
-    color: var(--kage-text-primary, #E5E7EB);
+    color: var(--kage-text-primary, #e5e7eb);
     font-variant-numeric: tabular-nums;
     min-width: 60px;
 }
@@ -275,21 +280,23 @@ body.clipboard-mode .floating-banner {
     background: transparent;
     border: 1px solid var(--kage-border, #3a3640);
     border-radius: 6px;
-    color: var(--kage-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938f9b);
     padding: 2px 8px;
     font-size: 12px;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
 }
 
 .extension-bar-btn:hover {
-    background: var(--kage-surface-hover, #352F3D);
-    color: var(--kage-text-primary, #E5E7EB);
+    background: var(--kage-surface-hover, #352f3d);
+    color: var(--kage-text-primary, #e5e7eb);
 }
 
 .offline-bar {
     background: rgba(255, 160, 50, 0.08);
-    color: var(--kage-text-secondary, #938F9B);
+    color: var(--kage-text-secondary, #938f9b);
 }
 .offline-bar .extension-bar-text {
     font-family: inherit;
@@ -346,7 +353,10 @@ body.clipboard-mode .floating-banner {
     justify-content: center;
     color: #6b7280;
     opacity: 0.35;
-    transition: opacity 0.2s, background 0.2s, color 0.2s;
+    transition:
+        opacity 0.2s,
+        background 0.2s,
+        color 0.2s;
     z-index: 1;
 }
 
@@ -382,7 +392,7 @@ body.clipboard-mode .floating-banner {
 .math-result-value {
     font-size: 16px;
     font-weight: 600;
-    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
     color: #4fc3f7;
 }
 
@@ -395,14 +405,14 @@ body.clipboard-mode .floating-banner {
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    color: #19161D;
+    color: #19161d;
     flex-shrink: 0;
 }
 
 /* Selection current indicator */
 .selection-current {
     margin-left: 6px;
-    color: #8E48FF;
+    color: #8e48ff;
     font-size: 10px;
 }
 
@@ -430,7 +440,7 @@ body.clipboard-mode .floating-banner {
 }
 body.dark-theme .datetime-time,
 body.dark-theme .datetime-date {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 /* Stop generating button */
@@ -495,7 +505,7 @@ body.dark-theme .datetime-date {
     display: flex;
     align-items: center;
     padding: 4px 12px;
-    border-top: 1px solid var(--kage-border-subtle, rgba(255,255,255,0.06));
+    border-top: 1px solid var(--kage-border-subtle, rgba(255, 255, 255, 0.06));
     gap: 4px;
 }
 .floating-toolbar-left {
@@ -514,14 +524,16 @@ body.dark-theme .datetime-date {
     border-radius: 6px;
     color: var(--kage-text-muted, #6b7280);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
 }
 .floating-toolbar-btn:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--kage-text, #e5e7eb);
 }
 body.light-theme .floating-toolbar-btn:hover {
-    background: rgba(0,0,0,0.06);
+    background: rgba(0, 0, 0, 0.06);
     color: #374151;
 }
 .floating-toolbar-ext {
@@ -560,21 +572,22 @@ body.light-theme .floating-toolbar-btn:hover {
     font-size: 11px;
     color: var(--kage-text-muted, #6b7280);
     cursor: pointer;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
     max-width: 140px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .floating-model-selector:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: var(--kage-text, #e5e7eb);
 }
 body.light-theme .floating-model-selector:hover {
-    background: rgba(0,0,0,0.06);
+    background: rgba(0, 0, 0, 0.06);
     color: #374151;
 }
-
 
 /* Floating response action buttons (copy, speak) */
 .floating-response-actions {

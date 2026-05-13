@@ -23,9 +23,10 @@
 let _isMacCached = null;
 export function isMac() {
     if (_isMacCached === null) {
-        _isMacCached = typeof navigator !== 'undefined'
-            && typeof navigator.platform === 'string'
-            && navigator.platform.startsWith('Mac');
+        _isMacCached =
+            typeof navigator !== 'undefined' &&
+            typeof navigator.platform === 'string' &&
+            navigator.platform.startsWith('Mac');
     }
     return _isMacCached;
 }
@@ -38,9 +39,10 @@ export function isMac() {
 let _isWindowsCached = null;
 export function isWindows() {
     if (_isWindowsCached === null) {
-        const plat = (typeof navigator !== 'undefined' && typeof navigator.platform === 'string')
-            ? navigator.platform
-            : '';
+        const plat =
+            typeof navigator !== 'undefined' && typeof navigator.platform === 'string'
+                ? navigator.platform
+                : '';
         _isWindowsCached = plat.startsWith('Win');
     }
     return _isWindowsCached;
@@ -67,7 +69,7 @@ export function isLinux() {
  * @returns {boolean}
  */
 export function cmdOrCtrlPressed(e) {
-    return isMac() ? (e.ctrlKey || e.metaKey) : e.ctrlKey;
+    return isMac() ? e.ctrlKey || e.metaKey : e.ctrlKey;
 }
 
 /**
@@ -88,7 +90,7 @@ export function platformKeyLabel(label) {
     if (!isMac()) return label;
     return label
         .split('+')
-        .map(part => {
+        .map((part) => {
             switch (part.trim()) {
                 case 'Ctrl':
                 case 'Cmd':
@@ -132,10 +134,10 @@ export function matchShortcut(input, shortcuts) {
     const trigger = parts[0].toLowerCase();
     const args = parts.slice(1);
 
-    const matches = shortcuts.filter(s => s.shortcut.toLowerCase() === trigger);
+    const matches = shortcuts.filter((s) => s.shortcut.toLowerCase() === trigger);
     if (matches.length === 0) return null;
 
-    const scoredMatches = matches.map(shortcut => {
+    const scoredMatches = matches.map((shortcut) => {
         const score = scoreShortcutMatch(shortcut, args);
         return { shortcut, args, score };
     });
@@ -201,13 +203,16 @@ export function buildShortcutCommand(shortcut, args, selectionText = '') {
     const substitute = (template, encode = false) => {
         if (!template) return '';
         let result = template;
-        result = result.replace(/\{selection\}/g, encode ? encodeURIComponent(selectionText) : selectionText);
+        result = result.replace(
+            /\{selection\}/g,
+            encode ? encodeURIComponent(selectionText) : selectionText
+        );
         if (result.includes('{*}')) {
             const all = args.join(' ');
             result = result.replace('{*}', encode ? encodeURIComponent(all) : all);
         } else {
             result = result.replace(/\{(\d+)\?\}/g, (_, idx) => {
-                const i = parseInt(idx);
+                const i = parseInt(idx, 10);
                 const val = i < args.length ? args[i] : '';
                 return encode ? encodeURIComponent(val) : val;
             });
@@ -238,42 +243,64 @@ export function buildShortcutCommand(shortcut, args, selectionText = '') {
 
             if (scriptAction === 'run_program') {
                 if (!Array.isArray(result)) {
-                    return { type: 'error', message: 'Script must return an array [cmd, workDir, ...args] for Run as Command' };
+                    return {
+                        type: 'error',
+                        message:
+                            'Script must return an array [cmd, workDir, ...args] for Run as Command',
+                    };
                 }
                 return {
                     type: 'run_program',
                     path: result[0] || '',
                     workDir: result[1] || null,
-                    args: result.slice(2).map(String)
+                    args: result.slice(2).map(String),
                 };
             }
 
             if (typeof result !== 'string') {
-                return { type: 'error', message: 'Script must return a string, got ' + typeof result };
+                return {
+                    type: 'error',
+                    message: 'Script must return a string, got ' + typeof result,
+                };
             }
             if (scriptAction === 'open_url') return { type: 'open_url', url: result };
             if (scriptAction === 'prompt') return { type: 'prompt', message: result };
             return { type: 'text', message: result };
         } catch (e) {
-            return { type: 'error', message: `Script ${e.constructor?.name || 'Error'}: ${e.message}` };
+            return {
+                type: 'error',
+                message: `Script ${e.constructor?.name || 'Error'}: ${e.message}`,
+            };
         }
     }
 
     // run_program (default)
     if (!shortcut.arguments) {
-        return { type: 'run_program', path: shortcut.path, args: [], workDir: shortcut.working_directory };
+        return {
+            type: 'run_program',
+            path: shortcut.path,
+            args: [],
+            workDir: shortcut.working_directory,
+        };
     }
-    const processedArgs = substitute(shortcut.arguments).split(/\s+/).filter(a => a && !a.match(/^\{\d+\}$/));
-    return { type: 'run_program', path: shortcut.path, args: processedArgs, workDir: shortcut.working_directory };
+    const processedArgs = substitute(shortcut.arguments)
+        .split(/\s+/)
+        .filter((a) => a && !a.match(/^\{\d+\}$/));
+    return {
+        type: 'run_program',
+        path: shortcut.path,
+        args: processedArgs,
+        workDir: shortcut.working_directory,
+    };
 }
 
 /**
  * Validate that all required parameters are provided.
  */
 export function validateShortcutArgs(shortcut, args) {
-    const templates = [
-        shortcut.url, shortcut.prompt, shortcut.arguments, shortcut.script
-    ].filter(Boolean).join(' ');
+    const templates = [shortcut.url, shortcut.prompt, shortcut.arguments, shortcut.script]
+        .filter(Boolean)
+        .join(' ');
 
     if (templates.includes('{*}')) return { valid: true };
 
@@ -283,7 +310,7 @@ export function validateShortcutArgs(shortcut, args) {
     while ((match = paramRegex.exec(templates)) !== null) {
         const fullMatch = templates.substring(match.index, match.index + match[0].length + 1);
         if (!fullMatch.endsWith('?}')) {
-            requiredParams.add(parseInt(match[1]));
+            requiredParams.add(parseInt(match[1], 10));
         }
     }
 
@@ -295,6 +322,10 @@ export function validateShortcutArgs(shortcut, args) {
     const missing = maxRequired - args.length;
     return {
         valid: false,
-        message: `This command requires ${maxRequired} parameter${maxRequired > 1 ? 's' : ''} (${missing} missing). Usage: ${shortcut.shortcut} <${Array.from(requiredParams).map(i => 'arg' + i).join('> <')}>`
+        message: `This command requires ${maxRequired} parameter${maxRequired > 1 ? 's' : ''} (${missing} missing). Usage: ${shortcut.shortcut} <${Array.from(
+            requiredParams
+        )
+            .map((i) => 'arg' + i)
+            .join('> <')}>`,
     };
 }

@@ -1,7 +1,7 @@
 /* Shared dark theme overrides */
 
 body.dark-theme .response-text {
-    color: #E5E7EB;
+    color: #e5e7eb;
 }
 
 /* Link colors now handled globally via --kage-link tokens in shared-kage-tokens.css */
@@ -60,14 +60,14 @@ body.dark-theme .diagram-content {
 }
 
 body.dark-theme .tool-sources {
-    border-top-color: #4A464F;
+    border-top-color: #4a464f;
 }
 
 body.dark-theme .source-chip {
-    background: #352F3D;
-    color: #938F9B;
+    background: #352f3d;
+    color: #938f9b;
 }
 body.dark-theme .source-chip:hover {
-    background: #4A464F;
-    color: #E5E7EB;
+    background: #4a464f;
+    color: #e5e7eb;
 }

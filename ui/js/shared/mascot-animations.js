@@ -26,7 +26,7 @@ export const ANIMATIONS = {
         ],
         fps: 4,
         loop: true,
-        aspect: 43 / 36,  // wider than tall
+        aspect: 43 / 36, // wider than tall
     },
     jumping: {
         frames: [
@@ -41,6 +41,6 @@ export const ANIMATIONS = {
         ],
         fps: 8,
         loop: true,
-        aspect: 45 / 73,  // taller than wide
+        aspect: 45 / 73, // taller than wide
     },
 };

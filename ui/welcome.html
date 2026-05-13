@@ -767,8 +767,8 @@
                                 config.acp.mode = {
                                     type: 'remote',
                                     host: document.getElementById('wAcpHost').value,
-                                    port: parseInt(document.getElementById('wAcpPort').value),
-                                    timeout_ms: parseInt(document.getElementById('wAcpTimeout').value),
+                                    port: parseInt(document.getElementById('wAcpPort').value, 10),
+                                    timeout_ms: parseInt(document.getElementById('wAcpTimeout').value, 10),
                                 };
                             }
                         } else if (detectedAgent) {

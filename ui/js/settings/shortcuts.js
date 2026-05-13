@@ -253,7 +253,10 @@ class ShortcutsSettingsModule extends SettingsModule {
         this._registerActions();
         this._wireDialogListeners();
         this._escHandler = (e) => {
-            if (e.key === 'Escape' && document.getElementById('shortcutDialog')?.style.display === 'flex') {
+            if (
+                e.key === 'Escape' &&
+                document.getElementById('shortcutDialog')?.style.display === 'flex'
+            ) {
                 e.stopPropagation();
                 this.closeDialog();
             }
@@ -303,7 +306,8 @@ class ShortcutsSettingsModule extends SettingsModule {
         if (!listEl) return;
 
         if (this.shortcuts.length === 0) {
-            listEl.innerHTML = '<div class="shortcuts-empty">No shortcuts configured. Click "Add Shortcut" to create one.</div>';
+            listEl.innerHTML =
+                '<div class="shortcuts-empty">No shortcuts configured. Click "Add Shortcut" to create one.</div>';
             return;
         }
 
@@ -311,38 +315,46 @@ class ShortcutsSettingsModule extends SettingsModule {
             run_program: '▶️ Run Program',
             open_url: '🌐 Open URL',
             prompt: '💬 Prompt',
-            script: '📜 Script'
+            script: '📜 Script',
         };
 
-        listEl.innerHTML = this.shortcuts.map((s, index) => {
-            const at = s.action_type || 'run_program';
-            const label = actionLabels[at] || at;
-            let details = `<div><strong>Type:</strong> ${label}</div>`;
+        listEl.innerHTML = this.shortcuts
+            .map((s, index) => {
+                const at = s.action_type || 'run_program';
+                const label = actionLabels[at] || at;
+                let details = `<div><strong>Type:</strong> ${label}</div>`;
 
-            if (at === 'open_url') {
-                details += `<div><strong>URL:</strong> ${escapeHtml(s.url || '')}</div>`;
-            } else if (at === 'prompt') {
-                details += `<div><strong>Prompt:</strong> ${escapeHtml(s.prompt || '')}</div>`;
-            } else if (at === 'script') {
-                const saLabels = { text: '📝 Display', prompt: '💬 Agent', open_url: '🌐 URL', run_program: '▶️ Run' };
-                details += `<div><strong>Action:</strong> ${saLabels[s.script_action] || 'Display'}</div>`;
-                details += `<div><strong>Script:</strong> <code>${escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
-            } else {
-                details += `<div><strong>Path:</strong> ${escapeHtml(s.path || '')}</div>`;
-                if (s.working_directory) details += `<div><strong>Dir:</strong> ${escapeHtml(s.working_directory)}</div>`;
-                if (s.arguments) details += `<div><strong>Args:</strong> ${escapeHtml(s.arguments)}</div>`;
-            }
+                if (at === 'open_url') {
+                    details += `<div><strong>URL:</strong> ${escapeHtml(s.url || '')}</div>`;
+                } else if (at === 'prompt') {
+                    details += `<div><strong>Prompt:</strong> ${escapeHtml(s.prompt || '')}</div>`;
+                } else if (at === 'script') {
+                    const saLabels = {
+                        text: '📝 Display',
+                        prompt: '💬 Agent',
+                        open_url: '🌐 URL',
+                        run_program: '▶️ Run',
+                    };
+                    details += `<div><strong>Action:</strong> ${saLabels[s.script_action] || 'Display'}</div>`;
+                    details += `<div><strong>Script:</strong> <code>${escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
+                } else {
+                    details += `<div><strong>Path:</strong> ${escapeHtml(s.path || '')}</div>`;
+                    if (s.working_directory)
+                        details += `<div><strong>Dir:</strong> ${escapeHtml(s.working_directory)}</div>`;
+                    if (s.arguments)
+                        details += `<div><strong>Args:</strong> ${escapeHtml(s.arguments)}</div>`;
+                }
 
-            let iconHtml;
-            if (s.icon && s.icon.startsWith('data:')) {
-                iconHtml = `<img src="${s.icon}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;margin-right:8px;">`;
-            } else if (s.icon) {
-                iconHtml = `<span style="font-size:18px;margin-right:8px;">${s.icon}</span>`;
-            } else {
-                iconHtml = `<span style="font-size:18px;margin-right:8px;">⚡</span>`;
-            }
+                let iconHtml;
+                if (s.icon?.startsWith('data:')) {
+                    iconHtml = `<img src="${s.icon}" style="width:24px;height:24px;border-radius:4px;object-fit:cover;margin-right:8px;">`;
+                } else if (s.icon) {
+                    iconHtml = `<span style="font-size:18px;margin-right:8px;">${s.icon}</span>`;
+                } else {
+                    iconHtml = `<span style="font-size:18px;margin-right:8px;">⚡</span>`;
+                }
 
-            return `
+                return `
                 <div class="shortcut-item">
                     <div class="shortcut-info" style="display:flex;align-items:flex-start;">
                         <div style="padding-top:2px;">${iconHtml}</div>
@@ -357,7 +369,8 @@ class ShortcutsSettingsModule extends SettingsModule {
                         <button class="shortcut-action-btn delete" data-action="shortcuts.deleteShortcut" data-arg="${index}">Delete</button>
                     </div>
                 </div>`;
-        }).join('');
+            })
+            .join('');
     }
 
     showAddDialog() {
@@ -410,8 +423,10 @@ class ShortcutsSettingsModule extends SettingsModule {
 
     onActionTypeChange() {
         const at = document.getElementById('shortcutActionType').value;
-        document.getElementById('runProgramFields').style.display = at === 'run_program' ? 'block' : 'none';
-        document.getElementById('openUrlFields').style.display = at === 'open_url' ? 'block' : 'none';
+        document.getElementById('runProgramFields').style.display =
+            at === 'run_program' ? 'block' : 'none';
+        document.getElementById('openUrlFields').style.display =
+            at === 'open_url' ? 'block' : 'none';
         document.getElementById('promptFields').style.display = at === 'prompt' ? 'block' : 'none';
         document.getElementById('scriptFields').style.display = at === 'script' ? 'block' : 'none';
         // Show "Use Favicon" button only for URL shortcuts
@@ -428,7 +443,7 @@ class ShortcutsSettingsModule extends SettingsModule {
         const clearBtn = document.getElementById('shortcutIconClear');
         if (!preview) return;
 
-        if (icon && icon.startsWith('data:')) {
+        if (icon?.startsWith('data:')) {
             // Base64 image
             preview.innerHTML = `<img src="${icon}">`;
             if (emojiInput) emojiInput.value = '';
@@ -473,7 +488,10 @@ class ShortcutsSettingsModule extends SettingsModule {
     async fetchFavicon() {
         const urlInput = document.getElementById('shortcutUrl');
         const url = urlInput?.value?.trim();
-        if (!url) { alert('Enter a URL first'); return; }
+        if (!url) {
+            alert('Enter a URL first');
+            return;
+        }
 
         const btn = document.getElementById('shortcutFaviconBtn');
         const origText = btn?.textContent;
@@ -511,7 +529,11 @@ class ShortcutsSettingsModule extends SettingsModule {
         const body = document.getElementById('shortcutTestBody');
         const toggle = document.getElementById('shortcutTestToggle');
         if (args) args.value = '';
-        if (output) { output.style.display = 'none'; output.textContent = ''; output.className = 'shortcut-test-output'; }
+        if (output) {
+            output.style.display = 'none';
+            output.textContent = '';
+            output.className = 'shortcut-test-output';
+        }
         if (body) body.style.display = 'none';
         if (toggle) toggle.textContent = '▶';
     }
@@ -601,7 +623,10 @@ class ShortcutsSettingsModule extends SettingsModule {
         const statusEl = document.getElementById('scriptAiStatus');
         const btn = document.getElementById('scriptAiBtn');
         const userPrompt = promptInput?.value.trim();
-        if (!userPrompt) { statusEl.textContent = 'Please enter a description.'; return; }
+        if (!userPrompt) {
+            statusEl.textContent = 'Please enter a description.';
+            return;
+        }
 
         const scriptAction = document.getElementById('shortcutScriptAction')?.value || 'text';
         const currentScript = document.getElementById('shortcutScript')?.value.trim() || '';
@@ -609,13 +634,17 @@ class ShortcutsSettingsModule extends SettingsModule {
         // Build action-specific return format hints
         let returnSpec;
         if (scriptAction === 'run_program') {
-            returnSpec = 'Return an array: [command, workingDirectory, ...args]. workingDirectory can be an empty string for the default directory. Example: return ["git", "C:\\\\projects", "status"];';
+            returnSpec =
+                'Return an array: [command, workingDirectory, ...args]. workingDirectory can be an empty string for the default directory. Example: return ["git", "C:\\\\projects", "status"];';
         } else if (scriptAction === 'open_url') {
-            returnSpec = 'Return a string containing a valid URL. Example: return "https://example.com/search?q=" + encodeURIComponent(args[0]);';
+            returnSpec =
+                'Return a string containing a valid URL. Example: return "https://example.com/search?q=" + encodeURIComponent(args[0]);';
         } else if (scriptAction === 'prompt') {
-            returnSpec = 'Return a string that will be sent to an AI agent as a prompt. Example: return "Explain this error: " + args.join(" ");';
+            returnSpec =
+                'Return a string that will be sent to an AI agent as a prompt. Example: return "Explain this error: " + args.join(" ");';
         } else {
-            returnSpec = 'Return a string that will be displayed to the user. Example: return "Result: " + args.join(", ");';
+            returnSpec =
+                'Return a string that will be displayed to the user. Example: return "Result: " + args.join(", ");';
         }
 
         const parts = [
@@ -654,16 +683,17 @@ class ShortcutsSettingsModule extends SettingsModule {
             // Collect streamed response
             let response = '';
             const unlisten = await listen('message_chunk', (event) => {
-                const delta = (event.payload && typeof event.payload === 'object')
-                    ? (event.payload.text || '')
-                    : String(event.payload || '');
+                const delta =
+                    event.payload && typeof event.payload === 'object'
+                        ? event.payload.text || ''
+                        : String(event.payload || '');
                 response += delta;
                 statusEl.textContent = 'Receiving...';
             });
 
             const completionPromise = new Promise((resolve) => {
                 const unlistenComplete = listen('message_complete', () => {
-                    unlistenComplete.then(fn => fn());
+                    unlistenComplete.then((fn) => fn());
                     resolve();
                 });
             });
@@ -677,7 +707,10 @@ class ShortcutsSettingsModule extends SettingsModule {
             const fenceMatch = code.match(/```(?:javascript|js)?\s*\n([\s\S]*?)```/);
             if (fenceMatch) code = fenceMatch[1].trim();
             // Also strip bare ``` at start/end
-            code = code.replace(/^```\w*\n?/, '').replace(/\n?```$/, '').trim();
+            code = code
+                .replace(/^```\w*\n?/, '')
+                .replace(/\n?```$/, '')
+                .trim();
 
             const textarea = document.getElementById('shortcutScript');
             if (textarea) {
@@ -716,30 +749,49 @@ class ShortcutsSettingsModule extends SettingsModule {
         const trigger = document.getElementById('shortcutTrigger').value.trim();
         const actionType = document.getElementById('shortcutActionType').value;
 
-        if (!name || !trigger) { alert('Name and Trigger Word are required.'); return; }
+        if (!name || !trigger) {
+            alert('Name and Trigger Word are required.');
+            return;
+        }
 
         const shortcut = { name, shortcut: trigger, action_type: actionType };
         if (this._currentIcon) shortcut.icon = this._currentIcon;
 
         if (actionType === 'open_url') {
             const url = document.getElementById('shortcutUrl').value.trim();
-            if (!url) { alert('URL is required.'); return; }
+            if (!url) {
+                alert('URL is required.');
+                return;
+            }
             shortcut.url = url;
         } else if (actionType === 'prompt') {
             const prompt = document.getElementById('shortcutPrompt').value.trim();
-            if (!prompt) { alert('Prompt template is required.'); return; }
+            if (!prompt) {
+                alert('Prompt template is required.');
+                return;
+            }
             shortcut.prompt = prompt;
         } else if (actionType === 'script') {
             const script = document.getElementById('shortcutScript').value.trim();
-            if (!script) { alert('Script body is required.'); return; }
+            if (!script) {
+                alert('Script body is required.');
+                return;
+            }
             shortcut.script = script;
             shortcut.script_action = document.getElementById('shortcutScriptAction').value;
             // Validate script syntax
-            try { new Function('...args', script); }
-            catch (e) { alert('Script syntax error: ' + e.message); return; }
+            try {
+                new Function('...args', script);
+            } catch (e) {
+                alert('Script syntax error: ' + e.message);
+                return;
+            }
         } else {
             const path = document.getElementById('shortcutPath').value.trim();
-            if (!path) { alert('Executable Path is required.'); return; }
+            if (!path) {
+                alert('Executable Path is required.');
+                return;
+            }
             shortcut.path = path;
             const workDir = document.getElementById('shortcutWorkDir').value.trim();
             const args = document.getElementById('shortcutArgs').value.trim();
@@ -764,16 +816,21 @@ class ShortcutsSettingsModule extends SettingsModule {
     }
 
     exportShortcuts() {
-        const blob = new Blob([JSON.stringify(this.shortcuts, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(this.shortcuts, null, 2)], {
+            type: 'application/json',
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'kage-shortcuts.json'; a.click();
+        a.href = url;
+        a.download = 'kage-shortcuts.json';
+        a.click();
         URL.revokeObjectURL(url);
     }
 
     importShortcuts() {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'application/json';
+        input.type = 'file';
+        input.accept = 'application/json';
         input.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -781,10 +838,15 @@ class ShortcutsSettingsModule extends SettingsModule {
             reader.onload = (ev) => {
                 try {
                     const imported = JSON.parse(ev.target.result);
-                    if (!Array.isArray(imported)) { alert('Invalid format.'); return; }
+                    if (!Array.isArray(imported)) {
+                        alert('Invalid format.');
+                        return;
+                    }
                     this.shortcuts = imported;
                     this.renderShortcutsList();
-                } catch (err) { alert('Failed to parse: ' + err.message); }
+                } catch (err) {
+                    alert('Failed to parse: ' + err.message);
+                }
             };
             reader.readAsText(file);
         };
@@ -812,14 +874,22 @@ class ShortcutsSettingsModule extends SettingsModule {
         if (script) script.addEventListener('input', () => this.updateHighlight());
 
         const aiPrompt = document.getElementById('scriptAiPrompt');
-        if (aiPrompt) aiPrompt.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); this.generateScript(); }
-        });
+        if (aiPrompt)
+            aiPrompt.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.generateScript();
+                }
+            });
 
         const testArgs = document.getElementById('shortcutTestArgs');
-        if (testArgs) testArgs.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); this.runTest(); }
-        });
+        if (testArgs)
+            testArgs.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.runTest();
+                }
+            });
     }
 
     // Register every data-action="shortcuts.*" handler with the dispatcher.
@@ -830,26 +900,27 @@ class ShortcutsSettingsModule extends SettingsModule {
     _registerActions() {
         if (!window.registerSettingsActions) return;
         window.registerSettingsActions({
-            'shortcuts.showAddDialog':       () => this.showAddDialog(),
-            'shortcuts.openCommandsStore':   () => {
+            'shortcuts.showAddDialog': () => this.showAddDialog(),
+            'shortcuts.openCommandsStore': () => {
                 if (window.__TAURI__?.core) {
                     window.__TAURI__.core.invoke('open_store_window', { tab: 'commands' });
                 }
             },
-            'shortcuts.exportShortcuts':     () => this.exportShortcuts(),
-            'shortcuts.importShortcuts':     () => this.importShortcuts(),
-            'shortcuts.closeDialog':         () => this.closeDialog(),
-            'shortcuts.openIconFilePicker':  () => document.getElementById('shortcutIconFile')?.click(),
-            'shortcuts.fetchFavicon':        () => this.fetchFavicon(),
-            'shortcuts.clearIcon':           () => this.clearIcon(),
-            'shortcuts.onActionTypeChange':  () => this.onActionTypeChange(),
-            'shortcuts.generateScript':      () => this.generateScript(),
-            'shortcuts.undoGenerate':        () => this.undoGenerate(),
-            'shortcuts.toggleTestSection':   () => this.toggleTestSection(),
-            'shortcuts.runTest':             () => this.runTest(),
-            'shortcuts.saveShortcut':        () => this.saveShortcut(),
-            'shortcuts.editShortcut':        (arg) => this.editShortcut(parseInt(arg, 10)),
-            'shortcuts.deleteShortcut':      (arg) => this.deleteShortcut(parseInt(arg, 10)),
+            'shortcuts.exportShortcuts': () => this.exportShortcuts(),
+            'shortcuts.importShortcuts': () => this.importShortcuts(),
+            'shortcuts.closeDialog': () => this.closeDialog(),
+            'shortcuts.openIconFilePicker': () =>
+                document.getElementById('shortcutIconFile')?.click(),
+            'shortcuts.fetchFavicon': () => this.fetchFavicon(),
+            'shortcuts.clearIcon': () => this.clearIcon(),
+            'shortcuts.onActionTypeChange': () => this.onActionTypeChange(),
+            'shortcuts.generateScript': () => this.generateScript(),
+            'shortcuts.undoGenerate': () => this.undoGenerate(),
+            'shortcuts.toggleTestSection': () => this.toggleTestSection(),
+            'shortcuts.runTest': () => this.runTest(),
+            'shortcuts.saveShortcut': () => this.saveShortcut(),
+            'shortcuts.editShortcut': (arg) => this.editShortcut(parseInt(arg, 10)),
+            'shortcuts.deleteShortcut': (arg) => this.deleteShortcut(parseInt(arg, 10)),
         });
     }
 }

@@ -137,7 +137,9 @@ class AboutSettingsModule extends SettingsModule {
                     const configBase = folders?.config;
                     if (configBase) {
                         const sep = configBase.includes('\\') ? '\\' : '/';
-                        await window.__TAURI__.core.invoke('open_path', { path: configBase + sep + 'kage' });
+                        await window.__TAURI__.core.invoke('open_path', {
+                            path: configBase + sep + 'kage',
+                        });
                     }
                 } catch (e) {
                     console.error('Failed to open config folder:', e);
@@ -151,7 +153,8 @@ class AboutSettingsModule extends SettingsModule {
             document.getElementById('aboutVersion').textContent = 'v' + info.version;
             const hpEl = document.getElementById('aboutHomepage');
             if (hpEl && info.homepage) {
-                hpEl.innerHTML = '<a href="' + info.homepage + '" target="_blank">' + info.homepage + '</a>';
+                hpEl.innerHTML =
+                    '<a href="' + info.homepage + '" target="_blank">' + info.homepage + '</a>';
             }
             const descEl = document.getElementById('aboutDescription');
             if (descEl && info.description) descEl.textContent = info.description;
@@ -159,7 +162,17 @@ class AboutSettingsModule extends SettingsModule {
             if (infoEl) {
                 const rows = [];
                 if (info.authors) rows.push(this.infoRow('Author', info.authors));
-                if (info.repository && info.repository !== 'TBD') rows.push(this.infoRow('Repository', '<a href="' + info.repository + '" target="_blank">' + info.repository.replace('https://', '') + '</a>'));
+                if (info.repository && info.repository !== 'TBD')
+                    rows.push(
+                        this.infoRow(
+                            'Repository',
+                            '<a href="' +
+                                info.repository +
+                                '" target="_blank">' +
+                                info.repository.replace('https://', '') +
+                                '</a>'
+                        )
+                    );
                 if (info.license) rows.push(this.infoRow('License', info.license));
                 rows.push(this.infoRow('Copyright', '© 2025 ' + (info.authors || 'Kage Team')));
                 infoEl.innerHTML = rows.join('');
@@ -170,7 +183,7 @@ class AboutSettingsModule extends SettingsModule {
             // payload — no race where a fast click would open a
             // bare github.com/issues/new without the env block.
             this._wireFeedbackButton(info);
-        } catch (e) {
+        } catch (_e) {
             // Don't use console.log here to avoid recursive logging in settings
         }
 
@@ -182,9 +195,17 @@ class AboutSettingsModule extends SettingsModule {
 
         // Filter listeners
         const levelFilter = document.getElementById('logFilterLevel');
-        if (levelFilter) levelFilter.addEventListener('change', () => { this._filterLevel = levelFilter.value; this._renderLogEntries(); });
+        if (levelFilter)
+            levelFilter.addEventListener('change', () => {
+                this._filterLevel = levelFilter.value;
+                this._renderLogEntries();
+            });
         const sourceFilter = document.getElementById('logFilterSource');
-        if (sourceFilter) sourceFilter.addEventListener('change', () => { this._filterSource = sourceFilter.value; this._renderLogEntries(); });
+        if (sourceFilter)
+            sourceFilter.addEventListener('change', () => {
+                this._filterSource = sourceFilter.value;
+                this._renderLogEntries();
+            });
 
         // Refresh button
         const refreshBtn = document.getElementById('logRefreshBtn');
@@ -200,7 +221,7 @@ class AboutSettingsModule extends SettingsModule {
                     await window.__TAURI__.core.invoke('app_log_clear');
                     this._logEntries = [];
                     this._renderLogEntries();
-                } catch (e) {
+                } catch (_e) {
                     // silent
                 }
             });
@@ -213,7 +234,7 @@ class AboutSettingsModule extends SettingsModule {
                 try {
                     const dir = await window.__TAURI__.core.invoke('app_log_get_dir');
                     if (dir) await window.__TAURI__.core.invoke('open_path', { path: dir });
-                } catch (e) {
+                } catch (_e) {
                     // silent
                 }
             });
@@ -310,7 +331,7 @@ class AboutSettingsModule extends SettingsModule {
             this._logEntries = await window.__TAURI__.core.invoke('app_log_get_entries');
             this._populateSourceFilter();
             this._renderLogEntries();
-        } catch (e) {
+        } catch (_e) {
             viewer.innerHTML = '<div class="about-log-empty">Failed to load logs</div>';
         }
     }
@@ -318,38 +339,79 @@ class AboutSettingsModule extends SettingsModule {
     _populateSourceFilter() {
         const select = document.getElementById('logFilterSource');
         if (!select) return;
-        const sources = [...new Set(this._logEntries.map(e => e.source))].sort();
+        const sources = [...new Set(this._logEntries.map((e) => e.source))].sort();
         const current = select.value;
-        select.innerHTML = '<option value="all">All sources</option>' +
-            sources.map(s => '<option value="' + s + '"' + (s === current ? ' selected' : '') + '>' + s + '</option>').join('');
+        select.innerHTML =
+            '<option value="all">All sources</option>' +
+            sources
+                .map(
+                    (s) =>
+                        '<option value="' +
+                        s +
+                        '"' +
+                        (s === current ? ' selected' : '') +
+                        '>' +
+                        s +
+                        '</option>'
+                )
+                .join('');
     }
 
     _renderLogEntries() {
         const viewer = document.getElementById('logViewer');
         if (!viewer) return;
         let entries = this._logEntries;
-        if (this._filterLevel !== 'all') entries = entries.filter(e => e.level === this._filterLevel);
-        if (this._filterSource !== 'all') entries = entries.filter(e => e.source === this._filterSource);
+        if (this._filterLevel !== 'all')
+            entries = entries.filter((e) => e.level === this._filterLevel);
+        if (this._filterSource !== 'all')
+            entries = entries.filter((e) => e.source === this._filterSource);
         if (entries.length === 0) {
-            viewer.innerHTML = '<div class="about-log-empty">No log entries' + (this._filterLevel !== 'all' || this._filterSource !== 'all' ? ' matching filters' : '') + '</div>';
+            viewer.innerHTML =
+                '<div class="about-log-empty">No log entries' +
+                (this._filterLevel !== 'all' || this._filterSource !== 'all'
+                    ? ' matching filters'
+                    : '') +
+                '</div>';
             return;
         }
-        viewer.innerHTML = entries.map(e => {
-            const ts = e.ts ? e.ts.replace('T', ' ').replace('Z', '').substring(0, 23) : '';
-            const esc = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-            return '<div class="about-log-line">' +
-                '<span class="log-ts">' + ts + '</span> ' +
-                '<span class="log-level ' + e.level + '">' + e.level.toUpperCase() + '</span> ' +
-                '<span class="log-source">[' + esc(e.source) + ']</span> ' +
-                esc(e.msg) +
-                '</div>';
-        }).join('');
+        viewer.innerHTML = entries
+            .map((e) => {
+                const ts = e.ts ? e.ts.replace('T', ' ').replace('Z', '').substring(0, 23) : '';
+                const esc = (s) => {
+                    const d = document.createElement('div');
+                    d.textContent = s;
+                    return d.innerHTML;
+                };
+                return (
+                    '<div class="about-log-line">' +
+                    '<span class="log-ts">' +
+                    ts +
+                    '</span> ' +
+                    '<span class="log-level ' +
+                    e.level +
+                    '">' +
+                    e.level.toUpperCase() +
+                    '</span> ' +
+                    '<span class="log-source">[' +
+                    esc(e.source) +
+                    ']</span> ' +
+                    esc(e.msg) +
+                    '</div>'
+                );
+            })
+            .join('');
         // Scroll to bottom
         viewer.scrollTop = viewer.scrollHeight;
     }
 
     infoRow(label, value) {
-        return '<div class="about-row"><span class="about-label">' + label + '</span><span>' + value + '</span></div>';
+        return (
+            '<div class="about-row"><span class="about-label">' +
+            label +
+            '</span><span>' +
+            value +
+            '</span></div>'
+        );
     }
 
     load(config) {
@@ -364,7 +426,7 @@ class AboutSettingsModule extends SettingsModule {
         if (!config.system) config.system = {};
         if (input) {
             const val = parseInt(input.value, 10);
-            if (!isNaN(val) && val >= 100) {
+            if (!Number.isNaN(val) && val >= 100) {
                 config.system.log_buffer_size = val;
             }
         }
@@ -378,7 +440,7 @@ class AboutSettingsModule extends SettingsModule {
         const input = document.getElementById('logBufferSize');
         if (input) {
             const val = parseInt(input.value, 10);
-            if (isNaN(val) || val < 100 || val > 50000) {
+            if (Number.isNaN(val) || val < 100 || val > 50000) {
                 return { valid: false, error: 'Log buffer size must be between 100 and 50,000' };
             }
         }

@@ -100,7 +100,7 @@ export class ExtensionToolController {
         const em = this.host.extensionManager;
         if (!extensionId || !em) return '🧩';
         const defs = em.getToolDefinitionsCached?.() || [];
-        const def = defs.find(d => d.extensionId === extensionId);
+        const def = defs.find((d) => d.extensionId === extensionId);
         return def?.extensionIcon || '🧩';
     }
 
@@ -125,7 +125,11 @@ export class ExtensionToolController {
         console.log(`Extension tool call: ${extension}/${tool}`, params);
 
         const extToolCallId = `ext-${extension}-${tool}`;
-        this.host.addToolUsage?.({ toolCallId: extToolCallId, title: toolTitle, kind: 'extension' });
+        this.host.addToolUsage?.({
+            toolCallId: extToolCallId,
+            title: toolTitle,
+            kind: 'extension',
+        });
 
         const policy = await this._resolvePolicy(extension, tool);
 
@@ -137,7 +141,11 @@ export class ExtensionToolController {
         }
 
         if (policy === 'ask') {
-            const allowed = await this.host.permissionModal.showForExtensionTool(extension, tool, icon);
+            const allowed = await this.host.permissionModal.showForExtensionTool(
+                extension,
+                tool,
+                icon
+            );
             if (!allowed) {
                 this.executing = false;
                 this.handled = false;
@@ -149,7 +157,11 @@ export class ExtensionToolController {
         this.executing = true;
         this.host.onExecuteStart?.();
 
-        const result = await this.host.extensionManager.executeExtensionTool(extension, tool, params);
+        const result = await this.host.extensionManager.executeExtensionTool(
+            extension,
+            tool,
+            params
+        );
         const success = !result.error;
         const resultJson = JSON.stringify(success ? result.result : result.error);
 
@@ -177,8 +189,8 @@ export class ExtensionToolController {
 
     async _resolvePolicy(extension, tool) {
         const toolDefs = await this.host.extensionManager.getToolDefinitions();
-        const extDef = toolDefs.find(d => d.extensionId === extension);
-        const toolDef = extDef?.tools?.find(t => t.name === tool);
+        const extDef = toolDefs.find((d) => d.extensionId === extension);
+        const toolDef = extDef?.tools?.find((t) => t.name === tool);
         if (toolDef?.hasBuiltInConfirmation === true) return 'allow';
         try {
             return await this.host.invoke('check_extension_tool_permission', {

@@ -7,7 +7,7 @@ class AppearanceSettingsModule extends SettingsModule {
     }
 
     render() {
-            return `
+        return `
                 <div class="settings-section" id="${this.id}-section">
                     <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
@@ -28,7 +28,7 @@ class AppearanceSettingsModule extends SettingsModule {
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="fontSize" min="11" max="20" step="1" value="14">' +
                             '<span class="range-value" id="fontSizeValue">14px</span>' +
-                        '</div>'
+                            '</div>'
                     )}
 
                     <!-- Launcher -->
@@ -40,7 +40,7 @@ class AppearanceSettingsModule extends SettingsModule {
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="opacity" min="0.3" max="1" step="0.05" value="1">' +
                             '<span class="range-value" id="opacityValue">1.0</span>' +
-                        '</div>'
+                            '</div>'
                     )}
 
                     ${this.createControlRow(
@@ -50,7 +50,7 @@ class AppearanceSettingsModule extends SettingsModule {
                             '<option value="center">Center of active monitor</option>' +
                             '<option value="mouse">Next to mouse cursor</option>' +
                             '<option value="remember">Remember last position</option>' +
-                        '</select>'
+                            '</select>'
                     )}
 
                     ${this.createCheckboxRow(
@@ -90,7 +90,7 @@ class AppearanceSettingsModule extends SettingsModule {
                                 '<option value="HH:mm:ss">14:30:45 (24h + sec)</option>' +
                                 '<option value="h:mm A">2:30 PM (12h)</option>' +
                                 '<option value="h:mm:ss A">2:30:45 PM (12h + sec)</option>' +
-                            '</select>'
+                                '</select>'
                         )}
                     </div>
 
@@ -113,7 +113,7 @@ class AppearanceSettingsModule extends SettingsModule {
                                 '<option value="YYYY-MM-DD">2026-01-05</option>' +
                                 '<option value="MM/DD/YYYY">01/05/2026</option>' +
                                 '<option value="DD/MM/YYYY">05/01/2026</option>' +
-                            '</select>'
+                                '</select>'
                         )}
                     </div>
 
@@ -128,7 +128,7 @@ class AppearanceSettingsModule extends SettingsModule {
                     )}
                 </div>
             `;
-        }
+    }
 
     load(config) {
         if (!config.ui) return;
@@ -145,7 +145,8 @@ class AppearanceSettingsModule extends SettingsModule {
         if (theme) theme.value = config.ui.theme || 'system';
         if (opacity) {
             opacity.value = config.ui.floating_window_opacity ?? 1.0;
-            if (opacityValue) opacityValue.textContent = (config.ui.floating_window_opacity ?? 1.0).toFixed(2);
+            if (opacityValue)
+                opacityValue.textContent = (config.ui.floating_window_opacity ?? 1.0).toFixed(2);
         }
         if (preserve) preserve.checked = config.ui.preserve_last_response !== false;
         const showToolbar = document.getElementById('showFloatingToolbar');
@@ -182,7 +183,9 @@ class AppearanceSettingsModule extends SettingsModule {
     save(config) {
         config.ui = config.ui || {};
         config.ui.theme = document.getElementById('theme')?.value || 'system';
-        config.ui.floating_window_opacity = parseFloat(document.getElementById('opacity')?.value ?? '1');
+        config.ui.floating_window_opacity = parseFloat(
+            document.getElementById('opacity')?.value ?? '1'
+        );
         const rememberChat = document.getElementById('rememberChatGeometry')?.checked ?? true;
         if (!rememberChat) {
             config.ui.chat_window_width = 0;
@@ -191,9 +194,12 @@ class AppearanceSettingsModule extends SettingsModule {
             config.ui.chat_window_y = null;
         }
         // Don't overwrite saved geometry when checkbox is on — it's saved by the chat window itself
-        config.ui.preserve_last_response = document.getElementById('preserveLastResponse')?.checked ?? true;
-        config.ui.show_floating_toolbar = document.getElementById('showFloatingToolbar')?.checked ?? false;
-        config.ui.remember_launcher_size = document.getElementById('rememberLauncherSize')?.checked ?? false;
+        config.ui.preserve_last_response =
+            document.getElementById('preserveLastResponse')?.checked ?? true;
+        config.ui.show_floating_toolbar =
+            document.getElementById('showFloatingToolbar')?.checked ?? false;
+        config.ui.remember_launcher_size =
+            document.getElementById('rememberLauncherSize')?.checked ?? false;
         if (!config.ui.remember_launcher_size) {
             config.ui.launcher_width = null;
             config.ui.launcher_height = null;
@@ -202,8 +208,9 @@ class AppearanceSettingsModule extends SettingsModule {
         config.ui.show_date = document.getElementById('showDate')?.checked ?? false;
         config.ui.time_format = document.getElementById('timeFormat')?.value || 'HH:mm';
         config.ui.date_format = document.getElementById('dateFormat')?.value || 'ddd, MMM D';
-        config.ui.window_start_position = document.getElementById('windowStartPosition')?.value || 'center';
-        config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14');
+        config.ui.window_start_position =
+            document.getElementById('windowStartPosition')?.value || 'center';
+        config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14', 10);
 
         // Apply immediately via the global settings theme function
         if (typeof applySettingsTheme === 'function') {
@@ -229,8 +236,12 @@ class AppearanceSettingsModule extends SettingsModule {
         }
 
         // Show/hide date/time format selectors
-        document.getElementById('showTime')?.addEventListener('change', () => this.toggleDateTimeFormats());
-        document.getElementById('showDate')?.addEventListener('change', () => this.toggleDateTimeFormats());
+        document
+            .getElementById('showTime')
+            ?.addEventListener('change', () => this.toggleDateTimeFormats());
+        document
+            .getElementById('showDate')
+            ?.addEventListener('change', () => this.toggleDateTimeFormats());
 
         // Browse themes button
         document.getElementById('browseThemesBtn')?.addEventListener('click', () => {
@@ -255,9 +266,14 @@ class AppearanceSettingsModule extends SettingsModule {
 
             // Built-in themes (cannot be deleted)
             const builtins = [
-                { id: 'system', icon: '🖥️', name: 'Kage (Auto Light / Dark)', description: 'Follows your OS theme' },
-                { id: 'light',  icon: '☀️', name: 'Kage Light', description: '' },
-                { id: 'dark',   icon: '🌙', name: 'Kage Dark', description: '' },
+                {
+                    id: 'system',
+                    icon: '🖥️',
+                    name: 'Kage (Auto Light / Dark)',
+                    description: 'Follows your OS theme',
+                },
+                { id: 'light', icon: '☀️', name: 'Kage Light', description: '' },
+                { id: 'dark', icon: '🌙', name: 'Kage Dark', description: '' },
             ];
 
             let html = '';
@@ -288,7 +304,9 @@ class AppearanceSettingsModule extends SettingsModule {
                     : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="Use this theme">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </button>`;
-                const removeBtn = t.bundled ? '' : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
+                const removeBtn = t.bundled
+                    ? ''
+                    : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>`;
                 html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">
@@ -301,18 +319,22 @@ class AppearanceSettingsModule extends SettingsModule {
             themeList.innerHTML = html;
 
             // Wire up Use buttons
-            themeList.querySelectorAll('.theme-use-btn').forEach(btn => {
+            themeList.querySelectorAll('.theme-use-btn').forEach((btn) => {
                 btn.addEventListener('click', () => this._useTheme(btn.dataset.themeId));
             });
             // Wire up Remove buttons
-            themeList.querySelectorAll('.theme-remove-btn').forEach(btn => {
+            themeList.querySelectorAll('.theme-remove-btn').forEach((btn) => {
                 btn.addEventListener('click', () => this._removeTheme(btn.dataset.themeId));
             });
         } catch (e) {
             console.warn('Failed to load themes:', e);
         }
 
-        function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
     }
 
     async _useTheme(themeId) {
@@ -362,6 +384,5 @@ class AppearanceSettingsModule extends SettingsModule {
         return { valid: true };
     }
 
-    destroy() {
-    }
+    destroy() {}
 }

@@ -49,7 +49,10 @@
     ];
 
     function escapeHtml(s) {
-        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        return String(s).replace(
+            /[&<>"']/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+        );
     }
 
     /**
@@ -76,13 +79,15 @@
      */
     function renderAllInto(container, invoke, idPrefix) {
         const prefix = idPrefix || 'macPerm';
-        const html = MAC_PERMISSIONS.map(p => renderPermissionCard(p, `${prefix}-${p.id}-btn`)).join('');
+        const html = MAC_PERMISSIONS.map((p) =>
+            renderPermissionCard(p, `${prefix}-${p.id}-btn`)
+        ).join('');
         container.innerHTML = html;
-        MAC_PERMISSIONS.forEach(p => {
+        MAC_PERMISSIONS.forEach((p) => {
             const btn = container.querySelector(`#${prefix}-${p.id}-btn`);
             if (!btn) return;
             btn.addEventListener('click', () => {
-                invoke('open_url', { url: p.url }).catch(err => {
+                invoke('open_url', { url: p.url }).catch((err) => {
                     console.error('Failed to open System Settings:', err);
                 });
             });
@@ -91,7 +96,7 @@
 
     window.kageMacPermissions = Object.freeze({
         isMacOS,
-        permissions: Object.freeze(MAC_PERMISSIONS.map(p => Object.freeze(p))),
+        permissions: Object.freeze(MAC_PERMISSIONS.map((p) => Object.freeze(p))),
         renderPermissionCard,
         renderAllInto,
     });

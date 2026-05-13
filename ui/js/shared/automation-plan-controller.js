@@ -43,7 +43,11 @@
  *                                     stop window-hide on outside click)
  */
 
-import { detectAutomationPlan, detectAutomationPlanIncremental, automationPlanToTasks } from './streaming-utils.js';
+import {
+    detectAutomationPlan,
+    detectAutomationPlanIncremental,
+    automationPlanToTasks,
+} from './streaming-utils.js';
 
 export class AutomationPlanController {
     constructor(host) {
@@ -176,7 +180,7 @@ export class AutomationPlanController {
 
         const stepCompleteUnlisten = await this.host.listen('automation_step_complete', (event) => {
             const { step, success, result, stopped } = event.payload;
-            this.statuses[step] = stopped ? 'stopped' : (success ? 'done' : 'failed');
+            this.statuses[step] = stopped ? 'stopped' : success ? 'done' : 'failed';
             if (result) this.results[step] = result;
             this._renderTasks();
         });
@@ -189,15 +193,18 @@ export class AutomationPlanController {
         };
         this.cleanup = cleanup;
 
-        const planCompleteUnlisten = await this.host.listen('automation_plan_complete', async () => {
-            cleanup();
-            this.started = false;
-            await this.host.onPlanComplete?.();
-        });
+        const planCompleteUnlisten = await this.host.listen(
+            'automation_plan_complete',
+            async () => {
+                cleanup();
+                this.started = false;
+                await this.host.onPlanComplete?.();
+            }
+        );
 
         try {
             await this.host.invoke('execute_automation_plan', {
-                planJson: JSON.stringify(plan)
+                planJson: JSON.stringify(plan),
             });
         } catch (e) {
             console.error('Automation plan execution failed:', e);

@@ -21,7 +21,7 @@
  */
 export const COMMAND_CAPABILITIES = Object.freeze({
     // --- storage: the extension's own sandboxed data + config ---------------
-    get_config: 'storage',                   // read-only access; scrubbed in host
+    get_config: 'storage', // read-only access; scrubbed in host
     get_extension_config: 'storage',
     save_extension_config: 'storage',
     save_extension_data: 'storage',
@@ -250,19 +250,63 @@ export const COMMAND_CAPABILITIES = Object.freeze({
  * prompt and the settings UI badge row.
  */
 export const CAPABILITIES = Object.freeze({
-    storage:       { icon: '💾', label: 'Storage',       description: 'Read and write this extension\u2019s own sandboxed data and config.' },
-    clipboard:     { icon: '📋', label: 'Clipboard',     description: 'Read your clipboard contents and history.' },
-    shell:         { icon: '🌐', label: 'Shell',         description: 'Open URLs, file paths, and launch other apps on your behalf.' },
-    filesystem:    { icon: '📂', label: 'Filesystem',    description: 'Scan folders and search files.' },
-    window:        { icon: '🪟', label: 'Kage windows',  description: 'Resize, move, and adjust Kage\u2019s own windows.' },
-    windows:       { icon: '🧿', label: 'Open windows',  description: 'List and focus other apps\u2019 windows.' },
-    notifications: { icon: '🔔', label: 'Notifications', description: 'Show system notifications.' },
-    calendar:      { icon: '📅', label: 'Calendar',      description: 'Read calendar events from your system.' },
-    session:       { icon: '💬', label: 'Chat sessions', description: 'List and read chat sessions with the agent.' },
-    agent:         { icon: '🤖', label: 'AI agent',      description: 'Send messages to the AI agent and cancel generations.' },
-    activity:      { icon: '📊', label: 'Activity',      description: 'Start/stop the activity tracker and read app-usage statistics.' },
-    automation:    { icon: '⚡', label: 'Automation',    description: 'Emit signals that can trigger automations.' },
-    tts:           { icon: '🔈', label: 'Text-to-speech',description: 'Use text-to-speech voices.' },
+    storage: {
+        icon: '💾',
+        label: 'Storage',
+        description: 'Read and write this extension\u2019s own sandboxed data and config.',
+    },
+    clipboard: {
+        icon: '📋',
+        label: 'Clipboard',
+        description: 'Read your clipboard contents and history.',
+    },
+    shell: {
+        icon: '🌐',
+        label: 'Shell',
+        description: 'Open URLs, file paths, and launch other apps on your behalf.',
+    },
+    filesystem: { icon: '📂', label: 'Filesystem', description: 'Scan folders and search files.' },
+    window: {
+        icon: '🪟',
+        label: 'Kage windows',
+        description: 'Resize, move, and adjust Kage\u2019s own windows.',
+    },
+    windows: {
+        icon: '🧿',
+        label: 'Open windows',
+        description: 'List and focus other apps\u2019 windows.',
+    },
+    notifications: {
+        icon: '🔔',
+        label: 'Notifications',
+        description: 'Show system notifications.',
+    },
+    calendar: {
+        icon: '📅',
+        label: 'Calendar',
+        description: 'Read calendar events from your system.',
+    },
+    session: {
+        icon: '💬',
+        label: 'Chat sessions',
+        description: 'List and read chat sessions with the agent.',
+    },
+    agent: {
+        icon: '🤖',
+        label: 'AI agent',
+        description: 'Send messages to the AI agent and cancel generations.',
+    },
+    activity: {
+        icon: '📊',
+        label: 'Activity',
+        description: 'Start/stop the activity tracker and read app-usage statistics.',
+    },
+    automation: {
+        icon: '⚡',
+        label: 'Automation',
+        description: 'Emit signals that can trigger automations.',
+    },
+    tts: { icon: '🔈', label: 'Text-to-speech', description: 'Use text-to-speech voices.' },
 });
 
 /** Ordered list of capability names (stable order for UI display). */
@@ -313,7 +357,7 @@ export function decideInvoke(command, held) {
     if (typeof command !== 'string') {
         return { allow: false, reason: 'command name must be a string' };
     }
-    if (!Object.prototype.hasOwnProperty.call(COMMAND_CAPABILITIES, command)) {
+    if (!Object.hasOwn(COMMAND_CAPABILITIES, command)) {
         return { allow: false, reason: `command '${command}' is not available to extensions` };
     }
     const required = COMMAND_CAPABILITIES[command];

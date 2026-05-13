@@ -93,7 +93,9 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                             { title: '⚠️ Enable Terminator Mode', kind: 'warning' }
                         );
                     } else {
-                        confirmed = confirm('⚠️ Terminator Mode will auto-approve ALL tool requests. Are you sure?');
+                        confirmed = confirm(
+                            '⚠️ Terminator Mode will auto-approve ALL tool requests. Are you sure?'
+                        );
                     }
                     if (!confirmed) {
                         e.target.checked = false;
@@ -107,7 +109,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         const resetBtn = document.getElementById('resetPermissionsBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
-                if (!confirm('This will remove all tool permissions and reset to "Always Ask" for everything. Continue?')) return;
+                if (
+                    !confirm(
+                        'This will remove all tool permissions and reset to "Always Ask" for everything. Continue?'
+                    )
+                )
+                    return;
                 this.tools = [];
                 this.terminatorMode = false;
                 const terminatorCheckbox = document.getElementById('terminatorMode');
@@ -116,7 +123,11 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 // Save immediately
                 try {
                     const config = await window.__TAURI__.core.invoke('get_config');
-                    config.tool_permissions = { trust_all: false, terminator_mode: false, tools: [] };
+                    config.tool_permissions = {
+                        trust_all: false,
+                        terminator_mode: false,
+                        tools: [],
+                    };
                     await window.__TAURI__.core.invoke('save_config', { config });
                 } catch (e) {
                     console.error('Failed to reset permissions:', e);
@@ -136,7 +147,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         const clearBtn = document.getElementById('auditLogClearBtn');
         if (clearBtn) {
             clearBtn.addEventListener('click', async () => {
-                if (!confirm('Clear the permission audit log? This cannot be undone. Permissions themselves are NOT affected.')) return;
+                if (
+                    !confirm(
+                        'Clear the permission audit log? This cannot be undone. Permissions themselves are NOT affected.'
+                    )
+                )
+                    return;
                 try {
                     await window.__TAURI__.core.invoke('clear_permission_audit_log');
                     this.auditEntries = [];
@@ -165,12 +181,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
     load(config) {
         this.terminatorMode = config.tool_permissions?.terminator_mode || false;
         this.tools = config.tool_permissions?.tools || [];
-        
+
         const terminatorCheckbox = document.getElementById('terminatorMode');
         if (terminatorCheckbox) {
             terminatorCheckbox.checked = this.terminatorMode;
         }
-        
+
         this.renderToolsList();
     }
 
@@ -178,7 +194,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         config.tool_permissions = {
             trust_all: false, // deprecated, kept for compat
             terminator_mode: this.terminatorMode,
-            tools: this.tools
+            tools: this.tools,
         };
     }
 
@@ -189,20 +205,25 @@ class ToolPermissionsSettingsModule extends SettingsModule {
     renderToolsList() {
         const container = document.getElementById('agentToolsList');
         if (!container) return;
-        
+
         if (this.tools.length === 0) {
             container.innerHTML = `
                 <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
             `;
             return;
         }
-        
-        const toolsHtml = this.tools.map((tool, index) => {
-            const icon = getToolEmoji(tool.title);
-            const lastSeen = tool.last_seen ? new Date(tool.last_seen).toLocaleDateString() : '';
-            const isExtension = tool.title.startsWith('ext:');
-            const badge = isExtension ? '<span class="agent-tool-badge ext-badge">Extension</span>' : '<span class="agent-tool-badge mcp-badge">MCP</span>';
-            return `
+
+        const toolsHtml = this.tools
+            .map((tool, index) => {
+                const icon = getToolEmoji(tool.title);
+                const lastSeen = tool.last_seen
+                    ? new Date(tool.last_seen).toLocaleDateString()
+                    : '';
+                const isExtension = tool.title.startsWith('ext:');
+                const badge = isExtension
+                    ? '<span class="agent-tool-badge ext-badge">Extension</span>'
+                    : '<span class="agent-tool-badge mcp-badge">MCP</span>';
+                return `
                 <div class="agent-tool-item">
                     <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
@@ -218,8 +239,9 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                     <button class="agent-tool-remove" data-action="toolPermissions.removeTool" data-arg="${index}" title="Remove">✕</button>
                 </div>
             `;
-        }).join('');
-        
+            })
+            .join('');
+
         container.innerHTML = toolsHtml;
     }
 
@@ -227,11 +249,11 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         if (index >= 0 && index < this.tools.length) {
             const tool = this.tools[index];
             tool.policy = policy;
-            
+
             try {
                 await window.__TAURI__.core.invoke('update_tool_policy', {
                     toolTitle: tool.title,
-                    policy: policy
+                    policy: policy,
                 });
             } catch (error) {
                 console.error('Failed to update tool policy:', error);
@@ -244,10 +266,10 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             const tool = this.tools[index];
             this.tools.splice(index, 1);
             this.renderToolsList();
-            
+
             try {
                 await window.__TAURI__.core.invoke('remove_tool_permission', {
-                    toolTitle: tool.title
+                    toolTitle: tool.title,
                 });
             } catch (error) {
                 console.error('Failed to remove tool:', error);
@@ -257,7 +279,9 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
     async loadAuditLog() {
         try {
-            const entries = await window.__TAURI__.core.invoke('get_permission_audit_log', { limit: 500 });
+            const entries = await window.__TAURI__.core.invoke('get_permission_audit_log', {
+                limit: 500,
+            });
             this.auditEntries = Array.isArray(entries) ? entries : [];
         } catch (e) {
             console.error('Failed to load audit log:', e);
@@ -270,11 +294,9 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         const list = document.getElementById('auditLogList');
         if (!list) return;
         const entries = this.auditEntries || [];
-        const filter = (document.getElementById('auditLogFilter')?.value) || 'all';
+        const filter = document.getElementById('auditLogFilter')?.value || 'all';
 
-        const filtered = filter === 'all'
-            ? entries
-            : entries.filter(e => e.event === filter);
+        const filtered = filter === 'all' ? entries : entries.filter((e) => e.event === filter);
 
         if (filtered.length === 0) {
             list.innerHTML = `<div class="tools-empty" style="padding:14px; text-align:center; color:#938f9b;">
@@ -283,7 +305,7 @@ class ToolPermissionsSettingsModule extends SettingsModule {
             return;
         }
 
-        list.innerHTML = filtered.map(entry => this._renderAuditRow(entry)).join('');
+        list.innerHTML = filtered.map((entry) => this._renderAuditRow(entry)).join('');
     }
 
     _renderAuditRow(entry) {
@@ -292,9 +314,13 @@ class ToolPermissionsSettingsModule extends SettingsModule {
         // should render as something debuggable, not crash the UI.
         const when = entry.at
             ? new Date(entry.at).toLocaleString(undefined, {
-                year: 'numeric', month: 'short', day: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-            })
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+              })
             : '(unknown time)';
         const kind = entry.event || 'unknown';
 
@@ -308,7 +334,9 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 summary = `Granted <strong>${escapeHtml(entry.tool || '?')}</strong> (${escapeHtml(entry.grant_type || '?')})`;
                 if (entry.session_id) meta = `session ${escapeHtml(entry.session_id.slice(0, 8))}`;
                 if (entry.args_preview) {
-                    meta += (meta ? ' · ' : '') + `<code>${escapeHtml(entry.args_preview.slice(0, 140))}</code>`;
+                    meta +=
+                        (meta ? ' · ' : '') +
+                        `<code>${escapeHtml(entry.args_preview.slice(0, 140))}</code>`;
                 }
                 break;
             case 'denied':
@@ -320,7 +348,8 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 icon = '🗑️';
                 summary = `Revoked <strong>${escapeHtml(entry.tool || '?')}</strong>`;
                 if (entry.prior_policy) meta = `was ${escapeHtml(entry.prior_policy)}`;
-                if (entry.prior_grant_type) meta += (meta ? ' ' : '') + `(${escapeHtml(entry.prior_grant_type)})`;
+                if (entry.prior_grant_type)
+                    meta += (meta ? ' ' : '') + `(${escapeHtml(entry.prior_grant_type)})`;
                 break;
             case 'expired':
                 icon = '⏳';
@@ -329,12 +358,16 @@ class ToolPermissionsSettingsModule extends SettingsModule {
                 break;
             case 'terminator_mode_changed':
                 icon = entry.enabled ? '⚠️' : '🛡️';
-                summary = entry.enabled ? '<strong>Terminator mode enabled</strong>' : 'Terminator mode disabled';
+                summary = entry.enabled
+                    ? '<strong>Terminator mode enabled</strong>'
+                    : 'Terminator mode disabled';
                 break;
             default:
                 icon = '❔';
                 summary = `Unknown event: ${escapeHtml(kind)}`;
-                try { meta = escapeHtml(JSON.stringify(entry)); } catch {}
+                try {
+                    meta = escapeHtml(JSON.stringify(entry));
+                } catch {}
         }
 
         return `
@@ -352,12 +385,12 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
 // Global functions for onclick handlers
 function updateToolPolicy(index, policy) {
-    const module = settingsManager.modules.find(m => m.id === 'tool-permissions');
+    const module = settingsManager.modules.find((m) => m.id === 'tool-permissions');
     if (module) module.updatePolicy(index, policy);
 }
 
 function removeSeenTool(index) {
-    const module = settingsManager.modules.find(m => m.id === 'tool-permissions');
+    const module = settingsManager.modules.find((m) => m.id === 'tool-permissions');
     if (module) module.removeTool(index);
 }
 

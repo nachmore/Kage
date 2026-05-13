@@ -97,11 +97,11 @@ class ConnectionSettingsModule extends SettingsModule {
         const sessDir = document.getElementById('sessionsDirectory');
         if (sessDir) sessDir.value = agentCfg.sessions_directory || '';
 
-        if (config.acp && config.acp.mode) {
+        if (config.acp?.mode) {
             const mode = config.acp.mode;
             const modeSelect = document.getElementById('acpMode');
             if (!modeSelect) return;
-            
+
             if (mode.type === 'local') {
                 modeSelect.value = 'local';
                 const spawnCmd = document.getElementById('spawnCommand');
@@ -111,12 +111,12 @@ class ConnectionSettingsModule extends SettingsModule {
                 const host = document.getElementById('acpHost');
                 const port = document.getElementById('acpPort');
                 const timeout = document.getElementById('acpTimeout');
-                
+
                 if (host) host.value = mode.host;
                 if (port) port.value = mode.port;
                 if (timeout) timeout.value = mode.timeout_ms;
             }
-            
+
             this.toggleMode();
         }
     }
@@ -126,24 +126,27 @@ class ConnectionSettingsModule extends SettingsModule {
 
         // Preserve existing agent settings
         const existingAgent = config.acp.agent || {};
-        existingAgent.start_session_on_launch = document.getElementById('startSessionOnLaunch').checked;
-        existingAgent.working_directory = document.getElementById('workingDirectory').value.trim() || null;
-        existingAgent.sessions_directory = document.getElementById('sessionsDirectory').value.trim() || null;
-        
+        existingAgent.start_session_on_launch =
+            document.getElementById('startSessionOnLaunch').checked;
+        existingAgent.working_directory =
+            document.getElementById('workingDirectory').value.trim() || null;
+        existingAgent.sessions_directory =
+            document.getElementById('sessionsDirectory').value.trim() || null;
+
         const mode = document.getElementById('acpMode').value;
-        
+
         if (mode === 'local') {
             const spawnCommand = document.getElementById('spawnCommand').value.trim();
             config.acp.mode = {
                 type: 'local',
-                spawn_command: spawnCommand
+                spawn_command: spawnCommand,
             };
         } else {
             config.acp.mode = {
                 type: 'remote',
                 host: document.getElementById('acpHost').value,
-                port: parseInt(document.getElementById('acpPort').value),
-                timeout_ms: parseInt(document.getElementById('acpTimeout').value)
+                port: parseInt(document.getElementById('acpPort').value, 10),
+                timeout_ms: parseInt(document.getElementById('acpTimeout').value, 10),
             };
         }
 
@@ -163,14 +166,14 @@ class ConnectionSettingsModule extends SettingsModule {
 
     validate() {
         const mode = document.getElementById('acpMode').value;
-        
+
         if (mode === 'local') {
             const spawnCommand = document.getElementById('spawnCommand').value.trim();
             if (!spawnCommand) {
                 return { valid: false, error: 'Spawn command is required for local mode' };
             }
         }
-        
+
         return { valid: true };
     }
 
@@ -196,7 +199,7 @@ class ConnectionSettingsModule extends SettingsModule {
         const mode = document.getElementById('acpMode').value;
         const localSettings = document.getElementById('localModeSettings');
         const remoteSettings = document.getElementById('remoteModeSettings');
-        
+
         if (mode === 'local') {
             localSettings.style.display = 'block';
             remoteSettings.style.display = 'none';

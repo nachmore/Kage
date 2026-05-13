@@ -19,9 +19,9 @@
 # platform-specific regressions. Linux is a deliberate omission — the
 # Linux impls are mostly stubs and nothing ships there.
 #
-# Hard gates: cargo fmt, cargo clippy, cargo tauri build --debug, cargo
-# test, vitest. All five together take ~6–12 min per OS warm / ~15–20
-# min cold.
+# Hard gates: cargo fmt, cargo clippy, biome ci, cargo tauri build
+# --debug, cargo test, vitest. All six together take ~6–12 min per OS
+# warm / ~15–20 min cold.
 
 name: Debug Build + Test
 
@@ -70,10 +70,15 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: ui/tests/package-lock.json
+          cache-dependency-path: |
+            ui/tests/package-lock.json
+            package-lock.json
 
       - name: Install JS test deps
         working-directory: ui/tests
+        run: npm ci
+
+      - name: Install root JS tooling (Biome)
         run: npm ci
 
       # ----- Lint gates ------------------------------------------------
@@ -82,6 +87,14 @@ jobs:
       - name: cargo fmt --check
         if: matrix.os == 'windows-latest'
         run: cargo fmt --all -- --check
+
+      # Biome lint+format check. Warnings are promoted to errors via
+      # --error-on-warnings so the gate is strict by default — same
+      # philosophy as `cargo clippy -- -D warnings`. Single-OS run
+      # because the rules are platform-independent.
+      - name: biome ci
+        if: matrix.os == 'windows-latest'
+        run: npm run ci
 
       - name: cargo clippy
         # --all-targets covers lib, bins, tests, examples. -D warnings

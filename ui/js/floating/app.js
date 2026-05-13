@@ -1,23 +1,56 @@
 // Main application logic
-import { renderShortcutSuggestion, renderShortcutSuggestions, renderUrlSuggestion, renderPathSuggestion, renderSuggestions, updateSelection, appendSendHint } from './suggestions.js';
+import { updateSelection, appendSendHint } from './suggestions.js';
 import { WindowManager } from './window.js';
 import { renderMarkdown, createTaskPlanElement, setAppIconInvoke } from '../shared/markdown.js';
-import { matchCommands, matchSlashCommands, matchCommandsByName, loadSlashCommands, renderCommandSuggestions, executeCommand } from '../shared/commands.js';
-import { AttachmentManager, handlePasteEvent, renderAttachmentPreviews } from '../shared/attachments.js';
-import { renderToolChipsHtml, renderSourceChipsHtml, renderSourceBubblesHtml, extractSuggestedActions } from '../shared/streaming-utils.js';
+import { loadSlashCommands } from '../shared/commands.js';
+import {
+    AttachmentManager,
+    handlePasteEvent,
+    renderAttachmentPreviews,
+} from '../shared/attachments.js';
+import {
+    renderToolChipsHtml,
+    renderSourceChipsHtml,
+    renderSourceBubblesHtml,
+    extractSuggestedActions,
+} from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
-import { startTimer, startStopwatch, pauseResumeSlot, stopSlot, getSlotState, updateTimerBar, setupTimerBarControls } from './timer.js';
+import {
+    startTimer,
+    startStopwatch,
+    pauseResumeSlot,
+    stopSlot,
+    getSlotState,
+    updateTimerBar,
+    setupTimerBarControls,
+} from './timer.js';
 import { playTimerSound } from '../shared/timer-sounds.js';
-import { unifiedSearch, renderUnifiedResults, recordSelection, loadFrecency, setExtensionManager } from './search-unified.js';
+import {
+    unifiedSearch,
+    renderUnifiedResults,
+    loadFrecency,
+    setExtensionManager,
+} from './search-unified.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
 import { SpeechController } from '../shared/speech.js';
-import { matchShortcut as matchShortcutFn, buildShortcutCommand as buildShortcutCommandFn, cmdOrCtrlPressed, platformKeyLabel } from '../shared/shortcuts.js';
-import { isClipboardTrigger, getClipboardFilter, fetchClipboardHistory, filterClipboardHistory, renderClipboardHistory } from './clipboard-history.js';
-import { executeResult as executeResultShared, executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
+import {
+    matchShortcut as matchShortcutFn,
+    buildShortcutCommand as buildShortcutCommandFn,
+    cmdOrCtrlPressed,
+    platformKeyLabel,
+} from '../shared/shortcuts.js';
+import {
+    isClipboardTrigger,
+    getClipboardFilter,
+    fetchClipboardHistory,
+    filterClipboardHistory,
+    renderClipboardHistory,
+} from './clipboard-history.js';
+import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml } from '../shared/tool-utils.js';
-import { isOnline, checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
+import { checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
@@ -51,7 +84,7 @@ export class FloatingApp {
         this.appWindow = appWindow;
         this.listen = listen;
         this.windowManager = new WindowManager(invoke);
-        
+
         this.currentMatches = [];
         this.selectedIndex = -1;
         this.searchTimeout = null;
@@ -72,7 +105,10 @@ export class FloatingApp {
         this.extensionToolController = new ExtensionToolController({
             invoke,
             extensionManager: this.extensionManager,
-            permissionModal: { showForExtensionTool: (...args) => window.PermissionModal.showForExtensionTool(...args) },
+            permissionModal: {
+                showForExtensionTool: (...args) =>
+                    window.PermissionModal.showForExtensionTool(...args),
+            },
             addToolUsage: (entry) => {
                 if (!this._toolCallIds) this._toolCallIds = new Set();
                 if (this._toolCallIds.has(entry.toolCallId)) return;
@@ -99,7 +135,9 @@ export class FloatingApp {
                 this.startThinking();
                 this.updateDatetimeVisibility();
             },
-            resetAccumulator: () => { this.currentResponse = ''; },
+            resetAccumulator: () => {
+                this.currentResponse = '';
+            },
         });
         this.automationPlanController = new AutomationPlanController({
             invoke,
@@ -148,8 +186,12 @@ export class FloatingApp {
             isWaiting: () => this.isWaitingForResponse,
             acceptSessionId: () => true, // floating doesn't filter by session
             getAccumulator: () => this.currentResponse,
-            appendToAccumulator: (delta) => { this.currentResponse = (this.currentResponse || '') + delta; },
-            resetAccumulator: () => { this.currentResponse = ''; },
+            appendToAccumulator: (delta) => {
+                this.currentResponse = (this.currentResponse || '') + delta;
+            },
+            resetAccumulator: () => {
+                this.currentResponse = '';
+            },
             automationPlanController: this.automationPlanController,
             extensionToolController: this.extensionToolController,
             onChunkAppended: (text) => {
@@ -171,10 +213,12 @@ export class FloatingApp {
             bumpLayout: () => this.windowManager.resizeWindow(),
             renderStreaming: (text) => {
                 renderMarkdown(text, this.elements.responseText, true);
-                const toolSpinner = this.elements.responseText.querySelector('.tool-running-indicator');
+                const toolSpinner =
+                    this.elements.responseText.querySelector('.tool-running-indicator');
                 if (toolSpinner) toolSpinner.remove();
                 if (this.elements.responseText.lastChild) {
-                    let streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
+                    let streamingIndicator =
+                        this.elements.responseText.querySelector('.streaming-indicator');
                     if (!streamingIndicator) {
                         streamingIndicator = document.createElement('span');
                         streamingIndicator.className = 'streaming-indicator';
@@ -184,7 +228,9 @@ export class FloatingApp {
                 }
                 this.windowManager.resizeWindow();
             },
-            feedTTS: (text) => { if (this.speech) this.speech.feedStreamingText(text); },
+            feedTTS: (text) => {
+                if (this.speech) this.speech.feedStreamingText(text);
+            },
             onCompleteHeader: () => {
                 markOnline();
                 this._noBlurTools.clear();
@@ -199,13 +245,14 @@ export class FloatingApp {
                 this.computerControlActive = false;
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
-                const streamingIndicator = this.elements.responseText.querySelector('.streaming-indicator');
+                const streamingIndicator =
+                    this.elements.responseText.querySelector('.streaming-indicator');
                 if (streamingIndicator) streamingIndicator.remove();
             },
             // The floating window historically waited 50ms after message_complete
             // to let trailing chunks flush before the final render — without this,
             // the last few tokens were sometimes missing from the markdown.
-            waitForPendingChunks: () => new Promise(r => setTimeout(r, 50)),
+            waitForPendingChunks: () => new Promise((r) => setTimeout(r, 50)),
             renderFinal: (text) => {
                 renderMarkdown(text, this.elements.responseText);
             },
@@ -232,10 +279,20 @@ export class FloatingApp {
 
                 try {
                     if (!this._windowFocused && text) {
-                        const preview = text.substring(0, 100).replace(/[#*`\n]/g, ' ').trim();
-                        await sendAppNotification(this.invoke, 'Kage', preview || 'Response ready', 'floating');
+                        const preview = text
+                            .substring(0, 100)
+                            .replace(/[#*`\n]/g, ' ')
+                            .trim();
+                        await sendAppNotification(
+                            this.invoke,
+                            'Kage',
+                            preview || 'Response ready',
+                            'floating'
+                        );
                     }
-                } catch { /* ignore */ }
+                } catch {
+                    /* ignore */
+                }
             },
             onError: async (event, online) => {
                 if (!this.isWaitingForResponse) return;
@@ -247,7 +304,7 @@ export class FloatingApp {
                 if (!online) this.showError(OFFLINE_MESSAGE);
                 else this.showError('Error: ' + event.payload);
             },
-            onSessionReset: (event, msg) => {
+            onSessionReset: (_event, msg) => {
                 this.isWaitingForResponse = false;
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
@@ -272,10 +329,22 @@ export class FloatingApp {
             onToolCallTracked: (update, updated) => {
                 // Detect computer-control tool usage and keep window visible
                 if (update?.title) {
-                    const ccTools = ['screenshot', 'click', 'double_click', 'right_click',
-                        'move_mouse', 'drag', 'scroll', 'type_text', 'key_press',
-                        'key_press_confirmed', 'launch_app', 'wait', 'get_screen_size',
-                        'get_cursor_position'];
+                    const ccTools = [
+                        'screenshot',
+                        'click',
+                        'double_click',
+                        'right_click',
+                        'move_mouse',
+                        'drag',
+                        'scroll',
+                        'type_text',
+                        'key_press',
+                        'key_press_confirmed',
+                        'launch_app',
+                        'wait',
+                        'get_screen_size',
+                        'get_cursor_position',
+                    ];
                     if (ccTools.includes(update.title)) {
                         this.computerControlActive = true;
                     }
@@ -296,166 +365,192 @@ export class FloatingApp {
         });
         this.lastSelection = null;
         this._compacting = false;
-        this._messageHistory = [];   // shell-style input history
-        this._historyIndex = -1;     // -1 = not browsing history
-        this._historySaved = '';      // stash current input when entering history
-        
+        this._messageHistory = []; // shell-style input history
+        this._historyIndex = -1; // -1 = not browsing history
+        this._historySaved = ''; // stash current input when entering history
+
         this.elements = {};
     }
 
-    get _extensionToolCallHandled() { return this.extensionToolController.handled; }
-    set _extensionToolCallHandled(v) { this.extensionToolController.handled = v; }
-    get _extensionToolExecuting() { return this.extensionToolController.executing; }
-    set _extensionToolExecuting(v) { this.extensionToolController.executing = v; }
+    get _extensionToolCallHandled() {
+        return this.extensionToolController.handled;
+    }
+    set _extensionToolCallHandled(v) {
+        this.extensionToolController.handled = v;
+    }
+    get _extensionToolExecuting() {
+        return this.extensionToolController.executing;
+    }
+    set _extensionToolExecuting(v) {
+        this.extensionToolController.executing = v;
+    }
 
-    get _automationPlanStarted() { return this.automationPlanController.started; }
-    set _automationPlanStarted(v) { this.automationPlanController.started = v; }
-    get _automationPlan() { return this.automationPlanController.plan; }
-    get _automationStatuses() { return this.automationPlanController.statuses; }
-    get _automationCleanup() { return this.automationPlanController.cleanup; }
-    get _pendingPlanRevision() { return this.automationPlanController.pendingRevision; }
-    set _pendingPlanRevision(v) { this.automationPlanController.pendingRevision = v; }
+    get _automationPlanStarted() {
+        return this.automationPlanController.started;
+    }
+    set _automationPlanStarted(v) {
+        this.automationPlanController.started = v;
+    }
+    get _automationPlan() {
+        return this.automationPlanController.plan;
+    }
+    get _automationStatuses() {
+        return this.automationPlanController.statuses;
+    }
+    get _automationCleanup() {
+        return this.automationPlanController.cleanup;
+    }
+    get _pendingPlanRevision() {
+        return this.automationPlanController.pendingRevision;
+    }
+    set _pendingPlanRevision(v) {
+        this.automationPlanController.pendingRevision = v;
+    }
 
     async init() {
-            const _t0 = performance.now();
-            const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] init: ${label}`);
+        const _t0 = performance.now();
+        const _ts = (label) =>
+            console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] init: ${label}`);
 
-            this.cacheElements();
-            this.setupEventListeners();
-            this.setupStreamingListeners();
-            this.setupVisibilityTracking();
-            this.setupNetworkMonitor();
-            this.windowManager.setupDragging(this.elements.mascotContainer);
-            this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
+        this.cacheElements();
+        this.setupEventListeners();
+        this.setupStreamingListeners();
+        this.setupVisibilityTracking();
+        this.setupNetworkMonitor();
+        this.windowManager.setupDragging(this.elements.mascotContainer);
+        this.windowManager.setupResizeHandle(document.getElementById('resizeHandle'));
 
-            // Double-click ghost to open full chat window
-            this.windowManager._onDoubleClick = async () => {
-                try {
-                    await this.invoke('open_chat_window');
-                    await this.appWindow.hide();
-                } catch (err) {
-                    console.error('Failed to open chat window:', err);
+        // Double-click ghost to open full chat window
+        this.windowManager._onDoubleClick = async () => {
+            try {
+                await this.invoke('open_chat_window');
+                await this.appWindow.hide();
+            } catch (err) {
+                console.error('Failed to open chat window:', err);
+            }
+        };
+        this.windowManager.setupScaleChangeListener();
+        this.windowManager.setupObserver();
+
+        const inputContainer = this.elements.input?.closest('.input-container');
+        setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
+        _ts('Synchronous setup done');
+
+        // Load shortcuts and slash commands in parallel (fast IPC calls)
+        await Promise.all([
+            this.loadShortcuts(),
+            loadSlashCommands(this.invoke),
+            loadFrecency(this.invoke),
+        ]);
+        _ts('Parallel IPC done (shortcuts + commands + frecency)');
+
+        this.setupSpeech();
+
+        // Register event listeners (synchronous, no awaits needed)
+        this.listen('config_updated', async () => {
+            console.log('Config updated, reloading...');
+            await this.loadShortcuts();
+            await this.extensionManager.onConfigUpdate();
+            await this.extensionManager.reload();
+            this.updateSpeechButtonVisibility();
+            this._updateToolbarVisibility();
+        });
+
+        this.listen('extensions_changed', async () => {
+            console.log('Extensions changed, reloading...');
+            await this.extensionManager.reload();
+        });
+
+        this.listen('slash_commands_available', async () => {
+            console.log('Slash commands updated, reloading...');
+            await loadSlashCommands(this.invoke);
+        });
+
+        this.listen('clipboard_history_mode', async () => {
+            console.log('Clipboard history mode activated via hotkey');
+            // Clear any stale content
+            this.elements.responseText.textContent = '';
+            this.elements.contentArea.classList.remove('visible');
+            this.elements.expandBtn.classList.remove('visible');
+            this.elements.floatingStopBtn.style.display = 'none';
+            this.currentResponse = '';
+            this.dismissBanner();
+            // Enter clipboard mode
+            this.elements.input.value = '>cb ';
+            this._enterClipboardMode();
+        });
+
+        this.listen('voice_mode', () => {
+            console.log('Voice mode activated via hotkey');
+            trackEvent('voice_input_used', { trigger: 'hotkey' });
+            this.elements.responseText.textContent = '';
+            this.elements.contentArea.classList.remove('visible');
+            this.elements.expandBtn.classList.remove('visible');
+            this.elements.floatingStopBtn.style.display = 'none';
+            this.currentResponse = '';
+            this.dismissBanner();
+            this.elements.input.value = '';
+            this.clearSuggestions();
+            if (this.speech) {
+                this.speech.voiceMode = true;
+                if (!this.speech.isListening) {
+                    this.speech.start();
                 }
-            };
-            this.windowManager.setupScaleChangeListener();
-            this.windowManager.setupObserver();
+            }
+        });
 
-            const inputContainer = this.elements.input?.closest('.input-container');
-            setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
-            _ts('Synchronous setup done');
+        setTimeout(() => this.elements.input.focus(), 100);
 
-            // Load shortcuts and slash commands in parallel (fast IPC calls)
-            await Promise.all([
-                this.loadShortcuts(),
-                loadSlashCommands(this.invoke),
-                loadFrecency(this.invoke),
-            ]);
-            _ts('Parallel IPC done (shortcuts + commands + frecency)');
+        this.checkForUpdateBanner();
 
-            this.setupSpeech();
+        this.listen('show_floating_banner', (event) => {
+            const { icon, text, action_label, action_type, action_data } = event.payload;
+            this.showBanner(icon, text, action_label, action_type, action_data);
+        });
 
-            // Register event listeners (synchronous, no awaits needed)
-            this.listen('config_updated', async () => {
-                console.log('Config updated, reloading...');
-                await this.loadShortcuts();
-                await this.extensionManager.onConfigUpdate();
-                await this.extensionManager.reload();
-                this.updateSpeechButtonVisibility();
-                this._updateToolbarVisibility();
-            });
+        this.listen('update_available', (event) => {
+            const version = event.payload;
+            this.showBanner(
+                '⬆️',
+                'Kage v' + version + ' is available!',
+                'Install now →',
+                'update_install',
+                ''
+            );
+        });
 
-            this.listen('extensions_changed', async () => {
-                console.log('Extensions changed, reloading...');
-                await this.extensionManager.reload();
-            });
+        // Signal frontend ready NOW — the window is fully usable for input.
+        // Extension loading below happens in the background and doesn't block the UI.
+        this.invoke('notify_frontend_ready').catch(() => {});
+        _ts('notify_frontend_ready sent');
 
-            this.listen('slash_commands_available', async () => {
-                console.log('Slash commands updated, reloading...');
-                await loadSlashCommands(this.invoke);
-            });
+        // Check for terminator mode and show a one-time banner
+        this._checkTerminatorMode();
 
-            this.listen('clipboard_history_mode', async () => {
-                console.log('Clipboard history mode activated via hotkey');
-                // Clear any stale content
-                this.elements.responseText.textContent = '';
-                this.elements.contentArea.classList.remove('visible');
-                this.elements.expandBtn.classList.remove('visible');
-                this.elements.floatingStopBtn.style.display = 'none';
-                this.currentResponse = '';
-                this.dismissBanner();
-                // Enter clipboard mode
-                this.elements.input.value = '>cb ';
-                this._enterClipboardMode();
-            });
+        // Enable app-icon rendering in markdown
+        setAppIconInvoke(this.invoke);
 
-            this.listen('voice_mode', () => {
-                console.log('Voice mode activated via hotkey');
-                trackEvent('voice_input_used', { trigger: 'hotkey' });
-                this.elements.responseText.textContent = '';
-                this.elements.contentArea.classList.remove('visible');
-                this.elements.expandBtn.classList.remove('visible');
-                this.elements.floatingStopBtn.style.display = 'none';
-                this.currentResponse = '';
-                this.dismissBanner();
-                this.elements.input.value = '';
-                this.clearSuggestions();
-                if (this.speech) {
-                    this.speech.voiceMode = true;
-                    if (!this.speech.isListening) {
-                        this.speech.start();
-                    }
-                }
-            });
+        // Register extension widget slots so widgets can mount into
+        // them as the ExtensionManager loads.
+        const bottomSlot = document.getElementById('extWidgetSlotBottom');
+        const statusSlot = document.getElementById('extWidgetSlotStatus');
+        if (bottomSlot) this.extensionManager.setWidgetSlot('floating-bottom', bottomSlot);
+        if (statusSlot) this.extensionManager.setWidgetSlot('floating-status', statusSlot);
 
-            setTimeout(() => this.elements.input.focus(), 100);
-
-            this.checkForUpdateBanner();
-
-            this.listen('show_floating_banner', (event) => {
-                const { icon, text, action_label, action_type, action_data } = event.payload;
-                this.showBanner(icon, text, action_label, action_type, action_data);
-            });
-
-            this.listen('update_available', (event) => {
-                const version = event.payload;
-                this.showBanner(
-                    '⬆️',
-                    'Kage v' + version + ' is available!',
-                    'Install now →',
-                    'update_install',
-                    ''
-                );
-            });
-
-            // Signal frontend ready NOW — the window is fully usable for input.
-            // Extension loading below happens in the background and doesn't block the UI.
-            this.invoke('notify_frontend_ready').catch(() => {});
-            _ts('notify_frontend_ready sent');
-
-            // Check for terminator mode and show a one-time banner
-            this._checkTerminatorMode();
-
-            // Enable app-icon rendering in markdown
-            setAppIconInvoke(this.invoke);
-
-            // Register extension widget slots so widgets can mount into
-            // them as the ExtensionManager loads.
-            const bottomSlot = document.getElementById('extWidgetSlotBottom');
-            const statusSlot = document.getElementById('extWidgetSlotStatus');
-            if (bottomSlot) this.extensionManager.setWidgetSlot('floating-bottom', bottomSlot);
-            if (statusSlot) this.extensionManager.setWidgetSlot('floating-status', statusSlot);
-
-            // Load extensions in the background — not needed for basic input/response
-            this.extensionManager.initialize().then(() => {
+        // Load extensions in the background — not needed for basic input/response
+        this.extensionManager
+            .initialize()
+            .then(() => {
                 _ts('Extensions initialized (background)');
                 setExtensionManager(this.extensionManager);
                 this.extensionToolController.sendSteering();
                 if (this._onExtensionsReady) this._onExtensionsReady();
                 _ts('Extension steering sent (background)');
-            }).catch(e => {
+            })
+            .catch((e) => {
                 console.warn('Background extension init failed:', e);
             });
-        }
+    }
 
     cacheElements() {
         this.elements = {
@@ -495,9 +590,15 @@ export class FloatingApp {
         // Hide if: streaming, stop button visible, input has text, quick actions visible, or speech listening
         const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
         const hasInput = this.elements.input.value.length > 0;
-        const qaVisible = document.getElementById('quickActionsContainer')?.style.display === 'flex'
-            || document.getElementById('responseActionsContainer')?.style.display === 'flex';
-        const dtHidden = this.isWaitingForResponse || stopVisible || hasInput || qaVisible || this.speech?.isListening;
+        const qaVisible =
+            document.getElementById('quickActionsContainer')?.style.display === 'flex' ||
+            document.getElementById('responseActionsContainer')?.style.display === 'flex';
+        const dtHidden =
+            this.isWaitingForResponse ||
+            stopVisible ||
+            hasInput ||
+            qaVisible ||
+            this.speech?.isListening;
         if (dtHidden) {
             dt.style.display = 'none';
         } else {
@@ -518,7 +619,7 @@ export class FloatingApp {
                 if (this.elements.speechBtn.style.display !== 'none') {
                     if (!dtHidden && dt.style.display !== 'none') {
                         const dtWidth = dt.offsetWidth || 60;
-                        this.elements.speechBtn.style.right = (dtWidth + 18) + 'px';
+                        this.elements.speechBtn.style.right = dtWidth + 18 + 'px';
                     } else {
                         this.elements.speechBtn.style.right = '10px';
                     }
@@ -528,136 +629,142 @@ export class FloatingApp {
     }
 
     setupEventListeners() {
-            this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
-            this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
-            this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
-            this.elements.floatingStopBtn.addEventListener('click', () => this.stopGenerating());
-            document.addEventListener('click', (e) => this.handleOutsideClick(e));
+        this.elements.input.addEventListener('input', (e) => this.handleInputChange(e));
+        this.elements.input.addEventListener('keydown', (e) => this.handleKeyDown(e));
+        this.elements.expandBtn.addEventListener('click', () => this.handleExpandClick());
+        this.elements.floatingStopBtn.addEventListener('click', () => this.stopGenerating());
+        document.addEventListener('click', (e) => this.handleOutsideClick(e));
 
-            // Global keyboard shortcuts
-            document.addEventListener('keydown', (e) => {
-                // Escape — stop speech/TTS first, then stop generating, then hide
-                if (e.key === 'Escape') {
-                    // Stop speech recognition or TTS first
-                    if (this.speech?.isActive || this.speech?.isListening) {
-                        e.preventDefault();
-                        this.speech.stopVoiceMode();
-                        this.speech.cancelSpeech();
-                        return;
-                    }
-                    if (this.isWaitingForResponse) {
-                        e.preventDefault();
-                        this.stopGenerating();
-                        return;
-                    }
-                    if (this._justStoppedGenerating) {
-                        e.preventDefault();
-                        return;
-                    }
-                    this.appWindow.hide();
-                    return;
-                }
-                // Ctrl/⌘+, — open settings
-                if (cmdOrCtrlPressed(e) && e.key === ',') {
+        // Global keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Escape — stop speech/TTS first, then stop generating, then hide
+            if (e.key === 'Escape') {
+                // Stop speech recognition or TTS first
+                if (this.speech?.isActive || this.speech?.isListening) {
                     e.preventDefault();
-                    this.invoke('open_settings_window');
+                    this.speech.stopVoiceMode();
+                    this.speech.cancelSpeech();
                     return;
                 }
-                // Ctrl/⌘+E — expand to full chat
-                if (cmdOrCtrlPressed(e) && e.key === 'e') {
+                if (this.isWaitingForResponse) {
                     e.preventDefault();
-                    this.handleExpandClick();
+                    this.stopGenerating();
                     return;
                 }
-                // Ctrl/⌘+L — clear/reset
-                if (cmdOrCtrlPressed(e) && e.key === 'l') {
+                if (this._justStoppedGenerating) {
                     e.preventDefault();
-                    this.resetUI();
-                    this.windowManager.userSetHeight = null;
-                    this.windowManager.resizeWindow();
                     return;
                 }
-                // Ctrl/⌘+Shift+C — copy last response
-                if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
-                    e.preventDefault();
-                    if (this.currentResponse) {
-                        navigator.clipboard.writeText(this.currentResponse).catch(() => {});
-                    }
-                    return;
-                }
-                // Ctrl/⌘+W — hide window
-                if (cmdOrCtrlPressed(e) && e.key === 'w') {
-                    e.preventDefault();
-                    this.appWindow.hide();
-                    return;
-                }
-            });
-
-            // Paste handler for images
-            this.elements.input.addEventListener('paste', (e) => handlePasteEvent(e, this.attachmentManager));
-
-            // Re-render previews when attachments change and resize window
-            this.attachmentManager.onChange((attachments) => {
-                renderAttachmentPreviews(this.elements.attachmentPreviews, attachments, this.attachmentManager);
+                this.appWindow.hide();
+                return;
+            }
+            // Ctrl/⌘+, — open settings
+            if (cmdOrCtrlPressed(e) && e.key === ',') {
+                e.preventDefault();
+                this.invoke('open_settings_window');
+                return;
+            }
+            // Ctrl/⌘+E — expand to full chat
+            if (cmdOrCtrlPressed(e) && e.key === 'e') {
+                e.preventDefault();
+                this.handleExpandClick();
+                return;
+            }
+            // Ctrl/⌘+L — clear/reset
+            if (cmdOrCtrlPressed(e) && e.key === 'l') {
+                e.preventDefault();
+                this.resetUI();
+                this.windowManager.userSetHeight = null;
                 this.windowManager.resizeWindow();
-            });
-
-            // Floating toolbar: attach file/image buttons
-            this.elements.floatingAttachFileBtn?.addEventListener('click', () => {
-                this._filePickerOpen = true;
-                this.elements.floatingFileInput?.click();
-            });
-            this.elements.floatingAttachImageBtn?.addEventListener('click', () => {
-                this._filePickerOpen = true;
-                this.elements.floatingImageInput?.click();
-            });
-            this.elements.floatingFileInput?.addEventListener('change', (e) => {
-                this._filePickerOpen = false;
-                for (const file of e.target.files) {
-                    const path = file.path || file.name;
-                    this.attachmentManager.addFile(path, file.name, file.type || 'text/plain');
+                return;
+            }
+            // Ctrl/⌘+Shift+C — copy last response
+            if (cmdOrCtrlPressed(e) && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                if (this.currentResponse) {
+                    navigator.clipboard.writeText(this.currentResponse).catch(() => {});
                 }
-                e.target.value = '';
+                return;
+            }
+            // Ctrl/⌘+W — hide window
+            if (cmdOrCtrlPressed(e) && e.key === 'w') {
+                e.preventDefault();
+                this.appWindow.hide();
+                return;
+            }
+        });
+
+        // Paste handler for images
+        this.elements.input.addEventListener('paste', (e) =>
+            handlePasteEvent(e, this.attachmentManager)
+        );
+
+        // Re-render previews when attachments change and resize window
+        this.attachmentManager.onChange((attachments) => {
+            renderAttachmentPreviews(
+                this.elements.attachmentPreviews,
+                attachments,
+                this.attachmentManager
+            );
+            this.windowManager.resizeWindow();
+        });
+
+        // Floating toolbar: attach file/image buttons
+        this.elements.floatingAttachFileBtn?.addEventListener('click', () => {
+            this._filePickerOpen = true;
+            this.elements.floatingFileInput?.click();
+        });
+        this.elements.floatingAttachImageBtn?.addEventListener('click', () => {
+            this._filePickerOpen = true;
+            this.elements.floatingImageInput?.click();
+        });
+        this.elements.floatingFileInput?.addEventListener('change', (e) => {
+            this._filePickerOpen = false;
+            for (const file of e.target.files) {
+                const path = file.path || file.name;
+                this.attachmentManager.addFile(path, file.name, file.type || 'text/plain');
+            }
+            e.target.value = '';
+            this.appWindow.show();
+            this.appWindow.setFocus();
+        });
+        this.elements.floatingImageInput?.addEventListener('change', async (e) => {
+            this._filePickerOpen = false;
+            for (const file of e.target.files) {
+                if (!file.type.startsWith('image/')) continue;
+                try {
+                    const base64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result.split(',')[1]);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    this.attachmentManager.addImage(base64, file.type);
+                } catch (err) {
+                    console.error('Failed to read image:', file.name, err);
+                }
+            }
+            e.target.value = '';
+            this.appWindow.show();
+            this.appWindow.setFocus();
+        });
+        // Handle file picker cancel (no change event fires)
+        window.addEventListener('focus', () => {
+            if (this._filePickerOpen) {
+                this._filePickerOpen = false;
                 this.appWindow.show();
                 this.appWindow.setFocus();
-            });
-            this.elements.floatingImageInput?.addEventListener('change', async (e) => {
-                this._filePickerOpen = false;
-                for (const file of e.target.files) {
-                    if (!file.type.startsWith('image/')) continue;
-                    try {
-                        const base64 = await new Promise((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = () => resolve(reader.result.split(',')[1]);
-                            reader.onerror = reject;
-                            reader.readAsDataURL(file);
-                        });
-                        this.attachmentManager.addImage(base64, file.type);
-                    } catch (err) {
-                        console.error('Failed to read image:', file.name, err);
-                    }
-                }
-                e.target.value = '';
-                this.appWindow.show();
-                this.appWindow.setFocus();
-            });
-            // Handle file picker cancel (no change event fires)
-            window.addEventListener('focus', () => {
-                if (this._filePickerOpen) {
-                    this._filePickerOpen = false;
-                    this.appWindow.show();
-                    this.appWindow.setFocus();
-                }
-            });
+            }
+        });
 
-            // Show/hide toolbar based on config
-            this._updateToolbarVisibility();
+        // Show/hide toolbar based on config
+        this._updateToolbarVisibility();
 
-            // Model selector in toolbar — opens model settings
-            this.elements.floatingModelSelector?.addEventListener('click', () => {
-                this.invoke('open_settings_window', { section: 'model' });
-            });
-        }
+        // Model selector in toolbar — opens model settings
+        this.elements.floatingModelSelector?.addEventListener('click', () => {
+            this.invoke('open_settings_window', { section: 'model' });
+        });
+    }
 
     setupStreamingListeners() {
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
@@ -693,7 +800,9 @@ export class FloatingApp {
                 try {
                     const raw = await this.invoke('get_last_selection');
                     this.lastSelection = raw?.trim() || null;
-                } catch { this.lastSelection = null; }
+                } catch {
+                    this.lastSelection = null;
+                }
                 if (this.lastSelection) {
                     if (indicator) indicator.style.display = '';
                     if (checkbox) checkbox.checked = true;
@@ -704,12 +813,22 @@ export class FloatingApp {
                     if (quickActionsContainer) {
                         try {
                             const config = await getConfig(this.invoke);
-                            const qaConfig = config.quick_actions || { enabled: true, custom_actions: [] };
+                            const qaConfig = config.quick_actions || {
+                                enabled: true,
+                                custom_actions: [],
+                            };
                             const actions = await getActionsForText(this.lastSelection, qaConfig);
-                            renderQuickActionChips(actions, quickActionsContainer, (promptTemplate) => {
-                                const prompt = promptTemplate.replace(/\{text\}/g, this.lastSelection);
-                                this.sendChatMessage(prompt, { skipSelection: true });
-                            });
+                            renderQuickActionChips(
+                                actions,
+                                quickActionsContainer,
+                                (promptTemplate) => {
+                                    const prompt = promptTemplate.replace(
+                                        /\{text\}/g,
+                                        this.lastSelection
+                                    );
+                                    this.sendChatMessage(prompt, { skipSelection: true });
+                                }
+                            );
                         } catch (e) {
                             console.error('Quick actions error:', e);
                             quickActionsContainer.style.display = 'none';
@@ -757,14 +876,14 @@ export class FloatingApp {
             this.elements.contentArea.classList.remove('visible');
 
             // Show options as selectable items in the suggestions dropdown
-            this.currentMatches = options.map(opt => ({
+            this.currentMatches = options.map((opt) => ({
                 type: 'selection',
                 name: opt.label,
                 value: opt.value,
                 current: opt.current,
-                command: command
+                command: command,
             }));
-            this.selectedIndex = options.findIndex(o => o.current);
+            this.selectedIndex = options.findIndex((o) => o.current);
             if (this.selectedIndex < 0) this.selectedIndex = 0;
 
             const container = this.elements.appSuggestions;
@@ -773,7 +892,8 @@ export class FloatingApp {
 
             options.forEach((opt, index) => {
                 const item = document.createElement('div');
-                item.className = 'app-suggestion-item' + (index === this.selectedIndex ? ' selected' : '');
+                item.className =
+                    'app-suggestion-item' + (index === this.selectedIndex ? ' selected' : '');
                 const currentBadge = opt.current ? '<span class="selection-current">●</span>' : '';
                 item.innerHTML = `
                     <div class="app-icon">${opt.current ? '✓' : '○'}</div>
@@ -800,7 +920,7 @@ export class FloatingApp {
             this.windowManager.resizeWindow();
         };
         // Do a real connectivity check on startup
-        checkOnline().then(online => update(online));
+        checkOnline().then((online) => update(online));
         onNetworkChange(update);
     }
 
@@ -813,7 +933,8 @@ export class FloatingApp {
         if (!document.getElementById('kage-anim-pause-style')) {
             const s = document.createElement('style');
             s.id = 'kage-anim-pause-style';
-            s.textContent = '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
+            s.textContent =
+                '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
             document.head.appendChild(s);
         }
         // Window starts hidden — pause immediately
@@ -831,7 +952,7 @@ export class FloatingApp {
             this.invoke('touch_floating_activity').catch(() => {});
 
             // Check network status when launcher is invoked (debounced)
-            checkOnline().then(online => {
+            checkOnline().then((online) => {
                 const bar = document.getElementById('offlineBar');
                 if (bar) bar.style.display = online ? 'none' : 'flex';
                 this.windowManager.resizeWindow();
@@ -846,13 +967,18 @@ export class FloatingApp {
             }
 
             // Clear any pending system command confirmations and re-trigger search
-            if (this.currentMatches.some(m => m.type === 'system_confirm')) {
+            if (this.currentMatches.some((m) => m.type === 'system_confirm')) {
                 const query = this.elements.input.value.trim();
                 if (query) {
                     this.clearSuggestions();
                     const results = await unifiedSearch(query, this.invoke, this.shortcuts);
                     if (results.length > 0) {
-                        this.selectedIndex = await renderUnifiedResults(results, this.elements.appSuggestions, this.currentMatches, () => this.windowManager.resizeWindow());
+                        this.selectedIndex = await renderUnifiedResults(
+                            results,
+                            this.elements.appSuggestions,
+                            this.currentMatches,
+                            () => this.windowManager.resizeWindow()
+                        );
                     }
                 } else {
                     this.clearSuggestions();
@@ -875,7 +1001,7 @@ export class FloatingApp {
                                 if (!this._clipboardMode) this.elements.input.select();
                             }, 50);
                         }
-                    } catch (e) {
+                    } catch (_e) {
                         setTimeout(() => {
                             this.elements.input.focus();
                             if (!this._clipboardMode) this.elements.input.select();
@@ -886,7 +1012,7 @@ export class FloatingApp {
 
             this.updateDatetimeVisibility();
         });
-        
+
         this.appWindow.listen('tauri://blur', async () => {
             this._windowFocused = false;
             // Don't hide if permission modal is open
@@ -971,7 +1097,10 @@ export class FloatingApp {
         this.elements.contentArea.classList.remove('visible');
         this.elements.contentArea.classList.remove('banner-only');
         const responseActions = document.getElementById('responseActionsContainer');
-        if (responseActions) { responseActions.innerHTML = ''; responseActions.style.display = 'none'; }
+        if (responseActions) {
+            responseActions.innerHTML = '';
+            responseActions.style.display = 'none';
+        }
         const floatingActions = document.getElementById('floatingResponseActions');
         if (floatingActions) floatingActions.style.display = 'none';
         this.stopThinking();
@@ -1001,7 +1130,9 @@ export class FloatingApp {
         this.elements.contentArea?.classList.remove('banner-only');
         // Switch mascot to jumping animation at larger size
         if (window._kageMascot) {
-            import('../shared/mascot-animations.js').then(m => window._kageMascot.setActive(m.ANIMATIONS.jumping, 60));
+            import('../shared/mascot-animations.js').then((m) =>
+                window._kageMascot.setActive(m.ANIMATIONS.jumping, 60)
+            );
         }
         // Show inline stop button in input area, hide datetime
         this.updateDatetimeVisibility();
@@ -1026,7 +1157,9 @@ export class FloatingApp {
 
         this.isWaitingForResponse = false;
         this._justStoppedGenerating = true;
-        setTimeout(() => { this._justStoppedGenerating = false; }, 300);
+        setTimeout(() => {
+            this._justStoppedGenerating = false;
+        }, 300);
         this.stopThinking();
         this.elements.floatingStopBtn.style.display = 'none';
         this.updateDatetimeVisibility();
@@ -1044,7 +1177,7 @@ export class FloatingApp {
         }
 
         this.windowManager.resizeWindow();
-        this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
+        this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
     }
 
     // --- Speech ---
@@ -1101,7 +1234,7 @@ export class FloatingApp {
                         messages: [],
                     };
                     const out = await btn.onClick(ctx);
-                    if (out && out.host) this._runToolbarHostEffect(out.host);
+                    if (out?.host) this._runToolbarHostEffect(out.host);
                 } catch (e) {
                     console.warn(`Extension toolbar button error (${btn.extensionId}):`, e);
                 }
@@ -1141,7 +1274,9 @@ export class FloatingApp {
                 // Floating window has no messages area; log and drop so
                 // extensions can tell the difference between unsupported
                 // contexts and silent failure.
-                console.info('[Floating] Ignoring show_ephemeral_message host effect — only supported in chat window');
+                console.info(
+                    '[Floating] Ignoring show_ephemeral_message host effect — only supported in chat window'
+                );
                 break;
             default:
                 console.warn('[Floating] Unknown toolbar host effect:', host.type);
@@ -1153,13 +1288,18 @@ export class FloatingApp {
 
     async _refreshContextUsage() {
         try {
-            const result = await this.invoke('execute_slash_command', { command: 'context', args: {} });
+            const result = await this.invoke('execute_slash_command', {
+                command: 'context',
+                args: {},
+            });
             const msg = result?.message || JSON.stringify(result);
             const match = msg.match(/(\d+)%/);
             if (match) {
                 const pct = parseInt(match[1], 10);
-                if (this.elements.floatingContextPercent) this.elements.floatingContextPercent.textContent = pct + '%';
-                if (this.elements.floatingContextIndicator) this.elements.floatingContextIndicator.title = pct + '% context used';
+                if (this.elements.floatingContextPercent)
+                    this.elements.floatingContextPercent.textContent = pct + '%';
+                if (this.elements.floatingContextIndicator)
+                    this.elements.floatingContextIndicator.title = pct + '% context used';
                 this._drawContextRing(pct);
             }
         } catch {}
@@ -1169,7 +1309,11 @@ export class FloatingApp {
         const canvas = this.elements.floatingContextRing;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        const size = 16, cx = size / 2, cy = size / 2, r = 6, lw = 2;
+        const size = 16,
+            cx = size / 2,
+            cy = size / 2,
+            r = 6,
+            lw = 2;
         ctx.clearRect(0, 0, size, size);
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -1182,7 +1326,7 @@ export class FloatingApp {
             else if (percent >= 75) color = '#eab308';
             const start = -Math.PI / 2;
             ctx.beginPath();
-            ctx.arc(cx, cy, r, start, start + (Math.PI * 2 * Math.min(percent, 100) / 100));
+            ctx.arc(cx, cy, r, start, start + (Math.PI * 2 * Math.min(percent, 100)) / 100);
             ctx.strokeStyle = color;
             ctx.lineWidth = lw;
             ctx.lineCap = 'round';
@@ -1196,7 +1340,9 @@ export class FloatingApp {
             this._availableModels = models || [];
             if (this._availableModels.length > 0) {
                 const current = this._availableModels[0];
-                if (this.elements.floatingModelName) this.elements.floatingModelName.textContent = current.name || current.modelId || '?';
+                if (this.elements.floatingModelName)
+                    this.elements.floatingModelName.textContent =
+                        current.name || current.modelId || '?';
             }
         } catch {}
     }
@@ -1207,7 +1353,7 @@ export class FloatingApp {
             elements: {
                 input: this.elements.input,
                 speechBtn: this.elements.speechBtn,
-                speechWave: this.elements.speechWave
+                speechWave: this.elements.speechWave,
             },
             onSend: (text) => this.sendChatMessage(text),
             onVisibilityUpdate: () => this.updateDatetimeVisibility(),
@@ -1217,9 +1363,15 @@ export class FloatingApp {
     }
 
     // Convenience accessors used by Escape handler and sendChatMessage
-    get isSpeechListening() { return this.speech?.isListening ?? false; }
-    get _usedSpeechForLastMessage() { return this.speech?.usedSpeechForLastMessage ?? false; }
-    set _usedSpeechForLastMessage(v) { if (this.speech) this.speech.usedSpeechForLastMessage = v; }
+    get isSpeechListening() {
+        return this.speech?.isListening ?? false;
+    }
+    get _usedSpeechForLastMessage() {
+        return this.speech?.usedSpeechForLastMessage ?? false;
+    }
+    set _usedSpeechForLastMessage(v) {
+        if (this.speech) this.speech.usedSpeechForLastMessage = v;
+    }
 
     async loadShortcuts() {
         try {
@@ -1233,7 +1385,8 @@ export class FloatingApp {
     }
 
     _startTimerUI(durationMs) {
-        startTimer(durationMs,
+        startTimer(
+            durationMs,
             (display, progress) => {
                 updateTimerBar('timer', display, progress, true);
             },
@@ -1258,7 +1411,7 @@ export class FloatingApp {
         let config = {};
         try {
             const fullConfig = await getConfig(this.invoke);
-            config = (fullConfig.extensions && fullConfig.extensions['timer']) || {};
+            config = fullConfig.extensions?.timer || {};
         } catch {}
 
         if (config.show_window_on_complete !== false) {
@@ -1273,13 +1426,22 @@ export class FloatingApp {
 
         if (config.notify_on_complete !== false) {
             try {
-                await sendAppNotification(this.invoke, 'Timer Complete', '⏱️ Your timer has finished!', 'floating');
+                await sendAppNotification(
+                    this.invoke,
+                    'Timer Complete',
+                    '⏱️ Your timer has finished!',
+                    'floating'
+                );
             } catch {}
         }
 
         if (config.sound_on_complete !== false) {
             try {
-                playTimerSound(config.sound_id || 'two-tone', config.custom_sound_path || '', config.sound_repeats || 3);
+                playTimerSound(
+                    config.sound_id || 'two-tone',
+                    config.custom_sound_path || '',
+                    config.sound_repeats || 3
+                );
             } catch {}
         }
 
@@ -1288,7 +1450,10 @@ export class FloatingApp {
             const s = getSlotState('timer');
             if (!s.active) {
                 const bar = document.getElementById('timerBar_timer');
-                if (bar) { bar.style.display = 'none'; bar.remove(); }
+                if (bar) {
+                    bar.style.display = 'none';
+                    bar.remove();
+                }
                 this.windowManager.resizeWindow();
             }
         }, 5000);
@@ -1298,7 +1463,13 @@ export class FloatingApp {
         try {
             const wasUpdated = await this.invoke('was_just_updated');
             if (wasUpdated) {
-                this.showBanner('🎉', 'Kage has been updated!', 'View changelog →', 'settings', 'updates');
+                this.showBanner(
+                    '🎉',
+                    'Kage has been updated!',
+                    'View changelog →',
+                    'settings',
+                    'updates'
+                );
                 // Clear the flag so it only shows once
                 this.invoke('clear_update_flag').catch(() => {});
             }
@@ -1347,7 +1518,9 @@ export class FloatingApp {
         this.dismissBanner();
         if (!action) return;
         if (action.type === 'settings') {
-            this.invoke('open_settings_window', { section: action.data || 'updates' }).catch(() => {});
+            this.invoke('open_settings_window', { section: action.data || 'updates' }).catch(
+                () => {}
+            );
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
         } else if (action.type === 'update_install') {
@@ -1375,7 +1548,7 @@ export class FloatingApp {
         document.getElementById('contentArea')?.classList.remove('banner-only');
         // If the banner was the only content, collapse the content area
         const responseText = document.getElementById('responseText');
-        if (!this.isWaitingForResponse && (!responseText || !responseText.textContent.trim())) {
+        if (!this.isWaitingForResponse && !responseText?.textContent.trim()) {
             document.getElementById('contentArea')?.classList.remove('visible');
             this.elements.expandBtn?.classList.remove('visible');
             this.windowManager.userSetHeight = null;
@@ -1393,7 +1566,8 @@ export class FloatingApp {
                     bar = document.createElement('div');
                     bar.id = 'terminatorBar';
                     bar.className = 'extension-bar';
-                    bar.style.cssText = 'cursor:default;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);';
+                    bar.style.cssText =
+                        'cursor:default;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);';
                     const inputContainer = document.querySelector('.input-container');
                     if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
                 }
@@ -1414,7 +1588,9 @@ export class FloatingApp {
                 });
                 this.windowManager.resizeWindow();
             }
-        } catch { /* ignore */ }
+        } catch {
+            /* ignore */
+        }
     }
 
     matchShortcut(input) {
@@ -1433,7 +1609,9 @@ export class FloatingApp {
             invoke: this.invoke,
             appWindow: this.appWindow,
             extensionManager: this.extensionManager,
-            selectionText: document.getElementById('useSelectionCheckbox')?.checked ? this.lastSelection || '' : '',
+            selectionText: document.getElementById('useSelectionCheckbox')?.checked
+                ? this.lastSelection || ''
+                : '',
             onPrompt: (text) => this.sendChatMessage(text),
             onDisplay: (text) => {
                 this.currentResponse = text;
@@ -1441,7 +1619,11 @@ export class FloatingApp {
                 this.elements.contentArea.classList.add('visible');
                 this.windowManager.resizeWindow();
             },
-            onCopy: async (text) => { try { await navigator.clipboard.writeText(text); } catch {} },
+            onCopy: async (text) => {
+                try {
+                    await navigator.clipboard.writeText(text);
+                } catch {}
+            },
             onReplaceInput: (text) => {
                 this.elements.input.value = text;
                 this.elements.input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1449,10 +1631,19 @@ export class FloatingApp {
             onTimerStart: (ms) => this._startTimerUI(ms),
             onStopwatch: () => {
                 const sw = getSlotState('stopwatch');
-                if (sw.active && sw.running) { pauseResumeSlot('stopwatch'); }
-                else if (sw.active && !sw.running) { stopSlot('stopwatch'); const bar = document.getElementById('timerBar_stopwatch'); if (bar) { bar.remove(); } this.windowManager.resizeWindow(); }
-                else { this._startStopwatchUI(); }
-            }
+                if (sw.active && sw.running) {
+                    pauseResumeSlot('stopwatch');
+                } else if (sw.active && !sw.running) {
+                    stopSlot('stopwatch');
+                    const bar = document.getElementById('timerBar_stopwatch');
+                    if (bar) {
+                        bar.remove();
+                    }
+                    this.windowManager.resizeWindow();
+                } else {
+                    this._startStopwatchUI();
+                }
+            },
         };
     }
 
@@ -1470,7 +1661,7 @@ export class FloatingApp {
         }
     }
 
-    async handleInputChange(event) {
+    async handleInputChange(_event) {
         const rawQuery = this.elements.input.value;
         const query = rawQuery.trim();
 
@@ -1483,7 +1674,7 @@ export class FloatingApp {
         if (newH !== oldH) {
             this.windowManager.animateInputResize(input, oldH, newH);
         }
-        
+
         // Reset tab cycle state when user types
         this._tabCycleActive = false;
 
@@ -1492,17 +1683,17 @@ export class FloatingApp {
             this._historyIndex = -1;
             this._historySaved = '';
         }
-        
+
         // Dismiss banner as soon as user starts typing — it's served its purpose
         if (query.length > 0) this.dismissBanner();
 
         // Update datetime visibility based on input state
         this.updateDatetimeVisibility();
-        
+
         if (this.searchTimeout) {
             clearTimeout(this.searchTimeout);
         }
-        
+
         if (query.length === 0) {
             this.elements.appSuggestions.classList.remove('visible');
             this.currentMatches = [];
@@ -1514,10 +1705,14 @@ export class FloatingApp {
 
         // Resize window to fit the growing input
         await this.windowManager.resizeWindow();
-        
+
         // Debounced unified search — queries all sources in parallel
         // Use a longer debounce for file search patterns to avoid unnecessary disk queries
-        const looksLikeFileSearch = /\.\w{0,6}$/.test(query) || query.includes('*') || query.includes('?') || query.toLowerCase().startsWith('>find ');
+        const looksLikeFileSearch =
+            /\.\w{0,6}$/.test(query) ||
+            query.includes('*') ||
+            query.includes('?') ||
+            query.toLowerCase().startsWith('>find ');
         const debounceMs = looksLikeFileSearch ? 250 : 100;
         this._searchGeneration++;
         const gen = this._searchGeneration;
@@ -1536,39 +1731,45 @@ export class FloatingApp {
             if (this._clipboardMode) this._restoreOverlaysAfterClipboard();
             this._clipboardMode = false;
 
-            const results = await unifiedSearch(rawQuery, this.invoke, this.shortcuts, async (partial, { done, pending }) => {
-                // Progressive rendering: show results as they arrive
-                if (gen !== this._searchGeneration) return; // stale
-                if (partial.length > 0) {
-                    this.selectedIndex = await renderUnifiedResults(
-                        partial,
-                        this.elements.appSuggestions,
-                        this.currentMatches,
-                        () => this.windowManager.resizeWindow()
-                    );
-                }
-                // Show/hide loading indicator with provider names
-                const existing = this.elements.appSuggestions.querySelector('.suggestions-loading');
-                if (done) {
-                    if (existing) existing.remove();
-                } else {
-                    let label = 'Loading more results';
-                    if (pending && pending.length > 0) {
-                        const shown = pending.slice(0, 2).join(', ');
-                        label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+            const results = await unifiedSearch(
+                rawQuery,
+                this.invoke,
+                this.shortcuts,
+                async (partial, { done, pending }) => {
+                    // Progressive rendering: show results as they arrive
+                    if (gen !== this._searchGeneration) return; // stale
+                    if (partial.length > 0) {
+                        this.selectedIndex = await renderUnifiedResults(
+                            partial,
+                            this.elements.appSuggestions,
+                            this.currentMatches,
+                            () => this.windowManager.resizeWindow()
+                        );
                     }
-                    label += '\u2026';
-                    if (existing) {
-                        existing.textContent = label;
+                    // Show/hide loading indicator with provider names
+                    const existing =
+                        this.elements.appSuggestions.querySelector('.suggestions-loading');
+                    if (done) {
+                        if (existing) existing.remove();
                     } else {
-                        const hint = document.createElement('div');
-                        hint.className = 'suggestions-hint suggestions-loading';
-                        hint.textContent = label;
-                        this.elements.appSuggestions.appendChild(hint);
+                        let label = 'Loading more results';
+                        if (pending && pending.length > 0) {
+                            const shown = pending.slice(0, 2).join(', ');
+                            label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
+                        }
+                        label += '\u2026';
+                        if (existing) {
+                            existing.textContent = label;
+                        } else {
+                            const hint = document.createElement('div');
+                            hint.className = 'suggestions-hint suggestions-loading';
+                            hint.textContent = label;
+                            this.elements.appSuggestions.appendChild(hint);
+                        }
                     }
+                    this.windowManager.resizeWindow();
                 }
-                this.windowManager.resizeWindow();
-            });
+            );
             // Discard stale results — a newer search was started while this one was in-flight
             if (gen !== this._searchGeneration) return;
             // Remove loading indicator — all providers have resolved
@@ -1593,7 +1794,10 @@ export class FloatingApp {
 
     async clearSuggestions() {
         this._searchGeneration++; // discard in-flight searches
-        if (this.searchTimeout) { clearTimeout(this.searchTimeout); this.searchTimeout = null; }
+        if (this.searchTimeout) {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = null;
+        }
         this.elements.appSuggestions.classList.remove('visible');
         this.currentMatches = [];
         this.selectedIndex = -1;
@@ -1673,7 +1877,9 @@ export class FloatingApp {
             `;
         }
 
-        item.addEventListener('click', () => this._executeSystemCommand(cmdId, needsConfirm, false));
+        item.addEventListener('click', () =>
+            this._executeSystemCommand(cmdId, needsConfirm, false)
+        );
         container.appendChild(item);
         container.classList.add('visible');
         this.windowManager.resizeWindow();
@@ -1695,14 +1901,14 @@ export class FloatingApp {
             confirmItem.addEventListener('click', async () => {
                 try {
                     await this.invoke('execute_system_command', { commandId: cmdId, elevated });
-                } catch (e) { console.error('System command failed:', e); }
+                } catch (e) {
+                    console.error('System command failed:', e);
+                }
                 this._clearInput();
             });
             container.appendChild(confirmItem);
 
-            this.currentMatches = [
-                { type: 'system_confirm', cmdId, elevated }
-            ];
+            this.currentMatches = [{ type: 'system_confirm', cmdId, elevated }];
             this.selectedIndex = 0;
             this.windowManager.resizeWindow();
             return;
@@ -1710,7 +1916,9 @@ export class FloatingApp {
 
         try {
             await this.invoke('execute_system_command', { commandId: cmdId, elevated });
-        } catch (e) { console.error('System command failed:', e); }
+        } catch (e) {
+            console.error('System command failed:', e);
+        }
         this._clearInput();
     }
 
@@ -1727,12 +1935,14 @@ export class FloatingApp {
             const argKey = command + 'Name';
             const result = await this.invoke('execute_slash_command', {
                 command: command,
-                args: { [argKey]: value }
+                args: { [argKey]: value },
             });
             const msg = result?.message || `Selected: ${value}`;
             document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
         } catch (e) {
-            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+            document.dispatchEvent(
+                new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+            );
         }
     }
 
@@ -1772,11 +1982,12 @@ export class FloatingApp {
                 }
                 return;
             }
-            const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
+            const itemCount =
+                this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
                 // Only navigate suggestions if cursor is on the last line of the textarea
                 const ta = this.elements.input;
-                const textBeforeCursor = ta.value.substring(0, ta.selectionStart);
+                const _textBeforeCursor = ta.value.substring(0, ta.selectionStart);
                 const textAfterCursor = ta.value.substring(ta.selectionEnd);
                 const isLastLine = !textAfterCursor.includes('\n');
                 if (isLastLine) {
@@ -1801,7 +2012,8 @@ export class FloatingApp {
                     return;
                 }
             }
-            const itemCount = this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
+            const itemCount =
+                this.elements.appSuggestions.querySelectorAll('.app-suggestion-item').length;
             if (itemCount > 0) {
                 // Only navigate suggestions if cursor is on the first line of the textarea
                 const ta = this.elements.input;
@@ -1809,7 +2021,8 @@ export class FloatingApp {
                 const isFirstLine = !textBeforeCursor.includes('\n');
                 if (isFirstLine) {
                     event.preventDefault();
-                    this.selectedIndex = this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
+                    this.selectedIndex =
+                        this.selectedIndex <= 0 ? itemCount - 1 : this.selectedIndex - 1;
                     updateSelection(this.elements.appSuggestions, this.selectedIndex);
                 }
             }
@@ -1879,10 +2092,13 @@ export class FloatingApp {
                 this._clearInput();
                 await this.appWindow.hide();
                 // Small delay to let the previous window regain focus
-                await new Promise(r => setTimeout(r, 150));
+                await new Promise((r) => setTimeout(r, 150));
                 try {
                     await this.invoke('paste_clipboard_item', { text: selected.data.text });
-                    console.log('[Clipboard] Pasted to active app:', selected.data.text.slice(0, 50));
+                    console.log(
+                        '[Clipboard] Pasted to active app:',
+                        selected.data.text.slice(0, 50)
+                    );
                 } catch (e) {
                     console.warn('[Clipboard] Failed to paste:', e);
                 }
@@ -1899,14 +2115,20 @@ export class FloatingApp {
             shortcuts: this.shortcuts,
             ctx: this._getExecCtx(),
             onSend: (msg) => this.sendChatMessage(msg),
-            onSystemCommand: (cmdId, needsConfirm, elevated) => this._executeSystemCommand(cmdId, needsConfirm, elevated),
+            onSystemCommand: (cmdId, needsConfirm, elevated) =>
+                this._executeSystemCommand(cmdId, needsConfirm, elevated),
             onSelection: (command, value) => this.executeSelection(command, value),
         });
 
         if (result.handled) {
-            if (result.action === 'replace_input') { /* input already replaced by onReplaceInput callback */ }
-            else if (result.action === 'hide') { this.resetUI(); await this.appWindow.hide(); }
-            else { this._clearInput(); }
+            if (result.action === 'replace_input') {
+                /* input already replaced by onReplaceInput callback */
+            } else if (result.action === 'hide') {
+                this.resetUI();
+                await this.appWindow.hide();
+            } else {
+                this._clearInput();
+            }
         }
     }
 
@@ -1918,7 +2140,10 @@ export class FloatingApp {
 
     async sendChatMessage(message, options = {}) {
         // Track message in shell-style history (skip duplicates of the last entry)
-        if (message.trim() && (this._messageHistory.length === 0 || this._messageHistory[0] !== message.trim())) {
+        if (
+            message.trim() &&
+            (this._messageHistory.length === 0 || this._messageHistory[0] !== message.trim())
+        ) {
             this._messageHistory.unshift(message.trim());
             if (this._messageHistory.length > 50) this._messageHistory.pop();
         }
@@ -1954,7 +2179,10 @@ export class FloatingApp {
             try {
                 // Notify the chat window so it can show the user bubble
                 window.__TAURI__.event.emit('floating_message_sent', { message });
-                trackEvent('message_sent', { source: 'floating', length: messageLengthBucket(message) });
+                trackEvent('message_sent', {
+                    source: 'floating',
+                    length: messageLengthBucket(message),
+                });
                 await this.invoke('send_message_streaming', { message, attachments: null });
             } catch (e) {
                 this.showError('Error: ' + e);
@@ -1966,8 +2194,9 @@ export class FloatingApp {
         this.attachmentManager.clear();
 
         // Include selected text as context if checkbox is checked
-        const useSelection = !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
-        if (useSelection && this.lastSelection && this.lastSelection.trim()) {
+        const useSelection =
+            !options.skipSelection && document.getElementById('useSelectionCheckbox')?.checked;
+        if (useSelection && this.lastSelection?.trim()) {
             message = `The following text is currently selected in my active window:\n\`\`\`\n${this.lastSelection.trim()}\n\`\`\`\n\n${message}`;
         }
         // Hide selection indicator after use
@@ -1992,7 +2221,7 @@ export class FloatingApp {
         } catch (e) {
             console.log('No pending permission to dismiss:', e);
         }
-        
+
         try {
             // If forceChat, attachments present, or we already know there's no match, skip classification
             let rustResults = [];
@@ -2004,7 +2233,9 @@ export class FloatingApp {
                 try {
                     const json = await this.invoke('handle_floating_input', { input: message });
                     rustResults = JSON.parse(json);
-                } catch { rustResults = []; }
+                } catch {
+                    rustResults = [];
+                }
             }
             this._noMatchSinceLen = 0;
 
@@ -2020,11 +2251,12 @@ export class FloatingApp {
                 // No actionable match — send to agent. Reset UI now.
                 // If a response is in progress, cancel it first
                 if (this.isWaitingForResponse) {
-                    this.invoke('cancel_generation').catch(e => console.log('Cancel:', e));
+                    this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
                     this.isWaitingForResponse = false;
                     this.stopThinking();
                     this.elements.floatingStopBtn.style.display = 'none';
-                    const indicator = this.elements.responseText.querySelector('.streaming-indicator');
+                    const indicator =
+                        this.elements.responseText.querySelector('.streaming-indicator');
                     if (indicator) indicator.remove();
                 }
 
@@ -2050,7 +2282,7 @@ export class FloatingApp {
                 this.extensionToolController.reset();
                 this.automationPlanController.reset();
                 this._promptGeneration++;
-                const gen = this._promptGeneration;
+                const _gen = this._promptGeneration;
                 await this.windowManager.resizeWindow();
                 this.dismissBanner();
 
@@ -2069,7 +2301,11 @@ export class FloatingApp {
 
                 // Notify the chat window so it can show the user bubble
                 window.__TAURI__.event.emit('floating_message_sent', { message });
-                trackEvent('message_sent', { source: 'floating', length: messageLengthBucket(message), attachments: attachments?.length || 0 });
+                trackEvent('message_sent', {
+                    source: 'floating',
+                    length: messageLengthBucket(message),
+                    attachments: attachments?.length || 0,
+                });
                 await this.invoke('send_message_streaming', { message, attachments });
             }
         } catch (error) {
@@ -2081,11 +2317,17 @@ export class FloatingApp {
     /** Force the streaming renderer to paint the full accumulated text now.
      *  Called by the permission modal handler before showing the dialog so
      *  the user sees the complete streamed text behind it. */
-    flushStreamingRender() { this.messageStreamController.flushStreamingRender(); }
+    flushStreamingRender() {
+        this.messageStreamController.flushStreamingRender();
+    }
 
-    handleMessageChunk(event) { return this.messageStreamController.handleChunk(event); }
+    handleMessageChunk(event) {
+        return this.messageStreamController.handleChunk(event);
+    }
 
-    async handleMessageComplete() { return this.messageStreamController.handleComplete(); }
+    async handleMessageComplete() {
+        return this.messageStreamController.handleComplete();
+    }
 
     /**
      * Render a loading indicator while an extension tool call is being streamed.
@@ -2097,7 +2339,10 @@ export class FloatingApp {
         if (beforeFence) {
             renderMarkdown(beforeFence, this.elements.responseText, true);
         } else {
-            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(info.extension, info.tool);
+            const friendlyName = this.extensionToolController.getExtensionToolFriendlyName(
+                info.extension,
+                info.tool
+            );
             this.elements.responseText.innerHTML = `<div class="folder-plan-spinner-row"><span class="folder-plan-spinner"></span> ${escapeHtml(friendlyName)}...</div>`;
         }
     }
@@ -2121,8 +2366,12 @@ export class FloatingApp {
             copyBtn.onclick = () => {
                 const text = this.currentResponse || '';
                 navigator.clipboard.writeText(text).then(() => {
-                    copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-                    setTimeout(() => { copyBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }, 1500);
+                    copyBtn.innerHTML =
+                        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                    setTimeout(() => {
+                        copyBtn.innerHTML =
+                            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+                    }, 1500);
                 });
             };
         }
@@ -2175,7 +2424,9 @@ export class FloatingApp {
                 container.style.display = 'flex';
                 await this.windowManager.resizeWindow();
             }
-        } catch (e) { console.warn('[QA] Response actions error:', e); }
+        } catch (e) {
+            console.warn('[QA] Response actions error:', e);
+        }
     }
 
     /**
@@ -2218,57 +2469,59 @@ export class FloatingApp {
         if (notice) notice.remove();
     }
 
-    async handleMessageError(event) { return this.messageStreamController.handleError(event); }
+    async handleMessageError(event) {
+        return this.messageStreamController.handleError(event);
+    }
 
-    handleSessionReset(event) { return this.messageStreamController.handleSessionReset(event); }
+    handleSessionReset(event) {
+        return this.messageStreamController.handleSessionReset(event);
+    }
 
-    handleToolCallUpdate(event) { return this.messageStreamController.handleToolCallUpdate(event); }
-
-
-
-
-
+    handleToolCallUpdate(event) {
+        return this.messageStreamController.handleToolCallUpdate(event);
+    }
 
     renderSources() {
-            const compactEl = document.getElementById('toolSourcesCompact');
-            if (compactEl) compactEl.remove();
+        const compactEl = document.getElementById('toolSourcesCompact');
+        if (compactEl) compactEl.remove();
 
-            let sourcesEl = document.getElementById('toolSources');
-            if (!sourcesEl) {
-                sourcesEl = document.createElement('div');
-                sourcesEl.id = 'toolSources';
-                sourcesEl.className = 'tool-sources';
-                if (this.elements.contentArea) this.elements.contentArea.appendChild(sourcesEl);
-            }
-
-            if (this.toolSources.length === 0 && this.toolUsages.length === 0) {
-                sourcesEl.style.display = 'none';
-                return;
-            }
-
-            sourcesEl.style.display = 'flex';
-            this.elements.contentArea.classList.add('visible');
-            sourcesEl.innerHTML = renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
-            this.windowManager.resizeWindow();
+        let sourcesEl = document.getElementById('toolSources');
+        if (!sourcesEl) {
+            sourcesEl = document.createElement('div');
+            sourcesEl.id = 'toolSources';
+            sourcesEl.className = 'tool-sources';
+            if (this.elements.contentArea) this.elements.contentArea.appendChild(sourcesEl);
         }
+
+        if (this.toolSources.length === 0 && this.toolUsages.length === 0) {
+            sourcesEl.style.display = 'none';
+            return;
+        }
+
+        sourcesEl.style.display = 'flex';
+        this.elements.contentArea.classList.add('visible');
+        sourcesEl.innerHTML =
+            renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+        this.windowManager.resizeWindow();
+    }
 
     renderSourcesCompact() {
-            this.elements.loadingDots.classList.remove('visible');
-            this.elements.mascotContainer.classList.remove('thinking');
+        this.elements.loadingDots.classList.remove('visible');
+        this.elements.mascotContainer.classList.remove('thinking');
 
-            let compactEl = document.getElementById('toolSourcesCompact');
-            if (!compactEl) {
-                compactEl = document.createElement('div');
-                compactEl.id = 'toolSourcesCompact';
-                compactEl.className = 'tool-sources-compact';
-                const speechBubble = document.querySelector('.speech-bubble');
-                if (speechBubble) speechBubble.insertBefore(compactEl, this.elements.contentArea);
-            }
-
-            compactEl.style.display = 'flex';
-            compactEl.innerHTML = renderSourceBubblesHtml(this.toolUsages, this.toolSources);
-            this.windowManager.resizeWindow();
+        let compactEl = document.getElementById('toolSourcesCompact');
+        if (!compactEl) {
+            compactEl = document.createElement('div');
+            compactEl.id = 'toolSourcesCompact';
+            compactEl.className = 'tool-sources-compact';
+            const speechBubble = document.querySelector('.speech-bubble');
+            if (speechBubble) speechBubble.insertBefore(compactEl, this.elements.contentArea);
         }
+
+        compactEl.style.display = 'flex';
+        compactEl.innerHTML = renderSourceBubblesHtml(this.toolUsages, this.toolSources);
+        this.windowManager.resizeWindow();
+    }
 
     showError(message) {
         this.stopThinking();
@@ -2332,8 +2585,12 @@ export class FloatingApp {
         // Don't hide if we just finished resizing or dragging — the mouseup
         // outside the window boundary fires a click event we should ignore.
         if (this.windowManager.isResizing || this.windowManager.isDragging) return;
-        if (this.windowManager._resizeEndedAt && Date.now() - this.windowManager._resizeEndedAt < 300) return;
-        
+        if (
+            this.windowManager._resizeEndedAt &&
+            Date.now() - this.windowManager._resizeEndedAt < 300
+        )
+            return;
+
         const container = document.querySelector('.floating-container');
         if (container && !container.contains(event.target)) {
             // Don't hide if a sandbox iframe is running (Try button)

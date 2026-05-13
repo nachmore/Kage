@@ -25,7 +25,9 @@ export function applyTheme(setting) {
         currentThemeSetting = setting;
     }
     const isDark = resolveTheme(currentThemeSetting);
-    console.log(`[theme] applyTheme: setting=${currentThemeSetting}, isDark=${isDark}, osDark=${cachedOsDarkMode}`);
+    console.log(
+        `[theme] applyTheme: setting=${currentThemeSetting}, isDark=${isDark}, osDark=${cachedOsDarkMode}`
+    );
     document.body.classList.toggle('dark-theme', isDark);
     document.body.classList.toggle('light-theme', !isDark);
 }
@@ -61,7 +63,9 @@ export function initThemeListener() {
             if (_lastInvoke) {
                 try {
                     cachedOsDarkMode = await _lastInvoke('get_os_dark_mode');
-                } catch { /* keep cached value */ }
+                } catch {
+                    /* keep cached value */
+                }
             }
             applyTheme();
             if (isCustomTheme(currentThemeSetting) && _lastInvoke) {
@@ -84,10 +88,16 @@ async function applyThemeExtensionColors(invoke, themeId) {
         const colors = await invoke('load_theme_colors', { themeId, variant });
         if (colors && typeof colors === 'object') {
             const keys = Object.keys(colors);
-            console.log(`[theme] Applied ${keys.length} custom CSS vars for '${themeId}':`, keys.slice(0, 5).join(', '), keys.length > 5 ? '...' : '');
+            console.log(
+                `[theme] Applied ${keys.length} custom CSS vars for '${themeId}':`,
+                keys.slice(0, 5).join(', '),
+                keys.length > 5 ? '...' : ''
+            );
             applyCustomThemeColors(colors);
         } else {
-            console.warn(`[theme] load_theme_colors returned null/empty for '${themeId}' (${variant})`);
+            console.warn(
+                `[theme] load_theme_colors returned null/empty for '${themeId}' (${variant})`
+            );
         }
     } catch (e) {
         console.warn(`[theme] Failed to load theme colors for '${themeId}':`, e);
@@ -130,7 +140,7 @@ export async function loadAndApplyTheme(invoke) {
 
         // Apply date/time display
         applyDateTime(config.ui);
-    } catch (e) {
+    } catch (_e) {
         applyTheme('system');
     }
 }
@@ -198,7 +208,10 @@ function applyDateTime(ui) {
 }
 
 function _stopDateTimeTimer() {
-    if (_dateTimeTimer) { clearTimeout(_dateTimeTimer); _dateTimeTimer = null; }
+    if (_dateTimeTimer) {
+        clearTimeout(_dateTimeTimer);
+        _dateTimeTimer = null;
+    }
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -213,8 +226,34 @@ document.addEventListener('visibilitychange', () => {
 function formatDateTime(date, fmt) {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const daysFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const monthsFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+    ];
+    const monthsFull = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+    ];
 
     const h24 = date.getHours();
     const h12 = h24 % 12 || 12;

@@ -22,10 +22,14 @@ const _svgCache = new Map(); // path → parsed SVG document
 let _terminatorMode = false;
 
 /** Set terminator mode globally. Call once at startup. */
-export function setTerminatorMode(enabled) { _terminatorMode = enabled; }
+export function setTerminatorMode(enabled) {
+    _terminatorMode = enabled;
+}
 
 /** Check if terminator mode is active. */
-export function isTerminatorMode() { return _terminatorMode; }
+export function isTerminatorMode() {
+    return _terminatorMode;
+}
 
 /**
  * Read mascot theme settings from CSS custom properties.
@@ -33,9 +37,10 @@ export function isTerminatorMode() { return _terminatorMode; }
  */
 export function getMascotThemeSettings() {
     const style = getComputedStyle(document.documentElement);
-    const outlineColor = style.getPropertyValue('--kage-mascot-outline').trim()
-        || style.getPropertyValue('--kage-accent').trim()
-        || '#319795';
+    const outlineColor =
+        style.getPropertyValue('--kage-mascot-outline').trim() ||
+        style.getPropertyValue('--kage-accent').trim() ||
+        '#319795';
     const invertVal = style.getPropertyValue('--kage-mascot-invert').trim();
     const invert = invertVal === '1' || invertVal === 'true';
     return { outlineColor, invert };
@@ -70,7 +75,7 @@ function buildMascotFromSource(doc, size) {
     }
 
     // Apply theme classes: black fills → body, white fills → eyes
-    svg.querySelectorAll('*').forEach(el => {
+    svg.querySelectorAll('*').forEach((el) => {
         const style = el.getAttribute('style') || '';
         const fill = el.getAttribute('fill') || '';
         if (style.match(/fill\s*:\s*#000000/i) || fill === '#000000') {
@@ -170,10 +175,10 @@ export async function createMascot(opts = {}) {
     const svg = buildMascotFromSource(doc, size);
     svg.classList.add('kage-mascot');
     if (invert) svg.classList.add('kage-mascot-inverted');
-    if (className) className.split(' ').forEach(c => c && svg.classList.add(c));
+    if (className) className.split(' ').forEach((c) => c && svg.classList.add(c));
 
     if (outline) {
-        const color = typeof outline === 'string' ? outline : (outline.color || '#38B2AC');
+        const color = typeof outline === 'string' ? outline : outline.color || '#38B2AC';
         const radius = (typeof outline === 'object' && outline.radius) || 2;
         const filterId = ensureOutlineFilter(color, radius);
         svg.style.filter = `url(#${filterId})`;
@@ -190,11 +195,13 @@ export async function createMascot(opts = {}) {
 export function mascotHTML(opts = {}) {
     ensureCSS();
     const { size = 48, className = '', invert = false } = opts;
-    const cls = ['kage-mascot', invert ? 'kage-mascot-inverted' : '', className].filter(Boolean).join(' ');
+    const cls = ['kage-mascot', invert ? 'kage-mascot-inverted' : '', className]
+        .filter(Boolean)
+        .join(' ');
     const id = `kage-mascot-${++_filterCounter}`;
     const svgPath = _terminatorMode ? TERMINATOR_SVG_PATH : MASCOT_SVG_PATH;
     // Kick off async load to hydrate the placeholder
-    loadSVG(svgPath).then(doc => {
+    loadSVG(svgPath).then((doc) => {
         const placeholder = document.getElementById(id);
         if (!placeholder) return;
         const svg = buildMascotFromSource(doc, size);
@@ -207,8 +214,6 @@ export function mascotHTML(opts = {}) {
     });
     return `<span id="${id}" class="${cls}" style="display:inline-block;width:${size}px;height:${size}px;"></span>`;
 }
-
-
 
 // ─── Animation support ──────────────────────────────────────────────────────
 
@@ -232,28 +237,41 @@ function preloadImg(src) {
  */
 export function createAnimatedMascot(opts = {}) {
     ensureCSS();
-    const { frames: framePaths = [], size = 40, fps = 6, loop = true, autoplay = true, className = '', aspect, invert = false, outline = null } = opts;
+    const {
+        frames: framePaths = [],
+        size = 40,
+        fps = 6,
+        loop = true,
+        autoplay = true,
+        className = '',
+        aspect,
+        invert = false,
+        outline = null,
+    } = opts;
 
     // Compute width/height from size + aspect ratio.
     let w, h;
     if (aspect && aspect < 1) {
-        h = size; w = Math.round(size * aspect);
+        h = size;
+        w = Math.round(size * aspect);
     } else if (aspect && aspect > 1) {
-        w = size; h = Math.round(size / aspect);
+        w = size;
+        h = Math.round(size / aspect);
     } else {
-        w = size; h = size;
+        w = size;
+        h = size;
     }
 
     const container = document.createElement('div');
     container.style.cssText = `position:relative;width:${w}px;height:${h}px;`;
     container.classList.add('kage-mascot', 'kage-mascot-animated');
     if (invert) container.classList.add('kage-mascot-inverted');
-    if (className) className.split(' ').forEach(c => c && container.classList.add(c));
+    if (className) className.split(' ').forEach((c) => c && container.classList.add(c));
 
     // Set up outline filter if requested
     let filterStyle = '';
     if (outline) {
-        const color = typeof outline === 'string' ? outline : (outline.color || '#38B2AC');
+        const color = typeof outline === 'string' ? outline : outline.color || '#38B2AC';
         const radius = outline.radius || 2;
         const filterId = ensureOutlineFilter(color, radius);
         filterStyle = `filter:url(#${filterId});`;
@@ -289,7 +307,11 @@ export function createAnimatedMascot(opts = {}) {
             const next = currentFrame + 1;
             if (next >= imgs.length && !loop) {
                 stop();
-                if (_onComplete) { const cb = _onComplete; _onComplete = null; cb(); }
+                if (_onComplete) {
+                    const cb = _onComplete;
+                    _onComplete = null;
+                    cb();
+                }
                 return;
             }
             showFrame(next);
@@ -297,10 +319,16 @@ export function createAnimatedMascot(opts = {}) {
     }
 
     function stop() {
-        if (intervalId) { clearInterval(intervalId); intervalId = null; }
+        if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
     }
 
-    function destroy() { stop(); container.remove(); }
+    function destroy() {
+        stop();
+        container.remove();
+    }
 
     function playOnce(cb) {
         stop();
@@ -310,7 +338,11 @@ export function createAnimatedMascot(opts = {}) {
             const next = currentFrame + 1;
             if (next >= imgs.length) {
                 stop();
-                if (_onComplete) { const fn = _onComplete; _onComplete = null; fn(); }
+                if (_onComplete) {
+                    const fn = _onComplete;
+                    _onComplete = null;
+                    fn();
+                }
                 return;
             }
             showFrame(next);
@@ -318,16 +350,21 @@ export function createAnimatedMascot(opts = {}) {
     }
 
     /** Hide this animation (all frames hidden). */
-    function hide() { stop(); imgs.forEach(img => img.style.display = 'none'); }
+    function hide() {
+        stop();
+        imgs.forEach((img) => (img.style.display = 'none'));
+    }
 
     /** Show frame 0 without playing. */
-    function showIdle() { stop(); showFrame(0); }
+    function showIdle() {
+        stop();
+        showFrame(0);
+    }
 
     if (autoplay && imgs.length > 1) play();
 
     return { element: container, play, playOnce, stop, destroy, showFrame, hide, showIdle };
 }
-
 
 // ─── Mascot Controller ──────────────────────────────────────────────────────
 
@@ -357,7 +394,14 @@ export function createMascotController(container, opts = {}) {
     function getOrCreate(animDef) {
         const key = animDef.frames.join('|');
         if (anims.has(key)) return { key, ...anims.get(key) };
-        const anim = createAnimatedMascot({ ...animDef, size, autoplay: false, loop: false, invert, outline });
+        const anim = createAnimatedMascot({
+            ...animDef,
+            size,
+            autoplay: false,
+            loop: false,
+            invert,
+            outline,
+        });
         anim.element.style.display = 'none'; // hidden until switched to
         container.appendChild(anim.element);
         anims.set(key, { anim, def: animDef });
@@ -370,7 +414,10 @@ export function createMascotController(container, opts = {}) {
                 anim.element.style.display = '';
             } else {
                 anim.stop();
-                if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
+                if (anim._loopInterval) {
+                    clearInterval(anim._loopInterval);
+                    anim._loopInterval = null;
+                }
                 anim.element.style.display = 'none';
             }
         }
@@ -395,7 +442,10 @@ export function createMascotController(container, opts = {}) {
         if (periodicTimer) clearTimeout(periodicTimer);
         if (!periodic) return;
         periodicTimer = setTimeout(() => {
-            if (state !== 'idle') { schedulePeriodicPlay(); return; }
+            if (state !== 'idle') {
+                schedulePeriodicPlay();
+                return;
+            }
             playPeriodic();
         }, jitteredDelay());
     }
@@ -414,7 +464,10 @@ export function createMascotController(container, opts = {}) {
     }
 
     function setActive(animDef, activeSize) {
-        if (periodicTimer) { clearTimeout(periodicTimer); periodicTimer = null; }
+        if (periodicTimer) {
+            clearTimeout(periodicTimer);
+            periodicTimer = null;
+        }
         const useSize = activeSize || size;
         const sizeKey = animDef.frames.join('|') + '@' + useSize;
 
@@ -423,7 +476,10 @@ export function createMascotController(container, opts = {}) {
 
         // Stop any existing loop intervals before starting a new one
         for (const { anim: a } of anims.values()) {
-            if (a._loopInterval) { clearInterval(a._loopInterval); a._loopInterval = null; }
+            if (a._loopInterval) {
+                clearInterval(a._loopInterval);
+                a._loopInterval = null;
+            }
         }
 
         state = 'active';
@@ -431,7 +487,14 @@ export function createMascotController(container, opts = {}) {
         if (anims.has(sizeKey)) {
             entry = { key: sizeKey, ...anims.get(sizeKey) };
         } else {
-            const anim = createAnimatedMascot({ ...animDef, size: useSize, autoplay: false, loop: false, invert, outline });
+            const anim = createAnimatedMascot({
+                ...animDef,
+                size: useSize,
+                autoplay: false,
+                loop: false,
+                invert,
+                outline,
+            });
             anim.element.style.display = 'none';
             container.appendChild(anim.element);
             anims.set(sizeKey, { anim, def: animDef });
@@ -457,7 +520,10 @@ export function createMascotController(container, opts = {}) {
 
         // Stop any active loop
         for (const { anim } of anims.values()) {
-            if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
+            if (anim._loopInterval) {
+                clearInterval(anim._loopInterval);
+                anim._loopInterval = null;
+            }
         }
         if (playTransition && periodic) {
             playPeriodic();
@@ -474,7 +540,10 @@ export function createMascotController(container, opts = {}) {
     function destroy() {
         _destroyed = true;
         if (periodicTimer) clearTimeout(periodicTimer);
-        if (_preloadTimer) { clearTimeout(_preloadTimer); _preloadTimer = null; }
+        if (_preloadTimer) {
+            clearTimeout(_preloadTimer);
+            _preloadTimer = null;
+        }
         for (const { anim } of anims.values()) {
             anim.stop();
             if (anim._loopInterval) clearInterval(anim._loopInterval);
@@ -488,9 +557,15 @@ export function createMascotController(container, opts = {}) {
     function pause() {
         if (_pausedState) return; // already paused
         _pausedState = state;
-        if (periodicTimer) { clearTimeout(periodicTimer); periodicTimer = null; }
+        if (periodicTimer) {
+            clearTimeout(periodicTimer);
+            periodicTimer = null;
+        }
         for (const { anim } of anims.values()) {
-            if (anim._loopInterval) { clearInterval(anim._loopInterval); anim._loopInterval = null; }
+            if (anim._loopInterval) {
+                clearInterval(anim._loopInterval);
+                anim._loopInterval = null;
+            }
         }
         // Return to idle — show placeholder or static frame
         showStatic();
@@ -521,22 +596,29 @@ export function createMascotController(container, opts = {}) {
     // Callers can await this before showing the window.
     const firstFrameSrc = idle?.frames?.[0];
     const readyPromise = firstFrameSrc
-        ? new Promise(resolve => {
-            // Find the frame 0 <img> that createAnimatedMascot just created
-            const img = container.querySelector('img[src$="' + firstFrameSrc.split('/').pop() + '"]');
-            if (img && img.complete) { resolve(); }
-            else if (img) { img.onload = resolve; img.onerror = resolve; }
-            else { resolve(); }
-        })
+        ? new Promise((resolve) => {
+              // Find the frame 0 <img> that createAnimatedMascot just created
+              const img = container.querySelector(
+                  'img[src$="' + firstFrameSrc.split('/').pop() + '"]'
+              );
+              if (img?.complete) {
+                  resolve();
+              } else if (img) {
+                  img.onload = resolve;
+                  img.onerror = resolve;
+              } else {
+                  resolve();
+              }
+          })
         : Promise.resolve();
 
     // Preload remaining frames in the background for smooth animation later
     const allFrames = new Set();
-    if (idle) idle.frames.forEach(f => allFrames.add(f));
-    if (periodic) periodic.frames.forEach(f => allFrames.add(f));
+    if (idle) idle.frames.forEach((f) => allFrames.add(f));
+    if (periodic) periodic.frames.forEach((f) => allFrames.add(f));
     if (opts.preload) {
         for (const animDef of opts.preload) {
-            animDef.frames.forEach(f => allFrames.add(f));
+            animDef.frames.forEach((f) => allFrames.add(f));
         }
     }
 
@@ -550,5 +632,15 @@ export function createMascotController(container, opts = {}) {
         }
     });
 
-    return { setActive, setIdle, pause, resume, destroy, ready: readyPromise, get state() { return state; } };
+    return {
+        setActive,
+        setIdle,
+        pause,
+        resume,
+        destroy,
+        ready: readyPromise,
+        get state() {
+            return state;
+        },
+    };
 }

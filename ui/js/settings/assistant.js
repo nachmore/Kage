@@ -79,7 +79,8 @@ class AssistantSettingsModule extends SettingsModule {
         const qa = config.quick_actions || { enabled: true, custom_actions: [] };
         if (qaEnabled) qaEnabled.checked = qa.enabled !== false;
         const showResponseActions = document.getElementById('showResponseActions');
-        if (showResponseActions) showResponseActions.checked = config.ui?.show_response_actions !== false;
+        if (showResponseActions)
+            showResponseActions.checked = config.ui?.show_response_actions !== false;
         const translateLang = document.getElementById('translateLanguage');
         if (translateLang) translateLang.value = qa.translate_language || '';
         this._renderCustomActions(qa.custom_actions || []);
@@ -88,17 +89,22 @@ class AssistantSettingsModule extends SettingsModule {
     save(config) {
         if (!config.acp) config.acp = {};
         if (!config.acp.agent) config.acp.agent = {};
-        config.acp.agent.auto_steering_enabled = document.getElementById('autoSteeringEnabled').checked;
-        config.acp.agent.user_steering_path = document.getElementById('userSteeringPath').value.trim() || null;
+        config.acp.agent.auto_steering_enabled =
+            document.getElementById('autoSteeringEnabled').checked;
+        config.acp.agent.user_steering_path =
+            document.getElementById('userSteeringPath').value.trim() || null;
 
         // Quick actions
         config.quick_actions = config.quick_actions || {};
-        config.quick_actions.enabled = document.getElementById('quickActionsEnabled')?.checked ?? true;
-        config.quick_actions.translate_language = document.getElementById('translateLanguage')?.value?.trim() || null;
+        config.quick_actions.enabled =
+            document.getElementById('quickActionsEnabled')?.checked ?? true;
+        config.quick_actions.translate_language =
+            document.getElementById('translateLanguage')?.value?.trim() || null;
         config.quick_actions.custom_actions = this._collectCustomActions();
         // Response actions (stored in ui config)
         config.ui = config.ui || {};
-        config.ui.show_response_actions = document.getElementById('showResponseActions')?.checked ?? true;
+        config.ui.show_response_actions =
+            document.getElementById('showResponseActions')?.checked ?? true;
     }
 
     initialize() {

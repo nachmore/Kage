@@ -32,31 +32,38 @@ function looksLikeNumber(text) {
 
 function looksLikeCode(text) {
     // Language keywords at start of line (broad set)
-    const keywords = /^\s*(function|def|class|const|let|var|import|from|pub|fn|if|else|for|while|return|async|await|match|switch|case|try|catch|except|raise|throw|interface|struct|enum|impl|module|package|namespace|using|include|require|export|extends|implements)\b/m;
+    const keywords =
+        /^\s*(function|def|class|const|let|var|import|from|pub|fn|if|else|for|while|return|async|await|match|switch|case|try|catch|except|raise|throw|interface|struct|enum|impl|module|package|namespace|using|include|require|export|extends|implements)\b/m;
     if (keywords.test(text)) return true;
 
     // Keywords anywhere (for single-line pastes where newlines are collapsed)
-    if (/\b(pub\s+fn|pub\s+async|async\s+fn|impl\s+\w+|struct\s+\w+|enum\s+\w+|trait\s+\w+)\b/.test(text)) return true;
-    if (/\b(function\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/.test(text)) return true;
+    if (
+        /\b(pub\s+fn|pub\s+async|async\s+fn|impl\s+\w+|struct\s+\w+|enum\s+\w+|trait\s+\w+)\b/.test(
+            text
+        )
+    )
+        return true;
+    if (/\b(function\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=)\b/.test(text))
+        return true;
     if (/\b(def\s+\w+|import\s+\w+|from\s+\w+\s+import)\b/.test(text)) return true;
 
     // Rust/C-style attributes and annotations
-    if (/#\[\w+/.test(text)) return true;                // #[derive], #[tauri::command], etc.
+    if (/#\[\w+/.test(text)) return true; // #[derive], #[tauri::command], etc.
 
     // Common code patterns
-    if (/[{};]\s*$/m.test(text)) return true;           // Lines ending with { } ;
-    if (/\w+\(.*\)\s*[:{=>]/.test(text)) return true;   // function calls followed by : { => (def foo(): / fn bar() { / x => )
+    if (/[{};]\s*$/m.test(text)) return true; // Lines ending with { } ;
+    if (/\w+\(.*\)\s*[:{=>]/.test(text)) return true; // function calls followed by : { => (def foo(): / fn bar() { / x => )
     if (/\w+\(.*\)\s*$/.test(text) && /\bdef\b|\basync\b|\bfn\b|\bfunc\b/.test(text)) return true; // def/async/fn with parens
-    if (/^\s*(\/\/|#!?|\/\*|\*\s|--\s)/m.test(text)) return true;  // Comment lines
+    if (/^\s*(\/\/|#!?|\/\*|\*\s|--\s)/m.test(text)) return true; // Comment lines
     if (/\.\w+\(/.test(text) && /[;{}():]/.test(text)) return true; // Method calls with code punctuation
     if (/\bself\b|\bthis\b/.test(text) && /[.()]/.test(text)) return true; // self.x or this.x patterns
-    if (/=>\s*{/.test(text)) return true;                // Arrow functions
+    if (/=>\s*{/.test(text)) return true; // Arrow functions
     if (/\w+:\s*\w+\s*[,)]/.test(text) && /[(){}]/.test(text)) return true; // Type annotations like x: int, y: str
-    if (/^\s*@\w+/m.test(text)) return true;             // Decorators (@property, @app.route)
+    if (/^\s*@\w+/m.test(text)) return true; // Decorators (@property, @app.route)
     if (/\bNone\b|\bnull\b|\bnil\b|\bundefined\b/.test(text) && /[=()]/.test(text)) return true; // None/null with assignment or call
 
     // High density of code punctuation (braces, semicolons, arrows, generics)
-    const codePunctCount = (text.match(/[{};()\[\]<>]/g) || []).length;
+    const codePunctCount = (text.match(/[{};()[\]<>]/g) || []).length;
     if (codePunctCount >= 6 && codePunctCount / text.length > 0.03) return true;
 
     return false;
@@ -72,9 +79,14 @@ function looksLikeError(text) {
 
 function looksLikeJson(text) {
     const trimmed = text.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try { JSON.parse(trimmed); return true; } catch {}
+    if (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+        try {
+            JSON.parse(trimmed);
+            return true;
+        } catch {}
     }
     // YAML-like (multiple key: value lines)
     if (/^\w+:\s+/m.test(trimmed) && /\n\w+:\s+/m.test(trimmed)) return true;
@@ -89,7 +101,7 @@ function looksLikeUrl(text) {
 function looksLikeMath(text) {
     const trimmed = text.trim();
     if (!/\d/.test(trimmed)) return false;
-    if (!/[+\-*\/\^%=]/.test(trimmed)) return false;
+    if (!/[+\-*/^%=]/.test(trimmed)) return false;
     if (/[a-z]{4,}\s+[a-z]{4,}/i.test(trimmed)) return false;
     return true;
 }
@@ -97,9 +109,11 @@ function looksLikeMath(text) {
 function looksLikeFolderPlan(text) {
     // Detect folder organization responses — mentions of folders/files being organized,
     // plan proposals, or results of folder operations
-    const lower = text.toLowerCase();
-    const hasOrgKeywords = /\b(organiz|folder|directory|move|moved|sorted|duplicat|clean|tidier)\b/i.test(text);
-    const hasPlanIndicators = /\b(plan|operations?|completed|here'?s what|would you like|want me to)\b/i.test(text);
+    const _lower = text.toLowerCase();
+    const hasOrgKeywords =
+        /\b(organiz|folder|directory|move|moved|sorted|duplicat|clean|tidier)\b/i.test(text);
+    const hasPlanIndicators =
+        /\b(plan|operations?|completed|here'?s what|would you like|want me to)\b/i.test(text);
     return hasOrgKeywords && hasPlanIndicators;
 }
 
@@ -119,9 +133,25 @@ function getOsLanguageName() {
         }
         // Fallback: map common locale prefixes
         const lang = locale.split('-')[0].toLowerCase();
-        const map = { en:'English', es:'Spanish', fr:'French', de:'German', pt:'Portuguese',
-            it:'Italian', ja:'Japanese', ko:'Korean', zh:'Chinese', ru:'Russian', ar:'Arabic',
-            hi:'Hindi', nl:'Dutch', sv:'Swedish', pl:'Polish', tr:'Turkish', he:'Hebrew' };
+        const map = {
+            en: 'English',
+            es: 'Spanish',
+            fr: 'French',
+            de: 'German',
+            pt: 'Portuguese',
+            it: 'Italian',
+            ja: 'Japanese',
+            ko: 'Korean',
+            zh: 'Chinese',
+            ru: 'Russian',
+            ar: 'Arabic',
+            hi: 'Hindi',
+            nl: 'Dutch',
+            sv: 'Swedish',
+            pl: 'Polish',
+            tr: 'Turkish',
+            he: 'Hebrew',
+        };
         return map[lang] || 'English';
     } catch {
         return 'English';
@@ -146,13 +176,13 @@ function _getOsLanguageCode() {
  */
 function _stripMarkdownForDetection(text) {
     return text
-        .replace(/```[\s\S]*?```/g, ' ')      // fenced code blocks
-        .replace(/`[^`]*`/g, ' ')             // inline code
+        .replace(/```[\s\S]*?```/g, ' ') // fenced code blocks
+        .replace(/`[^`]*`/g, ' ') // inline code
         .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links/images → keep label
-        .replace(/https?:\/\/\S+/g, ' ')      // raw URLs
-        .replace(/^\s*#{1,6}\s*/gm, '')       // heading markers
-        .replace(/^\s*[-*+]\s+/gm, '')        // bullet markers
-        .replace(/[*_~>]/g, ' ')              // emphasis/quote punctuation
+        .replace(/https?:\/\/\S+/g, ' ') // raw URLs
+        .replace(/^\s*#{1,6}\s*/gm, '') // heading markers
+        .replace(/^\s*[-*+]\s+/gm, '') // bullet markers
+        .replace(/[*_~>]/g, ' ') // emphasis/quote punctuation
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -165,13 +195,369 @@ function _stripMarkdownForDetection(text) {
  * Cyrillic, Arabic, CJK, etc. are resolved via `detectScript` upstream.
  */
 const COMMON_WORDS = {
-    en: ['the','and','is','are','was','were','you','your','this','that','with','what','have','has','not','but','for','from','about','can','will','would','should','could','there','their','they','them','here','like','just','know','want','help','please','hey','hi','hello','when','where','which','who','why','how','some','more','only','also','very','really','much','many','most','good','great','well','okay','ok','yes','no','let','make','take','get','got','see','look','think','need','use','used'],
-    es: ['el','la','los','las','de','del','y','o','pero','que','qué','es','son','está','están','en','con','sin','por','para','como','cómo','un','una','unos','unas','mi','tu','su','este','esta','esto','ese','esa','eso','hay','muy','más','menos','bien','también','pero','hola','gracias','sí','no','donde','dónde','cuando','cuándo'],
-    fr: ['le','la','les','un','une','des','de','du','et','ou','mais','que','qui','est','sont','était','étaient','dans','pour','avec','sans','par','sur','sous','ce','cette','ces','mon','ton','son','notre','votre','leur','je','tu','il','elle','nous','vous','ils','elles','pas','plus','moins','bien','très','aussi','bonjour','salut','merci','oui','non'],
-    de: ['der','die','das','den','dem','des','ein','eine','einen','einem','einer','und','oder','aber','ist','sind','war','waren','nicht','mit','von','für','auf','in','im','zu','zum','zur','auch','nur','sehr','mehr','weniger','schon','noch','hallo','danke','ja','nein','was','wer','wie','wo','wann','warum'],
-    it: ['il','la','lo','i','le','gli','un','una','uno','di','del','della','e','o','ma','che','cosa','è','sono','era','erano','con','senza','per','in','a','da','su','questo','questa','quel','quella','mio','tuo','suo','non','più','meno','anche','molto','ciao','grazie','sì','no','dove','quando'],
-    pt: ['o','a','os','as','um','uma','uns','umas','de','do','da','dos','das','e','ou','mas','que','é','são','era','eram','com','sem','para','por','em','no','na','nos','nas','este','esta','esse','essa','meu','teu','seu','não','mais','menos','também','muito','olá','obrigado','sim','onde','quando'],
-    nl: ['de','het','een','en','of','maar','dat','dit','die','deze','is','zijn','was','waren','niet','met','van','voor','op','in','naar','bij','ook','nog','zeer','meer','minder','goed','hoi','hallo','dank','ja','nee','wat','wie','hoe','waar','wanneer'],
+    en: [
+        'the',
+        'and',
+        'is',
+        'are',
+        'was',
+        'were',
+        'you',
+        'your',
+        'this',
+        'that',
+        'with',
+        'what',
+        'have',
+        'has',
+        'not',
+        'but',
+        'for',
+        'from',
+        'about',
+        'can',
+        'will',
+        'would',
+        'should',
+        'could',
+        'there',
+        'their',
+        'they',
+        'them',
+        'here',
+        'like',
+        'just',
+        'know',
+        'want',
+        'help',
+        'please',
+        'hey',
+        'hi',
+        'hello',
+        'when',
+        'where',
+        'which',
+        'who',
+        'why',
+        'how',
+        'some',
+        'more',
+        'only',
+        'also',
+        'very',
+        'really',
+        'much',
+        'many',
+        'most',
+        'good',
+        'great',
+        'well',
+        'okay',
+        'ok',
+        'yes',
+        'no',
+        'let',
+        'make',
+        'take',
+        'get',
+        'got',
+        'see',
+        'look',
+        'think',
+        'need',
+        'use',
+        'used',
+    ],
+    es: [
+        'el',
+        'la',
+        'los',
+        'las',
+        'de',
+        'del',
+        'y',
+        'o',
+        'pero',
+        'que',
+        'qué',
+        'es',
+        'son',
+        'está',
+        'están',
+        'en',
+        'con',
+        'sin',
+        'por',
+        'para',
+        'como',
+        'cómo',
+        'un',
+        'una',
+        'unos',
+        'unas',
+        'mi',
+        'tu',
+        'su',
+        'este',
+        'esta',
+        'esto',
+        'ese',
+        'esa',
+        'eso',
+        'hay',
+        'muy',
+        'más',
+        'menos',
+        'bien',
+        'también',
+        'pero',
+        'hola',
+        'gracias',
+        'sí',
+        'no',
+        'donde',
+        'dónde',
+        'cuando',
+        'cuándo',
+    ],
+    fr: [
+        'le',
+        'la',
+        'les',
+        'un',
+        'une',
+        'des',
+        'de',
+        'du',
+        'et',
+        'ou',
+        'mais',
+        'que',
+        'qui',
+        'est',
+        'sont',
+        'était',
+        'étaient',
+        'dans',
+        'pour',
+        'avec',
+        'sans',
+        'par',
+        'sur',
+        'sous',
+        'ce',
+        'cette',
+        'ces',
+        'mon',
+        'ton',
+        'son',
+        'notre',
+        'votre',
+        'leur',
+        'je',
+        'tu',
+        'il',
+        'elle',
+        'nous',
+        'vous',
+        'ils',
+        'elles',
+        'pas',
+        'plus',
+        'moins',
+        'bien',
+        'très',
+        'aussi',
+        'bonjour',
+        'salut',
+        'merci',
+        'oui',
+        'non',
+    ],
+    de: [
+        'der',
+        'die',
+        'das',
+        'den',
+        'dem',
+        'des',
+        'ein',
+        'eine',
+        'einen',
+        'einem',
+        'einer',
+        'und',
+        'oder',
+        'aber',
+        'ist',
+        'sind',
+        'war',
+        'waren',
+        'nicht',
+        'mit',
+        'von',
+        'für',
+        'auf',
+        'in',
+        'im',
+        'zu',
+        'zum',
+        'zur',
+        'auch',
+        'nur',
+        'sehr',
+        'mehr',
+        'weniger',
+        'schon',
+        'noch',
+        'hallo',
+        'danke',
+        'ja',
+        'nein',
+        'was',
+        'wer',
+        'wie',
+        'wo',
+        'wann',
+        'warum',
+    ],
+    it: [
+        'il',
+        'la',
+        'lo',
+        'i',
+        'le',
+        'gli',
+        'un',
+        'una',
+        'uno',
+        'di',
+        'del',
+        'della',
+        'e',
+        'o',
+        'ma',
+        'che',
+        'cosa',
+        'è',
+        'sono',
+        'era',
+        'erano',
+        'con',
+        'senza',
+        'per',
+        'in',
+        'a',
+        'da',
+        'su',
+        'questo',
+        'questa',
+        'quel',
+        'quella',
+        'mio',
+        'tuo',
+        'suo',
+        'non',
+        'più',
+        'meno',
+        'anche',
+        'molto',
+        'ciao',
+        'grazie',
+        'sì',
+        'no',
+        'dove',
+        'quando',
+    ],
+    pt: [
+        'o',
+        'a',
+        'os',
+        'as',
+        'um',
+        'uma',
+        'uns',
+        'umas',
+        'de',
+        'do',
+        'da',
+        'dos',
+        'das',
+        'e',
+        'ou',
+        'mas',
+        'que',
+        'é',
+        'são',
+        'era',
+        'eram',
+        'com',
+        'sem',
+        'para',
+        'por',
+        'em',
+        'no',
+        'na',
+        'nos',
+        'nas',
+        'este',
+        'esta',
+        'esse',
+        'essa',
+        'meu',
+        'teu',
+        'seu',
+        'não',
+        'mais',
+        'menos',
+        'também',
+        'muito',
+        'olá',
+        'obrigado',
+        'sim',
+        'onde',
+        'quando',
+    ],
+    nl: [
+        'de',
+        'het',
+        'een',
+        'en',
+        'of',
+        'maar',
+        'dat',
+        'dit',
+        'die',
+        'deze',
+        'is',
+        'zijn',
+        'was',
+        'waren',
+        'niet',
+        'met',
+        'van',
+        'voor',
+        'op',
+        'in',
+        'naar',
+        'bij',
+        'ook',
+        'nog',
+        'zeer',
+        'meer',
+        'minder',
+        'goed',
+        'hoi',
+        'hallo',
+        'dank',
+        'ja',
+        'nee',
+        'wat',
+        'wie',
+        'hoe',
+        'waar',
+        'wanneer',
+    ],
 };
 
 function _containsEnoughCommonWords(text, langCode, threshold = 3) {
@@ -227,7 +613,7 @@ async function _isTextInTargetLanguage(text, targetLangCode) {
         // Weak top guess, or target is a close runner-up → assume target.
         // tinyld tends to drift on short / mixed / markdown text.
         if (top.accuracy < 0.5) return true;
-        const targetCandidate = candidates.find(c => c.lang === targetLangCode);
+        const targetCandidate = candidates.find((c) => c.lang === targetLangCode);
         if (targetCandidate && top.accuracy - targetCandidate.accuracy < 0.2) return true;
 
         return false;
@@ -246,28 +632,120 @@ function countWords(text) {
 
 const BUILTIN_ACTIONS = [
     // Universal — only shown when text is long enough to benefit from summarization
-    { label: 'Summarize', icon: '📝', prompt: 'Summarize the following text concisely:\n\n{text}', contentTypes: [], mode: 'inform', minWords: SUMMARIZE_MIN_WORDS },
+    {
+        label: 'Summarize',
+        icon: '📝',
+        prompt: 'Summarize the following text concisely:\n\n{text}',
+        contentTypes: [],
+        mode: 'inform',
+        minWords: SUMMARIZE_MIN_WORDS,
+    },
     // Prose
-    { label: 'Translate', icon: '🌐', prompt: null, contentTypes: ['prose'], _dynamic: 'translate', mode: 'replace' },
+    {
+        label: 'Translate',
+        icon: '🌐',
+        prompt: null,
+        contentTypes: ['prose'],
+        _dynamic: 'translate',
+        mode: 'replace',
+    },
     // Code
-    { label: 'Explain', icon: '💡', prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
-    { label: 'Add comments', icon: '💬', prompt: 'Add clear, helpful comments to this code. Return only the commented code, no explanations:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'replace' },
-    { label: 'Find bugs', icon: '🐛', prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```', contentTypes: ['code'], mode: 'inform' },
+    {
+        label: 'Explain',
+        icon: '💡',
+        prompt: 'Explain what this code does in plain language:\n\n```\n{text}\n```',
+        contentTypes: ['code'],
+        mode: 'inform',
+    },
+    {
+        label: 'Add comments',
+        icon: '💬',
+        prompt: 'Add clear, helpful comments to this code. Return only the commented code, no explanations:\n\n```\n{text}\n```',
+        contentTypes: ['code'],
+        mode: 'replace',
+    },
+    {
+        label: 'Find bugs',
+        icon: '🐛',
+        prompt: 'Review this code for bugs, issues, or improvements:\n\n```\n{text}\n```',
+        contentTypes: ['code'],
+        mode: 'inform',
+    },
     // Errors
-    { label: 'Explain error', icon: '🔍', prompt: 'Explain this error and suggest how to fix it:\n\n```\n{text}\n```', contentTypes: ['error'], mode: 'inform' },
-    { label: 'Suggest fix', icon: '🔧', prompt: 'Suggest a fix for this error. Return only the corrected code:\n\n```\n{text}\n```', contentTypes: ['error'], mode: 'replace' },
+    {
+        label: 'Explain error',
+        icon: '🔍',
+        prompt: 'Explain this error and suggest how to fix it:\n\n```\n{text}\n```',
+        contentTypes: ['error'],
+        mode: 'inform',
+    },
+    {
+        label: 'Suggest fix',
+        icon: '🔧',
+        prompt: 'Suggest a fix for this error. Return only the corrected code:\n\n```\n{text}\n```',
+        contentTypes: ['error'],
+        mode: 'replace',
+    },
     // JSON/data
-    { label: 'Format', icon: '📐', prompt: 'Format and pretty-print this data. Return only the formatted data:\n\n```\n{text}\n```', contentTypes: ['json'], mode: 'replace' },
-    { label: 'Validate', icon: '✅', prompt: 'Validate this data structure and point out any issues:\n\n```\n{text}\n```', contentTypes: ['json'], mode: 'inform' },
+    {
+        label: 'Format',
+        icon: '📐',
+        prompt: 'Format and pretty-print this data. Return only the formatted data:\n\n```\n{text}\n```',
+        contentTypes: ['json'],
+        mode: 'replace',
+    },
+    {
+        label: 'Validate',
+        icon: '✅',
+        prompt: 'Validate this data structure and point out any issues:\n\n```\n{text}\n```',
+        contentTypes: ['json'],
+        mode: 'inform',
+    },
     // URL
-    { label: 'Summarize page', icon: '🌐', prompt: 'Summarize the content at this URL:\n\n{text}', contentTypes: ['url'], mode: 'inform' },
+    {
+        label: 'Summarize page',
+        icon: '🌐',
+        prompt: 'Summarize the content at this URL:\n\n{text}',
+        contentTypes: ['url'],
+        mode: 'inform',
+    },
     // Number
-    { label: 'Convert units', icon: '📏', prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}', contentTypes: ['number'], mode: 'inform' },
-    { label: 'Explain number', icon: '🔢', prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}', contentTypes: ['number'], mode: 'inform' },
+    {
+        label: 'Convert units',
+        icon: '📏',
+        prompt: 'What are common unit conversions for this number? Show conversions for likely units (currency, distance, weight, temperature, etc.):\n\n{text}',
+        contentTypes: ['number'],
+        mode: 'inform',
+    },
+    {
+        label: 'Explain number',
+        icon: '🔢',
+        prompt: 'What is significant about this number? Provide context (is it a port number, HTTP status, error code, mathematical constant, etc.):\n\n{text}',
+        contentTypes: ['number'],
+        mode: 'inform',
+    },
     // Folder organization
-    { label: 'Looks good, do it', icon: '▶️', prompt: 'Go ahead and execute the plan as proposed.', contentTypes: ['folder_plan'], mode: 'inform' },
-    { label: 'More details', icon: '🔍', prompt: 'Can you give me more details about what each operation will do and why?', contentTypes: ['folder_plan'], mode: 'inform' },
-    { label: 'Undo changes', icon: '↩️', prompt: 'Please undo/rollback the folder changes that were just made.', contentTypes: ['folder_plan'], mode: 'inform' },
+    {
+        label: 'Looks good, do it',
+        icon: '▶️',
+        prompt: 'Go ahead and execute the plan as proposed.',
+        contentTypes: ['folder_plan'],
+        mode: 'inform',
+    },
+    {
+        label: 'More details',
+        icon: '🔍',
+        prompt: 'Can you give me more details about what each operation will do and why?',
+        contentTypes: ['folder_plan'],
+        mode: 'inform',
+    },
+    {
+        label: 'Undo changes',
+        icon: '↩️',
+        prompt: 'Please undo/rollback the folder changes that were just made.',
+        contentTypes: ['folder_plan'],
+        mode: 'inform',
+    },
 ];
 
 // --- Chip rendering ---
@@ -292,12 +770,14 @@ export async function getActionsForText(text, config) {
         // Respect per-action minimum word count (e.g. Summarize needs enough content)
         if (action.minWords && wordCount < action.minWords) continue;
 
-        if (action.contentTypes.length === 0 ||
-            action.contentTypes.some(t => types.includes(t))) {
+        if (
+            action.contentTypes.length === 0 ||
+            action.contentTypes.some((t) => types.includes(t))
+        ) {
             // Handle dynamic translate action — only show if text is in a different language
             if (action._dynamic === 'translate') {
                 const targetLangCode = _getOsLanguageCode();
-                if (!await _isTextInTargetLanguage(text, targetLangCode)) {
+                if (!(await _isTextInTargetLanguage(text, targetLangCode))) {
                     actions.push({
                         ...action,
                         label: `→ ${translateLang}`,
@@ -313,8 +793,11 @@ export async function getActionsForText(text, config) {
     // Custom actions from config
     if (config.custom_actions) {
         for (const custom of config.custom_actions) {
-            if (!custom.content_types || custom.content_types.length === 0 ||
-                custom.content_types.some(t => types.includes(t))) {
+            if (
+                !custom.content_types ||
+                custom.content_types.length === 0 ||
+                custom.content_types.some((t) => types.includes(t))
+            ) {
                 actions.push(custom);
             }
         }
@@ -358,14 +841,23 @@ export function renderQuickActionChips(actions, container, onAction) {
             // user-typed copy. Lazy-import keeps this module loadable
             // in non-Tauri test contexts.
             const KNOWN = new Set([
-                'Translate', 'Summarize', 'Explain', 'Rewrite',
-                'Fix grammar', 'Make formal', 'Make casual',
-                'Code review', 'Explain code', 'Add comments',
+                'Translate',
+                'Summarize',
+                'Explain',
+                'Rewrite',
+                'Fix grammar',
+                'Make formal',
+                'Make casual',
+                'Code review',
+                'Explain code',
+                'Add comments',
             ]);
             const label = KNOWN.has(action.label) ? action.label : 'custom';
-            import('./telemetry.js').then(({ trackEvent }) => {
-                trackEvent('quick_action_used', { action: label });
-            }).catch(() => {});
+            import('./telemetry.js')
+                .then(({ trackEvent }) => {
+                    trackEvent('quick_action_used', { action: label });
+                })
+                .catch(() => {});
             onAction(action.prompt);
         });
         container.appendChild(chip);

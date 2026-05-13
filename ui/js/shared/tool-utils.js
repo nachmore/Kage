@@ -18,7 +18,7 @@ export function getToolIcon(kind) {
 
 /**
  * Get emoji for a tool name (used in permissions and settings)
- */ 
+ */
 export function getToolEmoji(name) {
     const lower = (name || '').toLowerCase();
     // Extension tools — use the extension's icon if available
@@ -27,7 +27,8 @@ export function getToolEmoji(name) {
     if (lower.includes('fetch') || lower.includes('web')) return '🌐';
     if (lower.includes('read')) return '📖';
     if (lower.includes('write') || lower.includes('edit')) return '✏️';
-    if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+    if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal'))
+        return '💻';
     if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
     if (lower.includes('file')) return '📁';
     return '🔧';
@@ -50,11 +51,10 @@ export function escapeHtml(text) {
 export function stripKageTags(text) {
     if (!text) return text;
     return text
-        .replace(/<_kage_[^>]*\/>\n?/g, '')   // <_kage_ctx app="..." title="..."/>
-        .replace(/\[_KAGE_[A-Z_]*\][^\n]*\n?/g, '')  // [_KAGE_INLINE] Return ONLY...
+        .replace(/<_kage_[^>]*\/>\n?/g, '') // <_kage_ctx app="..." title="..."/>
+        .replace(/\[_KAGE_[A-Z_]*\][^\n]*\n?/g, '') // [_KAGE_INLINE] Return ONLY...
         .trim();
 }
-
 
 /**
  * Map MCP/agent tool names to user-friendly descriptions for spinners.
@@ -119,9 +119,9 @@ export function getExtensionToolFriendlyName(extensionId, toolName, extensionMan
         // definitions pre-fetched. If you need the freshest data, await
         // extensionManager.getToolDefinitions() before calling this.
         const defs = extensionManager.getToolDefinitionsCached?.() || [];
-        const extDef = defs.find(d => d.extensionId === extensionId);
+        const extDef = defs.find((d) => d.extensionId === extensionId);
         if (extDef?.tools) {
-            const tool = extDef.tools.find(t => t.name === toolName);
+            const tool = extDef.tools.find((t) => t.name === toolName);
             if (tool?.friendlyName) return tool.friendlyName;
         }
     }

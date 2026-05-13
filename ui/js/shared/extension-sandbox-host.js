@@ -119,7 +119,8 @@ export class ExtensionSandbox {
         // zero-sized hidden iframe would run the extension sandbox at a
         // crawl (observed: 1-second setTimeouts firing after 3+ seconds
         // during rapid keystrokes), causing RPCs to time out.
-        iframe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
+        iframe.style.cssText =
+            'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
         this._iframe = iframe;
         this._container.appendChild(iframe);
         // Set src *after* appendChild so there's exactly one 'load' event
@@ -141,21 +142,20 @@ export class ExtensionSandbox {
         await this._waitForIframeLoad();
 
         const readyPromise = this._waitForReady();
-        iframe.contentWindow.postMessage(
-            { type: 'handshake' },
-            '*',
-            [channel.port2],
-        );
+        iframe.contentWindow.postMessage({ type: 'handshake' }, '*', [channel.port2]);
 
         await readyPromise;
 
-        const initResult = await this._rpcRaw({
-            type: 'init',
-            config: this.config,
-            sources: this.sources,
-            sharedSources: this.sharedSources,
-            vendorSources: this.vendorSources,
-        }, { ackType: 'init-ack' });
+        const initResult = await this._rpcRaw(
+            {
+                type: 'init',
+                config: this.config,
+                sources: this.sources,
+                sharedSources: this.sharedSources,
+                vendorSources: this.vendorSources,
+            },
+            { ackType: 'init-ack' }
+        );
 
         if (!initResult.ok) {
             throw new Error(`sandbox init failed: ${initResult.error || 'unknown'}`);
@@ -225,10 +225,14 @@ export class ExtensionSandbox {
         }
         this._pendingRpcs.clear();
 
-        try { this._port?.close(); } catch {}
+        try {
+            this._port?.close();
+        } catch {}
         this._port = null;
 
-        try { this._iframe?.remove(); } catch {}
+        try {
+            this._iframe?.remove();
+        } catch {}
         this._iframe = null;
     }
 
@@ -255,7 +259,11 @@ export class ExtensionSandbox {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this._readyResolver = null;
-                reject(new Error(`sandbox '${this.extensionId}' did not signal ready within ${BOOT_TIMEOUT_MS}ms`));
+                reject(
+                    new Error(
+                        `sandbox '${this.extensionId}' did not signal ready within ${BOOT_TIMEOUT_MS}ms`
+                    )
+                );
             }, BOOT_TIMEOUT_MS);
             this._readyResolver = () => {
                 clearTimeout(timeout);
@@ -337,7 +345,7 @@ export class ExtensionSandbox {
                 error: `Extension '${this.extensionId}': ${decision.reason}`,
             });
             console.warn(
-                `[sandbox ${this.extensionId}] BLOCKED invoke('${command}'): ${decision.reason}`,
+                `[sandbox ${this.extensionId}] BLOCKED invoke('${command}'): ${decision.reason}`
             );
             return;
         }
@@ -349,7 +357,7 @@ export class ExtensionSandbox {
         // another extension's data even if they know the key.
         const forwardedArgs = STORAGE_COMMANDS.has(command)
             ? { ...(args || {}), extension_id: this.extensionId }
-            : (args || {});
+            : args || {};
 
         try {
             const result = await this._rawInvoke(command, forwardedArgs);
@@ -368,10 +376,18 @@ export class ExtensionSandbox {
         const level = msg.level || 'info';
         const text = typeof msg.msg === 'string' ? msg.msg : JSON.stringify(msg.msg);
         switch (level) {
-            case 'error': console.error(prefix, text); break;
-            case 'warn':  console.warn(prefix, text); break;
-            case 'debug': console.debug(prefix, text); break;
-            default:      console.log(prefix, text); break;
+            case 'error':
+                console.error(prefix, text);
+                break;
+            case 'warn':
+                console.warn(prefix, text);
+                break;
+            case 'debug':
+                console.debug(prefix, text);
+                break;
+            default:
+                console.log(prefix, text);
+                break;
         }
     }
 }
@@ -403,7 +419,8 @@ export class ExtensionSandboxPool {
             // container clips the child iframes to zero rendered area,
             // which Chromium treats as backgrounded — timers get
             // throttled and RPCs time out during rapid input.)
-            el.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
+            el.style.cssText =
+                'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
             document.body.appendChild(el);
         }
         this._container = el;

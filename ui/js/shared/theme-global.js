@@ -47,13 +47,17 @@
 
     async function refresh(themeOverride) {
         if (!_invoke) return;
-        try { _osDark = await _invoke('get_os_dark_mode'); } catch {}
+        try {
+            _osDark = await _invoke('get_os_dark_mode');
+        } catch {}
         let theme = themeOverride;
         if (!theme) {
             try {
                 const config = await _invoke('get_config');
                 theme = config.ui?.theme || 'system';
-            } catch { theme = 'system'; }
+            } catch {
+                theme = 'system';
+            }
         }
         clearCustomColors();
         applyClasses(theme);
@@ -78,7 +82,9 @@
             window.__TAURI__.event.listen('config_updated', () => refresh());
         }
         // Re-apply on OS theme change
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => refresh());
+        window
+            .matchMedia('(prefers-color-scheme: dark)')
+            .addEventListener('change', () => refresh());
     }
 
     window.kageTheme = { init, refresh, applyClasses, isDark: () => _osDark };

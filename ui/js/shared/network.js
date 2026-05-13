@@ -32,7 +32,11 @@ function _setOnline(value) {
     if (_online !== value) {
         _online = value;
         for (const fn of _listeners) {
-            try { fn(_online); } catch (e) { console.warn('Network listener error:', e); }
+            try {
+                fn(_online);
+            } catch (e) {
+                console.warn('Network listener error:', e);
+            }
         }
     }
 }
@@ -98,4 +102,5 @@ export function markOnline() {
 }
 
 /** User-friendly message explaining what works offline. */
-export const OFFLINE_MESSAGE = 'No internet connection. Search, shortcuts, and app launching still work, but AI features need a connection.';
+export const OFFLINE_MESSAGE =
+    'No internet connection. Search, shortcuts, and app launching still work, but AI features need a connection.';

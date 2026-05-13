@@ -30,36 +30,36 @@ body.dark-theme .session-current-badge {
 }
 
 body.dark-theme .session-item:hover {
-    background: #28242E;
+    background: #28242e;
 }
 
 body.dark-theme .session-item.active {
-    background: #352F3D;
+    background: #352f3d;
 }
 
 body.dark-theme .session-item-title {
-    color: #E5E7EB;
+    color: #e5e7eb;
 }
 
 body.dark-theme .session-item-date {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .session-list-empty {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .sidebar-footer {
-    border-top-color: #352F3D;
+    border-top-color: #352f3d;
 }
 
 body.dark-theme .sidebar-footer-btn {
-    background: #28242E;
-    color: #938F9B;
+    background: #28242e;
+    color: #938f9b;
 }
 
 body.dark-theme .sidebar-footer-btn:hover {
-    background: #352F3D;
+    background: #352f3d;
     color: var(--kage-accent-light);
 }
 
@@ -73,7 +73,7 @@ body.dark-theme .chat-header {
 }
 
 body.dark-theme .chat-header-title {
-    color: #E5E7EB;
+    color: #e5e7eb;
 }
 
 body.dark-theme .messages-area {
@@ -83,16 +83,16 @@ body.dark-theme .messages-area {
 /* Link colors handled globally via --kage-link tokens */
 
 body.dark-theme .message.assistant .message-content {
-    background: #28242E;
-    color: #E5E7EB;
+    background: #28242e;
+    color: #e5e7eb;
 }
 
 body.dark-theme .message-placeholder {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .typing-indicator {
-    background: #28242E;
+    background: #28242e;
 }
 
 body.dark-theme .chat-input-container {
@@ -101,8 +101,8 @@ body.dark-theme .chat-input-container {
 }
 
 body.dark-theme .chat-input-wrapper {
-    background: #28242E;
-    border-color: #4A464F;
+    background: #28242e;
+    border-color: #4a464f;
 }
 
 body.dark-theme .chat-input-wrapper:focus-within {
@@ -110,46 +110,46 @@ body.dark-theme .chat-input-wrapper:focus-within {
 }
 
 body.dark-theme .chat-input {
-    color: #E5E7EB;
+    color: #e5e7eb;
 }
 
 body.dark-theme .chat-input::placeholder {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .chat-toolbar-btn {
-    color: #938F9B;
+    color: #938f9b;
 }
 body.dark-theme .chat-toolbar-btn:hover {
-    background: rgba(255,255,255,0.08);
-    color: #E5E7EB;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e5e7eb;
 }
 body.dark-theme .chat-context-indicator {
-    color: #938F9B;
+    color: #938f9b;
 }
 body.dark-theme .chat-model-selector {
-    color: #938F9B;
+    color: #938f9b;
 }
 body.dark-theme .chat-model-selector:hover {
-    background: rgba(255,255,255,0.08);
-    color: #E5E7EB;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e5e7eb;
 }
 body.dark-theme .chat-model-dropdown {
-    background: #28242E;
-    border-color: #4A464F;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    background: #28242e;
+    border-color: #4a464f;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 body.dark-theme .chat-model-dropdown-item:hover {
-    background: rgba(255,255,255,0.06);
+    background: rgba(255, 255, 255, 0.06);
 }
 body.dark-theme .chat-model-dropdown-item.active {
     background: rgba(99, 102, 241, 0.15);
 }
 body.dark-theme .chat-model-dropdown-item-name {
-    color: #E5E7EB;
+    color: #e5e7eb;
 }
 body.dark-theme .chat-model-dropdown-item-desc {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .chat-error {
@@ -165,12 +165,12 @@ body.dark-theme .chat-error.chat-warning {
 }
 
 body.dark-theme .message-attachment-img {
-    border-color: #4A464F;
+    border-color: #4a464f;
 }
 
 body.dark-theme .message-attachment-file {
-    background: rgba(255,255,255,0.08);
-    color: #E5E7EB;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e5e7eb;
 }
 
 body.dark-theme .session-reset-notice {
@@ -187,11 +187,11 @@ body.dark-theme .compacting-notice {
 body.dark-theme .compacting-notice.compacting-done {
     background: rgba(34, 197, 94, 0.08);
     border-color: rgba(34, 197, 94, 0.2);
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .chat-header-title-input {
-    color: #E5E7EB;
+    color: #e5e7eb;
     border-color: var(--kage-accent);
 }
 

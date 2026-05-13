@@ -44,7 +44,9 @@ class ColorPickerSettingsModule extends SettingsModule {
 
     save(config) {
         config.color_picker = config.color_picker || {};
-        config.color_picker.enabled = document.getElementById('colorPickerEnabled')?.checked ?? true;
-        config.color_picker.copy_format = document.getElementById('colorCopyFormat')?.value || 'all';
+        config.color_picker.enabled =
+            document.getElementById('colorPickerEnabled')?.checked ?? true;
+        config.color_picker.copy_format =
+            document.getElementById('colorCopyFormat')?.value || 'all';
     }
 }

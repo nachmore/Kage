@@ -6,7 +6,12 @@
 import { classifyText, getActionsForText } from './shared/quick-actions.js';
 import { createMascot } from './shared/mascot.js';
 
-console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText, 'getActionsForText:', typeof getActionsForText);
+console.log(
+    '[inline-assist] Module loaded, classifyText:',
+    typeof classifyText,
+    'getActionsForText:',
+    typeof getActionsForText
+);
 
 (async function () {
     const { invoke } = window.__TAURI__.core;
@@ -19,7 +24,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
 
     // Render mascot icon
     const mascotEl = document.getElementById('inlineAssistMascot');
-    if (mascotEl) createMascot({ size: 24 }).then(svg => mascotEl.appendChild(svg));
+    if (mascotEl) createMascot({ size: 24 }).then((svg) => mascotEl.appendChild(svg));
 
     const actionsEl = document.getElementById('actions');
     const customInput = document.getElementById('customInput');
@@ -54,7 +59,10 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         console.log('[inline-assist] Received show event:', event.payload);
         const { selection, app, title } = event.payload || {};
         selectedText = selection || '';
-        console.log('[inline-assist] Selection text (' + selectedText.length + ' chars):', JSON.stringify(selectedText.substring(0, 200)));
+        console.log(
+            '[inline-assist] Selection text (' + selectedText.length + ' chars):',
+            JSON.stringify(selectedText.substring(0, 200))
+        );
         console.log('[inline-assist] Classification:', classifyText(selectedText));
         sourceApp = app || '';
         sourceTitle = title || '';
@@ -120,12 +128,24 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         try {
             const config = await invoke('get_config');
             loadedMacros = config.macros || [];
-        } catch { loadedMacros = []; }
+        } catch {
+            loadedMacros = [];
+        }
 
         if (!selectedText.trim()) {
             actionItems = [
-                { label: 'Summarize page', icon: '📝', prompt: 'Summarize what I\'m currently looking at.', mode: 'inform' },
-                { label: 'Help with this app', icon: '💡', prompt: 'Give me tips for what I\'m currently doing.', mode: 'inform' },
+                {
+                    label: 'Summarize page',
+                    icon: '📝',
+                    prompt: "Summarize what I'm currently looking at.",
+                    mode: 'inform',
+                },
+                {
+                    label: 'Help with this app',
+                    icon: '💡',
+                    prompt: "Give me tips for what I'm currently doing.",
+                    mode: 'inform',
+                },
             ];
         } else {
             const qaConfig = { enabled: true, custom_actions: [] };
@@ -214,11 +234,12 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         panel.style.display = 'none';
         iconBubble.classList.add('thinking');
         iconBubble.style.margin = '20px auto';
-        await new Promise(r => requestAnimationFrame(r));
+        await new Promise((r) => requestAnimationFrame(r));
         await appWindow.setSize(new LogicalSize(86, 86));
 
         // Add instruction for inline replacement
-        prompt += '\n\n[_KAGE_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences. Just the raw output text that should replace the selection.';
+        prompt +=
+            '\n\n[_KAGE_INLINE] Return ONLY the result text. No explanations, no markdown formatting, no code fences. Just the raw output text that should replace the selection.';
 
         try {
             await invoke('send_inline_assist', { message: prompt });
@@ -261,11 +282,11 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
         panel.style.display = 'none';
         iconBubble.classList.add('thinking');
         iconBubble.style.margin = '20px auto';
-        await new Promise(r => requestAnimationFrame(r));
+        await new Promise((r) => requestAnimationFrame(r));
         await appWindow.setSize(new LogicalSize(86, 86));
 
         try {
-            const steps = macro.steps.map(s => ({
+            const steps = macro.steps.map((s) => ({
                 step_type: s.step_type || 'ai_prompt',
                 prompt: s.prompt || '',
                 find: s.find || '',
@@ -278,7 +299,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
                 initialInput: selectedText.trim(),
             });
 
-            if (result && result.trim()) {
+            if (result?.trim()) {
                 if (outputMode === 'replace') {
                     await invoke('inline_assist_apply', { text: result.trim() });
                 } else {
@@ -345,13 +366,15 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
 
     // --- Auto-resize ---
     async function resizeToFit() {
-        await new Promise(r => requestAnimationFrame(r));
-        await new Promise(r => requestAnimationFrame(r)); // double-raf for layout settle
+        await new Promise((r) => requestAnimationFrame(r));
+        await new Promise((r) => requestAnimationFrame(r)); // double-raf for layout settle
         const layoutRect = document.getElementById('layout').getBoundingClientRect();
-        await appWindow.setSize(new LogicalSize(
-            Math.max(Math.ceil(layoutRect.width) + 8, 260),
-            Math.ceil(layoutRect.height) + 8
-        ));
+        await appWindow.setSize(
+            new LogicalSize(
+                Math.max(Math.ceil(layoutRect.width) + 8, 260),
+                Math.ceil(layoutRect.height) + 8
+            )
+        );
     }
 
     // --- Hide on blur ---
@@ -373,7 +396,8 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
 
     // Inject a style rule that pauses ALL animations when the class is set
     const pauseStyle = document.createElement('style');
-    pauseStyle.textContent = '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
+    pauseStyle.textContent =
+        '.animations-paused, .animations-paused * { animation-play-state: paused !important; }';
     document.head.appendChild(pauseStyle);
 
     // Window starts hidden — pause immediately
@@ -383,6 +407,7 @@ console.log('[inline-assist] Module loaded, classifyText:', typeof classifyText,
     await appWindow.listen('tauri://focus', () => resumeAnimations());
     await appWindow.listen('tauri://blur', () => pauseAnimations());
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) pauseAnimations(); else resumeAnimations();
+        if (document.hidden) pauseAnimations();
+        else resumeAnimations();
     });
 })();

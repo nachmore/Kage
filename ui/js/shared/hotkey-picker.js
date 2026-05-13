@@ -19,8 +19,12 @@ export class HotkeyPicker {
         this.bind();
     }
 
-    onChange(cb) { this._callbacks.push(cb); }
-    _notify() { for (const cb of this._callbacks) cb(this.hotkey); }
+    onChange(cb) {
+        this._callbacks.push(cb);
+    }
+    _notify() {
+        for (const cb of this._callbacks) cb(this.hotkey);
+    }
 
     setHotkey(hk) {
         this.hotkey = hk;
@@ -50,10 +54,12 @@ export class HotkeyPicker {
 
     renderKeycaps() {
         const parts = [...(this.hotkey.modifiers || []), this.hotkey.key];
-        this.keycapsEl.innerHTML = parts.map((k, i) => {
-            const sep = i < parts.length - 1 ? '<span class="hk-picker-sep">+</span>' : '';
-            return `<kbd class="hk-picker-key">${k}</kbd>${sep}`;
-        }).join('');
+        this.keycapsEl.innerHTML = parts
+            .map((k, i) => {
+                const sep = i < parts.length - 1 ? '<span class="hk-picker-sep">+</span>' : '';
+                return `<kbd class="hk-picker-key">${k}</kbd>${sep}`;
+            })
+            .join('');
     }
 
     clearStatus() {
@@ -75,7 +81,7 @@ export class HotkeyPicker {
 
         try {
             const result = await this.invoke('capture_hotkey_combo');
-            if (result && result.key) {
+            if (result?.key) {
                 // Try to register immediately
                 try {
                     await this.invoke('try_register_hotkey', {

@@ -44,7 +44,7 @@ async function initContextMenu() {
                     document.execCommand('copy');
                 } else {
                     const responseEl = document.getElementById('responseText');
-                    if (responseEl && responseEl.textContent) {
+                    if (responseEl?.textContent) {
                         navigator.clipboard.writeText(responseEl.textContent).catch(() => {});
                     }
                 }
@@ -57,7 +57,8 @@ async function initContextMenu() {
                         input.focus();
                         const start = input.selectionStart;
                         const end = input.selectionEnd;
-                        input.value = input.value.substring(0, start) + text + input.value.substring(end);
+                        input.value =
+                            input.value.substring(0, start) + text + input.value.substring(end);
                         input.selectionStart = input.selectionEnd = start + text.length;
                         input.dispatchEvent(new Event('input', { bubbles: true }));
                     }
@@ -69,13 +70,19 @@ async function initContextMenu() {
                 try {
                     await invoke('open_settings_window');
                     await appWindow.hide();
-                } catch (e) { console.error(e); }
+                } catch (e) {
+                    console.error(e);
+                }
                 break;
             case 'close':
                 await appWindow.hide();
                 break;
             case 'inspect':
-                try { await invoke('open_devtools'); } catch (e) { console.error(e); }
+                try {
+                    await invoke('open_devtools');
+                } catch (e) {
+                    console.error(e);
+                }
                 break;
             case 'dismissed':
                 // Menu closed without action

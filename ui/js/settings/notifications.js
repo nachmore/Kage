@@ -43,7 +43,7 @@ class NotificationsSettingsModule extends SettingsModule {
             const enabled = document.getElementById('notificationsEnabled');
             const sound = document.getElementById('notificationSound');
             const duration = document.getElementById('notificationDuration');
-            
+
             if (enabled) enabled.checked = config.notifications.enabled;
             if (sound) sound.value = config.notifications.sound;
             if (duration) duration.value = config.notifications.duration;
@@ -54,14 +54,17 @@ class NotificationsSettingsModule extends SettingsModule {
         config.notifications = {
             enabled: document.getElementById('notificationsEnabled').checked,
             sound: document.getElementById('notificationSound').value,
-            duration: parseInt(document.getElementById('notificationDuration').value)
+            duration: parseInt(document.getElementById('notificationDuration').value, 10),
         };
     }
 
     validate() {
-        const duration = parseInt(document.getElementById('notificationDuration').value);
+        const duration = parseInt(document.getElementById('notificationDuration').value, 10);
         if (duration < 1 || duration > 30) {
-            return { valid: false, error: 'Notification duration must be between 1 and 30 seconds' };
+            return {
+                valid: false,
+                error: 'Notification duration must be between 1 and 30 seconds',
+            };
         }
         return { valid: true };
     }

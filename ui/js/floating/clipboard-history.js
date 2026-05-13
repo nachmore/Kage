@@ -16,7 +16,7 @@ const CB_PREFIXES = ['>cb', '>clipboard'];
 /** Check if the input text should trigger clipboard history mode */
 export function isClipboardTrigger(query) {
     const lower = query.toLowerCase();
-    return CB_PREFIXES.some(p => lower === p || lower.startsWith(p + ' '));
+    return CB_PREFIXES.some((p) => lower === p || lower.startsWith(p + ' '));
 }
 
 /** Extract the filter query from a clipboard trigger input */
@@ -43,7 +43,7 @@ export async function fetchClipboardHistory(invoke) {
 export function filterClipboardHistory(entries, query) {
     if (!query) return entries;
     const lower = query.toLowerCase();
-    return entries.filter(e => e.text.toLowerCase().includes(lower));
+    return entries.filter((e) => e.text.toLowerCase().includes(lower));
 }
 
 /** Format a timestamp for display */
@@ -59,7 +59,9 @@ function formatTime(isoString) {
         const diffHr = Math.floor(diffMin / 60);
         if (diffHr < 24) return `${diffHr}h ago`;
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    } catch { return ''; }
+    } catch {
+        return '';
+    }
 }
 
 /** Truncate text for preview */

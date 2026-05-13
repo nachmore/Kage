@@ -1,47 +1,47 @@
 /* Floating dark theme - imports shared + floating-specific overrides */
-@import url('shared-theme-dark.css');
+@import url("shared-theme-dark.css");
 
 body.dark-theme .speech-bubble {
-    background: #28242E;
-    color: #E5E7EB;
+    background: #28242e;
+    color: #e5e7eb;
 }
 
 body.dark-theme .resize-handle {
-    background: linear-gradient(135deg, transparent 50%, #4A464F 50%);
+    background: linear-gradient(135deg, transparent 50%, #4a464f 50%);
 }
 
 body.dark-theme .content-area.visible + .input-container,
 body.dark-theme .loading-dots.visible ~ .input-container {
-    border-top-color: #4A464F;
+    border-top-color: #4a464f;
 }
 
 body.dark-theme .input-box {
-    color: #E5E7EB;
+    color: #e5e7eb;
     background: transparent;
 }
 
 body.dark-theme .input-box::placeholder {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 /* Link colors handled globally via --kage-link tokens */
 
 body.dark-theme .expand-btn {
-    color: #938F9B;
+    color: #938f9b;
 }
 
 body.dark-theme .expand-btn:hover {
-    background: #352F3D;
+    background: #352f3d;
     color: var(--kage-accent-light);
 }
 
 /* Suggestion dark theme handled by shared-components.css */
 
 body.dark-theme .app-suggestions {
-    background: #28242E;
-    border-top-color: #4A464F;
+    background: #28242e;
+    border-top-color: #4a464f;
 }
 
 body.dark-theme .app-suggestion-item {
-    border-bottom-color: #352F3D;
+    border-bottom-color: #352f3d;
 }

@@ -17,21 +17,21 @@
 // preserved so the many explicit call sites in app.js / suggestions / timers
 // keep working as nudges — they coalesce with observer-driven reflows.
 
-const DEFAULT_HEIGHT = 76;        // logical px — collapsed launcher
-const MAX_HEIGHT_PERCENT = 0.65;  // % of monitor height, auto-grow ceiling
-const BODY_PADDING = 16;          // 8px top + 8px bottom in floating-base.css
+const DEFAULT_HEIGHT = 76; // logical px — collapsed launcher
+const MAX_HEIGHT_PERCENT = 0.65; // % of monitor height, auto-grow ceiling
+const BODY_PADDING = 16; // 8px top + 8px bottom in floating-base.css
 
 export class WindowManager {
     constructor(invoke) {
         this.invoke = invoke;
-        this.userSetHeight = null;   // physical px — set by manual resize handle
-        this.isResizing = false;     // user dragging the corner handle
-        this.isDragging = false;     // user dragging the ghost
+        this.userSetHeight = null; // physical px — set by manual resize handle
+        this.isResizing = false; // user dragging the corner handle
+        this.isDragging = false; // user dragging the ghost
         this._animSeq = 0;
         this._animFrame = null;
         this._scheduled = false;
-        this._suspended = false;     // pause auto-resize (e.g. permission modal)
-        this._lastTarget = 0;        // last target we actually requested
+        this._suspended = false; // pause auto-resize (e.g. permission modal)
+        this._lastTarget = 0; // last target we actually requested
         this._observer = null;
         this._mutationObserver = null;
     }
@@ -87,7 +87,7 @@ export class WindowManager {
         try {
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const monitor = await appWindow.currentMonitor();
-            if (monitor && monitor.size) {
+            if (monitor?.size) {
                 return Math.floor(monitor.size.height * MAX_HEIGHT_PERCENT);
             }
         } catch {}
@@ -119,8 +119,12 @@ export class WindowManager {
 
         // If suggestions list would push us past the cap, let it scroll.
         const appSuggestions = document.getElementById('appSuggestions');
-        if (appSuggestions && appSuggestions.classList.contains('visible') && naturalPhys > maxPhys && !this.userSetHeight) {
-            const overflowLogical = naturalLogical - (maxPhys / scale);
+        if (
+            appSuggestions?.classList.contains('visible') &&
+            naturalPhys > maxPhys &&
+            !this.userSetHeight
+        ) {
+            const overflowLogical = naturalLogical - maxPhys / scale;
             const currentH = appSuggestions.offsetHeight;
             const cappedH = Math.floor(currentH - overflowLogical);
             if (cappedH > 40) appSuggestions.style.maxHeight = cappedH + 'px';
@@ -171,7 +175,9 @@ export class WindowManager {
         if (diff < 4) return;
 
         if (target >= from) {
-            try { await this.invoke('resize_floating_window', { height: target }); } catch {}
+            try {
+                await this.invoke('resize_floating_window', { height: target });
+            } catch {}
             return;
         }
 
@@ -179,13 +185,18 @@ export class WindowManager {
         const start = performance.now();
         const me = ++this._animSeq;
 
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             const step = async (now) => {
-                if (me !== this._animSeq) { resolve(); return; }
+                if (me !== this._animSeq) {
+                    resolve();
+                    return;
+                }
                 const t = Math.min((now - start) / duration, 1);
-                const eased = 1 - Math.pow(1 - t, 3);
+                const eased = 1 - (1 - t) ** 3;
                 const h = Math.round(from + (target - from) * eased);
-                try { await this.invoke('resize_floating_window', { height: h }); } catch {}
+                try {
+                    await this.invoke('resize_floating_window', { height: h });
+                } catch {}
                 if (t < 1 && me === this._animSeq) {
                     this._animFrame = requestAnimationFrame(step);
                 } else {
@@ -279,11 +290,15 @@ export class WindowManager {
             input.style.overflowY = inputPrevOverflowY;
         };
 
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             const step = (now) => {
-                if (me !== this._animSeq) { cleanup(); resolve(); return; }
+                if (me !== this._animSeq) {
+                    cleanup();
+                    resolve();
+                    return;
+                }
                 const t = Math.min((now - start) / duration, 1);
-                input.style.height = (fromInput + delta * t) + 'px';
+                input.style.height = fromInput + delta * t + 'px';
                 const osH = Math.round(fromOS + (toOS - fromOS) * t);
                 this.invoke('resize_floating_window', { height: osH }).catch(() => {});
                 if (t < 1 && me === this._animSeq) {
@@ -311,7 +326,7 @@ export class WindowManager {
         requestAnimationFrame(() => {
             this._scheduled = false;
             if (this._inputAnimating) return;
-            this._applyNaturalHeight().catch(e => console.warn('[WindowManager] resize:', e));
+            this._applyNaturalHeight().catch((e) => console.warn('[WindowManager] resize:', e));
         });
     }
 
@@ -384,15 +399,25 @@ export class WindowManager {
             const centerX = pos.x + Math.round(size.width / 2);
             const centerY = pos.y + Math.round(size.height / 2);
 
-            let monX = 0, monY = 0, monW, monH;
+            let monX = 0,
+                monY = 0,
+                monW,
+                monH;
             try {
                 const monitors = await window.__TAURI__.window.availableMonitors();
                 if (monitors && monitors.length > 0) {
                     let best = null;
                     for (const m of monitors) {
-                        const mx = m.position.x, my = m.position.y;
-                        const mw = m.size.width, mh = m.size.height;
-                        if (centerX >= mx && centerX < mx + mw && centerY >= my && centerY < my + mh) {
+                        const mx = m.position.x,
+                            my = m.position.y;
+                        const mw = m.size.width,
+                            mh = m.size.height;
+                        if (
+                            centerX >= mx &&
+                            centerX < mx + mw &&
+                            centerY >= my &&
+                            centerY < my + mh
+                        ) {
                             best = m;
                             break;
                         }
@@ -403,7 +428,10 @@ export class WindowManager {
                         monY = best.position.y;
                         monW = best.size.width;
                         const scale = best.scaleFactor || 1;
-                        monH = Math.min(best.size.height, Math.round(window.screen.availHeight * scale));
+                        monH = Math.min(
+                            best.size.height,
+                            Math.round(window.screen.availHeight * scale)
+                        );
                     }
                 }
             } catch {}
@@ -417,10 +445,22 @@ export class WindowManager {
             let y = pos.y;
             let moved = false;
 
-            if (y + size.height > monY + monH) { y = monY + monH - size.height; moved = true; }
-            if (x + size.width > monX + monW) { x = monX + monW - size.width; moved = true; }
-            if (x < monX) { x = monX; moved = true; }
-            if (y < monY) { y = monY; moved = true; }
+            if (y + size.height > monY + monH) {
+                y = monY + monH - size.height;
+                moved = true;
+            }
+            if (x + size.width > monX + monW) {
+                x = monX + monW - size.width;
+                moved = true;
+            }
+            if (x < monX) {
+                x = monX;
+                moved = true;
+            }
+            if (y < monY) {
+                y = monY;
+                moved = true;
+            }
 
             if (moved) {
                 await appWindow.setPosition(new window.__TAURI__.window.PhysicalPosition(x, y));
@@ -432,7 +472,8 @@ export class WindowManager {
 
     setupDragging(ghostContainer) {
         const DRAG_THRESHOLD = 5;
-        let startX = 0, startY = 0;
+        let startX = 0,
+            startY = 0;
         let pendingDrag = false;
         let moveHandler = null;
 
@@ -469,7 +510,9 @@ export class WindowManager {
         document.addEventListener('mouseup', () => {
             pendingDrag = false;
             if (moveHandler) document.removeEventListener('mousemove', moveHandler);
-            setTimeout(() => { this.isDragging = false; }, 200);
+            setTimeout(() => {
+                this.isDragging = false;
+            }, 200);
         });
     }
 
@@ -507,7 +550,7 @@ export class WindowManager {
             try {
                 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                 const monitor = await appWindow.currentMonitor();
-                if (monitor && monitor.size) {
+                if (monitor?.size) {
                     maxHeight = monitor.size.height;
                 } else {
                     maxHeight = window.screen.availHeight * scaleFactor;
@@ -521,16 +564,22 @@ export class WindowManager {
             const inputContainer = document.querySelector('.input-container');
             const inputH = inputContainer?.offsetHeight || 44;
             let minContentH = inputH + BODY_PADDING;
-            document.querySelectorAll('.extension-bar').forEach(bar => {
+            document.querySelectorAll('.extension-bar').forEach((bar) => {
                 if (bar.style.display !== 'none') minContentH += bar.offsetHeight;
             });
-            const minHeight = Math.max(Math.floor(DEFAULT_HEIGHT * scaleFactor), Math.floor(minContentH * scaleFactor));
+            const minHeight = Math.max(
+                Math.floor(DEFAULT_HEIGHT * scaleFactor),
+                Math.floor(minContentH * scaleFactor)
+            );
             const newWidth = Math.max(minWidth, Math.min(maxWidth * scaleFactor, startWidth + dx));
             const newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + dy));
             this.userSetHeight = newHeight;
             this._lastTarget = newHeight; // observer would otherwise fight us
             try {
-                await this.invoke('resize_floating_window', { width: Math.round(newWidth), height: Math.round(newHeight) });
+                await this.invoke('resize_floating_window', {
+                    width: Math.round(newWidth),
+                    height: Math.round(newHeight),
+                });
             } catch {}
         };
 

@@ -10,9 +10,9 @@ const SOUNDS = {
             const ctx = new AudioContext();
             _tone(ctx, 800, 0, 0.25, 0.3);
             _tone(ctx, 1000, 0.3, 0.25, 0.3);
-        }
+        },
     },
-    'chime': {
+    chime: {
         name: 'Chime',
         play: () => {
             const ctx = new AudioContext();
@@ -20,18 +20,18 @@ const SOUNDS = {
             _tone(ctx, 659, 0.15, 0.15, 0.25);
             _tone(ctx, 784, 0.3, 0.15, 0.25);
             _tone(ctx, 1047, 0.45, 0.3, 0.3);
-        }
+        },
     },
-    'alert': {
+    alert: {
         name: 'Alert',
         play: () => {
             const ctx = new AudioContext();
             _tone(ctx, 880, 0, 0.1, 0.35);
             _tone(ctx, 880, 0.15, 0.1, 0.35);
             _tone(ctx, 880, 0.3, 0.1, 0.35);
-        }
+        },
     },
-    'gentle': {
+    gentle: {
         name: 'Gentle',
         play: () => {
             const ctx = new AudioContext();
@@ -46,9 +46,9 @@ const SOUNDS = {
             gain.connect(ctx.destination);
             osc.start();
             osc.stop(ctx.currentTime + 0.8);
-        }
+        },
     },
-    'bell': {
+    bell: {
         name: 'Bell',
         play: () => {
             const ctx = new AudioContext();
@@ -63,16 +63,16 @@ const SOUNDS = {
                 osc.start();
                 osc.stop(ctx.currentTime + 1.2);
             });
-        }
+        },
     },
-    'success': {
+    success: {
         name: 'Success',
         play: () => {
             const ctx = new AudioContext();
             _tone(ctx, 523, 0, 0.12, 0.25);
             _tone(ctx, 659, 0.12, 0.12, 0.25);
             _tone(ctx, 784, 0.24, 0.2, 0.3);
-        }
+        },
     },
 };
 
@@ -97,8 +97,16 @@ let _activeAudio = null;
  * Stop any currently playing sound.
  */
 export function stopTimerSound() {
-    if (_activeInterval) { clearInterval(_activeInterval); _activeInterval = null; }
-    if (_activeAudio) { try { _activeAudio.pause(); } catch {} _activeAudio = null; }
+    if (_activeInterval) {
+        clearInterval(_activeInterval);
+        _activeInterval = null;
+    }
+    if (_activeAudio) {
+        try {
+            _activeAudio.pause();
+        } catch {}
+        _activeAudio = null;
+    }
 }
 
 /**
@@ -129,10 +137,17 @@ export function playTimerSound(soundId, customPath, repeats = 3, onDone) {
 
 function _playSynthRepeated(sound, repeats, onDone) {
     let i = 1;
-    try { sound.play(); } catch {}
-    if (repeats <= 1) { if (onDone) setTimeout(onDone, 500); return; }
+    try {
+        sound.play();
+    } catch {}
+    if (repeats <= 1) {
+        if (onDone) setTimeout(onDone, 500);
+        return;
+    }
     _activeInterval = setInterval(() => {
-        try { sound.play(); } catch {}
+        try {
+            sound.play();
+        } catch {}
         i++;
         if (i >= repeats) {
             clearInterval(_activeInterval);
@@ -145,16 +160,25 @@ function _playSynthRepeated(sound, repeats, onDone) {
 function _playCustomRepeated(path, repeats, onDone) {
     let i = 0;
     function playOnce() {
-        if (i >= repeats || _activeAudio === null && i > 0) {
+        if (i >= repeats || (_activeAudio === null && i > 0)) {
             _activeAudio = null;
             if (onDone) onDone();
             return;
         }
         try {
             _activeAudio = new Audio(path);
-            _activeAudio.onended = () => { i++; setTimeout(playOnce, 300); };
-            _activeAudio.play().catch(() => { _activeAudio = null; if (onDone) onDone(); });
-        } catch { _activeAudio = null; if (onDone) onDone(); }
+            _activeAudio.onended = () => {
+                i++;
+                setTimeout(playOnce, 300);
+            };
+            _activeAudio.play().catch(() => {
+                _activeAudio = null;
+                if (onDone) onDone();
+            });
+        } catch {
+            _activeAudio = null;
+            if (onDone) onDone();
+        }
     }
     playOnce();
 }

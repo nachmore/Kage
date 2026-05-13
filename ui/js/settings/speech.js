@@ -173,7 +173,6 @@ class SpeechSettingsModule extends SettingsModule {
         `;
     }
 
-
     load(config) {
         // Speech input settings
         const ui = config.ui || {};
@@ -185,7 +184,8 @@ class SpeechSettingsModule extends SettingsModule {
         if (readBack) readBack.checked = ui.speech_read_back === true;
         if (silence) {
             silence.value = ui.speech_silence_timeout ?? 2.0;
-            if (silenceValue) silenceValue.textContent = (ui.speech_silence_timeout ?? 2.0).toFixed(1) + 's';
+            if (silenceValue)
+                silenceValue.textContent = (ui.speech_silence_timeout ?? 2.0).toFixed(1) + 's';
         }
         this._savedSystemVoice = ui.speech_voice || '';
 
@@ -203,8 +203,14 @@ class SpeechSettingsModule extends SettingsModule {
         const eosValue = document.getElementById('pocketTtsEosValue');
         if (autoStart) autoStart.checked = ptts.auto_start === true;
         if (port) port.value = ptts.port || 9877;
-        if (temp) { temp.value = ptts.temp ?? 0.7; if (tempValue) tempValue.textContent = (ptts.temp ?? 0.7).toFixed(1); }
-        if (eos) { eos.value = ptts.eos_threshold ?? -4.0; if (eosValue) eosValue.textContent = (ptts.eos_threshold ?? -4.0).toFixed(1); }
+        if (temp) {
+            temp.value = ptts.temp ?? 0.7;
+            if (tempValue) tempValue.textContent = (ptts.temp ?? 0.7).toFixed(1);
+        }
+        if (eos) {
+            eos.value = ptts.eos_threshold ?? -4.0;
+            if (eosValue) eosValue.textContent = (ptts.eos_threshold ?? -4.0).toFixed(1);
+        }
         this._savedPocketVoice = ptts.voice || 'alba';
 
         this._populateSystemVoices();
@@ -215,20 +221,31 @@ class SpeechSettingsModule extends SettingsModule {
     save(config) {
         // Speech input
         config.ui = config.ui || {};
-        config.ui.show_speech_button = document.getElementById('showSpeechButton')?.checked ?? false;
+        config.ui.show_speech_button =
+            document.getElementById('showSpeechButton')?.checked ?? false;
         config.ui.speech_read_back = document.getElementById('speechReadBack')?.checked ?? false;
-        config.ui.speech_silence_timeout = parseFloat(document.getElementById('speechSilenceTimeout')?.value ?? '2');
+        config.ui.speech_silence_timeout = parseFloat(
+            document.getElementById('speechSilenceTimeout')?.value ?? '2'
+        );
         config.ui.speech_voice = document.getElementById('speechVoice')?.value || null;
 
         // TTS engine
         const engine = document.getElementById('ttsEngine')?.value || 'system';
         config.pocket_tts = config.pocket_tts || {};
         config.pocket_tts.enabled = engine === 'pocket-tts';
-        config.pocket_tts.auto_start = document.getElementById('pocketTtsAutoStart')?.checked ?? false;
+        config.pocket_tts.auto_start =
+            document.getElementById('pocketTtsAutoStart')?.checked ?? false;
         config.pocket_tts.voice = document.getElementById('pocketTtsVoice')?.value || 'alba';
-        config.pocket_tts.port = parseInt(document.getElementById('pocketTtsPort')?.value || '9877', 10);
-        config.pocket_tts.temp = parseFloat(document.getElementById('pocketTtsTemp')?.value || '0.7');
-        config.pocket_tts.eos_threshold = parseFloat(document.getElementById('pocketTtsEos')?.value || '-4.0');
+        config.pocket_tts.port = parseInt(
+            document.getElementById('pocketTtsPort')?.value || '9877',
+            10
+        );
+        config.pocket_tts.temp = parseFloat(
+            document.getElementById('pocketTtsTemp')?.value || '0.7'
+        );
+        config.pocket_tts.eos_threshold = parseFloat(
+            document.getElementById('pocketTtsEos')?.value || '-4.0'
+        );
         if (this._pocketStatus) {
             config.pocket_tts.python_path = this._pocketStatus.python_path || null;
             config.pocket_tts.installed = this._pocketStatus.installed || false;
@@ -237,29 +254,43 @@ class SpeechSettingsModule extends SettingsModule {
 
     validate() {
         const port = parseInt(document.getElementById('pocketTtsPort')?.value || '9877', 10);
-        if (port < 1024 || port > 65535) return { valid: false, error: 'Pocket TTS port must be between 1024 and 65535.' };
+        if (port < 1024 || port > 65535)
+            return { valid: false, error: 'Pocket TTS port must be between 1024 and 65535.' };
         return { valid: true };
     }
 
     initialize() {
         // Engine toggle
-        document.getElementById('ttsEngine')?.addEventListener('change', () => this._toggleSections());
-        document.getElementById('showSpeechButton')?.addEventListener('change', () => this._toggleSections());
+        document
+            .getElementById('ttsEngine')
+            ?.addEventListener('change', () => this._toggleSections());
+        document
+            .getElementById('showSpeechButton')
+            ?.addEventListener('change', () => this._toggleSections());
 
         // Silence slider
         const silence = document.getElementById('speechSilenceTimeout');
         const silenceValue = document.getElementById('speechSilenceValue');
         if (silence && silenceValue) {
-            silence.addEventListener('input', () => { const v = parseFloat(silence.value); silenceValue.textContent = v === 0 ? 'Off' : v.toFixed(1) + 's'; });
+            silence.addEventListener('input', () => {
+                const v = parseFloat(silence.value);
+                silenceValue.textContent = v === 0 ? 'Off' : v.toFixed(1) + 's';
+            });
         }
 
         // Pocket TTS sliders
         const temp = document.getElementById('pocketTtsTemp');
         const tempValue = document.getElementById('pocketTtsTempValue');
-        if (temp && tempValue) temp.addEventListener('input', () => { tempValue.textContent = parseFloat(temp.value).toFixed(1); });
+        if (temp && tempValue)
+            temp.addEventListener('input', () => {
+                tempValue.textContent = parseFloat(temp.value).toFixed(1);
+            });
         const eos = document.getElementById('pocketTtsEos');
         const eosValue = document.getElementById('pocketTtsEosValue');
-        if (eos && eosValue) eos.addEventListener('input', () => { eosValue.textContent = parseFloat(eos.value).toFixed(1); });
+        if (eos && eosValue)
+            eos.addEventListener('input', () => {
+                eosValue.textContent = parseFloat(eos.value).toFixed(1);
+            });
 
         // System voices may load async
         if (speechSynthesis.onvoiceschanged !== undefined) {
@@ -284,13 +315,18 @@ class SpeechSettingsModule extends SettingsModule {
         const systemSection = document.getElementById('systemVoiceSection');
         const pocketSection = document.getElementById('pocketTtsSection');
 
-        [readBackRow, silenceRow, engineSection].forEach(el => {
-            if (el) { el.style.opacity = speechEnabled ? '1' : '0.4'; el.style.pointerEvents = speechEnabled ? '' : 'none'; }
+        [readBackRow, silenceRow, engineSection].forEach((el) => {
+            if (el) {
+                el.style.opacity = speechEnabled ? '1' : '0.4';
+                el.style.pointerEvents = speechEnabled ? '' : 'none';
+            }
         });
 
         // Show the right engine section
-        if (systemSection) systemSection.style.display = (speechEnabled && engine === 'system') ? '' : 'none';
-        if (pocketSection) pocketSection.style.display = (speechEnabled && engine === 'pocket-tts') ? '' : 'none';
+        if (systemSection)
+            systemSection.style.display = speechEnabled && engine === 'system' ? '' : 'none';
+        if (pocketSection)
+            pocketSection.style.display = speechEnabled && engine === 'pocket-tts' ? '' : 'none';
     }
 
     _populateSystemVoices() {
@@ -337,7 +373,9 @@ class SpeechSettingsModule extends SettingsModule {
         if (step1) step1.style.display = '';
 
         if (!s.python_found) {
-            if (pythonStatus) pythonStatus.innerHTML = '❌ Python 3 not found. <a href="https://www.python.org/downloads/" target="_blank">Download Python</a>';
+            if (pythonStatus)
+                pythonStatus.innerHTML =
+                    '❌ Python 3 not found. <a href="https://www.python.org/downloads/" target="_blank">Download Python</a>';
             if (statusText) statusText.innerHTML = '❌ Python 3.10+ required';
             if (step2) step2.style.display = 'none';
             if (step3) step3.style.display = 'none';
@@ -364,13 +402,19 @@ class SpeechSettingsModule extends SettingsModule {
 
         if (installStatus) installStatus.textContent = '✅ Installed';
         const installBtn = document.getElementById('pocketTtsInstallBtn');
-        if (installBtn) { installBtn.textContent = 'Reinstall'; installBtn.style.opacity = '0.7'; }
+        if (installBtn) {
+            installBtn.textContent = 'Reinstall';
+            installBtn.style.opacity = '0.7';
+        }
         if (step3) step3.style.display = '';
         if (config) config.style.display = '';
 
         if (s.server_running) {
             if (serverStatus) serverStatus.textContent = '✅ Running';
-            if (startBtn) { startBtn.textContent = 'Stop Server'; startBtn.style.background = '#c44'; }
+            if (startBtn) {
+                startBtn.textContent = 'Stop Server';
+                startBtn.style.background = '#c44';
+            }
             if (statusText) statusText.textContent = '✅ Ready';
             this._setStatusColor('success');
             // Auto-collapse setup when everything is good
@@ -378,7 +422,10 @@ class SpeechSettingsModule extends SettingsModule {
             if (setupToggle) setupToggle.textContent = '▼ Setup';
         } else {
             if (serverStatus) serverStatus.textContent = '⏹ Stopped';
-            if (startBtn) { startBtn.textContent = 'Start Server'; startBtn.style.background = ''; }
+            if (startBtn) {
+                startBtn.textContent = 'Start Server';
+                startBtn.style.background = '';
+            }
             if (statusText) statusText.textContent = '⏹ Server stopped';
             this._setStatusColor('info');
             // Show setup so user can start server
@@ -390,7 +437,12 @@ class SpeechSettingsModule extends SettingsModule {
     _setStatusColor(type) {
         const banner = document.getElementById('pocketTtsStatusBanner');
         if (!banner) return;
-        const colors = { success: 'rgba(76,175,80,0.15)', error: 'rgba(244,67,54,0.15)', warning: 'rgba(255,152,0,0.15)', info: 'rgba(33,150,243,0.15)' };
+        const colors = {
+            success: 'rgba(76,175,80,0.15)',
+            error: 'rgba(244,67,54,0.15)',
+            warning: 'rgba(255,152,0,0.15)',
+            info: 'rgba(33,150,243,0.15)',
+        };
         banner.style.background = colors[type] || colors.info;
     }
 
@@ -410,10 +462,11 @@ class SpeechSettingsModule extends SettingsModule {
                 select.appendChild(opt);
             }
             if (this._savedPocketVoice) select.value = this._savedPocketVoice;
-        } catch (e) { console.warn('[Speech] Failed to load pocket voices:', e); }
+        } catch (e) {
+            console.warn('[Speech] Failed to load pocket voices:', e);
+        }
     }
 }
-
 
 // ── Global functions for onclick handlers ──
 
@@ -426,7 +479,7 @@ function togglePocketTtsSetup() {
     if (toggle) toggle.textContent = visible ? '▼ Setup' : '▲ Setup';
 }
 
-let _pocketTtsInstallUnlisteners = [];
+const _pocketTtsInstallUnlisteners = [];
 
 async function pocketTtsInstall() {
     const invoke = window.__TAURI__.core.invoke;
@@ -435,19 +488,30 @@ async function pocketTtsInstall() {
     const status = document.getElementById('pocketTtsInstallStatus');
     const log = document.getElementById('pocketTtsInstallLog');
 
-    if (btn) { btn.textContent = '✕ Cancel'; btn.style.background = '#c44'; btn.style.color = 'white'; btn.dataset.action = 'speech.pocketTtsCancelInstall'; }
+    if (btn) {
+        btn.textContent = '✕ Cancel';
+        btn.style.background = '#c44';
+        btn.style.color = 'white';
+        btn.dataset.action = 'speech.pocketTtsCancelInstall';
+    }
     if (status) status.textContent = 'Installing...';
-    if (log) { log.style.display = 'block'; log.textContent = '$ pip install pocket-tts\n'; }
+    if (log) {
+        log.style.display = 'block';
+        log.textContent = '$ pip install pocket-tts\n';
+    }
 
     try {
         const unlisten1 = await listen('pocket_tts_install_output', (event) => {
-            if (log) { log.textContent += event.payload + '\n'; log.scrollTop = log.scrollHeight; }
+            if (log) {
+                log.textContent += event.payload + '\n';
+                log.scrollTop = log.scrollHeight;
+            }
         });
         _pocketTtsInstallUnlisteners.push(unlisten1);
 
         const unlisten2 = await listen('pocket_tts_install_done', async (event) => {
             const data = event.payload;
-            _pocketTtsInstallUnlisteners.forEach(fn => fn());
+            _pocketTtsInstallUnlisteners.forEach((fn) => fn());
             _pocketTtsInstallUnlisteners.length = 0;
 
             if (data.success) {
@@ -459,22 +523,40 @@ async function pocketTtsInstall() {
                     config.pocket_tts.installed = true;
                     if (data.python_path) config.pocket_tts.python_path = data.python_path;
                     await invoke('save_config', { config });
-                } catch (e) { console.warn('[Speech] Config update failed:', e); }
+                } catch (e) {
+                    console.warn('[Speech] Config update failed:', e);
+                }
             } else {
                 if (status) status.textContent = '❌ ' + (data.message || 'Failed');
                 if (log) log.textContent += '\n❌ ' + data.message + '\n';
             }
-            if (btn) { btn.textContent = data.success ? 'Reinstall' : 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.dataset.action = 'speech.pocketTtsInstall'; btn.disabled = false; }
-            const mod = settingsManager.modules.find(m => m.id === 'speech');
+            if (btn) {
+                btn.textContent = data.success ? 'Reinstall' : 'Retry';
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.dataset.action = 'speech.pocketTtsInstall';
+                btn.disabled = false;
+            }
+            const mod = settingsManager.modules.find((m) => m.id === 'speech');
             if (mod) mod._refreshPocketStatus();
         });
         _pocketTtsInstallUnlisteners.push(unlisten2);
-    } catch (e) { console.error('[Speech] Event listener setup failed:', e); }
+    } catch (e) {
+        console.error('[Speech] Event listener setup failed:', e);
+    }
 
-    try { await invoke('pocket_tts_install'); } catch (e) {
+    try {
+        await invoke('pocket_tts_install');
+    } catch (e) {
         if (status) status.textContent = '❌ ' + e;
-        if (btn) { btn.textContent = 'Retry'; btn.style.background = ''; btn.style.color = ''; btn.dataset.action = 'speech.pocketTtsInstall'; btn.disabled = false; }
-        _pocketTtsInstallUnlisteners.forEach(fn => fn());
+        if (btn) {
+            btn.textContent = 'Retry';
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.dataset.action = 'speech.pocketTtsInstall';
+            btn.disabled = false;
+        }
+        _pocketTtsInstallUnlisteners.forEach((fn) => fn());
         _pocketTtsInstallUnlisteners.length = 0;
     }
 }
@@ -482,21 +564,36 @@ async function pocketTtsInstall() {
 async function pocketTtsCancelInstall() {
     const invoke = window.__TAURI__.core.invoke;
     const btn = document.getElementById('pocketTtsInstallBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
-    try { await invoke('pocket_tts_cancel_install'); } catch (e) { console.warn('[Speech] Failed to cancel Pocket TTS install:', e); }
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Cancelling...';
+    }
+    try {
+        await invoke('pocket_tts_cancel_install');
+    } catch (e) {
+        console.warn('[Speech] Failed to cancel Pocket TTS install:', e);
+    }
 }
 
 async function pocketTtsToggleServer() {
     const invoke = window.__TAURI__.core.invoke;
     const btn = document.getElementById('pocketTtsStartBtn');
     const status = document.getElementById('pocketTtsServerStatus');
-    const mod = settingsManager.modules.find(m => m.id === 'speech');
+    const mod = settingsManager.modules.find((m) => m.id === 'speech');
     const isRunning = mod?._pocketStatus?.server_running;
     if (btn) btn.disabled = true;
     try {
-        if (isRunning) { if (status) status.textContent = 'Stopping...'; await invoke('pocket_tts_stop'); }
-        else { if (status) status.textContent = 'Starting...'; if (btn) btn.textContent = 'Starting...'; await invoke('pocket_tts_start'); }
-    } catch (e) { if (status) status.textContent = '❌ ' + e; }
+        if (isRunning) {
+            if (status) status.textContent = 'Stopping...';
+            await invoke('pocket_tts_stop');
+        } else {
+            if (status) status.textContent = 'Starting...';
+            if (btn) btn.textContent = 'Starting...';
+            await invoke('pocket_tts_start');
+        }
+    } catch (e) {
+        if (status) status.textContent = '❌ ' + e;
+    }
     if (btn) btn.disabled = false;
     if (mod) mod._refreshPocketStatus();
 }
@@ -507,21 +604,76 @@ async function pocketTtsTest() {
     const btn = document.getElementById('pocketTtsTestBtn');
     const spinner = document.getElementById('pocketTtsTestSpinner');
     const status = document.getElementById('pocketTtsTestStatus');
-    if (_pocketTtsTestAudio) { _pocketTtsTestAudio.pause(); _pocketTtsTestAudio = null; if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; } if (spinner) spinner.style.display = 'none'; if (status) status.textContent = 'Stopped'; return; }
-    if (btn) btn.style.display = 'none'; if (spinner) spinner.style.display = ''; if (status) status.textContent = '';
+    if (_pocketTtsTestAudio) {
+        _pocketTtsTestAudio.pause();
+        _pocketTtsTestAudio = null;
+        if (btn) {
+            btn.textContent = '🔊 Test Voice';
+            btn.style.display = '';
+        }
+        if (spinner) spinner.style.display = 'none';
+        if (status) status.textContent = 'Stopped';
+        return;
+    }
+    if (btn) btn.style.display = 'none';
+    if (spinner) spinner.style.display = '';
+    if (status) status.textContent = '';
     try {
         const config = await invoke('get_config');
         const port = config.pocket_tts?.port || 9877;
         const voice = document.getElementById('pocketTtsVoice')?.value || 'alba';
-        const resp = await fetch(`http://127.0.0.1:${port}/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'Hello! I am your Kage, using Pocket TTS for high quality speech.', voice, stream: false }) });
-        if (!resp.ok) { const err = await resp.json().catch(() => ({ error: resp.statusText })); throw new Error(err.error || 'Failed'); }
-        const blob = await resp.blob(); const url = URL.createObjectURL(blob);
+        const resp = await fetch(`http://127.0.0.1:${port}/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                text: 'Hello! I am your Kage, using Pocket TTS for high quality speech.',
+                voice,
+                stream: false,
+            }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: resp.statusText }));
+            throw new Error(err.error || 'Failed');
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
         _pocketTtsTestAudio = new Audio(url);
-        _pocketTtsTestAudio.onended = () => { URL.revokeObjectURL(url); _pocketTtsTestAudio = null; if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; } if (spinner) spinner.style.display = 'none'; if (status) status.textContent = '✅ Done'; };
-        _pocketTtsTestAudio.onerror = () => { URL.revokeObjectURL(url); _pocketTtsTestAudio = null; if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; } if (spinner) spinner.style.display = 'none'; if (status) status.textContent = '❌ Error'; };
-        if (spinner) spinner.style.display = 'none'; if (btn) { btn.textContent = '⏹ Stop'; btn.style.display = ''; } if (status) status.textContent = '🔊 Playing...';
+        _pocketTtsTestAudio.onended = () => {
+            URL.revokeObjectURL(url);
+            _pocketTtsTestAudio = null;
+            if (btn) {
+                btn.textContent = '🔊 Test Voice';
+                btn.style.display = '';
+            }
+            if (spinner) spinner.style.display = 'none';
+            if (status) status.textContent = '✅ Done';
+        };
+        _pocketTtsTestAudio.onerror = () => {
+            URL.revokeObjectURL(url);
+            _pocketTtsTestAudio = null;
+            if (btn) {
+                btn.textContent = '🔊 Test Voice';
+                btn.style.display = '';
+            }
+            if (spinner) spinner.style.display = 'none';
+            if (status) status.textContent = '❌ Error';
+        };
+        if (spinner) spinner.style.display = 'none';
+        if (btn) {
+            btn.textContent = '⏹ Stop';
+            btn.style.display = '';
+        }
+        if (status) status.textContent = '🔊 Playing...';
         _pocketTtsTestAudio.play();
-    } catch (e) { _pocketTtsTestAudio = null; if (btn) { btn.textContent = '🔊 Test Voice'; btn.style.display = ''; } if (spinner) spinner.style.display = 'none'; if (status) status.textContent = '❌ ' + e.message; }
+    } catch (e) {
+        _pocketTtsTestAudio = null;
+        if (btn) {
+            btn.textContent = '🔊 Test Voice';
+            btn.style.display = '';
+        }
+        if (spinner) spinner.style.display = 'none';
+        if (status) status.textContent = '❌ ' + e.message;
+    }
 }
 
 async function pocketTtsAddVoice() {
@@ -532,33 +684,70 @@ async function pocketTtsAddVoice() {
     const status = document.getElementById('pocketTtsAddVoiceStatus');
     const voiceUrl = urlInput?.value.trim() || '';
     let voiceName = nameInput?.value.trim() || '';
-    if (!voiceUrl) { if (status) status.textContent = '⚠️ Paste a voice URL first'; return; }
-    if (!voiceName) { const parts = voiceUrl.replace(/\/$/, '').split('/'); voiceName = (parts[parts.length - 1] || 'custom').replace(/\.(wav|mp3|safetensors)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_'); }
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading...'; }
+    if (!voiceUrl) {
+        if (status) status.textContent = '⚠️ Paste a voice URL first';
+        return;
+    }
+    if (!voiceName) {
+        const parts = voiceUrl.replace(/\/$/, '').split('/');
+        voiceName = (parts[parts.length - 1] || 'custom')
+            .replace(/\.(wav|mp3|safetensors)$/i, '')
+            .replace(/[^a-zA-Z0-9_-]/g, '_');
+    }
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+    }
     if (status) status.textContent = '⏳ Downloading...';
     try {
         const config = await invoke('get_config');
         const port = config.pocket_tts?.port || 9877;
-        const resp = await fetch(`http://127.0.0.1:${port}/load-voice`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: voiceUrl }) });
-        if (!resp.ok) { const err = await resp.json().catch(() => ({ error: 'Failed' })); throw new Error(err.error || 'Failed'); }
-        await fetch(`http://127.0.0.1:${port}/export-voice`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wav_path: voiceUrl, output_name: voiceName }) });
+        const resp = await fetch(`http://127.0.0.1:${port}/load-voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ voice: voiceUrl }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ error: 'Failed' }));
+            throw new Error(err.error || 'Failed');
+        }
+        await fetch(`http://127.0.0.1:${port}/export-voice`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wav_path: voiceUrl, output_name: voiceName }),
+        });
         if (status) status.textContent = `✅ "${voiceName}" added`;
-        if (urlInput) urlInput.value = ''; if (nameInput) nameInput.value = '';
-        const mod = settingsManager.modules.find(m => m.id === 'speech');
+        if (urlInput) urlInput.value = '';
+        if (nameInput) nameInput.value = '';
+        const mod = settingsManager.modules.find((m) => m.id === 'speech');
         if (mod) mod._populatePocketVoices();
-    } catch (e) { if (status) status.textContent = '❌ ' + e.message; }
-    finally { if (btn) { btn.disabled = false; btn.textContent = 'Add'; } }
+    } catch (e) {
+        if (status) status.textContent = '❌ ' + e.message;
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Add';
+        }
+    }
 }
 
 async function pocketTtsOpenVoicesDir() {
     const invoke = window.__TAURI__.core.invoke;
     try {
         let basePath;
-        if (navigator.platform.startsWith('Win')) { basePath = ((await invoke('get_user_info')).home || '') + '\\AppData\\Local\\kage\\pocket-tts\\voices'; }
-        else if (navigator.platform === 'MacIntel') { basePath = '~/Library/Application Support/kage/pocket-tts/voices'; }
-        else { basePath = '~/.local/share/kage/pocket-tts/voices'; }
+        if (navigator.platform.startsWith('Win')) {
+            basePath =
+                ((await invoke('get_user_info')).home || '') +
+                '\\AppData\\Local\\kage\\pocket-tts\\voices';
+        } else if (navigator.platform === 'MacIntel') {
+            basePath = '~/Library/Application Support/kage/pocket-tts/voices';
+        } else {
+            basePath = '~/.local/share/kage/pocket-tts/voices';
+        }
         await invoke('open_path', { path: basePath });
-    } catch (e) { console.warn('[Speech] Failed to open voices dir:', e); }
+    } catch (e) {
+        console.warn('[Speech] Failed to open voices dir:', e);
+    }
 }
 
 // Register the speech section's handlers with the delegated dispatcher
@@ -566,12 +755,12 @@ async function pocketTtsOpenVoicesDir() {
 // that previously called these functions through window globals.
 if (typeof window !== 'undefined' && window.registerSettingsActions) {
     window.registerSettingsActions({
-        'speech.togglePocketTtsSetup':   () => togglePocketTtsSetup(),
-        'speech.pocketTtsInstall':       () => pocketTtsInstall(),
+        'speech.togglePocketTtsSetup': () => togglePocketTtsSetup(),
+        'speech.pocketTtsInstall': () => pocketTtsInstall(),
         'speech.pocketTtsCancelInstall': () => pocketTtsCancelInstall(),
-        'speech.pocketTtsToggleServer':  () => pocketTtsToggleServer(),
-        'speech.pocketTtsTest':          () => pocketTtsTest(),
-        'speech.pocketTtsAddVoice':      () => pocketTtsAddVoice(),
+        'speech.pocketTtsToggleServer': () => pocketTtsToggleServer(),
+        'speech.pocketTtsTest': () => pocketTtsTest(),
+        'speech.pocketTtsAddVoice': () => pocketTtsAddVoice(),
         'speech.pocketTtsOpenVoicesDir': () => pocketTtsOpenVoicesDir(),
     });
 }

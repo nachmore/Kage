@@ -61,9 +61,7 @@ export function initLinkHandler(invoke) {
             e.preventDefault();
             e.stopPropagation();
             const path = href.slice('kage:'.length);
-            handleKageProtocol(path).catch(err =>
-                console.warn('kage: link error:', err)
-            );
+            handleKageProtocol(path).catch((err) => console.warn('kage: link error:', err));
             return;
         }
 
@@ -71,7 +69,7 @@ export function initLinkHandler(invoke) {
         if (href.startsWith('http://') || href.startsWith('https://')) {
             e.preventDefault();
             e.stopPropagation();
-            invoke('open_url', { url: href }).catch(err =>
+            invoke('open_url', { url: href }).catch((err) =>
                 console.warn('Failed to open URL:', err)
             );
             return;

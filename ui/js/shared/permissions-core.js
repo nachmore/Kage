@@ -32,7 +32,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         // If a permission is already showing, queue this one
         if (currentPermissionRequest && modal.style.display === 'flex') {
             _permissionQueue.push({ notification, toolName });
-            console.log(`[Permissions] Queued permission request (${_permissionQueue.length} in queue)`);
+            console.log(
+                `[Permissions] Queued permission request (${_permissionQueue.length} in queue)`
+            );
             return;
         }
 
@@ -44,7 +46,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             sessionId: params.sessionId || '',
             toolCall: toolCall,
             options: params.options || [],
-            toolName: toolName || null
+            toolName: toolName || null,
         };
 
         toolTitleEl.textContent = toolCall.title || 'Unknown Tool';
@@ -74,8 +76,13 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         // Show next queued permission request
         if (_permissionQueue.length > 0) {
             const next = _permissionQueue.shift();
-            console.log(`[Permissions] Showing next queued request (${_permissionQueue.length} remaining)`);
-            setTimeout(async () => await showPermissionModal(next.notification, next.toolName), 150);
+            console.log(
+                `[Permissions] Showing next queued request (${_permissionQueue.length} remaining)`
+            );
+            setTimeout(
+                async () => await showPermissionModal(next.notification, next.toolName),
+                150
+            );
             if (hooks.onHide) await hooks.onHide(modal, true);
             return;
         }
@@ -94,13 +101,20 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (denyDropdown) denyDropdown.style.display = 'none';
 
         try {
-            const policyTitle = currentPermissionRequest.toolName || currentPermissionRequest.toolCall.title || 'Unknown';
+            const policyTitle =
+                currentPermissionRequest.toolName ||
+                currentPermissionRequest.toolCall.title ||
+                'Unknown';
 
             // Extension tool requests use a callback instead of ACP response
             if (_extensionToolCallback) {
                 const allowed = optionId === 'allow_once' || optionId === 'allow_always';
                 if (policyOverride) {
-                    await invoke('update_tool_policy', { toolTitle: policyTitle, policy: policyOverride, grantType: grantType || 'once' });
+                    await invoke('update_tool_policy', {
+                        toolTitle: policyTitle,
+                        policy: policyOverride,
+                        grantType: grantType || 'once',
+                    });
                 }
                 const cb = _extensionToolCallback;
                 _extensionToolCallback = null;
@@ -112,19 +126,19 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             await invoke('send_permission_response', {
                 requestId: currentPermissionRequest.id,
                 optionId: optionId,
-                toolTitle: policyTitle
+                toolTitle: policyTitle,
             });
 
             if (policyOverride) {
                 await invoke('update_tool_policy', {
                     toolTitle: policyTitle,
                     policy: policyOverride,
-                    grantType: grantType || 'once'
+                    grantType: grantType || 'once',
                 });
             }
 
             // Small delay to ensure the response is processed
-            await new Promise(r => setTimeout(r, 100));
+            await new Promise((r) => setTimeout(r, 100));
             await hidePermissionModal();
         } catch (error) {
             console.error('Failed to send permission response:', error);
@@ -133,7 +147,9 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
     function wireButtons() {
         // Deny button (single use)
-        document.getElementById('permissionDeny')?.addEventListener('click', () => handlePermissionResponse('reject_once'));
+        document
+            .getElementById('permissionDeny')
+            ?.addEventListener('click', () => handlePermissionResponse('reject_once'));
 
         // Deny dropdown toggle
         const denyMenuBtn = document.getElementById('permissionDenyMenu');
@@ -141,7 +157,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         if (denyMenuBtn && denyDropdown) {
             denyMenuBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                denyDropdown.style.display = denyDropdown.style.display === 'none' ? 'block' : 'none';
+                denyDropdown.style.display =
+                    denyDropdown.style.display === 'none' ? 'block' : 'none';
                 // Close the other dropdown
                 const allowDropdown = document.getElementById('permissionAllowDropdown');
                 if (allowDropdown) allowDropdown.style.display = 'none';
@@ -149,10 +166,16 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         }
 
         // Deny always
-        document.getElementById('permissionDenyAlways')?.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
+        document
+            .getElementById('permissionDenyAlways')
+            ?.addEventListener('click', () => handlePermissionResponse('reject_once', 'deny'));
 
         // Allow button (single use)
-        document.getElementById('permissionAllow')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', 'once'));
+        document
+            .getElementById('permissionAllow')
+            ?.addEventListener('click', () =>
+                handlePermissionResponse('allow_once', 'allow', 'once')
+            );
 
         // Allow dropdown toggle
         const menuBtn = document.getElementById('permissionAllowMenu');
@@ -173,31 +196,46 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         });
 
         // Allow dropdown items
-        document.getElementById('permissionAllow24h')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', '24h'));
-        document.getElementById('permissionAllowAlways')?.addEventListener('click', () => handlePermissionResponse('allow_once', 'allow', 'always'));
+        document
+            .getElementById('permissionAllow24h')
+            ?.addEventListener('click', () =>
+                handlePermissionResponse('allow_once', 'allow', '24h')
+            );
+        document
+            .getElementById('permissionAllowAlways')
+            ?.addEventListener('click', () =>
+                handlePermissionResponse('allow_once', 'allow', 'always')
+            );
     }
 
     function wireOverlayDismiss() {
         document.getElementById('permissionModal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'permissionModal' || e.target === document.getElementById('permissionModal')) {
+            if (
+                e.target.id === 'permissionModal' ||
+                e.target === document.getElementById('permissionModal')
+            ) {
                 handlePermissionResponse('reject_once');
             }
         });
     }
 
     function wireKeyboard() {
-        document.addEventListener('keydown', (e) => {
-            if (!currentPermissionRequest) return;
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                handlePermissionResponse('reject_once');
-            } else {
-                // Block typing from reaching the input behind the modal
-                e.preventDefault();
-                e.stopPropagation();
-            }
-        }, true);
+        document.addEventListener(
+            'keydown',
+            (e) => {
+                if (!currentPermissionRequest) return;
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handlePermissionResponse('reject_once');
+                } else {
+                    // Block typing from reaching the input behind the modal
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            },
+            true
+        );
     }
 
     function wirePermissionRequestListener() {
@@ -207,15 +245,15 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             // Let the window-specific hook decide whether to handle this request
             if (hooks.onRequestReceived) {
                 const decision = await hooks.onRequestReceived(event, invoke, appWindow);
-                if (!decision || !decision.handle) return;
+                if (!decision?.handle) return;
             }
 
             if (auto_approve) {
                 invoke('send_permission_response', {
                     requestId: notification.id,
                     optionId: 'allow_once',
-                    toolTitle: notification.params?.toolCall?.title || 'Unknown'
-                }).catch(e => console.error('Auto-approve failed:', e));
+                    toolTitle: notification.params?.toolCall?.title || 'Unknown',
+                }).catch((e) => console.error('Auto-approve failed:', e));
             } else {
                 await showPermissionModal(notification, event.payload.toolName);
             }
@@ -241,7 +279,14 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
     /** Show the permission modal for an extension tool call. Returns promise<boolean>. */
     function showForExtensionTool(extensionId, toolName, icon) {
-        return new Promise(async (resolve) => {
+        // The promise resolves when the user accepts/denies via the
+        // modal — the resolve fn is stashed in `_extensionToolCallback`
+        // and invoked by the modal's button handlers. The modal show
+        // itself is async (loads i18n, etc) but we don't need its
+        // outcome here, so fire-and-forget the await rather than
+        // wrapping the executor in `async` (which Biome flags because
+        // it swallows rejections silently).
+        return new Promise((resolve) => {
             const toolTitle = `ext:${extensionId}/${toolName}`;
             const notification = {
                 id: null,
@@ -253,7 +298,11 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                 },
             };
             _extensionToolCallback = resolve;
-            await showPermissionModal(notification, toolTitle);
+            showPermissionModal(notification, toolTitle).catch((err) => {
+                console.error('[permissions] showPermissionModal failed:', err);
+                _extensionToolCallback = null;
+                resolve(false);
+            });
         });
     }
 
@@ -263,6 +312,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
         hide: hidePermissionModal,
         showForExtensionTool,
         /** Get the current permission request (for session-scoping in chat) */
-        getCurrentRequest() { return currentPermissionRequest; },
+        getCurrentRequest() {
+            return currentPermissionRequest;
+        },
     };
 }

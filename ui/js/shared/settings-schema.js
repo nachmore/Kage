@@ -105,7 +105,13 @@
  */
 
 export const CONTROL_TYPES = Object.freeze([
-    'checkbox', 'text', 'number', 'select', 'range', 'action', 'info',
+    'checkbox',
+    'text',
+    'number',
+    'select',
+    'range',
+    'action',
+    'info',
 ]);
 
 export const ACTION_VARIANTS = Object.freeze(['default', 'danger', 'primary']);
@@ -168,9 +174,12 @@ function validateControl(ctrl, where, seenIds) {
             }
             for (let i = 0; i < ctrl.options.length; i++) {
                 const opt = ctrl.options[i];
-                if (!opt || typeof opt !== 'object') return `${where}.options[${i}] must be an object`;
-                if (typeof opt.value !== 'string') return `${where}.options[${i}].value must be a string`;
-                if (typeof opt.label !== 'string') return `${where}.options[${i}].label must be a string`;
+                if (!opt || typeof opt !== 'object')
+                    return `${where}.options[${i}] must be an object`;
+                if (typeof opt.value !== 'string')
+                    return `${where}.options[${i}].value must be a string`;
+                if (typeof opt.label !== 'string')
+                    return `${where}.options[${i}].label must be a string`;
             }
             break;
         }
@@ -217,8 +226,19 @@ function validateControl(ctrl, where, seenIds) {
  * info blocks actually need and nothing more.
  */
 const ALLOWED_TAGS = new Set([
-    'A', 'B', 'BR', 'CODE', 'DIV', 'EM', 'I', 'LI', 'OL', 'P', 'SPAN',
-    'STRONG', 'UL',
+    'A',
+    'B',
+    'BR',
+    'CODE',
+    'DIV',
+    'EM',
+    'I',
+    'LI',
+    'OL',
+    'P',
+    'SPAN',
+    'STRONG',
+    'UL',
 ]);
 
 const ALLOWED_ATTRS_BY_TAG = {
@@ -297,12 +317,23 @@ export function defaultValues(schema) {
         for (const ctrl of section.controls || []) {
             if (!ctrl.id) continue;
             switch (ctrl.type) {
-                case 'checkbox': values[ctrl.id] = ctrl.default ?? false; break;
-                case 'text':     values[ctrl.id] = ctrl.default ?? ''; break;
-                case 'number':   values[ctrl.id] = ctrl.default ?? 0; break;
-                case 'select':   values[ctrl.id] = ctrl.default ?? (ctrl.options?.[0]?.value ?? ''); break;
-                case 'range':    values[ctrl.id] = ctrl.default ?? ctrl.min ?? 0; break;
-                default: break;
+                case 'checkbox':
+                    values[ctrl.id] = ctrl.default ?? false;
+                    break;
+                case 'text':
+                    values[ctrl.id] = ctrl.default ?? '';
+                    break;
+                case 'number':
+                    values[ctrl.id] = ctrl.default ?? 0;
+                    break;
+                case 'select':
+                    values[ctrl.id] = ctrl.default ?? ctrl.options?.[0]?.value ?? '';
+                    break;
+                case 'range':
+                    values[ctrl.id] = ctrl.default ?? ctrl.min ?? 0;
+                    break;
+                default:
+                    break;
             }
         }
     }

@@ -12,7 +12,7 @@ const LOCAL_COMMANDS = [
         execute: async (invoke, appWindow) => {
             await invoke('open_settings_window');
             await appWindow.hide();
-        }
+        },
     },
     {
         name: 'quit',
@@ -20,7 +20,7 @@ const LOCAL_COMMANDS = [
         icon: '🚪',
         execute: async (invoke) => {
             await invoke('quit_app');
-        }
+        },
     },
     {
         name: 'restart',
@@ -28,7 +28,7 @@ const LOCAL_COMMANDS = [
         icon: '🔄',
         execute: async (invoke) => {
             await invoke('restart_app');
-        }
+        },
     },
     {
         name: 'inspect',
@@ -36,15 +36,15 @@ const LOCAL_COMMANDS = [
         icon: '🔍',
         execute: async (invoke) => {
             await invoke('open_devtools');
-        }
+        },
     },
     {
         name: 'clear-ux',
         description: 'Clear the visible response (does not clear conversation history)',
         icon: '🧹',
-        execute: async (_invoke, appWindow) => {
+        execute: async (_invoke, _appWindow) => {
             document.dispatchEvent(new CustomEvent('kage-clear'));
-        }
+        },
     },
     {
         name: 'sessions',
@@ -54,7 +54,7 @@ const LOCAL_COMMANDS = [
             document.dispatchEvent(new CustomEvent('kage-clear'));
             await invoke('open_chat_window');
             await appWindow.hide();
-        }
+        },
     },
     {
         name: 'session-id',
@@ -66,9 +66,11 @@ const LOCAL_COMMANDS = [
                 const text = id || 'No active session';
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                );
             }
-        }
+        },
     },
     {
         name: 'session-title',
@@ -77,21 +79,35 @@ const LOCAL_COMMANDS = [
         execute: async (invoke, _appWindow, args) => {
             const title = args?.trim();
             if (!title) {
-                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Usage: >session-title New Session Name' }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', {
+                        detail: 'Usage: >session-title New Session Name',
+                    })
+                );
                 return;
             }
             try {
                 const sessionId = await invoke('get_current_session_id');
                 if (!sessionId) {
-                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'No active session to rename' }));
+                    document.dispatchEvent(
+                        new CustomEvent('kage-show-response', {
+                            detail: 'No active session to rename',
+                        })
+                    );
                     return;
                 }
                 await invoke('rename_session', { sessionId, title });
-                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: `Session renamed to: ${title}` }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', {
+                        detail: `Session renamed to: ${title}`,
+                    })
+                );
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                );
             }
-        }
+        },
     },
     {
         name: 'store',
@@ -100,7 +116,7 @@ const LOCAL_COMMANDS = [
         execute: async (invoke, appWindow) => {
             await invoke('open_store_window');
             await appWindow.hide();
-        }
+        },
     },
     {
         name: 'session-folder',
@@ -110,14 +126,18 @@ const LOCAL_COMMANDS = [
             try {
                 const sessionId = await invoke('get_current_session_id');
                 if (!sessionId) {
-                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'No active session' }));
+                    document.dispatchEvent(
+                        new CustomEvent('kage-show-response', { detail: 'No active session' })
+                    );
                     return;
                 }
                 await invoke('reveal_session_file', { sessionId });
             } catch (e) {
-                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+                document.dispatchEvent(
+                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                );
             }
-        }
+        },
     },
     {
         name: 'find',
@@ -126,7 +146,7 @@ const LOCAL_COMMANDS = [
         execute: async () => {
             // No-op — file search is handled by the search engine when it sees ">find " prefix.
             // This entry exists so >find shows up in the command suggestions.
-        }
+        },
     },
     {
         name: 'clipboard',
@@ -139,7 +159,7 @@ const LOCAL_COMMANDS = [
                 input.value = '>cb ';
                 input.dispatchEvent(new Event('input', { bubbles: true }));
             }
-        }
+        },
     },
     {
         name: 'logs',
@@ -148,8 +168,8 @@ const LOCAL_COMMANDS = [
         execute: async (invoke, appWindow) => {
             await invoke('open_settings_window', { section: 'about', subSection: 'logging' });
             await appWindow.hide();
-        }
-    }
+        },
+    },
 ];
 
 /** Cached ACP slash commands */
@@ -188,8 +208,8 @@ export function matchCommands(input) {
 
     const query = trimmed.substring(1).trim().toLowerCase();
     if (query.length === 0) return [...LOCAL_COMMANDS];
-    return LOCAL_COMMANDS.filter(cmd =>
-        cmd.name.startsWith(query) || cmd.aliases?.some(a => a.startsWith(query))
+    return LOCAL_COMMANDS.filter(
+        (cmd) => cmd.name.startsWith(query) || cmd.aliases?.some((a) => a.startsWith(query))
     );
 }
 
@@ -200,9 +220,9 @@ export function matchCommands(input) {
 export function matchCommandsByName(query) {
     const q = query.trim().toLowerCase();
     if (q.length === 0) return [];
-    return LOCAL_COMMANDS
-        .filter(cmd => cmd.name.startsWith(q) || cmd.aliases?.some(a => a.startsWith(q)))
-        .map(cmd => ({ type: 'command', ...cmd }));
+    return LOCAL_COMMANDS.filter(
+        (cmd) => cmd.name.startsWith(q) || cmd.aliases?.some((a) => a.startsWith(q))
+    ).map((cmd) => ({ type: 'command', ...cmd }));
 }
 
 /**
@@ -216,19 +236,19 @@ export function matchSlashCommands(input) {
 
     // Map ACP commands to the display format
     const mapped = acpSlashCommands
-        .filter(cmd => {
+        .filter((cmd) => {
             // Skip /quit if it's marked as local — we handle that with >quit
             if (cmd.meta?.local) return false;
             if (query.length === 0) return true;
             return cmd.name.substring(1).toLowerCase().startsWith(query);
         })
-        .map(cmd => ({
+        .map((cmd) => ({
             type: 'slash',
             name: cmd.name,
             description: cmd.description + (cmd.meta?.hint ? ` (${cmd.meta.hint})` : ''),
             icon: getSlashIcon(cmd.name),
             meta: cmd.meta,
-            execute: async (invoke, appWindow) => {
+            execute: async (invoke, _appWindow) => {
                 const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
 
                 // Selection-type commands: show options as a selectable list
@@ -236,33 +256,43 @@ export function matchSlashCommands(input) {
                     try {
                         const result = await invoke('execute_slash_command', {
                             command: cmdName,
-                            args: null
+                            args: null,
                         });
                         // Parse the message to extract options
                         const msg = result?.message || '';
-                        const lines = msg.split('\n').filter(l => l.trim());
+                        const lines = msg.split('\n').filter((l) => l.trim());
                         if (lines.length > 0) {
-                            document.dispatchEvent(new CustomEvent('kage-show-selection', {
-                                detail: {
-                                    command: cmdName,
-                                    options: lines.map(line => {
-                                        const isCurrent = line.trim().startsWith('→') || line.trim().startsWith('*');
-                                        const clean = line.replace(/^[\s→*]+/, '').trim();
-                                        // Extract name and id: "name (id)" or just "name"
-                                        const match = clean.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
-                                        return {
-                                            label: match ? match[1].trim() : clean,
-                                            value: match ? match[2].trim() : clean,
-                                            current: isCurrent
-                                        };
-                                    })
-                                }
-                            }));
+                            document.dispatchEvent(
+                                new CustomEvent('kage-show-selection', {
+                                    detail: {
+                                        command: cmdName,
+                                        options: lines.map((line) => {
+                                            const isCurrent =
+                                                line.trim().startsWith('→') ||
+                                                line.trim().startsWith('*');
+                                            const clean = line.replace(/^[\s→*]+/, '').trim();
+                                            // Extract name and id: "name (id)" or just "name"
+                                            const match = clean.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+                                            return {
+                                                label: match ? match[1].trim() : clean,
+                                                value: match ? match[2].trim() : clean,
+                                                current: isCurrent,
+                                            };
+                                        }),
+                                    },
+                                })
+                            );
                         } else {
-                            document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg || 'No options available' }));
+                            document.dispatchEvent(
+                                new CustomEvent('kage-show-response', {
+                                    detail: msg || 'No options available',
+                                })
+                            );
                         }
                     } catch (e) {
-                        document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+                        document.dispatchEvent(
+                            new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                        );
                     }
                     return;
                 }
@@ -271,14 +301,20 @@ export function matchSlashCommands(input) {
                 try {
                     const result = await invoke('execute_slash_command', {
                         command: cmdName,
-                        args: null
+                        args: null,
                     });
-                    const msg = result?.message || (result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed');
-                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: result?.message || msg }));
+                    const msg =
+                        result?.message ||
+                        (result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed');
+                    document.dispatchEvent(
+                        new CustomEvent('kage-show-response', { detail: result?.message || msg })
+                    );
                 } catch (e) {
-                    document.dispatchEvent(new CustomEvent('kage-show-response', { detail: 'Error: ' + e }));
+                    document.dispatchEvent(
+                        new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                    );
                 }
-            }
+            },
         }));
 
     return mapped.length > 0 ? mapped : null;
@@ -288,7 +324,14 @@ export function matchSlashCommands(input) {
  * Render command suggestions into the suggestions container.
  * Works for both > local commands and / slash commands.
  */
-export function renderCommandSuggestions(commands, container, selectedIndex, onExecute, onResize, showSendHint = false) {
+export function renderCommandSuggestions(
+    commands,
+    container,
+    selectedIndex,
+    onExecute,
+    onResize,
+    showSendHint = false
+) {
     container.innerHTML = '';
 
     commands.forEach((cmd, index) => {
@@ -326,7 +369,7 @@ export async function executeCommand(name, invoke, appWindow) {
     const parts = name.toLowerCase().split(/\s+/);
     const cmdName = parts[0];
     const args = parts.length > 1 ? name.substring(name.indexOf(' ') + 1) : '';
-    const cmd = LOCAL_COMMANDS.find(c => c.name === cmdName);
+    const cmd = LOCAL_COMMANDS.find((c) => c.name === cmdName);
     if (!cmd) return false;
     await cmd.execute(invoke, appWindow, args);
     return true;

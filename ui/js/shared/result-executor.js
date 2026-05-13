@@ -39,7 +39,11 @@ export async function executeResult(result, query, ctx) {
         if (action) {
             if (action.type === 'copy') {
                 if (ctx.onCopy) await ctx.onCopy(action.value);
-                else { try { await navigator.clipboard.writeText(action.value); } catch {} }
+                else {
+                    try {
+                        await navigator.clipboard.writeText(action.value);
+                    } catch {}
+                }
             } else if (action.type === 'prompt' && ctx.onPrompt) {
                 await ctx.onPrompt(action.value);
             } else if (action.type === 'display' && ctx.onDisplay) {
@@ -116,7 +120,9 @@ export async function executeResult(result, query, ctx) {
             ctx.invoke('record_shortcut_usage', {
                 trigger: sc.shortcut,
                 args: args.join(' '),
-            }).catch((e) => { console.warn('[Shortcuts] Failed to record usage:', e); });
+            }).catch((e) => {
+                console.warn('[Shortcuts] Failed to record usage:', e);
+            });
         }
         return execResult;
     }
@@ -154,13 +160,12 @@ export async function executeShortcutCommand(command, ctx) {
         await invoke('execute_shortcut', {
             path: command.path,
             args: command.args,
-            workingDirectory: command.workDir || null
+            workingDirectory: command.workDir || null,
         });
         return { handled: true, action: 'hide' };
     }
     return { handled: false };
 }
-
 
 /**
  * Handle Enter key press — shared flow for both floating and chat windows.
@@ -178,7 +183,16 @@ export async function executeShortcutCommand(command, ctx) {
  * @returns {Promise<{handled: boolean, action?: string}>}
  */
 export async function handleEnterAction(opts) {
-    const { message, suggestions, selectedIndex, shortcuts, ctx, onSend, onSystemCommand, onSelection } = opts;
+    const {
+        message,
+        suggestions,
+        selectedIndex,
+        shortcuts,
+        ctx,
+        onSend,
+        onSystemCommand,
+        onSelection,
+    } = opts;
 
     // If a suggestion is selected, execute it
     if (suggestions.length > 0 && selectedIndex >= 0) {
@@ -197,7 +211,10 @@ export async function handleEnterAction(opts) {
         }
         // Selection lists (floating-only)
         if (selected.type === 'selection' && onSelection) {
-            await onSelection(selected.data?.command || selected.command, selected.data?.value || selected.value);
+            await onSelection(
+                selected.data?.command || selected.command,
+                selected.data?.value || selected.value
+            );
             return { handled: true };
         }
 
@@ -228,14 +245,20 @@ export async function handleEnterAction(opts) {
         const { matchShortcut: matchSc } = await import('./shortcuts.js');
         const matches = matchSc(message, shortcuts);
         if (matches?.length > 0) {
-            const cmd = buildShortcutCommand(matches[0].shortcut, matches[0].args, ctx.selectionText || '');
+            const cmd = buildShortcutCommand(
+                matches[0].shortcut,
+                matches[0].args,
+                ctx.selectionText || ''
+            );
             const result = await executeShortcutCommand(cmd, ctx);
             // Record usage for history
             if (result.handled && matches[0].args?.length > 0 && ctx.invoke) {
                 ctx.invoke('record_shortcut_usage', {
                     trigger: matches[0].shortcut.shortcut,
                     args: matches[0].args.join(' '),
-                }).catch((e) => { console.warn('[Shortcuts] Failed to record usage:', e); });
+                }).catch((e) => {
+                    console.warn('[Shortcuts] Failed to record usage:', e);
+                });
             }
             return result.handled ? result : { handled: false };
         }

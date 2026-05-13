@@ -1,9 +1,10 @@
 /* Floating-specific base styles and layout */
-@import url('shared-base.css');
+@import url("shared-base.css");
 
-html, body {
-    background: transparent !important;
-    background-color: transparent !important;
+html,
+body {
+    background: transparent;
+    background-color: transparent;
 }
 
 body {
@@ -40,8 +41,14 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 /* Floating banner (reusable for welcome, updates, etc.) */
@@ -63,6 +70,16 @@ body {
 .floating-banner:hover {
     background: linear-gradient(135deg, var(--kage-border) 0%, var(--kage-bg-elevated) 100%);
 }
-.floating-banner-icon { font-size: 30px; flex-shrink: 0; }
-.floating-banner-text { flex: 1; line-height: 1.4; }
-.floating-banner-action { opacity: 0.6; font-size: 11px; flex-shrink: 0; }
+.floating-banner-icon {
+    font-size: 30px;
+    flex-shrink: 0;
+}
+.floating-banner-text {
+    flex: 1;
+    line-height: 1.4;
+}
+.floating-banner-action {
+    opacity: 0.6;
+    font-size: 11px;
+    flex-shrink: 0;
+}

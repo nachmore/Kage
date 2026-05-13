@@ -8,7 +8,7 @@
  */
 
 function pollTauri(callback) {
-    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.webviewWindow) {
+    if (window.__TAURI__?.core && window.__TAURI__.webviewWindow) {
         callback({
             invoke: window.__TAURI__.core.invoke,
             appWindow: window.__TAURI__.webviewWindow.getCurrentWebviewWindow(),

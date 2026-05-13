@@ -6,12 +6,21 @@
 
 // --- Dual state: one timer slot + one stopwatch slot ---
 const _slots = {
-    timer: null,     // { running, startTime, elapsed, duration, pausedAt, intervalId, onTick, onComplete }
+    timer: null, // { running, startTime, elapsed, duration, pausedAt, intervalId, onTick, onComplete }
     stopwatch: null, // { running, startTime, elapsed, pausedAt, intervalId, onTick }
 };
 
 function _newSlot() {
-    return { running: false, startTime: 0, elapsed: 0, duration: 0, pausedAt: 0, intervalId: null, onTick: null, onComplete: null };
+    return {
+        running: false,
+        startTime: 0,
+        elapsed: 0,
+        duration: 0,
+        pausedAt: 0,
+        intervalId: null,
+        onTick: null,
+        onComplete: null,
+    };
 }
 
 // --- Parsing ---
@@ -22,7 +31,8 @@ export function parseTimerCommand(input) {
     if ('stopwatch'.startsWith(trimmed) && trimmed.length >= 2) return { type: 'stopwatch' };
     if (trimmed === 'sw') return { type: 'stopwatch' };
     // Prefix match for "timer" (no duration yet)
-    if ('timer'.startsWith(trimmed) && trimmed.length >= 3 && trimmed !== 'timer') return { type: 'hint' };
+    if ('timer'.startsWith(trimmed) && trimmed.length >= 3 && trimmed !== 'timer')
+        return { type: 'hint' };
     const timerMatch = trimmed.match(/^timer\s+(.+)$/);
     if (!timerMatch) {
         if (trimmed === 'timer') return { type: 'hint' };
@@ -36,17 +46,23 @@ export function parseTimerCommand(input) {
 function parseDuration(str) {
     const colonMatch = str.match(/^(\d+):(\d{2})(?::(\d{2}))?$/);
     if (colonMatch) {
-        if (colonMatch[3] !== undefined) return (parseInt(colonMatch[1]) * 3600 + parseInt(colonMatch[2]) * 60 + parseInt(colonMatch[3])) * 1000;
-        return (parseInt(colonMatch[1]) * 60 + parseInt(colonMatch[2])) * 1000;
+        if (colonMatch[3] !== undefined)
+            return (
+                (parseInt(colonMatch[1], 10) * 3600 +
+                    parseInt(colonMatch[2], 10) * 60 +
+                    parseInt(colonMatch[3], 10)) *
+                1000
+            );
+        return (parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10)) * 1000;
     }
     let totalMs = 0;
     const hMatch = str.match(/(\d+)\s*h/);
     const mMatch = str.match(/(\d+)\s*m(?!s)/);
     const sMatch = str.match(/(\d+)\s*s/);
-    if (hMatch) totalMs += parseInt(hMatch[1]) * 3600000;
-    if (mMatch) totalMs += parseInt(mMatch[1]) * 60000;
-    if (sMatch) totalMs += parseInt(sMatch[1]) * 1000;
-    if (totalMs === 0 && /^\d+$/.test(str)) totalMs = parseInt(str) * 60000;
+    if (hMatch) totalMs += parseInt(hMatch[1], 10) * 3600000;
+    if (mMatch) totalMs += parseInt(mMatch[1], 10) * 60000;
+    if (sMatch) totalMs += parseInt(sMatch[1], 10) * 1000;
+    if (totalMs === 0 && /^\d+$/.test(str)) totalMs = parseInt(str, 10) * 60000;
     return totalMs || null;
 }
 
@@ -82,7 +98,10 @@ export function pauseResumeSlot(slotName) {
     if (s.running) {
         s.running = false;
         s.pausedAt = s.elapsed;
-        if (s.intervalId) { clearInterval(s.intervalId); s.intervalId = null; }
+        if (s.intervalId) {
+            clearInterval(s.intervalId);
+            s.intervalId = null;
+        }
     } else {
         s.running = true;
         s.startTime = Date.now();
@@ -94,13 +113,19 @@ export function pauseResumeSlot(slotName) {
 export function stopSlot(slotName) {
     const s = _slots[slotName];
     if (!s) return;
-    if (s.intervalId) { clearInterval(s.intervalId); s.intervalId = null; }
+    if (s.intervalId) {
+        clearInterval(s.intervalId);
+        s.intervalId = null;
+    }
     _slots[slotName] = null;
 }
 
 export function addTimeToTimer(ms) {
     const s = _slots.timer;
-    if (s) { s.duration += ms; _tick('timer'); }
+    if (s) {
+        s.duration += ms;
+        _tick('timer');
+    }
 }
 
 export function getSlotState(slotName) {
@@ -116,7 +141,7 @@ function _tick(slotName) {
 
     if (slotName === 'timer') {
         const remaining = Math.max(0, s.duration - s.elapsed);
-        const progress = 1 - (remaining / s.duration);
+        const progress = 1 - remaining / s.duration;
         if (s.onTick) s.onTick(formatMs(remaining), progress);
         if (remaining <= 0) {
             const cb = s.onComplete;
@@ -133,8 +158,8 @@ function formatMs(ms) {
     const h = Math.floor(totalSecs / 3600);
     const m = Math.floor((totalSecs % 3600) / 60);
     const s = totalSecs % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    return `${m}:${String(s).padStart(2,'0')}`;
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 // --- Suggestion rendering ---
@@ -215,7 +240,10 @@ export function updateTimerBar(slotName, displayStr, progress, running) {
     let bar = document.getElementById(barId);
 
     if (!displayStr && !_slots[slotName]) {
-        if (bar) { bar.style.display = 'none'; bar.remove(); }
+        if (bar) {
+            bar.style.display = 'none';
+            bar.remove();
+        }
         return;
     }
 
@@ -236,8 +264,8 @@ export function updateTimerBar(slotName, displayStr, progress, running) {
             </div>
         `;
         // Prevent buttons from stealing focus (which triggers window blur → hide)
-        bar.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('mousedown', e => e.preventDefault());
+        bar.querySelectorAll('button').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.preventDefault());
         });
         const inputContainer = document.querySelector('.input-container');
         if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
@@ -263,19 +291,26 @@ export function setupTimerBarControls(slotName, onStop, onResize) {
         const stopBtn = document.getElementById(`${barId}_stop`);
         const addBtn = document.getElementById(`${barId}_add`);
 
-        if (pauseBtn) pauseBtn.onclick = () => {
-            pauseResumeSlot(slotName);
-            const s = getSlotState(slotName);
-            pauseBtn.textContent = s.running ? '⏸' : '▶';
-        };
-        if (stopBtn) stopBtn.onclick = () => {
-            stopSlot(slotName);
-            const bar = document.getElementById(barId);
-            // Delay removal so the click event completes before the DOM changes
-            // (removing the clicked element's ancestor triggers window blur)
-            if (bar) setTimeout(() => { bar.style.display = 'none'; bar.remove(); if (onResize) onResize(); }, 50);
-            if (onStop) onStop();
-        };
+        if (pauseBtn)
+            pauseBtn.onclick = () => {
+                pauseResumeSlot(slotName);
+                const s = getSlotState(slotName);
+                pauseBtn.textContent = s.running ? '⏸' : '▶';
+            };
+        if (stopBtn)
+            stopBtn.onclick = () => {
+                stopSlot(slotName);
+                const bar = document.getElementById(barId);
+                // Delay removal so the click event completes before the DOM changes
+                // (removing the clicked element's ancestor triggers window blur)
+                if (bar)
+                    setTimeout(() => {
+                        bar.style.display = 'none';
+                        bar.remove();
+                        if (onResize) onResize();
+                    }, 50);
+                if (onStop) onStop();
+            };
         if (addBtn) addBtn.onclick = () => addTimeToTimer(60000);
     }, 50);
 }

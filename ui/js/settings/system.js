@@ -2,7 +2,7 @@
  * Startup Settings Module
  */
 
-function getSystemIcon() {
+function _getSystemIcon() {
     const platform = navigator.platform || '';
     if (platform.startsWith('Win')) return '🪟';
     if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF';
@@ -33,11 +33,14 @@ class SystemSettingsModule extends SettingsModule {
         // Check actual registry state, not config
         const autoStart = document.getElementById('autoStart');
         if (autoStart) {
-            window.__TAURI__.core.invoke('get_startup_enabled').then(enabled => {
-                autoStart.checked = enabled;
-            }).catch(() => {
-                if (config.system) autoStart.checked = config.system.auto_start;
-            });
+            window.__TAURI__.core
+                .invoke('get_startup_enabled')
+                .then((enabled) => {
+                    autoStart.checked = enabled;
+                })
+                .catch(() => {
+                    if (config.system) autoStart.checked = config.system.auto_start;
+                });
         }
     }
 
@@ -47,7 +50,9 @@ class SystemSettingsModule extends SettingsModule {
         if (autoStart) {
             autoStart.addEventListener('change', async () => {
                 try {
-                    await window.__TAURI__.core.invoke('set_startup_enabled', { enabled: autoStart.checked });
+                    await window.__TAURI__.core.invoke('set_startup_enabled', {
+                        enabled: autoStart.checked,
+                    });
                 } catch (e) {
                     console.error('Failed to set startup:', e);
                 }

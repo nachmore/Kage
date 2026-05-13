@@ -323,9 +323,9 @@
     let currentTab = 'extensions';
     let showInstalledOnly = false;
     let installedMap = new Map(); // id → { version, kind }
-    let _bundledIds = new Set();
+    const _bundledIds = new Set();
     let _isDevMode = false;
-    let _storeSources = []; // available source names from catalog response
+    const _storeSources = []; // available source names from catalog response
     let _hasMultipleSources = false;
 
     function waitForTauri(cb) {
@@ -431,7 +431,7 @@
         renderTab();
     }
 
-    function toggleInstalledFilter() {
+    function _toggleInstalledFilter() {
         showInstalledOnly = !showInstalledOnly;
         document.getElementById('installedFilter').classList.toggle('active', showInstalledOnly);
         renderTab();
@@ -653,7 +653,7 @@
         return { cancelled: false, item };
     }
 
-    async function installFromStore(id) {
+    async function _installFromStore(id) {
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Installing…');
         try {
@@ -673,7 +673,7 @@
         }
     }
 
-    async function updateItem(id) {
+    async function _updateItem(id) {
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Updating…');
         try {
@@ -691,7 +691,7 @@
         }
     }
 
-    async function reinstallItem(id) {
+    async function _reinstallItem(id) {
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Reinstalling…');
         try {
@@ -706,7 +706,7 @@
         }
     }
 
-    async function uninstallItem(id, kind) {
+    async function _uninstallItem(id, kind) {
         if (!confirm(`Uninstall "${id}"?`)) return;
         const invoke = window.__TAURI__.core.invoke;
         setCardBusy(id, 'Removing…');
@@ -720,13 +720,13 @@
         }
     }
 
-    function openSettings(extensionId) {
+    function _openSettings(extensionId) {
         const invoke = window.__TAURI__.core.invoke;
         invoke('open_settings_window', { section: extensionId });
     }
 
     let searchTimeout;
-    function onSearch() {
+    function _onSearch() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => renderTab(), 300);
     }

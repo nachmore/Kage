@@ -34,7 +34,7 @@ export class AttachmentManager {
             type: 'image',
             data: base64Data,
             mimeType,
-            previewUrl: previewUrl || `data:${mimeType};base64,${base64Data}`
+            previewUrl: previewUrl || `data:${mimeType};base64,${base64Data}`,
         });
         this._notify();
         return true;
@@ -48,7 +48,7 @@ export class AttachmentManager {
             type: 'resource_link',
             uri,
             name: fileName,
-            mimeType: mimeType || guessMimeType(fileName)
+            mimeType: mimeType || guessMimeType(fileName),
         });
         this._notify();
         return true;
@@ -77,7 +77,7 @@ export class AttachmentManager {
     /** Build the attachments array for the Tauri invoke call */
     toContentBlocks() {
         if (!this.hasAttachments()) return null;
-        return this.attachments.map(att => {
+        return this.attachments.map((att) => {
             if (att.type === 'image') {
                 return { type: 'image', data: att.data, mimeType: att.mimeType };
             }
@@ -244,7 +244,7 @@ export function attachmentPreviewHtml(attachments) {
 // --- Utilities ---
 
 /** Show a brief disappearing toast near the target element */
-function showLimitToast(nearElement) {
+function showLimitToast(_nearElement) {
     // Remove any existing toast
     const existing = document.querySelector('.attachment-limit-toast');
     if (existing) existing.remove();
@@ -267,7 +267,7 @@ function showLimitToast(nearElement) {
 export function sessionImageToDataUrl(imageItem) {
     try {
         const imgData = imageItem.data;
-        if (!imgData || !imgData.source || !imgData.source.data) return null;
+        if (!imgData?.source?.data) return null;
         const bytes = imgData.source.data;
         const format = imgData.format || 'png';
         const mimeType = `image/${format}`;
@@ -301,15 +301,32 @@ function fileToBase64(file) {
 function guessMimeType(filename) {
     const ext = (filename || '').split('.').pop()?.toLowerCase();
     const map = {
-        'rs': 'text/x-rust', 'js': 'text/javascript', 'ts': 'text/typescript',
-        'py': 'text/x-python', 'java': 'text/x-java', 'go': 'text/x-go',
-        'c': 'text/x-c', 'cpp': 'text/x-c++', 'h': 'text/x-c',
-        'css': 'text/css', 'html': 'text/html', 'json': 'application/json',
-        'xml': 'text/xml', 'yaml': 'text/yaml', 'yml': 'text/yaml',
-        'md': 'text/markdown', 'txt': 'text/plain', 'sh': 'text/x-shellscript',
-        'toml': 'text/x-toml', 'sql': 'text/x-sql',
-        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-        'gif': 'image/gif', 'webp': 'image/webp', 'svg': 'image/svg+xml',
+        rs: 'text/x-rust',
+        js: 'text/javascript',
+        ts: 'text/typescript',
+        py: 'text/x-python',
+        java: 'text/x-java',
+        go: 'text/x-go',
+        c: 'text/x-c',
+        cpp: 'text/x-c++',
+        h: 'text/x-c',
+        css: 'text/css',
+        html: 'text/html',
+        json: 'application/json',
+        xml: 'text/xml',
+        yaml: 'text/yaml',
+        yml: 'text/yaml',
+        md: 'text/markdown',
+        txt: 'text/plain',
+        sh: 'text/x-shellscript',
+        toml: 'text/x-toml',
+        sql: 'text/x-sql',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        svg: 'image/svg+xml',
     };
     return map[ext] || 'application/octet-stream';
 }

@@ -47,7 +47,7 @@ class ModelSettingsModule extends SettingsModule {
 
     async loadModels() {
         try {
-            this.models = await this.getInvoke()('get_available_models') || [];
+            this.models = (await this.getInvoke()('get_available_models')) || [];
         } catch (e) {
             console.log('Could not load models:', e);
             this.models = [];
@@ -69,15 +69,17 @@ class ModelSettingsModule extends SettingsModule {
         }
 
         const defaultModel = this._loadedDefault || '';
-        select.innerHTML = this.models.map(m => {
-            const selected = m.modelId === defaultModel ? ' selected' : '';
-            return `<option value="${m.modelId}"${selected}>${m.name}</option>`;
-        }).join('');
+        select.innerHTML = this.models
+            .map((m) => {
+                const selected = m.modelId === defaultModel ? ' selected' : '';
+                return `<option value="${m.modelId}"${selected}>${m.name}</option>`;
+            })
+            .join('');
     }
 
     getSelectedModelId() {
         const select = document.getElementById('defaultModelSelect');
-        return select ? select.value : (this._loadedDefault || '');
+        return select ? select.value : this._loadedDefault || '';
     }
 
     load(config) {

@@ -16,11 +16,13 @@ let _emojiNamesLoading = false;
 export function preloadEmojiNames() {
     if (_emojiNames || _emojiNamesLoading) return;
     _emojiNamesLoading = true;
-    import('../../vendor/lib/emoji-names.js').then(mod => {
-        _emojiNames = mod.emojiNames;
-    }).catch(() => {
-        _emojiNames = {}; // Fallback: emojis will just be stripped
-    });
+    import('../../vendor/lib/emoji-names.js')
+        .then((mod) => {
+            _emojiNames = mod.emojiNames;
+        })
+        .catch(() => {
+            _emojiNames = {}; // Fallback: emojis will just be stripped
+        });
 }
 
 // Sentence boundary regex
@@ -74,12 +76,13 @@ export function cleanForTts(text) {
     }
     // Replace emoji sequences with their spoken names, wrapped in commas for a natural pause.
     // Consecutive emojis are grouped (e.g. 🤣🤣🤣 → ", rolling on the floor laughing x3,")
-    const emojiUnit = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
+    const emojiUnit =
+        /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)(\u200D(\p{Emoji_Presentation}|\p{Emoji}\uFE0F))*/gu;
     // Match one or more consecutive emoji (possibly separated by whitespace)
     const emojiGroup = new RegExp(`(${emojiUnit.source})(\\s*(${emojiUnit.source}))*`, 'gu');
     text = text.replace(emojiGroup, (match) => {
         // Split the group into individual emoji
-        const singles = [...match.matchAll(emojiUnit)].map(m => m[0]);
+        const singles = [...match.matchAll(emojiUnit)].map((m) => m[0]);
         // Count consecutive duplicates and build spoken parts
         const parts = [];
         let i = 0;
@@ -96,7 +99,10 @@ export function cleanForTts(text) {
         return parts.length ? `, ${parts.join(', ')}, ` : '';
     });
     // Collapse multiple spaces/commas from removals
-    text = text.replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
+    text = text
+        .replace(/\s{2,}/g, ' ')
+        .replace(/,\s*,/g, ',')
+        .trim();
     return text;
 }
 
@@ -104,14 +110,14 @@ function splitSentences(text) {
     const clean = text
         .replace(/```[\s\S]*?```/g, ' code block ')
         .replace(/`([^`]+)`/g, '$1')
-        .replace(/[#*_~>\[\]()]/g, '')
+        .replace(/[#*_~>[\]()]/g, '')
         .replace(/\n+/g, '. ')
         .trim();
     if (!clean) return [];
     // Apply TTS-specific symbol/emoji cleanup
     const ttsReady = cleanForTts(clean);
     if (!ttsReady) return [];
-    const parts = ttsReady.split(SENTENCE_RE).filter(s => s.trim().length > 0);
+    const parts = ttsReady.split(SENTENCE_RE).filter((s) => s.trim().length > 0);
     const merged = [];
     for (const part of parts) {
         if (merged.length > 0 && part.trim().length < 20) {
@@ -122,7 +128,6 @@ function splitSentences(text) {
     }
     return merged;
 }
-
 
 // ─── Reusable Playback Bar ───
 
@@ -156,17 +161,25 @@ export class TtsPlaybackBar {
                 </button>
             </div>
         `;
-        this._el.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('mousedown', e => e.preventDefault());
+        this._el.querySelectorAll('button').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.preventDefault());
         });
         if (this.barContainer) {
             this.barContainer.parentNode.insertBefore(this._el, this.barContainer);
         }
-        this._el.querySelector('#ttsBarPause').onclick = () => { if (this.callbacks.onPause) this.callbacks.onPause(); };
-        this._el.querySelector('#ttsBarStop').onclick = () => { if (this.callbacks.onStop) this.callbacks.onStop(); };
+        this._el.querySelector('#ttsBarPause').onclick = () => {
+            if (this.callbacks.onPause) this.callbacks.onPause();
+        };
+        this._el.querySelector('#ttsBarStop').onclick = () => {
+            if (this.callbacks.onStop) this.callbacks.onStop();
+        };
         this._el.querySelector('#ttsBarSettings').onclick = () => {
             if (window.__TAURI__?.core) {
-                window.__TAURI__.core.invoke('open_settings_window', { section: 'speech' }).catch((e) => { console.warn('[TTS] Failed to open settings window:', e); });
+                window.__TAURI__.core
+                    .invoke('open_settings_window', { section: 'speech' })
+                    .catch((e) => {
+                        console.warn('[TTS] Failed to open settings window:', e);
+                    });
             }
         };
         this._el.style.display = 'flex';
@@ -195,7 +208,11 @@ export class TtsPlaybackBar {
         if (!this._el) return;
         const el = this._el;
         this._el = null;
-        setTimeout(() => { el.style.display = 'none'; el.remove(); this.onBarChange(); }, 50);
+        setTimeout(() => {
+            el.style.display = 'none';
+            el.remove();
+            this.onBarChange();
+        }, 50);
     }
 
     hideAfterDelay(ms = 2000) {
@@ -204,9 +221,10 @@ export class TtsPlaybackBar {
         setTimeout(() => this.hide(), ms);
     }
 
-    get visible() { return !!this._el; }
+    get visible() {
+        return !!this._el;
+    }
 }
-
 
 // ─── TTS Streamer (Pocket TTS) ───
 
@@ -281,73 +299,81 @@ export class TtsStreamer {
         this._updateBarStatus();
 
         try {
-        // Retry loop — server may still be starting up on first request
-        const maxRetries = 15;
-        let lastError = null;
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            if (this._stopped) return;
-            try {
-                const controller = new AbortController();
-                this._abortControllers.push(controller);
-                const resp = await fetch(`http://127.0.0.1:${this.port}/tts`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: sentence, voice: this.voice, stream: true }),
-                    signal: controller.signal,
-                });
+            // Retry loop — server may still be starting up on first request
+            const maxRetries = 15;
+            let lastError = null;
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
                 if (this._stopped) return;
-                if (!resp.ok) {
-                    // 503 = model not loaded yet — retry
-                    if (resp.status === 503 && attempt < maxRetries) {
-                        this._bar.setStatus(`Waiting for voice model... (${attempt + 1}s)`);
-                        await new Promise(r => setTimeout(r, 1000));
-                        continue;
+                try {
+                    const controller = new AbortController();
+                    this._abortControllers.push(controller);
+                    const resp = await fetch(`http://127.0.0.1:${this.port}/tts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: sentence, voice: this.voice, stream: true }),
+                        signal: controller.signal,
+                    });
+                    if (this._stopped) return;
+                    if (!resp.ok) {
+                        // 503 = model not loaded yet — retry
+                        if (resp.status === 503 && attempt < maxRetries) {
+                            this._bar.setStatus(`Waiting for voice model... (${attempt + 1}s)`);
+                            await new Promise((r) => setTimeout(r, 1000));
+                            continue;
+                        }
+                        let errorMsg = `TTS server error (${resp.status})`;
+                        try {
+                            const body = await resp.json();
+                            errorMsg = body.error || errorMsg;
+                        } catch {}
+                        console.warn('[TtsStreamer] TTS failed:', resp.status, errorMsg);
+                        this._bar.setStatus(`Error: ${errorMsg}`);
+                        setTimeout(() => this._bar.hideAfterDelay(3000), 0);
+                        return;
                     }
-                    let errorMsg = `TTS server error (${resp.status})`;
-                    try { const body = await resp.json(); errorMsg = body.error || errorMsg; } catch {}
-                    console.warn('[TtsStreamer] TTS failed:', resp.status, errorMsg);
-                    this._bar.setStatus(`Error: ${errorMsg}`);
-                    setTimeout(() => this._bar.hideAfterDelay(3000), 0);
-                    return;
-                }
 
-                const contentType = resp.headers.get('Content-Type') || '';
-                if (contentType.includes('octet-stream')) {
-                    const sampleRate = parseInt(resp.headers.get('X-Sample-Rate') || '24000', 10);
-                    const chunks = [];
-                    const reader = resp.body.getReader();
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done || this._stopped) break;
-                        chunks.push(value);
+                    const contentType = resp.headers.get('Content-Type') || '';
+                    if (contentType.includes('octet-stream')) {
+                        const sampleRate = parseInt(
+                            resp.headers.get('X-Sample-Rate') || '24000',
+                            10
+                        );
+                        const chunks = [];
+                        const reader = resp.body.getReader();
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done || this._stopped) break;
+                            chunks.push(value);
+                        }
+                        if (this._stopped) return;
+                        const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+                        const pcm = new Uint8Array(totalLen);
+                        let offset = 0;
+                        for (const chunk of chunks) {
+                            pcm.set(new Uint8Array(chunk.buffer || chunk), offset);
+                            offset += chunk.byteLength;
+                        }
+                        const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
+                        this._audioQueue.push({ url, sentence });
+                    } else {
+                        const blob = await resp.blob();
+                        if (this._stopped) return;
+                        this._audioQueue.push({ url: URL.createObjectURL(blob), sentence });
                     }
-                    if (this._stopped) return;
-                    const totalLen = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-                    const pcm = new Uint8Array(totalLen);
-                    let offset = 0;
-                    for (const chunk of chunks) { pcm.set(new Uint8Array(chunk.buffer || chunk), offset); offset += chunk.byteLength; }
-                    const url = URL.createObjectURL(_pcmToWav(pcm, sampleRate));
-                    this._audioQueue.push({ url, sentence });
-                } else {
-                    const blob = await resp.blob();
-                    if (this._stopped) return;
-                    this._audioQueue.push({ url: URL.createObjectURL(blob), sentence });
-                }
-                if (!this._isPlaying && !this._isPaused) this._playNext();
-                return; // Success — exit retry loop
-            } catch (e) {
-                lastError = e;
-                if (attempt < maxRetries) {
-                    this._bar.setStatus(`Waiting for voice server... (${attempt + 1}s)`);
-                    await new Promise(r => setTimeout(r, 1000));
-                    continue;
+                    if (!this._isPlaying && !this._isPaused) this._playNext();
+                    return; // Success — exit retry loop
+                } catch (e) {
+                    lastError = e;
+                    if (attempt < maxRetries) {
+                        this._bar.setStatus(`Waiting for voice server... (${attempt + 1}s)`);
+                        await new Promise((r) => setTimeout(r, 1000));
+                    }
                 }
             }
-        }
-        // All retries exhausted
-        console.warn('[TtsStreamer] TTS fetch error after retries:', lastError);
-        this._bar.setStatus('Voice server connection failed');
-        setTimeout(() => this._bar.hideAfterDelay(3000), 0);
+            // All retries exhausted
+            console.warn('[TtsStreamer] TTS fetch error after retries:', lastError);
+            this._bar.setStatus('Voice server connection failed');
+            setTimeout(() => this._bar.hideAfterDelay(3000), 0);
         } finally {
             this._pendingFetches--;
         }
@@ -356,36 +382,81 @@ export class TtsStreamer {
         if (this._stopped || this._isPaused) return;
         if (this._audioQueue.length === 0) {
             this._isPlaying = false;
-            if (this._finished && this._pendingFetches === 0) { this._bar.hideAfterDelay(); if (this._onFinished) this._onFinished(); }
+            if (this._finished && this._pendingFetches === 0) {
+                this._bar.hideAfterDelay();
+                if (this._onFinished) this._onFinished();
+            }
             return;
         }
         this._isPlaying = true;
         const chunk = this._audioQueue.shift();
         this._currentAudio = new Audio(chunk.url);
-        this._currentAudio.onended = () => { URL.revokeObjectURL(chunk.url); this._currentAudio = null; this._playedChunks++; this._updateBarStatus(); this._playNext(); };
-        this._currentAudio.onerror = () => { URL.revokeObjectURL(chunk.url); this._currentAudio = null; this._playedChunks++; this._updateBarStatus(); this._playNext(); };
+        this._currentAudio.onended = () => {
+            URL.revokeObjectURL(chunk.url);
+            this._currentAudio = null;
+            this._playedChunks++;
+            this._updateBarStatus();
+            this._playNext();
+        };
+        this._currentAudio.onerror = () => {
+            URL.revokeObjectURL(chunk.url);
+            this._currentAudio = null;
+            this._playedChunks++;
+            this._updateBarStatus();
+            this._playNext();
+        };
         this._updateBarStatus();
         this._currentAudio.play().catch(() => this._playNext());
     }
 
-    pause() { if (this._currentAudio && this._isPlaying) { this._currentAudio.pause(); this._isPaused = true; this._updateBarStatus(); this._bar.setPauseIcon(true); } }
-    resume() { if (this._isPaused) { this._isPaused = false; if (this._currentAudio) this._currentAudio.play().catch(() => {}); else this._playNext(); this._bar.setPauseIcon(false); this._updateBarStatus(); } }
-    togglePause() { if (this._isPaused) this.resume(); else this.pause(); }
+    pause() {
+        if (this._currentAudio && this._isPlaying) {
+            this._currentAudio.pause();
+            this._isPaused = true;
+            this._updateBarStatus();
+            this._bar.setPauseIcon(true);
+        }
+    }
+    resume() {
+        if (this._isPaused) {
+            this._isPaused = false;
+            if (this._currentAudio) this._currentAudio.play().catch(() => {});
+            else this._playNext();
+            this._bar.setPauseIcon(false);
+            this._updateBarStatus();
+        }
+    }
+    togglePause() {
+        if (this._isPaused) this.resume();
+        else this.pause();
+    }
 
     stop() {
-        this._stopped = true; this._isPaused = false; this._isPlaying = false;
-        if (this._currentAudio) { this._currentAudio.pause(); this._currentAudio.src = ''; this._currentAudio = null; }
+        this._stopped = true;
+        this._isPaused = false;
+        this._isPlaying = false;
+        if (this._currentAudio) {
+            this._currentAudio.pause();
+            this._currentAudio.src = '';
+            this._currentAudio = null;
+        }
         for (const c of this._audioQueue) URL.revokeObjectURL(c.url);
         this._audioQueue = [];
         // Abort all in-flight fetch requests
-        for (const ac of this._abortControllers) { try { ac.abort(); } catch {} }
+        for (const ac of this._abortControllers) {
+            try {
+                ac.abort();
+            } catch {}
+        }
         this._abortControllers = [];
         // Tell the server to cancel any ongoing generation
         fetch(`http://127.0.0.1:${this.port}/stop`, { method: 'POST' }).catch(() => {});
         this._bar.hide();
     }
 
-    get isActive() { return this._isPlaying || this._audioQueue.length > 0 || this._pendingFetches > 0; }
+    get isActive() {
+        return this._isPlaying || this._audioQueue.length > 0 || this._pendingFetches > 0;
+    }
 
     _updateBarStatus() {
         if (this._isPaused) this._bar.setStatus('Paused');
@@ -395,21 +466,29 @@ export class TtsStreamer {
     }
 }
 
-
 // ─── Helpers ───
 
 function _pcmToWav(pcmBytes, sampleRate) {
-    const numChannels = 1, bitsPerSample = 16;
-    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-    const blockAlign = numChannels * bitsPerSample / 8;
+    const numChannels = 1,
+        bitsPerSample = 16;
+    const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+    const blockAlign = (numChannels * bitsPerSample) / 8;
     const dataSize = pcmBytes.byteLength;
     const buffer = new ArrayBuffer(44 + dataSize);
     const view = new DataView(buffer);
-    _writeStr(view, 0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); _writeStr(view, 8, 'WAVE');
-    _writeStr(view, 12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true); view.setUint16(34, bitsPerSample, true);
-    _writeStr(view, 36, 'data'); view.setUint32(40, dataSize, true);
+    _writeStr(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    _writeStr(view, 8, 'WAVE');
+    _writeStr(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    _writeStr(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
     new Uint8Array(buffer, 44).set(pcmBytes);
     return new Blob([buffer], { type: 'audio/wav' });
 }

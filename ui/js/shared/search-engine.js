@@ -18,20 +18,65 @@ function _relativeTime(isoString) {
         const diffDay = Math.floor(diffHr / 24);
         if (diffDay < 7) return `${diffDay}d ago`;
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    } catch { return ''; }
+    } catch {
+        return '';
+    }
 }
 
 function _fileIcon(ext) {
     const icons = {
-        pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
-        txt: '📄', md: '📄', csv: '📄', json: '📄', xml: '📄', yaml: '📄', yml: '📄',
-        js: '📜', ts: '📜', py: '📜', rs: '📜', java: '📜', cpp: '📜', c: '📜', h: '📜',
-        html: '🌐', css: '🎨', svg: '🎨',
-        png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', bmp: '🖼️', ico: '🖼️', webp: '🖼️',
-        mp3: '🎵', wav: '🎵', flac: '🎵', ogg: '🎵', m4a: '🎵',
-        mp4: '🎬', avi: '🎬', mkv: '🎬', mov: '🎬', wmv: '🎬',
-        zip: '📦', rar: '📦', '7z': '📦', tar: '📦', gz: '📦',
-        exe: '⚙️', msi: '⚙️', bat: '⚙️', cmd: '⚙️', ps1: '⚙️',
+        pdf: '📕',
+        doc: '📘',
+        docx: '📘',
+        xls: '📗',
+        xlsx: '📗',
+        ppt: '📙',
+        pptx: '📙',
+        txt: '📄',
+        md: '📄',
+        csv: '📄',
+        json: '📄',
+        xml: '📄',
+        yaml: '📄',
+        yml: '📄',
+        js: '📜',
+        ts: '📜',
+        py: '📜',
+        rs: '📜',
+        java: '📜',
+        cpp: '📜',
+        c: '📜',
+        h: '📜',
+        html: '🌐',
+        css: '🎨',
+        svg: '🎨',
+        png: '🖼️',
+        jpg: '🖼️',
+        jpeg: '🖼️',
+        gif: '🖼️',
+        bmp: '🖼️',
+        ico: '🖼️',
+        webp: '🖼️',
+        mp3: '🎵',
+        wav: '🎵',
+        flac: '🎵',
+        ogg: '🎵',
+        m4a: '🎵',
+        mp4: '🎬',
+        avi: '🎬',
+        mkv: '🎬',
+        mov: '🎬',
+        wmv: '🎬',
+        zip: '📦',
+        rar: '📦',
+        '7z': '📦',
+        tar: '📦',
+        gz: '📦',
+        exe: '⚙️',
+        msi: '⚙️',
+        bat: '⚙️',
+        cmd: '⚙️',
+        ps1: '⚙️',
     };
     return icons[ext] || '📄';
 }
@@ -150,7 +195,11 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
         }
         // Don't return early for >find or >cb — let them fall through to file search / clipboard
         const lowerQuery = query.toLowerCase().trim();
-        if (!lowerQuery.startsWith('>find ') && !lowerQuery.startsWith('>cb') && !lowerQuery.startsWith('>clipboard')) {
+        if (
+            !lowerQuery.startsWith('>find ') &&
+            !lowerQuery.startsWith('>cb') &&
+            !lowerQuery.startsWith('>clipboard')
+        ) {
             return _applyFrecency(results, query);
         }
     }
@@ -203,17 +252,24 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             const triggerMatch = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
             const nameMatch = nameLower.startsWith(lower) || nameLower.includes(lower);
             if (triggerMatch || nameMatch) {
-                const matchedByTrigger = scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
+                const matchedByTrigger =
+                    scLower.startsWith(lower) || (hasSpace && scLower === triggerWord);
                 const triggerLen = matchedByTrigger ? sc.shortcut.length : sc.name.length;
-                const rawArgs = matchedByTrigger ? (query.length > triggerLen ? query.substring(triggerLen).trim() : '') : '';
+                const rawArgs = matchedByTrigger
+                    ? query.length > triggerLen
+                        ? query.substring(triggerLen).trim()
+                        : ''
+                    : '';
                 const argsArray = rawArgs ? rawArgs.split(/\s+/) : [];
 
                 let desc = '⚡ ' + sc.shortcut;
-                const templates = [sc.url, sc.prompt, sc.arguments, sc.script].filter(Boolean).join(' ');
+                const templates = [sc.url, sc.prompt, sc.arguments, sc.script]
+                    .filter(Boolean)
+                    .join(' ');
                 const reqParams = new Set();
                 let m;
                 const re = /\{(\d+)\}(?!\?)/g;
-                while ((m = re.exec(templates)) !== null) reqParams.add(parseInt(m[1]));
+                while ((m = re.exec(templates)) !== null) reqParams.add(parseInt(m[1], 10));
                 if (reqParams.size > 0 && argsArray.length < Math.max(...reqParams) + 1) {
                     const needed = Math.max(...reqParams) + 1;
                     desc += ` · ${needed - argsArray.length} param${needed - argsArray.length > 1 ? 's' : ''} needed`;
@@ -233,17 +289,22 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                 if (scLower === triggerWord && hasSpace) {
                     historyPromises.push(
                         invoke('get_shortcut_history', { trigger: sc.shortcut })
-                            .then(history => {
+                            .then((history) => {
                                 const histResults = [];
                                 for (const entry of history) {
                                     const histArgs = entry.args || '';
-                                    if (partialArgs && !histArgs.toLowerCase().includes(partialArgs)) continue;
+                                    if (
+                                        partialArgs &&
+                                        !histArgs.toLowerCase().includes(partialArgs)
+                                    )
+                                        continue;
                                     if (rawArgs && histArgs === rawArgs) continue;
                                     histResults.push({
                                         id: 'shortcut-history:' + sc.name + ':' + histArgs,
                                         type: 'shortcut',
                                         label: sc.name + ' ' + histArgs,
-                                        description: '🕐 ' + (entry.at ? _relativeTime(entry.at) : ''),
+                                        description:
+                                            '🕐 ' + (entry.at ? _relativeTime(entry.at) : ''),
                                         icon: sc.icon || '⚡',
                                         score: 84,
                                         data: { shortcut: sc, args: histArgs.split(/\s+/) },
@@ -271,7 +332,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     if (_extensionManager) {
         asyncTasks.push({
             name: 'extensions',
-            promise: _extensionManager.matchAllAsync(query).catch(() => [])
+            promise: _extensionManager.matchAllAsync(query).catch(() => []),
         });
     }
 
@@ -279,23 +340,66 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
     asyncTasks.push({
         name: 'apps',
         promise: invoke('handle_floating_input', { input: query })
-            .then(rustJson => {
+            .then((rustJson) => {
                 const rustResults = JSON.parse(rustJson);
                 const mapped = [];
                 for (const r of rustResults) {
                     if (r.type === 'url') {
-                        mapped.push({ id: 'url:' + r.value, type: 'url', label: 'Open in browser', description: r.value, icon: '🌐', score: r.score || 88, data: { value: r.value } });
+                        mapped.push({
+                            id: 'url:' + r.value,
+                            type: 'url',
+                            label: 'Open in browser',
+                            description: r.value,
+                            icon: '🌐',
+                            score: r.score || 88,
+                            data: { value: r.value },
+                        });
                     } else if (r.type === 'path') {
-                        mapped.push({ id: 'path:' + r.value, type: 'path', label: r.pathType === 'file' ? 'Open File' : 'Open Folder', description: r.value, icon: r.pathType === 'file' ? '📄' : '📁', score: r.score || 87, data: { value: r.value, pathType: r.pathType } });
+                        mapped.push({
+                            id: 'path:' + r.value,
+                            type: 'path',
+                            label: r.pathType === 'file' ? 'Open File' : 'Open Folder',
+                            description: r.value,
+                            icon: r.pathType === 'file' ? '📄' : '📁',
+                            score: r.score || 87,
+                            data: { value: r.value, pathType: r.pathType },
+                        });
                     } else if (r.type === 'system') {
-                        mapped.push({ id: 'system:' + r.cmdId, type: 'system', label: r.cmdLabel, description: r.needsConfirm ? 'Press Enter to select' : 'Press Enter to execute', icon: '⚙️', score: r.score || 86, data: { cmdId: r.cmdId, cmdLabel: r.cmdLabel, needsConfirm: r.needsConfirm } });
+                        mapped.push({
+                            id: 'system:' + r.cmdId,
+                            type: 'system',
+                            label: r.cmdLabel,
+                            description: r.needsConfirm
+                                ? 'Press Enter to select'
+                                : 'Press Enter to execute',
+                            icon: '⚙️',
+                            score: r.score || 86,
+                            data: {
+                                cmdId: r.cmdId,
+                                cmdLabel: r.cmdLabel,
+                                needsConfirm: r.needsConfirm,
+                            },
+                        });
                     } else if (r.type === 'app') {
-                        mapped.push({ id: 'app:' + r.name, type: 'app', label: r.name, description: '', icon: '', score: r.score || 75, tooltip: r.path || '', data: { name: r.name, icon_base64: r.icon_base64, emoji_icon: r.emoji_icon } });
+                        mapped.push({
+                            id: 'app:' + r.name,
+                            type: 'app',
+                            label: r.name,
+                            description: '',
+                            icon: '',
+                            score: r.score || 75,
+                            tooltip: r.path || '',
+                            data: {
+                                name: r.name,
+                                icon_base64: r.icon_base64,
+                                emoji_icon: r.emoji_icon,
+                            },
+                        });
                     }
                 }
                 return mapped;
             })
-            .catch(() => [])
+            .catch(() => []),
     });
 
     // File search — conditional
@@ -311,10 +415,12 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             asyncTasks.push({
                 name: 'searching files',
                 promise: invoke('search_files', { query: fileQuery, maxResults: 8 })
-                    .then(fileResults => {
+                    .then((fileResults) => {
                         const mapped = [];
                         for (const f of fileResults) {
-                            const ext = f.name.includes('.') ? f.name.split('.').pop().toLowerCase() : '';
+                            const ext = f.name.includes('.')
+                                ? f.name.split('.').pop().toLowerCase()
+                                : '';
                             const icon = f.is_folder ? '📁' : _fileIcon(ext);
                             const sizeStr = f.is_folder ? '' : _formatSize(f.size);
                             const timeStr = f.modified ? _relativeTime(f.modified) : '';
@@ -331,22 +437,25 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                         }
                         return mapped;
                     })
-                    .catch(e => { console.warn('[Search] File search failed:', e); return []; })
+                    .catch((e) => {
+                        console.warn('[Search] File search failed:', e);
+                        return [];
+                    }),
             });
         }
     }
 
     // History promises (unnamed — fast, not worth labeling)
-    const historyEntries = historyPromises.map(p => ({ name: null, promise: p }));
+    const historyEntries = historyPromises.map((p) => ({ name: null, promise: p }));
 
     // Flush each async batch as it resolves (progressive rendering)
     if (onPartial) {
         const allEntries = [...asyncTasks, ...historyEntries];
-        const allPromises = allEntries.map(e => e.promise);
-        const pending = new Set(asyncTasks.map(t => t.name).filter(Boolean));
+        const allPromises = allEntries.map((e) => e.promise);
+        const pending = new Set(asyncTasks.map((t) => t.name).filter(Boolean));
 
         for (const entry of allEntries) {
-            entry.promise.then(batch => {
+            entry.promise.then((batch) => {
                 if (entry.name) pending.delete(entry.name);
                 if (Array.isArray(batch) && batch.length > 0) {
                     results.push(...batch);
@@ -359,7 +468,7 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
         await Promise.all(allPromises);
     } else {
         // Legacy path: wait for everything, return once
-        const allPromises = [...asyncTasks.map(t => t.promise), ...historyPromises];
+        const allPromises = [...asyncTasks.map((t) => t.promise), ...historyPromises];
         const allAsync = await Promise.all(allPromises);
         for (const batch of allAsync) {
             if (Array.isArray(batch)) results.push(...batch);
@@ -368,7 +477,6 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
 
     return _applyFrecency(results, query);
 }
-
 
 function _applyFrecency(results, query) {
     for (const r of results) {

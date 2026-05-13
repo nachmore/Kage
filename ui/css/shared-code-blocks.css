@@ -37,8 +37,14 @@
     align-items: center;
     gap: 4px;
 }
-.copy-button:hover { background: #4e4e4e; color: #fff; }
-.copy-button.copied { background: #a6e22e; color: #272822; }
+.copy-button:hover {
+    background: #4e4e4e;
+    color: #fff;
+}
+.copy-button.copied {
+    background: #a6e22e;
+    color: #272822;
+}
 
 .code-block-actions {
     display: flex;
@@ -47,10 +53,22 @@
 }
 
 /* Try button */
-.try-button { background: #2d4a2d; color: #a6e22e; }
-.try-button:hover { background: #3a5c3a; color: #c8ff5e; }
-.try-button-running { background: #5a2d2d; color: #f92672; }
-.try-button-running:hover { background: #6a3a3a; color: #ff5e8e; }
+.try-button {
+    background: #2d4a2d;
+    color: #a6e22e;
+}
+.try-button:hover {
+    background: #3a5c3a;
+    color: #c8ff5e;
+}
+.try-button-running {
+    background: #5a2d2d;
+    color: #f92672;
+}
+.try-button-running:hover {
+    background: #6a3a3a;
+    color: #ff5e8e;
+}
 
 /* Try output panel */
 .try-output {
@@ -78,21 +96,36 @@
     padding: 0 4px;
     line-height: 1;
 }
-.try-output-close:hover { color: #ccc; }
+.try-output-close:hover {
+    color: #ccc;
+}
 .try-output-body {
     margin: 0;
     padding: 8px 12px;
     max-height: 200px;
     overflow-y: auto;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
     font-size: 12px;
     line-height: 1.5;
 }
-.try-output-line { color: #d4d4d4; white-space: pre-wrap; word-break: break-all; }
-.try-output-warn { color: #e6db74; }
-.try-output-error { color: #f92672; }
-.try-output-result { color: #a6e22e; }
-.try-output-dim { color: #666; font-style: italic; }
+.try-output-line {
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.try-output-warn {
+    color: #e6db74;
+}
+.try-output-error {
+    color: #f92672;
+}
+.try-output-result {
+    color: #a6e22e;
+}
+.try-output-dim {
+    color: #666;
+    font-style: italic;
+}
 
 .code-block-wrapper pre {
     margin: 0;
@@ -102,7 +135,7 @@
 }
 
 .code-block-wrapper code {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
     font-size: 13px;
     line-height: 1.5;
 }
@@ -175,7 +208,7 @@
 }
 
 .diagram-source code {
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
     color: #f8f8f2;
     white-space: pre;
 }
@@ -202,8 +235,12 @@
 }
 
 @keyframes diagramLightboxFadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
 
 .diagram-lightbox svg {
@@ -233,8 +270,8 @@
 
 .diagram-lightbox-btn {
     background: rgba(0, 0, 0, 0.5);
-    color: var(--kage-accent-light, #C09CFF);
-    border: 1px solid var(--kage-accent-light, #C09CFF);
+    color: var(--kage-accent-light, #c09cff);
+    border: 1px solid var(--kage-accent-light, #c09cff);
     border-radius: 4px;
     padding: 4px 10px;
     font-size: 11px;
@@ -242,14 +279,16 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    transition: background 0.15s, color 0.15s;
+    transition:
+        background 0.15s,
+        color 0.15s;
     backdrop-filter: blur(8px);
 }
 
 .diagram-lightbox-btn:hover {
-    background: var(--kage-accent, #7138CC);
+    background: var(--kage-accent, #7138cc);
     color: white;
-    border-color: var(--kage-accent, #7138CC);
+    border-color: var(--kage-accent, #7138cc);
 }
 
 .diagram-lightbox-close {

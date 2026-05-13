@@ -43,10 +43,11 @@ export class KageDesktopViewer {
                     // Reload and re-render, preserving scroll + marking new messages
                     const messages = await this.invoke('kage_cli_load_session', { conversationId });
                     const area = this.chatApp.elements.messagesArea;
-                    const session = this.sessions.find(s => s.id === conversationId);
+                    const session = this.sessions.find((s) => s.id === conversationId);
                     if (area) {
                         const prevCount = area.querySelectorAll('.message').length;
-                        const wasAtBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
+                        const wasAtBottom =
+                            area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
                         this.renderMessages(area, messages, session);
                         const newCount = area.querySelectorAll('.message').length;
                         // Insert a "new" divider before the new messages
@@ -59,19 +60,25 @@ export class KageDesktopViewer {
                                 divider.textContent = '● New';
                                 dividerTarget.before(divider);
                                 // Fade out when scrolled into view
-                                const observer = new IntersectionObserver((entries) => {
-                                    if (entries[0].isIntersecting) {
-                                        setTimeout(() => divider.classList.add('kd-new-divider-seen'), 2000);
-                                        observer.disconnect();
-                                    }
-                                }, { root: area, threshold: 0.5 });
+                                const observer = new IntersectionObserver(
+                                    (entries) => {
+                                        if (entries[0].isIntersecting) {
+                                            setTimeout(
+                                                () => divider.classList.add('kd-new-divider-seen'),
+                                                2000
+                                            );
+                                            observer.disconnect();
+                                        }
+                                    },
+                                    { root: area, threshold: 0.5 }
+                                );
                                 observer.observe(divider);
                             }
                         }
                         if (wasAtBottom) area.scrollTop = area.scrollHeight;
                     }
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Silently ignore poll errors (db might be locked momentarily)
             }
         }, 3000);
@@ -101,11 +108,12 @@ export class KageDesktopViewer {
         return true;
     }
 
-    async loadSessions(workspaceEncoded = null) {
+    async loadSessions(_workspaceEncoded = null) {
         try {
             console.log('[KageDesktop] Loading sessions...');
             const list = this.elements.sessionList;
-            list.innerHTML = '<div class="kd-loading" style="display:flex;justify-content:center;padding:24px 0;"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
+            list.innerHTML =
+                '<div class="kd-loading" style="display:flex;justify-content:center;padding:24px 0;"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
 
             // Load from both sources in parallel
             const promises = [];
@@ -125,7 +133,9 @@ export class KageDesktopViewer {
             // Merge and sort by date
             this.sessions = [...desktopSessions, ...cliSessions];
             this.sessions.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-            console.log(`[KageDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`);
+            console.log(
+                `[KageDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`
+            );
             this.renderSessionList();
         } catch (e) {
             console.warn('[KageDesktop] Failed to load sessions:', e);
@@ -144,7 +154,7 @@ export class KageDesktopViewer {
         }
 
         const filtered = searchQuery
-            ? this.sessions.filter(s => s.title.toLowerCase().includes(searchQuery))
+            ? this.sessions.filter((s) => s.title.toLowerCase().includes(searchQuery))
             : this.sessions;
 
         if (filtered.length === 0) {
@@ -158,11 +168,12 @@ export class KageDesktopViewer {
             const isActive = s.id === this.activeSessionId;
             const date = new Date(s.updated_at);
             const dateStr = formatRelativeDate(date);
-            const sourceIcon = s.session_type === 'cli'
-                ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-                : mascotHTML({ size: 14, className: 'kd-source-icon' });
+            const sourceIcon =
+                s.session_type === 'cli'
+                    ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
+                    : mascotHTML({ size: 14, className: 'kd-source-icon' });
             const sourceLabel = s.session_type === 'cli' ? 'CLI' : 'Desktop';
-            const wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
+            const _wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
 
             html += `<div class="session-item kd-session-item ${isActive ? 'active' : ''}"
                 data-session-id="${esc(s.id)}" data-workspace="${esc(s.workspace_encoded)}" data-filepath="${esc(s.file_path || '')}">
@@ -183,7 +194,7 @@ export class KageDesktopViewer {
 
         list.innerHTML = html;
 
-        list.querySelectorAll('.kd-session-item').forEach(item => {
+        list.querySelectorAll('.kd-session-item').forEach((item) => {
             // Session click — load conversation
             item.addEventListener('click', async (e) => {
                 // Don't trigger on action button clicks
@@ -192,11 +203,16 @@ export class KageDesktopViewer {
                 this.activeSessionId = item.dataset.sessionId;
                 this.activeWorkspace = item.dataset.workspace;
                 try {
-                    await this.loadAndDisplaySession(item.dataset.workspace, item.dataset.sessionId);
+                    await this.loadAndDisplaySession(
+                        item.dataset.workspace,
+                        item.dataset.sessionId
+                    );
                 } catch (e) {
                     console.error('[KageDesktop] Error loading session:', e);
                 }
-                list.querySelectorAll('.kd-session-item').forEach(el => el.classList.remove('active'));
+                list.querySelectorAll('.kd-session-item').forEach((el) =>
+                    el.classList.remove('active')
+                );
                 item.classList.add('active');
             });
 
@@ -206,7 +222,10 @@ export class KageDesktopViewer {
                 folderBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const fp = item.dataset.filepath;
-                    if (fp) this.invoke('kage_desktop_open_folder', { filePath: fp }).catch(console.warn);
+                    if (fp)
+                        this.invoke('kage_desktop_open_folder', { filePath: fp }).catch(
+                            console.warn
+                        );
                 });
             }
 
@@ -220,7 +239,7 @@ export class KageDesktopViewer {
                     try {
                         await this.invoke('kage_desktop_delete_session', { filePath: fp });
                         item.remove();
-                        this.sessions = this.sessions.filter(s => s.file_path !== fp);
+                        this.sessions = this.sessions.filter((s) => s.file_path !== fp);
                     } catch (err) {
                         console.warn('[KageDesktop] Delete failed:', err);
                     }
@@ -247,20 +266,29 @@ export class KageDesktopViewer {
 
         try {
             let messages;
-            const session = this.sessions.find(s => s.id === sessionId && s.workspace_encoded === workspaceEncoded);
+            const session = this.sessions.find(
+                (s) => s.id === sessionId && s.workspace_encoded === workspaceEncoded
+            );
 
             if (session?.session_type === 'cli') {
                 console.log(`[KageDesktop] Loading CLI session: ${sessionId}`);
-                messages = await this.invoke('kage_cli_load_session', { conversationId: sessionId });
+                messages = await this.invoke('kage_cli_load_session', {
+                    conversationId: sessionId,
+                });
                 // Start polling for live updates
                 const updatedMs = new Date(session.updated_at).getTime();
                 this._startPolling(sessionId, updatedMs);
             } else if (session?.file_path?.endsWith('.chat')) {
                 console.log(`[KageDesktop] Loading .chat file: ${session.file_path}`);
-                messages = await this.invoke('kage_desktop_load_chat_file', { filePath: session.file_path });
+                messages = await this.invoke('kage_desktop_load_chat_file', {
+                    filePath: session.file_path,
+                });
             } else {
                 console.log(`[KageDesktop] Loading workspace session: ${sessionId}`);
-                messages = await this.invoke('kage_desktop_load_session', { workspaceEncoded, sessionId });
+                messages = await this.invoke('kage_desktop_load_session', {
+                    workspaceEncoded,
+                    sessionId,
+                });
             }
 
             console.log(`[KageDesktop] Loaded ${messages.length} messages`);
@@ -276,9 +304,10 @@ export class KageDesktopViewer {
 
         // Read-only banner with expandable details
         const sourceLabel = session?.session_type === 'cli' ? 'Kage CLI' : 'Kage Desktop';
-        const bannerIcon = session?.session_type === 'cli'
-            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-            : mascotHTML({ size: 14 });
+        const bannerIcon =
+            session?.session_type === 'cli'
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
+                : mascotHTML({ size: 14 });
         const banner = document.createElement('div');
         banner.className = 'kd-readonly-banner';
         banner.innerHTML = `<details class="kd-banner-details">
@@ -335,8 +364,12 @@ export class KageDesktopViewer {
                     e.stopPropagation();
                     navigator.clipboard.writeText(toolContent).then(() => {
                         const btn = e.currentTarget;
-                        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
-                        setTimeout(() => { btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'; }, 1500);
+                        btn.innerHTML =
+                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+                        setTimeout(() => {
+                            btn.innerHTML =
+                                '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+                        }, 1500);
                     });
                 });
                 container.appendChild(el);
@@ -348,16 +381,17 @@ export class KageDesktopViewer {
 
     extractUserText(msg) {
         if (msg.content_blocks && msg.content_blocks.length > 0) {
-            const userBlocks = msg.content_blocks.filter(b =>
-                b.block_type === 'text' &&
-                !b.text.startsWith('<identity>') &&
-                !b.text.startsWith('## Included Rules') &&
-                !b.text.startsWith('[KAGE_STEERING') &&
-                !b.text.startsWith('Follow these instructions') &&
-                b.text.length < 5000
+            const userBlocks = msg.content_blocks.filter(
+                (b) =>
+                    b.block_type === 'text' &&
+                    !b.text.startsWith('<identity>') &&
+                    !b.text.startsWith('## Included Rules') &&
+                    !b.text.startsWith('[KAGE_STEERING') &&
+                    !b.text.startsWith('Follow these instructions') &&
+                    b.text.length < 5000
             );
             if (userBlocks.length > 0) {
-                return userBlocks.map(b => b.text).join('\n');
+                return userBlocks.map((b) => b.text).join('\n');
             }
         }
         return msg.content;
@@ -407,7 +441,7 @@ function extractInlineImages(text) {
         images.push({ data: match[2], mime: match[1] });
     }
     // Clean the text — remove the base64 data blobs
-    let cleanText = text
+    const cleanText = text
         .replace(/"data":"[A-Za-z0-9+/=]{100,}","mimeType":"image\/[a-z]+"/g, '[image]')
         .replace(/!\[.*?\]\(data:image\/[a-z]+;base64,[A-Za-z0-9+/=]{100,}\)/g, '[image]');
     return { cleanText, images };

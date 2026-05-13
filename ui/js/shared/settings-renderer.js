@@ -49,7 +49,7 @@ export class RenderedSettings {
         const pieces = [];
         if (this.schema.description) {
             pieces.push(
-                `<p class="ext-settings-description">${escapeHtml(this.schema.description)}</p>`,
+                `<p class="ext-settings-description">${escapeHtml(this.schema.description)}</p>`
             );
         }
         for (const section of this.schema.sections || []) {
@@ -74,7 +74,7 @@ export class RenderedSettings {
             for (const ctrl of section.controls || []) {
                 if (!ctrl.id) continue;
                 if (ctrl.type === 'info' || ctrl.type === 'action') continue;
-                const has = stored && Object.prototype.hasOwnProperty.call(stored, ctrl.id);
+                const has = stored && Object.hasOwn(stored, ctrl.id);
                 const v = has ? stored[ctrl.id] : ctrl.default;
                 this.values[ctrl.id] = coerceValue(ctrl, v);
                 this._writeToControl(ctrl, this.values[ctrl.id]);
@@ -104,9 +104,15 @@ export class RenderedSettings {
         // field, we adopt it and surface through subsequent save().
         if (this.sandbox) {
             try {
-                const normalized = await this.sandbox.call('normalizeSettings', { values: current });
-                if (normalized && typeof normalized === 'object' && normalized.values
-                    && typeof normalized.values === 'object') {
+                const normalized = await this.sandbox.call('normalizeSettings', {
+                    values: current,
+                });
+                if (
+                    normalized &&
+                    typeof normalized === 'object' &&
+                    normalized.values &&
+                    typeof normalized.values === 'object'
+                ) {
                     current = normalized.values;
                     // Write the normalized values back into the UI so the
                     // user sees what will actually be saved.
@@ -114,7 +120,7 @@ export class RenderedSettings {
                         for (const ctrl of section.controls || []) {
                             if (!ctrl.id) continue;
                             if (ctrl.type === 'info' || ctrl.type === 'action') continue;
-                            if (Object.prototype.hasOwnProperty.call(current, ctrl.id)) {
+                            if (Object.hasOwn(current, ctrl.id)) {
                                 this.values[ctrl.id] = current[ctrl.id];
                                 this._writeToControl(ctrl, current[ctrl.id]);
                             }
@@ -130,7 +136,7 @@ export class RenderedSettings {
         if (this.sandbox) {
             try {
                 extResult = await this.sandbox.call('validateSettings', { values: current });
-            } catch (e) {
+            } catch (_e) {
                 extResult = null;
             }
         }
@@ -155,7 +161,12 @@ export class RenderedSettings {
     }
 
     destroy() {
-        if (this._cleanup) this._cleanup.forEach(fn => { try { fn(); } catch {} });
+        if (this._cleanup)
+            this._cleanup.forEach((fn) => {
+                try {
+                    fn();
+                } catch {}
+            });
         this._cleanup = [];
         this._rowsById.clear();
         this._controlsById.clear();
@@ -167,13 +178,15 @@ export class RenderedSettings {
         const labelHtml = section.label
             ? `<div class="setting-section-label">${escapeHtml(section.label)}</div>`
             : '';
-        const rows = (section.controls || []).map(c => this._renderRow(c)).join('\n');
+        const rows = (section.controls || []).map((c) => this._renderRow(c)).join('\n');
         return `${labelHtml}\n${rows}`;
     }
 
     _renderRow(ctrl) {
         const rowId = this._rowId(ctrl);
-        const showWhenAttr = ctrl.showWhen ? ` data-ext-showwhen='${escapeAttr(JSON.stringify(ctrl.showWhen))}'` : '';
+        const showWhenAttr = ctrl.showWhen
+            ? ` data-ext-showwhen='${escapeAttr(JSON.stringify(ctrl.showWhen))}'`
+            : '';
 
         switch (ctrl.type) {
             case 'checkbox':
@@ -225,7 +238,7 @@ export class RenderedSettings {
 
     _renderNumberRow(ctrl, rowId, showWhenAttr) {
         const inputId = this._inputId(ctrl);
-        const style = ` style="max-width:${+ (ctrl.maxWidth || 80)}px;"`;
+        const style = ` style="max-width:${+(ctrl.maxWidth || 80)}px;"`;
         const minAttr = typeof ctrl.min === 'number' ? ` min="${ctrl.min}"` : '';
         const maxAttr = typeof ctrl.max === 'number' ? ` max="${ctrl.max}"` : '';
         const stepAttr = typeof ctrl.step === 'number' ? ` step="${ctrl.step}"` : '';
@@ -241,10 +254,10 @@ export class RenderedSettings {
 
     _renderSelectRow(ctrl, rowId, showWhenAttr) {
         const inputId = this._inputId(ctrl);
-        const style = ` style="max-width:${+ (ctrl.maxWidth || 200)}px;"`;
-        const opts = (ctrl.options || []).map(o =>
-            `<option value="${escapeAttr(o.value)}">${escapeHtml(o.label)}</option>`,
-        ).join('');
+        const style = ` style="max-width:${+(ctrl.maxWidth || 200)}px;"`;
+        const opts = (ctrl.options || [])
+            .map((o) => `<option value="${escapeAttr(o.value)}">${escapeHtml(o.label)}</option>`)
+            .join('');
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
                 <div class="setting-label">${escapeHtml(ctrl.label)}</div>
@@ -276,9 +289,8 @@ export class RenderedSettings {
     _renderActionRow(ctrl, rowId, showWhenAttr) {
         const btnId = this._inputId(ctrl);
         const statusId = `${btnId}__status`;
-        const variantClass = ctrl.variant === 'danger' ? ' danger'
-                           : ctrl.variant === 'primary' ? ' primary'
-                           : '';
+        const variantClass =
+            ctrl.variant === 'danger' ? ' danger' : ctrl.variant === 'primary' ? ' primary' : '';
         return `
             <div class="setting-row" id="${rowId}"${showWhenAttr}>
                 ${ctrl.description ? `<div class="setting-description">${escapeHtml(ctrl.description)}</div>` : ''}
@@ -344,8 +356,10 @@ export class RenderedSettings {
                 if (ctrl.type === 'range') this._updateRangeLabel(ctrl);
                 this._applyVisibility();
             };
-            const eventName = (ctrl.type === 'text' || ctrl.type === 'number' || ctrl.type === 'range')
-                ? 'input' : 'change';
+            const eventName =
+                ctrl.type === 'text' || ctrl.type === 'number' || ctrl.type === 'range'
+                    ? 'input'
+                    : 'change';
             el.addEventListener(eventName, handler);
             this._cleanup.push(() => el.removeEventListener(eventName, handler));
 
@@ -354,7 +368,7 @@ export class RenderedSettings {
 
         // Action buttons.
         const buttons = this.container.querySelectorAll('[data-ext-action]');
-        buttons.forEach(btn => {
+        buttons.forEach((btn) => {
             const onClick = (ev) => this._handleActionClick(btn, ev);
             btn.addEventListener('click', onClick);
             this._cleanup.push(() => btn.removeEventListener('click', onClick));
@@ -367,7 +381,9 @@ export class RenderedSettings {
         if (confirmMsg && !window.confirm(confirmMsg)) return;
 
         const statusEl = this.container.querySelector(`#${cssEscapeId(btn.id)}__status`);
-        const setStatus = (text) => { if (statusEl) statusEl.textContent = text || ''; };
+        const setStatus = (text) => {
+            if (statusEl) statusEl.textContent = text || '';
+        };
 
         const prevText = btn.textContent;
         btn.disabled = true;
@@ -459,8 +475,9 @@ export class RenderedSettings {
                 // doesn't share an AudioContext with the parent, and our
                 // timer-sounds module lives in the main-window bundle.
                 try {
-                    const { playTimerSound, stopTimerSound, isSoundPlaying } =
-                        await import('./timer-sounds.js');
+                    const { playTimerSound, stopTimerSound, isSoundPlaying } = await import(
+                        './timer-sounds.js'
+                    );
                     if (isSoundPlaying()) {
                         stopTimerSound();
                         return;
@@ -526,7 +543,8 @@ export class RenderedSettings {
         const el = this._inputEl(ctrl);
         if (!el) return ctrl.default;
         switch (ctrl.type) {
-            case 'checkbox': return !!el.checked;
+            case 'checkbox':
+                return !!el.checked;
             case 'number':
             case 'range': {
                 const raw = el.value;
@@ -534,7 +552,8 @@ export class RenderedSettings {
                 const n = Number(raw);
                 return Number.isFinite(n) ? n : (ctrl.default ?? 0);
             }
-            default: return el.value;
+            default:
+                return el.value;
         }
     }
 
@@ -562,9 +581,10 @@ export class RenderedSettings {
 // --- Helpers ---------------------------------------------------------------
 
 function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
+    return String(s).replace(
+        /[&<>"']/g,
+        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+    );
 }
 
 function escapeAttr(s) {
@@ -584,19 +604,21 @@ function cssEscapeId(id) {
         return CSS.escape(id);
     }
     // Minimal fallback: backslash-escape anything not alphanumeric, _ or -.
-    return String(id).replace(/[^a-zA-Z0-9_-]/g, c => '\\' + c);
+    return String(id).replace(/[^a-zA-Z0-9_-]/g, (c) => '\\' + c);
 }
 
 function coerceValue(ctrl, v) {
     switch (ctrl.type) {
-        case 'checkbox': return !!v;
+        case 'checkbox':
+            return !!v;
         case 'number':
         case 'range': {
             if (v == null || v === '') return ctrl.default ?? ctrl.min ?? 0;
             const n = Number(v);
             return Number.isFinite(n) ? n : (ctrl.default ?? ctrl.min ?? 0);
         }
-        default: return v == null ? (ctrl.default ?? '') : String(v);
+        default:
+            return v == null ? (ctrl.default ?? '') : String(v);
     }
 }
 

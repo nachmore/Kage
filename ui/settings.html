@@ -15,12 +15,12 @@
     <link rel="stylesheet" href="css/settings-layout.css">
     <script>
         // Shared utilities — available to all settings modules
-        function escapeHtml(text) {
+        function _escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        function getToolEmoji(name) {
+        function _getToolEmoji(name) {
             const lower = (name || '').toLowerCase();
             if (lower.startsWith('ext:')) return '🧩';
             if (lower.includes('search')) return '🔍';
@@ -153,13 +153,13 @@
     <script src="js/shared/mac-permissions.js"></script>
     <script>
         // Thin wrappers so appearance.js can call these by name
-        function applySettingsTheme(theme) { kageTheme.applyClasses(theme); }
-        function refreshSettingsTheme(themeOverride) { return kageTheme.refresh(themeOverride); }
+        function _applySettingsTheme(theme) { kageTheme.applyClasses(theme); }
+        function _refreshSettingsTheme(themeOverride) { return kageTheme.refresh(themeOverride); }
 
         // Apply theme on load
         (async function() {
             function waitForTauri(cb) {
-                if (window.__TAURI__ && window.__TAURI__.core) cb();
+                if (window.__TAURI__?.core) cb();
                 else setTimeout(() => waitForTauri(cb), 50);
             }
             waitForTauri(() => kageTheme.init());
@@ -178,7 +178,7 @@
         // Listen for navigation requests from other windows (e.g. floating → updates)
         (function() {
             function waitForTauri(cb) {
-                if (window.__TAURI__ && window.__TAURI__.event) cb();
+                if (window.__TAURI__?.event) cb();
                 else setTimeout(() => waitForTauri(cb), 50);
             }
             waitForTauri(() => {

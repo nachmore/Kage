@@ -58,7 +58,12 @@ export function buildMsgMeta(messageId, timestamps, durations, role) {
  * displayable data URLs. Defaults to the shared `sessionImageToDataUrl`,
  * but tests can pass a stub to avoid btoa/Uint8Array round-trips.
  */
-export function buildRenderQueue(messages, timestamps, durations, imageToDataUrl = _defaultSessionImageToDataUrl) {
+export function buildRenderQueue(
+    messages,
+    timestamps,
+    durations,
+    imageToDataUrl = _defaultSessionImageToDataUrl
+) {
     const queue = [];
     let skipNextAssistant = false;
 
@@ -92,9 +97,10 @@ export function buildRenderQueue(messages, timestamps, durations, imageToDataUrl
 
             if (textParts.length > 0 || imageDataUrls.length > 0) {
                 const text = textParts.join('\n');
-                const snapshots = imageDataUrls.length > 0
-                    ? imageDataUrls.map(url => ({ type: 'image', previewUrl: url }))
-                    : null;
+                const snapshots =
+                    imageDataUrls.length > 0
+                        ? imageDataUrls.map((url) => ({ type: 'image', previewUrl: url }))
+                        : null;
                 queue.push({
                     type: 'user',
                     text,
@@ -176,5 +182,9 @@ export function formatError(error) {
     if (typeof error === 'string') return error;
     if (error.message) return error.message;
     if (error.toString && error.toString() !== '[object Object]') return error.toString();
-    try { return JSON.stringify(error); } catch { return 'Unknown error'; }
+    try {
+        return JSON.stringify(error);
+    } catch {
+        return 'Unknown error';
+    }
 }

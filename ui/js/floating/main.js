@@ -3,7 +3,11 @@ import { FloatingApp } from './app.js';
 import { initMarkdown, setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
-import { createMascotController, getMascotThemeSettings, setTerminatorMode } from '../shared/mascot.js';
+import {
+    createMascotController,
+    getMascotThemeSettings,
+    setTerminatorMode,
+} from '../shared/mascot.js';
 import { ANIMATIONS } from '../shared/mascot-animations.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
@@ -44,7 +48,9 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
         // Refresh terminator mode (may have been toggled in settings)
         let newTerminator = false;
-        try { newTerminator = await invoke('is_terminator_mode'); } catch {}
+        try {
+            newTerminator = await invoke('is_terminator_mode');
+        } catch {}
         if (newTerminator !== isTerminator) {
             isTerminator = newTerminator;
             setTerminatorMode(isTerminator);
@@ -69,14 +75,19 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     // Set up mascot — use terminator variant if terminator mode is active
     let isTerminator = false;
-    try { isTerminator = await invoke('is_terminator_mode'); } catch {}
+    try {
+        isTerminator = await invoke('is_terminator_mode');
+    } catch {}
     setTerminatorMode(isTerminator);
 
     async function refreshFloatingMascot() {
         const mascotContainer = document.getElementById('floatingMascot');
         if (!mascotContainer) return;
         // Destroy existing mascot controller if any
-        if (window._kageMascot) { window._kageMascot.destroy(); window._kageMascot = null; }
+        if (window._kageMascot) {
+            window._kageMascot.destroy();
+            window._kageMascot = null;
+        }
         mascotContainer.innerHTML = '';
 
         if (isTerminator) {

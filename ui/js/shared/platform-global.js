@@ -14,9 +14,10 @@
     let _isMacCached = null;
     function isMac() {
         if (_isMacCached === null) {
-            _isMacCached = typeof navigator !== 'undefined'
-                && typeof navigator.platform === 'string'
-                && navigator.platform.startsWith('Mac');
+            _isMacCached =
+                typeof navigator !== 'undefined' &&
+                typeof navigator.platform === 'string' &&
+                navigator.platform.startsWith('Mac');
         }
         return _isMacCached;
     }
@@ -30,9 +31,10 @@
     let _isWindowsCached = null;
     function isWindows() {
         if (_isWindowsCached === null) {
-            const plat = (typeof navigator !== 'undefined' && typeof navigator.platform === 'string')
-                ? navigator.platform
-                : '';
+            const plat =
+                typeof navigator !== 'undefined' && typeof navigator.platform === 'string'
+                    ? navigator.platform
+                    : '';
             _isWindowsCached = plat.startsWith('Win');
         }
         return _isWindowsCached;
@@ -51,7 +53,7 @@
         // platformKeyLabel). Windows: Ctrl only — Win+key combos are OS-
         // intercepted and shouldn't hijack user bindings that leak through.
         // Linux: Ctrl only — Super+key is typically a WM/launcher binding.
-        return isMac() ? (e.ctrlKey || e.metaKey) : e.ctrlKey;
+        return isMac() ? e.ctrlKey || e.metaKey : e.ctrlKey;
     }
 
     function platformKeyLabel(label) {
@@ -64,22 +66,22 @@
                     case 'Cmd':
                     case 'Super':
                     case 'Meta':
-                        return '\u2318';   // ⌘
+                        return '\u2318'; // ⌘
                     case 'Shift':
-                        return '\u21E7';   // ⇧
+                        return '\u21E7'; // ⇧
                     case 'Alt':
                     case 'Option':
-                        return '\u2325';   // ⌥
+                        return '\u2325'; // ⌥
                     case 'Enter':
                     case 'Return':
-                        return '\u23CE';   // ⏎
+                        return '\u23CE'; // ⏎
                     case 'Backspace':
-                        return '\u232B';   // ⌫
+                        return '\u232B'; // ⌫
                     case 'Escape':
                     case 'Esc':
-                        return '\u238B';   // ⎋
+                        return '\u238B'; // ⎋
                     case 'Tab':
-                        return '\u21E5';   // ⇥
+                        return '\u21E5'; // ⇥
                     default:
                         return part;
                 }
@@ -87,5 +89,11 @@
             .join('');
     }
 
-    window.kagePlatform = { isMac: isMac, isWindows: isWindows, isLinux: isLinux, cmdOrCtrlPressed: cmdOrCtrlPressed, platformKeyLabel: platformKeyLabel };
+    window.kagePlatform = {
+        isMac: isMac,
+        isWindows: isWindows,
+        isLinux: isLinux,
+        cmdOrCtrlPressed: cmdOrCtrlPressed,
+        platformKeyLabel: platformKeyLabel,
+    };
 })();

@@ -49,12 +49,12 @@
 // eslint-disable-next-line no-console
 console.info(
     '%c[kage sandbox]%c Two benign WebView2 DevTools warnings expected in this frame: ' +
-    '"Cannot read properties of undefined (reading \'plugins\')" and ' +
-    '"Unsafe attempt to load URL ... from frame with URL ...". ' +
-    'Both are injected by the inspector against this null-origin frame and ' +
-    'do not affect extension behaviour. See ui/js/extension-sandbox/runtime.js for details.',
+        '"Cannot read properties of undefined (reading \'plugins\')" and ' +
+        '"Unsafe attempt to load URL ... from frame with URL ...". ' +
+        'Both are injected by the inspector against this null-origin frame and ' +
+        'do not affect extension behaviour. See ui/js/extension-sandbox/runtime.js for details.',
     'color:#888;font-weight:bold',
-    'color:inherit',
+    'color:inherit'
 );
 
 // --- Host handshake ---------------------------------------------------------
@@ -85,16 +85,24 @@ const providers = {
 };
 
 function log(level, ...args) {
-    const msg = args.map(a => {
-        if (typeof a === 'string') return a;
-        try { return JSON.stringify(a); } catch { return String(a); }
-    }).join(' ');
+    const msg = args
+        .map((a) => {
+            if (typeof a === 'string') return a;
+            try {
+                return JSON.stringify(a);
+            } catch {
+                return String(a);
+            }
+        })
+        .join(' ');
     safePost({ type: 'log', level, msg });
 }
 
 function safePost(payload) {
     if (!hostPort) return;
-    try { hostPort.postMessage(payload); } catch (e) {
+    try {
+        hostPort.postMessage(payload);
+    } catch (e) {
         // If the host side has gone away, we have nothing useful to do here.
         // Avoid recursing back into logging.
         console.error('[sandbox] failed to post to host:', e);
@@ -121,8 +129,8 @@ function buildContext() {
     };
     const extLog = {
         debug: (...a) => log('debug', ...a),
-        info:  (...a) => log('info', ...a),
-        warn:  (...a) => log('warn', ...a),
+        info: (...a) => log('info', ...a),
+        warn: (...a) => log('warn', ...a),
         error: (...a) => log('error', ...a),
     };
     return { invoke, config: extensionConfig, log: extLog, runSandboxed };
@@ -206,7 +214,7 @@ function spawnSandboxedWorker(vendorList) {
 function ensureSandboxedWorker(vendorList) {
     const key = sandboxedWorkerKey(vendorList);
     let entry = sandboxedWorkerPool.get(key);
-    if (entry && entry.worker) return entry;
+    if (entry?.worker) return entry;
 
     const { worker, url } = spawnSandboxedWorker(vendorList);
     entry = { worker, url, vendorList: vendorList.slice(), inflight: null, queue: [] };
@@ -255,8 +263,12 @@ function ensureSandboxedWorker(vendorList) {
 
 function killSandboxedWorker(entry) {
     const key = sandboxedWorkerKey(entry.vendorList);
-    try { entry.worker.terminate(); } catch {}
-    try { URL.revokeObjectURL(entry.url); } catch {}
+    try {
+        entry.worker.terminate();
+    } catch {}
+    try {
+        URL.revokeObjectURL(entry.url);
+    } catch {}
     entry.worker = null;
     // Only remove if we're still the registered entry (guard against
     // races where a new worker has already replaced us).
@@ -292,7 +304,13 @@ function pumpSandboxedQueue(entry) {
         }
     }, next.deadline);
 
-    entry.inflight = { id, resolve: next.resolve, reject: next.reject, timer, deadline: next.deadline };
+    entry.inflight = {
+        id,
+        resolve: next.resolve,
+        reject: next.reject,
+        timer,
+        deadline: next.deadline,
+    };
     try {
         entry.worker.postMessage({ id, runSrc: next.runSrc, data: next.data });
     } catch (e) {
@@ -341,16 +359,16 @@ function runSandboxed({ run, vendor, data, timeoutMs } = {}) {
         return Promise.reject(new Error('runSandboxed: run must be a function'));
     }
     const deadline = Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.floor(timeoutMs) : 1000;
-    const vendorList = Array.isArray(vendor)
-        ? vendor.filter(v => typeof v === 'string')
-        : [];
+    const vendorList = Array.isArray(vendor) ? vendor.filter((v) => typeof v === 'string') : [];
     const runSrc = run.toString();
 
     let entry;
     try {
         entry = ensureSandboxedWorker(vendorList);
     } catch (e) {
-        return Promise.reject(new Error(`runSandboxed: failed to spawn worker: ${e?.message || e}`));
+        return Promise.reject(
+            new Error(`runSandboxed: failed to spawn worker: ${e?.message || e}`)
+        );
     }
 
     return new Promise((resolve, reject) => {
@@ -457,7 +475,9 @@ function registerSharedModules(sharedSources) {
         const rewritten = rewriteRelativeImports(src);
         if (rewritten === src) continue;
         const oldUrl = sharedModuleBlobs.get(relPath);
-        try { URL.revokeObjectURL(oldUrl); } catch {}
+        try {
+            URL.revokeObjectURL(oldUrl);
+        } catch {}
         const newBlob = new Blob([rewritten], { type: 'application/javascript' });
         sharedModuleBlobs.set(relPath, URL.createObjectURL(newBlob));
     }
@@ -541,9 +561,9 @@ async function initExtension(init) {
     // false because every streaming chunk would round-trip through the
     // bridge, which is expensive for long assistant messages.
     const formatterOptsIn = !!(
-        providers.messageFormatter
-        && (providers.messageFormatter.formatDuringStreaming
-            || providers.messageFormatter.constructor?.formatDuringStreaming)
+        providers.messageFormatter &&
+        (providers.messageFormatter.formatDuringStreaming ||
+            providers.messageFormatter.constructor?.formatDuringStreaming)
     );
 
     if (sources.widgets && typeof sources.widgets === 'object') {
@@ -633,7 +653,7 @@ async function dispatchMethod(method, params) {
                 return { valid: true };
             }
             const out = p.validate(params?.values || {});
-            return (out && typeof out === 'object') ? out : { valid: true };
+            return out && typeof out === 'object' ? out : { valid: true };
         }
         case 'normalizeSettings': {
             const p = providers.settingsProvider;
@@ -653,7 +673,7 @@ async function dispatchMethod(method, params) {
                 return { error: 'no settings provider (or runAction not implemented)' };
             }
             const result = await p.runAction(params?.action || '', params?.values || {});
-            return (result && typeof result === 'object') ? result : {};
+            return result && typeof result === 'object' ? result : {};
         }
         case 'onFileSelected': {
             const p = providers.settingsProvider;
@@ -661,7 +681,7 @@ async function dispatchMethod(method, params) {
                 return {};
             }
             const result = await p.onFileSelected(params || {});
-            return (result && typeof result === 'object') ? result : {};
+            return result && typeof result === 'object' ? result : {};
         }
         case 'renderCustom': {
             const p = providers.searchProvider;
@@ -670,7 +690,10 @@ async function dispatchMethod(method, params) {
             // Expected shape: { html, className? } or null to skip.
             if (!out || typeof out !== 'object') return null;
             if (typeof out.html !== 'string') return null;
-            return { html: out.html, className: typeof out.className === 'string' ? out.className : '' };
+            return {
+                html: out.html,
+                className: typeof out.className === 'string' ? out.className : '',
+            };
         }
         case 'onResultAction': {
             const p = providers.searchProvider;
@@ -678,7 +701,7 @@ async function dispatchMethod(method, params) {
             const out = await p.onResultAction(params?.actionId || '', {
                 resultId: params?.resultId ?? null,
             });
-            return (out && typeof out === 'object') ? out : {};
+            return out && typeof out === 'object' ? out : {};
         }
         case 'getToolbarButtons': {
             const p = providers.toolbarProvider;
@@ -687,25 +710,24 @@ async function dispatchMethod(method, params) {
             // Pass through only the declarative fields. Any function
             // references would be unserializable anyway, but we guard
             // to make the contract explicit.
-            return defs.map(d => ({
-                id: String(d?.id || ''),
-                icon: String(d?.icon || ''),
-                tooltip: String(d?.tooltip || ''),
-            })).filter(d => d.id);
+            return defs
+                .map((d) => ({
+                    id: String(d?.id || ''),
+                    icon: String(d?.icon || ''),
+                    tooltip: String(d?.tooltip || ''),
+                }))
+                .filter((d) => d.id);
         }
         case 'onToolbarClick': {
             const p = providers.toolbarProvider;
             if (!p || typeof p.onClick !== 'function') return {};
             const result = await p.onClick(params?.buttonId || '', params?.context || {});
-            return (result && typeof result === 'object') ? result : {};
+            return result && typeof result === 'object' ? result : {};
         }
         case 'formatMessage': {
             const p = providers.messageFormatter;
             if (!p || typeof p.format !== 'function') return null;
-            const out = await p.format(
-                String(params?.html || ''),
-                params?.context || {},
-            );
+            const out = await p.format(String(params?.html || ''), params?.context || {});
             if (typeof out !== 'string') return null;
             return { html: out };
         }
@@ -716,10 +738,14 @@ async function dispatchMethod(method, params) {
             if (!out || typeof out !== 'object') return null;
             // Shape: { html, className?, actions? }. Actions are declared
             // buttons the host will wire to onWidgetAction.
-            const actions = Array.isArray(out.actions) ? out.actions.map(a => ({
-                id: String(a?.id || ''),
-                rpc: String(a?.rpc || a?.id || ''),
-            })).filter(a => a.id) : [];
+            const actions = Array.isArray(out.actions)
+                ? out.actions
+                      .map((a) => ({
+                          id: String(a?.id || ''),
+                          rpc: String(a?.rpc || a?.id || ''),
+                      }))
+                      .filter((a) => a.id)
+                : [];
             return {
                 html: typeof out.html === 'string' ? out.html : '',
                 className: typeof out.className === 'string' ? out.className : '',
@@ -736,7 +762,7 @@ async function dispatchMethod(method, params) {
             const w = providers.widgets[params?.widgetId];
             if (!w || typeof w.onAction !== 'function') return {};
             const out = await w.onAction(params?.actionId || '', params?.context || {});
-            return (out && typeof out === 'object') ? out : {};
+            return out && typeof out === 'object' ? out : {};
         }
         case 'onConfigUpdate': {
             extensionConfig = params?.config || {};
@@ -749,14 +775,18 @@ async function dispatchMethod(method, params) {
                 providers.messageFormatter,
             ]) {
                 if (p?.onConfigUpdate) {
-                    try { p.onConfigUpdate(extensionConfig); } catch (e) {
+                    try {
+                        p.onConfigUpdate(extensionConfig);
+                    } catch (e) {
                         log('warn', `onConfigUpdate failed: ${e?.message || e}`);
                     }
                 }
             }
             for (const w of Object.values(providers.widgets)) {
                 if (w?.onConfigUpdate) {
-                    try { w.onConfigUpdate(extensionConfig); } catch (e) {
+                    try {
+                        w.onConfigUpdate(extensionConfig);
+                    } catch (e) {
                         log('warn', `widget onConfigUpdate failed: ${e?.message || e}`);
                     }
                 }
@@ -774,7 +804,9 @@ async function dispatchMethod(method, params) {
                 ...Object.values(providers.widgets),
             ];
             for (const p of all) {
-                try { p?.destroy?.(); } catch {}
+                try {
+                    p?.destroy?.();
+                } catch {}
             }
             return true;
         }
@@ -792,8 +824,10 @@ function handleHostMessage(ev) {
     switch (msg.type) {
         case 'init': {
             initExtension(msg)
-                .then(result => safePost({ type: 'init-ack', ok: true, result }))
-                .catch(e => safePost({ type: 'init-ack', ok: false, error: String(e?.message || e) }));
+                .then((result) => safePost({ type: 'init-ack', ok: true, result }))
+                .catch((e) =>
+                    safePost({ type: 'init-ack', ok: false, error: String(e?.message || e) })
+                );
             break;
         }
         case 'rpc':

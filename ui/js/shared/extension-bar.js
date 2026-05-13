@@ -46,9 +46,12 @@ export function showExtensionBar(opts) {
     bar.id = barId;
     bar.className = 'extension-bar' + (opts.className ? ` ${opts.className}` : '');
 
-    const buttonsHtml = (opts.buttons || []).map(b =>
-        `<button class="extension-bar-btn" id="${barId}_${b.id}" title="${b.title || ''}">${b.label}</button>`
-    ).join('');
+    const buttonsHtml = (opts.buttons || [])
+        .map(
+            (b) =>
+                `<button class="extension-bar-btn" id="${barId}_${b.id}" title="${b.title || ''}">${b.label}</button>`
+        )
+        .join('');
 
     const counterHtml = opts.counter
         ? `<span class="extension-bar-counter" id="${barId}_counter">${opts.counter}</span>`
@@ -64,8 +67,8 @@ export function showExtensionBar(opts) {
     `;
 
     // Prevent buttons from stealing focus (which triggers window blur → hide)
-    bar.querySelectorAll('button').forEach(btn => {
-        btn.addEventListener('mousedown', e => e.preventDefault());
+    bar.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.preventDefault());
     });
 
     // Wire up button click handlers

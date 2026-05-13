@@ -2,7 +2,13 @@
  * Floating window search — re-exports shared search engine + floating-specific renderer.
  */
 
-export { unifiedSearch, recordSelection, loadFrecency, setExtensionManager, getExtensionManager } from '../shared/search-engine.js';
+export {
+    unifiedSearch,
+    recordSelection,
+    loadFrecency,
+    setExtensionManager,
+    getExtensionManager,
+} from '../shared/search-engine.js';
 
 // --- Floating-specific suggestion renderer ---
 
@@ -25,7 +31,7 @@ function _resultKey(r) {
 /**
  * Render a single result item into a DOM element.
  */
-function _renderItem(r, index, extMgr) {
+function _renderItem(r, _index, extMgr) {
     const item = document.createElement('div');
     item.className = 'app-suggestion-item';
     item.dataset.resultKey = _resultKey(r);
@@ -42,9 +48,11 @@ function _renderItem(r, index, extMgr) {
 
     let iconHtml;
     if (r.type === 'app' && r.data?.icon_base64) {
-        const src = r.data.icon_base64.startsWith('data:') ? r.data.icon_base64 : 'data:image/png;base64,' + r.data.icon_base64;
+        const src = r.data.icon_base64.startsWith('data:')
+            ? r.data.icon_base64
+            : 'data:image/png;base64,' + r.data.icon_base64;
         iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="app-icon" style="display:none">${r.data.emoji_icon || r.label.charAt(0).toUpperCase()}</div>`;
-    } else if (r.icon && r.icon.startsWith('data:')) {
+    } else if (r.icon?.startsWith('data:')) {
         iconHtml = `<img src="${r.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
     } else {
         iconHtml = `<div class="app-icon">${r.icon || r.label.charAt(0)}</div>`;
@@ -105,13 +113,15 @@ export async function renderUnifiedResults(results, container, currentMatches, r
     // synchronous. If the sandbox isn't ready or the extension doesn't
     // implement renderCustom, this is a no-op.
     if (extMgr?.prefetchCustomRender) {
-        try { await extMgr.prefetchCustomRender(results); } catch {}
+        try {
+            await extMgr.prefetchCustomRender(results);
+        } catch {}
     }
-    const newKeys = results.map(r => _resultKey(r));
+    const newKeys = results.map((r) => _resultKey(r));
 
     // Build map of existing items by key
     const existingByKey = new Map();
-    container.querySelectorAll('.app-suggestion-item').forEach(el => {
+    container.querySelectorAll('.app-suggestion-item').forEach((el) => {
         existingByKey.set(el.dataset.resultKey, el);
     });
 
@@ -153,10 +163,12 @@ export async function renderUnifiedResults(results, container, currentMatches, r
             item.style.opacity = '0';
             item.style.transform = 'translateY(4px)';
             // Trigger animation after append
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                item.style.opacity = '1';
-                item.style.transform = 'translateY(0)';
-            }));
+            requestAnimationFrame(() =>
+                requestAnimationFrame(() => {
+                    item.style.opacity = '1';
+                    item.style.transform = 'translateY(0)';
+                })
+            );
         }
 
         item.classList.toggle('selected', i === 0);
@@ -203,7 +215,10 @@ function _scheduleContentLockRelease() {
 }
 
 function _releaseContentLock() {
-    if (_releaseTimer) { clearTimeout(_releaseTimer); _releaseTimer = null; }
+    if (_releaseTimer) {
+        clearTimeout(_releaseTimer);
+        _releaseTimer = null;
+    }
     const contentArea = document.getElementById('contentArea');
     if (contentArea?.dataset.kageHeightLocked) {
         contentArea.style.minHeight = '';

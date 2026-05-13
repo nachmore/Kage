@@ -85,7 +85,7 @@ class SettingsModule {
      * Load settings from config object
      * @param {Object} config - The configuration object
      */
-    load(config) {
+    load(_config) {
         throw new Error('load() must be implemented by subclass');
     }
 
@@ -93,7 +93,7 @@ class SettingsModule {
      * Save settings to config object
      * @param {Object} config - The configuration object to update
      */
-    save(config) {
+    save(_config) {
         throw new Error('save() must be implemented by subclass');
     }
 

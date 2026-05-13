@@ -20,38 +20,38 @@
 // For shared scripts (Latin, Cyrillic), we return null and let tinyld handle it.
 const SCRIPT_RANGES = [
     // East Asian
-    { range: [0x3040, 0x309F], lang: 'ja' },  // Hiragana
-    { range: [0x30A0, 0x30FF], lang: 'ja' },  // Katakana
-    { range: [0x4E00, 0x9FFF], lang: 'zh' },  // CJK Unified Ideographs (Chinese default, also used in Japanese)
-    { range: [0xAC00, 0xD7AF], lang: 'ko' },  // Hangul Syllables
-    { range: [0x1100, 0x11FF], lang: 'ko' },  // Hangul Jamo
+    { range: [0x3040, 0x309f], lang: 'ja' }, // Hiragana
+    { range: [0x30a0, 0x30ff], lang: 'ja' }, // Katakana
+    { range: [0x4e00, 0x9fff], lang: 'zh' }, // CJK Unified Ideographs (Chinese default, also used in Japanese)
+    { range: [0xac00, 0xd7af], lang: 'ko' }, // Hangul Syllables
+    { range: [0x1100, 0x11ff], lang: 'ko' }, // Hangul Jamo
 
     // South/Southeast Asian
-    { range: [0x0E00, 0x0E7F], lang: 'th' },  // Thai
-    { range: [0x0900, 0x097F], lang: 'hi' },  // Devanagari (Hindi default)
-    { range: [0x0980, 0x09FF], lang: 'bn' },  // Bengali
-    { range: [0x0A80, 0x0AFF], lang: 'gu' },  // Gujarati
-    { range: [0x0B00, 0x0B7F], lang: 'or' },  // Odia
-    { range: [0x0B80, 0x0BFF], lang: 'ta' },  // Tamil
-    { range: [0x0C00, 0x0C7F], lang: 'te' },  // Telugu
-    { range: [0x0C80, 0x0CFF], lang: 'kn' },  // Kannada
-    { range: [0x0D00, 0x0D7F], lang: 'ml' },  // Malayalam
-    { range: [0x0A00, 0x0A7F], lang: 'pa' },  // Gurmukhi (Punjabi)
-    { range: [0x1000, 0x109F], lang: 'my' },  // Myanmar (Burmese)
-    { range: [0x0E80, 0x0EFF], lang: 'lo' },  // Lao
-    { range: [0x1780, 0x17FF], lang: 'km' },  // Khmer
+    { range: [0x0e00, 0x0e7f], lang: 'th' }, // Thai
+    { range: [0x0900, 0x097f], lang: 'hi' }, // Devanagari (Hindi default)
+    { range: [0x0980, 0x09ff], lang: 'bn' }, // Bengali
+    { range: [0x0a80, 0x0aff], lang: 'gu' }, // Gujarati
+    { range: [0x0b00, 0x0b7f], lang: 'or' }, // Odia
+    { range: [0x0b80, 0x0bff], lang: 'ta' }, // Tamil
+    { range: [0x0c00, 0x0c7f], lang: 'te' }, // Telugu
+    { range: [0x0c80, 0x0cff], lang: 'kn' }, // Kannada
+    { range: [0x0d00, 0x0d7f], lang: 'ml' }, // Malayalam
+    { range: [0x0a00, 0x0a7f], lang: 'pa' }, // Gurmukhi (Punjabi)
+    { range: [0x1000, 0x109f], lang: 'my' }, // Myanmar (Burmese)
+    { range: [0x0e80, 0x0eff], lang: 'lo' }, // Lao
+    { range: [0x1780, 0x17ff], lang: 'km' }, // Khmer
 
     // Middle Eastern
-    { range: [0x0590, 0x05FF], lang: 'he' },  // Hebrew
-    { range: [0x0600, 0x06FF], lang: 'ar' },  // Arabic
-    { range: [0xFB50, 0xFDFF], lang: 'ar' },  // Arabic Presentation Forms-A
-    { range: [0xFE70, 0xFEFF], lang: 'ar' },  // Arabic Presentation Forms-B
-    { range: [0x0530, 0x058F], lang: 'hy' },  // Armenian
-    { range: [0x10A0, 0x10FF], lang: 'ka' },  // Georgian
+    { range: [0x0590, 0x05ff], lang: 'he' }, // Hebrew
+    { range: [0x0600, 0x06ff], lang: 'ar' }, // Arabic
+    { range: [0xfb50, 0xfdff], lang: 'ar' }, // Arabic Presentation Forms-A
+    { range: [0xfe70, 0xfeff], lang: 'ar' }, // Arabic Presentation Forms-B
+    { range: [0x0530, 0x058f], lang: 'hy' }, // Armenian
+    { range: [0x10a0, 0x10ff], lang: 'ka' }, // Georgian
 
     // Other
-    { range: [0x0F00, 0x0FFF], lang: 'bo' },  // Tibetan
-    { range: [0x1200, 0x137F], lang: 'am' },  // Ethiopic (Amharic default)
+    { range: [0x0f00, 0x0fff], lang: 'bo' }, // Tibetan
+    { range: [0x1200, 0x137f], lang: 'am' }, // Ethiopic (Amharic default)
 ];
 
 /**
@@ -78,9 +78,13 @@ export function detectScript(text) {
     if (hits.size === 0) return null;
 
     // Return the script with the most character hits
-    let best = null, bestCount = 0;
+    let best = null,
+        bestCount = 0;
     for (const [lang, count] of hits) {
-        if (count > bestCount) { best = lang; bestCount = count; }
+        if (count > bestCount) {
+            best = lang;
+            bestCount = count;
+        }
     }
     return best;
 }
@@ -92,7 +96,7 @@ let _loading = null;
 async function _ensureLoaded() {
     if (_tinyld) return _tinyld;
     if (_loading) return _loading;
-    _loading = import('../../vendor/lib/tinyld.js').then(mod => {
+    _loading = import('../../vendor/lib/tinyld.js').then((mod) => {
         _tinyld = mod;
         _loading = null;
         return mod;

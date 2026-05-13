@@ -38,7 +38,9 @@ export function hardenMarkedOnce() {
     if (typeof marked === 'undefined' || !marked.use) return;
     marked.use({
         renderer: {
-            html(token) { return _escapeHtmlForMarked(token.text || ''); },
+            html(token) {
+                return _escapeHtmlForMarked(token.text || '');
+            },
         },
     });
     _markedHardenedFlag = true;
@@ -76,7 +78,7 @@ async function ensureMermaid() {
                     startOnLoad: false,
                     theme: 'default',
                     securityLevel: 'loose',
-                    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+                    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
                 });
                 mermaidReady = true;
                 resolve(true);
@@ -106,7 +108,7 @@ export function setExtensionManager(em) {
 // --- Streaming-aware debounced rendering ---
 
 const STREAMING_RENDER_INTERVAL = 150; // ms between renders during streaming
-const _renderTimers = new WeakMap();   // targetElement → timer id
+const _renderTimers = new WeakMap(); // targetElement → timer id
 const _lastRenderTime = new WeakMap(); // targetElement → timestamp
 
 // --- App icon inline rendering ---
@@ -135,21 +137,26 @@ function _processAppIcons(container) {
 
     // Replace all <app-icon name="..."/> or <app-icon name="..."></app-icon> with placeholders
     const pending = [];
-    const replaced = html.replace(/<app-icon\s+name="([^"]+)"\s*\/?>(?:<\/app-icon>)?/gi, (match, name) => {
-        const key = name.toLowerCase();
-        if (_appIconCache.has(key)) {
-            const dataUri = _appIconCache.get(key);
-            if (dataUri) {
-                const src = dataUri.startsWith('data:') ? dataUri : 'data:image/png;base64,' + dataUri;
-                return `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
+    const replaced = html.replace(
+        /<app-icon\s+name="([^"]+)"\s*\/?>(?:<\/app-icon>)?/gi,
+        (_match, name) => {
+            const key = name.toLowerCase();
+            if (_appIconCache.has(key)) {
+                const dataUri = _appIconCache.get(key);
+                if (dataUri) {
+                    const src = dataUri.startsWith('data:')
+                        ? dataUri
+                        : 'data:image/png;base64,' + dataUri;
+                    return `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
+                }
+                return ''; // no icon available
             }
-            return ''; // no icon available
+            // Not cached yet — insert an empty placeholder span and fetch async
+            const id = `app-icon-${_appIconPlaceholderId++}`;
+            pending.push({ id, name, key });
+            return `<span id="${id}" style="display:inline-block;width:1.2em;height:1.2em;vertical-align:middle;"></span>`;
         }
-        // Not cached yet — insert an empty placeholder span and fetch async
-        const id = `app-icon-${_appIconPlaceholderId++}`;
-        pending.push({ id, name, key });
-        return `<span id="${id}" style="display:inline-block;width:1.2em;height:1.2em;vertical-align:middle;"></span>`;
-    });
+    );
 
     if (replaced !== html) {
         container.innerHTML = replaced;
@@ -157,20 +164,24 @@ function _processAppIcons(container) {
 
     // Fetch uncached icons and replace placeholders
     for (const { id, name, key } of pending) {
-        _appIconInvoke('get_app_icon', { processName: name }).then(dataUri => {
-            _appIconCache.set(key, dataUri || null);
-            const placeholder = container.querySelector(`#${id}`);
-            if (placeholder) {
-                if (dataUri) {
-                    const src = dataUri.startsWith('data:') ? dataUri : 'data:image/png;base64,' + dataUri;
-                    placeholder.outerHTML = `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
-                } else {
-                    placeholder.outerHTML = ''; // no icon available
+        _appIconInvoke('get_app_icon', { processName: name })
+            .then((dataUri) => {
+                _appIconCache.set(key, dataUri || null);
+                const placeholder = container.querySelector(`#${id}`);
+                if (placeholder) {
+                    if (dataUri) {
+                        const src = dataUri.startsWith('data:')
+                            ? dataUri
+                            : 'data:image/png;base64,' + dataUri;
+                        placeholder.outerHTML = `<img src="${src}" alt="${name}" title="${name}" style="width:1.2em;height:1.2em;vertical-align:middle;border-radius:3px;margin:0 2px;">`;
+                    } else {
+                        placeholder.outerHTML = ''; // no icon available
+                    }
                 }
-            }
-        }).catch(() => {
-            _appIconCache.set(key, null);
-        });
+            })
+            .catch(() => {
+                _appIconCache.set(key, null);
+            });
     }
 }
 
@@ -180,8 +191,8 @@ let _appIconPlaceholderId = 0;
 // During streaming, we split markdown into a "frozen prefix" (complete blocks
 // that won't change) and an "active tail" (the last incomplete block).
 // Only the tail is re-parsed on each chunk, turning O(n²) into ~O(n).
-const _frozenHtml = new WeakMap();     // targetElement → rendered HTML string for frozen prefix
-const _frozenLength = new WeakMap();   // targetElement → char count of frozen markdown prefix
+const _frozenHtml = new WeakMap(); // targetElement → rendered HTML string for frozen prefix
+const _frozenLength = new WeakMap(); // targetElement → char count of frozen markdown prefix
 
 /**
  * Render markdown into a target element.
@@ -201,7 +212,10 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
     if (!streaming) {
         // Final render — cancel any pending debounce, clear incremental state, do full render
         const pending = _renderTimers.get(targetElement);
-        if (pending) { clearTimeout(pending); _renderTimers.delete(targetElement); }
+        if (pending) {
+            clearTimeout(pending);
+            _renderTimers.delete(targetElement);
+        }
         _frozenHtml.delete(targetElement);
         _frozenLength.delete(targetElement);
         _doRender(markdown, targetElement, false);
@@ -216,7 +230,10 @@ export function renderMarkdown(markdown, targetElement, streaming = false) {
     if (elapsed >= STREAMING_RENDER_INTERVAL) {
         // Enough time has passed — render immediately
         const pending = _renderTimers.get(targetElement);
-        if (pending) { clearTimeout(pending); _renderTimers.delete(targetElement); }
+        if (pending) {
+            clearTimeout(pending);
+            _renderTimers.delete(targetElement);
+        }
         _doRender(markdown, targetElement, true);
     } else {
         // Schedule a render for when the interval expires (if not already scheduled)
@@ -366,13 +383,15 @@ function _doRender(markdown, targetElement, streaming) {
             if (!tailDiv) {
                 // First render or structure mismatch — do a full incremental setup
                 const savedDiagrams = new Map();
-                targetElement.querySelectorAll('.diagram-wrapper[data-rendered]').forEach((wrapper) => {
-                    const sourceEl = wrapper.querySelector('.diagram-source code');
-                    if (sourceEl) {
-                        savedDiagrams.set(sourceEl.textContent, wrapper);
-                        wrapper.remove();
-                    }
-                });
+                targetElement
+                    .querySelectorAll('.diagram-wrapper[data-rendered]')
+                    .forEach((wrapper) => {
+                        const sourceEl = wrapper.querySelector('.diagram-source code');
+                        if (sourceEl) {
+                            savedDiagrams.set(sourceEl.textContent, wrapper);
+                            wrapper.remove();
+                        }
+                    });
 
                 marked.setOptions({ breaks: true, gfm: true });
 
@@ -486,7 +505,12 @@ export function _findStableSplitPoint(markdown) {
     let i = 0;
     while (i < markdown.length) {
         // Check for code fence (``` at start of line)
-        if ((i === 0 || markdown[i - 1] === '\n') && markdown[i] === '`' && markdown[i + 1] === '`' && markdown[i + 2] === '`') {
+        if (
+            (i === 0 || markdown[i - 1] === '\n') &&
+            markdown[i] === '`' &&
+            markdown[i + 1] === '`' &&
+            markdown[i + 2] === '`'
+        ) {
             inFence = !inFence;
             i += 3;
             // Skip to end of line
@@ -527,9 +551,15 @@ function _highlightOrLazy(codeBlock, language) {
     if (!language || language === 'text') return;
     if (Prism.languages[language]) {
         try {
-            codeBlock.innerHTML = Prism.highlight(codeBlock.textContent, Prism.languages[language], language);
+            codeBlock.innerHTML = Prism.highlight(
+                codeBlock.textContent,
+                Prism.languages[language],
+                language
+            );
             codeBlock.className = 'language-' + language;
-        } catch { /* skip */ }
+        } catch {
+            /* skip */
+        }
         return;
     }
     // Capture the source text now — by the time the load resolves, the
@@ -544,9 +574,13 @@ function _highlightOrLazy(codeBlock, language) {
             try {
                 codeBlock.innerHTML = Prism.highlight(source, Prism.languages[language], language);
                 codeBlock.className = 'language-' + language;
-            } catch { /* skip */ }
+            } catch {
+                /* skip */
+            }
         })
-        .catch(() => { /* unknown language or offline — leave unhighlighted */ });
+        .catch(() => {
+            /* unknown language or offline — leave unhighlighted */
+        });
 }
 
 /**
@@ -565,7 +599,9 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
                 // Reinsert the last successful render immediately (no flash)
                 if (savedDiagrams.size > 0) {
                     const saved = savedDiagrams.get(code) || savedDiagrams.values().next().value;
-                    const savedKey = savedDiagrams.has(code) ? code : savedDiagrams.keys().next().value;
+                    const savedKey = savedDiagrams.has(code)
+                        ? code
+                        : savedDiagrams.keys().next().value;
                     pre.parentNode.insertBefore(saved, pre);
                     pre.remove();
                     savedDiagrams.delete(savedKey);
@@ -592,10 +628,10 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             try {
                 const plan = JSON.parse(codeBlock.textContent.trim());
                 if (Array.isArray(plan) && plan.length > 0 && plan[0].task) {
-                    const tasks = plan.map(s => ({
+                    const tasks = plan.map((s) => ({
                         status: 'pending',
                         description: s.task,
-                        detail: s.details || ''
+                        detail: s.details || '',
                     }));
                     const wrapper = createTaskPlanElement(tasks);
                     wrapper.dataset.automationPlan = 'true';
@@ -603,7 +639,9 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
                     pre.remove();
                     return;
                 }
-            } catch { /* fall through to default rendering */ }
+            } catch {
+                /* fall through to default rendering */
+            }
         }
         if (HTML_LANGUAGES.has(language)) {
             renderHtmlPreview(codeBlock, pre);
@@ -661,7 +699,10 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
     try {
         if (language === 'mermaid') {
             const loaded = await ensureMermaid();
-            if (!loaded) { _diagramPending.delete(hash); return; }
+            if (!loaded) {
+                _diagramPending.delete(hash);
+                return;
+            }
 
             const renderNode = document.createElement('div');
             renderNode.classList.add('mermaid');
@@ -689,7 +730,10 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
             }
         } else if (language === 'dot' || language === 'graphviz' || language === 'neato') {
             const graphviz = await getGraphviz();
-            if (!graphviz) { _diagramPending.delete(hash); return; }
+            if (!graphviz) {
+                _diagramPending.delete(hash);
+                return;
+            }
 
             const engine = language === 'neato' ? 'neato' : 'dot';
             try {
@@ -698,7 +742,10 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
                 if (diagramContent && existingWrapper.isConnected) {
                     diagramContent.innerHTML = svg;
                     const svgEl = diagramContent.querySelector('svg');
-                    if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
+                    if (svgEl) {
+                        svgEl.style.maxWidth = '100%';
+                        svgEl.style.height = 'auto';
+                    }
                     const sourceCode = existingWrapper.querySelector('.diagram-source code');
                     if (sourceCode) sourceCode.textContent = code;
                     _markDiagramRendered(diagramContent);
@@ -716,7 +763,7 @@ async function _tryBackgroundDiagramRender(existingWrapper, code, language) {
 // After MAX_STREAMING_FAILURES, stop attempting until the final render.
 const MAX_STREAMING_FAILURES = 3;
 const _diagramFailures = new Map(); // code hash → failure count
-const _diagramPending = new Set();  // code hashes currently being rendered
+const _diagramPending = new Set(); // code hashes currently being rendered
 
 function _codeHash(code) {
     // Simple hash for keying — use first 200 chars + length to avoid collisions
@@ -753,10 +800,15 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
     // Don't render incomplete diagrams — show as code block and wait for more content
     if (language === 'mermaid' && !code.trim()) return;
     if ((language === 'plantuml' || language === 'puml') && !code.includes('@enduml')) {
-        wrapCodeBlock(codeBlock, pre, language); return;
+        wrapCodeBlock(codeBlock, pre, language);
+        return;
     }
-    if ((language === 'dot' || language === 'graphviz' || language === 'neato') && !code.includes('}')) {
-        wrapCodeBlock(codeBlock, pre, language); return;
+    if (
+        (language === 'dot' || language === 'graphviz' || language === 'neato') &&
+        !code.includes('}')
+    ) {
+        wrapCodeBlock(codeBlock, pre, language);
+        return;
     }
 
     // During streaming, if this code has failed too many times, just show as code block
@@ -775,7 +827,14 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
         }
     }
 
-    const labels = { mermaid:'Mermaid', plantuml:'PlantUML', puml:'PlantUML', dot:'Graphviz', graphviz:'Graphviz', neato:'Graphviz (neato)' };
+    const labels = {
+        mermaid: 'Mermaid',
+        plantuml: 'PlantUML',
+        puml: 'PlantUML',
+        dot: 'Graphviz',
+        graphviz: 'Graphviz',
+        neato: 'Graphviz (neato)',
+    };
 
     const wrapper = document.createElement('div');
     wrapper.className = 'diagram-wrapper';
@@ -790,7 +849,8 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
     actions.className = 'diagram-actions';
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'copy-button diagram-toggle';
-    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
     actions.appendChild(toggleBtn);
     actions.appendChild(createCopyButton(code));
     header.appendChild(label);
@@ -855,7 +915,8 @@ async function renderMermaidInto(container, code, streaming = false) {
         if (streaming) {
             _diagramFailures.set(hash, MAX_STREAMING_FAILURES);
         } else {
-            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Failed to load Mermaid library</div>';
+            container.innerHTML =
+                '<div style="color:#dc2626;padding:20px;">Failed to load Mermaid library</div>';
         }
         return;
     }
@@ -885,7 +946,8 @@ async function renderMermaidInto(container, code, streaming = false) {
             // Leave the placeholder (formatted source) intact
         } else {
             console.error('Mermaid rendering error:', error);
-            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
+            container.innerHTML =
+                '<div style="color:#dc2626;padding:20px;">Error: ' + error.message + '</div>';
         }
     }
 }
@@ -900,7 +962,8 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
             if (streaming) {
                 _diagramFailures.set(hash, MAX_STREAMING_FAILURES);
             } else {
-                container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
+                container.innerHTML =
+                    '<div style="color:#dc2626;padding:20px;">Graphviz WASM failed to load</div>';
             }
             return;
         }
@@ -910,7 +973,10 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
         // Success — replace placeholder with rendered SVG
         container.innerHTML = svg;
         const svgEl = container.querySelector('svg');
-        if (svgEl) { svgEl.style.maxWidth = '100%'; svgEl.style.height = 'auto'; }
+        if (svgEl) {
+            svgEl.style.maxWidth = '100%';
+            svgEl.style.height = 'auto';
+        }
         _markDiagramRendered(container);
     } catch (error) {
         _diagramPending.delete(hash);
@@ -919,7 +985,10 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
             // Leave the placeholder (formatted source) intact
         } else {
             console.error('Graphviz rendering error:', error);
-            container.innerHTML = '<div style="color:#dc2626;padding:20px;">Graphviz error: ' + error.message + '</div>';
+            container.innerHTML =
+                '<div style="color:#dc2626;padding:20px;">Graphviz error: ' +
+                error.message +
+                '</div>';
         }
     }
 }
@@ -929,7 +998,8 @@ function renderPlantUMLInto(container, code) {
     const pre = document.createElement('pre');
     pre.style.cssText = 'margin:0;padding:16px;background:#272822;overflow-x:auto';
     const codeEl = document.createElement('code');
-    codeEl.style.cssText = "font-family:'Consolas','Monaco','Courier New',monospace;font-size:13px;line-height:1.5;color:#f8f8f2;white-space:pre";
+    codeEl.style.cssText =
+        "font-family:'Consolas','Monaco','Courier New',monospace;font-size:13px;line-height:1.5;color:#f8f8f2;white-space:pre";
     codeEl.textContent = code;
     pre.appendChild(codeEl);
     container.style.padding = '0';
@@ -958,7 +1028,8 @@ function renderHtmlPreview(codeBlock, pre) {
     actions.className = 'diagram-actions';
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'copy-button diagram-toggle';
-    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
     actions.appendChild(toggleBtn);
     actions.appendChild(createCopyButton(code));
     header.appendChild(label);
@@ -978,10 +1049,12 @@ function renderHtmlPreview(codeBlock, pre) {
         try {
             const doc = iframe.contentDocument || iframe.contentWindow.document;
             // Strip any script tags that might have been included
-            doc.querySelectorAll('script').forEach(s => s.remove());
+            doc.querySelectorAll('script').forEach((s) => s.remove());
             const h = doc.documentElement.scrollHeight || doc.body.scrollHeight;
             iframe.style.height = Math.min(Math.max(h, 60), 600) + 'px';
-        } catch { /* cross-origin, ignore */ }
+        } catch {
+            /* cross-origin, ignore */
+        }
     };
 
     const sourceDiv = document.createElement('div');
@@ -1034,7 +1107,8 @@ function renderJsonTree(codeBlock, pre, language) {
     actions.className = 'diagram-actions';
     const toggleBtn = document.createElement('button');
     toggleBtn.className = 'copy-button diagram-toggle';
-    toggleBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
     actions.appendChild(toggleBtn);
     actions.appendChild(createCopyButton(code));
     header.appendChild(label);
@@ -1131,7 +1205,11 @@ function _jsonLeaf(text, className) {
 }
 
 function _escJsonStr(s) {
-    return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t');
+    return s
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t');
 }
 
 // --- Shared utilities ---
@@ -1139,24 +1217,33 @@ function _escJsonStr(s) {
 function createCopyButton(code) {
     const btn = document.createElement('button');
     btn.className = 'copy-button';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
+    btn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg><span>Copy</span>';
     btn.onclick = () => copyCode(code, btn);
     return btn;
 }
 
 function copyCode(code, button) {
-    navigator.clipboard.writeText(code).then(() => {
-        const orig = button.innerHTML;
-        button.classList.add('copied');
-        button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
-        setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
-    }).catch(err => console.error('Copy failed:', err));
+    navigator.clipboard
+        .writeText(code)
+        .then(() => {
+            const orig = button.innerHTML;
+            button.classList.add('copied');
+            button.innerHTML =
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Copied!</span>';
+            setTimeout(() => {
+                button.classList.remove('copied');
+                button.innerHTML = orig;
+            }, 2000);
+        })
+        .catch((err) => console.error('Copy failed:', err));
 }
 
-function createTryButton(codeBlock, wrapper) {
+function createTryButton(_codeBlock, _wrapper) {
     const btn = document.createElement('button');
     btn.className = 'copy-button try-button';
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
+    btn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
     btn.onclick = () => {
         const liveWrapper = btn.closest('.code-block-wrapper');
         if (!liveWrapper) return;
@@ -1167,8 +1254,10 @@ function createTryButton(codeBlock, wrapper) {
     return btn;
 }
 
-const _tryPlayIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
-const _tryStopIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg><span>Stop</span>';
+const _tryPlayIcon =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Try</span>';
+const _tryStopIcon =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg><span>Stop</span>';
 
 function runCodeInSandbox(code, wrapper, button) {
     // Flag to suppress blur-hide while sandbox iframe is being created
@@ -1184,7 +1273,7 @@ function runCodeInSandbox(code, wrapper, button) {
     const prev = wrapper.querySelector('.try-output');
     if (prev) prev.remove();
     const prevIframe = wrapper._kageSandboxIframe;
-    if (prevIframe && prevIframe.parentNode) prevIframe.remove();
+    if (prevIframe?.parentNode) prevIframe.remove();
 
     // Create output container
     const output = document.createElement('div');
@@ -1196,7 +1285,10 @@ function runCodeInSandbox(code, wrapper, button) {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'try-output-close';
     closeBtn.textContent = '✕';
-    closeBtn.onclick = () => { cleanup(); output.remove(); };
+    closeBtn.onclick = () => {
+        cleanup();
+        output.remove();
+    };
     outputHeader.appendChild(closeBtn);
     output.appendChild(outputHeader);
 
@@ -1253,13 +1345,13 @@ function runCodeInSandbox(code, wrapper, button) {
         if (!msg || msg._kageSandbox !== true) return;
         if (msg.type === 'log') appendLine('', msg.args.map(String).join(' '));
         else if (msg.type === 'warn') appendLine('try-output-warn', msg.args.map(String).join(' '));
-        else if (msg.type === 'error') appendLine('try-output-error', msg.args.map(String).join(' '));
+        else if (msg.type === 'error')
+            appendLine('try-output-error', msg.args.map(String).join(' '));
         else if (msg.type === 'result') {
             if (msg.value !== undefined && msg.value !== 'undefined') {
                 appendLine('try-output-result', '→ ' + msg.value);
             }
-        }
-        else if (msg.type === 'exception') appendLine('try-output-error', '✕ ' + msg.message);
+        } else if (msg.type === 'exception') appendLine('try-output-error', '✕ ' + msg.message);
         else if (msg.type === 'done') cleanup();
     }
     window.addEventListener('message', onMessage);
@@ -1307,7 +1399,7 @@ function runCodeInSandbox(code, wrapper, button) {
             }
             send('done', {});
         })();
-        <\/script>
+        </script>
     `;
     iframe.srcdoc = sandboxScript;
 }
@@ -1316,7 +1408,8 @@ function createSaveButton(diagramContentEl) {
     const btn = document.createElement('button');
     btn.className = 'copy-button diagram-save-btn';
     btn.style.display = 'none'; // Hidden until diagram renders
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Save</span>';
+    btn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Save</span>';
     btn.onclick = () => saveDiagramAsPng(diagramContentEl, btn);
     return btn;
 }
@@ -1353,8 +1446,12 @@ async function saveDiagramAsPng(diagramContentEl, button) {
 
         const orig = button.innerHTML;
         button.classList.add('copied');
-        button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Saved!</span>';
-        setTimeout(() => { button.classList.remove('copied'); button.innerHTML = orig; }, 2000);
+        button.innerHTML =
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg><span>Saved!</span>';
+        setTimeout(() => {
+            button.classList.remove('copied');
+            button.innerHTML = orig;
+        }, 2000);
     } catch (err) {
         console.error('Save diagram failed:', err);
     }
@@ -1403,7 +1500,10 @@ async function _renderDiagramToBlob(svgEl, scale = 4) {
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, w, h);
             ctx.drawImage(img, 0, 0, w, h);
-            canvas.toBlob((b) => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png');
+            canvas.toBlob(
+                (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+                'image/png'
+            );
         };
         img.onerror = () => reject(new Error('SVG load failed'));
         img.src = dataUrl;
@@ -1464,7 +1564,9 @@ function openDiagramLightbox(svgEl) {
                 URL.revokeObjectURL(a.href);
             }
             saveBtn.textContent = 'Saved!';
-            setTimeout(() => { saveBtn.textContent = 'Save'; }, 2000);
+            setTimeout(() => {
+                saveBtn.textContent = 'Save';
+            }, 2000);
         } catch (err) {
             console.error('Lightbox save failed:', err);
         }
@@ -1475,7 +1577,10 @@ function openDiagramLightbox(svgEl) {
     closeBtn.className = 'diagram-lightbox-btn diagram-lightbox-close';
     closeBtn.textContent = '✕';
     closeBtn.title = 'Close';
-    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeDiagramLightbox(); });
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeDiagramLightbox();
+    });
     actions.appendChild(closeBtn);
 
     overlay.appendChild(actions);
@@ -1488,7 +1593,11 @@ function openDiagramLightbox(svgEl) {
 
     // Escape to close (capture phase, stop propagation so floating window doesn't hide)
     overlay._escHandler = (e) => {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDiagramLightbox(); }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            closeDiagramLightbox();
+        }
     };
     document.addEventListener('keydown', overlay._escHandler, true);
 
@@ -1498,13 +1607,14 @@ function openDiagramLightbox(svgEl) {
 function closeDiagramLightbox() {
     const existing = document.getElementById('diagramLightbox');
     if (existing) {
-        if (existing._escHandler) document.removeEventListener('keydown', existing._escHandler, true);
+        if (existing._escHandler)
+            document.removeEventListener('keydown', existing._escHandler, true);
         existing.remove();
     }
 }
 
 function makeTablesSortable(container) {
-    container.querySelectorAll('table').forEach(table => {
+    container.querySelectorAll('table').forEach((table) => {
         const thead = table.querySelector('thead');
         const tbody = table.querySelector('tbody');
         if (!thead || !tbody) return;
@@ -1520,7 +1630,7 @@ function makeTablesSortable(container) {
                 const newDir = currentDir === 'asc' ? 'desc' : 'asc';
 
                 // Reset all headers
-                headers.forEach(h => {
+                headers.forEach((h) => {
                     h.dataset.sortDir = 'none';
                     h.textContent = h.textContent.replace(/ [▲▼]$/, '');
                 });
@@ -1534,15 +1644,18 @@ function makeTablesSortable(container) {
                     const aNum = parseFloat(aText);
                     const bNum = parseFloat(bText);
                     // Numeric sort if both are numbers
-                    if (!isNaN(aNum) && !isNaN(bNum)) {
+                    if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {
                         return newDir === 'asc' ? aNum - bNum : bNum - aNum;
                     }
                     // String sort
-                    const cmp = aText.localeCompare(bText, undefined, { numeric: true, sensitivity: 'base' });
+                    const cmp = aText.localeCompare(bText, undefined, {
+                        numeric: true,
+                        sensitivity: 'base',
+                    });
                     return newDir === 'asc' ? cmp : -cmp;
                 });
 
-                rows.forEach(row => tbody.appendChild(row));
+                rows.forEach((row) => tbody.appendChild(row));
             });
         });
     });
@@ -1571,7 +1684,9 @@ export function _keepLastTaskPlan(markdown) {
     // Remove all but the last taskplan block
     if (blocks.length > 1) {
         for (let i = blocks.length - 2; i >= 0; i--) {
-            markdown = markdown.slice(0, blocks[i].index) + markdown.slice(blocks[i].index + blocks[i][0].length);
+            markdown =
+                markdown.slice(0, blocks[i].index) +
+                markdown.slice(blocks[i].index + blocks[i][0].length);
         }
     }
 
@@ -1589,7 +1704,7 @@ export function _keepLastTaskPlan(markdown) {
     const updates = new Map();
     let m;
     while ((m = stepPattern.exec(markdown)) !== null) {
-        const stepNum = parseInt(m[1]);
+        const stepNum = parseInt(m[1], 10);
         const status = m[2];
         // Extract detail: text between this marker's closing backtick and the next marker or end of line
         const afterMarker = markdown.slice(m.index + m[0].length);
@@ -1604,8 +1719,8 @@ export function _keepLastTaskPlan(markdown) {
     // Parse the taskplan block lines and apply updates
     const blockText = block[0];
     const lines = blockText.split(/\r?\n/);
-    const header = lines[0];  // ```taskplan
-    const footer = lines[lines.length - 1];  // ```
+    const header = lines[0]; // ```taskplan
+    const footer = lines[lines.length - 1]; // ```
     const taskLines = lines.slice(1, -1);
 
     const updatedLines = taskLines.map((line, i) => {
@@ -1624,7 +1739,8 @@ export function _keepLastTaskPlan(markdown) {
     const newBlock = header + '\n' + updatedLines.join('\n') + '\n' + footer;
 
     // Replace the block in the markdown
-    let result = markdown.slice(0, block.index) + newBlock + markdown.slice(block.index + block[0].length);
+    let result =
+        markdown.slice(0, block.index) + newBlock + markdown.slice(block.index + block[0].length);
 
     // Strip the inline step markers from the output (handle same-line cases too)
     result = result.replace(/`\[step \d+ \w+\]`\s*[^`\n\r]*/g, '');
@@ -1653,11 +1769,20 @@ function _deduplicateTaskPlans(container) {
  * @returns {Array<{status: string, description: string, detail: string}>}
  */
 export function parseTaskPlan(text) {
-    return text.trim().split('\n').filter(l => l.trim()).map(line => {
-        const match = line.match(/^\[(\w+)\]\s*(.+?)(?:\s*\|\s*(.*))?$/);
-        if (!match) return null;
-        return { status: match[1], description: match[2].trim(), detail: match[3]?.trim() || '' };
-    }).filter(Boolean);
+    return text
+        .trim()
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((line) => {
+            const match = line.match(/^\[(\w+)\]\s*(.+?)(?:\s*\|\s*(.*))?$/);
+            if (!match) return null;
+            return {
+                status: match[1],
+                description: match[2].trim(),
+                detail: match[3]?.trim() || '',
+            };
+        })
+        .filter(Boolean);
 }
 
 /**
@@ -1689,7 +1814,7 @@ export function createTaskPlanElement(tasks) {
     wrapper.setAttribute('role', 'list');
     wrapper.setAttribute('aria-label', 'Task plan');
 
-    const doneCount = tasks.filter(t => t.status === 'done').length;
+    const doneCount = tasks.filter((t) => t.status === 'done').length;
     const totalCount = tasks.length;
     wrapper.dataset.progress = `${doneCount}/${totalCount}`;
 
@@ -1748,5 +1873,9 @@ function _taskIcon(status) {
 
 // escapeHtml used by renderTaskPlan
 function _escapeTaskText(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }

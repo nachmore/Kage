@@ -75,7 +75,7 @@ class PrivacySettingsModule extends SettingsModule {
         `;
     }
 
-    async load(config) {
+    async load(_config) {
         try {
             this._info = await window.__TAURI__.core.invoke('get_telemetry_info');
         } catch (e) {
@@ -95,7 +95,8 @@ class PrivacySettingsModule extends SettingsModule {
         const staleBanner = document.getElementById('telemetryStaleBanner');
 
         if (enabled) enabled.checked = !!this._info.enabled;
-        if (idField) idField.value = this._info.install_id || '(not yet assigned — opt in to generate)';
+        if (idField)
+            idField.value = this._info.install_id || '(not yet assigned — opt in to generate)';
         if (warning) warning.style.display = this._info.transport_available ? 'none' : '';
 
         // Stale-consent detection: when the bundled privacy policy
@@ -107,9 +108,10 @@ class PrivacySettingsModule extends SettingsModule {
         // current_policy_version = 0 means transport isn't configured
         // in this build; skip the banner in that case because there's
         // nothing to consent to.
-        const stale = this._info.current_policy_version > 0
-            && this._info.consent_version > 0
-            && this._info.consent_version < this._info.current_policy_version;
+        const stale =
+            this._info.current_policy_version > 0 &&
+            this._info.consent_version > 0 &&
+            this._info.consent_version < this._info.current_policy_version;
         if (staleBanner) staleBanner.style.display = stale ? '' : 'none';
     }
 
@@ -135,8 +137,8 @@ class PrivacySettingsModule extends SettingsModule {
             resetBtn.addEventListener('click', async () => {
                 const ok = confirm(
                     'Generate a new anonymous install ID?\n\n' +
-                    'Past analytics events from this install will no longer be linkable to future events. ' +
-                    'This does not delete past events — it just orphans them.'
+                        'Past analytics events from this install will no longer be linkable to future events. ' +
+                        'This does not delete past events — it just orphans them.'
                 );
                 if (!ok) return;
                 try {
@@ -169,5 +171,7 @@ class PrivacySettingsModule extends SettingsModule {
     // Privacy is managed through dedicated commands, not the generic
     // save_config flow. No-op here to satisfy the module contract.
     save(_config) {}
-    validate() { return { valid: true }; }
+    validate() {
+        return { valid: true };
+    }
 }

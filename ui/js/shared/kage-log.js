@@ -50,10 +50,18 @@ function _write(level, source, msg) {
  * every call (the caller opted in explicitly).
  */
 export const kageLog = {
-    debug(source, ...args) { _write('debug', source, args.map(_fmt).join(' ')); },
-    info(source, ...args)  { _write('info',  source, args.map(_fmt).join(' ')); },
-    warn(source, ...args)  { _write('warn',  source, args.map(_fmt).join(' ')); },
-    error(source, ...args) { _write('error', source, args.map(_fmt).join(' ')); },
+    debug(source, ...args) {
+        _write('debug', source, args.map(_fmt).join(' '));
+    },
+    info(source, ...args) {
+        _write('info', source, args.map(_fmt).join(' '));
+    },
+    warn(source, ...args) {
+        _write('warn', source, args.map(_fmt).join(' '));
+    },
+    error(source, ...args) {
+        _write('error', source, args.map(_fmt).join(' '));
+    },
 };
 
 /**
@@ -63,10 +71,18 @@ export const kageLog = {
 export function createExtensionLogger(extensionId) {
     const src = `ext:${extensionId}`;
     return {
-        debug(...args) { _write('debug', src, args.map(_fmt).join(' ')); },
-        info(...args)  { _write('info',  src, args.map(_fmt).join(' ')); },
-        warn(...args)  { _write('warn',  src, args.map(_fmt).join(' ')); },
-        error(...args) { _write('error', src, args.map(_fmt).join(' ')); },
+        debug(...args) {
+            _write('debug', src, args.map(_fmt).join(' '));
+        },
+        info(...args) {
+            _write('info', src, args.map(_fmt).join(' '));
+        },
+        warn(...args) {
+            _write('warn', src, args.map(_fmt).join(' '));
+        },
+        error(...args) {
+            _write('error', src, args.map(_fmt).join(' '));
+        },
     };
 }
 
@@ -87,8 +103,8 @@ export function interceptConsole(source, opts = {}) {
     _verboseConsoleCapture = !!opts.verbose;
 
     const orig = {
-        log:   console.log.bind(console),
-        warn:  console.warn.bind(console),
+        log: console.log.bind(console),
+        warn: console.warn.bind(console),
         error: console.error.bind(console),
         debug: console.debug.bind(console),
     };
@@ -128,7 +144,11 @@ function _fmt(v) {
     if (v === null || v === undefined) return String(v);
     if (v instanceof Error) return `${v.message}\n${v.stack || ''}`;
     if (typeof v === 'object') {
-        try { return JSON.stringify(v); } catch { return String(v); }
+        try {
+            return JSON.stringify(v);
+        } catch {
+            return String(v);
+        }
     }
     return String(v);
 }
