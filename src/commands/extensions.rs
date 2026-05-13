@@ -100,6 +100,15 @@ pub async fn set_extension_enabled(
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Extension '{}' enabled={}", id, enabled);
+    drop(config);
+    crate::telemetry::track(
+        &app,
+        "extension_enabled_toggled",
+        Some(serde_json::json!({
+            "extension_id": id,
+            "enabled": enabled,
+        })),
+    );
     if let Err(e) = app.emit("config_updated", ()) {
         error!("Failed to emit config_updated: {}", e);
     }
@@ -262,6 +271,14 @@ pub async fn uninstall_extension(
 #[tauri::command]
 pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
+
+    // Telemetry early so we count "opened" even on the path where the
+    // window already exists and we just focus it.
+    crate::telemetry::track(
+        &app,
+        "store_opened",
+        tab.as_deref().map(|t| serde_json::json!({ "tab": t })),
+    );
 
     if let Some(w) = app.get_webview_window("store") {
         let _ = w.show();
@@ -1034,6 +1051,15 @@ fn toggle_enabled_direct(
     cfg.save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
     drop(cfg);
+    crate::telemetry::track(
+        app,
+        "extension_enabled_toggled",
+        Some(serde_json::json!({
+            "extension_id": id,
+            "enabled": enabled,
+            "source": "welcome_batch",
+        })),
+    );
     if let Err(e) = app.emit("config_updated", ()) {
         error!("Failed to emit config_updated: {}", e);
     }

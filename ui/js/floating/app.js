@@ -390,6 +390,7 @@ export class FloatingApp {
 
             this.listen('voice_mode', () => {
                 console.log('Voice mode activated via hotkey');
+                trackEvent('voice_input_used', { trigger: 'hotkey' });
                 this.elements.responseText.textContent = '';
                 this.elements.contentArea.classList.remove('visible');
                 this.elements.expandBtn.classList.remove('visible');

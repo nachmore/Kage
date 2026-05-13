@@ -300,6 +300,7 @@ pub fn maybe_spawn_default_session(
     let floating_session = ui.floating_session_id.clone();
     let config_arc = features.config.clone();
     let models_arc = acp.available_models.clone();
+    let app_handle = app.handle().clone();
 
     tauri::async_runtime::spawn(async move {
         info!("Connecting ACP client on launch...");
@@ -321,6 +322,24 @@ pub fn maybe_spawn_default_session(
                     if let Ok(mut fs) = floating_session.lock() {
                         *fs = Some(id.clone());
                     }
+                    // Source: was this a post-update relaunch, or a
+                    // user picking up where they left off? Reading
+                    // last_updated_version under a brief lock here
+                    // distinguishes them — the welcome banner consumes
+                    // the same field a moment later.
+                    let source = {
+                        let cfg = config_arc.lock_or_recover();
+                        if crate::updater::was_just_updated(&cfg) {
+                            "update-resume"
+                        } else {
+                            "floating-launch"
+                        }
+                    };
+                    crate::telemetry::track(
+                        &app_handle,
+                        "session_resumed",
+                        Some(serde_json::json!({ "source": source })),
+                    );
                     // Loaded session already has its model + steering history;
                     // don't re-apply either or we'd duplicate the steering
                     // message and stomp the model the user actually picked.
@@ -342,6 +361,11 @@ pub fn maybe_spawn_default_session(
                     match acp_client.create_session(cwd) {
                         Ok((sid, models_json)) => {
                             store_available_models(models_json, &models_arc);
+                            crate::telemetry::track(
+                                &app_handle,
+                                "session_created",
+                                Some(serde_json::json!({ "source": "resume-fallback" })),
+                            );
                             sid
                         }
                         Err(e) => {
@@ -357,6 +381,11 @@ pub fn maybe_spawn_default_session(
                 Ok((sid, models_json)) => {
                     info!("Default session created on launch: {}", sid);
                     store_available_models(models_json, &models_arc);
+                    crate::telemetry::track(
+                        &app_handle,
+                        "session_created",
+                        Some(serde_json::json!({ "source": "launch" })),
+                    );
                     sid
                 }
                 Err(e) => {

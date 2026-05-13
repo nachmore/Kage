@@ -677,6 +677,7 @@ pub async fn switch_acp_session(
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, crate::state::UiState>,
+    app: tauri::AppHandle,
 ) -> Result<String, AppError> {
     let client_guard = acp.client.clone();
 
@@ -730,6 +731,13 @@ pub async fn switch_acp_session(
 
             client_guard
                 .load_existing_session(&id, cwd)
+                .inspect(|_| {
+                    crate::telemetry::track(
+                        &app,
+                        "session_resumed",
+                        Some(serde_json::json!({ "source": "manual" })),
+                    );
+                })
                 .map_err(|e| AppError::internal(format!("Failed to load session: {}", e)))
         }
         None => {
@@ -741,6 +749,12 @@ pub async fn switch_acp_session(
             let (new_session_id, models_json) = client_guard
                 .create_session(cwd)
                 .map_err(|e| format!("Failed to create session: {}", e))?;
+
+            crate::telemetry::track(
+                &app,
+                "session_created",
+                Some(serde_json::json!({ "source": "manual" })),
+            );
 
             // Store available models
             if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(

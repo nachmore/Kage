@@ -161,7 +161,7 @@ pub fn record_startup_events(app: &AppHandle, config: &Arc<std::sync::Mutex<Conf
 
     // app_started / app_installed / app_upgraded — include version
     // transition when applicable.
-    let props = match (event_to_fire, new_date) {
+    let props = match (event_to_fire, &new_date) {
         ("app_upgraded", Some(prev)) => Some(json!({
             "from_version": prev,
             "to_version": new_version,
@@ -170,6 +170,35 @@ pub fn record_startup_events(app: &AppHandle, config: &Arc<std::sync::Mutex<Conf
     };
     let _ = app.track_event(event_to_fire, props);
     info!("Telemetry: {}", event_to_fire);
+
+    // If the upgrade landed via our own auto-updater (rather than a
+    // user-driven reinstall), `was_just_updated` is true on this first
+    // post-install launch. Fire a typed `update_installed` event so the
+    // dashboard can split "auto-updates that completed successfully"
+    // from total upgrades. Reads the channel from current config so the
+    // event reflects what the user is on now (not the channel that
+    // checked, in case they switched between download and relaunch —
+    // either reading is defensible; "current" is simpler).
+    if event_to_fire == "app_upgraded" {
+        let (was_via_updater, channel) = {
+            let cfg = config.lock_or_recover();
+            (
+                crate::updater::was_just_updated(&cfg),
+                cfg.updates.channel.clone(),
+            )
+        };
+        if was_via_updater {
+            let mut props = json!({
+                "to_version": new_version,
+                "channel": channel,
+            });
+            if let Some(prev) = new_date {
+                props["from_version"] = json!(prev);
+            }
+            let _ = app.track_event("update_installed", Some(props));
+            info!("Telemetry: update_installed");
+        }
+    }
 
     if should_daily {
         let _ = app.track_event("app_daily_active", None);

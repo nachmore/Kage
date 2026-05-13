@@ -46,7 +46,7 @@ export function messageLengthBucket(msg) {
  * fastest way to audit everything that can ever reach Aptabase.
  */
 export const KNOWN_EVENTS = Object.freeze([
-    // Lifecycle (some are also fired from Rust; listed here for reference)
+    // Lifecycle (most are fired from Rust)
     'app_started',
     'app_installed',
     'app_upgraded',
@@ -57,46 +57,44 @@ export const KNOWN_EVENTS = Object.freeze([
     // (file:line). See src/telemetry.rs::panic_hook.
     'panic',
 
-    // First-run flow
+    // First-run + consent
     'first_run_completed',
     'first_run_extensions_provisioned',
     'telemetry_enabled',
     'telemetry_disabled',
 
-    // Window surface
+    // Update flow
+    'update_installed',
+    'update_check_failed',
+
+    // Window surface — "what parts of the app actually get used"
     'floating_shown',
     'chat_opened',
     'settings_opened',
     'store_opened',
     'inline_assist_shown',
+    'context_menu_shown',
 
     // Primary interactions
     'message_sent',
     'voice_input_used',
-    'selection_captured',
     'quick_action_used',
     'slash_command_used',
-
-    // Configuration
-    'theme_changed',
-    'hotkey_changed',
-    'model_changed',
-    'shortcut_added',
+    'clipboard_history_used',
     'shortcut_triggered',
     'macro_executed',
 
-    // Extensions & MCP
+    // Sessions
+    'session_created',
+    'session_resumed',
+
+    // Configuration
+    'model_changed',
+
+    // Extensions
     'extension_installed',
     'extension_uninstalled',
     'extension_enabled_toggled',
-    'mcp_server_added',
-
-    // Agent capability / tooling
-    'tool_permission_granted',
-    'tool_permission_denied',
-    'session_created',
-    'session_resumed',
-    'update_installed',
 ]);
 
 /**

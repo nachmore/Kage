@@ -348,7 +348,26 @@ export function renderQuickActionChips(actions, container, onAction) {
         labelSpan.textContent = action.label;
         chip.appendChild(iconSpan);
         chip.appendChild(labelSpan);
-        chip.addEventListener('click', () => onAction(action.prompt));
+        chip.addEventListener('click', () => {
+            // Telemetry: chip-click is the only meaningful "user picked
+            // this action" signal. Built-in actions have fixed labels
+            // from getActionsForText (Translate / Summarize / Explain /
+            // etc.); custom actions carry user-typed labels. Send the
+            // built-in label verbatim and bucket custom ones to a
+            // single name so we can see the split without leaking
+            // user-typed copy. Lazy-import keeps this module loadable
+            // in non-Tauri test contexts.
+            const KNOWN = new Set([
+                'Translate', 'Summarize', 'Explain', 'Rewrite',
+                'Fix grammar', 'Make formal', 'Make casual',
+                'Code review', 'Explain code', 'Add comments',
+            ]);
+            const label = KNOWN.has(action.label) ? action.label : 'custom';
+            import('./telemetry.js').then(({ trackEvent }) => {
+                trackEvent('quick_action_used', { action: label });
+            }).catch(() => {});
+            onAction(action.prompt);
+        });
         container.appendChild(chip);
     }
 }

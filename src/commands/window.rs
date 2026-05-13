@@ -484,6 +484,7 @@ pub async fn open_settings_window(
 
 #[tauri::command]
 pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<(), AppError> {
+    crate::telemetry::track(&app, "context_menu_shown", None);
     if let Some(window) = app.get_webview_window("context-menu") {
         // Get the menu window size
         let win_size = window.outer_size().unwrap_or(tauri::PhysicalSize {
@@ -746,6 +747,17 @@ pub async fn show_inline_assist_with_context(
         selection.as_ref().map(|s| s.len()).unwrap_or(0),
         cursor_pos.0,
         cursor_pos.1
+    );
+
+    // Single firing point for both the command-driven and hotkey-driven
+    // entry. has_selection lets us tell whether inline-assist is being
+    // used to operate on highlighted text vs as a freeform prompt.
+    crate::telemetry::track(
+        &app,
+        "inline_assist_shown",
+        Some(serde_json::json!({
+            "has_selection": selection.is_some(),
+        })),
     );
 
     let ui: tauri::State<'_, crate::state::UiState> = app.state();

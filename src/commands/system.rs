@@ -1179,12 +1179,34 @@ pub async fn fetch_favicon(url: String) -> Result<String, AppError> {
 
 /// Write text to clipboard and simulate Ctrl+V paste to the foreground window.
 #[tauri::command]
-pub async fn paste_clipboard_item(text: String) -> Result<(), AppError> {
+pub async fn paste_clipboard_item(text: String, app: tauri::AppHandle) -> Result<(), AppError> {
     crate::os::write_clipboard(&text);
     // Small delay to ensure clipboard is updated before paste
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     crate::os::simulate_paste();
+    // "Advanced paste" / clipboard history usage. We send only the
+    // length bucket — the text content itself is user data and never
+    // leaves the machine.
+    crate::telemetry::track(
+        &app,
+        "clipboard_history_used",
+        Some(serde_json::json!({
+            "length": message_length_bucket(text.len()),
+        })),
+    );
     Ok(())
+}
+
+/// Length-bucket helper, mirroring ui/js/shared/telemetry.js::messageLengthBucket
+/// so the buckets line up across event sources.
+fn message_length_bucket(n: usize) -> &'static str {
+    match n {
+        0..=49 => "xs",
+        50..=199 => "sm",
+        200..=999 => "md",
+        1000..=4999 => "lg",
+        _ => "xl",
+    }
 }
 
 #[derive(serde::Serialize, Clone)]

@@ -370,7 +370,40 @@ pub fn start_update_loop(
                         let _ = cfg.save();
                     }
                 }
-                Err(e) => warn!("Update check failed: {}", e),
+                Err(e) => {
+                    warn!("Update check failed: {}", e);
+                    // Telemetry: surface check failures so we can spot
+                    // a borked release endpoint or signature mismatch
+                    // in aggregate. The reason bucket comes from a
+                    // simple keyword scan of the error string — not
+                    // perfect, but enough to distinguish "network was
+                    // down" from "the signature didn't verify" which
+                    // are very different things to investigate.
+                    let msg = e.to_string().to_lowercase();
+                    let reason = if msg.contains("signature") || msg.contains("verify") {
+                        "signature"
+                    } else if msg.contains("no endpoint") || msg.contains("not configured") {
+                        "config"
+                    } else if msg.contains("404") || msg.contains("not found") {
+                        "not_found"
+                    } else if msg.contains("dns")
+                        || msg.contains("connect")
+                        || msg.contains("network")
+                        || msg.contains("timeout")
+                    {
+                        "network"
+                    } else {
+                        "other"
+                    };
+                    crate::telemetry::track(
+                        &app_handle,
+                        "update_check_failed",
+                        Some(serde_json::json!({
+                            "reason": reason,
+                            "channel": channel,
+                        })),
+                    );
+                }
             }
 
             tokio::time::sleep(std::time::Duration::from_secs(3600)).await;

@@ -692,8 +692,13 @@ pub async fn execute_slash_command(
     args: Option<serde_json::Value>,
     acp: State<'_, AcpHandles>,
     window: WebviewWindow,
+    app: tauri::AppHandle,
 ) -> Result<serde_json::Value, String> {
     let client = acp.client.clone();
+    // Snapshot before the move into spawn_blocking — we need both for
+    // telemetry after the call returns.
+    let cmd_for_event = command.clone();
+    let args_for_event = args.clone();
 
     let result = async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
@@ -716,6 +721,40 @@ pub async fn execute_slash_command(
     })
     .await
     .map_err(|e| format!("Task: {}", e))??;
+
+    // Telemetry — fire AFTER the call so we only count successful
+    // command executions, not failed ones (though we don't bother
+    // tracking the failure case as a separate event; that would be
+    // adding noise without driving a decision).
+    let cmd_name = cmd_for_event
+        .strip_prefix('/')
+        .unwrap_or(&cmd_for_event)
+        .to_string();
+    crate::telemetry::track(
+        &app,
+        "slash_command_used",
+        Some(serde_json::json!({ "command": cmd_name })),
+    );
+
+    // `/model <name>` is a model-switch under the hood. Surface it as
+    // a typed event so the dashboard doesn't have to filter slash
+    // commands by argument shape. Model names are public identifiers
+    // (claude-3-7-sonnet, gpt-4o, etc.) so passing them through is
+    // safe — but we only do it for the model command, not arbitrary
+    // slash command args (which can carry user content).
+    if cmd_name == "model" {
+        if let Some(model_name) = args_for_event
+            .as_ref()
+            .and_then(|v| v.get("modelName"))
+            .and_then(|v| v.as_str())
+        {
+            crate::telemetry::track(
+                &app,
+                "model_changed",
+                Some(serde_json::json!({ "model": model_name })),
+            );
+        }
+    }
 
     let _ = window.emit("slash_command_result", &result);
     Ok(result)
@@ -1234,7 +1273,8 @@ pub async fn execute_macro(
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     let client = acp.client.clone();
-
+    let step_count = steps.len();
+    let app_for_event = app.clone();
     let result = async_runtime::spawn_blocking(move || {
         let mut current_input = initial_input;
 
@@ -1304,6 +1344,16 @@ pub async fn execute_macro(
 
         Ok(current_input)
     }).await.map_err(|e| format!("Task error: {}", e))?;
+
+    // Telemetry — fire on success only. step_count is captured before
+    // the move; we don't include macro names because those are user-typed.
+    if result.is_ok() {
+        crate::telemetry::track(
+            &app_for_event,
+            "macro_executed",
+            Some(serde_json::json!({ "step_count": step_count })),
+        );
+    }
 
     result
 }
