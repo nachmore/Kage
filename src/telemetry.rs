@@ -42,7 +42,7 @@ use log::{debug, info};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_aptabase::EventTracker;
+use tauri_plugin_aptabase::{EventTracker, PanicHook};
 
 /// Current privacy policy version. Bump when the disclosed data
 /// collection scope or recipients change. The UI compares this to
@@ -249,4 +249,78 @@ pub fn snapshot(config: &Arc<std::sync::Mutex<Config>>) -> TelemetryInfo {
         current_policy_version: PRIVACY_POLICY_VERSION,
         transport_available: APTABASE_KEY.is_some(),
     }
+}
+
+/// Build the panic hook the Aptabase plugin will install, gated on the
+/// same opt-in checks as every other event source.
+///
+/// What gets sent on panic:
+///   - Event name `panic`.
+///   - `message`: panic payload as a string, truncated to 250 chars so
+///     accidentally-included file paths or user input don't balloon the
+///     event past Aptabase's property size cap. Local variables are
+///     never inspected.
+///   - `location`: `<file>:<line>` from `PanicInfo::location` if known.
+///     File paths in panic locations are source paths from rustc (e.g.
+///     `src/foo.rs`), not user-content paths, so they're safe to send.
+///
+/// What does NOT get sent:
+///   - Backtraces. They go to `crash.log` locally only — they can
+///     contain frame symbols that leak module structure beyond what we
+///     want in an analytics dashboard, and they're rarely actionable
+///     without source-map symbolication anyway.
+///   - The recent app-log ring buffer that `crash.log` includes. That
+///     can carry user message content; never goes off the machine.
+///
+/// The hook composes with our existing `panic_handler::install` flow.
+/// The Aptabase plugin's setup chains hooks via `take_hook` /
+/// `set_hook` — it captures whatever was previously installed and
+/// invokes it after our closure runs. So `crash.log` still gets
+/// written even when telemetry fires. See docs/PRIVACY.md.
+///
+/// Consent gate: we re-read config from disk inside the closure rather
+/// than capturing an `Arc<Mutex<Config>>` at construction time. The
+/// plugin builder needs the hook before `setup()` builds the config
+/// Arc, and a panic hook running at most once before exit can afford
+/// the disk read. If config load fails for any reason — usual case is
+/// "the panic destroyed the world" — we silently no-op rather than
+/// risk recursive panics.
+pub fn panic_hook() -> PanicHook {
+    Box::new(|client, info, msg| {
+        // Re-check consent at panic time. Reading config from disk is
+        // safe in a panic hook because we're not holding any locks; the
+        // worst case is std::fs::read returns an error and we no-op.
+        let allowed = Config::load()
+            .map(|c| c.telemetry.enabled && c.telemetry.install_id.is_some())
+            .unwrap_or(false);
+        if !allowed {
+            return;
+        }
+
+        // Truncate at a UTF-8 char boundary so we can't split a multi-
+        // byte sequence and ship invalid UTF-8 to the server.
+        const MAX: usize = 250;
+        let mut truncated = msg;
+        if truncated.len() > MAX {
+            let mut end = MAX;
+            while end > 0 && !truncated.is_char_boundary(end) {
+                end -= 1;
+            }
+            truncated.truncate(end);
+        }
+
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()));
+
+        let mut props = json!({ "message": truncated });
+        if let Some(loc) = location {
+            props["location"] = json!(loc);
+        }
+
+        // Fire-and-forget. The plugin's internal panic-hook wrapper
+        // already calls `client.flush_blocking()` after invoking us —
+        // we don't need to flush ourselves.
+        let _ = client.track_event("panic", Some(props));
+    })
 }

@@ -200,9 +200,19 @@ async fn run() {
     // self-hosted via InitOptions::host). Our key is EU so the EU
     // endpoint is picked automatically — matches docs/PRIVACY.md.
     //
+    // The panic_hook composes with our existing panic_handler::install
+    // (the file-based crash.log writer). Order of hooks at panic time:
+    // Aptabase fires our `panic` event and flushes, then chains to the
+    // crash.log writer, then the rust default. The hook itself reads
+    // config from disk to re-check consent at panic time.
+    //
     // See src/telemetry.rs and docs/PRIVACY.md.
     if let Some(key) = telemetry::APTABASE_KEY {
-        builder = builder.plugin(tauri_plugin_aptabase::Builder::new(key).build());
+        builder = builder.plugin(
+            tauri_plugin_aptabase::Builder::new(key)
+                .with_panic_hook(telemetry::panic_hook())
+                .build(),
+        );
     }
 
     let app = builder

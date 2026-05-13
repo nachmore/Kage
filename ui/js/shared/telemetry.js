@@ -52,6 +52,10 @@ export const KNOWN_EVENTS = Object.freeze([
     'app_upgraded',
     'app_daily_active',
     'app_exited',
+    // Crash signal — fired from the Rust panic hook, never from JS.
+    // Carries `message` (truncated panic string) and `location`
+    // (file:line). See src/telemetry.rs::panic_hook.
+    'panic',
 
     // First-run flow
     'first_run_completed',
