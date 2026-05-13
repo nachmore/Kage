@@ -3,8 +3,8 @@
   "version": "0.9.0",
   "identifier": "com.kage.app",
   "build": {
-    "beforeDevCommand": "python ../../scripts/dev_server.py",
-    "beforeBuildCommand": "python ../../scripts/build_mcp.py",
+    "beforeDevCommand": "python scripts/dev_server.py",
+    "beforeBuildCommand": "python scripts/build_mcp.py",
     "devUrl": "http://localhost:1420",
     "frontendDist": "./ui"
   },
@@ -89,6 +89,12 @@
         "focus": true
       }
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": ""
+    }
   },
   "bundle": {
     "active": true,
