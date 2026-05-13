@@ -290,8 +290,33 @@ Future improvements being considered, none blocking:
 
 - **Content-Security-Policy header on the sandbox iframe itself**,
   belt-and-braces beyond the sanitizer.
-- **Per-widget refresh budgets** so a misbehaving widget can't
-  thrash the CPU. Today widgets declare their own interval and
-  the host trusts it within a lower bound.
 - **Fine-grained capability grants** — let users approve a subset
   of the requested capabilities instead of all-or-nothing.
+
+### Widget refresh budgets (implemented)
+
+Widgets declare their own refresh interval, but the host enforces
+hard bounds and a circuit breaker:
+
+- The declared interval is clamped to `[1s, 24h]` so a typo'd `1`
+  can't spin the host on a 1ms loop.
+- Re-entrant ticks are dropped — `setInterval` keeps firing even if
+  the previous render is still in flight; we skip overlapping
+  invocations rather than letting them stack.
+- Each render is timed. A render that takes longer than 5 seconds
+  *or* longer than 70% of the widget's own declared interval counts
+  as a "slow render" failure.
+- After 3 consecutive failures (slow renders, RPC throws, RPC
+  timeouts, or skipped overlaps) the breaker trips: the timer is
+  cleared, the host slot shows a "Widget paused" notice with a
+  manual retry link, and an `extension_widget_disabled` telemetry
+  event fires (extension id + reason, no widget content).
+- A successful render resets the failure counter so transient blips
+  don't add up forever.
+- A manual retry resets the counter once. If the widget trips again
+  after that, the user has to disable the extension to recover —
+  intentionally avoiding an automatic-retry loop that would let a
+  broken widget burn CPU indefinitely.
+
+See `ExtensionManager._mountWidget` and `_renderWidget` in
+`ui/js/shared/extension-manager.js` for the implementation.

@@ -95,6 +95,11 @@ export const KNOWN_EVENTS = Object.freeze([
     'extension_installed',
     'extension_uninstalled',
     'extension_enabled_toggled',
+    // Fired when a widget's circuit breaker trips after repeated render
+    // failures or budget overruns. See ExtensionManager._noteWidgetFailure.
+    // Payload: extension_id, widget_id, reason ('overlap'|'slow_absolute'|
+    // 'slow_relative'|'throw').
+    'extension_widget_disabled',
 ]);
 
 /**

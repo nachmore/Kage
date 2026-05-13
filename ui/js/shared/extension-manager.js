@@ -35,6 +35,40 @@ const SANDBOX_VENDOR_ALLOWLIST = {
     math: 'vendor/lib/math.js',
 };
 
+// --- Widget refresh-budget caps ---------------------------------------
+// A widget that misbehaves can degrade the entire host process: a slow
+// `renderWidget()` ties up the sandbox RPC channel, a hard-failing one
+// burns CPU on every interval, and an extension that re-mounts on every
+// config change can multiply both. The constants below define the
+// circuit breaker that contains the blast radius.
+
+/** Hard floor on declared refresh interval. Anything below this is
+ *  clamped up — protects against a typo that says `1` (interpreted as
+ *  1ms) instead of `1000`. */
+const WIDGET_MIN_INTERVAL_MS = 1_000;
+
+/** Hard ceiling — 24h. A widget that wants to refresh less often than
+ *  this should just refresh manually on action. */
+const WIDGET_MAX_INTERVAL_MS = 24 * 3_600 * 1_000;
+
+/** A render that runs longer than this is flagged as slow regardless of
+ *  the declared interval. Even a 5-minute-cadence widget shouldn't be
+ *  blocking the UI for 5 seconds per tick — that's a bug, not a budget
+ *  question. The RPC layer already times out at 10s, so the practical
+ *  ceiling is somewhere in (3s, 10s); 5s is comfortably inside both. */
+const WIDGET_SLOW_RENDER_MS = 5_000;
+
+/** A render counts as a "soft failure" if it took longer than
+ *  `interval * SLOW_RENDER_RATIO`. We can't accumulate work past the
+ *  next tick boundary, so a render that took 70%+ of its own interval
+ *  is one bad scheduling beat away from overlapping with itself. */
+const WIDGET_SLOW_RENDER_RATIO = 0.7;
+
+/** Trip the breaker after N consecutive failures. Three is a balance
+ *  between "transient blip ≠ disable" and "broken extension keeps
+ *  burning CPU forever". */
+const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
+
 import { normalizePermissions } from './extension-permissions.js';
 import { ExtensionSandboxPool } from './extension-sandbox-host.js';
 import { sanitizeExtensionHtml, findExtActions } from './extension-html-sanitizer.js';
@@ -1012,6 +1046,26 @@ export class ExtensionManager {
             timer: null,
             destroyed: false,
             refreshIntervalMs: 0,
+            // --- Refresh-budget enforcement state ----------------------
+            // A widget can declare a healthy 60s interval but still
+            // misbehave: throw on every tick, run >> than its declared
+            // cadence, or stack overlapping renders if we don't gate.
+            // The fields below implement a small circuit-breaker.
+
+            /** True while a renderWidget RPC is in flight. We skip ticks
+             *  rather than letting them stack — prevents unbounded
+             *  pending-promise growth if the extension is slow. */
+            renderInFlight: false,
+
+            /** Consecutive failures (RPC throw, timeout, or render that
+             *  blew the slow-render budget). When this hits the trip
+             *  threshold we kill the timer and surface a paused state. */
+            consecutiveFailures: 0,
+
+            /** Set true after the breaker trips. The host shows a small
+             *  "Widget paused" message with a retry link; until then we
+             *  don't auto-recover. Manual retry resets the counter. */
+            tripped: false,
         };
         this._widgetInstances.set(key, controller);
 
@@ -1036,9 +1090,14 @@ export class ExtensionManager {
             });
             const n = Number(ms);
             if (Number.isFinite(n) && n > 0) {
-                // Clamp to sensible bounds: >= 1 second (so the extension
-                // can't DoS the UI with a 1ms re-render loop), <= 24h.
-                controller.refreshIntervalMs = Math.max(1_000, Math.min(n, 24 * 3600 * 1000));
+                // Clamp to a sane range. The floor stops a widget from
+                // re-rendering itself into a CPU spike (declared `1`
+                // interpreted as 1ms), the ceiling keeps the schedule
+                // bounded so the timer doesn't sit idle for years.
+                controller.refreshIntervalMs = Math.max(
+                    WIDGET_MIN_INTERVAL_MS,
+                    Math.min(n, WIDGET_MAX_INTERVAL_MS)
+                );
             } else {
                 controller.refreshIntervalMs = 0;
             }
@@ -1065,61 +1124,198 @@ export class ExtensionManager {
     }
 
     async _renderWidget(controller) {
-        if (controller.destroyed) return;
+        if (controller.destroyed || controller.tripped) return;
         const ext = this.extensions.get(controller.extensionId);
         if (!ext?.sandbox) return;
+
+        // Re-entrancy guard. setInterval keeps firing even if the
+        // previous render hasn't finished; left unchecked, a slow
+        // widget piles up overlapping `renderWidget` RPCs and starves
+        // every other RPC on the same sandbox. Skipping is preferable
+        // to queueing — by the time the in-flight render returns, its
+        // output is already what the next tick would draw.
+        if (controller.renderInFlight) {
+            this._noteWidgetFailure(controller, 'overlap');
+            return;
+        }
+        controller.renderInFlight = true;
+
+        const start = performance.now();
+        let failureReason = null;
         try {
             const out = await ext.sandbox.call('renderWidget', { widgetId: controller.widgetId });
             // Bail if we were unmounted while the RPC was in flight —
             // writing to a detached host is harmless but the listeners
             // we'd wire up would never fire anyway.
             if (controller.destroyed) return;
+
+            const elapsed = performance.now() - start;
+            // Slow-render checks. Both bounds are hard caps:
+            //   - absolute: 5s blocks the UI noticeably regardless of
+            //     declared cadence. We treat that as a failure even
+            //     for hourly-cadence widgets.
+            //   - relative: a render eating 70%+ of its own interval
+            //     is one bad scheduling beat away from overlapping
+            //     with itself. Treat as a failure before we hit the
+            //     overlap path above.
+            if (elapsed >= WIDGET_SLOW_RENDER_MS) {
+                failureReason = 'slow_absolute';
+            } else if (
+                controller.refreshIntervalMs > 0 &&
+                elapsed >= controller.refreshIntervalMs * WIDGET_SLOW_RENDER_RATIO
+            ) {
+                failureReason = 'slow_relative';
+            }
+
             if (!out || typeof out.html !== 'string') {
                 // Nothing to render → hide the host so it takes up no layout.
                 controller.host.innerHTML = '';
                 controller.host.style.display = 'none';
-                return;
-            }
-            const frag = sanitizeExtensionHtml(out.html, 'rich');
-            controller.host.innerHTML = '';
-            if (out.className) {
-                controller.host.className = `ext-widget ext-widget-${controller.slot} ${out.className}`;
-            }
-            controller.host.style.display = '';
-            controller.host.appendChild(frag);
-
-            // Wire declared action buttons. We enumerate all
-            // data-ext-action elements in the widget and match by
-            // action id — avoids having to escape arbitrary ids inside
-            // a CSS attribute selector.
-            if (Array.isArray(out.actions)) {
-                const actionMap = new Map();
-                for (const a of out.actions) {
-                    if (!a?.id) continue;
-                    actionMap.set(a.id, a.rpc || a.id);
+            } else {
+                const frag = sanitizeExtensionHtml(out.html, 'rich');
+                controller.host.innerHTML = '';
+                if (out.className) {
+                    controller.host.className = `ext-widget ext-widget-${controller.slot} ${out.className}`;
                 }
-                if (actionMap.size > 0) {
-                    const nodes = controller.host.querySelectorAll('[data-ext-action]');
-                    for (const btn of nodes) {
-                        const aid = btn.getAttribute('data-ext-action');
-                        if (!actionMap.has(aid)) continue;
-                        if (btn.__kageExtAction) continue;
-                        btn.__kageExtAction = true;
-                        const rpc = actionMap.get(aid);
-                        btn.addEventListener('click', (ev) => {
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            this._runWidgetAction(controller, rpc);
-                        });
+                controller.host.style.display = '';
+                controller.host.appendChild(frag);
+
+                // Wire declared action buttons. We enumerate all
+                // data-ext-action elements in the widget and match by
+                // action id — avoids having to escape arbitrary ids inside
+                // a CSS attribute selector.
+                if (Array.isArray(out.actions)) {
+                    const actionMap = new Map();
+                    for (const a of out.actions) {
+                        if (!a?.id) continue;
+                        actionMap.set(a.id, a.rpc || a.id);
+                    }
+                    if (actionMap.size > 0) {
+                        const nodes = controller.host.querySelectorAll('[data-ext-action]');
+                        for (const btn of nodes) {
+                            const aid = btn.getAttribute('data-ext-action');
+                            if (!actionMap.has(aid)) continue;
+                            if (btn.__kageExtAction) continue;
+                            btn.__kageExtAction = true;
+                            const rpc = actionMap.get(aid);
+                            btn.addEventListener('click', (ev) => {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                this._runWidgetAction(controller, rpc);
+                            });
+                        }
                     }
                 }
+            }
+
+            if (failureReason) {
+                this._noteWidgetFailure(controller, failureReason, elapsed);
+            } else {
+                // Successful render resets the failure counter — a single
+                // good tick after two bad ones shouldn't leave us one
+                // tick away from tripping. Transient blips are forgiven.
+                controller.consecutiveFailures = 0;
             }
         } catch (e) {
             console.warn(
                 `widget render for '${controller.extensionId}:${controller.widgetId}' failed:`,
                 e
             );
+            this._noteWidgetFailure(controller, 'throw');
+        } finally {
+            controller.renderInFlight = false;
         }
+    }
+
+    /** Increment the failure counter and trip the breaker if we've hit
+     *  the threshold. `reason` is one of:
+     *    - 'overlap'        — re-entrant tick skipped
+     *    - 'slow_absolute'  — render exceeded WIDGET_SLOW_RENDER_MS
+     *    - 'slow_relative'  — render exceeded interval * SLOW_RENDER_RATIO
+     *    - 'throw'          — RPC threw or timed out
+     *  Each failure increments the counter; a successful render resets
+     *  it. Once tripped we stop the timer and surface a paused-state UI
+     *  so the user sees what happened. */
+    _noteWidgetFailure(controller, reason, elapsedMs) {
+        controller.consecutiveFailures++;
+        const key = `${controller.extensionId}:${controller.widgetId}`;
+        console.warn(
+            `[widget] ${key} failure (${reason}` +
+                (typeof elapsedMs === 'number' ? `, ${Math.round(elapsedMs)}ms` : '') +
+                `): ${controller.consecutiveFailures}/${WIDGET_FAILURE_TRIP_THRESHOLD}`
+        );
+        if (controller.consecutiveFailures < WIDGET_FAILURE_TRIP_THRESHOLD) return;
+
+        // Trip the breaker. Stop the timer, mark the controller, and
+        // render a small paused notice with a retry link. We keep the
+        // host element in the DOM so the user can choose to recover —
+        // unmounting would reset the breaker silently on the next
+        // refresh anyway.
+        controller.tripped = true;
+        if (controller.timer) {
+            clearInterval(controller.timer);
+            controller.timer = null;
+        }
+        try {
+            controller.host.style.display = '';
+            controller.host.innerHTML = '';
+            const notice = document.createElement('div');
+            notice.className = 'ext-widget-paused';
+            notice.style.cssText =
+                'padding:8px 12px;font-size:12px;color:var(--kage-text-muted);background:var(--kage-bg-input);border-radius:4px;display:flex;align-items:center;gap:8px;';
+            notice.innerHTML = '<span>⚠️ Widget paused (kept failing or running too slow).</span>';
+            const retry = document.createElement('a');
+            retry.href = '#';
+            retry.textContent = 'Retry';
+            retry.style.cssText = 'color:var(--kage-accent);text-decoration:underline;';
+            retry.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                this._retryWidget(controller);
+            });
+            notice.appendChild(retry);
+            controller.host.appendChild(notice);
+        } catch {
+            // DOM may be in any state if we got here mid-render; the
+            // breaker tripping is what matters, the UI hint is
+            // best-effort.
+        }
+
+        // Telemetry — surface in aggregate so we can spot a problematic
+        // extension across the install base. Anonymous: extension id
+        // only, no widget content. Best-effort import so this file
+        // doesn't hard-depend on the telemetry module being loadable.
+        try {
+            import('./telemetry.js')
+                .then(({ trackEvent }) =>
+                    trackEvent('extension_widget_disabled', {
+                        extension_id: controller.extensionId,
+                        widget_id: controller.widgetId,
+                        reason,
+                    })
+                )
+                .catch(() => {});
+        } catch {}
+    }
+
+    /** Reset and resume a tripped widget. Single retry: if it trips
+     *  again, we leave it paused — repeated retries would let a broken
+     *  widget burn CPU indefinitely. The user can disable the
+     *  extension if it never recovers. */
+    _retryWidget(controller) {
+        if (controller.destroyed) return;
+        controller.consecutiveFailures = 0;
+        controller.tripped = false;
+        controller.renderInFlight = false;
+        controller.host.innerHTML = '';
+        this._renderWidget(controller).then(() => {
+            if (controller.destroyed || controller.tripped) return;
+            if (controller.refreshIntervalMs > 0 && !controller.timer) {
+                controller.timer = setInterval(
+                    () => this._renderWidget(controller),
+                    controller.refreshIntervalMs
+                );
+            }
+        });
     }
 
     async _runWidgetAction(controller, actionId) {
