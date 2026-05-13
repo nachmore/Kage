@@ -1125,6 +1125,15 @@ export class ExtensionManager {
 
     async _renderWidget(controller) {
         if (controller.destroyed || controller.tripped) return;
+        // Skip ticks while the floating window is hidden. The host
+        // signals this via window._kageFloatingHidden in app.js; the
+        // widget is repainting into an off-screen webview otherwise,
+        // which is wasted work for both us and the extension.
+        // This check is intentionally lighter than the breaker path:
+        // a skipped-while-hidden tick is not a failure (no counter
+        // increment, no breaker trip). The next tick after the window
+        // is shown will catch up.
+        if (typeof window !== 'undefined' && window._kageFloatingHidden === true) return;
         const ext = this.extensions.get(controller.extensionId);
         if (!ext?.sandbox) return;
 
@@ -1496,5 +1505,35 @@ export class ExtensionManager {
                     .catch((e) => console.warn(`onResultAction '${actionId}' failed:`, e));
             });
         }
+    }
+
+    /**
+     * Tear down all extensions and their sandboxes. Called from the
+     * floating window's tauri://close-requested handler so a closed
+     * webview doesn't leave widget timers ticking until process exit.
+     *
+     * Idempotent: safe to call twice; the second call no-ops because
+     * the widget instances and sandbox pool are already empty.
+     */
+    destroy() {
+        // Clear every widget's timer + flip the destroyed flag so any
+        // in-flight render returns without writing back to the DOM.
+        if (this._widgetInstances) {
+            for (const [, ctrl] of this._widgetInstances) {
+                ctrl.destroyed = true;
+                if (ctrl.timer) {
+                    clearInterval(ctrl.timer);
+                    ctrl.timer = null;
+                }
+            }
+            this._widgetInstances.clear();
+        }
+        // Sandbox pool tears down each iframe + rejects pending RPCs.
+        try {
+            this._pool?.unloadAll();
+        } catch (e) {
+            console.warn('ExtensionManager.destroy: pool.unloadAll failed:', e);
+        }
+        this.extensions.clear();
     }
 }

@@ -258,4 +258,44 @@ describe('Widget budget cap', () => {
         await mgr._renderWidget(ctrl);
         expect(calls).toBe(0);
     });
+
+    it('skips render while floating window is hidden, without counting as failure', async () => {
+        let calls = 0;
+        const mgr = makeManagerWithSandbox({
+            renderImpl: () => {
+                calls++;
+                return { html: '<div>x</div>' };
+            },
+        });
+        const ctrl = makeController();
+
+        window._kageFloatingHidden = true;
+        try {
+            await mgr._renderWidget(ctrl);
+            expect(calls).toBe(0);
+            // Crucially, this is NOT a failure — the breaker counter
+            // must stay at 0 so a long hidden period doesn't leave us
+            // one tick away from tripping when the user reopens the
+            // window.
+            expect(ctrl.consecutiveFailures).toBe(0);
+            expect(ctrl.tripped).toBe(false);
+        } finally {
+            delete window._kageFloatingHidden;
+        }
+    });
+
+    it('destroy() clears widget timers and flips destroyed', () => {
+        const mgr = makeManagerWithSandbox({ renderImpl: () => ({ html: '<div>x</div>' }) });
+        const ctrl = makeController();
+        // Simulate a mounted controller with an active timer.
+        ctrl.timer = setInterval(() => {}, 1_000);
+        mgr._widgetInstances = new Map([['test-ext:w1', ctrl]]);
+
+        mgr.destroy();
+
+        expect(ctrl.destroyed).toBe(true);
+        expect(ctrl.timer).toBe(null);
+        expect(mgr._widgetInstances.size).toBe(0);
+        expect(mgr.extensions.size).toBe(0);
+    });
 });

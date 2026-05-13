@@ -948,6 +948,18 @@ export class FloatingApp {
         this.appWindow.listen('tauri://focus', async () => {
             this._windowFocused = true;
             document.documentElement.classList.remove('animations-paused');
+            // Resume work that was paused on hide. Mascot animation
+            // intervals were ticking against an invisible window — a
+            // small but constant CPU drag on every hidden minute.
+            // Mirrors the existing permission-modal pause/resume.
+            window._kageFloatingHidden = false;
+            if (window._kageMascot) {
+                try {
+                    window._kageMascot.resume();
+                } catch (e) {
+                    console.warn('mascot.resume failed:', e);
+                }
+            }
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
@@ -1059,6 +1071,24 @@ export class FloatingApp {
             }
             await this.appWindow.hide();
             this.dismissBanner();
+            // Pause work that doesn't need to run while hidden.
+            // - Mascot animation: ticks every ~120-150ms; over a long
+            //   idle session that's real CPU we can give back to the
+            //   foreground app the user is actually using.
+            // - Hidden flag: read by ExtensionManager._renderWidget so
+            //   long-cadence widgets (calendar, todos) skip ticks
+            //   that would otherwise repaint into an invisible host.
+            // Listeners and observers stay attached — reattaching on
+            // every show would directly inflate time-to-paint, which
+            // is the headline metric for this window.
+            window._kageFloatingHidden = true;
+            if (window._kageMascot) {
+                try {
+                    window._kageMascot.pause();
+                } catch (e) {
+                    console.warn('mascot.pause failed:', e);
+                }
+            }
             // Shut down mic and voice mode on hide
             if (this.speech) {
                 this.speech.stopVoiceMode();
@@ -1081,6 +1111,33 @@ export class FloatingApp {
 
             // Pause animations to stop GPU compositing while hidden
             document.documentElement.classList.add('animations-paused');
+        });
+
+        // Close-time cleanup. The floating window is normally hidden,
+        // not closed — this listener is defensive insurance for two
+        // cases: (1) a future refactor that flips floating to
+        // close-on-dismiss, and (2) explicit teardown via the tray
+        // "quit" path. Without it, a closed-but-not-destroyed webview
+        // would sit there with mascot timers still ticking until the
+        // process exits. The cleanup is intentionally narrow:
+        //   - Mascot intervals (the only timer we own that runs while
+        //     hidden today).
+        //   - Extension manager teardown via destroy(), which cascades
+        //     to widget timers and sandbox iframes.
+        // We deliberately don't strip event listeners — webview
+        // teardown frees the JS heap wholesale, and the cost of
+        // walking every DOM listener individually exceeds the wholesale
+        // GC the runtime is about to do anyway.
+        this.appWindow.listen('tauri://close-requested', () => {
+            try {
+                if (window._kageMascot) {
+                    window._kageMascot.destroy();
+                    window._kageMascot = null;
+                }
+                this.extensionManager?.destroy?.();
+            } catch (e) {
+                console.warn('floating close-requested cleanup failed:', e);
+            }
         });
     }
 
