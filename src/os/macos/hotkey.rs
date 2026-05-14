@@ -28,7 +28,11 @@
 //! A short timer thread stops the run loop when the timeout expires.
 
 use crate::os::hotkey::CapturedHotkey;
+use accessibility_sys as ax;
+use core_foundation::boolean::CFBoolean;
+use core_foundation::dictionary::CFDictionary;
 use core_foundation::runloop::{CFRunLoop, CFRunLoopRef};
+use core_foundation::string::CFString;
 use core_graphics::event::{
     CGEventFlags, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventType, CallbackResult, EventField,
@@ -61,6 +65,23 @@ static CAPTURED: Mutex<Option<CapturedHotkey>> = Mutex::new(None);
 // ---------------------------------------------------------------------------
 
 pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
+    // Prompt for Accessibility if not already granted. Accessibility subsumes
+    // Input Monitoring for passive CGEventTaps — once granted, the tap works
+    // without a separate Input Monitoring entry. The prompt also ensures the
+    // app appears in the Accessibility list in System Settings.
+    //
+    // NOTE: This only works when running as a proper .app bundle (i.e.
+    // `cargo tauri build`). During `cargo tauri dev` the bare binary won't
+    // appear in System Settings TCC lists — this is a macOS limitation for
+    // non-bundled executables.
+    let ax_trusted = ensure_accessibility_for_capture();
+    if !ax_trusted {
+        info!(
+            "[HOTKEY_CAPTURE] Accessibility not yet granted — event tap may fail. \
+             Grant Accessibility in System Settings and restart the app."
+        );
+    }
+
     // Refuse concurrent capture so two callers can't race on the shared
     // slot. The caller is expected to be serial anyway.
     if CAPTURING.swap(true, Ordering::SeqCst) {
@@ -227,10 +248,30 @@ fn warn_permission_once() {
     static WARNED: OnceLock<()> = OnceLock::new();
     WARNED.get_or_init(|| {
         log::warn!(
-            "hotkey capture: CGEventTapCreate failed — Input Monitoring permission likely not granted. \
-             Go to System Settings → Privacy & Security → Input Monitoring and enable Kage."
+            "hotkey capture: CGEventTapCreate failed — Accessibility permission likely not granted. \
+             Go to System Settings → Privacy & Security → Accessibility and enable Kage."
         );
     });
+}
+
+/// Check (and prompt for) Accessibility permission. Returns true if granted.
+///
+/// Accessibility permission subsumes Input Monitoring for passive CGEventTaps,
+/// so granting Accessibility is sufficient — the user doesn't need to separately
+/// find and enable the app in the Input Monitoring list.
+///
+/// The prompt option (`kAXTrustedCheckOptionPrompt = true`) causes macOS to show
+/// the native "Kage would like to control this computer" dialog if permission
+/// hasn't been granted yet, and adds the app to the Accessibility list in System
+/// Settings. This works even for ad-hoc signed development builds.
+fn ensure_accessibility_for_capture() -> bool {
+    use core_foundation::base::TCFType;
+
+    let dict: CFDictionary<CFString, CFBoolean> = CFDictionary::from_CFType_pairs(&[(
+        unsafe { CFString::wrap_under_get_rule(ax::kAXTrustedCheckOptionPrompt) },
+        CFBoolean::true_value(),
+    )]);
+    unsafe { ax::AXIsProcessTrustedWithOptions(dict.as_concrete_TypeRef()) }
 }
 
 /// Access the raw `CFRunLoopRef` inside the `CFRunLoop` newtype. The crate
