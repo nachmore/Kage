@@ -51,18 +51,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Ensure rustup is functional before the toolchain action runs.
+      # Some macOS runner images ship a stale rustup-init shim that
+      # confuses dtolnay/rust-toolchain. A self-update fixes it.
+      - name: Bootstrap rustup
+        run: |
+          rustup --version || curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          rustup self update || true
+
       - name: Install Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
-      # Ensure cargo/rustc are on PATH (works around runner images where
-      # the default cargo shim points to rustup-init until first use).
-      - name: Verify Rust installation
-        run: |
-          rustup show
-          cargo --version
-          rustc --version
 
       # Cache target/ and ~/.cargo/registry keyed on Cargo.lock — turns a
       # ~10min cold compile into a ~2min warm one. Swatinem/rust-cache
