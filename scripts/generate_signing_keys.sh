@@ -30,11 +30,30 @@ if [ ! -f "${KEYFILE}.pub" ]; then
     exit 1
 fi
 
-PUBKEY=$(cat "${KEYFILE}.pub")
+# cargo tauri signer generate writes files as base64-encoded blobs.
+# Tauri expects the decoded plaintext format:
+#   untrusted comment: ...
+#   <key data>
+# Detect and decode if needed.
+
+decode_if_base64() {
+    local file="$1"
+    if grep -q "^untrusted comment:" "$file"; then
+        # Already plaintext
+        cat "$file"
+    else
+        # Base64-encoded — decode it
+        base64 -d < "$file"
+    fi
+}
+
+PUBKEY=$(decode_if_base64 "${KEYFILE}.pub")
+
+# Private key: Tauri CLI expects the raw file content (base64-encoded blob)
 PRIVKEY=$(cat "$KEYFILE")
 
-# Copy public key to the repo location build.rs reads
-cp "${KEYFILE}.pub" "$PUBKEY_FILE"
+# Write decoded public key to the repo location build.rs reads
+echo "$PUBKEY" > "$PUBKEY_FILE"
 
 # Clean up the temp files (private key should not linger on disk)
 rm -f "$KEYFILE" "${KEYFILE}.pub"
@@ -62,7 +81,8 @@ echo "       Skip this secret if you used an empty password."
 echo ""
 echo "─────────────────────────────────────────"
 echo "Name:  TAURI_UPDATER_PUBKEY"
-echo "Value: $PUBKEY"
+echo "Value:"
+echo "$PUBKEY"
 echo ""
 echo "==========================================="
 echo ""
