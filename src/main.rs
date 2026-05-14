@@ -271,6 +271,7 @@ async fn run() {
                         for (_, window) in _app.webview_windows() {
                             let _ = window.hide();
                         }
+                        setup::hide_macos_app();
                     }
                     "macos-hide-others" => {
                         // NSApp hideOtherApplications — not directly available,
@@ -278,6 +279,7 @@ async fn run() {
                         for (_, window) in _app.webview_windows() {
                             let _ = window.hide();
                         }
+                        setup::hide_macos_app();
                     }
                     "macos-show-all" => {
                         if let Some(w) = _app.get_webview_window("floating") {

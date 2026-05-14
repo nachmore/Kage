@@ -238,11 +238,34 @@ pub fn spawn_app_registry_scan(app: &App) {
 
 /// Window close-requested handler: hide rather than close, so the app
 /// persists in the tray. Logs (rather than panics) if hide fails.
+/// On macOS, also hides the app to return focus to the previous application.
 pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi) {
     if let Err(e) = window.hide() {
         log::warn!("Failed to hide window on close: {}", e);
     }
     api.prevent_close();
+
+    // On macOS, hiding a window doesn't return focus to the previous app —
+    // the menu bar still shows "Kage". Hide the app to fix this.
+    #[cfg(target_os = "macos")]
+    hide_macos_app();
+}
+
+/// Hide the macOS app (NSApp.hide), returning focus to the previous application.
+/// This is the equivalent of Cmd+H — the app stays running but yields focus.
+#[cfg(target_os = "macos")]
+pub fn hide_macos_app() {
+    use objc2::rc::autoreleasepool;
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    autoreleasepool(|_pool| {
+        // Safe: this is always called from the main thread (UI event handlers).
+        if let Some(mtm) = MainThreadMarker::new() {
+            let app = NSApplication::sharedApplication(mtm);
+            app.hide(None);
+        }
+    });
 }
 
 /// Show the welcome window on first run. Small delay so the floating
