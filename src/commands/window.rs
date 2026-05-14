@@ -58,6 +58,12 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
         return;
     }
 
+    // Don't show during first-run wizard
+    if !features.config.lock_or_recover().first_run_completed {
+        info!("Ignoring show_floating_at_mouse — first run not completed");
+        return;
+    }
+
     // If already visible, hide it (toggle behavior)
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
@@ -88,6 +94,12 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
         .load(std::sync::atomic::Ordering::Acquire)
     {
         info!("Ignoring hotkey — frontend not ready");
+        return;
+    }
+
+    // Don't show during first-run wizard — user should complete onboarding first
+    if !features.config.lock_or_recover().first_run_completed {
+        info!("Ignoring hotkey — first run not completed");
         return;
     }
 
