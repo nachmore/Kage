@@ -236,6 +236,66 @@ async fn run() {
             info!("Setting up application");
             info!("=== Kage Setup ===");
 
+            // macOS: override the default app menu so Cmd+Q hides windows
+            // instead of quitting. Users quit via the tray menu's "Quit".
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+                use tauri::Manager;
+
+                let hide_item = MenuItemBuilder::with_id("macos-hide", "Hide Kage")
+                    .accelerator("CmdOrCtrl+Q")
+                    .build(app)?;
+                let hide_others = MenuItemBuilder::with_id("macos-hide-others", "Hide Others")
+                    .accelerator("CmdOrCtrl+Alt+H")
+                    .build(app)?;
+                let show_all =
+                    MenuItemBuilder::with_id("macos-show-all", "Show All").build(app)?;
+                let quit_item = MenuItemBuilder::with_id("macos-quit", "Quit Kage")
+                    .accelerator("CmdOrCtrl+Shift+Q")
+                    .build(app)?;
+
+                let app_submenu = SubmenuBuilder::new(app, "Kage")
+                    .items(&[&hide_item, &hide_others, &show_all])
+                    .separator()
+                    .item(&quit_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app).item(&app_submenu).build()?;
+                app.set_menu(menu)?;
+
+                let app_handle = app.handle().clone();
+                app.on_menu_event(move |_app, event| match event.id().as_ref() {
+                    "macos-hide" => {
+                        info!("Cmd+Q: hiding all windows (use tray Quit to exit)");
+                        for (_, window) in _app.webview_windows() {
+                            let _ = window.hide();
+                        }
+                    }
+                    "macos-hide-others" => {
+                        // NSApp hideOtherApplications — not directly available,
+                        // but hiding our windows achieves the user intent.
+                        for (_, window) in _app.webview_windows() {
+                            let _ = window.hide();
+                        }
+                    }
+                    "macos-show-all" => {
+                        if let Some(w) = _app.get_webview_window("floating") {
+                            let _ = w.show();
+                        }
+                    }
+                    "macos-quit" => {
+                        info!("Cmd+Shift+Q: quitting application");
+                        crate::commands::system::graceful_shutdown(&app_handle);
+                        let app_for_exit = app_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            crate::commands::system::shutdown_and_exit(&app_for_exit).await;
+                        });
+                    }
+                    _ => {}
+                });
+            }
+
             // Check for session resume after update. The marker file (or
             // /resume-session CLI arg) is *always* consumed here so a stale
             // marker doesn't ghost-trigger on the next normal launch.
