@@ -71,7 +71,15 @@ export default class CalendarSettingsProvider {
                     status: `✅ Found ${count} event${count === 1 ? '' : 's'} in the next ${hours} hour${hours === 1 ? '' : 's'}`,
                 };
             } catch (e) {
-                return { status: `❌ ${e?.message || e}` };
+                const msg = e?.message || e || '';
+                // If it's a permission error, open System Settings to the Calendar privacy pane
+                if (typeof msg === 'string' && (msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('permission'))) {
+                    try {
+                        await this.invoke('open_url', { url: 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Calendars' });
+                    } catch (_) { /* best effort */ }
+                    return { status: `❌ Calendar access denied — opened System Settings. Grant Calendar permission to Kage, then test again.` };
+                }
+                return { status: `❌ ${msg}` };
             }
         }
         return {};

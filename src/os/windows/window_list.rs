@@ -219,3 +219,21 @@ pub fn get_foreground_window_info() -> Option<(String, String)> {
         Some((title, process_name))
     }
 }
+
+/// On Windows, icons are already extracted during list_windows_impl and cached
+/// in the icon module. This function looks them up from a fresh window enumeration
+/// which populates icons as a side effect.
+pub fn get_window_icons(pids: &[u64]) -> std::collections::HashMap<u64, String> {
+    use std::collections::HashMap;
+
+    let mut result: HashMap<u64, String> = HashMap::new();
+    let windows = list_windows_impl();
+    for win in &windows {
+        if pids.contains(&win.handle) {
+            if let Some(ref icon) = win.icon_base64 {
+                result.insert(win.handle, icon.clone());
+            }
+        }
+    }
+    result
+}

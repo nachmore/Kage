@@ -53,9 +53,11 @@ function _renderItem(r, _index, extMgr) {
             : 'data:image/png;base64,' + r.data.icon_base64;
         iconHtml = `<img src="${src}" class="app-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="app-icon" style="display:none">${r.data.emoji_icon || r.label.charAt(0).toUpperCase()}</div>`;
     } else if (r.icon?.startsWith('data:')) {
-        iconHtml = `<img src="${r.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">`;
+        const dot = r.type === 'window' ? '<span class="window-indicator"></span>' : '';
+        iconHtml = `<div class="app-icon-wrap"><img src="${r.icon}" class="app-icon-img" style="width:24px;height:24px;border-radius:4px;object-fit:cover;">${dot}</div>`;
     } else {
-        iconHtml = `<div class="app-icon">${r.icon || r.label.charAt(0)}</div>`;
+        const dot = r.type === 'window' ? '<span class="window-indicator"></span>' : '';
+        iconHtml = `<div class="app-icon-wrap"><div class="app-icon">${r.icon || r.label.charAt(0)}</div>${dot}</div>`;
     }
 
     item.innerHTML = `

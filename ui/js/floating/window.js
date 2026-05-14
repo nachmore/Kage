@@ -80,6 +80,14 @@ export class WindowManager {
             return mt + mb + Math.max(minH, pt + pb + inner);
         }
 
+        // For scrollable containers with max-height, scrollHeight reports the
+        // full content height (including overflow). Use offsetHeight which
+        // respects the max-height cap and gives the actual rendered size.
+        const overflow = cs.overflowY;
+        if ((overflow === 'auto' || overflow === 'scroll') && cs.maxHeight !== 'none') {
+            return el.offsetHeight + mt + mb;
+        }
+
         return el.scrollHeight + mt + mb;
     }
 

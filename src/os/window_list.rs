@@ -46,3 +46,11 @@ pub fn get_app_icon(process_name: &str) -> Option<String> {
 pub fn get_foreground_window_info() -> Option<(String, String)> {
     crate::os::platform::window_list::get_foreground_window_info()
 }
+
+/// Fetch app icons for a set of window handles (PIDs on macOS, HWNDs on Windows).
+/// Returns a map of handle → base64 data URI.
+/// This is designed to be called asynchronously after `list_windows()` so the
+/// window list can render immediately while icons load in the background.
+pub fn get_window_icons(handles: &[u64]) -> std::collections::HashMap<u64, String> {
+    crate::os::platform::window_list::get_window_icons(handles)
+}

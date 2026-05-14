@@ -29,12 +29,16 @@ pub struct CalendarEvent {
 }
 
 /// Get upcoming calendar events within the next `hours` hours.
-pub fn get_upcoming_events(hours: u32) -> Vec<CalendarEvent> {
+///
+/// Returns `Err` when the calendar backend reports a hard failure (e.g.
+/// permission denied on macOS). An empty `Ok(vec![])` means "no events
+/// found" — callers should distinguish the two in the UI.
+pub fn get_upcoming_events(hours: u32) -> Result<Vec<CalendarEvent>, String> {
     crate::os::platform::calendar::get_upcoming_events_impl(hours)
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
-pub fn get_events_for_date(date: &str) -> Vec<CalendarEvent> {
+pub fn get_events_for_date(date: &str) -> Result<Vec<CalendarEvent>, String> {
     crate::os::platform::calendar::get_events_for_date_impl(date)
 }
 

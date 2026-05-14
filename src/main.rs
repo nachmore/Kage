@@ -542,6 +542,7 @@ async fn run() {
             commands::get_common_folders,
             commands::notify_frontend_ready,
             commands::list_open_windows,
+            commands::get_window_icons,
             commands::get_process_name,
             commands::focus_open_window,
             crate::automation::emit_automation_signal,

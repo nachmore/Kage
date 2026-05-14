@@ -1099,11 +1099,10 @@ pub async fn get_calendar_events(
     hours: Option<u32>,
 ) -> Result<Vec<crate::os::calendar::CalendarEvent>, AppError> {
     let h = hours.unwrap_or(24).min(72);
-    Ok(
-        tauri::async_runtime::spawn_blocking(move || crate::os::get_upcoming_events(h))
-            .await
-            .map_err(|e| format!("Calendar task failed: {}", e))?,
-    )
+    tauri::async_runtime::spawn_blocking(move || crate::os::get_upcoming_events(h))
+        .await
+        .map_err(|e| AppError::from(format!("Calendar task failed: {}", e)))?
+        .map_err(AppError::from)
 }
 
 /// Get calendar events for a specific date (YYYY-MM-DD).
@@ -1130,11 +1129,10 @@ pub async fn get_calendar_events_for_date(
     if !ok {
         return Err("Invalid date format. Use YYYY-MM-DD.".into());
     }
-    Ok(
-        tauri::async_runtime::spawn_blocking(move || crate::os::get_events_for_date(&date))
-            .await
-            .map_err(|e| format!("Calendar date query failed: {}", e))?,
-    )
+    tauri::async_runtime::spawn_blocking(move || crate::os::get_events_for_date(&date))
+        .await
+        .map_err(|e| AppError::from(format!("Calendar date query failed: {}", e)))?
+        .map_err(AppError::from)
 }
 
 /// Fetch a website's favicon and return it as a base64 data URI.
@@ -1533,6 +1531,20 @@ pub fn show_update_banner(app: &tauri::AppHandle) {
 #[tauri::command]
 pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInfo>, AppError> {
     Ok(crate::os::list_windows())
+}
+
+/// Fetch app icons for a set of window handles. Designed to be called after
+/// list_open_windows so the window list renders instantly while icons load
+/// in the background.
+#[tauri::command]
+pub async fn get_window_icons(
+    pids: Vec<u64>,
+) -> Result<std::collections::HashMap<u64, String>, AppError> {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        crate::os::window_list::get_window_icons(&pids)
+    })
+    .await
+    .map_err(|e| AppError::from(format!("Icon fetch failed: {}", e)))?)
 }
 
 #[tauri::command]

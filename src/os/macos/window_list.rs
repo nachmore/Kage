@@ -1,81 +1,213 @@
-// macOS window enumeration using osascript (AppleScript)
-// Uses System Events to list windows and NSWorkspace to activate apps.
+// macOS window enumeration using CGWindowList (fast, no Accessibility TCC).
+//
+// Uses CGWindowListCopyWindowInfo to enumerate on-screen windows. This is
+// the same API used by `get_foreground_window_info()` for title extraction.
+// Window titles require Screen Recording permission (macOS 10.15+); without
+// it we still get process names and PIDs, just empty titles.
+//
+// Focus uses NSRunningApplication.activateWithOptions which only needs the
+// PID — no Accessibility permission required for basic activation.
 
 use crate::os::window_list::WindowInfo;
+use core_foundation::array::CFArray;
+use core_foundation::base::{CFType, TCFType};
+use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::CFNumber;
+use core_foundation::string::CFString;
+use core_graphics::window::{
+    kCGNullWindowID, kCGWindowListExcludeDesktopElements, kCGWindowListOptionOnScreenOnly,
+    CGWindowListCopyWindowInfo,
+};
+use log::debug;
+use std::collections::HashSet;
 use std::process::Command;
 
 pub fn list_windows_impl() -> Vec<WindowInfo> {
-    // Use AppleScript via osascript to get window list — avoids native framework bindings
-    let script = r#"
-        tell application "System Events"
-            set windowList to ""
-            repeat with proc in (every process whose visible is true)
-                set procName to name of proc
-                set procId to unix id of proc
-                try
-                    set bundleId to bundle identifier of proc
-                on error
-                    set bundleId to ""
-                end try
-                repeat with win in (every window of proc)
-                    set winTitle to name of win
-                    if winTitle is not "" then
-                        set windowList to windowList & procName & "	" & winTitle & "	" & procId & "	" & bundleId & linefeed
-                    end if
-                end repeat
-            end repeat
-        end tell
-        return windowList
-    "#;
+    // CGWindowListCopyWindowInfo is fast (~1-5ms) and doesn't require
+    // Accessibility permission. Window titles require Screen Recording
+    // permission; without it they'll be empty strings.
+    let options = kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements;
 
-    let output = match Command::new("osascript").arg("-e").arg(script).output() {
-        Ok(o) => o,
-        Err(_) => return vec![],
+    let window_list: CFArray<CFDictionary<CFString, CFType>> = unsafe {
+        let cf_array = CGWindowListCopyWindowInfo(options, kCGNullWindowID);
+        if cf_array.is_null() {
+            debug!("[window-walker] CGWindowListCopyWindowInfo returned null");
+            return vec![];
+        }
+        CFArray::wrap_under_create_rule(cf_array as *const _)
     };
 
-    if !output.status.success() {
-        return vec![];
-    }
+    let key_pid = CFString::from_static_string("kCGWindowOwnerPID");
+    let key_name = CFString::from_static_string("kCGWindowName");
+    let key_layer = CFString::from_static_string("kCGWindowLayer");
+    let key_owner = CFString::from_static_string("kCGWindowOwnerName");
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let mut windows = Vec::new();
+    // Track PIDs we've already added a window for — show one entry per app
+    // when the title is empty (Screen Recording not granted), but show all
+    // titled windows when we have permission.
+    let mut seen_pids_no_title: HashSet<u64> = HashSet::new();
 
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() < 3 {
+    for info in window_list.iter() {
+        // Only layer 0 = regular app windows (skip menubar, dock, etc.)
+        let layer = info
+            .find(&key_layer)
+            .and_then(|v| v.downcast::<CFNumber>())
+            .and_then(|n| n.to_i32())
+            .unwrap_or(i32::MAX);
+        if layer != 0 {
             continue;
         }
-        let process_name = parts[0].to_string();
-        let title = parts[1].to_string();
-        let pid: u64 = parts[2].parse().unwrap_or(0);
 
-        // Skip our own window
-        if process_name.contains("Kage") {
+        let pid = info
+            .find(&key_pid)
+            .and_then(|v| v.downcast::<CFNumber>())
+            .and_then(|n| n.to_i64())
+            .unwrap_or(0) as u64;
+        if pid == 0 {
             continue;
         }
 
-        windows.push(WindowInfo {
-            title,
-            process_name,
-            handle: pid, // use PID as handle — we activate by PID on macOS
-            icon_base64: None,
-        });
+        let process_name = info
+            .find(&key_owner)
+            .and_then(|v| v.downcast::<CFString>())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        // Skip our own windows
+        if process_name.contains("Kage") || process_name.contains("kage") {
+            continue;
+        }
+
+        let title = info
+            .find(&key_name)
+            .and_then(|v| v.downcast::<CFString>())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        // If we have a title, show each window individually.
+        // If no title (Screen Recording not granted), show one entry per app.
+        if title.is_empty() {
+            if seen_pids_no_title.contains(&pid) {
+                continue;
+            }
+            seen_pids_no_title.insert(pid);
+            // Use process name as the display title when we can't get window titles
+            windows.push(WindowInfo {
+                title: process_name.clone(),
+                process_name,
+                handle: pid,
+                icon_base64: None,
+            });
+        } else {
+            windows.push(WindowInfo {
+                title,
+                process_name,
+                handle: pid,
+                icon_base64: None,
+            });
+        }
     }
+
+    debug!(
+        "[window-walker] CGWindowList returned {} windows",
+        windows.len()
+    );
 
     windows
 }
 
+/// Extract app icons for a list of window handles (PIDs on macOS).
+/// Returns a map of handle → base64 icon.
+/// Uses NSRunningApplication to get the bundle path, then NSWorkspace.iconForFile.
+/// Results are cached in the cross-platform icon-by-name cache.
+pub fn get_window_icons(handles: &[u64]) -> std::collections::HashMap<u64, String> {
+    use objc2::rc::autoreleasepool;
+    use objc2_app_kit::NSRunningApplication;
+    use std::collections::HashMap;
+
+    let mut result: HashMap<u64, String> = HashMap::new();
+
+    autoreleasepool(|_pool| {
+        for &handle in handles {
+            // Check the by-name cache first (may have been populated by a prior call)
+            let app = match NSRunningApplication::runningApplicationWithProcessIdentifier(
+                handle as i32,
+            ) {
+                Some(a) => a,
+                None => continue,
+            };
+            let process_name = app
+                .localizedName()
+                .map(|n| n.to_string())
+                .unwrap_or_default();
+
+            // Fast path: already cached by process name
+            if let Some(cached) = crate::os::icon::get_icon_by_process_name(&process_name) {
+                result.insert(handle, cached);
+                continue;
+            }
+
+            // Extract from bundle path
+            let bundle_url = match app.bundleURL() {
+                Some(u) => u,
+                None => continue,
+            };
+            let path = match bundle_url.path() {
+                Some(p) => p.to_string(),
+                None => continue,
+            };
+            if let Some(icon) = crate::os::icon::extract_icon_base64(&path) {
+                crate::os::icon::register_process_name_icon(&process_name, &icon);
+                result.insert(handle, icon);
+            }
+        }
+    });
+
+    result
+}
+
 pub fn focus_window_impl(handle: u64) -> Result<(), String> {
-    // Activate the application by PID and restore if minimized
+    // Use NSRunningApplication to activate by PID — fast, no Accessibility TCC.
+    use objc2::rc::autoreleasepool;
+    use objc2_app_kit::NSApplicationActivationOptions;
+    use objc2_app_kit::NSRunningApplication;
+
+    let pid = handle as i32;
+
+    autoreleasepool(|_pool| {
+        let app = NSRunningApplication::runningApplicationWithProcessIdentifier(pid);
+        match app {
+            Some(app) => {
+                // Un-hide/un-minimize the app first so its windows are restored.
+                // unhide() brings back windows hidden via Cmd+H; for minimized
+                // (Dock'd) windows, activateWithOptions also restores them when
+                // the app becomes frontmost.
+                app.unhide();
+
+                #[allow(deprecated)]
+                // macOS 14 deprecates this but the replacement isn't available yet
+                let options = NSApplicationActivationOptions::ActivateIgnoringOtherApps;
+                let ok = app.activateWithOptions(options);
+                if ok {
+                    Ok(())
+                } else {
+                    // Fallback to osascript for cases where activateWithOptions fails
+                    // (e.g. the app doesn't support activation this way)
+                    focus_via_osascript(handle)
+                }
+            }
+            None => Err(format!("No running application with PID {}", pid)),
+        }
+    })
+}
+
+/// Fallback: use osascript to focus a window. Only called when NSRunningApplication
+/// activation fails.
+fn focus_via_osascript(handle: u64) -> Result<(), String> {
     let script = format!(
         r#"tell application "System Events"
             set targetProc to first process whose unix id is {}
-            -- Restore minimized windows
-            repeat with win in (every window of targetProc)
-                if miniaturized of win then
-                    set miniaturized of win to false
-                end if
-            end repeat
             set frontmost of targetProc to true
         end tell"#,
         handle

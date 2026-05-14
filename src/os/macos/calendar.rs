@@ -31,30 +31,34 @@ use std::sync::OnceLock;
 // Public API — what the cross-platform dispatch in src/os/calendar.rs calls
 // ---------------------------------------------------------------------------
 
-pub fn get_upcoming_events_impl(hours: u32) -> Vec<CalendarEvent> {
-    if let Some(events) = run_eventkit_helper(&["upcoming", &hours.to_string()]) {
-        return events;
+pub fn get_upcoming_events_impl(hours: u32) -> Result<Vec<CalendarEvent>, String> {
+    match run_eventkit_helper(&["upcoming", &hours.to_string()]) {
+        HelperResult::Ok(events) => return Ok(events),
+        HelperResult::PermissionDenied(msg) => return Err(msg),
+        HelperResult::OtherFailure => {} // fall through to icalBuddy
     }
     if icalbuddy_is_available() {
-        return get_upcoming_events_via_icalbuddy(hours);
+        return Ok(get_upcoming_events_via_icalbuddy(hours));
     }
     warn_unavailable_once();
-    vec![]
+    Ok(vec![])
 }
 
-pub fn get_events_for_date_impl(date: &str) -> Vec<CalendarEvent> {
+pub fn get_events_for_date_impl(date: &str) -> Result<Vec<CalendarEvent>, String> {
     if NaiveDate::parse_from_str(date, "%Y-%m-%d").is_err() {
         debug!("calendar: ignoring malformed date '{date}'");
-        return vec![];
+        return Ok(vec![]);
     }
-    if let Some(events) = run_eventkit_helper(&["date", date]) {
-        return events;
+    match run_eventkit_helper(&["date", date]) {
+        HelperResult::Ok(events) => return Ok(events),
+        HelperResult::PermissionDenied(msg) => return Err(msg),
+        HelperResult::OtherFailure => {} // fall through to icalBuddy
     }
     if icalbuddy_is_available() {
-        return get_events_for_date_via_icalbuddy(date);
+        return Ok(get_events_for_date_via_icalbuddy(date));
     }
     warn_unavailable_once();
-    vec![]
+    Ok(vec![])
 }
 
 // ---------------------------------------------------------------------------
@@ -102,13 +106,27 @@ struct HelperError {
     error: String,
 }
 
-fn run_eventkit_helper(args: &[&str]) -> Option<Vec<CalendarEvent>> {
-    let path = helper_path()?;
+/// Tri-state result from the EventKit helper binary.
+enum HelperResult {
+    /// Successfully parsed events (may be empty — that's fine).
+    Ok(Vec<CalendarEvent>),
+    /// Calendar access was denied — this should propagate to the user.
+    PermissionDenied(String),
+    /// Any other failure (missing binary, parse error, etc.) — fall through
+    /// to the next backend.
+    OtherFailure,
+}
+
+fn run_eventkit_helper(args: &[&str]) -> HelperResult {
+    let path = match helper_path() {
+        Some(p) => p,
+        None => return HelperResult::OtherFailure,
+    };
     let output = match Command::new(&path).args(args).output() {
         Ok(o) => o,
         Err(e) => {
             debug!("calendar-helper spawn failed: {e}");
-            return None;
+            return HelperResult::OtherFailure;
         }
     };
 
@@ -116,7 +134,7 @@ fn run_eventkit_helper(args: &[&str]) -> Option<Vec<CalendarEvent>> {
     let stdout_trim = stdout.trim();
     if stdout_trim.is_empty() {
         debug!("calendar-helper produced empty stdout");
-        return None;
+        return HelperResult::OtherFailure;
     }
 
     // Try parsing as the success shape (Vec<CalendarEvent>) first. If that
@@ -128,18 +146,25 @@ fn run_eventkit_helper(args: &[&str]) -> Option<Vec<CalendarEvent>> {
             events.len(),
             args
         );
-        return Some(events);
+        return HelperResult::Ok(events);
     }
     if let Ok(err) = serde_json::from_str::<HelperError>(stdout_trim) {
         warn!("calendar-helper error: {}", err.error);
-        return None;
+        // Detect permission-denied errors so the UI can prompt the user.
+        let lower = err.error.to_lowercase();
+        if lower.contains("denied") || lower.contains("permission") || lower.contains("timed out") {
+            return HelperResult::PermissionDenied(format!(
+                "Calendar access denied — grant Calendar permission in System Settings"
+            ));
+        }
+        return HelperResult::OtherFailure;
     }
     warn!(
         "calendar-helper returned unexpected output ({} bytes); \
          falling back",
         stdout_trim.len()
     );
-    None
+    HelperResult::OtherFailure
 }
 
 // ---------------------------------------------------------------------------

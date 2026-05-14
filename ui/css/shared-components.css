@@ -1222,6 +1222,31 @@ body.light-theme .speech-btn:hover {
     flex-shrink: 0;
 }
 
+/* Wrapper for icon + window indicator dot */
+.app-icon-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Green dot indicating an open/running window (like macOS Dock indicator) */
+.window-indicator {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background: #34d399;
+    border-radius: 50%;
+    border: 1.5px solid white;
+}
+
+body.dark-theme .window-indicator {
+    border-color: #28242e;
+}
+
 .suggestion-info,
 .app-info,
 .chat-suggestion-info {

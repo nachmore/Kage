@@ -19,12 +19,12 @@ fn warn_once() {
     });
 }
 
-pub fn get_upcoming_events_impl(_hours: u32) -> Vec<CalendarEvent> {
+pub fn get_upcoming_events_impl(_hours: u32) -> Result<Vec<CalendarEvent>, String> {
     warn_once();
-    vec![]
+    Ok(vec![])
 }
 
-pub fn get_events_for_date_impl(_date: &str) -> Vec<CalendarEvent> {
+pub fn get_events_for_date_impl(_date: &str) -> Result<Vec<CalendarEvent>, String> {
     warn_once();
-    vec![]
+    Ok(vec![])
 }

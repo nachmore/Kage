@@ -60,6 +60,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
 
     // --- windows: other apps' windows --------------------------------------
     list_open_windows: 'windows',
+    get_window_icons: 'windows',
     focus_open_window: 'windows',
     get_process_name: 'windows',
     get_source_window: 'windows',

@@ -151,3 +151,7 @@ pub fn focus_window_impl(handle: u64) -> Result<(), String> {
 pub fn get_foreground_window_info() -> Option<(String, String)> {
     None // TODO: implement on Linux
 }
+
+pub fn get_window_icons(_handles: &[u64]) -> std::collections::HashMap<u64, String> {
+    std::collections::HashMap::new() // TODO: implement on Linux
+}
