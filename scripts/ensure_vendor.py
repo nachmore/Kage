@@ -26,7 +26,12 @@ def ensure_vendor(repo_root: Path) -> None:
         return  # Already populated
 
     print("[ensure_vendor] ui/vendor/lib/ not found — running npm install...", flush=True)
-    result = subprocess.run(["npm", "install"], cwd=vendor_dir)
+    result = subprocess.run(
+        ["npm", "install"],
+        cwd=vendor_dir,
+        # shell=True needed on Windows where npm is a .cmd script
+        shell=(sys.platform == "win32"),
+    )
     if result.returncode != 0:
         print(
             f"[ensure_vendor] ❌ npm install failed (exit {result.returncode}). "

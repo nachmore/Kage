@@ -1,7 +1,7 @@
 {
   "productName": "Kage",
   "version": "0.9.0",
-  "identifier": "com.kage.app",
+  "identifier": "com.kage.launcher",
   "build": {
     "beforeDevCommand": "python scripts/dev_server.py",
     "beforeBuildCommand": "python scripts/build_mcp.py",

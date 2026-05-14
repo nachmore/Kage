@@ -78,6 +78,7 @@ jobs:
           node-version: "24"
           cache: "npm"
           cache-dependency-path: |
+            ui/vendor/package-lock.json
             ui/tests/package-lock.json
             package-lock.json
 
