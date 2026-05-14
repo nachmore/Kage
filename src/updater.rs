@@ -428,57 +428,6 @@ pub fn fetch_changelog(channel: &str) -> Result<String> {
     Ok(rendered)
 }
 
-#[cfg(test)]
-mod tests {
-    // NOTE: This module is currently unreachable because src/lib.rs
-    // gates the updater module on `#[cfg(not(test))]`. Kept here so
-    // that if the gating is ever relaxed (e.g. via a test-friendly
-    // mock plugin) the parser invariants are already documented as
-    // executable specs. Keep the test fns small and pure-logic so
-    // they never need the runtime to compile.
-    use super::*;
-
-    #[test]
-    fn parses_https_github_url() {
-        assert_eq!(
-            parse_github_repo("https://github.com/nachmore/Kage"),
-            Some(("nachmore".into(), "Kage".into()))
-        );
-    }
-
-    #[test]
-    fn parses_https_github_url_with_trailing_slash() {
-        assert_eq!(
-            parse_github_repo("https://github.com/nachmore/Kage/"),
-            Some(("nachmore".into(), "Kage".into()))
-        );
-    }
-
-    #[test]
-    fn parses_git_suffix() {
-        assert_eq!(
-            parse_github_repo("https://github.com/nachmore/Kage.git"),
-            Some(("nachmore".into(), "Kage".into()))
-        );
-    }
-
-    #[test]
-    fn parses_ssh_url() {
-        assert_eq!(
-            parse_github_repo("git@github.com:nachmore/Kage.git"),
-            Some(("nachmore".into(), "Kage".into()))
-        );
-    }
-
-    #[test]
-    fn rejects_non_github_url() {
-        assert_eq!(parse_github_repo("https://gitlab.com/foo/bar"), None);
-        assert_eq!(parse_github_repo(""), None);
-        assert_eq!(parse_github_repo("https://github.com/"), None);
-        assert_eq!(parse_github_repo("https://github.com/onlyowner"), None);
-    }
-}
-
 /// Persist the current session id so the post-restart process can
 /// resume it. Written to `<config_dir>/kage/last-session.txt`, consumed
 /// (and deleted) by `startup::resolve_resume_session_id`.
@@ -738,4 +687,55 @@ pub fn was_just_updated(config: &Config) -> bool {
 /// Clear the "just updated" flag after the user has been notified.
 pub fn clear_update_flag(config: &mut Config) {
     config.updates.last_updated_version = None;
+}
+
+#[cfg(test)]
+mod tests {
+    // NOTE: This module is currently unreachable because src/lib.rs
+    // gates the updater module on `#[cfg(not(test))]`. Kept here so
+    // that if the gating is ever relaxed (e.g. via a test-friendly
+    // mock plugin) the parser invariants are already documented as
+    // executable specs. Keep the test fns small and pure-logic so
+    // they never need the runtime to compile.
+    use super::*;
+
+    #[test]
+    fn parses_https_github_url() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_https_github_url_with_trailing_slash() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage/"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_git_suffix() {
+        assert_eq!(
+            parse_github_repo("https://github.com/nachmore/Kage.git"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn parses_ssh_url() {
+        assert_eq!(
+            parse_github_repo("git@github.com:nachmore/Kage.git"),
+            Some(("nachmore".into(), "Kage".into()))
+        );
+    }
+
+    #[test]
+    fn rejects_non_github_url() {
+        assert_eq!(parse_github_repo("https://gitlab.com/foo/bar"), None);
+        assert_eq!(parse_github_repo(""), None);
+        assert_eq!(parse_github_repo("https://github.com/"), None);
+        assert_eq!(parse_github_repo("https://github.com/onlyowner"), None);
+    }
 }
