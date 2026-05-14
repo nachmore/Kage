@@ -16,29 +16,31 @@ The rolling tags (`beta-latest`, `dev-latest`) are force-moved by CI on each run
 
 ## One-time setup — generating the signing keypair
 
-Done once per project. Run:
+Done once per project. Run the helper script:
 
 ```bash
-cargo tauri signer generate -w .tauri-updater.key
+./scripts/generate_signing_keys.sh
 ```
 
-This produces two files:
+This generates the keypair, writes the public key to `.tauri-updater-pubkey` (gitignored, read by `build.rs`), and prints the private key with instructions for adding GitHub secrets.
 
-- `.tauri-updater.key` — the **private key**. Protect with a passphrase at the prompt. Add to `.gitignore` immediately if not already. Upload to GitHub Actions secrets as `TAURI_SIGNING_PRIVATE_KEY` (full file contents, including headers). If you set a passphrase, also add `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-- `.tauri-updater.key.pub` — the **public key**. Put its contents in `.tauri-updater-pubkey` (gitignored) for local release builds, and add the same value as the `TAURI_UPDATER_PUBKEY` GitHub Actions secret so CI builds embed it.
+If you prefer to do it manually:
 
-If you lose the private key, every user who has already installed Kage will stop receiving updates — the new key's signatures won't verify against their embedded old public key. Back up the private key somewhere safe (1Password, an encrypted volume, etc.) the moment you generate it.
+```bash
+cargo tauri signer generate -w .tauri-signing-key
+cp .tauri-signing-key.pub .tauri-updater-pubkey
+```
+
+Then add the secrets listed below to GitHub.
+
+**⚠️ If you lose the private key**, every user who has already installed Kage will stop receiving updates — the new key's signatures won't verify against their embedded old public key. Back up the private key somewhere safe (1Password, an encrypted volume, etc.) the moment you generate it.
 
 ## Local release build (optional, for testing)
 
 ```bash
-# Put the public key in a local file (one time):
-cp .tauri-updater-pubkey.example .tauri-updater-pubkey
-# then paste the actual public key
-
-# And the private key (one time, from the generate step above):
-export TAURI_SIGNING_PRIVATE_KEY="$(cat .tauri-updater.key)"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<passphrase>"
+# Set the private key (one time, from the generate step above):
+export TAURI_SIGNING_PRIVATE_KEY="<private key contents>"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<passphrase, or omit if empty>"
 
 cargo tauri build
 ```
@@ -76,9 +78,9 @@ Set these as GitHub Actions repository secrets:
 
 | Secret                               | What it is                                                                                  |
 |--------------------------------------|---------------------------------------------------------------------------------------------|
-| `TAURI_SIGNING_PRIVATE_KEY`          | Contents of the `.tauri-updater.key` file — CI uses this to sign release bundles.           |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Passphrase for the private key, if you set one during `signer generate`.                    |
-| `TAURI_UPDATER_PUBKEY`               | Contents of the `.tauri-updater.key.pub` file — baked into every binary by `build.rs`.      |
+| `TAURI_SIGNING_PRIVATE_KEY`          | Full private key contents — CI uses this to sign release bundles.                            |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Passphrase for the private key. Skip this secret if you used an empty password.              |
+| `TAURI_UPDATER_PUBKEY`               | Public key string — baked into every binary by `build.rs` to verify updates at runtime.      |
 | `APTABASE_KEY`                       | (Unrelated to updates.) Aptabase telemetry key — see `docs/PRIVACY.md`.                     |
 
 ## What if a build ships without a public key?
