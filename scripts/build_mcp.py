@@ -22,6 +22,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ensure_vendor import ensure_vendor  # noqa: E402
+
 
 def main() -> int:
     debug = os.environ.get("TAURI_ENV_DEBUG", "").lower() == "true"
@@ -31,6 +34,10 @@ def main() -> int:
     # scripts/ sits at the repo root, so parent.parent lands there
     # regardless of Tauri's cwd for the hook.
     repo_root = Path(__file__).resolve().parent.parent
+
+    # Ensure vendor JS libs are ready before building
+    ensure_vendor(repo_root)
+
     print(
         f"[build_mcp] profile={'debug' if debug else 'release'} cwd={repo_root} -> {' '.join(cmd)}",
         flush=True,

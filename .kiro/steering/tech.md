@@ -79,7 +79,7 @@ cargo fmt                  # Format code
 cargo clippy               # Lint code
 
 # Frontend Dependencies
-cd ui/vendor && npm install  # Install/update JS dependencies
+cd ui/vendor && npm install  # Install deps + copy browser bundles to lib/ (auto-runs on first dev/build)
 ```
 
 ### Dev vs Build: Frontend Assets

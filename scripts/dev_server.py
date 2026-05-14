@@ -16,6 +16,16 @@ if "--check" in sys.argv:
     print(f"ui/index.html exists: {os.path.isfile('ui/index.html')}")
     sys.exit(0)
 
+# Resolve repo root (scripts/ is one level deep) and the ui/ directory
+repo_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+ui_dir = os.path.join(repo_root, "ui")
+
+# Ensure vendor JS libs are installed before serving
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ensure_vendor import ensure_vendor  # noqa: E402
+from pathlib import Path
+ensure_vendor(Path(repo_root))
+
 
 def port_in_use(port):
     """Quick check if a port is already bound. Returns False on socket errors
@@ -69,10 +79,6 @@ if port_in_use(PORT):
     # Brief wait for the OS to release the socket
     import time
     time.sleep(0.3)
-
-# Resolve repo root (scripts/ is one level deep) and the ui/ directory
-repo_root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-ui_dir = os.path.join(repo_root, "ui")
 
 
 def build_mcp_binary():

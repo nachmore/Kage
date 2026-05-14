@@ -15,8 +15,9 @@ Thumbs.db
 # Sample data
 sample_sessions/
 
-# Vendor node_modules (use vendor/lib for committed files)
+# Vendor node_modules and generated lib (run `npm install` in ui/vendor/ to populate)
 ui/vendor/node_modules/
+ui/vendor/lib/
 
 # Test dependencies
 ui/tests/node_modules/
