@@ -1777,7 +1777,15 @@ pub async fn dump_thread_info() -> Result<String, AppError> {
             Err(e) => Ok(format!("Thread dump task failed: {}", e)),
         }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        let result = tauri::async_runtime::spawn_blocking(dump_thread_info_macos).await;
+        match result {
+            Ok(output) => Ok(output),
+            Err(e) => Ok(format!("Thread dump task failed: {}", e)),
+        }
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
         Ok("Thread dump not implemented on this platform".to_string())
     }
@@ -1967,6 +1975,202 @@ fn filetime_to_ms(ft: &windows::Win32::Foundation::FILETIME) -> f64 {
     let ticks = ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64);
     // FILETIME is in 100-nanosecond intervals
     ticks as f64 / 10_000.0
+}
+
+// ---------------------------------------------------------------------------
+// macOS thread dump via Mach APIs
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "macos")]
+/// (port, total_ms, user_ms, kernel_ms) — port is used to correlate threads across snapshots.
+type MacThreadSnapshot = (u32, f64, f64, f64);
+
+#[cfg(target_os = "macos")]
+fn dump_thread_info_macos() -> String {
+    use std::fmt::Write;
+
+    let pid = std::process::id();
+    let mut output = String::new();
+    let _ = writeln!(output, "=== Thread Dump for PID {} ===", pid);
+
+    let snap1 = snapshot_threads_macos();
+    if snap1.is_empty() {
+        let _ = writeln!(output, "Failed to snapshot threads");
+        return output;
+    }
+
+    let _ = writeln!(output, "Sampling {} threads for 3 seconds...", snap1.len());
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    let snap2 = snapshot_threads_macos();
+
+    // Compute deltas by matching on thread port (stable identity across snapshots)
+    // (port, delta_total, delta_user, delta_kernel, cum_total, cum_user, cum_kernel)
+    let mut deltas: Vec<(u32, f64, f64, f64, f64, f64, f64)> = Vec::new();
+    for (port2, total2, user2, kernel2) in &snap2 {
+        if let Some((_, total1, user1, kernel1)) = snap1.iter().find(|(p, _, _, _)| p == port2) {
+            let dt = total2 - total1;
+            let du = user2 - user1;
+            let dk = kernel2 - kernel1;
+            deltas.push((*port2, dt, du, dk, *total2, *user2, *kernel2));
+        }
+    }
+
+    // Sort by delta descending
+    deltas.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Active threads (delta > 10ms in the 3s window)
+    let active: Vec<_> = deltas.iter().filter(|d| d.1 > 10.0).collect();
+    if active.is_empty() {
+        let _ = writeln!(
+            output,
+            "No threads used significant CPU in the 3s sample window."
+        );
+    } else {
+        let _ = writeln!(output, "\n--- Active threads (CPU used in last 3s) ---");
+        let _ = writeln!(
+            output,
+            "{:<8} {:>10} {:>10} {:>10}  {:>12} {:>12} {:>12}",
+            "Port", "Δ Total", "Δ User", "Δ Kernel", "Cum Total", "Cum User", "Cum Kernel"
+        );
+        let _ = writeln!(output, "{}", "-".repeat(85));
+        for (port, dt, du, dk, ct, cu, ck) in &active {
+            let pct = dt / 3000.0 * 100.0;
+            let note = if pct > 80.0 {
+                " ← SPINNING"
+            } else if pct > 30.0 {
+                " ← HOT"
+            } else {
+                ""
+            };
+            let _ = writeln!(
+                output,
+                "{:<8} {:>9.0}ms {:>9.0}ms {:>9.0}ms  {:>11.0}ms {:>11.0}ms {:>11.0}ms  ({:.0}% core){}",
+                port, dt, du, dk, ct, cu, ck, pct, note
+            );
+        }
+    }
+
+    // Top 10 by cumulative total
+    let _ = writeln!(output, "\n--- All threads by cumulative CPU (top 10) ---");
+    let _ = writeln!(
+        output,
+        "{:<8} {:>12} {:>12} {:>12}",
+        "Port", "Total(ms)", "User(ms)", "Kernel(ms)"
+    );
+    let _ = writeln!(output, "{}", "-".repeat(50));
+    let mut by_cum = deltas.clone();
+    by_cum.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+    for (port, _, _, _, ct, cu, ck) in by_cum.iter().take(10) {
+        let _ = writeln!(output, "{:<8} {:>12.0} {:>12.0} {:>12.0}", port, ct, cu, ck);
+    }
+
+    let _ = writeln!(output, "\n=== End Thread Dump ===");
+
+    for line in output.lines() {
+        info!("[ThreadDump] {}", line);
+    }
+
+    output
+}
+
+/// Snapshot all threads in the current task, returning (port, total_ms, user_ms, kernel_ms).
+/// The port serves as a stable thread identity for correlating across snapshots.
+#[cfg(target_os = "macos")]
+fn snapshot_threads_macos() -> Vec<MacThreadSnapshot> {
+    use std::mem;
+    use std::ptr;
+
+    // Mach types and constants
+    type MachPort = u32;
+    type KernReturn = i32;
+    const KERN_SUCCESS: KernReturn = 0;
+    const THREAD_BASIC_INFO: u32 = 3;
+    const THREAD_BASIC_INFO_COUNT: u32 =
+        (mem::size_of::<ThreadBasicInfo>() / mem::size_of::<i32>()) as u32;
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct TimeValue {
+        seconds: i32,
+        microseconds: i32,
+    }
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct ThreadBasicInfo {
+        user_time: TimeValue,
+        system_time: TimeValue,
+        cpu_usage: i32,
+        policy: i32,
+        run_state: i32,
+        flags: i32,
+        suspend_count: i32,
+        sleep_time: i32,
+    }
+
+    extern "C" {
+        // Use mach_task_self_ directly — the cached task port, avoids leaking send rights.
+        static mach_task_self_: MachPort;
+        fn task_threads(
+            task: MachPort,
+            thread_list: *mut *mut MachPort,
+            thread_count: *mut u32,
+        ) -> KernReturn;
+        fn thread_info(
+            thread: MachPort,
+            flavor: u32,
+            info: *mut i32,
+            count: *mut u32,
+        ) -> KernReturn;
+        fn vm_deallocate(task: MachPort, address: usize, size: usize) -> KernReturn;
+        fn mach_port_deallocate(task: MachPort, name: MachPort) -> KernReturn;
+    }
+
+    fn time_value_to_ms(tv: &TimeValue) -> f64 {
+        tv.seconds as f64 * 1000.0 + tv.microseconds as f64 / 1000.0
+    }
+
+    let mut threads: Vec<MacThreadSnapshot> = Vec::new();
+
+    unsafe {
+        let task = mach_task_self_;
+        let mut thread_list: *mut MachPort = ptr::null_mut();
+        let mut thread_count: u32 = 0;
+
+        if task_threads(task, &mut thread_list, &mut thread_count) != KERN_SUCCESS {
+            return threads;
+        }
+
+        for i in 0..thread_count as isize {
+            let thread_port = *thread_list.offset(i);
+            let mut info: ThreadBasicInfo = mem::zeroed();
+            let mut count = THREAD_BASIC_INFO_COUNT;
+
+            if thread_info(
+                thread_port,
+                THREAD_BASIC_INFO,
+                &mut info as *mut ThreadBasicInfo as *mut i32,
+                &mut count,
+            ) == KERN_SUCCESS
+            {
+                let user_ms = time_value_to_ms(&info.user_time);
+                let kernel_ms = time_value_to_ms(&info.system_time);
+                threads.push((thread_port, user_ms + kernel_ms, user_ms, kernel_ms));
+            }
+
+            mach_port_deallocate(task, thread_port);
+        }
+
+        // Free the thread list
+        vm_deallocate(
+            task,
+            thread_list as usize,
+            thread_count as usize * mem::size_of::<MachPort>(),
+        );
+    }
+
+    threads
 }
 
 // --- Permission audit log commands ---
