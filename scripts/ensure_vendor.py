@@ -34,12 +34,12 @@ def ensure_vendor(repo_root: Path) -> None:
     )
     if result.returncode != 0:
         print(
-            f"[ensure_vendor] ❌ npm install failed (exit {result.returncode}). "
+            f"[ensure_vendor] ERROR: npm install failed (exit {result.returncode}). "
             f"Install Node.js/npm and retry, or run manually: cd ui/vendor && npm install",
             flush=True,
         )
         sys.exit(result.returncode)
-    print("[ensure_vendor] ✓ vendor libs ready.", flush=True)
+    print("[ensure_vendor] vendor libs ready.", flush=True)
 
 
 if __name__ == "__main__":
