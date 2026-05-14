@@ -2,7 +2,7 @@
  * Startup Settings Module
  */
 
-function _getSystemIcon() {
+function getSystemIcon() {
     const platform = navigator.platform || '';
     if (platform.startsWith('Win')) return '🪟';
     if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF';
