@@ -1,12 +1,11 @@
 # Release workflow.
 #
-# Three channels, all driven by different triggers:
+# Two channels, driven by different triggers:
 #   - stable — cut on a git tag matching `v*.*.*`. Human-initiated.
 #   - beta   — manual workflow_dispatch with channel=beta. Moves the
 #              `beta-latest` release to whatever ref you pick.
-#   - dev    — automatic on every push to main. Moves the `dev-latest`
-#              release to HEAD of main so devs can grab bleeding-edge
-#              builds without waiting for a curated release.
+#
+# Dev builds (debug, every push to main) are handled by ci.yml, not here.
 #
 # Each run:
 #   1. Builds the app on Windows + macOS.
@@ -39,8 +38,6 @@ on:
     # Semver tags like v1.2.3 or v1.2.3-rc.1 trigger a stable release.
     tags:
       - "v*.*.*"
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       channel:
@@ -51,15 +48,13 @@ on:
         options:
           - beta
           - stable
-          - dev
 
 concurrency:
   # Only one release-per-channel at a time. Stable runs queue (never
-  # cancel) so a tag race never gets dropped. Non-stable channels cancel
+  # cancel) so a tag race never gets dropped. Beta channels cancel
   # superseded runs because each force-moves the channel's alias tag —
-  # only the latest matters, and 4 in-flight redundant builds is just
-  # CI minutes wasted.
-  group: release-${{ github.event.inputs.channel || (startsWith(github.ref, 'refs/tags/v') && 'stable') || 'dev' }}
+  # only the latest matters.
+  group: release-${{ github.event.inputs.channel || 'stable' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
@@ -83,7 +78,8 @@ jobs:
             echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "release_name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          else
+            # workflow_dispatch
             CH="${{ github.event.inputs.channel }}"
             echo "channel=$CH" >> "$GITHUB_OUTPUT"
             echo "release_tag=${CH}-latest" >> "$GITHUB_OUTPUT"
@@ -93,12 +89,6 @@ jobs:
             else
               echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             fi
-          else
-            # push to main → dev channel
-            echo "channel=dev" >> "$GITHUB_OUTPUT"
-            echo "release_tag=dev-latest" >> "$GITHUB_OUTPUT"
-            echo "release_name=Kage dev (latest)" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
           fi
 
   build:

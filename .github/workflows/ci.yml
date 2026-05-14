@@ -1,17 +1,16 @@
 # Debug Build + Test: gate every push to main and every PR to main on a
 # green build, clean lints, and a passing test suite (Rust + JS), then
-# publish a self-contained debug build as a short-lived workflow artifact.
+# publish a packaged debug build as a short-lived workflow artifact.
 #
 # This is a *debug* build — debug profile, assertions on, devtools enabled,
-# but the frontend is embedded (via `cargo tauri build --debug --no-bundle`)
-# so the exe runs standalone without a dev server. This is different from
-# `cargo build --bins`, which produces a debug exe that expects the dev
-# server at http://localhost:1420 (mode 1, the local edit loop).
+# but fully bundled (.app on macOS, NSIS installer on Windows) so the
+# output is a proper installable package. This serves as the "dev channel":
+# anyone can grab the latest debug bundle from the workflow artifacts.
 #
 # Modes at a glance:
-#   1. Dev:            `cargo tauri dev`                      — hot reload from Python server
-#   2. Debug-packaged: `cargo tauri build --debug --no-bundle` — standalone debug exe (this workflow)
-#   3. Production:     `cargo tauri build`                    — release + bundle (separate workflow, TBD)
+#   1. Dev:            `cargo tauri dev`          — hot reload from Python server
+#   2. Debug-packaged: `cargo tauri build --debug` — bundled debug package (this workflow)
+#   3. Production:     `cargo tauri build`         — release + signed (release.yml, tags only)
 #
 # Runs on Windows and macOS. Large swaths of the codebase are
 # `#[cfg(target_os = ...)]` gated (Windows: WinRT/COM/uiautomation;
@@ -56,6 +55,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+
+      # Ensure cargo/rustc are on PATH (works around runner images where
+      # the default cargo shim points to rustup-init until first use).
+      - name: Verify Rust installation
+        run: |
+          rustup show
+          cargo --version
+          rustc --version
 
       # Cache target/ and ~/.cargo/registry keyed on Cargo.lock — turns a
       # ~10min cold compile into a ~2min warm one. Swatinem/rust-cache
@@ -108,29 +115,21 @@ jobs:
         # tauri itself bumps, not automatically.
         run: cargo install tauri-cli --version 2.10.0 --locked
 
-      # `cargo tauri build --debug --no-bundle` does what we want:
+      # `cargo tauri build --debug` does what we want:
       #   - runs tauri codegen so the frontend (./ui) is embedded in the exe
       #   - builds in debug profile (fast, assertions on, devtools)
-      #   - skips the OS bundler (NSIS / .app — that's a release concern)
-      # The result at target/debug/kage[.exe] runs standalone — no dev
-      # server required — which is what makes the uploaded artifact
-      # actually useful.
+      #   - produces OS bundles (.app on macOS, NSIS on Windows)
+      # The result is a proper installable/runnable package — useful for
+      # smoke-testing a branch or grabbing a bleeding-edge build.
       #
       # This also covers the `cargo build --bins` role; `cargo tauri
       # build` invokes cargo under the hood and will fail loudly on
       # compile errors in either bin. On macOS this also triggers the
       # build.rs swiftc compile of src-tauri/macos/calendar-helper.swift.
-      #
-      # APTABASE_KEY is passed through so build.rs picks it up and
-      # `option_env!` embeds it into the binary. On fork PRs GitHub
-      # withholds secrets by default, so the var expands to empty and
-      # the build drops to "no telemetry transport" — which is exactly
-      # what we want for forks. The TODO release workflow will set the
-      # same env var for `cargo tauri build` (no --debug).
-      - name: cargo tauri build --debug --no-bundle
+      - name: cargo tauri build --debug
         env:
           APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
-        run: cargo tauri build --debug --no-bundle
+        run: cargo tauri build --debug
 
       - name: cargo test
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
@@ -143,38 +142,26 @@ jobs:
 
       # ----- Artifact upload ------------------------------------------
 
-      # Self-contained debug binary from `cargo tauri build --debug
-      # --no-bundle`. Frontend is embedded, so the exe runs without a
-      # dev server — useful for smoke-testing a branch, attaching to an
-      # issue, or letting someone try a change without checking out the
-      # repo. Short retention since these aren't shipping artifacts.
-      #
-      # Both kage and the kage-computer-control-mcp sidecar are built
-      # debug here: `beforeBuildCommand` in tauri.conf.json calls
-      # scripts/build_mcp.py, which reads TAURI_ENV_DEBUG to match the
-      # main build's profile.
-      #
-      # Binary names differ per OS: Windows has `.exe` suffixes, macOS
-      # ships the Swift calendar helper alongside the two Rust binaries.
-      - name: Upload debug binaries (Windows)
+      # Debug bundle from `cargo tauri build --debug`. This is a proper
+      # .app (macOS) or NSIS installer (Windows) with the frontend
+      # embedded — useful for smoke-testing, attaching to issues, or
+      # grabbing a bleeding-edge build without checking out the repo.
+      - name: Upload debug bundle (Windows)
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v7
         with:
           name: kage-debug-windows-${{ github.sha }}
-          path: |
-            target/debug/kage.exe
-            target/debug/kage-computer-control-mcp.exe
+          path: target/debug/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload debug binaries (macOS)
+      - name: Upload debug bundle (macOS)
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v7
         with:
           name: kage-debug-macos-${{ github.sha }}
           path: |
-            target/debug/kage
-            target/debug/kage-computer-control-mcp
-            target/debug/kage-calendar-helper
+            target/debug/bundle/dmg/*.dmg
+            target/debug/bundle/macos/*.app.tar.gz
           if-no-files-found: error
           retention-days: 7
