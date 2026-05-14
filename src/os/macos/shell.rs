@@ -65,10 +65,39 @@ pub fn system_command_impl(cmd: &str) -> (&'static str, Vec<&'static str>) {
     }
 }
 
-/// Spawn a process with elevated privileges using osascript (admin prompt).
+/// Spawn a process with elevated privileges using osascript's `with administrator privileges`.
+///
+/// This triggers the native macOS admin authentication dialog (Touch ID / password).
+/// The command and its arguments are shell-escaped and executed via `do shell script`.
 pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std::process::Child> {
-    let mut cmd_args: Vec<&str> = vec![program];
-    cmd_args.extend(args);
-    // Use pkexec as a cross-Unix fallback; macOS could also use osascript with admin privileges
-    Command::new("pkexec").args(&cmd_args).spawn()
+    // Build the shell command string, quoting each component for safety
+    let quoted_parts: Vec<String> = std::iter::once(program)
+        .chain(args.iter().copied())
+        .map(|s| shell_quote(s))
+        .collect();
+    let shell_cmd = quoted_parts.join(" ");
+
+    // osascript -e 'do shell script "..." with administrator privileges'
+    // The inner command uses escaped double-quotes inside the AppleScript string.
+    let script = format!(
+        "do shell script \"{}\" with administrator privileges",
+        shell_cmd.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+
+    Command::new("osascript").args(["-e", &script]).spawn()
+}
+
+/// Quote a string for safe inclusion in a shell command.
+fn shell_quote(s: &str) -> String {
+    if s.is_empty() {
+        return "''".to_string();
+    }
+    // If the string contains no special characters, return as-is
+    if s.chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/')
+    {
+        return s.to_string();
+    }
+    // Wrap in single quotes, escaping any embedded single quotes
+    format!("'{}'", s.replace('\'', "'\\''"))
 }
