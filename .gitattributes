@@ -1,0 +1,4 @@
+# Force LF line endings for all text files so Biome (and other tools)
+# see consistent formatting on all platforms. Without this, Windows
+# runners check out CRLF and the linter fails.
+* text=auto eol=lf
