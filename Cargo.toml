@@ -51,7 +51,7 @@ issues     = "https://github.com/nachmore/Kage/issues"
 privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 
 [dependencies]
-tauri = { version = "2.10", features = ["tray-icon", "image-png"] }
+tauri = { version = "2.10", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
