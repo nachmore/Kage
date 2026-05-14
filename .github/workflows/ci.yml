@@ -143,16 +143,33 @@ jobs:
 
       # ----- Artifact upload ------------------------------------------
 
-      # Debug bundle from `cargo tauri build --debug`. This is a proper
-      # .app (macOS) or NSIS installer (Windows) with the frontend
-      # embedded — useful for smoke-testing, attaching to issues, or
-      # grabbing a bleeding-edge build without checking out the repo.
+      # Debug bundle from `cargo tauri build --debug`. Rename files to
+      # include "_debug" so they're never confused with release builds.
+      - name: Rename debug bundles (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Get-ChildItem target/debug/bundle/nsis/*.exe | ForEach-Object {
+            $newName = $_.Name -replace '(_x64-setup\.exe)$', '_debug$1'
+            Rename-Item $_.FullName $newName
+          }
+
+      - name: Rename debug bundles (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          for f in target/debug/bundle/dmg/*.dmg; do
+            mv "$f" "${f%.dmg}_debug.dmg"
+          done
+          for f in target/debug/bundle/macos/*.app.tar.gz; do
+            mv "$f" "${f%.app.tar.gz}_debug.app.tar.gz"
+          done
+
       - name: Upload debug bundle (Windows)
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v7
         with:
           name: kage-debug-windows-${{ github.sha }}
-          path: target/debug/bundle/nsis/*.exe
+          path: target/debug/bundle/nsis/*_debug*.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -162,7 +179,7 @@ jobs:
         with:
           name: kage-debug-macos-${{ github.sha }}
           path: |
-            target/debug/bundle/dmg/*.dmg
-            target/debug/bundle/macos/*.app.tar.gz
+            target/debug/bundle/dmg/*_debug*.dmg
+            target/debug/bundle/macos/*_debug*.app.tar.gz
           if-no-files-found: error
           retention-days: 7
