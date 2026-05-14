@@ -17,6 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Force UTF-8 output so Unicode characters render on Windows (cp1252 default).
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 
 def ensure_vendor(repo_root: Path) -> None:
     vendor_dir = repo_root / "ui" / "vendor"
@@ -34,12 +40,12 @@ def ensure_vendor(repo_root: Path) -> None:
     )
     if result.returncode != 0:
         print(
-            f"[ensure_vendor] ERROR: npm install failed (exit {result.returncode}). "
+            f"[ensure_vendor] ❌ npm install failed (exit {result.returncode}). "
             f"Install Node.js/npm and retry, or run manually: cd ui/vendor && npm install",
             flush=True,
         )
         sys.exit(result.returncode)
-    print("[ensure_vendor] vendor libs ready.", flush=True)
+    print("[ensure_vendor] ✓ vendor libs ready.", flush=True)
 
 
 if __name__ == "__main__":
