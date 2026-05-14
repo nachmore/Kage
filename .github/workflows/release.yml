@@ -163,10 +163,6 @@ jobs:
           # the update.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Our build.rs bakes the matching public key into every
-          # binary so the updater plugin can verify signatures at
-          # runtime. Same secret mechanism as APTABASE_KEY.
-          TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
           APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
         run: cargo tauri build --target ${{ matrix.target }}
 

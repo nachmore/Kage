@@ -38,6 +38,25 @@ def main() -> int:
     # Ensure vendor JS libs are ready before building
     ensure_vendor(repo_root)
 
+    # Warn if signing key is missing (needed for bundled builds with updater)
+    if not os.environ.get("TAURI_SIGNING_PRIVATE_KEY"):
+        env_file = repo_root / ".env"
+        if env_file.is_file():
+            print(
+                "[build_mcp] WARNING: TAURI_SIGNING_PRIVATE_KEY not set. "
+                "The build will succeed but signing will fail.\n"
+                "  macOS/Linux:  source .env && cargo tauri build --debug\n"
+                "  Any platform: npx dotenv-cli -- cargo tauri build --debug\n"
+                "  Generate keys: ./scripts/generate_signing_keys.sh",
+                flush=True,
+            )
+        else:
+            print(
+                "[build_mcp] WARNING: TAURI_SIGNING_PRIVATE_KEY not set and no .env file found.\n"
+                "  Run ./scripts/generate_signing_keys.sh to generate keys.",
+                flush=True,
+            )
+
     print(
         f"[build_mcp] profile={'debug' if debug else 'release'} cwd={repo_root} -> {' '.join(cmd)}",
         flush=True,

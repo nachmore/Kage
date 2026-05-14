@@ -9,8 +9,6 @@ fn main() {
     println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
     println!("cargo:rerun-if-changed=.aptabase-key");
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
-    println!("cargo:rerun-if-changed=.tauri-updater-pubkey");
-    println!("cargo:rerun-if-env-changed=TAURI_UPDATER_PUBKEY");
 
     // Make the Aptabase analytics key available to src/telemetry.rs via
     // `option_env!("APTABASE_KEY")`. Resolution order, highest priority first:
@@ -97,42 +95,35 @@ fn main() {
     println!("cargo:rustc-env=UPDATE_ENDPOINT_DEV={endpoint_dev}");
     println!("cargo:rustc-env=UPDATE_CHANGELOG_URL={changelog_url}");
 
-    // Tauri updater public key — provisioned the same way as APTABASE_KEY:
-    //
-    //   1. `TAURI_UPDATER_PUBKEY` env var (used by CI — set from a GitHub
-    //      Actions secret so the key is never committed).
-    //   2. `.tauri-updater-pubkey` file at the repo root (gitignored).
-    //
-    // The pubkey corresponds to the private key CI signs releases with
-    // (`cargo tauri signer generate`). The plugin compares the manifest's
-    // signature against this pubkey before running anything; a missing or
-    // mismatched signature aborts the install. See docs/RELEASE.md.
+    // Tauri updater public key — read from tauri.conf.json's
+    // plugins.updater.pubkey field (the single source of truth).
+    // The plugin compares the manifest's signature against this pubkey
+    // before running anything; a missing or mismatched signature aborts
+    // the install. See docs/RELEASE.md.
     //
     // Absent key is fatal for release builds — an unsigned release would
     // mean the updater silently refuses every update forever. Debug builds
     // tolerate a missing key because `cargo tauri dev` is useful even
     // without update infrastructure.
-    let pubkey_from_env = std::env::var("TAURI_UPDATER_PUBKEY")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let pubkey_from_file = std::fs::read_to_string(".tauri-updater-pubkey")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
-    let updater_pubkey = pubkey_from_env.or(pubkey_from_file).unwrap_or_default();
+    let updater_pubkey = {
+        let conf_str =
+            std::fs::read_to_string("tauri.conf.json").expect("failed to read tauri.conf.json");
+        let conf: serde_json::Value =
+            serde_json::from_str(&conf_str).expect("failed to parse tauri.conf.json");
+        conf["plugins"]["updater"]["pubkey"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
 
     if updater_pubkey.is_empty() {
         if is_release {
             panic!(
-                "No Tauri updater public key found (neither TAURI_UPDATER_PUBKEY env \
-                 var nor .tauri-updater-pubkey file). Release builds must ship with a \
-                 public key so the updater can verify signed artifacts — without one, \
-                 every update check would fail. Copy .tauri-updater-pubkey.example to \
-                 .tauri-updater-pubkey and paste your public key, or set the env var."
+                "No Tauri updater public key found in tauri.conf.json → plugins.updater.pubkey. \
+                 Release builds must ship with a public key so the updater can verify signed \
+                 artifacts. Run ./scripts/generate_signing_keys.sh to set it up."
             );
         }
-        // Debug: silently permit — the runtime simply disables the updater
-        // (no endpoint is configured anyway for a bare `cargo tauri dev`).
     } else {
         println!("cargo:rustc-env=TAURI_UPDATER_PUBKEY={updater_pubkey}");
     }
