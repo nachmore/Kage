@@ -143,7 +143,7 @@ objc2-foundation = { version = "0.3", features = ["NSString", "NSArray", "NSData
 # at runtime — without it we fall back to empty title (process-level tracking
 # still works).
 core-foundation = "0.10"
-core-graphics = "0.25"
+core-graphics = { version = "0.25", features = ["highsierra"] }
 # Accessibility framework bindings for the AX provider in
 # `src/os/macos/accessibility.rs`. Thin FFI layer — the provider handles
 # CFRetain/CFRelease and role mapping directly. Requires the Accessibility
