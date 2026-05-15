@@ -56,6 +56,7 @@ import { ExtensionToolController } from '../shared/extension-tool-controller.js'
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
+import { showExtensionBar, hideExtensionBar } from '../shared/extension-bar.js';
 
 /**
  * Measure the natural (no-overflow) content height of a textarea without
@@ -454,6 +455,7 @@ export class FloatingApp {
             await this.extensionManager.reload();
             this.updateSpeechButtonVisibility();
             this._updateToolbarVisibility();
+            this._checkTerminatorMode();
         });
 
         this.listen('extensions_changed', async () => {
@@ -1616,34 +1618,35 @@ export class FloatingApp {
     async _checkTerminatorMode() {
         try {
             const isTerminator = await this.invoke('is_terminator_mode');
-            if (isTerminator && !sessionStorage.getItem('terminator_bar_dismissed')) {
-                // Create an extension-bar style overlay
-                let bar = document.getElementById('terminatorBar');
-                if (!bar) {
-                    bar = document.createElement('div');
-                    bar.id = 'terminatorBar';
-                    bar.className = 'extension-bar';
-                    bar.style.cssText =
-                        'cursor:default;background:rgba(239,68,68,0.12);border-bottom:1px solid rgba(239,68,68,0.3);';
-                    const inputContainer = document.querySelector('.input-container');
-                    if (inputContainer) inputContainer.parentNode.insertBefore(bar, inputContainer);
+            if (isTerminator) {
+                // Clear dismissed flag when mode is (re-)enabled so the bar
+                // reappears if the user toggled it off and back on.
+                if (this._terminatorWasOff) {
+                    sessionStorage.removeItem('terminator_bar_dismissed');
                 }
-                bar.innerHTML = `
-                    <span class="extension-bar-icon">🤖</span>
-                    <span class="extension-bar-text" style="flex:1;font-size:12px;color:#ef4444;">Terminator Mode — all tools auto-approved</span>
-                    <div class="extension-bar-controls">
-                        <button class="extension-bar-btn" id="terminatorDismissBtn" style="font-size:11px;padding:1px 4px;color:#ef4444;border-color:rgba(239,68,68,0.3);" title="Dismiss">✕</button>
-                    </div>
-                `;
-                bar.style.display = 'flex';
-                document.getElementById('terminatorDismissBtn')?.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    bar.style.display = 'none';
-                    bar.remove();
-                    sessionStorage.setItem('terminator_bar_dismissed', '1');
-                    this.windowManager.resizeWindow();
-                });
-                this.windowManager.resizeWindow();
+                this._terminatorWasOff = false;
+                if (!sessionStorage.getItem('terminator_bar_dismissed')) {
+                    showExtensionBar({
+                        id: 'terminator',
+                        icon: '🤖',
+                        text: 'Terminator Mode — all tools auto-approved',
+                        className: 'terminator-bar',
+                        buttons: [
+                            {
+                                id: 'dismiss',
+                                label: '✕',
+                                title: 'Dismiss',
+                                onClick: () => {
+                                    sessionStorage.setItem('terminator_bar_dismissed', '1');
+                                    hideExtensionBar('terminator');
+                                },
+                            },
+                        ],
+                    });
+                }
+            } else {
+                this._terminatorWasOff = true;
+                hideExtensionBar('terminator');
             }
         } catch {
             /* ignore */

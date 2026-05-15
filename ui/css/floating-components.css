@@ -304,6 +304,19 @@ body.clipboard-mode .floating-banner {
     font-weight: normal;
 }
 
+.terminator-bar {
+    background: rgba(239, 68, 68, 0.12);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.3);
+    cursor: default;
+}
+.terminator-bar .extension-bar-text {
+    color: #ef4444;
+}
+.terminator-bar .extension-bar-btn {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
 .input-box {
     flex: 1;
     padding: 10px 12px;
