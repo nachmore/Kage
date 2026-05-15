@@ -108,6 +108,11 @@ export class MessageStreamController {
 
         if (host.dropEmptyComplete?.()) return;
 
+        // Wait for any trailing chunks to flush before checking controllers.
+        // The last chunk (e.g. closing ``` fence) can arrive milliseconds
+        // before message_complete and may not have been processed yet.
+        await host.waitForPendingChunks?.();
+
         if (host.automationPlanController.started) return;
 
         if (host.extensionToolController.maybeHandleComplete(host.getAccumulator()).handled) {
@@ -121,8 +126,6 @@ export class MessageStreamController {
         ) {
             return;
         }
-
-        await host.waitForPendingChunks?.();
 
         host.renderFinal(host.getAccumulator());
         await host.onAfterFinalRender?.(host.getAccumulator());

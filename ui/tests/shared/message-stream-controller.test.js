@@ -180,7 +180,7 @@ describe('MessageStreamController.handleComplete', () => {
 
         const c = new MessageStreamController(host);
         await c.handleComplete();
-        expect(calls).toEqual(['header', 'beforeFinal', 'wait', 'final', 'after']);
+        expect(calls).toEqual(['header', 'wait', 'beforeFinal', 'final', 'after']);
         expect(host.renderFinal).toHaveBeenCalledWith('the answer is 42');
         expect(host.onAfterFinalRender).toHaveBeenCalledWith('the answer is 42');
     });
