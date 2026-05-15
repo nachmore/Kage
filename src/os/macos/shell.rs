@@ -73,7 +73,7 @@ pub fn spawn_elevated_impl(program: &str, args: &[&str]) -> std::io::Result<std:
     // Build the shell command string, quoting each component for safety
     let quoted_parts: Vec<String> = std::iter::once(program)
         .chain(args.iter().copied())
-        .map(|s| shell_quote(s))
+        .map(shell_quote)
         .collect();
     let shell_cmd = quoted_parts.join(" ");
 

@@ -131,7 +131,7 @@ fn get_avatar_from_cache() -> Option<String> {
 /// Decode a hex string into bytes.
 fn hex_to_bytes(hex: &str) -> Option<Vec<u8>> {
     let chars: Vec<char> = hex.chars().collect();
-    if chars.len() % 2 != 0 {
+    if !chars.len().is_multiple_of(2) {
         return None;
     }
     let mut bytes = Vec::with_capacity(chars.len() / 2);

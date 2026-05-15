@@ -1543,11 +1543,9 @@ pub async fn list_open_windows() -> Result<Vec<crate::os::window_list::WindowInf
 pub async fn get_window_icons(
     pids: Vec<u64>,
 ) -> Result<std::collections::HashMap<u64, String>, AppError> {
-    Ok(tauri::async_runtime::spawn_blocking(move || {
-        crate::os::window_list::get_window_icons(&pids)
-    })
-    .await
-    .map_err(|e| AppError::from(format!("Icon fetch failed: {}", e)))?)
+    tauri::async_runtime::spawn_blocking(move || crate::os::window_list::get_window_icons(&pids))
+        .await
+        .map_err(|e| AppError::from(format!("Icon fetch failed: {}", e)))
 }
 
 #[tauri::command]

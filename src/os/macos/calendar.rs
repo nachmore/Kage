@@ -153,9 +153,9 @@ fn run_eventkit_helper(args: &[&str]) -> HelperResult {
         // Detect permission-denied errors so the UI can prompt the user.
         let lower = err.error.to_lowercase();
         if lower.contains("denied") || lower.contains("permission") || lower.contains("timed out") {
-            return HelperResult::PermissionDenied(format!(
-                "Calendar access denied — grant Calendar permission in System Settings"
-            ));
+            return HelperResult::PermissionDenied(
+                "Calendar access denied — grant Calendar permission in System Settings".to_string(),
+            );
         }
         return HelperResult::OtherFailure;
     }
