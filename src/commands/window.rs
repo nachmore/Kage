@@ -438,6 +438,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        crate::setup::update_activation_policy(&app);
     } else {
         warn!("Main window not found");
     }
@@ -484,6 +485,7 @@ pub async fn open_settings_window(
             let _ = window.emit("navigate_settings_subsection", sub);
         }
     }
+    crate::setup::update_activation_policy(&app);
     crate::telemetry::track(
         &app,
         "settings_opened",

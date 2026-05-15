@@ -476,6 +476,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
     if let Some(w) = app.get_webview_window("welcome") {
         let _ = w.show();
         let _ = w.set_focus();
+        crate::setup::update_activation_policy(&app);
         return Ok(());
     }
     // Create fresh window (previous one was closed/destroyed)
@@ -496,9 +497,11 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
     let _ = w.set_background_color(Some(tauri::window::Color(30, 26, 36, 255)));
     // When closed, destroy so it can be recreated
     let w2 = w.clone();
+    let app2 = app.clone();
     w.on_window_event(move |event| {
         if let tauri::WindowEvent::CloseRequested { .. } = event {
             let _ = w2.destroy();
+            crate::setup::update_activation_policy(&app2);
         }
     });
     Ok(())

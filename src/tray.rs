@@ -77,12 +77,14 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
+                    crate::setup::update_activation_policy(app_handle_inner);
                 }
                 "settings" => {
                     if let Some(window) = app_handle_inner.get_webview_window("settings") {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
+                    crate::setup::update_activation_policy(app_handle_inner);
                 }
                 "inspect" => {
                     info!("Opening chat inspector");
@@ -168,6 +170,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     let _ = window.show();
                     let _ = window.set_focus();
                 }
+                crate::setup::update_activation_policy(&app_handle);
             }
         })
         .build(app)?;

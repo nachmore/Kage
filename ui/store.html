@@ -738,10 +738,10 @@
     }
 
     document.addEventListener('keydown', (e) => {
-        // Ctrl+W / ⌘+W — hide window
+        // Ctrl+W / ⌘+W — close window (triggers CloseRequested for activation policy update)
         if (window.kagePlatform.cmdOrCtrlPressed(e) && e.key === 'w') {
             e.preventDefault();
-            window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow()?.hide();
+            window.__TAURI__?.webviewWindow?.getCurrentWebviewWindow()?.close();
         }
     });
     </script>

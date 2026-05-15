@@ -434,7 +434,7 @@ class SettingsManager {
      * Close settings window
      */
     close() {
-        this.appWindow.hide();
+        this.appWindow.close();
     }
 
     /**

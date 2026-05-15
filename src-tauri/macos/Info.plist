@@ -10,6 +10,9 @@
 -->
 <plist version="1.0">
 <dict>
+    <key>LSUIElement</key>
+    <true/>
+
     <key>NSAppleEventsUsageDescription</key>
     <string>Kage uses System Events to list open windows, focus apps, and capture selected text for your queries.</string>
 

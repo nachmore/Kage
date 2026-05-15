@@ -272,6 +272,7 @@ async fn run() {
                             let _ = window.hide();
                         }
                         setup::hide_macos_app();
+                        setup::update_activation_policy(_app);
                     }
                     "macos-hide-others" => {
                         // NSApp hideOtherApplications — not directly available,
@@ -280,6 +281,7 @@ async fn run() {
                             let _ = window.hide();
                         }
                         setup::hide_macos_app();
+                        setup::update_activation_policy(_app);
                     }
                     "macos-show-all" => {
                         if let Some(w) = _app.get_webview_window("floating") {
@@ -296,6 +298,21 @@ async fn run() {
                     }
                     _ => {}
                 });
+            }
+
+            // macOS: start as Accessory (no Cmd+Tab / Dock) since only the
+            // floating window is visible at launch. LSUIElement in Info.plist
+            // handles this for release builds, but during `cargo tauri dev`
+            // the plist isn't bundled — so we set it programmatically too.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::ActivationPolicy;
+                if let Err(e) = app.handle().set_activation_policy(ActivationPolicy::Accessory)
+                {
+                    warn!("Failed to set initial activation policy: {}", e);
+                } else {
+                    info!("Set initial activation policy to Accessory");
+                }
             }
 
             // Check for session resume after update. The marker file (or

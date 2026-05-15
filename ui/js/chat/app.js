@@ -696,7 +696,7 @@ export class ChatApp {
             // Ctrl/⌘+W — hide window
             if (cmdOrCtrlPressed(e) && e.key === 'w') {
                 e.preventDefault();
-                this.appWindow.hide();
+                this.appWindow.close();
                 return;
             }
             // Ctrl/⌘+Shift+C — copy last response

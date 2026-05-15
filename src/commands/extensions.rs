@@ -294,6 +294,7 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
             let js = format!("if(typeof switchTab==='function')switchTab('{}')", safe_tab);
             let _ = w.eval(&js);
         }
+        crate::setup::update_activation_policy(&app);
         return Ok(());
     }
 
@@ -313,6 +314,7 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         .map_err(|e| format!("Failed to open store window: {}", e))?;
 
     let _ = w.set_background_color(Some(tauri::window::Color(30, 30, 30, 255)));
+    crate::setup::update_activation_policy(&app);
 
     Ok(())
 }

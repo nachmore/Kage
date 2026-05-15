@@ -240,15 +240,20 @@ pub fn spawn_app_registry_scan(app: &App) {
 /// persists in the tray. Logs (rather than panics) if hide fails.
 /// On macOS, also hides the app to return focus to the previous application.
 pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi) {
+    let closing_label = window.label().to_string();
     if let Err(e) = window.hide() {
         log::warn!("Failed to hide window on close: {}", e);
     }
     api.prevent_close();
 
-    // On macOS, hiding a window doesn't return focus to the previous app —
-    // the menu bar still shows "Kage". Hide the app to fix this.
+    // On macOS: update activation policy (exclude the closing window since
+    // is_visible() may not reflect the hide yet), then hide the app to
+    // deactivate and return focus to the previous application.
     #[cfg(target_os = "macos")]
-    hide_macos_app();
+    {
+        update_activation_policy_excluding(window.app_handle(), Some(&closing_label));
+        hide_macos_app();
+    }
 }
 
 /// Hide the macOS app (NSApp.hide), returning focus to the previous application.
@@ -267,6 +272,85 @@ pub fn hide_macos_app() {
         }
     });
 }
+
+/// Update the macOS activation policy based on whether any "real" window
+/// (chat, settings, store, welcome) is visible. When at least one is
+/// visible, switch to Regular (shows in Cmd+Tab and Dock). When none are
+/// visible, switch to Accessory (hidden from Cmd+Tab and Dock).
+///
+/// The floating window is excluded — it's a transient overlay, not
+/// something the user Cmd+Tabs to.
+///
+/// Uses Tauri's built-in `set_activation_policy` which handles main-thread
+/// dispatch internally.
+#[cfg(target_os = "macos")]
+pub fn update_activation_policy(app_handle: &AppHandle) {
+    update_activation_policy_excluding(app_handle, None);
+}
+
+/// Same as `update_activation_policy` but allows excluding a window label
+/// from the visibility check (used when a window is being hidden but
+/// `is_visible()` hasn't caught up yet).
+#[cfg(target_os = "macos")]
+pub fn update_activation_policy_excluding(app_handle: &AppHandle, exclude: Option<&str>) {
+    use tauri::ActivationPolicy;
+
+    // Windows that count as "real" for Cmd+Tab purposes
+    let real_windows = ["main", "settings", "store", "welcome"];
+
+    let any_visible = real_windows.iter().any(|label| {
+        if exclude == Some(*label) {
+            return false;
+        }
+        app_handle
+            .get_webview_window(label)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false)
+    });
+
+    let desired = if any_visible {
+        ActivationPolicy::Regular
+    } else {
+        ActivationPolicy::Accessory
+    };
+
+    log::debug!(
+        "update_activation_policy: any_visible={}, setting {}",
+        any_visible,
+        if any_visible { "Regular" } else { "Accessory" }
+    );
+
+    if let Err(e) = app_handle.set_activation_policy(desired) {
+        log::warn!("Failed to set activation policy: {}", e);
+    } else {
+        log::debug!(
+            "Activation policy set → {}",
+            if any_visible { "Regular" } else { "Accessory" }
+        );
+        // macOS quirk: switching from Accessory → Regular doesn't update
+        // the Cmd+Tab list until the app goes through an activation cycle.
+        // We must explicitly activate the app after the policy change.
+        if any_visible {
+            let _ = app_handle.run_on_main_thread(|| {
+                use objc2::MainThreadMarker;
+                use objc2_app_kit::NSApplication;
+
+                let mtm = unsafe { MainThreadMarker::new_unchecked() };
+                let ns_app = NSApplication::sharedApplication(mtm);
+                #[allow(deprecated)]
+                ns_app.activateIgnoringOtherApps(true);
+            });
+        }
+    }
+}
+
+/// No-op on non-macOS platforms.
+#[cfg(not(target_os = "macos"))]
+pub fn update_activation_policy(_app_handle: &AppHandle) {}
+
+/// No-op on non-macOS platforms.
+#[cfg(not(target_os = "macos"))]
+pub fn update_activation_policy_excluding(_app_handle: &AppHandle, _exclude: Option<&str>) {}
 
 /// Show the welcome window on first run. Small delay so the floating
 /// window has finished initializing before the welcome stacks on top.

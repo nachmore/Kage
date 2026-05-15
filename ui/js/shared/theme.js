@@ -161,9 +161,15 @@ function applyDateTime(ui) {
 
     if (!showTime && !showDate) {
         container.style.display = 'none';
+        container.dataset.enabled = '';
         _stopDateTimeTimer();
         return;
     }
+
+    // Mark as config-enabled so updateDatetimeVisibility() in app.js
+    // knows the datetime should be visible when state allows.
+    container.dataset.enabled = '1';
+    container.style.display = '';
 
     const timeFormat = ui?.time_format || 'HH:mm';
     const dateFormat = ui?.date_format || 'ddd, MMM D';

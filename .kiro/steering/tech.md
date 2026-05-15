@@ -43,6 +43,13 @@ cargo tauri dev -- /dev            # Dev mode (inspector, tray reload)
 cargo tauri dev -- /debug          # Debug logging (ACP messages)
 cargo tauri dev -- /dev /debug     # Both
 
+# macOS bundled dev build — use this when testing features that require
+# the .app bundle (e.g. activation policy / Cmd+Tab, TCC permissions).
+# `cargo tauri dev` runs an unbundled binary where some macOS APIs are
+# no-ops. The bundled debug build gives you full OS integration + logs.
+cargo tauri build --debug
+pkill -f Kage; sleep 1; ./target/debug/bundle/macos/Kage.app/Contents/MacOS/Kage /debug /dev
+
 # Building
 cargo build                # Debug build (binaries only, no installer)
 cargo tauri build          # Release build + NSIS installer (output: target/release/bundle/nsis/)

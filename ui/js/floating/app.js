@@ -456,6 +456,7 @@ export class FloatingApp {
             this.updateSpeechButtonVisibility();
             this._updateToolbarVisibility();
             this._checkTerminatorMode();
+            this.updateDatetimeVisibility();
         });
 
         this.listen('extensions_changed', async () => {
@@ -589,13 +590,16 @@ export class FloatingApp {
     updateDatetimeVisibility() {
         const dt = this.elements.datetimeDisplay;
         if (!dt) return;
-        // Hide if: streaming, stop button visible, input has text, quick actions visible, or speech listening
+        // Don't show if datetime is disabled in config (managed by applyDateTime in theme.js)
+        const configEnabled = dt.dataset.enabled === '1';
+        // Hide if: not configured, streaming, stop button visible, input has text, quick actions visible, or speech listening
         const stopVisible = this.elements.floatingStopBtn.style.display !== 'none';
         const hasInput = this.elements.input.value.length > 0;
         const qaVisible =
             document.getElementById('quickActionsContainer')?.style.display === 'flex' ||
             document.getElementById('responseActionsContainer')?.style.display === 'flex';
         const dtHidden =
+            !configEnabled ||
             this.isWaitingForResponse ||
             stopVisible ||
             hasInput ||
