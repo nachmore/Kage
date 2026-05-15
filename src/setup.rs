@@ -240,7 +240,6 @@ pub fn spawn_app_registry_scan(app: &App) {
 /// persists in the tray. Logs (rather than panics) if hide fails.
 /// On macOS, also hides the app to return focus to the previous application.
 pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi) {
-    let closing_label = window.label().to_string();
     if let Err(e) = window.hide() {
         log::warn!("Failed to hide window on close: {}", e);
     }
@@ -251,6 +250,7 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
     // deactivate and return focus to the previous application.
     #[cfg(target_os = "macos")]
     {
+        let closing_label = window.label().to_string();
         update_activation_policy_excluding(window.app_handle(), Some(&closing_label));
         hide_macos_app();
     }
