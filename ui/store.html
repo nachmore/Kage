@@ -302,7 +302,7 @@
     <div class="store-container">
         <div class="store-header">
             <h1>🛍️ Extension Store</h1>
-            <button class="store-header-settings" onclick="openSettings('store')" title="Store settings">⚙️</button>
+            <button class="store-header-settings" onclick="_openSettings('store')" title="Store settings">⚙️</button>
         </div>
         <div class="store-tabs">
             <div class="store-tab active" data-tab="extensions" onclick="switchTab('extensions')">Extensions</div>
@@ -314,7 +314,7 @@
             <select class="store-source-select" id="sourceFilter" onchange="renderTab()" style="display:none">
                 <option value="">All Sources</option>
             </select>
-            <button class="store-filter-btn" id="installedFilter" onclick="toggleInstalledFilter()">Installed only</button>
+            <button class="store-filter-btn" id="installedFilter" onclick="_toggleInstalledFilter()">Installed only</button>
         </div>
         <div class="store-content" id="storeContent"></div>
     </div>
@@ -501,26 +501,26 @@
 
             // Settings deep link (if extension has a settings module)
             if (localInfo?.hasSettings) {
-                buttons.push(`<button class="store-card-btn settings-link" onclick="event.stopPropagation();openSettings('${esc(item.id)}')" title="Open settings">⚙️</button>`);
+                buttons.push(`<button class="store-card-btn settings-link" onclick="event.stopPropagation();_openSettings('${esc(item.id)}')" title="Open settings">⚙️</button>`);
             }
 
             // Update button
             if (updateAvailable) {
                 const localVer = localInfo?.version || '';
-                buttons.push(`<button class="store-card-btn update" onclick="event.stopPropagation();updateItem('${esc(item.id)}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>`);
+                buttons.push(`<button class="store-card-btn update" onclick="event.stopPropagation();_updateItem('${esc(item.id)}')" title="${esc(localVer)} → ${esc(item.version)}">Update</button>`);
             }
 
             // Reinstall button (dev mode only)
             if (_isDevMode) {
-                buttons.push(`<button class="store-card-btn reinstall" onclick="event.stopPropagation();reinstallItem('${esc(item.id)}')" title="Re-download and reinstall">🔄</button>`);
+                buttons.push(`<button class="store-card-btn reinstall" onclick="event.stopPropagation();_reinstallItem('${esc(item.id)}')" title="Re-download and reinstall">🔄</button>`);
             }
 
             // Uninstall button
-            buttons.push(`<button class="store-card-btn uninstall" onclick="event.stopPropagation();uninstallItem('${esc(item.id)}','${kind}')">Uninstall</button>`);
+            buttons.push(`<button class="store-card-btn uninstall" onclick="event.stopPropagation();_uninstallItem('${esc(item.id)}','${kind}')">Uninstall</button>`);
 
             actionHtml = `<div class="store-card-actions">${buttons.join('')}</div>`;
         } else {
-            actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();installFromStore('${esc(item.id)}')">Install</button>`;
+            actionHtml = `<button class="store-card-btn install" onclick="event.stopPropagation();_installFromStore('${esc(item.id)}')">Install</button>`;
         }
 
         // Source badge (only show when multiple sources exist)
