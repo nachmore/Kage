@@ -12,6 +12,13 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Source .env for TAURI_SIGNING_PRIVATE_KEY (required by `cargo tauri build`)
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -a
+  source "$REPO_ROOT/.env"
+  set +a
+fi
 APP_PATH="$REPO_ROOT/target/debug/bundle/macos/Kage.app/Contents/MacOS/Kage"
 DEV_SERVER="$REPO_ROOT/scripts/dev_server.py"
 PORT=1420
@@ -31,7 +38,12 @@ done
 # --- Build if requested or binary missing ---
 if [ "$BUILD" = true ] || [ ! -f "$APP_PATH" ]; then
   echo "🔨 Building debug bundle..."
-  cargo tauri build --debug
+  # Skip the separate MCP build in beforeBuildCommand. It causes a
+  # double-compile: build_mcp.py runs `cargo build` without Tauri's
+  # feature flags, then Tauri runs its own `cargo build` with different
+  # features — invalidating the entire cache. The MCP binary gets built
+  # and bundled by Tauri anyway (it's in externalBin / same target dir).
+  KAGE_SKIP_MCP_BUILD=1 cargo tauri build --debug
 fi
 
 # --- Kill any existing Kage instance ---

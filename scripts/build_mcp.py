@@ -27,6 +27,15 @@ from ensure_vendor import ensure_vendor  # noqa: E402
 
 
 def main() -> int:
+    # Allow callers to skip the MCP build (e.g. run_bundled_dev.sh builds it
+    # separately after Tauri finishes to avoid double-compiling deps).
+    if os.environ.get("KAGE_SKIP_MCP_BUILD", "").strip() == "1":
+        print("[build_mcp] Skipping MCP build (KAGE_SKIP_MCP_BUILD=1)", flush=True)
+        # Still ensure vendor libs are ready
+        repo_root = Path(__file__).resolve().parent.parent
+        ensure_vendor(repo_root)
+        return 0
+
     debug = os.environ.get("TAURI_ENV_DEBUG", "").lower() == "true"
     cmd = ["cargo", "build", "--bin", "kage-computer-control-mcp"]
     if not debug:
