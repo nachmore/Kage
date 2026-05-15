@@ -348,9 +348,9 @@ pub fn update_activation_policy_excluding(app_handle: &AppHandle, exclude: Optio
 #[cfg(not(target_os = "macos"))]
 pub fn update_activation_policy(_app_handle: &AppHandle) {}
 
-/// No-op on non-macOS platforms.
-#[cfg(not(target_os = "macos"))]
-pub fn update_activation_policy_excluding(_app_handle: &AppHandle, _exclude: Option<&str>) {}
+// `update_activation_policy_excluding` has no non-macOS stub on purpose:
+// its only caller is the `#[cfg(target_os = "macos")]` block in
+// `handle_window_close`, so a cross-platform stub would be dead code.
 
 /// Show the welcome window on first run. Small delay so the floating
 /// window has finished initializing before the welcome stacks on top.
