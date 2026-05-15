@@ -232,6 +232,22 @@
     <script src="js/settings/model.js"></script>
     <script src="js/settings/shortcuts.js"></script>
     <script src="js/settings/automations.js"></script>
+    <script>
+        // Shim: expose getToolEmoji for classic-script settings modules
+        // (canonical implementation lives in js/shared/tool-utils.js ES module)
+        function getToolEmoji(name) {
+            const lower = (name || '').toLowerCase();
+            if (lower.startsWith('ext:')) return '🧩';
+            if (lower.includes('search')) return '🔍';
+            if (lower.includes('fetch') || lower.includes('web')) return '🌐';
+            if (lower.includes('read')) return '📖';
+            if (lower.includes('write') || lower.includes('edit')) return '✏️';
+            if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
+            if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
+            if (lower.includes('file')) return '📁';
+            return '🔧';
+        }
+    </script>
     <script src="js/settings/tool-permissions.js"></script>
     <script src="js/settings/mcp.js"></script>
     <script src="js/settings/integration.js"></script>
