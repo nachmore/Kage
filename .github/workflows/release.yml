@@ -78,10 +78,18 @@ on:
   # bleeding-edge channel." We additionally guard inside the plan
   # job below so other branches / PRs that happen to run ci.yml
   # don't accidentally cut a dev release.
+  #
+  # NOTE: deliberately NOT using `branches: [main]` here. Multiple
+  # users have reported that the `branches` filter on workflow_run
+  # silently prevents the event from delivering at all
+  # (https://github.com/orgs/community/discussions/72097, plus
+  # several SO threads with the same fix: "remove the branches
+  # filter and it works"). The branch check moves into the plan
+  # job's `if:` instead, where we can read it off the event payload
+  # without tripping the bug.
   workflow_run:
     workflows: ["Debug Build + Test"]
     types: [completed]
-    branches: [main]
 
 concurrency:
   # Only one release-per-channel at a time. Stable runs queue (never
@@ -105,11 +113,19 @@ jobs:
   plan:
     name: Resolve channel
     runs-on: ubuntu-latest
-    # Skip workflow_run invocations where CI itself didn't succeed.
+    # Skip workflow_run invocations where CI itself didn't succeed,
+    # or where it ran on something other than main (PRs, feature
+    # branches). The branch filter lives here instead of on the
+    # workflow_run trigger because the trigger-level `branches:`
+    # filter has a long-standing GitHub Actions bug where the event
+    # silently fails to deliver — see the comment on the
+    # workflow_run trigger above.
+    #
     # Other triggers (tag push, workflow_dispatch) always proceed.
     if: |
       github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     outputs:
       channel: ${{ steps.pick.outputs.channel }}
       release_tag: ${{ steps.pick.outputs.release_tag }}
@@ -291,6 +307,14 @@ jobs:
       # Cargo.lock contains the version too; cargo regenerates it on
       # the next build so we don't need to touch it explicitly. The
       # rewrite is ephemeral — the workflow never commits back to git.
+      #
+      # We use python for the substitution (instead of sed) because
+      # BSD sed on macOS rejects the `0,/regex/{...}` form that GNU
+      # sed accepts on Linux runners. Python's regex behavior is
+      # identical across platforms — a single re.sub with `count=1`
+      # replaces only the first matching `version = "..."` line,
+      # which is what we want (later `version =` entries appear in
+      # [dependencies] tables and must stay untouched).
       - name: Stamp rolling channel version
         if: needs.plan.outputs.channel != 'stable'
         shell: bash
@@ -298,12 +322,29 @@ jobs:
           NEW_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          OLD=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "Stamping version: $OLD → $NEW_VERSION"
-          # Match the exact `^version = "..."` line in [package] to
-          # avoid touching `version =` in any other table.
-          sed -i.bak -E "0,/^version = \"[^\"]+\"/{s/^version = \"[^\"]+\"/version = \"${NEW_VERSION}\"/}" Cargo.toml
-          rm -f Cargo.toml.bak
+          python3 - <<'PY'
+          import os
+          import re
+          new = os.environ['NEW_VERSION']
+          path = 'Cargo.toml'
+          with open(path, 'r', encoding='utf-8') as f:
+              src = f.read()
+          # Match the first `version = "..."` line at start-of-line,
+          # not the `version =` entries inside [dependencies] tables
+          # (those are indented or appear inside curly braces).
+          new_src, n = re.subn(
+              r'(?m)^version\s*=\s*"[^"]+"',
+              f'version = "{new}"',
+              src,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(
+                  f"Failed to find package version line in {path}"
+              )
+          with open(path, 'w', encoding='utf-8') as f:
+              f.write(new_src)
+          PY
           echo "--- Cargo.toml [package] (head) ---"
           head -n 15 Cargo.toml
           # tauri.conf.json reads the version from Cargo.toml via
