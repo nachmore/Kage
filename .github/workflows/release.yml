@@ -4,14 +4,12 @@
 #   - stable — cut on a git tag matching `v*.*.*`. Human-initiated.
 #   - beta   — manual workflow_dispatch with channel=beta. Moves the
 #              `beta-latest` release to whatever ref you pick.
-#   - dev    — automatic via workflow_run after ci.yml succeeds on main.
-#              Moves the `dev-latest` release to that commit.
-#
-# The dev channel chains off ci.yml (Debug Build + Test) so we only
-# ever publish a dev release when every test gate is green. Doing the
-# release in a separate workflow keeps "test gate" cleanly separated
-# from "ship" and lets us reuse all the signing + manifest plumbing
-# below for free.
+#   - dev    — automatic via the auto-dev-release.yml sibling
+#              workflow, which calls `gh workflow run release.yml -f
+#              channel=dev` when ci.yml succeeds on main. Splitting
+#              the chain into its own file keeps release.yml on
+#              triggers we know work; see auto-dev-release.yml's
+#              own header for why.
 #
 # Each run:
 #   1. Builds the app on Windows + macOS.
@@ -35,15 +33,15 @@
 #   and silently skip every update. We rewrite Cargo.toml's version
 #   line in CI before the build to:
 #
-#       <base>-<channel>.<run_number>+<short_sha>
+#       <major>.<minor>.<YYYYMMDDHHMM>+<channel>.<short_sha>
 #
-#   e.g. `0.9.0-dev.142+abc1234`. The rewrite is ephemeral (never
-#   committed back). Stable releases keep the unmodified version from
-#   the v*.*.* tag, so they're untouched. We use semver pre-release +
-#   build-metadata so version comparison stays correct: `dev.143 >
-#   dev.142` (numeric pre-release tokens compare numerically), and the
-#   `+sha` build-metadata is ignored by semver but visible in
-#   Settings → About for bug reports.
+#   e.g. `0.9.202511171430+dev.abc1234`. The rewrite is ephemeral
+#   (never committed back). Stable releases keep the unmodified
+#   version from the v*.*.* tag, so they're untouched. We use
+#   semver patch + build-metadata so version comparison stays
+#   correct: `dev.<later-timestamp> > dev.<earlier-timestamp>`,
+#   and the `+sha` build-metadata is ignored by semver but visible
+#   in Settings → About for bug reports.
 #
 # What IS NOT yet in this workflow:
 #   - Linux (Kage ships only Windows + macOS today).
@@ -72,31 +70,18 @@ on:
           - beta
           - dev
           - stable
-  # Auto-publish dev builds when ci.yml goes green on main. The
-  # workflow_run trigger only fires on success — a failing CI run
-  # never reaches here, which is exactly the gate we want for "the
-  # bleeding-edge channel." We additionally guard inside the plan
-  # job below so other branches / PRs that happen to run ci.yml
-  # don't accidentally cut a dev release.
-  #
-  # NOTE: deliberately NOT using `branches: [main]` here. Multiple
-  # users have reported that the `branches` filter on workflow_run
-  # silently prevents the event from delivering at all
-  # (https://github.com/orgs/community/discussions/72097, plus
-  # several SO threads with the same fix: "remove the branches
-  # filter and it works"). The branch check moves into the plan
-  # job's `if:` instead, where we can read it off the event payload
-  # without tripping the bug.
-  workflow_run:
-    workflows: ["Debug Build + Test"]
-    types: [completed]
+      head_sha:
+        description: "Specific SHA to build (optional; defaults to ref HEAD). Used by auto-dev-release.yml to pin the build to the exact commit CI verified."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
   # Only one release-per-channel at a time. Stable runs queue (never
   # cancel) so a tag race never gets dropped. Beta/dev channels cancel
   # superseded runs because each force-moves the channel's alias tag —
   # only the latest matters.
-  group: release-${{ github.event.inputs.channel || (github.event_name == 'workflow_run' && 'dev') || 'stable' }}
+  group: release-${{ github.event.inputs.channel || 'stable' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
@@ -107,25 +92,9 @@ jobs:
   # stamps Cargo.toml) and the publish job (which writes latest.json)
   # need them to agree, so deriving twice would be a recipe for
   # silent skew.
-  #
-  # Also acts as a guard for workflow_run triggers: if CI failed,
-  # we exit early without doing any release work.
   plan:
     name: Resolve channel
     runs-on: ubuntu-latest
-    # Skip workflow_run invocations where CI itself didn't succeed,
-    # or where it ran on something other than main (PRs, feature
-    # branches). The branch filter lives here instead of on the
-    # workflow_run trigger because the trigger-level `branches:`
-    # filter has a long-standing GitHub Actions bug where the event
-    # silently fails to deliver — see the comment on the
-    # workflow_run trigger above.
-    #
-    # Other triggers (tag push, workflow_dispatch) always proceed.
-    if: |
-      github.event_name != 'workflow_run' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
     outputs:
       channel: ${{ steps.pick.outputs.channel }}
       release_tag: ${{ steps.pick.outputs.release_tag }}
@@ -136,17 +105,6 @@ jobs:
     steps:
       - name: Checkout (for Cargo.toml)
         uses: actions/checkout@v6
-        with:
-          # Just need the file at the right SHA so the version
-          # computation reads the same Cargo.toml the build job will.
-          # workflow_run defaults to the default branch HEAD which
-          # can race ahead of what was tested — pin to head_sha.
-          ref: |
-            ${{
-              github.event_name == 'workflow_run'
-                && github.event.workflow_run.head_sha
-                || github.sha
-            }}
 
       - id: pick
         shell: bash
@@ -157,18 +115,8 @@ jobs:
             echo "release_name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
             echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            # Auto-triggered by a successful CI run on main. Always dev.
-            # head_sha is the commit CI built — using GITHUB_SHA here
-            # would resolve to the default branch HEAD which can race
-            # ahead.
-            echo "channel=dev" >> "$GITHUB_OUTPUT"
-            echo "release_tag=dev-latest" >> "$GITHUB_OUTPUT"
-            echo "release_name=Kage dev (latest)" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "build_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
           else
-            # workflow_dispatch
+            # workflow_dispatch (manual or via auto-dev-release.yml)
             CH="${{ github.event.inputs.channel }}"
             echo "channel=$CH" >> "$GITHUB_OUTPUT"
             echo "release_tag=${CH}-latest" >> "$GITHUB_OUTPUT"
@@ -178,7 +126,17 @@ jobs:
             else
               echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             fi
-            echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            # auto-dev-release.yml passes the CI-verified commit via
+            # the optional head_sha input so the release builds the
+            # exact commit that just passed CI, not whatever main HEAD
+            # happens to be at dispatch time. Manual dispatches can
+            # leave it blank to use the ref HEAD.
+            INPUT_SHA="${{ github.event.inputs.head_sha }}"
+            if [[ -n "$INPUT_SHA" ]]; then
+              echo "build_sha=$INPUT_SHA" >> "$GITHUB_OUTPUT"
+            else
+              echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       # Compute the final version string. Single source of truth for
@@ -258,12 +216,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Always check out the SHA the plan resolved to. For tag
-          # pushes / dispatches that's GITHUB_SHA; for workflow_run
-          # triggers it's the head_sha of the CI run that succeeded.
-          # Without this override, workflow_run would check out the
-          # default branch HEAD, which can race ahead of what was
-          # tested.
+          # Check out the SHA the plan job resolved to. For tag
+          # pushes that's GITHUB_SHA; for dispatches it's whatever
+          # the dispatcher passed in. Pinning explicitly avoids
+          # races where main HEAD moves between plan and build.
           ref: ${{ needs.plan.outputs.build_sha }}
           # Full history so cargo can stamp version info if ever needed
           # AND so the tag-on-main guard below has the main branch to

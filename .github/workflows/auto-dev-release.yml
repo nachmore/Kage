@@ -1,0 +1,63 @@
+# Auto-dispatch dev release when CI succeeds on main.
+#
+# Why this is its own file (instead of a workflow_run trigger inside
+# release.yml): combining workflow_run with push/workflow_dispatch in
+# the same `on:` block has been intermittently broken for us — the
+# workflow_run event never delivered to release.yml even after
+# removing the `branches: [main]` filter. Splitting it into its own
+# minimal file isolates the chain logic so it's easier to debug, and
+# also keeps release.yml on its proven-working trigger surface.
+#
+# This workflow does ONE thing: when ci.yml goes green on main, it
+# calls `gh workflow run release.yml --ref main -f channel=dev`.
+# That's a workflow_dispatch event, which we know works (we use it
+# manually too). The downstream run will be attributed to
+# github-actions[bot] — purely cosmetic.
+
+name: Auto Dev Release
+
+on:
+  workflow_run:
+    workflows: ["Debug Build + Test"]
+    types: [completed]
+
+# Single concurrent dispatch in flight per branch — superseded
+# pushes cancel each other so we only release the freshest commit.
+concurrency:
+  group: auto-dev-release
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: Dispatch dev release
+    runs-on: ubuntu-latest
+    # Gate on:
+    #  1. CI succeeded (the primary point of this chain).
+    #  2. The CI run was triggered by a push (not a PR — PR runs build
+    #     a merge ref, not actual main, and shouldn't publish).
+    #  3. The CI run was on main (extra safety; with `event=push` and
+    #     no other branches receiving CI today, this is also implied).
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    permissions:
+      # Required to call `gh workflow run` against release.yml.
+      actions: write
+    steps:
+      - name: Trigger release.yml with channel=dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass the SHA so release.yml's checkout pins to the exact
+          # commit CI verified, not the floating main HEAD that may
+          # have moved on between CI completing and this dispatch
+          # firing.
+          BUILD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching release.yml for channel=dev at ${BUILD_SHA}"
+          gh workflow run release.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f channel=dev \
+            -f head_sha="${BUILD_SHA}"
