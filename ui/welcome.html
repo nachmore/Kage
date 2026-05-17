@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="css/shared-components.css">
     <script src="js/shared/theme-global.js"></script>
     <script src="js/shared/mac-permissions.js"></script>
+    <script src="js/shared/agent-connections.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -204,23 +205,9 @@
             letter-spacing: 0.01em;
         }
 
-        /* Detected agent card */
-        .agent-detected {
-            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
-            border-radius: 10px; padding: 20px; text-align: center;
-        }
-        .agent-detected-icon { font-size: 32px; margin-bottom: 8px; }
-        .agent-detected-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
-        .agent-detected-path { font-size: 11px; color: #938F9B; word-break: break-all; margin-bottom: 4px; }
-        .agent-detected-version { font-size: 11px; color: #938F9B; }
-        .agent-detected-status { font-size: 13px; color: var(--kage-accent-light, #C09CFF); margin-bottom: 12px; }
-        .agent-manual-link {
-            font-size: 12px; color: var(--kage-accent); background: none; border: none;
-            cursor: pointer; padding: 4px 8px; margin-top: 12px;
-        }
-        .agent-manual-link:hover { text-decoration: underline; }
-        .agent-searching { text-align: center; padding: 30px 0; color: #938F9B; font-size: 13px; }
-        .agent-not-found { text-align: center; padding: 20px 0; color: #938F9B; font-size: 13px; margin-bottom: 16px; }
+        /* Detected agent + connection editor styles now live in
+           ui/css/shared-components.css so the settings page can reuse
+           the same UX. */
 </style>
 </head>
 <body>
@@ -251,41 +238,13 @@
                 <div class="agent-searching">🔍 Searching for agents…</div>
             </div>
 
-            <div id="wManualConfig" style="display:none;">
-                <div class="form-group">
-                    <div class="section-label">Connection Mode</div>
-                    <div class="section-desc">Choose how Kage connects to the ACP server that powers your AI agent.</div>
-                    <select class="setting-select" id="wAcpMode">
-                        <option value="local">Local — spawn a process on this machine</option>
-                        <option value="remote">Remote — connect to a running server</option>
-                    </select>
+            <div id="wManualConfig" style="display:none;margin-top:16px;">
+                <div class="section-desc" style="margin-bottom:12px;">
+                    Configure the connection manually. You can change this later from Settings → Agent Connection.
                 </div>
-
-                <div id="wLocalSettings">
-                    <div class="form-group">
-                        <div class="section-label">Spawn Command</div>
-                        <div class="section-desc">Full command to start the ACP server, including the path to the binary and any arguments.</div>
-                        <input type="text" class="setting-input" id="wSpawnCommand" placeholder="e.g., C:\path\to\chat_cli.exe acp">
-                    </div>
-                </div>
-
-                <div id="wRemoteSettings" style="display:none;">
-                    <div class="form-group">
-                        <div class="section-label">Host</div>
-                        <input type="text" class="setting-input" id="wAcpHost" value="127.0.0.1">
-                    </div>
-                    <div style="display:flex;gap:12px;">
-                        <div class="form-group" style="flex:1;">
-                            <div class="section-label">Port</div>
-                            <input type="number" class="setting-input" id="wAcpPort" value="8765">
-                        </div>
-                        <div class="form-group" style="flex:1;">
-                            <div class="section-label">Timeout (ms)</div>
-                            <input type="number" class="setting-input" id="wAcpTimeout" value="30000">
-                        </div>
-                    </div>
-                </div>
+                <div id="wConnectionEditor"></div>
             </div>
+
             </div>
         </div>
 
@@ -503,9 +462,15 @@
         let storeExtensions = []; // catalog items loaded on step 3
         let extCatalogLoaded = false;
         let macPermsRendered = false;
-        let detectedAgent = null; // auto-detected agent, if any
-        let agentDetectionDone = false;
-        let useManualConfig = false;
+        // The connection the user has tentatively committed to via the
+        // welcome wizard. Either a detected agent (set when the user
+        // clicks "Use this") or a manually-edited connection. Persisted
+        // into config.acp.connections on Next-from-step-1.
+        let pendingConnection = null;
+        // Tracks whether the manual editor has been rendered. Lets us
+        // re-pull values via kageAgentConnections.readEditForm only if
+        // the form is actually live in the DOM.
+        let manualEditorRendered = false;
 
         function showStep(n) {
             currentStep = n;
@@ -518,83 +483,64 @@
             nextBtn.textContent = n === 0 ? 'Get Started' : n === totalSteps - 1 ? 'Finish' : 'Next';
         }
 
-        // ACP mode toggle
-        const modeSelect = document.getElementById('wAcpMode');
-        modeSelect.addEventListener('change', () => {
-            document.getElementById('wLocalSettings').style.display = modeSelect.value === 'local' ? '' : 'none';
-            document.getElementById('wRemoteSettings').style.display = modeSelect.value === 'remote' ? '' : 'none';
-        });
+        // --- Agent connection step --------------------------------------
+        // The whole agent-detect + manual-edit experience lives in the
+        // shared `kageAgentConnections` module so this wizard and the
+        // settings page can stay in sync.
 
-        // Agent auto-detection
+        function renderManualEditor(initialConnection) {
+            const api = window.kageAgentConnections;
+            const container = document.getElementById('wConnectionEditor');
+            if (!api || !container) return;
+            container.innerHTML = api.renderEditForm(
+                initialConnection || pendingConnection || {
+                    id: '',
+                    name: 'Default',
+                    preset_id: null,
+                    mode: { type: 'local', spawn_command: '' },
+                },
+                { idPrefix: 'wConnEdit' }
+            );
+            api.bindEditForm('wConnEdit');
+            manualEditorRendered = true;
+        }
+
+        function showManualConfig(initialConnection) {
+            const manualWrap = document.getElementById('wManualConfig');
+            manualWrap.style.display = '';
+            renderManualEditor(initialConnection);
+            // Hide the "Configure manually" affordance now that the
+            // form is visible — clicking it again would be a no-op
+            // and the duplicated entry-point is confusing.
+            const manualBtn = document.getElementById('agentDetectShowManual');
+            if (manualBtn) manualBtn.style.display = 'none';
+            // Scroll the form into view so users on the auto-detect
+            // path actually see the editor open up below the agent
+            // cards instead of staring at an unchanged screen.
+            requestAnimationFrame(() => {
+                manualWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
         async function runAgentDetection() {
-            if (agentDetectionDone) return;
+            const api = window.kageAgentConnections;
             const container = document.getElementById('wAgentAutoDetect');
-            try {
-                const agents = await invoke('detect_agents');
-                agentDetectionDone = true;
-                if (agents.length > 0) {
-                    detectedAgent = agents[0];
-                    const versionHtml = detectedAgent.version
-                        ? `<div class="agent-detected-version">${escapeHtml(detectedAgent.version)}</div>`
-                        : '';
-                    container.innerHTML = `
-                        <div class="agent-detected">
-                            <div class="agent-detected-icon">✅</div>
-                            <div class="agent-detected-status">Agent found</div>
-                            <div class="agent-detected-name">${escapeHtml(detectedAgent.name || '')}</div>
-                            <div class="agent-detected-path">${escapeHtml(detectedAgent.path || '')}</div>
-                            ${versionHtml}
-                            <button class="agent-manual-link" id="wShowManual">Configure manually</button>
-                        </div>`;
-                    document.getElementById('wShowManual').addEventListener('click', showManualConfig);
-                } else {
-                    container.innerHTML = `<div class="agent-not-found">No agent found automatically. Configure the connection below.</div>`;
-                    showManualConfig();
-                }
-            } catch (e) {
-                agentDetectionDone = true;
-                container.innerHTML = `<div class="agent-not-found">Could not detect agents. Configure the connection below.</div>`;
+            if (!api || !container) return;
+            const agents = await api.renderDetected(container, {
+                onSelect: (agent) => {
+                    pendingConnection = api.connectionFromDetected(agent);
+                    // Pre-populate the manual editor with the chosen
+                    // agent's spawn command so the user can tweak it
+                    // before continuing.
+                    showManualConfig(pendingConnection);
+                },
+                onManual: () => showManualConfig(),
+            });
+            // If nothing was detected, drop the user straight into the
+            // manual editor with a sensible default.
+            if (!agents.length) {
                 showManualConfig();
             }
-        }
-
-        function showManualConfig() {
-            useManualConfig = true;
-            document.getElementById('wManualConfig').style.display = '';
-            // Collapse the detected agent card to a compact bar
-            if (detectedAgent) {
-                const container = document.getElementById('wAgentAutoDetect');
-                container.innerHTML = `
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;margin-bottom:16px;">
-                        <span style="font-size:12px;color:#938F9B;">✅ ${escapeHtml(detectedAgent.name || '')} found</span>
-                        <button class="agent-manual-link" id="wUseDetected" style="margin:0;">Use auto-detected</button>
-                    </div>`;
-                document.getElementById('wUseDetected').addEventListener('click', switchToDetected);
-            }
-            // Pre-fill the spawn command if empty
-            if (detectedAgent && !document.getElementById('wSpawnCommand').value) {
-                document.getElementById('wSpawnCommand').value = detectedAgent.spawn_command;
-            }
-        }
-
-        function switchToDetected() {
-            useManualConfig = false;
-            document.getElementById('wManualConfig').style.display = 'none';
-            // Restore the full detected agent card
-            const container = document.getElementById('wAgentAutoDetect');
-            const versionHtml = detectedAgent.version
-                ? `<div class="agent-detected-version">${escapeHtml(detectedAgent.version)}</div>`
-                : '';
-            container.innerHTML = `
-                <div class="agent-detected">
-                    <div class="agent-detected-icon">✅</div>
-                    <div class="agent-detected-status">Agent found</div>
-                    <div class="agent-detected-name">${escapeHtml(detectedAgent.name || '')}</div>
-                    <div class="agent-detected-path">${escapeHtml(detectedAgent.path || '')}</div>
-                    ${versionHtml}
-                    <button class="agent-manual-link" id="wShowManual">Configure manually</button>
-                </div>`;
-            document.getElementById('wShowManual').addEventListener('click', showManualConfig);
         }
 
         // Load existing config
@@ -609,19 +555,15 @@
                 try { const c = await invoke('get_config'); c.hotkey = hk; await invoke('save_config', { config: c }); } catch {}
             });
 
-            // Pre-fill ACP settings if already configured
-            if (config.acp?.mode) {
-                const mode = config.acp.mode;
-                if (mode.type === 'remote') {
-                    modeSelect.value = 'remote';
-                    document.getElementById('wLocalSettings').style.display = 'none';
-                    document.getElementById('wRemoteSettings').style.display = '';
-                    if (mode.host) document.getElementById('wAcpHost').value = mode.host;
-                    if (mode.port) document.getElementById('wAcpPort').value = mode.port;
-                    if (mode.timeout_ms) document.getElementById('wAcpTimeout').value = mode.timeout_ms;
-                } else if (mode.spawn_command) {
-                    document.getElementById('wSpawnCommand').value = mode.spawn_command;
-                }
+            // Pre-fill the connection editor from the active saved
+            // connection (if any). Useful when the user re-opens the
+            // welcome wizard after first run, or just for sanity checks
+            // during dev.
+            const existing = config.acp?.connections?.find(
+                (c) => c.id === config.acp?.active_connection_id
+            ) || config.acp?.connections?.[0];
+            if (existing) {
+                pendingConnection = existing;
             }
         }).catch(() => {
             hotkeyPicker = new HotkeyPicker(document.getElementById('hotkeyPickerContainer'), invoke, { modifiers: ['Alt'], key: 'Space' });
@@ -754,28 +696,38 @@
 
         nextBtn.addEventListener('click', async () => {
             if (currentStep < totalSteps - 1) {
-                // Save ACP config when leaving step 1
+                // Save ACP config when leaving step 1 (the agent step).
                 if (currentStep === 1) {
                     try {
+                        const api = window.kageAgentConnections;
                         const config = await invoke('get_config');
                         if (!config.acp) config.acp = {};
-                        if (useManualConfig) {
-                            const mode = modeSelect.value;
-                            if (mode === 'local') {
-                                config.acp.mode = { type: 'local', spawn_command: document.getElementById('wSpawnCommand').value.trim() };
-                            } else {
-                                config.acp.mode = {
-                                    type: 'remote',
-                                    host: document.getElementById('wAcpHost').value,
-                                    port: parseInt(document.getElementById('wAcpPort').value, 10),
-                                    timeout_ms: parseInt(document.getElementById('wAcpTimeout').value, 10),
-                                };
-                            }
-                        } else if (detectedAgent) {
-                            config.acp.mode = { type: 'local', spawn_command: detectedAgent.spawn_command };
+
+                        // The user can land in three states:
+                        //   1. Picked a detected agent → we already
+                        //      stored it in pendingConnection.
+                        //   2. Edited the manual form → read it back.
+                        //   3. Did neither (rare; the no-detection path
+                        //      auto-shows the manual form so the empty
+                        //      state still produces a saveable shape).
+                        let conn = null;
+                        if (manualEditorRendered && api) {
+                            conn = api.readEditForm('wConnEdit', pendingConnection);
+                        } else if (pendingConnection) {
+                            conn = pendingConnection;
+                        }
+                        if (conn?.mode) {
+                            // Single-connection bootstrap: replace the
+                            // connections array with this one entry,
+                            // and mark it active.
+                            if (!conn.id) conn.id = api ? api.uuidLite() : 'default';
+                            config.acp.connections = [conn];
+                            config.acp.active_connection_id = conn.id;
                         }
                         await invoke('save_config', { config });
-                    } catch (e) { console.error('Failed to save ACP config:', e); }
+                    } catch (e) {
+                        console.error('Failed to save ACP config:', e);
+                    }
                 }
                 // Load extension catalog when entering step 3
                 if (currentStep + 1 === 3) {

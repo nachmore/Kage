@@ -232,7 +232,6 @@ impl Default for AgentConfig {
             default_model: None,
             working_directory: None,
             auto_compact_threshold: 90,
-            sessions_directory: None,
         }
     }
 }
@@ -245,9 +244,82 @@ pub struct HotkeyConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcpConfig {
-    pub mode: AcpMode,
+    /// Saved agent connections. Always contains at least one entry
+    /// after the first launch (the welcome flow seeds one).
+    #[serde(default)]
+    pub connections: Vec<AgentConnection>,
+    /// The id of the active connection in `connections`. The runtime
+    /// transport reads only the active connection's mode.
+    #[serde(default)]
+    pub active_connection_id: String,
     #[serde(default)]
     pub agent: AgentConfig,
+}
+
+impl AcpConfig {
+    /// The currently selected connection. Falls back to the first
+    /// entry if the active id no longer matches anything (which can
+    /// happen if a connection was deleted out-of-band).
+    pub fn active_connection(&self) -> Option<&AgentConnection> {
+        self.connections
+            .iter()
+            .find(|c| c.id == self.active_connection_id)
+            .or_else(|| self.connections.first())
+    }
+
+    /// Mutable variant of [`active_connection`]. Reserved for future
+    /// callers that need to edit a connection in place; today the JS
+    /// side replaces the whole config via `save_config`.
+    #[allow(dead_code)]
+    pub fn active_connection_mut(&mut self) -> Option<&mut AgentConnection> {
+        let id = self.active_connection_id.clone();
+        let idx = self.connections.iter().position(|c| c.id == id).or({
+            if self.connections.is_empty() {
+                None
+            } else {
+                Some(0)
+            }
+        })?;
+        self.connections.get_mut(idx)
+    }
+
+    /// The active connection's mode. Returns a sensible default
+    /// (Remote 127.0.0.1:8765) when no connection is configured yet —
+    /// callers that care about the difference should check
+    /// `active_connection()` directly.
+    pub fn active_mode(&self) -> AcpMode {
+        self.active_connection()
+            .map(|c| c.mode.clone())
+            .unwrap_or_else(|| AcpMode::Remote {
+                host: "127.0.0.1".to_string(),
+                port: 8765,
+                timeout_ms: 30000,
+            })
+    }
+}
+
+/// A saved agent connection. Multiple of these live in
+/// `AcpConfig::connections`; the user picks one as active via
+/// `active_connection_id`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConnection {
+    /// Stable id (uuid). Persisted across renames so the active pointer
+    /// doesn't need to chase the display name.
+    pub id: String,
+    /// User-facing name (defaults to the preset display name).
+    pub name: String,
+    /// Optional preset id (e.g. "kiro", "claude-code", "codex").
+    /// `None` means the connection was hand-rolled by the user.
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    /// Connection mode (Local spawn vs. Remote TCP).
+    pub mode: AcpMode,
+    /// Custom sessions directory for this agent. If unset, uses the
+    /// preset's well-known path (e.g. `~/.kiro/sessions/cli` for Kiro).
+    /// Stored per-connection because different agents lay out sessions
+    /// in different places.
+    #[serde(default)]
+    pub sessions_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -267,10 +339,6 @@ pub struct AgentConfig {
     /// Auto-compact threshold (0-100). When context usage >= this %, auto-send /compact. 0 = disabled.
     #[serde(default = "default_auto_compact_threshold")]
     pub auto_compact_threshold: u32,
-    /// Custom sessions directory. If unset, uses the agent preset path
-    /// (e.g. ~/.kiro/sessions/cli for Kiro).
-    #[serde(default)]
-    pub sessions_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -759,11 +827,18 @@ impl Default for Config {
                 key: "Space".to_string(),
             },
             acp: AcpConfig {
-                mode: AcpMode::Remote {
-                    host: "127.0.0.1".to_string(),
-                    port: 8765,
-                    timeout_ms: 30000,
-                },
+                connections: vec![AgentConnection {
+                    id: "default".to_string(),
+                    name: "Default".to_string(),
+                    preset_id: None,
+                    mode: AcpMode::Remote {
+                        host: "127.0.0.1".to_string(),
+                        port: 8765,
+                        timeout_ms: 30000,
+                    },
+                    sessions_directory: None,
+                }],
+                active_connection_id: "default".to_string(),
                 agent: AgentConfig::default(),
             },
             ui: UiConfig {

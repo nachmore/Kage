@@ -353,7 +353,8 @@ async fn run() {
                 app_log::log("info", "system", "App log initialized");
             }
 
-            let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&config.acp.mode);
+            let active_mode = config.acp.active_mode();
+            let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&active_mode);
             info!("{}", acp_mode_desc);
             let acp_client = AcpClient::new(acp_connection_mode);
             acp_client.set_debug_mode(config.debug_mode);
@@ -511,6 +512,8 @@ async fn run() {
             commands::trigger_welcome_banner,
             commands::is_first_run,
             commands::detect_agents,
+            commands::list_agent_presets,
+            commands::validate_agent_connection,
             commands::get_startup_enabled,
             commands::set_startup_enabled,
             commands::get_computer_control_enabled,

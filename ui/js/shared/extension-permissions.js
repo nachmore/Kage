@@ -174,6 +174,8 @@ export const COMMAND_CAPABILITIES = Object.freeze({
 
     // --- agent backend introspection (Kage chrome, not extension business) -
     detect_agents: null,
+    list_agent_presets: null,
+    validate_agent_connection: null,
     kage_cli_available: null,
     kage_cli_check_updated: null,
     kage_cli_load_session: null,

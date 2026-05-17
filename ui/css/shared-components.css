@@ -1836,3 +1836,319 @@ body.light-theme .mac-perm-card {
 body.light-theme .mac-perm-name {
     color: #1a1a1a;
 }
+
+/* ---------------------------------------------------------------- */
+/* Agent connections (settings + welcome)                           */
+/*                                                                  */
+/* These styles power the connection list, the auto-detect cards,   */
+/* and the inline editor used by both windows. The `agent-detected` */
+/* family was previously inlined in welcome.html; it now lives here */
+/* so the settings page can reuse it without duplicating CSS.       */
+/* ---------------------------------------------------------------- */
+
+.agent-detected {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 10px;
+    text-align: center;
+}
+body.light-theme .agent-detected {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+.agent-detected-icon {
+    font-size: 28px;
+    margin-bottom: 6px;
+}
+.agent-detected-status {
+    font-size: 13px;
+    color: var(--kage-accent-light, #c09cff);
+    margin-bottom: 6px;
+}
+.agent-detected-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.agent-detected-path {
+    font-size: 11px;
+    color: var(--kage-text-secondary, #938f9b);
+    word-break: break-all;
+    margin-bottom: 4px;
+}
+.agent-detected-version {
+    font-size: 11px;
+    color: var(--kage-text-secondary, #938f9b);
+}
+.agent-use-btn,
+.agent-manual-link {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+    background: var(--kage-accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.agent-use-btn:hover,
+.agent-manual-link:hover {
+    background: var(--kage-accent-hover);
+}
+.agent-manual-link {
+    background: none;
+    color: var(--kage-accent);
+}
+.agent-manual-link:hover {
+    background: rgba(160, 120, 230, 0.1);
+}
+.agent-searching {
+    text-align: center;
+    padding: 24px 0;
+    color: var(--kage-text-secondary, #938f9b);
+    font-size: 13px;
+}
+.agent-not-found {
+    text-align: center;
+    padding: 16px;
+    color: var(--kage-text-secondary, #938f9b);
+    font-size: 13px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+}
+body.light-theme .agent-not-found {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.conn-detected-list,
+.conn-saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0;
+}
+.conn-detected-actions,
+.conn-list-actions {
+    margin-top: 8px;
+}
+
+.conn-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    transition:
+        border-color 0.15s,
+        background 0.15s;
+}
+body.light-theme .conn-row {
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.02);
+}
+.conn-row-editing {
+    border-color: var(--kage-accent);
+}
+.conn-row-active {
+    background: rgba(160, 120, 230, 0.08);
+}
+.conn-row-main {
+    flex: 1;
+    min-width: 0;
+}
+.conn-row-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+.conn-row-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.conn-row-detail {
+    font-size: 11px;
+    color: var(--kage-text-secondary, #938f9b);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.conn-row-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.conn-active-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--kage-accent);
+}
+.conn-active-label {
+    font-size: 11px;
+    color: var(--kage-accent);
+    align-self: center;
+    padding: 0 6px;
+}
+.conn-issue-badge {
+    font-size: 10px;
+    color: #d97706;
+    background: rgba(217, 119, 6, 0.12);
+    padding: 1px 6px;
+    border-radius: 4px;
+    cursor: help;
+}
+.conn-preset-badge {
+    font-size: 10px;
+    color: var(--kage-text-secondary, #938f9b);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+body.light-theme .conn-preset-badge {
+    background: rgba(0, 0, 0, 0.05);
+}
+.conn-empty {
+    padding: 16px;
+    color: var(--kage-text-secondary, #938f9b);
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    text-align: center;
+}
+body.light-theme .conn-empty {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.conn-preset-info {
+    background: rgba(160, 120, 230, 0.06);
+    border: 1px solid rgba(160, 120, 230, 0.18);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+}
+.conn-preset-info-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+.conn-preset-info-desc {
+    font-size: 12px;
+    color: var(--kage-text-secondary, #938f9b);
+    margin-bottom: 6px;
+}
+.conn-preset-info-auth {
+    font-size: 11px;
+    color: var(--kage-text-primary, #e5e7eb);
+    margin-bottom: 4px;
+}
+.conn-preset-info-link {
+    font-size: 11px;
+    color: var(--kage-accent);
+}
+
+.setting-btn-secondary {
+    padding: 6px 12px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--kage-text-primary, #e5e7eb);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+.setting-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+body.light-theme .setting-btn-secondary {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+body.light-theme .setting-btn-secondary:hover {
+    background: rgba(0, 0, 0, 0.08);
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Master-detail extras for the connection settings page */
+.conn-detected-subhead {
+    margin-top: 12px;
+    margin-bottom: 6px;
+    padding: 0 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--kage-text-secondary, #938f9b);
+}
+.conn-row-detected {
+    background: rgba(255, 255, 255, 0.015);
+    border-style: dashed;
+}
+body.light-theme .conn-row-detected {
+    background: rgba(0, 0, 0, 0.02);
+}
+.conn-version-badge {
+    font-size: 10px;
+    color: var(--kage-text-secondary, #938f9b);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+body.light-theme .conn-version-badge {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+/* Edit view chrome */
+.conn-edit-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.conn-edit-subtitle {
+    font-size: 13px;
+    color: var(--kage-text-secondary, #938f9b);
+}
+.conn-back-btn {
+    padding: 4px 10px;
+}
+.conn-edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+body.light-theme .conn-edit-actions {
+    border-top-color: rgba(0, 0, 0, 0.06);
+}
+.setting-btn-primary {
+    padding: 6px 14px;
+    font-size: 12px;
+    background: var(--kage-accent);
+    color: white;
+    border: 1px solid var(--kage-accent);
+    border-radius: 6px;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+.setting-btn-primary:hover {
+    background: var(--kage-accent-hover);
+    border-color: var(--kage-accent-hover);
+}

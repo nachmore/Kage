@@ -5,10 +5,18 @@
     "key": "Space"
   },
   "acp": {
-    "mode": {
-      "type": "local",
-      "spawn_command": "C:\\workplace\\kage-cli\\target\\release\\chat_cli.exe acp"
-    },
+    "connections": [
+      {
+        "id": "default",
+        "name": "Kiro CLI",
+        "preset_id": "kiro",
+        "mode": {
+          "type": "local",
+          "spawn_command": "C:\\workplace\\kage-cli\\target\\release\\chat_cli.exe acp"
+        }
+      }
+    ],
+    "active_connection_id": "default",
     "agent": {
       "start_session_on_launch": true,
       "auto_steering_enabled": false,
