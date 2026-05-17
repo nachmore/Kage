@@ -335,7 +335,39 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
+          # Surface bundler subprocess output (notably bundle_dmg.sh
+          # stderr on macOS) so intermittent dmg failures stop being
+          # opaque "exit code 1" reports. See the matching note in
+          # ci.yml.
+          RUST_LOG: tauri_bundler=debug
         run: cargo tauri build --target ${{ matrix.target }}
+
+      # Post-mortem for the macOS dmg bundling step. Mirrors the same
+      # block in ci.yml. Runs only on failure of the build step above.
+      - name: bundle_dmg post-mortem (macOS)
+        if: failure() && startsWith(matrix.os, 'macos')
+        run: |
+          set +e
+          DMG_DIR=target/${{ matrix.target }}/release/bundle/dmg
+          echo "==== mounted volumes (hdiutil info) ===="
+          hdiutil info | head -200
+          echo
+          echo "==== bundle dirs ===="
+          ls -la target/${{ matrix.target }}/release/bundle/ || true
+          ls -la target/${{ matrix.target }}/release/bundle/macos/ || true
+          ls -la "$DMG_DIR" || true
+          if [[ -f "$DMG_DIR/bundle_dmg.sh" ]]; then
+            echo
+            echo "==== bundle_dmg.sh (staged copy) ===="
+            wc -l "$DMG_DIR/bundle_dmg.sh"
+            head -40 "$DMG_DIR/bundle_dmg.sh"
+            echo "... (truncated; see full file in artifacts)"
+            echo
+            echo "==== re-running with bash -x ===="
+            ( cd "$DMG_DIR" && bash -x ./bundle_dmg.sh 2>&1 ) | tail -200 || true
+          else
+            echo "(no bundle_dmg.sh staged — failure happened before bundling)"
+          fi
 
       - name: Upload Windows artefacts
         if: matrix.os == 'windows-latest'

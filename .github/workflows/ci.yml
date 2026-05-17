@@ -141,12 +141,52 @@ jobs:
       # build` invokes cargo under the hood and will fail loudly on
       # compile errors in either bin. On macOS this also triggers the
       # build.rs swiftc compile of src-tauri/macos/calendar-helper.swift.
+      #
+      # RUST_LOG=tauri_bundler=debug surfaces the bundler's subprocess
+      # output (notably bundle_dmg.sh stderr on macOS), which is
+      # otherwise swallowed and reported as a useless "exit code 1".
+      # We've seen intermittent dmg failures with no error context;
+      # this turns the next failure into something diagnosable.
       - name: cargo tauri build --debug
         env:
           APTABASE_KEY: ${{ secrets.APTABASE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RUST_LOG: tauri_bundler=debug
         run: cargo tauri build --debug
+
+      # Post-mortem for the macOS dmg bundling step. Runs only when the
+      # previous step failed. Tauri stages bundle_dmg.sh into
+      # target/debug/bundle/dmg/ before invoking it, but only forwards
+      # the exit code on failure — we lose the actual error. This step
+      # dumps the staged script and re-runs it under `bash -x` so the
+      # CI log carries the failing command + context. Also captures
+      # `hdiutil info` since the most common cause is a stale mount
+      # left behind by a previous run that hdiutil refuses to displace.
+      - name: bundle_dmg post-mortem (macOS)
+        if: failure() && matrix.os == 'macos-latest'
+        run: |
+          set +e
+          DMG_DIR=target/debug/bundle/dmg
+          echo "==== mounted volumes (hdiutil info) ===="
+          hdiutil info | head -200
+          echo
+          echo "==== bundle dirs ===="
+          ls -la target/debug/bundle/ || true
+          ls -la target/debug/bundle/macos/ || true
+          ls -la "$DMG_DIR" || true
+          if [[ -f "$DMG_DIR/bundle_dmg.sh" ]]; then
+            echo
+            echo "==== bundle_dmg.sh (staged copy) ===="
+            wc -l "$DMG_DIR/bundle_dmg.sh"
+            head -40 "$DMG_DIR/bundle_dmg.sh"
+            echo "... (truncated; see full file in artifacts)"
+            echo
+            echo "==== re-running with bash -x ===="
+            ( cd "$DMG_DIR" && bash -x ./bundle_dmg.sh 2>&1 ) | tail -200 || true
+          else
+            echo "(no bundle_dmg.sh staged — failure happened before bundling)"
+          fi
 
       - name: cargo test
         # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
