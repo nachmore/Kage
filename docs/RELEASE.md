@@ -83,15 +83,16 @@ Stable releases ship the version that's already checked into `Cargo.toml` (which
 The release workflow rewrites `Cargo.toml`'s version line in CI before each rolling-channel build to:
 
 ```
-<base>-<channel>.<run_number>+<short_sha>
+<major>.<minor>.<YYYYMMDDHHMM>+<channel>.<short_sha>
 ```
 
-For example: `0.9.0-dev.142+abc1234`. The pieces:
+For example: `0.9.202511171430+dev.abc1234`. The pieces:
 
-- **`<base>`** — the version already in `Cargo.toml` (everything after `-` or `+` stripped). Keeps semver ordering so a stable `v0.9.0` release wins over `0.9.0-dev.X` (per semver, pre-release identifiers compare lower than the release).
-- **`<channel>`** — `dev` or `beta`, distinguishes the binary at a glance.
-- **`<run_number>`** — `${{ github.run_number }}`, monotonically increasing per workflow run. Numeric pre-release tokens compare numerically, so `dev.143 > dev.142` always evaluates correctly. SHA-only schemes don't work — `zzz0001 > aaa9999` lexicographically.
-- **`+<short_sha>`** — semver build metadata. Ignored for comparison but visible in **Settings → About** so bug reports point at a precise commit.
+- **`<major>.<minor>`** — the first two components of whatever's already in `Cargo.toml`. If `Cargo.toml` says `0.9.0`, dev builds become `0.9.<timestamp>`. When you cut stable `v0.10.0`, dev builds become `0.10.<timestamp>` going forward.
+- **`<YYYYMMDDHHMM>`** — UTC timestamp slotted into the patch position. Each new build sorts numerically above the previous one (`202511171530 > 202511171430`), and the format is human-readable in version strings: "I'm on the build from Nov 17 14:30 UTC."
+- **`+<channel>.<short_sha>`** — semver build metadata. Ignored by version-comparison logic but visible in **Settings → About**, so users can tell at a glance which channel a build is from and bug reports point at a precise commit.
+
+Comparison against stable: dev `0.9.202511171430` is numerically greater than stable `0.9.0`, so a dev user always sees their own build as the latest of the dev line. To pull dev users back onto a stable line you bump the minor — `0.10.0 > 0.9.<anything>`. That's the right behavior: dev users have explicitly opted in to leading edge until you cut a new minor.
 
 The rewrite is ephemeral. The workflow never commits back to git.
 

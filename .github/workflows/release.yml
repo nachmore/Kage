@@ -92,11 +92,16 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
-  # Resolve once up-front which channel this run targets. Downstream
-  # jobs just read the outputs so the channel-detection logic lives in
-  # exactly one place. Also acts as a guard for workflow_run triggers:
-  # if CI failed, or if it ran on something other than main, we exit
-  # early without doing any release work.
+  # Resolve once up-front which channel this run targets, the SHA
+  # we're going to build, and the final version string. Downstream
+  # jobs just read the outputs so the channel-detection and version
+  # logic both live in exactly one place — both the build job (which
+  # stamps Cargo.toml) and the publish job (which writes latest.json)
+  # need them to agree, so deriving twice would be a recipe for
+  # silent skew.
+  #
+  # Also acts as a guard for workflow_run triggers: if CI failed,
+  # we exit early without doing any release work.
   plan:
     name: Resolve channel
     runs-on: ubuntu-latest
@@ -111,7 +116,22 @@ jobs:
       release_name: ${{ steps.pick.outputs.release_name }}
       is_prerelease: ${{ steps.pick.outputs.is_prerelease }}
       build_sha: ${{ steps.pick.outputs.build_sha }}
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Checkout (for Cargo.toml)
+        uses: actions/checkout@v6
+        with:
+          # Just need the file at the right SHA so the version
+          # computation reads the same Cargo.toml the build job will.
+          # workflow_run defaults to the default branch HEAD which
+          # can race ahead of what was tested — pin to head_sha.
+          ref: |
+            ${{
+              github.event_name == 'workflow_run'
+                && github.event.workflow_run.head_sha
+                || github.sha
+            }}
+
       - id: pick
         shell: bash
         run: |
@@ -123,10 +143,9 @@ jobs:
             echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             # Auto-triggered by a successful CI run on main. Always dev.
-            # Use the SHA of the commit CI built, not GITHUB_SHA — for
-            # workflow_run that resolves to the merge commit on main
-            # which is what we want anyway, but being explicit keeps
-            # this readable.
+            # head_sha is the commit CI built — using GITHUB_SHA here
+            # would resolve to the default branch HEAD which can race
+            # ahead.
             echo "channel=dev" >> "$GITHUB_OUTPUT"
             echo "release_tag=dev-latest" >> "$GITHUB_OUTPUT"
             echo "release_name=Kage dev (latest)" >> "$GITHUB_OUTPUT"
@@ -145,6 +164,65 @@ jobs:
             fi
             echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
+
+      # Compute the final version string. Single source of truth for
+      # both the binary (stamped into Cargo.toml in the build job) and
+      # the manifest (written into latest.json in the publish job).
+      #
+      # Stable: ship whatever's in Cargo.toml. The human bumped it
+      #         deliberately before tagging.
+      #
+      # Rolling channels (dev / beta): replace the patch slot with a
+      #         UTC `YYYYMMDDHHMM` timestamp, plus `+<channel>.<sha>`
+      #         build metadata. Result: `0.9.202511171430+dev.abc1234`.
+      #
+      # Why this format works:
+      #   - Semver compares numerically per dotted component, so
+      #     `0.9.202511171430 > 0.9.0` and `0.9.202511171530 >
+      #     0.9.202511171430`. Each new dev build is unambiguously
+      #     newer than the previous one.
+      #   - When stable bumps to `0.9.1`, dev users still see their
+      #     `0.9.202511...` as newer (their build IS newer). To pull
+      #     dev users back onto a stable line you bump minor —
+      #     `0.10.0` > `0.9.<anything>`. This is the right behavior:
+      #     dev users opted in to leading edge.
+      #   - The `+build-metadata` slot is ignored by semver
+      #     comparison but visible in Settings → About, so users see
+      #     channel + commit at a glance and bug reports point at a
+      #     precise commit.
+      #
+      # Minute-collision risk: two builds in the same UTC minute would
+      # produce identical version strings. Concurrency.cancel-in-progress
+      # already cancels superseded rolling-channel runs, and a CI run
+      # takes 6+ minutes, so this is unreachable in practice. If it
+      # ever happened, the second build's "update available" check
+      # would be a no-op until the next push.
+      - id: version
+        shell: bash
+        env:
+          CHANNEL: ${{ steps.pick.outputs.channel }}
+          RELEASE_TAG: ${{ steps.pick.outputs.release_tag }}
+          BUILD_SHA: ${{ steps.pick.outputs.build_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$CHANNEL" == "stable" ]]; then
+            VERSION="${RELEASE_TAG#v}"
+          else
+            BASE=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+            # Strip any pre-existing pre-release / build-metadata so
+            # we don't double-stamp if a human happened to put one
+            # into the base version.
+            BASE_CLEAN="${BASE%%-*}"
+            BASE_CLEAN="${BASE_CLEAN%%+*}"
+            # Keep only major.minor — replace patch with the
+            # timestamp. `0.9.0` → `0.9` → `0.9.<timestamp>`.
+            MAJOR_MINOR=$(echo "$BASE_CLEAN" | awk -F. '{print $1"."$2}')
+            STAMP=$(date -u +%Y%m%d%H%M)
+            SHORT_SHA="$(echo "$BUILD_SHA" | cut -c1-7)"
+            VERSION="${MAJOR_MINOR}.${STAMP}+${CHANNEL}.${SHORT_SHA}"
+          fi
+          echo "Resolved version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build (${{ matrix.os }})
@@ -202,23 +280,13 @@ jobs:
       # releases skip this — they ship whatever version is already
       # checked in (which the human bumps before tagging).
       #
-      # Format: <base>-<channel>.<run_number>+<short_sha>
-      #   e.g. 0.9.0-dev.142+abc1234
+      # The version string itself was computed once in the plan job;
+      # we just paste it into Cargo.toml here. Format reminder:
       #
-      # Why every component matters:
-      #   - <base> is the existing Cargo.toml version. Keeps semver
-      #     ordering so that a stable v0.9.0 and a dev 0.9.0-dev.X
-      #     don't fight over which is "newer" (stable wins; pre-release
-      #     identifiers compare lower than the release per semver).
-      #   - <channel> distinguishes dev from beta in the version string
-      #     so users can see at a glance which channel a build is from.
-      #   - <run_number> is a monotonic integer per workflow run, so
-      #     dev.143 > dev.142 unambiguously. SHA-only schemes would
-      #     compare lexicographically and fail (`zzz0001 > aaa9999`).
-      #   - +<short_sha> is build metadata. Semver ignores it for
-      #     comparison but it gives bug reports a precise pointer to
-      #     the exact commit, which is the difference between "I can
-      #     repro this" and "good luck."
+      #     <major>.<minor>.<YYYYMMDDHHMM>+<channel>.<short_sha>
+      #     e.g. 0.9.202511171430+dev.abc1234
+      #
+      # See the `version` step in the plan job for the rationale.
       #
       # Cargo.lock contains the version too; cargo regenerates it on
       # the next build so we don't need to touch it explicitly. The
@@ -226,22 +294,15 @@ jobs:
       - name: Stamp rolling channel version
         if: needs.plan.outputs.channel != 'stable'
         shell: bash
+        env:
+          NEW_VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          CHANNEL="${{ needs.plan.outputs.channel }}"
-          RUN_NUM="${{ github.run_number }}"
-          SHORT_SHA="$(echo "${{ needs.plan.outputs.build_sha }}" | cut -c1-7)"
-          BASE=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-          # Strip any pre-existing pre-release / build-metadata so we
-          # don't double-stamp if a human already put -beta.X in the
-          # base version.
-          BASE_CLEAN="${BASE%%-*}"
-          BASE_CLEAN="${BASE_CLEAN%%+*}"
-          NEW="${BASE_CLEAN}-${CHANNEL}.${RUN_NUM}+${SHORT_SHA}"
-          echo "Stamping version: $BASE → $NEW"
+          OLD=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Stamping version: $OLD → $NEW_VERSION"
           # Match the exact `^version = "..."` line in [package] to
           # avoid touching `version =` in any other table.
-          sed -i.bak -E "0,/^version = \"[^\"]+\"/{s/^version = \"[^\"]+\"/version = \"${NEW}\"/}" Cargo.toml
+          sed -i.bak -E "0,/^version = \"[^\"]+\"/{s/^version = \"[^\"]+\"/version = \"${NEW_VERSION}\"/}" Cargo.toml
           rm -f Cargo.toml.bak
           echo "--- Cargo.toml [package] (head) ---"
           head -n 15 Cargo.toml
@@ -338,26 +399,14 @@ jobs:
           CHANNEL: ${{ needs.plan.outputs.channel }}
           TAG: ${{ needs.plan.outputs.release_tag }}
           REPO: ${{ github.repository }}
-          BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
-          RUN_NUM: ${{ github.run_number }}
+          # Single source of truth for the version, computed in the
+          # plan job. We can't just reread Cargo.toml here because the
+          # build job's rewrite was ephemeral and this runner did its
+          # own checkout that doesn't carry it.
+          VERSION: ${{ needs.plan.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          # Pull version from Cargo.toml for stable releases; for
-          # rolling channels reproduce the same string the build job
-          # stamped into Cargo.toml so the manifest version exactly
-          # matches what's baked into the binary. (We can't read it
-          # back from Cargo.toml here because this runner did its own
-          # checkout that doesn't carry the build job's rewrite.)
-          if [[ "$CHANNEL" == "stable" ]]; then
-            VERSION="${TAG#v}"
-          else
-            CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-            BASE_CLEAN="${CARGO_VERSION%%-*}"
-            BASE_CLEAN="${BASE_CLEAN%%+*}"
-            SHORT_SHA="$(echo "$BUILD_SHA" | cut -c1-7)"
-            VERSION="${BASE_CLEAN}-${CHANNEL}.${RUN_NUM}+${SHORT_SHA}"
-          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
