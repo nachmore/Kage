@@ -25,6 +25,14 @@ homepage = "https://github.com/nachmore/Kage"
 # Users pick a channel in Settings → Updates; the resolver in
 # src/updater.rs::endpoint_for_channel maps the string to the right URL.
 #
+# Debug builds hit the same endpoints. That means "is this update flow
+# wired up correctly?" is a question you can answer without a release —
+# `cargo tauri dev` on the dev channel reaches the same dev-latest
+# release in CI that real users on the dev channel would. We used to
+# point debug builds at a localhost stub, but it broke local testing
+# and offered nothing in return: the build is signed (or unsigned) the
+# same either way, so the network endpoint isn't the trust boundary.
+#
 # The {{target}}, {{arch}}, and {{current_version}} placeholders are
 # substituted at request time by the plugin.
 [package.metadata.update]
@@ -32,12 +40,6 @@ endpoint_stable = "https://github.com/nachmore/Kage/releases/latest/download/lat
 endpoint_beta   = "https://github.com/nachmore/Kage/releases/download/beta-latest/latest.json"
 endpoint_dev    = "https://github.com/nachmore/Kage/releases/download/dev-latest/latest.json"
 changelog_url   = "https://raw.githubusercontent.com/nachmore/Kage/main/CHANGELOG.md"
-
-[package.metadata.update.dev]
-endpoint_stable = "http://localhost:1420/updates/latest.json"
-endpoint_beta   = "http://localhost:1420/updates/latest.json"
-endpoint_dev    = "http://localhost:1420/updates/latest.json"
-changelog_url   = "http://localhost:1420/updates/CHANGELOG.md"
 
 # URLs surfaced to users from the UI (welcome flow, settings, about page).
 # `build.rs` forwards these into compile-time env vars so `env!()` in Rust

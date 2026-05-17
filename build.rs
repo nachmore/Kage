@@ -69,21 +69,20 @@ fn main() {
     }
 
     // Expose update URLs from [package.metadata.update] as compile-time env vars.
-    // Uses [package.metadata.update.dev] for debug builds, falling back to the
-    // top-level [package.metadata.update] for release builds.
+    // Both debug and release builds read the same table now: the dev channel
+    // points at a real GitHub Release that CI auto-publishes on every push to
+    // main, so `cargo tauri dev` on the dev channel can hit the same
+    // endpoints real users do without any local-server scaffolding. The build
+    // is signed (or unsigned) the same way either way, so the network
+    // endpoint isn't the trust boundary.
     let manifest: toml::Value = {
         let content = std::fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
         content.parse().expect("Failed to parse Cargo.toml")
     };
-    let update = &manifest["package"]["metadata"]["update"];
+    let urls = &manifest["package"]["metadata"]["update"];
     let is_release = std::env::var("PROFILE")
         .map(|p| p == "release")
         .unwrap_or(false);
-    let urls = if !is_release && update.get("dev").is_some() {
-        &update["dev"]
-    } else {
-        update
-    };
 
     let endpoint_stable = pluck_url(urls, "endpoint_stable", is_release);
     let endpoint_beta = pluck_url(urls, "endpoint_beta", is_release);

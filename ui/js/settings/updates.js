@@ -1,5 +1,33 @@
 import { SettingsModule } from './base.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+
+/**
+ * Coerce whatever Tauri threw into a readable string.
+ *
+ * Tauri serializes Rust errors via the type's Serialize impl. Our
+ * AppError serializes as `{ kind, message }` — calling `String(e)` on
+ * an object renders `[object Object]`, which is what users were
+ * seeing in the "Update check failed" line. Read the message field
+ * when present, fall through to a JSON dump otherwise.
+ *
+ * Exported so unit tests can lock the behavior in (see
+ * `ui/tests/shared/updates-format-err.test.js`).
+ */
+export function formatErr(e) {
+    if (e == null) return 'Unknown error';
+    if (typeof e === 'string') return e;
+    if (e instanceof Error) return e.message || String(e);
+    if (typeof e === 'object') {
+        if (typeof e.message === 'string' && e.message) return e.message;
+        try {
+            return JSON.stringify(e);
+        } catch {
+            return String(e);
+        }
+    }
+    return String(e);
+}
+
 /**
  * Updates Settings Module
  * Auto-update configuration and changelog display
@@ -140,7 +168,7 @@ export class UpdatesSettingsModule extends SettingsModule {
                 this.showUpToDate(result.current_version);
             }
         } catch (e) {
-            this.showCheckFailed(String(e));
+            this.showCheckFailed(formatErr(e));
         }
     }
 
@@ -211,7 +239,7 @@ export class UpdatesSettingsModule extends SettingsModule {
         try {
             await window.__TAURI__.core.invoke('download_and_install_update');
         } catch (e) {
-            this.showCheckFailed('Install failed: ' + String(e));
+            this.showCheckFailed('Install failed: ' + formatErr(e));
         }
     }
 
