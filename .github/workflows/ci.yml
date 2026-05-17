@@ -109,25 +109,21 @@ jobs:
         # promotes any warning into a failure so we stay at zero warnings.
         run: cargo clippy --all-targets -- -D warnings
 
-      # ----- Test gates ----------------------------------------------
+      # ----- Build + test gates --------------------------------------
       #
-      # Tests run BEFORE the bundling step so a red test fails fast
-      # without burning a few minutes on NSIS / .app packaging that
-      # we'd just throw away. The `cargo test` build doesn't share
-      # cached artefacts with `cargo tauri build` (test mode = `--cfg
-      # test`, which produces a different fingerprint) so reordering
-      # doesn't change overall build time — only the failure mode.
-
-      - name: cargo test
-        # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
-        # exhaustion on Windows; CI inherits that.
-        run: cargo test
-
-      - name: vitest
-        working-directory: ui/tests
-        run: npx vitest run
-
-      # ----- Build + bundle ------------------------------------------
+      # The bundle step runs BEFORE cargo test because some Rust
+      # integration tests (e.g. tests that exercise the bundled MCP
+      # binary or the calendar helper sidecar) expect the build
+      # artefacts to be present at their packaged paths. Reordering
+      # to fail-fast on tests breaks those — see the ci ordering
+      # discussion in 4d2e8f5 / its revert.
+      #
+      # The trade-off is a few minutes of NSIS / .app packaging
+      # cost on a red test, which is fine: tests rarely fail in
+      # CI by the time they hit main, and PRs eat the cost too. If
+      # we ever isolate the artefact-dependent tests behind a
+      # feature flag, we could split them and move the rest before
+      # the bundle.
 
       - name: Install Tauri CLI
         # Pinned to match the local dev env. Bump deliberately when
@@ -151,6 +147,15 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: cargo tauri build --debug
+
+      - name: cargo test
+        # `.cargo/config.toml` already caps jobs at 2 to avoid pagefile
+        # exhaustion on Windows; CI inherits that.
+        run: cargo test
+
+      - name: vitest
+        working-directory: ui/tests
+        run: npx vitest run
 
       # ----- Artifact upload ------------------------------------------
 
