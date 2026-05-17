@@ -70,14 +70,14 @@ Use GitHub's **Actions → Release → Run workflow** button, pick `beta` from t
 
 ## Dev channel
 
-Every push to `main` that passes the `Debug Build + Test` workflow (`ci.yml`) automatically chains into a dev release. A small workflow `auto-dev-release.yml` listens for CI's completion and, when CI succeeds on `main`, dispatches `release.yml` with `channel=dev` and the CI-verified commit SHA. No human action needed.
+Every push to `main` that passes the `Debug Build + Test` workflow (`ci.yml`) automatically chains into a dev release. CI's matrix-completion gate triggers an `auto-release-dev` job inside `ci.yml` itself, which dispatches `release.yml` with `channel=dev` and the CI-verified commit SHA. No human action needed.
 
 The dev release force-moves `dev-latest` to that commit. Dev-channel users see the new build on their next check (manual or daily). The release page for `dev-latest` always shows exactly the most recent successful build — older dev assets are replaced, not accumulated.
 
 If you ever need to ship a dev build manually (e.g. to re-run against a different ref), the **Actions → Release → Run workflow** dispatch lets you pick `dev` as the channel, same as beta.
 
 > [!NOTE]
-> The chain is split across two files (`auto-dev-release.yml` listening for CI + `release.yml` doing the actual release work) instead of putting a `workflow_run` trigger directly on `release.yml`. Combining `workflow_run` with `push` and `workflow_dispatch` triggers in one file caused the event to silently fail to deliver in this repo. Splitting it isolates the chained logic to a minimal file and keeps `release.yml` on triggers we know work.
+> The chain is implemented as a dependent job in `ci.yml` (rather than via `on: workflow_run` in a separate workflow file) because the `workflow_run` event silently failed to deliver in this repo even when isolated to its own minimal file. The current shape composes two reliable primitives: a `needs:` dependency from `auto-release-dev` onto the matrix legs, and a `gh workflow run` dispatch (which `GITHUB_TOKEN` is explicitly allowed to fire per the docs, unlike `push`/`pull_request` triggers).
 
 ## Versioning rolling channels
 

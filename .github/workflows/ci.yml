@@ -199,3 +199,55 @@ jobs:
             target/debug/bundle/macos/*_debug*.app.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+  # ----- Auto-publish dev release on green CI ---------------------
+  #
+  # Once both matrix legs of build-test go green on a push to main,
+  # this job dispatches release.yml with channel=dev. The release
+  # workflow then builds + signs + publishes the dev-latest
+  # GitHub Release that the in-app updater fetches.
+  #
+  # We do this here in ci.yml (instead of via `on: workflow_run`
+  # in a separate workflow file) because workflow_run events
+  # silently fail to deliver in this repo for reasons we couldn't
+  # diagnose — three CI greens in a row never triggered a
+  # workflow_run-listening workflow, and even isolating the trigger
+  # to its own minimal file didn't help. Composing two known-working
+  # primitives instead: a `needs:` dependency from this job onto
+  # build-test, and a `gh workflow run` dispatch (allowed from
+  # GITHUB_TOKEN per the docs, unlike push/pr triggers).
+  #
+  # Guards:
+  #   - event must be push (not PR — PR runs build a merge ref)
+  #   - ref must be main (not feature branches)
+  #   - both matrix legs of build-test must have succeeded (`needs:`)
+  auto-release-dev:
+    name: Auto-publish dev release
+    needs: build-test
+    if: |
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for `gh workflow run` to dispatch release.yml.
+      # Limited to actions:write (everything else stays default
+      # read) so this scoped permission boost doesn't apply to
+      # the matrix legs above, which don't need it.
+      actions: write
+    steps:
+      - name: Dispatch release.yml with channel=dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin the build to the exact commit CI just verified, not
+          # whatever main HEAD is at dispatch time. Closes the small
+          # race where two pushes land close together and dispatch
+          # would otherwise build the newer commit.
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching release.yml for channel=dev at ${BUILD_SHA}"
+          gh workflow run release.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f channel=dev \
+            -f head_sha="${BUILD_SHA}"
