@@ -1,11 +1,17 @@
 # Release workflow.
 #
-# Two channels, driven by different triggers:
+# Three channels, driven by different triggers:
 #   - stable — cut on a git tag matching `v*.*.*`. Human-initiated.
 #   - beta   — manual workflow_dispatch with channel=beta. Moves the
 #              `beta-latest` release to whatever ref you pick.
+#   - dev    — automatic via workflow_run after ci.yml succeeds on main.
+#              Moves the `dev-latest` release to that commit.
 #
-# Dev builds (debug, every push to main) are handled by ci.yml, not here.
+# The dev channel chains off ci.yml (Debug Build + Test) so we only
+# ever publish a dev release when every test gate is green. Doing the
+# release in a separate workflow keeps "test gate" cleanly separated
+# from "ship" and lets us reuse all the signing + manifest plumbing
+# below for free.
 #
 # Each run:
 #   1. Builds the app on Windows + macOS.
@@ -21,6 +27,23 @@
 # running any installer. The result: a MITM attacker who swaps the
 # download in flight still can't ship malicious code, because the
 # signature won't verify.
+#
+# Versioning for rolling channels (dev / beta):
+#   The version string baked into the binary needs to be monotonically
+#   increasing per build, otherwise the updater plugin's internal
+#   "is the manifest newer than what I'm running?" check would say no
+#   and silently skip every update. We rewrite Cargo.toml's version
+#   line in CI before the build to:
+#
+#       <base>-<channel>.<run_number>+<short_sha>
+#
+#   e.g. `0.9.0-dev.142+abc1234`. The rewrite is ephemeral (never
+#   committed back). Stable releases keep the unmodified version from
+#   the v*.*.* tag, so they're untouched. We use semver pre-release +
+#   build-metadata so version comparison stays correct: `dev.143 >
+#   dev.142` (numeric pre-release tokens compare numerically), and the
+#   `+sha` build-metadata is ignored by semver but visible in
+#   Settings → About for bug reports.
 #
 # What IS NOT yet in this workflow:
 #   - Linux (Kage ships only Windows + macOS today).
@@ -47,28 +70,47 @@ on:
         type: choice
         options:
           - beta
+          - dev
           - stable
+  # Auto-publish dev builds when ci.yml goes green on main. The
+  # workflow_run trigger only fires on success — a failing CI run
+  # never reaches here, which is exactly the gate we want for "the
+  # bleeding-edge channel." We additionally guard inside the plan
+  # job below so other branches / PRs that happen to run ci.yml
+  # don't accidentally cut a dev release.
+  workflow_run:
+    workflows: ["Debug Build + Test"]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   # Only one release-per-channel at a time. Stable runs queue (never
-  # cancel) so a tag race never gets dropped. Beta channels cancel
+  # cancel) so a tag race never gets dropped. Beta/dev channels cancel
   # superseded runs because each force-moves the channel's alias tag —
   # only the latest matters.
-  group: release-${{ github.event.inputs.channel || 'stable' }}
+  group: release-${{ github.event.inputs.channel || (github.event_name == 'workflow_run' && 'dev') || 'stable' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
   # Resolve once up-front which channel this run targets. Downstream
   # jobs just read the outputs so the channel-detection logic lives in
-  # exactly one place.
+  # exactly one place. Also acts as a guard for workflow_run triggers:
+  # if CI failed, or if it ran on something other than main, we exit
+  # early without doing any release work.
   plan:
     name: Resolve channel
     runs-on: ubuntu-latest
+    # Skip workflow_run invocations where CI itself didn't succeed.
+    # Other triggers (tag push, workflow_dispatch) always proceed.
+    if: |
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     outputs:
       channel: ${{ steps.pick.outputs.channel }}
       release_tag: ${{ steps.pick.outputs.release_tag }}
       release_name: ${{ steps.pick.outputs.release_name }}
       is_prerelease: ${{ steps.pick.outputs.is_prerelease }}
+      build_sha: ${{ steps.pick.outputs.build_sha }}
     steps:
       - id: pick
         shell: bash
@@ -78,6 +120,18 @@ jobs:
             echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "release_name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            # Auto-triggered by a successful CI run on main. Always dev.
+            # Use the SHA of the commit CI built, not GITHUB_SHA — for
+            # workflow_run that resolves to the merge commit on main
+            # which is what we want anyway, but being explicit keeps
+            # this readable.
+            echo "channel=dev" >> "$GITHUB_OUTPUT"
+            echo "release_tag=dev-latest" >> "$GITHUB_OUTPUT"
+            echo "release_name=Kage dev (latest)" >> "$GITHUB_OUTPUT"
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "build_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
           else
             # workflow_dispatch
             CH="${{ github.event.inputs.channel }}"
@@ -89,6 +143,7 @@ jobs:
             else
               echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             fi
+            echo "build_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -109,6 +164,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Always check out the SHA the plan resolved to. For tag
+          # pushes / dispatches that's GITHUB_SHA; for workflow_run
+          # triggers it's the head_sha of the CI run that succeeded.
+          # Without this override, workflow_run would check out the
+          # default branch HEAD, which can race ahead of what was
+          # tested.
+          ref: ${{ needs.plan.outputs.build_sha }}
           # Full history so cargo can stamp version info if ever needed
           # AND so the tag-on-main guard below has the main branch to
           # compare against. Without this the merge-base check would
@@ -123,7 +185,7 @@ jobs:
       # main. Catches "I tagged from the wrong branch" and force-pushed
       # tags that got reparented to a feature ref. Stable releases must
       # be cut from main and only main; if a hotfix branch needs a
-      # stable release, merge it to main first, then tag.
+      # stable release, merge it to main first, then re-tag.
       - name: Verify stable tag is on main
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -135,6 +197,57 @@ jobs:
             exit 1
           fi
           echo "✓ Tag is reachable from main"
+
+      # Rewrite Cargo.toml's version for rolling channels. Stable
+      # releases skip this — they ship whatever version is already
+      # checked in (which the human bumps before tagging).
+      #
+      # Format: <base>-<channel>.<run_number>+<short_sha>
+      #   e.g. 0.9.0-dev.142+abc1234
+      #
+      # Why every component matters:
+      #   - <base> is the existing Cargo.toml version. Keeps semver
+      #     ordering so that a stable v0.9.0 and a dev 0.9.0-dev.X
+      #     don't fight over which is "newer" (stable wins; pre-release
+      #     identifiers compare lower than the release per semver).
+      #   - <channel> distinguishes dev from beta in the version string
+      #     so users can see at a glance which channel a build is from.
+      #   - <run_number> is a monotonic integer per workflow run, so
+      #     dev.143 > dev.142 unambiguously. SHA-only schemes would
+      #     compare lexicographically and fail (`zzz0001 > aaa9999`).
+      #   - +<short_sha> is build metadata. Semver ignores it for
+      #     comparison but it gives bug reports a precise pointer to
+      #     the exact commit, which is the difference between "I can
+      #     repro this" and "good luck."
+      #
+      # Cargo.lock contains the version too; cargo regenerates it on
+      # the next build so we don't need to touch it explicitly. The
+      # rewrite is ephemeral — the workflow never commits back to git.
+      - name: Stamp rolling channel version
+        if: needs.plan.outputs.channel != 'stable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANNEL="${{ needs.plan.outputs.channel }}"
+          RUN_NUM="${{ github.run_number }}"
+          SHORT_SHA="$(echo "${{ needs.plan.outputs.build_sha }}" | cut -c1-7)"
+          BASE=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          # Strip any pre-existing pre-release / build-metadata so we
+          # don't double-stamp if a human already put -beta.X in the
+          # base version.
+          BASE_CLEAN="${BASE%%-*}"
+          BASE_CLEAN="${BASE_CLEAN%%+*}"
+          NEW="${BASE_CLEAN}-${CHANNEL}.${RUN_NUM}+${SHORT_SHA}"
+          echo "Stamping version: $BASE → $NEW"
+          # Match the exact `^version = "..."` line in [package] to
+          # avoid touching `version =` in any other table.
+          sed -i.bak -E "0,/^version = \"[^\"]+\"/{s/^version = \"[^\"]+\"/version = \"${NEW}\"/}" Cargo.toml
+          rm -f Cargo.toml.bak
+          echo "--- Cargo.toml [package] (head) ---"
+          head -n 15 Cargo.toml
+          # tauri.conf.json reads the version from Cargo.toml via
+          # "../Cargo.toml" so it inherits the new value automatically.
+          # No second rewrite needed.
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -204,6 +317,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ needs.plan.outputs.build_sha }}
           # Force-pushing the rolling tag below uses the default
           # GITHUB_TOKEN that checkout writes into the local git config.
           # Explicit so future maintainers don't wonder why a force-tag
@@ -224,17 +338,25 @@ jobs:
           CHANNEL: ${{ needs.plan.outputs.channel }}
           TAG: ${{ needs.plan.outputs.release_tag }}
           REPO: ${{ github.repository }}
+          BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
+          RUN_NUM: ${{ github.run_number }}
         shell: bash
         run: |
           set -euo pipefail
-          # Pull version from Cargo.toml for stable releases; use the
-          # short SHA for rolling channels so the manifest version
-          # bumps on every build.
+          # Pull version from Cargo.toml for stable releases; for
+          # rolling channels reproduce the same string the build job
+          # stamped into Cargo.toml so the manifest version exactly
+          # matches what's baked into the binary. (We can't read it
+          # back from Cargo.toml here because this runner did its own
+          # checkout that doesn't carry the build job's rewrite.)
           if [[ "$CHANNEL" == "stable" ]]; then
             VERSION="${TAG#v}"
           else
             CARGO_VERSION=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
-            VERSION="${CARGO_VERSION}-${CHANNEL}.$(git rev-parse --short HEAD)"
+            BASE_CLEAN="${CARGO_VERSION%%-*}"
+            BASE_CLEAN="${BASE_CLEAN%%+*}"
+            SHORT_SHA="$(echo "$BUILD_SHA" | cut -c1-7)"
+            VERSION="${BASE_CLEAN}-${CHANNEL}.${RUN_NUM}+${SHORT_SHA}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -287,11 +409,12 @@ jobs:
         if: needs.plan.outputs.channel != 'stable'
         env:
           TAG: ${{ needs.plan.outputs.release_tag }}
+          BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f "$TAG"
+          git tag -f "$TAG" "$BUILD_SHA"
           git push -f origin "$TAG"
 
       - name: Collect assets
@@ -307,9 +430,12 @@ jobs:
           tag_name: ${{ needs.plan.outputs.release_tag }}
           name: ${{ needs.plan.outputs.release_name }}
           prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
-          # For rolling channels we overwrite the release's assets each
-          # run. For stable releases the action naturally fails if the
-          # tag already has assets, which is what we want — re-running
-          # a stable release by accident should be loud.
+          # softprops/action-gh-release replaces existing assets when a
+          # release for the same tag already exists, so the rolling
+          # channels stay at "exactly the latest build" without
+          # accumulating stale assets. For stable releases the action
+          # naturally fails if the tag already has assets, which is
+          # what we want — re-running a stable release by accident
+          # should be loud.
           files: release/*
           fail_on_unmatched_files: true

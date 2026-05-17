@@ -70,7 +70,30 @@ Use GitHub's **Actions → Release → Run workflow** button, pick `beta` from t
 
 ## Dev channel
 
-Every push to `main` triggers a dev build and force-moves `dev-latest`. No human action needed. Dev-channel users see updates within 24 hours (or however often they re-check).
+Every push to `main` that passes the `Debug Build + Test` workflow (`ci.yml`) automatically chains into a dev release. The `Release` workflow listens via `workflow_run` and only fires when CI's conclusion is `success`, so a red CI run never produces a dev build. No human action needed.
+
+The dev release force-moves `dev-latest` to the commit CI just verified. Dev-channel users see the new build on their next check (manual or daily). The release page for `dev-latest` always shows exactly the most recent successful build — older dev assets are replaced, not accumulated.
+
+If you ever need to ship a dev build manually (e.g. CI got skipped or you want to re-run against a different ref), the **Actions → Release → Run workflow** dispatch lets you pick `dev` as the channel, same as beta.
+
+## Versioning rolling channels
+
+Stable releases ship the version that's already checked into `Cargo.toml` (which the human bumps before tagging). The dev and beta channels can't do that — they fire on every commit, so the version baked into the binary needs to be monotonically increasing per build, otherwise the updater plugin would say "I'm 0.9.0, the manifest says 0.9.0, no update" and silently skip every dev build.
+
+The release workflow rewrites `Cargo.toml`'s version line in CI before each rolling-channel build to:
+
+```
+<base>-<channel>.<run_number>+<short_sha>
+```
+
+For example: `0.9.0-dev.142+abc1234`. The pieces:
+
+- **`<base>`** — the version already in `Cargo.toml` (everything after `-` or `+` stripped). Keeps semver ordering so a stable `v0.9.0` release wins over `0.9.0-dev.X` (per semver, pre-release identifiers compare lower than the release).
+- **`<channel>`** — `dev` or `beta`, distinguishes the binary at a glance.
+- **`<run_number>`** — `${{ github.run_number }}`, monotonically increasing per workflow run. Numeric pre-release tokens compare numerically, so `dev.143 > dev.142` always evaluates correctly. SHA-only schemes don't work — `zzz0001 > aaa9999` lexicographically.
+- **`+<short_sha>`** — semver build metadata. Ignored for comparison but visible in **Settings → About** so bug reports point at a precise commit.
+
+The rewrite is ephemeral. The workflow never commits back to git.
 
 ## Secrets required in CI
 
