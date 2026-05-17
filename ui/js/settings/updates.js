@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+import { registerSettingsActions } from './module-registry.js';
 
 /**
  * Coerce whatever Tauri threw into a readable string.
@@ -83,7 +84,10 @@ export class UpdatesSettingsModule extends SettingsModule {
                 <div class="setting-section-label">Changelog</div>
 
                 <div class="setting-row">
-                    <div class="setting-description">Release notes and version history.</div>
+                    <div class="setting-description">
+                        Release notes and version history.
+                        <a href="#" id="openReleasesLink" data-action="updates.openReleases" style="margin-left:6px">Browse all releases on GitHub →</a>
+                    </div>
                     <div id="changelogContainer" class="changelog-box">
                         <em>Loading changelog...</em>
                     </div>
@@ -105,11 +109,30 @@ export class UpdatesSettingsModule extends SettingsModule {
                 Array.isArray(info.update_channels) && info.update_channels.length > 0
                     ? info.update_channels
                     : ['stable', 'beta', 'dev'];
+            // Build a /releases URL once. Falls back to "" when no
+            // repo is configured (third-party fork without a
+            // [package.metadata.links] block); the click handler
+            // below treats that as a noop so the link still renders
+            // but doesn't navigate users to a 404.
+            const repo = info?.links?.repository || '';
+            this._releasesUrl = repo ? repo.replace(/\/+$/, '') + '/releases' : '';
             this._renderChannelOptions();
         } catch (e) {
             console.warn('[Updates] Failed to get app info:', e);
             this._validChannels = ['stable', 'beta', 'dev'];
+            this._releasesUrl = '';
         }
+
+        // Open the releases page in the user's default browser. We
+        // route through the shell plugin's open_url command so the
+        // link works regardless of webview navigation policy. See
+        // src/commands/system.rs::open_url.
+        registerSettingsActions({
+            'updates.openReleases': () => {
+                if (!this._releasesUrl) return;
+                window.__TAURI__?.core?.invoke('open_url', { url: this._releasesUrl });
+            },
+        });
 
         this.loadChangelog();
 

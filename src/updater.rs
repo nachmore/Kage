@@ -159,6 +159,18 @@ impl UpdaterState {
 /// runtime via `updater_builder().pubkey(...)`. A missing key means we
 /// don't check for updates at all — safer to silently no-op than to
 /// ship updates with no verification.
+///
+/// Missing-manifest handling: a 404 from the channel endpoint isn't
+/// an error — it means "no release has been cut on this channel yet."
+/// Common in two scenarios:
+///   - A new channel where CI hasn't run / hasn't published yet
+///     (e.g. `dev-latest` before the first auto-publish).
+///   - A user pointed at a stale alias that's been retired.
+///
+/// Either way the user-facing answer is "you're as up-to-date as you
+/// can be on this channel" — same as the no-update case. Surfacing it
+/// as an error confused users (the previous "[object Object]" bug
+/// notwithstanding). The 404 stays in info-level logs for debugging.
 pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Option<Update>> {
     let Some(pubkey) = PUBKEY else {
         warn!("Updater: no public key configured — skipping check");
@@ -187,7 +199,34 @@ pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Optio
         .build()
         .context("Failed to build updater")?;
 
-    updater.check().await.context("Update check failed")
+    match updater.check().await {
+        Ok(maybe) => Ok(maybe),
+        Err(e) if is_manifest_not_found(&e) => {
+            // Treat as "no update available" — see fn doc above.
+            info!(
+                "No release published on channel '{}' yet (404 at {}); reporting up-to-date",
+                channel, endpoint
+            );
+            Ok(None)
+        }
+        Err(e) => Err(anyhow::Error::new(e).context("Update check failed")),
+    }
+}
+
+/// Heuristic: did this `tauri_plugin_updater::Error` come from a 404
+/// response (manifest missing) vs. a real failure (network down,
+/// signature verification, etc.)?
+///
+/// The plugin doesn't expose the HTTP status code as a typed variant;
+/// the only information we get back is the error's `Display` string,
+/// which contains "did not respond with a successful status code" for
+/// any non-2xx, plus the URL and the status. We check for the canonical
+/// "404" / "Not Found" tokens. If the plugin ever surfaces a typed
+/// status accessor we should switch to that — for now the string match
+/// is the only available signal.
+fn is_manifest_not_found(e: &tauri_plugin_updater::Error) -> bool {
+    let msg = e.to_string();
+    msg.contains("404") || msg.to_lowercase().contains("not found")
 }
 
 /// Download + install a previously-checked `Update`. The plugin streams
