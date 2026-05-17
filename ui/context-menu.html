@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Menu</title>
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
-    <script src="js/shared/theme-global.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -47,14 +46,17 @@
         <div class="menu-sep hidden" id="devSep"></div>
         <div class="menu-item hidden" id="devInspect" data-action="inspect">Inspect</div>
     </div>
-    <script>
+    <script type="module">
+        import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
+
         (async function() {
             const { invoke } = window.__TAURI__.core;
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const LogicalSize = window.__TAURI__.dpi.LogicalSize;
             const { emit } = window.__TAURI__.event;
 
-            kageTheme.init();
+            initThemeListener();
+            loadAndApplyTheme(invoke).catch(() => applyTheme('system'));
 
             // Check dev mode once at load
             try {

@@ -1,7 +1,9 @@
+import { SettingsModule } from './base.js';
+import { registerSettingsActions } from './module-registry.js';
 /**
  * Store Settings Module — auto-update, primary store URL, and additional store sources.
  */
-class StoreSettingsModule extends SettingsModule {
+export class StoreSettingsModule extends SettingsModule {
     constructor() {
         super('store', 'Extension Store', '🛍️');
         this._sources = [];
@@ -151,10 +153,8 @@ class StoreSettingsModule extends SettingsModule {
 // Register the store section's row-removal handler with the delegated
 // dispatcher. The button used to carry an inline `onclick="this.closest(
 // '.store-source-row').remove()"` — same behavior, expressed once.
-if (typeof window !== 'undefined' && window.registerSettingsActions) {
-    window.registerSettingsActions({
-        'store.removeSourceRow': (_arg, el) => {
-            el.closest('.store-source-row')?.remove();
-        },
-    });
-}
+registerSettingsActions({
+    'store.removeSourceRow': (_arg, el) => {
+        el.closest('.store-source-row')?.remove();
+    },
+});

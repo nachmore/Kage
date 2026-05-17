@@ -12,43 +12,26 @@
 // it with `(arg, element, event)`. Handlers can read further context
 // from element data attributes if they need to.
 //
-// This file is loaded as a non-module script (matching every other
-// settings/* module). The two functions it defines are intentionally
-// global so the existing module scripts can call them without ES
-// import wiring.
-//
 // Tested via `ui/tests/shared/settings-actions.test.js`.
 
-(function () {
-    if (typeof window === 'undefined') return;
-    if (window.__settingsActionsInstalled) return;
-    window.__settingsActionsInstalled = true;
+const handlers = Object.create(null);
+let _installed = false;
 
-    const handlers = Object.create(null);
+function findActionElement(start, attr) {
+    // Walk up to a parent carrying the requested data-attr. We use
+    // closest() so clicks on inner spans/icons still trigger.
+    if (!start?.closest) return null;
+    return start.closest(`[${attr}]`);
+}
 
-    function registerSettingsActions(map) {
-        Object.assign(handlers, map);
-    }
-
-    function dispatchSettingsAction(name, arg, element, event) {
-        const handler = handlers[name];
-        if (!handler) {
-            console.warn('[settings] no handler for action:', name);
-            return;
-        }
-        try {
-            handler(arg, element, event);
-        } catch (e) {
-            console.error('[settings] handler for', name, 'threw:', e);
-        }
-    }
-
-    function findActionElement(start, attr) {
-        // Walk up to a parent carrying the requested data-attr. We use
-        // closest() so clicks on inner spans/icons still trigger.
-        if (!start?.closest) return null;
-        return start.closest(`[${attr}]`);
-    }
+/**
+ * Install the global click/change listener exactly once. Idempotent —
+ * safe to call from each module's import path.
+ */
+export function installActionDispatcher() {
+    if (typeof document === 'undefined') return;
+    if (_installed) return;
+    _installed = true;
 
     document.addEventListener(
         'click',
@@ -80,7 +63,31 @@
         },
         true
     );
+}
 
+export function registerSettingsActions(map) {
+    Object.assign(handlers, map);
+}
+
+export function dispatchSettingsAction(name, arg, element, event) {
+    const handler = handlers[name];
+    if (!handler) {
+        console.warn('[settings] no handler for action:', name);
+        return;
+    }
+    try {
+        handler(arg, element, event);
+    } catch (e) {
+        console.error('[settings] handler for', name, 'threw:', e);
+    }
+}
+
+// Install dispatcher on import.
+installActionDispatcher();
+
+// Keep window globals so the existing settings-actions test (and any
+// not-yet-migrated callers) still work.
+if (typeof window !== 'undefined') {
     window.registerSettingsActions = registerSettingsActions;
     window.dispatchSettingsAction = dispatchSettingsAction;
-})();
+}

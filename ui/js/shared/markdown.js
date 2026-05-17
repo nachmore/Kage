@@ -20,9 +20,8 @@ const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 // syntax-highlighted code.
 //
 // We use a private DOM-based escape so we don't depend on import order
-// during module init — markdown.js is loaded as a non-module script tag
-// alongside marked, so static `import` of escapeHtml from tool-utils.js
-// would create a load-order coupling we don't otherwise have here.
+// during module init — keeps this file self-sufficient and avoids a
+// circular import with tool-utils.js (which depends on this module).
 export function _escapeHtmlForMarked(text) {
     const div = document.createElement('div');
     div.textContent = text;

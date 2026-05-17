@@ -1,7 +1,8 @@
+import { SettingsModule } from './base.js';
 /**
  * Color Picker Settings Module
  */
-class ColorPickerSettingsModule extends SettingsModule {
+export class ColorPickerSettingsModule extends SettingsModule {
     constructor() {
         super('colorpicker', 'Color Picker', '🎨');
     }

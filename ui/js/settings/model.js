@@ -1,8 +1,9 @@
+import { SettingsModule } from './base.js';
 /**
  * Model Settings Module
  * Allows selecting a default model for new sessions.
  */
-class ModelSettingsModule extends SettingsModule {
+export class ModelSettingsModule extends SettingsModule {
     constructor() {
         super('model', 'Model', '🧠');
         this.models = [];

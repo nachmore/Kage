@@ -1,7 +1,10 @@
+import { SettingsModule } from './base.js';
+import { getSystemIcon } from './system.js';
+import { isMac } from '../shared/shortcuts.js';
 /**
  * System Integration Settings Module
  */
-class IntegrationSettingsModule extends SettingsModule {
+export class IntegrationSettingsModule extends SettingsModule {
     constructor() {
         super('integration', 'System Integration', getSystemIcon());
     }
@@ -15,14 +18,14 @@ class IntegrationSettingsModule extends SettingsModule {
 
                 ${this.createCheckboxRow(
                     'Capture selected text',
-                    `Grab selected text from the active window when the hotkey is pressed (uses ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'}). Disable if this interferes with terminal apps or other programs.`,
+                    `Grab selected text from the active window when the hotkey is pressed (uses ${isMac() ? 'Cmd+C' : 'Ctrl+C'}). Disable if this interferes with terminal apps or other programs.`,
                     'captureSelection',
                     true
                 )}
 
                 ${this.createControlRow(
                     "Don't auto-copy in these apps",
-                    `One process name per line. When these apps are focused, Kage won't inject ${window.kagePlatform.isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
+                    `One process name per line. When these apps are focused, Kage won't inject ${isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
                     `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`
                 )}
 

@@ -1,8 +1,9 @@
+import { SettingsModule } from './base.js';
 /**
  * Notifications Settings Module
  * Example of how easy it is to add a new settings category
  */
-class NotificationsSettingsModule extends SettingsModule {
+export class NotificationsSettingsModule extends SettingsModule {
     constructor() {
         super('notifications', 'Notifications', '🔔');
     }

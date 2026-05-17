@@ -1,7 +1,8 @@
+import { SettingsModule } from './base.js';
 /**
  * Timer & Stopwatch Settings Module
  */
-class TimerSettingsModule extends SettingsModule {
+export class TimerSettingsModule extends SettingsModule {
     constructor() {
         super('timer', 'Timer & Stopwatch', '⏱️');
     }

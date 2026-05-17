@@ -1,12 +1,13 @@
 /**
  * Settings Manager
  * Coordinates all settings modules and handles save/load operations.
- *
- * For sandboxed extension settings we rely on helpers hoisted onto
- * `window.__kageSettingsSandbox` by js/settings/sandbox-bootstrap.js
- * (loaded as a module from settings.html). See that file for the
- * actual import wiring.
  */
+
+import { SettingsModule } from './base.js';
+import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
+import { renderSchema } from '../shared/settings-renderer.js';
+import { normalizePermissions } from '../shared/extension-permissions.js';
+import { setSettingsManager, registerSettingsActions } from './module-registry.js';
 
 // Capability → (icon, description) used to render permission badges on
 // extension settings pages. Keep in sync with ui/js/shared/extension-permissions.js.
@@ -67,7 +68,7 @@ function renderCapabilityBadges(capabilities, legacy) {
 // the same interface the legacy `SettingsModule` base class exposed, so
 // the rest of SettingsManager treats it like any other module.
 
-class SandboxedExtensionSettingsModule {
+export class SandboxedExtensionSettingsModule {
     constructor({ extensionId, manifest, sandbox, rendered, capabilities }) {
         this._extensionId = extensionId;
         this._extensionVersion = manifest.version || '';
@@ -122,7 +123,7 @@ class SandboxedExtensionSettingsModule {
  * Given a manifest and its source paths, boot a sandbox for settings
  * rendering, fetch the declared schema, and build the adapter module.
  */
-async function buildSandboxedSettingsModule({
+export async function buildSandboxedSettingsModule({
     pool,
     manifest,
     capabilities,
@@ -158,7 +159,7 @@ async function buildSandboxedSettingsModule({
     }
 
     const container = document.createElement('div');
-    const rendered = window.__kageSettingsSandbox.renderSchema({
+    const rendered = renderSchema({
         extensionId: manifest.id,
         schema,
         container,
@@ -174,7 +175,7 @@ async function buildSandboxedSettingsModule({
     });
 }
 
-class SettingsManager {
+export class SettingsManager {
     constructor() {
         this.modules = [];
         this.invoke = window.__TAURI__.core.invoke;
@@ -187,7 +188,7 @@ class SettingsManager {
      * SandboxedExtensionSettingsModule (used by all extensions).
      */
     registerModule(module) {
-        const isLegacy = typeof SettingsModule !== 'undefined' && module instanceof SettingsModule;
+        const isLegacy = module instanceof SettingsModule;
         const isSandboxed = module instanceof SandboxedExtensionSettingsModule;
         if (!isLegacy && !isSandboxed) {
             throw new Error(
@@ -446,14 +447,11 @@ class SettingsManager {
     }
 }
 
-// Global instance
-let settingsManager;
-
 /**
  * Add a sidebar item dynamically to the Extensions section, in alphabetical order.
  * Static items (store, integration, shortcuts) stay at the top.
  */
-function addExtensionSidebarItem(id, icon, label) {
+export function addExtensionSidebarItem(id, icon, label) {
     const section = document.getElementById('extensionsSidebarSection');
     if (!section) return;
     // Don't add duplicates
@@ -488,291 +486,17 @@ function addExtensionSidebarItem(id, icon, label) {
     }
 }
 
-/**
- * Initialize settings on page load
- */
-window.addEventListener('DOMContentLoaded', async () => {
-    settingsManager = new SettingsManager();
-    const invoke = window.__TAURI__.core.invoke;
+// --- Sandbox pool helpers ---------------------------------------------------
 
-    // Register core modules (order matches sidebar)
-    settingsManager.registerModule(new AppearanceSettingsModule());
-    settingsManager.registerModule(new HotkeySettingsModule());
-    settingsManager.registerModule(new SystemSettingsModule());
-    // macOS-only: privacy/TCC permissions pane. The sidebar item for this
-    // module is hidden by default in settings.html and revealed here.
-    if (window.kageMacPermissions?.isMacOS()) {
-        settingsManager.registerModule(new MacPermissionsSettingsModule());
-        const sidebarItem = document.getElementById('macPermissionsSidebarItem');
-        if (sidebarItem) sidebarItem.classList.remove('hidden');
-    }
-    settingsManager.registerModule(new AssistantSettingsModule());
-    settingsManager.registerModule(new ConnectionSettingsModule());
-    settingsManager.registerModule(new ModelSettingsModule());
-    settingsManager.registerModule(new McpSettingsModule());
-    settingsManager.registerModule(new ToolPermissionsSettingsModule());
-    settingsManager.registerModule(new IntegrationSettingsModule());
-    settingsManager.registerModule(new ShortcutsSettingsModule());
-    settingsManager.registerModule(new AutomationsSettingsModule());
-    settingsManager.registerModule(new SpeechSettingsModule());
-    settingsManager.registerModule(new StoreSettingsModule());
-
-    // Settings-window-local sandbox pool. Separate from the floating/chat
-    // windows' pools because each window has its own document; sandboxes
-    // are tied to the document they mount into.
-    const sandboxPool = window.__kageSettingsSandbox.createPool(invoke);
-
-    // Preload current config so we can hand each sandbox the right initial values.
-    let currentConfig = {};
-    try {
-        currentConfig = await invoke('get_config');
-    } catch (e) {
-        console.warn('Failed to preload config:', e);
-    }
-
-    // Read all user-installed extensions once — we'll iterate over both
-    // bundled and user-installed lists with a single loader path.
-    let installedUser = [];
-    try {
-        installedUser = await invoke('list_extensions');
-    } catch {}
-
-    // Helper: resolve granted capabilities for an extension. Bundled ones
-    // get what their manifest declares (implicit grant); user-installed
-    // ones get whatever `extension_grants[id].granted` says. See
-    // docs/SECURITY_MODEL.md for the install-time grant story.
-    function resolveCaps(manifest, bundled) {
-        const requested = window.__kageSettingsSandbox.normalize(manifest.permissions, manifest.id);
-        if (bundled) return requested;
-        const record = currentConfig.extension_grants?.[manifest.id];
-        if (!record) return [];
-        const grantedSet = new Set(
-            window.__kageSettingsSandbox.normalize(record.granted, manifest.id)
-        );
-        return requested.filter((cap) => grantedSet.has(cap));
-    }
-
-    async function loadSandboxedSettings({ manifest, sourceCode, bundled }) {
-        const capabilities = resolveCaps(manifest, bundled);
-        const mod = await buildSandboxedSettingsModule({
-            pool: sandboxPool,
-            manifest,
-            capabilities,
-            settingsProviderSource: sourceCode,
-            currentConfig,
-        });
-        settingsManager.registerModule(mod);
-        addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
-    }
-
-    // 1. Load bundled extension settings.
-    try {
-        const resp = await fetch('extensions/bundled.json');
-        if (resp.ok) {
-            const bundledList = await resp.json();
-            for (const entry of bundledList) {
-                try {
-                    const manifestResp = await fetch(`extensions/${entry.id}/manifest.json`);
-                    if (!manifestResp.ok) continue;
-                    const manifest = await manifestResp.json();
-                    const settingsPath = manifest.contributes?.settingsProvider;
-                    if (!settingsPath) continue; // extension has no settings UI
-                    const srcResp = await fetch(
-                        `extensions/${entry.id}/${settingsPath.replace('./', '')}`
-                    );
-                    if (!srcResp.ok) throw new Error(`HTTP ${srcResp.status}`);
-                    const sourceCode = await srcResp.text();
-                    await loadSandboxedSettings({ manifest, sourceCode, bundled: true });
-                } catch (e) {
-                    console.warn(`Failed to load bundled extension settings '${entry.id}':`, e);
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to load bundled.json:', e);
-    }
-
-    // 2. Load user-installed extension settings.
-    try {
-        const bundledIds = new Set();
-        try {
-            const resp = await fetch('extensions/bundled.json');
-            if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
-        } catch {}
-
-        for (const item of installedUser) {
-            if (bundledIds.has(item.manifest.id)) continue;
-            const manifest = item.manifest;
-            const settingsPath = manifest.contributes?.settingsProvider;
-            if (!settingsPath) continue;
-            try {
-                const sourceCode = await invoke('read_extension_file', {
-                    extensionId: manifest.id,
-                    kind: 'extension',
-                    filePath: settingsPath.replace('./', ''),
-                });
-                await loadSandboxedSettings({ manifest, sourceCode, bundled: false });
-            } catch (e) {
-                console.warn(`Failed to load user extension settings '${manifest.id}':`, e);
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to load user extensions for settings:', e);
-    }
-
-    // About section — ordering here must match the sidebar in
-    // ui/settings.html (Privacy → Updates → About). Several bits of
-    // settings machinery key off registration order: the first module
-    // is the default-visible section, extension module sidebar entries
-    // are inserted relative to these, and switchSection() relies on
-    // the one-to-one mapping between sidebar data-section IDs and the
-    // module IDs registered here.
-    settingsManager.registerModule(new PrivacySettingsModule());
-    settingsManager.registerModule(new UpdatesSettingsModule());
-    settingsManager.registerModule(new AboutSettingsModule());
-
-    // Render and load
-    settingsManager.render();
-    await settingsManager.load();
-
-    // Listen for extension install/uninstall — hot-load new settings modules
-    const { listen } = window.__TAURI__.event;
-    listen('extensions_changed', async () => {
-        console.log('[Settings] extensions_changed — checking for new modules');
-        try {
-            const userExts = await invoke('list_extensions');
-            // Refresh config so grants are current
-            try {
-                currentConfig = await invoke('get_config');
-            } catch {}
-
-            const bundledIds = new Set();
-            try {
-                const resp = await fetch('extensions/bundled.json');
-                if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
-            } catch {}
-
-            let added = false;
-            for (const item of userExts) {
-                if (bundledIds.has(item.manifest.id)) continue;
-                const manifest = item.manifest;
-                if (!manifest.contributes?.settingsProvider) continue;
-
-                const existingMod = settingsManager.modules.find(
-                    (m) => m._extensionId === manifest.id
-                );
-                if (existingMod) {
-                    if (existingMod._extensionVersion === manifest.version) continue;
-                    console.log(
-                        `[Settings] Updating '${manifest.id}' from ${existingMod._extensionVersion} to ${manifest.version}`
-                    );
-                    const idx = settingsManager.modules.indexOf(existingMod);
-                    if (idx !== -1) settingsManager.modules.splice(idx, 1);
-                    const sidebarItem = document.querySelector(
-                        `.sidebar-item[data-section="${existingMod.id}"]`
-                    );
-                    if (sidebarItem) sidebarItem.remove();
-                    try {
-                        existingMod.destroy?.();
-                    } catch {}
-                    sandboxPool.unload(manifest.id);
-                }
-
-                try {
-                    const settingsPath = manifest.contributes.settingsProvider.replace('./', '');
-                    const sourceCode = await invoke('read_extension_file', {
-                        extensionId: manifest.id,
-                        kind: 'extension',
-                        filePath: settingsPath,
-                    });
-                    const capabilities = resolveCaps(manifest, false);
-                    const mod = await buildSandboxedSettingsModule({
-                        pool: sandboxPool,
-                        manifest,
-                        capabilities,
-                        settingsProviderSource: sourceCode,
-                        currentConfig,
-                    });
-                    const insertIdx = Math.max(0, settingsManager.modules.length - 2);
-                    settingsManager.modules.splice(insertIdx, 0, mod);
-                    addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
-                    added = true;
-                    console.log(
-                        `[Settings] Hot-loaded extension settings: ${manifest.id} v${manifest.version}`
-                    );
-                } catch (e) {
-                    console.warn(`[Settings] Failed to hot-load '${manifest.id}':`, e);
-                }
-            }
-
-            // Remove modules for uninstalled extensions
-            const installedIds = new Set(userExts.map((e) => e.manifest.id));
-            const toRemove = settingsManager.modules.filter(
-                (m) =>
-                    m._extensionId &&
-                    !bundledIds.has(m._extensionId) &&
-                    !installedIds.has(m._extensionId)
-            );
-            for (const mod of toRemove) {
-                const idx = settingsManager.modules.indexOf(mod);
-                if (idx !== -1) {
-                    settingsManager.modules.splice(idx, 1);
-                    const sidebarItem = document.querySelector(
-                        `.sidebar-item[data-section="${mod.id}"]`
-                    );
-                    if (sidebarItem) sidebarItem.remove();
-                    try {
-                        mod.destroy?.();
-                    } catch {}
-                    sandboxPool.unload(mod._extensionId);
-                    added = true;
-                    console.log(`[Settings] Removed uninstalled extension: ${mod._extensionId}`);
-                }
-            }
-
-            if (added) {
-                settingsManager.render();
-                await settingsManager.load();
-            }
-        } catch (e) {
-            console.warn('[Settings] Failed to reload extensions:', e);
-        }
-    });
-});
-
-/**
- * Global functions for UI
- */
-function _saveSettings() {
-    return settingsManager.save();
+export function createSandboxPool(invoke) {
+    return new ExtensionSandboxPool(invoke);
 }
 
-async function saveAndClose() {
-    const success = await settingsManager.save();
-    if (success) settingsManager.close();
+export function normalizeExtensionPermissions(permissions, id) {
+    return normalizePermissions(permissions, id);
 }
 
-function closeSettings() {
-    settingsManager.close();
-}
-
-function switchSection(sectionId) {
-    settingsManager.switchSection(sectionId);
-}
-
-function openStore() {
-    if (window.__TAURI__?.core) {
-        window.__TAURI__.core.invoke('open_store_window', { tab: 'extensions' });
-    }
-}
-
-function toggleExtension(extId) {
-    const hiddenInput = document.getElementById('ext-enabled-' + extId);
-    if (!hiddenInput) return;
-    const nowEnabled = hiddenInput.value !== 'true';
-    hiddenInput.value = nowEnabled ? 'true' : 'false';
-    _updateExtToggleUI(extId, nowEnabled);
-}
+// --- Manager-owned action handlers -----------------------------------------
 
 function _updateExtToggleUI(extId, enabled) {
     const btn = document.getElementById('ext-toggle-btn-' + extId);
@@ -789,15 +513,57 @@ function _updateExtToggleUI(extId, enabled) {
     }
 }
 
-// Register manager-owned actions with the delegated dispatcher (actions.js).
-// These replace what used to be inline `onclick="..."` attributes calling
-// window-level globals.
-if (typeof window !== 'undefined' && window.registerSettingsActions) {
-    window.registerSettingsActions({
-        switchSection: (sectionId) => switchSection(sectionId),
-        saveAndClose: () => saveAndClose(),
-        closeSettings: () => closeSettings(),
-        toggleExtension: (extId) => toggleExtension(extId),
-        openStore: () => openStore(),
+/**
+ * Wire the manager-owned actions (saveAndClose, switchSection, toggle, etc.)
+ * into the delegated dispatcher. Must be called after `setSettingsManager`
+ * so the handlers can find the live manager.
+ */
+export function registerManagerActions() {
+    registerSettingsActions({
+        switchSection: (sectionId) => {
+            const mgr = _getMgr();
+            if (mgr) mgr.switchSection(sectionId);
+        },
+        saveAndClose: async () => {
+            const mgr = _getMgr();
+            if (!mgr) return;
+            const success = await mgr.save();
+            if (success) mgr.close();
+        },
+        closeSettings: () => {
+            const mgr = _getMgr();
+            if (mgr) mgr.close();
+        },
+        toggleExtension: (extId) => {
+            const hiddenInput = document.getElementById('ext-enabled-' + extId);
+            if (!hiddenInput) return;
+            const nowEnabled = hiddenInput.value !== 'true';
+            hiddenInput.value = nowEnabled ? 'true' : 'false';
+            _updateExtToggleUI(extId, nowEnabled);
+        },
+        openStore: () => {
+            if (window.__TAURI__?.core) {
+                window.__TAURI__.core.invoke('open_store_window', { tab: 'extensions' });
+            }
+        },
     });
+}
+
+// Late-bound lookup so the actions registered above always see the
+// current manager (the dispatcher is installed before the manager is
+// constructed).
+function _getMgr() {
+    // Imported lazily to avoid a circular import on module init.
+    return _settingsManagerHandle();
+}
+
+let _settingsManagerHandle = () => null;
+
+/**
+ * Test/setup hook so callers (main.js) can hand the manager to the
+ * action wiring without going through a window global.
+ */
+export function setManagerHandle(getter) {
+    _settingsManagerHandle = getter;
+    setSettingsManager(getter());
 }

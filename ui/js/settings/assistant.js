@@ -1,8 +1,9 @@
+import { SettingsModule } from './base.js';
 /**
  * Assistant Settings Module
  * Manages Kage-specific settings: session launch, steering documents
  */
-class AssistantSettingsModule extends SettingsModule {
+export class AssistantSettingsModule extends SettingsModule {
     constructor() {
         super('personalization', 'Personalization', '✨');
     }

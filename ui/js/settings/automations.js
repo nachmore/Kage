@@ -1,3 +1,4 @@
+import { SettingsModule } from './base.js';
 /**
  * Automations Settings Module — collapsed/expanded card UI for automation rules.
  */
@@ -32,7 +33,7 @@ const DAYS_OF_WEEK = [
     { value: '7', label: 'Sun' },
 ];
 
-class AutomationsSettingsModule extends SettingsModule {
+export class AutomationsSettingsModule extends SettingsModule {
     constructor() {
         super('macros', 'Automations', '🔄');
         this._automations = [];

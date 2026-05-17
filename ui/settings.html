@@ -8,31 +8,12 @@
     <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
     <script src="vendor/lib/prism.js"></script>
     <script src="vendor/lib/prism-components/prism-javascript.min.js"></script>
+    <script src="vendor/lib/marked.min.js"></script>
     <!-- App Styles -->
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
     <link rel="stylesheet" href="css/settings-layout.css">
-    <script>
-        // Shared utilities — available to all settings modules
-        function _escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        function _getToolEmoji(name) {
-            const lower = (name || '').toLowerCase();
-            if (lower.startsWith('ext:')) return '🧩';
-            if (lower.includes('search')) return '🔍';
-            if (lower.includes('fetch') || lower.includes('web')) return '🌐';
-            if (lower.includes('read')) return '📖';
-            if (lower.includes('write') || lower.includes('edit')) return '✏️';
-            if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
-            if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
-            if (lower.includes('file')) return '📁';
-            return '🔧';
-        }
-    </script>
     <style>
         /* Reset — kept inline since shared-base.css has light-theme defaults */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -146,119 +127,8 @@
         <button class="save-button" data-action="saveAndClose">Save &amp; Close</button>
     </div>
 
-    <!-- Theme initialization for settings window -->
-    <script src="js/shared/theme-global.js"></script>
-    <!-- Platform helpers (Ctrl/Cmd, key-glyph translation) for classic scripts -->
-    <script src="js/shared/platform-global.js"></script>
-    <script src="js/shared/mac-permissions.js"></script>
-    <script src="js/shared/agent-connections.js"></script>
-    <script>
-        // Thin wrappers so appearance.js can call these by name
-        function _applySettingsTheme(theme) { kageTheme.applyClasses(theme); }
-        function _refreshSettingsTheme(themeOverride) { return kageTheme.refresh(themeOverride); }
-
-        // Apply theme on load
-        (async function() {
-            function waitForTauri(cb) {
-                if (window.__TAURI__?.core) cb();
-                else setTimeout(() => waitForTauri(cb), 50);
-            }
-            waitForTauri(() => kageTheme.init());
-        })();
-
-        // Ctrl/⌘+W to close settings
-        document.addEventListener('keydown', (e) => {
-            if (window.kagePlatform.cmdOrCtrlPressed(e) && e.key === 'w') {
-                e.preventDefault();
-                if (window.__TAURI__) {
-                    window.__TAURI__.webviewWindow.getCurrentWebviewWindow().hide();
-                }
-            }
-        });
-
-        // Listen for navigation requests from other windows (e.g. floating → updates)
-        (function() {
-            function waitForTauri(cb) {
-                if (window.__TAURI__?.event) cb();
-                else setTimeout(() => waitForTauri(cb), 50);
-            }
-            waitForTauri(() => {
-                window.__TAURI__.event.listen('navigate_settings_section', (event) => {
-                    const section = event.payload;
-                    if (section && typeof switchSection === 'function') {
-                        switchSection(section);
-                    }
-                });
-                window.__TAURI__.event.listen('navigate_settings_subsection', (event) => {
-                    const sub = event.payload;
-                    if (sub) {
-                        // Small delay to let the section switch render first
-                        setTimeout(() => {
-                            document.dispatchEvent(new CustomEvent('settings-subsection', { detail: sub }));
-                        }, 100);
-                    }
-                });
-            });
-        })();
-    </script>
-
-    <script src="vendor/lib/marked.min.js"></script>
-    
-    <!-- Load all settings modules -->
-    <script src="js/settings/actions.js"></script>
-    <script src="js/settings/base.js"></script>
-    <script>
-        // Intercept console for settings window logging
-        (function() {
-            const invoke = () => window.__TAURI__?.core?.invoke;
-            function fmt(v) {
-                if (v === null || v === undefined) return String(v);
-                if (v instanceof Error) return v.message + '\n' + (v.stack || '');
-                if (typeof v === 'object') { try { return JSON.stringify(v); } catch { return String(v); } }
-                return String(v);
-            }
-            const orig = { log: console.log.bind(console), warn: console.warn.bind(console), error: console.error.bind(console), debug: console.debug.bind(console) };
-            console.log   = (...a) => { orig.log(...a);   const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'info',  source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
-            console.warn  = (...a) => { orig.warn(...a);  const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'warn',  source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
-            console.error = (...a) => { orig.error(...a); const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'error', source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
-            console.debug = (...a) => { orig.debug(...a); const fn_ = invoke(); if (fn_) fn_('app_log_write', { level: 'debug', source: 'settings', msg: a.map(fmt).join(' ') }).catch(() => {}); };
-        })();
-    </script>
-    <script src="js/settings/hotkey.js"></script>
-    <script src="js/settings/connection.js"></script>
-    <script src="js/settings/appearance.js"></script>
-    <script src="js/settings/system.js"></script>
-    <script src="js/settings/permissions.js"></script>
-    <script src="js/settings/assistant.js"></script>
-    <script src="js/settings/model.js"></script>
-    <script src="js/settings/shortcuts.js"></script>
-    <script src="js/settings/automations.js"></script>
-    <script>
-        // Shim: expose getToolEmoji for classic-script settings modules
-        // (canonical implementation lives in js/shared/tool-utils.js ES module)
-        function getToolEmoji(name) {
-            const lower = (name || '').toLowerCase();
-            if (lower.startsWith('ext:')) return '🧩';
-            if (lower.includes('search')) return '🔍';
-            if (lower.includes('fetch') || lower.includes('web')) return '🌐';
-            if (lower.includes('read')) return '📖';
-            if (lower.includes('write') || lower.includes('edit')) return '✏️';
-            if (lower.includes('shell') || lower.includes('command') || lower.includes('terminal')) return '💻';
-            if (lower.includes('aws') || lower.includes('cloud')) return '☁️';
-            if (lower.includes('file')) return '📁';
-            return '🔧';
-        }
-    </script>
-    <script src="js/settings/tool-permissions.js"></script>
-    <script src="js/settings/mcp.js"></script>
-    <script src="js/settings/integration.js"></script>
-    <script src="js/settings/speech.js"></script>
-    <script src="js/settings/store.js"></script>
-    <!-- Extension settings modules are loaded dynamically by manager.js -->
-    <script src="js/settings/about.js"></script>
-    <script src="js/settings/updates.js"></script>
-    <script src="js/settings/privacy.js"></script>
-    <script type="module" src="js/settings/sandbox-bootstrap.js"></script>
-    <script src="js/settings/manager.js"></script>
+    <!-- Single ES module entry — wires up theme, console intercept,
+         navigation listeners, dispatcher, and every settings module. -->
+    <script type="module" src="js/settings/main.js"></script>
 </body>
 </html>

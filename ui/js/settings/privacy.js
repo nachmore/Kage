@@ -1,3 +1,4 @@
+import { SettingsModule } from './base.js';
 /**
  * Privacy & Analytics settings module.
  *
@@ -7,7 +8,7 @@
  * collect" lists — discrepancies between the two is what trips up trust
  * audits.
  */
-class PrivacySettingsModule extends SettingsModule {
+export class PrivacySettingsModule extends SettingsModule {
     constructor() {
         super('privacy', 'Privacy', '🛡️');
         this._info = null;

@@ -7,9 +7,6 @@
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
-    <script src="js/shared/theme-global.js"></script>
-    <script src="js/shared/mac-permissions.js"></script>
-    <script src="js/shared/agent-connections.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -409,6 +406,9 @@
     import { escapeHtml } from './js/shared/tool-utils.js';
     import { interceptConsole } from './js/shared/kage-log.js';
     import { CAPABILITIES } from './js/shared/extension-permissions.js';
+    import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
+    import { isMacOS as detectMacOS, renderAllInto as renderMacPermsInto } from './js/shared/mac-permissions.js';
+    import * as kageAgentConnections from './js/shared/agent-connections.js';
 
     function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
@@ -425,7 +425,8 @@
         console.log('[welcome] init');
 
         // Apply theme (respects OS dark mode + custom themes)
-        kageTheme.init();
+        initThemeListener();
+        loadAndApplyTheme(invoke).catch(() => applyTheme('system'));
 
         // Render mascot before showing the window so it's visible immediately
         const mascotEl = document.getElementById('welcomeMascot');
@@ -450,7 +451,7 @@
         let currentStep = 0;
         // Drop mac-only step + dot on non-macOS platforms; totalSteps
         // reflects the visible step count after the pruning pass.
-        const isMacOS = window.kageMacPermissions?.isMacOS();
+        const isMacOS = detectMacOS();
         if (!isMacOS) {
             document.querySelectorAll('[data-mac-only="true"]').forEach(el => el.remove());
         }
@@ -489,7 +490,7 @@
         // settings page can stay in sync.
 
         function renderManualEditor(initialConnection) {
-            const api = window.kageAgentConnections;
+            const api = kageAgentConnections;
             const container = document.getElementById('wConnectionEditor');
             if (!api || !container) return;
             container.innerHTML = api.renderEditForm(
@@ -523,7 +524,7 @@
         }
 
         async function runAgentDetection() {
-            const api = window.kageAgentConnections;
+            const api = kageAgentConnections;
             const container = document.getElementById('wAgentAutoDetect');
             if (!api || !container) return;
             const agents = await api.renderDetected(container, {
@@ -699,7 +700,7 @@
                 // Save ACP config when leaving step 1 (the agent step).
                 if (currentStep === 1) {
                     try {
-                        const api = window.kageAgentConnections;
+                        const api = kageAgentConnections;
                         const config = await invoke('get_config');
                         if (!config.acp) config.acp = {};
 
@@ -736,8 +737,8 @@
                 // Render macOS permission cards when entering step 5 (mac only)
                 if (isMacOS && currentStep + 1 === 5 && !macPermsRendered) {
                     const container = document.getElementById('wMacPermCards');
-                    if (container && window.kageMacPermissions) {
-                        window.kageMacPermissions.renderAllInto(container, invoke, 'wMacPerm');
+                    if (container) {
+                        renderMacPermsInto(container, invoke, 'wMacPerm');
                         macPermsRendered = true;
                     }
                 }

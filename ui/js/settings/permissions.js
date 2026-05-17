@@ -1,3 +1,5 @@
+import { SettingsModule } from './base.js';
+import { renderAllInto } from '../shared/mac-permissions.js';
 /**
  * macOS Permissions Settings Module.
  *
@@ -8,10 +10,10 @@
  * to grant (or revisit) the permissions before they are triggered.
  *
  * Only registered on macOS — see manager.js for the conditional registration.
- * All rendering/behavior delegates to window.kageMacPermissions so the same
+ * All rendering/behavior delegates to shared/mac-permissions.js so the same
  * logic is reused by the Welcome wizard.
  */
-class MacPermissionsSettingsModule extends SettingsModule {
+export class MacPermissionsSettingsModule extends SettingsModule {
     constructor() {
         super('mac-permissions', 'macOS Permissions', '\uF8FF');
     }
@@ -39,10 +41,10 @@ class MacPermissionsSettingsModule extends SettingsModule {
 
     initialize() {
         const container = document.getElementById('macPermCards');
-        if (!container || !window.kageMacPermissions) return;
+        if (!container) return;
         const invoke = window.__TAURI__?.core?.invoke;
         if (!invoke) return;
-        window.kageMacPermissions.renderAllInto(container, invoke, 'macPermSetting');
+        renderAllInto(container, invoke, 'macPermSetting');
     }
 
     // This module has no persisted settings — the TCC state lives in the OS,

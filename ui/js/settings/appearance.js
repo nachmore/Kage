@@ -1,7 +1,9 @@
+import { SettingsModule } from './base.js';
+import { applyTheme as kageApplyTheme, loadAndApplyTheme } from '../shared/theme.js';
 /**
  * Appearance Settings Module
  */
-class AppearanceSettingsModule extends SettingsModule {
+export class AppearanceSettingsModule extends SettingsModule {
     constructor() {
         super('appearance', 'Appearance', '🎨');
     }
@@ -171,10 +173,8 @@ class AppearanceSettingsModule extends SettingsModule {
 
         this.toggleDateTimeFormats();
 
-        // Apply theme via the global settings theme function (defined in settings.html)
-        if (typeof applySettingsTheme === 'function') {
-            applySettingsTheme(config.ui.theme || 'system');
-        }
+        // Apply theme classes immediately so the settings window reflects the change.
+        kageApplyTheme(config.ui.theme || 'system');
 
         // Load theme list now that the hidden input has the correct value
         this.loadInstalledThemes();
@@ -212,10 +212,8 @@ class AppearanceSettingsModule extends SettingsModule {
             document.getElementById('windowStartPosition')?.value || 'center';
         config.ui.font_size = parseInt(document.getElementById('fontSize')?.value ?? '14', 10);
 
-        // Apply immediately via the global settings theme function
-        if (typeof applySettingsTheme === 'function') {
-            applySettingsTheme(config.ui.theme);
-        }
+        // Apply theme classes immediately so the settings window reflects the change.
+        kageApplyTheme(config.ui.theme);
     }
 
     initialize() {
@@ -344,9 +342,8 @@ class AppearanceSettingsModule extends SettingsModule {
             saveSettings();
         }
         // Apply custom theme colors immediately in settings window
-        if (typeof refreshSettingsTheme === 'function') {
-            refreshSettingsTheme(themeId);
-        }
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (invoke) loadAndApplyTheme(invoke);
         // Refresh the list to update active state
         this.loadInstalledThemes();
     }

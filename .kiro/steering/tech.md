@@ -32,7 +32,9 @@
 - Located in `ui/` directory
 - NPM-managed vendor dependencies in `ui/vendor/` (marked, mermaid, prismjs, mathjs)
 - Custom CSS theming with dark/light mode via CSS variables
-- ES modules for floating/chat windows, regular scripts for settings
+- ES modules across every window. Each HTML page loads a single
+  `<script type="module" src="js/.../main.js"></script>` entry point that
+  imports everything else.
 
 ## Common Commands
 

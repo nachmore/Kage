@@ -5,6 +5,7 @@
  */
 import { classifyText, getActionsForText } from './shared/quick-actions.js';
 import { createMascot } from './shared/mascot.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 
 console.log(
     '[inline-assist] Module loaded, classifyText:',
@@ -19,8 +20,9 @@ console.log(
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const LogicalSize = window.__TAURI__.dpi.LogicalSize;
 
-    // Apply theme (theme-global.js is loaded as a regular script in the HTML)
-    if (window.kageTheme) kageTheme.init();
+    // Apply theme via the shared ES module (loaded directly here, no global shim).
+    initThemeListener();
+    loadAndApplyTheme(invoke).catch(() => applyTheme('system'));
 
     // Render mascot icon
     const mascotEl = document.getElementById('inlineAssistMascot');

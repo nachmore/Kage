@@ -1,7 +1,8 @@
+import { SettingsModule } from './base.js';
 /**
  * MCP Settings Module
  */
-class McpSettingsModule extends SettingsModule {
+export class McpSettingsModule extends SettingsModule {
     constructor() {
         super('mcp', 'MCP Servers', '🔌');
         this._mcpConfig = null;

@@ -1,8 +1,9 @@
+import { SettingsModule } from './base.js';
 /**
  * Math Settings Module
  * Controls the inline math calculator feature
  */
-class MathSettingsModule extends SettingsModule {
+export class MathSettingsModule extends SettingsModule {
     constructor() {
         super('math', 'Math', '🧮');
     }

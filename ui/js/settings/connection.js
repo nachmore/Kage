@@ -1,3 +1,5 @@
+import { SettingsModule } from './base.js';
+import * as agentConnectionsApi from '../shared/agent-connections.js';
 /**
  * Connection Settings Module
  *
@@ -17,7 +19,7 @@
  * `js/shared/agent-connections.js` so the welcome wizard reuses the
  * same code.
  */
-class ConnectionSettingsModule extends SettingsModule {
+export class ConnectionSettingsModule extends SettingsModule {
     constructor() {
         super('connection', 'Agent Connection', '🔌');
         this._connections = [];
@@ -153,7 +155,7 @@ class ConnectionSettingsModule extends SettingsModule {
     // -----------------------------------------------------------------
 
     _api() {
-        return window.kageAgentConnections;
+        return agentConnectionsApi;
     }
 
     _hasId(id) {

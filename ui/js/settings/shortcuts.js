@@ -1,8 +1,11 @@
+import { SettingsModule } from './base.js';
+import { escapeHtml } from '../shared/tool-utils.js';
+import { registerSettingsActions } from './module-registry.js';
 /**
  * Shortcuts Settings Module
  * Manages custom command shortcuts
  */
-class ShortcutsSettingsModule extends SettingsModule {
+export class ShortcutsSettingsModule extends SettingsModule {
     constructor() {
         super('shortcuts', 'Quick Commands', '⚡');
         this.shortcuts = [];
@@ -249,7 +252,6 @@ class ShortcutsSettingsModule extends SettingsModule {
 
     initialize() {
         this.renderShortcutsList();
-        window.shortcutsModule = this;
         this._registerActions();
         this._wireDialogListeners();
         this._escHandler = (e) => {
@@ -855,7 +857,6 @@ class ShortcutsSettingsModule extends SettingsModule {
 
     destroy() {
         if (this._escHandler) document.removeEventListener('keydown', this._escHandler, true);
-        delete window.shortcutsModule;
     }
 
     // Wire input/change/keydown listeners that previously lived as inline
@@ -898,8 +899,7 @@ class ShortcutsSettingsModule extends SettingsModule {
     // forced eval-style attribute strings (which CSP and content-sniffing
     // checkers flag).
     _registerActions() {
-        if (!window.registerSettingsActions) return;
-        window.registerSettingsActions({
+        registerSettingsActions({
             'shortcuts.showAddDialog': () => this.showAddDialog(),
             'shortcuts.openCommandsStore': () => {
                 if (window.__TAURI__?.core) {

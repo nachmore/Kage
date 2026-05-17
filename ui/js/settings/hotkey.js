@@ -1,7 +1,9 @@
+import { SettingsModule } from './base.js';
+import { isWindows, platformKeyLabel } from '../shared/shortcuts.js';
 /**
  * Hotkey & Shortcuts Settings Module - uses shared HotkeyPicker component
  */
-class HotkeySettingsModule extends SettingsModule {
+export class HotkeySettingsModule extends SettingsModule {
     constructor() {
         super('hotkey', 'Hotkey & Shortcuts', '\u{1F3B9}');
         this._picker = null;
@@ -14,7 +16,7 @@ class HotkeySettingsModule extends SettingsModule {
         // an empty list by design — see src/os/macos/clipboard_history.rs). Hide
         // the hotkey binding and quick-reference row on non-Windows so users
         // don't set a shortcut that would never do anything.
-        const showClipboardHistory = window.kagePlatform?.isWindows?.() ?? false;
+        const showClipboardHistory = isWindows() ?? false;
         const clipboardHotkeyRow = showClipboardHistory
             ? this.createControlRow(
                   'Clipboard History Hotkey',
@@ -53,52 +55,28 @@ class HotkeySettingsModule extends SettingsModule {
             ) +
             '<div class="setting-section-label">Keyboard Shortcuts</div>' +
             '<div class="shortcuts-reference">' +
+            this.shortcutRow(platformKeyLabel('Ctrl+N'), 'New session', 'Chat window') +
+            this.shortcutRow(platformKeyLabel('Ctrl+W'), 'Close / hide window', 'All windows') +
+            this.shortcutRow(platformKeyLabel('Ctrl+,'), 'Open settings', 'Launcher & Chat') +
+            this.shortcutRow(platformKeyLabel('Ctrl+E'), 'Expand to full chat', 'Launcher') +
+            this.shortcutRow(platformKeyLabel('Ctrl+L'), 'Clear / reset', 'Launcher') +
             this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+N'),
-                'New session',
-                'Chat window'
-            ) +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+W'),
-                'Close / hide window',
-                'All windows'
-            ) +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+,'),
-                'Open settings',
-                'Launcher & Chat'
-            ) +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+E'),
-                'Expand to full chat',
-                'Launcher'
-            ) +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+L'),
-                'Clear / reset',
-                'Launcher'
-            ) +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+Shift+C'),
+                platformKeyLabel('Ctrl+Shift+C'),
                 'Copy last response',
                 'Launcher & Chat'
             ) +
             this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Ctrl+Enter'),
+                platformKeyLabel('Ctrl+Enter'),
                 'Send to agent (bypass suggestions)',
                 'Launcher'
             ) +
             this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Escape'),
+                platformKeyLabel('Escape'),
                 'Stop generating / Hide window',
                 'Launcher'
             ) +
-            this.shortcutRow(window.kagePlatform.platformKeyLabel('Enter'), 'Send message', 'All') +
-            this.shortcutRow(
-                window.kagePlatform.platformKeyLabel('Shift+Enter'),
-                'New line',
-                'All'
-            ) +
+            this.shortcutRow(platformKeyLabel('Enter'), 'Send message', 'All') +
+            this.shortcutRow(platformKeyLabel('Shift+Enter'), 'New line', 'All') +
             clipboardShortcutRef +
             '</div></div>'
         );

@@ -1,38 +1,32 @@
 /**
  * Tests for ui/js/settings/actions.js — the delegated event dispatcher
  * that replaced the dozen-plus inline `onclick="globalFn(...)"` attributes
- * in the settings window (P3.10).
+ * in the settings window.
  *
- * Loads the script in jsdom (it's a non-module IIFE), then verifies:
+ * Imports the module fresh per test, then verifies:
  *   - data-action="X" on a clicked element calls the registered handler
  *   - data-arg is forwarded
  *   - data-action-change fires only on `change`, not on `click`
  *   - clicks on inner spans bubble up via closest()
  *   - unknown actions warn instead of throwing
- *   - re-loading the script is idempotent
+ *   - re-importing the module is idempotent (the dispatcher install
+ *     guard means we don't accumulate listeners across reloads)
  */
 
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const actionsScript = readFileSync(
-    resolve(here, '../../js/settings/actions.js'),
-    'utf-8',
-);
+let registerSettingsActions;
+let dispatchSettingsAction;
 
-beforeAll(() => {
-    // Eval the IIFE inside the jsdom global scope. It binds
-    // window.registerSettingsActions / window.dispatchSettingsAction
-    // and installs the document-level click + change listeners.
-    // eslint-disable-next-line no-new-func
-    new Function(actionsScript)();
-});
-
-beforeEach(() => {
+beforeEach(async () => {
     document.body.innerHTML = '';
+
+    // Force a fresh module evaluation per test so the install-once
+    // guard inside actions.js doesn't leak listeners between specs.
+    vi.resetModules();
+    const mod = await import('../../js/settings/actions.js');
+    registerSettingsActions = mod.registerSettingsActions;
+    dispatchSettingsAction = mod.dispatchSettingsAction;
 });
 
 // ---- click dispatch ---------------------------------------------------------
@@ -40,7 +34,7 @@ beforeEach(() => {
 describe('click dispatch', () => {
     it('calls the registered handler with the data-arg value', () => {
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.run': handler });
+        registerSettingsActions({ 'test.run': handler });
 
         const btn = document.createElement('button');
         btn.dataset.action = 'test.run';
@@ -59,7 +53,7 @@ describe('click dispatch', () => {
         // Buttons frequently wrap an icon span — the click target is the
         // span, not the button. closest() must still find the action.
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.bubble': handler });
+        registerSettingsActions({ 'test.bubble': handler });
 
         const btn = document.createElement('button');
         btn.dataset.action = 'test.bubble';
@@ -80,7 +74,7 @@ describe('click dispatch', () => {
         // Plain elements should NOT fire any handler — there's no warning
         // and no error.
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.x': handler });
+        registerSettingsActions({ 'test.x': handler });
 
         const div = document.createElement('div');
         document.body.appendChild(div);
@@ -104,8 +98,10 @@ describe('click dispatch', () => {
 
     it('catches handler exceptions and logs without breaking the page', () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-        window.registerSettingsActions({
-            'test.boom': () => { throw new Error('boom'); },
+        registerSettingsActions({
+            'test.boom': () => {
+                throw new Error('boom');
+            },
         });
 
         const btn = document.createElement('button');
@@ -123,13 +119,15 @@ describe('click dispatch', () => {
 describe('change dispatch', () => {
     it('fires data-action-change handler on change events with current value', () => {
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.policy': handler });
+        registerSettingsActions({ 'test.policy': handler });
 
         const select = document.createElement('select');
         select.dataset.actionChange = 'test.policy';
         select.dataset.arg = '42';
-        const opt1 = document.createElement('option'); opt1.value = 'a';
-        const opt2 = document.createElement('option'); opt2.value = 'b';
+        const opt1 = document.createElement('option');
+        opt1.value = 'a';
+        const opt2 = document.createElement('option');
+        opt2.value = 'b';
         select.append(opt1, opt2);
         document.body.appendChild(select);
 
@@ -148,7 +146,7 @@ describe('change dispatch', () => {
         // handlers. A select with only data-action-change must stay quiet
         // when clicked (clicks bubble through its options on jsdom).
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.changeonly': handler });
+        registerSettingsActions({ 'test.changeonly': handler });
 
         const select = document.createElement('select');
         select.dataset.actionChange = 'test.changeonly';
@@ -166,8 +164,8 @@ describe('registry', () => {
     it('overwrites a previously-registered handler with the same name', () => {
         const a = vi.fn();
         const b = vi.fn();
-        window.registerSettingsActions({ 'test.replace': a });
-        window.registerSettingsActions({ 'test.replace': b });
+        registerSettingsActions({ 'test.replace': a });
+        registerSettingsActions({ 'test.replace': b });
 
         const btn = document.createElement('button');
         btn.dataset.action = 'test.replace';
@@ -183,11 +181,20 @@ describe('registry', () => {
         // already has the action name + element in hand and wants to skip
         // the click round-trip.
         const handler = vi.fn();
-        window.registerSettingsActions({ 'test.direct': handler });
+        registerSettingsActions({ 'test.direct': handler });
 
         const fakeEl = document.createElement('div');
-        window.dispatchSettingsAction('test.direct', 'arg', fakeEl, null);
+        dispatchSettingsAction('test.direct', 'arg', fakeEl, null);
 
         expect(handler).toHaveBeenCalledWith('arg', fakeEl, null);
+    });
+
+    it('exposes window globals for the soft back-compat shim', () => {
+        // While we finish migrating off classic scripts, the module
+        // also writes registerSettingsActions / dispatchSettingsAction
+        // onto window. Lock that in so nothing depending on it
+        // silently breaks.
+        expect(typeof window.registerSettingsActions).toBe('function');
+        expect(typeof window.dispatchSettingsAction).toBe('function');
     });
 });

@@ -2,7 +2,7 @@
  * Base class for settings modules
  * Each settings module should extend this class
  */
-class SettingsModule {
+export class SettingsModule {
     constructor(id, title, icon) {
         this.id = id;
         this.title = title;

@@ -1,9 +1,12 @@
+import { SettingsModule } from './base.js';
+import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
+import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
  * Agent Tools Settings Module
  * Shows tools seen during permission requests with per-tool policy toggles.
  */
 
-class ToolPermissionsSettingsModule extends SettingsModule {
+export class ToolPermissionsSettingsModule extends SettingsModule {
     constructor() {
         super('tool-permissions', 'Agent Permissions', '🔧');
         this.trustAll = false;
@@ -385,12 +388,14 @@ class ToolPermissionsSettingsModule extends SettingsModule {
 
 // Global functions for onclick handlers
 function updateToolPolicy(index, policy) {
-    const module = settingsManager.modules.find((m) => m.id === 'tool-permissions');
+    const settingsManager = getSettingsManager();
+    const module = settingsManager?.modules.find((m) => m.id === 'tool-permissions');
     if (module) module.updatePolicy(index, policy);
 }
 
 function removeSeenTool(index) {
-    const module = settingsManager.modules.find((m) => m.id === 'tool-permissions');
+    const settingsManager = getSettingsManager();
+    const module = settingsManager?.modules.find((m) => m.id === 'tool-permissions');
     if (module) module.removeTool(index);
 }
 
@@ -398,16 +403,14 @@ function removeSeenTool(index) {
 // The select uses data-action-change with the row index in data-arg, so
 // the handler receives the index as a string and reads `this.value` from
 // the element argument.
-if (typeof window !== 'undefined' && window.registerSettingsActions) {
-    window.registerSettingsActions({
-        'toolPermissions.updatePolicy': (arg, el) => {
-            updateToolPolicy(parseInt(arg, 10), el.value);
-        },
-        'toolPermissions.removeTool': (arg) => {
-            removeSeenTool(parseInt(arg, 10));
-        },
-    });
-}
+registerSettingsActions({
+    'toolPermissions.updatePolicy': (arg, el) => {
+        updateToolPolicy(parseInt(arg, 10), el.value);
+    },
+    'toolPermissions.removeTool': (arg) => {
+        removeSeenTool(parseInt(arg, 10));
+    },
+});
 
 // Styles
 const toolPermStyle = document.createElement('style');

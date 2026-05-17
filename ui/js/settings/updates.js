@@ -1,8 +1,10 @@
+import { SettingsModule } from './base.js';
+import { escapeHtml } from '../shared/tool-utils.js';
 /**
  * Updates Settings Module
  * Auto-update configuration and changelog display
  */
-class UpdatesSettingsModule extends SettingsModule {
+export class UpdatesSettingsModule extends SettingsModule {
     constructor() {
         super('updates', 'Updates', '🔄');
         this._knownUpdate = null; // cached available version

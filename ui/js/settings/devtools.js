@@ -1,7 +1,8 @@
+import { SettingsModule } from './base.js';
 /**
  * Developer Tools Settings Module
  */
-class DevToolsSettingsModule extends SettingsModule {
+export class DevToolsSettingsModule extends SettingsModule {
     constructor() {
         super('devtools', 'Developer Tools', '🛠️');
     }

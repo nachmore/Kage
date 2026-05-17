@@ -1,8 +1,10 @@
+import { SettingsModule } from './base.js';
+import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
  * Unified Speech Settings Module
  * Combines voice input (STT), read-back (TTS), and Pocket TTS configuration.
  */
-class SpeechSettingsModule extends SettingsModule {
+export class SpeechSettingsModule extends SettingsModule {
     constructor() {
         super('speech', 'Speech', '🎙️');
         this._pocketStatus = null;
@@ -537,7 +539,7 @@ async function pocketTtsInstall() {
                 btn.dataset.action = 'speech.pocketTtsInstall';
                 btn.disabled = false;
             }
-            const mod = settingsManager.modules.find((m) => m.id === 'speech');
+            const mod = getSettingsManager()?.modules?.find((m) => m.id === 'speech');
             if (mod) mod._refreshPocketStatus();
         });
         _pocketTtsInstallUnlisteners.push(unlisten2);
@@ -579,7 +581,7 @@ async function pocketTtsToggleServer() {
     const invoke = window.__TAURI__.core.invoke;
     const btn = document.getElementById('pocketTtsStartBtn');
     const status = document.getElementById('pocketTtsServerStatus');
-    const mod = settingsManager.modules.find((m) => m.id === 'speech');
+    const mod = getSettingsManager()?.modules?.find((m) => m.id === 'speech');
     const isRunning = mod?._pocketStatus?.server_running;
     if (btn) btn.disabled = true;
     try {
@@ -719,7 +721,7 @@ async function pocketTtsAddVoice() {
         if (status) status.textContent = `✅ "${voiceName}" added`;
         if (urlInput) urlInput.value = '';
         if (nameInput) nameInput.value = '';
-        const mod = settingsManager.modules.find((m) => m.id === 'speech');
+        const mod = getSettingsManager()?.modules?.find((m) => m.id === 'speech');
         if (mod) mod._populatePocketVoices();
     } catch (e) {
         if (status) status.textContent = '❌ ' + e.message;
@@ -753,14 +755,12 @@ async function pocketTtsOpenVoicesDir() {
 // Register the speech section's handlers with the delegated dispatcher
 // (actions.js). Replaces the inline `onclick="pocketTtsX()"` attributes
 // that previously called these functions through window globals.
-if (typeof window !== 'undefined' && window.registerSettingsActions) {
-    window.registerSettingsActions({
-        'speech.togglePocketTtsSetup': () => togglePocketTtsSetup(),
-        'speech.pocketTtsInstall': () => pocketTtsInstall(),
-        'speech.pocketTtsCancelInstall': () => pocketTtsCancelInstall(),
-        'speech.pocketTtsToggleServer': () => pocketTtsToggleServer(),
-        'speech.pocketTtsTest': () => pocketTtsTest(),
-        'speech.pocketTtsAddVoice': () => pocketTtsAddVoice(),
-        'speech.pocketTtsOpenVoicesDir': () => pocketTtsOpenVoicesDir(),
-    });
-}
+registerSettingsActions({
+    'speech.togglePocketTtsSetup': () => togglePocketTtsSetup(),
+    'speech.pocketTtsInstall': () => pocketTtsInstall(),
+    'speech.pocketTtsCancelInstall': () => pocketTtsCancelInstall(),
+    'speech.pocketTtsToggleServer': () => pocketTtsToggleServer(),
+    'speech.pocketTtsTest': () => pocketTtsTest(),
+    'speech.pocketTtsAddVoice': () => pocketTtsAddVoice(),
+    'speech.pocketTtsOpenVoicesDir': () => pocketTtsOpenVoicesDir(),
+});

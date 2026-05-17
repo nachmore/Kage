@@ -1,8 +1,9 @@
+import { SettingsModule } from './base.js';
 /**
  * About Settings Module
  * Shows version, author, copyright info, links to welcome screen, and logging section
  */
-class AboutSettingsModule extends SettingsModule {
+export class AboutSettingsModule extends SettingsModule {
     constructor() {
         super('about', 'About Kage', 'ℹ️');
         this._logExpanded = false;

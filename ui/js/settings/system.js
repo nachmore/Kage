@@ -1,15 +1,16 @@
+import { SettingsModule } from './base.js';
 /**
  * Startup Settings Module
  */
 
-function getSystemIcon() {
+export function getSystemIcon() {
     const platform = navigator.platform || '';
     if (platform.startsWith('Win')) return '🪟';
     if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF';
     return '🐧';
 }
 
-class SystemSettingsModule extends SettingsModule {
+export class SystemSettingsModule extends SettingsModule {
     constructor() {
         super('system', 'Startup', '🚀');
     }

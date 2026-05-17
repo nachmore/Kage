@@ -9,10 +9,10 @@
 // ---------------------------------------------------------------------------
 // Platform helpers — cross-platform key handling for shortcuts UX.
 //
-// Classic-script windows (settings, store) mirror this logic in
-// `shared/platform-global.js` exposing `window.kagePlatform`. Keep the two
-// files in sync — same precedent as `shared/theme.js` and
-// `shared/theme-global.js`.
+// Every window in the app is an ES module, so these are imported
+// directly. Earlier revisions had a parallel
+// `shared/platform-global.js` classic-script mirror exposing
+// `window.kagePlatform` for non-module windows; that's gone now.
 // ---------------------------------------------------------------------------
 
 /**
