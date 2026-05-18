@@ -61,7 +61,7 @@ Full release + signing documentation lives in [`docs/RELEASE.md`](docs/RELEASE.m
 cargo tauri dev                  # Run with hot-reloaded frontend
 cargo tauri dev -- /dev          # + developer menu, DevTools, tray reload
 cargo tauri dev -- /debug        # + ACP protocol message logging
-cargo tauri dev -- /dev /debug   # Both
+!   # Both
 ```
 
 The frontend is served from disk via a local dev server, so HTML/CSS/JS edits take effect on reload without a recompile. Only Rust edits require the dev server to rebuild the binary.
@@ -91,6 +91,32 @@ Output per platform:
 - **macOS**: `.app` bundle at `target/release/bundle/macos/Kage.app` and DMG at `target/release/bundle/dmg/Kage_<version>_<arch>.dmg`. The calendar helper is bundled inside `Kage.app/Contents/MacOS/` via Tauri's `externalBin` mechanism.
 
 For a universal-binary macOS release covering both Apple Silicon and Intel, either run `cargo tauri build --target universal-apple-darwin` (requires both toolchains installed) or build per-arch and merge with `lipo`.
+
+### Installing unsigned macOS builds
+
+Release builds from CI are not code-signed or notarized (no Apple Developer certificate). macOS Gatekeeper will block them with a "damaged" or "can't be opened" message when downloaded from the internet.
+
+**Before opening the DMG**, strip the quarantine attribute in Terminal:
+
+```bash
+xattr -d com.apple.quarantine ~/Downloads/Kage_0.9.0_aarch64.dmg
+```
+
+Then open the DMG and drag Kage to Applications as normal.
+
+If you already installed without doing this and get the "corrupted" error:
+
+```bash
+# Remove the quarantined install
+sudo rm -rf /Applications/Kage.app
+
+# Strip quarantine from the DMG
+xattr -d com.apple.quarantine ~/Downloads/Kage_0.9.0_aarch64.dmg
+
+# Re-open the DMG and drag Kage to Applications again
+```
+
+> **Why?** On macOS Sequoia (15+), the quarantine and provenance attributes propagate into the `.app` bundle and become immutable — even `sudo xattr -cr` can't remove them after installation. The only reliable fix is to strip quarantine from the DMG *before* mounting it.
 
 ### Common commands
 
