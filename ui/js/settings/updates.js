@@ -141,12 +141,20 @@ export class UpdatesSettingsModule extends SettingsModule {
         // latest version. Re-check after the settings save completes.
         const channelEl = document.getElementById('updateChannel');
         if (channelEl) {
-            channelEl.addEventListener('change', () => {
+            channelEl.addEventListener('change', async () => {
                 this._knownUpdate = null;
-                // The outer save-settings flow will persist the new
-                // channel; we re-check on the next onShow which fires
-                // right after. A manual re-check here would race the
-                // save — let the normal lifecycle handle it.
+                // Persist the new channel immediately so the next
+                // check_for_update reads the correct endpoint.
+                try {
+                    const config = await window.__TAURI__.core.invoke('get_config');
+                    if (!config.updates) config.updates = {};
+                    config.updates.channel = channelEl.value || 'stable';
+                    await window.__TAURI__.core.invoke('save_config', { config });
+                } catch (e) {
+                    console.warn('[Updates] Failed to persist channel change:', e);
+                }
+                // Re-check against the new channel.
+                this.autoCheck();
             });
         }
     }
