@@ -24,9 +24,33 @@
 
 import { decideInvoke } from './extension-permissions.js';
 
-const SANDBOX_PATH = 'extension-sandbox.html';
 const BOOT_TIMEOUT_MS = 10_000;
 const RPC_TIMEOUT_MS = 10_000;
+
+/**
+ * Cached sandbox runtime source. Fetched once on first pool load and
+ * reused for all subsequent sandbox iframes via srcdoc. This avoids
+ * the CORS issue where a sandboxed iframe (null origin) can't load
+ * ES modules from the Tauri custom-protocol origin in production builds.
+ * @type {string|null}
+ */
+let _runtimeSourceCache = null;
+
+/**
+ * Fetch the sandbox runtime source once. Returns the JS text that will
+ * be inlined into each sandbox iframe's srcdoc as a classic script.
+ */
+async function getSandboxRuntimeSource() {
+    if (_runtimeSourceCache !== null) return _runtimeSourceCache;
+    const resp = await fetch('js/extension-sandbox/runtime.js');
+    if (!resp.ok) throw new Error(`Failed to fetch sandbox runtime: HTTP ${resp.status}`);
+    let source = await resp.text();
+    // The runtime has one `export` (for unit tests). Strip it so the
+    // source works as a classic (non-module) script inside srcdoc.
+    source = source.replace(/^export\s+function\s/m, 'function ');
+    _runtimeSourceCache = source;
+    return source;
+}
 
 /**
  * Commands that read or write per-extension storage and therefore must be
@@ -109,6 +133,9 @@ export class ExtensionSandbox {
     async start() {
         if (this._iframe) throw new Error('sandbox already started');
 
+        // Fetch the runtime source (cached after first call).
+        const runtimeSource = await getSandboxRuntimeSource();
+
         const iframe = document.createElement('iframe');
         iframe.dataset.extensionId = this.extensionId;
         iframe.setAttribute('sandbox', 'allow-scripts');
@@ -123,11 +150,13 @@ export class ExtensionSandbox {
             'position:fixed;top:0;left:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
         this._iframe = iframe;
         this._container.appendChild(iframe);
-        // Set src *after* appendChild so there's exactly one 'load' event
-        // for the sandbox document. If src is set before insertion, some
-        // browsers fire an extra load for the initial about:blank, which
-        // we'd then race against.
-        iframe.src = SANDBOX_PATH;
+        // Use srcdoc with the runtime inlined as a classic script. This
+        // avoids the CORS issue where a null-origin sandboxed iframe
+        // can't load ES modules from the Tauri custom-protocol origin
+        // in production builds. The runtime uses dynamic import() for
+        // extension code (via blob URLs, which are same-origin to the
+        // iframe), so module loading still works for extensions.
+        iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body><script>${runtimeSource.replace(/<\/script/gi, '<\x2fscript')}</script></body></html>`;
 
         const channel = new MessageChannel();
         this._port = channel.port1;
