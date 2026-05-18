@@ -1272,7 +1272,10 @@ export class ExtensionManager {
             notice.className = 'ext-widget-paused';
             notice.style.cssText =
                 'padding:8px 12px;font-size:12px;color:var(--kage-text-muted);background:var(--kage-bg-input);border-radius:4px;display:flex;align-items:center;gap:8px;';
-            notice.innerHTML = '<span>⚠️ Widget paused (kept failing or running too slow).</span>';
+            const extName =
+                this.extensions.get(controller.extensionId)?.manifest?.name ||
+                controller.extensionId;
+            notice.innerHTML = `<span>⚠️ Widget paused — <strong>${extName}</strong> kept failing or running too slow.</span>`;
             const retry = document.createElement('a');
             retry.href = '#';
             retry.textContent = 'Retry';
