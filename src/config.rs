@@ -208,7 +208,17 @@ pub struct UpdateConfig {
 }
 
 fn default_update_channel() -> String {
-    "stable".to_string()
+    // Dev builds embed "+dev." in the version (e.g. 0.9.202511171430+dev.abc1234),
+    // beta builds embed "+beta.". Default new installs to the channel that
+    // matches their build so the updater hits an endpoint that actually exists.
+    let version = env!("CARGO_PKG_VERSION");
+    if version.contains("+dev.") {
+        "dev".to_string()
+    } else if version.contains("+beta.") {
+        "beta".to_string()
+    } else {
+        "stable".to_string()
+    }
 }
 
 impl Default for UpdateConfig {
