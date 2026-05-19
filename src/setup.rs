@@ -91,27 +91,6 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
     });
 }
 
-/// If the frontend doesn't signal ready within 15 seconds the webview
-/// has almost certainly failed to load (typically because another
-/// process still holds the WebView2 user data directory lock). We
-/// exit with code 1 rather than run headless — a UI-less app is
-/// worse than a clean restart.
-pub fn spawn_frontend_watchdog(app: &App) {
-    let ready_flag = app.state::<UiState>().frontend_ready.clone();
-    let app_handle = app.handle().clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(15));
-        if !ready_flag.load(std::sync::atomic::Ordering::Acquire) {
-            error!("❌ Frontend did not become ready within 15 seconds — webview may have failed to load.");
-            error!(
-                "   This usually means another process is holding the WebView2 user data folder."
-            );
-            error!("   Try closing other instances or killing stale WebView2 processes.");
-            app_handle.exit(1);
-        }
-    });
-}
-
 /// Route `show-sessions` events (fired by the single-instance IPC
 /// listener when a second launch tries to open) into the chat window.
 pub fn install_show_sessions_listener(app: &App) {

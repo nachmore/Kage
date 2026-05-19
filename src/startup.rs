@@ -220,7 +220,7 @@ pub fn cmdline_matches_kage_webview(cmdline: &str, user_data_dir: &Path) -> bool
 /// user data directory. If kage was force-killed (Task Manager, OS
 /// kill, debugger detach), the msedgewebview2 child processes can
 /// outlive the parent and continue holding the lock. The next launch
-/// then fails with "Frontend did not become ready" because Tauri
+/// then fails to load the floating window — the WebView2 process
 /// can't re-attach to the locked dir. We get out from under that by
 /// killing the orphans before opening the webview.
 ///

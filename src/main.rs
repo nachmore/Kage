@@ -457,9 +457,6 @@ async fn run() {
             // Start automation scheduler
             setup::spawn_automation_scheduler(app);
 
-            // Watchdog: exit early if the frontend doesn't become ready.
-            setup::spawn_frontend_watchdog(app);
-
             // Auto-start Pocket TTS server if configured
             setup::maybe_autostart_pocket_tts(app, &config);
 
