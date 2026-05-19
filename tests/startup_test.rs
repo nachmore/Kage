@@ -9,8 +9,8 @@
 use kage::acp_client::AcpConnectionMode;
 use kage::config::AcpMode;
 use kage::startup::{
-    self, acp_mode_for, detect_capture_hotkey_subcommand, resolve_resume_session_id,
-    wait_for_webview_release, CliFlags, WebviewWaitResult,
+    self, acp_mode_for, cmdline_matches_kage_webview, detect_capture_hotkey_subcommand,
+    resolve_resume_session_id, wait_for_webview_release, CliFlags, WebviewWaitResult,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -298,6 +298,66 @@ fn webview_user_data_dir_is_under_kage_namespace() {
         "path {} should end with EBWebView",
         p
     );
+}
+
+// ---------------------------------------------------------------------------
+// cmdline_matches_kage_webview
+// ---------------------------------------------------------------------------
+//
+// The native PEB-walking code in os::windows::process delegates the
+// match decision to this pure helper so the substring contract stays
+// testable on every platform without spinning up Windows processes.
+
+#[test]
+fn cmdline_match_hits_when_user_data_dir_appears_verbatim() {
+    let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+    let cmd = format!(
+        r#""C:\Program Files (x86)\Microsoft\EdgeWebView\msedgewebview2.exe" \
+           --embedded-browser-webview=1 --user-data-dir="{}" --gpu-preferences=..."#,
+        dir.display()
+    );
+    assert!(cmdline_matches_kage_webview(&cmd, &dir));
+}
+
+#[test]
+fn cmdline_match_is_case_insensitive() {
+    // Process Explorer often shows path components in mixed case
+    // depending on how the spawning code referenced them. We must
+    // match regardless.
+    let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+    let cmd = r#"... --user-data-dir="C:\USERS\FOO\APPDATA\LOCAL\KAGE\EBWEBVIEW" ..."#;
+    assert!(cmdline_matches_kage_webview(cmd, &dir));
+}
+
+#[test]
+fn cmdline_match_misses_when_user_data_dir_belongs_to_another_app() {
+    // Many other apps also use WebView2 — VS Code, Slack, Teams, etc.
+    // We must not kill those.
+    let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+    let other =
+        r#"... --user-data-dir="C:\Users\foo\AppData\Local\Microsoft\VSCode\EBWebView" ..."#;
+    assert!(!cmdline_matches_kage_webview(other, &dir));
+}
+
+#[test]
+fn cmdline_match_misses_when_path_is_a_partial_substring_of_kage() {
+    // Kage isn't unique enough as a substring on its own. The match
+    // must use the full user-data-dir path, not just "kage", to avoid
+    // matching e.g. an unrelated tool that happens to have "kage" in
+    // its data path.
+    let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+    let other = r#"... --user-data-dir="C:\Users\foo\AppData\Local\kage-old-cli\EBWebView" ..."#;
+    assert!(!cmdline_matches_kage_webview(other, &dir));
+}
+
+#[test]
+fn cmdline_match_returns_false_for_empty_user_data_dir() {
+    // Defensive: a Path::to_str() failure (e.g. non-UTF-8 path)
+    // returns None inside the helper. We never want a falsy match
+    // to silently kill arbitrary processes.
+    let dir = PathBuf::new();
+    let cmd = "anything --user-data-dir=foo";
+    assert!(!cmdline_matches_kage_webview(cmd, &dir));
 }
 
 // ---------------------------------------------------------------------------

@@ -41,3 +41,19 @@ pub fn spawn_detached(cmd: &mut Command) -> std::io::Result<std::process::Child>
 pub fn install_kill_on_exit_job() {
     crate::os::platform::process::install_kill_on_exit_job_impl()
 }
+
+/// On Windows: enumerate `msedgewebview2.exe` processes whose command
+/// line points at the given WebView2 user data folder, and kill them.
+/// Returns the number killed.
+///
+/// Used by the startup path to clean up orphan WebView2 children left
+/// behind by a previous kage instance that didn't shut down cleanly.
+/// WebView2 enforces single-writer semantics on its user data directory;
+/// an orphan child holding the lock makes the next launch fail with a
+/// "frontend never became ready" timeout.
+///
+/// No-op on macOS and Linux — neither WKWebView nor WebKitGTK has the
+/// same user-data-dir lock contention pattern.
+pub fn kill_orphan_kage_webview_processes(user_data_dir: &std::path::Path) -> usize {
+    crate::os::platform::process::kill_orphan_kage_webview_processes_impl(user_data_dir)
+}

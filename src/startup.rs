@@ -183,6 +183,58 @@ pub fn webview_user_data_dir() -> Option<PathBuf> {
     Some(dirs::data_local_dir()?.join("kage").join("EBWebView"))
 }
 
+/// Test whether a `msedgewebview2.exe` command line belongs to a
+/// previous kage instance — i.e. its `--user-data-dir=` argument
+/// resolves to our EBWebView folder. Returns false for unrelated
+/// WebView2 processes (VS Code, Slack, Teams, etc. — they all use
+/// WebView2 and there can be dozens running).
+///
+/// Match strategy: WebView2 spawns its host process with the
+/// `--user-data-dir=<path>` flag in the command line, sometimes
+/// quoted, sometimes not. We look for the path string anywhere in
+/// the command line — case-insensitively on Windows where paths are
+/// canonicalized to mixed case — because the `--user-data-dir=`
+/// substring may appear without quotes, with quotes, or with the
+/// `=` replaced by a space depending on the WebView2 spawn flavour.
+///
+/// Pure logic so it's covered by a unit test without needing live
+/// processes.
+pub fn cmdline_matches_kage_webview(cmdline: &str, user_data_dir: &Path) -> bool {
+    let dir_str = match user_data_dir.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return false,
+    };
+    // Normalize for case-insensitive substring match. Windows paths
+    // are canonically mixed case but processes can pass them in any
+    // casing; doing a tolower-style compare avoids false negatives.
+    let cmd_lower = cmdline.to_ascii_lowercase();
+    let dir_lower = dir_str.to_ascii_lowercase();
+    cmd_lower.contains(&dir_lower)
+}
+
+/// Best-effort: enumerate `msedgewebview2.exe` processes whose
+/// command line points at our EBWebView folder, and kill them.
+/// Returns the number of processes killed.
+///
+/// Why this exists: WebView2 enforces single-writer semantics on its
+/// user data directory. If kage was force-killed (Task Manager, OS
+/// kill, debugger detach), the msedgewebview2 child processes can
+/// outlive the parent and continue holding the lock. The next launch
+/// then fails with "Frontend did not become ready" because Tauri
+/// can't re-attach to the locked dir. We get out from under that by
+/// killing the orphans before opening the webview.
+///
+/// Implementation lives in `os::windows::process` — uses
+/// `CreateToolhelp32Snapshot` for enumeration plus a PEB walk via
+/// `NtQueryInformationProcess` + `ReadProcessMemory` to read each
+/// process's command line. No subprocess shell-out.
+///
+/// On non-Windows, this is a no-op — neither WKWebView nor WebKitGTK
+/// has the same user-data-dir lock contention pattern.
+pub fn kill_orphan_kage_webview_processes(user_data_dir: &Path) -> usize {
+    crate::os::kill_orphan_kage_webview_processes(user_data_dir)
+}
+
 // -------------------------------------------------------------------
 // Post-config helpers
 // -------------------------------------------------------------------
@@ -213,6 +265,82 @@ where
     config
 }
 
+/// Make sure the WebView2 user data directory is writable before we
+/// hand control to Tauri. If the directory is locked by leftover child
+/// processes from a previous kage instance (forced kill, OS shutdown
+/// during runtime), this:
+///
+///   1. Polls briefly to see if the lock releases on its own
+///      (handles the "we just exited and a child is still tearing
+///      down" case — usually <500ms).
+///   2. If still locked, kills any `msedgewebview2.exe` processes
+///      whose command line points at our EBWebView folder.
+///   3. Polls once more for the release. If still locked, logs and
+///      continues — there's nothing else we can usefully do, but the
+///      Tauri-level "frontend never became ready" timeout will then
+///      surface a clear error to the user.
+///
+/// Always runs on launch — not just `--restart`. Most launches will
+/// see step 1 succeed in <100ms (if the dir even exists). The expensive
+/// path (PowerShell enumeration) is only reached after the polite wait
+/// fails. Replaces the old `wait_for_previous_instance_if_restart`
+/// which only handled the updater path.
+pub fn ensure_webview_directory_writable() {
+    let Some(webview_dir) = webview_user_data_dir() else {
+        return;
+    };
+
+    // Phase 1: brief polite wait. 1 second total at 100ms cadence.
+    // First-launch dir-doesn't-exist case returns immediately.
+    match wait_for_webview_release(
+        &webview_dir,
+        10,
+        std::time::Duration::from_millis(100),
+        std::thread::sleep,
+    ) {
+        WebviewWaitResult::NotPresent | WebviewWaitResult::Released { .. } => return,
+        WebviewWaitResult::TimedOut { waited_ms } => {
+            log::warn!(
+                "WebView2 user data folder still locked after {}ms — looking for orphan processes",
+                waited_ms
+            );
+        }
+    }
+
+    // Phase 2: kill orphan WebView2 children that are pinned to our dir.
+    let killed = kill_orphan_kage_webview_processes(&webview_dir);
+    if killed == 0 {
+        log::warn!(
+            "No matching orphan WebView2 processes found — lock may be held by something else; continuing"
+        );
+        return;
+    }
+
+    // Phase 3: brief wait for the lock to actually release after the
+    // kill. WebView2 children take a moment to fully release file
+    // handles even after the process exits.
+    match wait_for_webview_release(
+        &webview_dir,
+        20,
+        std::time::Duration::from_millis(100),
+        std::thread::sleep,
+    ) {
+        WebviewWaitResult::NotPresent | WebviewWaitResult::Released { waited_ms: _ } => {
+            log::info!(
+                "WebView2 user data folder released after killing {} orphan(s)",
+                killed
+            );
+        }
+        WebviewWaitResult::TimedOut { waited_ms } => {
+            log::warn!(
+                "WebView2 user data folder still locked after killing {} orphan(s) and waiting {}ms — continuing anyway",
+                killed,
+                waited_ms
+            );
+        }
+    }
+}
+
 /// If the app was launched with `--restart`, poll the WebView2 user
 /// data directory until the previous process releases its lock.
 /// Silent no-op on first run or when we're not restarting.
@@ -220,6 +348,11 @@ where
 /// Extracted so main() can call one line. The testable piece
 /// (`wait_for_webview_release`) is above; this wraps it with the
 /// real filesystem and sleep.
+///
+/// **Deprecated** by `ensure_webview_directory_writable` which runs
+/// on every launch and also handles orphan-kill, but kept for now
+/// for the explicit "we just got restarted by the updater" code path
+/// where we want a longer wait before escalating to kill.
 pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
     if !is_restart {
         return;

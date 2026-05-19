@@ -62,6 +62,12 @@ pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::C
 /// one-liner.
 pub fn install_kill_on_exit_job_impl() {}
 
+/// macOS uses WKWebView via Tauri; there's no user-data-dir lock
+/// contention pattern that requires foreign process cleanup. No-op.
+pub fn kill_orphan_kage_webview_processes_impl(_user_data_dir: &std::path::Path) -> usize {
+    0
+}
+
 pub fn install_signal_handlers_impl<F>(cleanup_fn: F) -> Result<()>
 where
     F: Fn() + Send + 'static,

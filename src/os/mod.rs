@@ -53,7 +53,10 @@ pub use clipboard::{
 };
 pub use cursor::get_cursor_position;
 pub use launcher::{launch_application, scan_applications};
-pub use process::{configure_process_spawn, install_kill_on_exit_job, kill_process};
+pub use process::{
+    configure_process_spawn, install_kill_on_exit_job, kill_orphan_kage_webview_processes,
+    kill_process,
+};
 pub use shell::{open_in_editor, open_path, open_url, reveal_in_file_manager};
 pub use startup::{get_startup_enabled, set_startup_enabled};
 pub use user::get_user_profile;

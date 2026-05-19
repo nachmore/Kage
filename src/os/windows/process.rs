@@ -88,6 +88,257 @@ where
     Ok(())
 }
 
+/// Find `msedgewebview2.exe` processes whose command line points at the
+/// given user data folder, and kill them. Returns the number killed.
+///
+/// Used by `startup::ensure_webview_directory_writable` to clean up
+/// orphan WebView2 host processes left behind by a previous kage that
+/// didn't shut down cleanly. WebView2 enforces single-writer semantics
+/// on its user data directory; an orphan child holding the lock makes
+/// the next launch fail with a "frontend never became ready" timeout.
+///
+/// # How it finds them
+///
+/// 1. `CreateToolhelp32Snapshot` enumerates every process by name.
+/// 2. For each `msedgewebview2.exe`, `OpenProcess(PROCESS_QUERY_LIMITED_
+///    INFORMATION | PROCESS_VM_READ)` gets a handle.
+/// 3. `NtQueryInformationProcess(ProcessBasicInformation)` returns the
+///    PEB base address.
+/// 4. `ReadProcessMemory` walks PEB → ProcessParameters → CommandLine
+///    (a UNICODE_STRING with a buffer pointer + length in the remote
+///    address space).
+/// 5. A second `ReadProcessMemory` pulls the command-line bytes.
+/// 6. We compare the lowercased command line against the lowercased
+///    user-data-dir path. Any match gets `kill_process_impl`'d.
+///
+/// # Safety / fallibility
+///
+/// `NtQueryInformationProcess` and the PEB layout are documented as
+/// "reserved" by Microsoft, but the offsets we use (PEB
+/// → ProcessParameters → CommandLine) are stable across every
+/// supported Windows version and are what Process Explorer / sysinfo /
+/// htop-equivalent tools also rely on. If a future Windows ever
+/// changes the layout, our match silently returns false (no spurious
+/// kills) and the caller surfaces the "frontend not ready" warning as
+/// before.
+///
+/// We deliberately tolerate every kind of failure (handle open denied,
+/// remote read truncated, processes that died mid-enumeration, etc.) —
+/// this is a best-effort cleanup and any error just means "skip this
+/// PID and move on."
+pub fn kill_orphan_kage_webview_processes_impl(user_data_dir: &std::path::Path) -> usize {
+    let pids = match enumerate_processes_by_name("msedgewebview2.exe") {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(
+                "Failed to enumerate processes while looking for orphan WebView2: {}",
+                e
+            );
+            return 0;
+        }
+    };
+
+    let mut matches: Vec<u32> = Vec::new();
+    for pid in pids {
+        match read_process_command_line(pid) {
+            Ok(cmdline) => {
+                // Match logic lives in startup.rs so we have one
+                // testable home for the substring contract.
+                if crate::startup::cmdline_matches_kage_webview(&cmdline, user_data_dir) {
+                    matches.push(pid);
+                }
+            }
+            Err(_) => {
+                // Common: PID died between enumeration and OpenProcess,
+                // or we don't have rights. Skip silently — we're only
+                // interested in processes we CAN read, and orphans we
+                // spawned ourselves are by definition readable by us.
+            }
+        }
+    }
+
+    if matches.is_empty() {
+        return 0;
+    }
+
+    log::warn!(
+        "Found {} orphan kage-WebView2 process(es): {:?} — killing",
+        matches.len(),
+        matches
+    );
+
+    let mut killed = 0;
+    for pid in matches {
+        if kill_process_impl(pid) {
+            killed += 1;
+        }
+    }
+    killed
+}
+
+/// Enumerate every process whose image name (case-insensitive)
+/// matches `name`. Returns the list of PIDs. Used by
+/// `kill_orphan_kage_webview_processes`.
+fn enumerate_processes_by_name(name: &str) -> Result<Vec<u32>> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let target = name.to_ascii_lowercase();
+    let mut pids: Vec<u32> = Vec::new();
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+            .map_err(|e| anyhow::anyhow!("CreateToolhelp32Snapshot failed: {}", e))?;
+
+        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                // szExeFile is a fixed-size [u16; 260] null-terminated UTF-16
+                // string. Read until first null, lowercase, compare.
+                let len = entry
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let exe = String::from_utf16_lossy(&entry.szExeFile[..len]).to_ascii_lowercase();
+                if exe == target {
+                    pids.push(entry.th32ProcessID);
+                }
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+
+    Ok(pids)
+}
+
+/// Read the command line of a foreign process via PEB walk.
+///
+/// PEB layout the code relies on (stable across Windows versions):
+///
+/// ```text
+/// PEB
+///   + 0x20  ProcessParameters: *mut RTL_USER_PROCESS_PARAMETERS  (x64)
+/// RTL_USER_PROCESS_PARAMETERS
+///   + 0x70  CommandLine: UNICODE_STRING { Length, MaxLength, Buffer }  (x64)
+/// ```
+///
+/// We use the typed `windows` crate bindings so the offsets come from
+/// the canonical headers rather than hardcoded numbers.
+fn read_process_command_line(pid: u32) -> Result<String> {
+    use windows::Wdk::System::Threading::{NtQueryInformationProcess, ProcessBasicInformation};
+    use windows::Win32::Foundation::{CloseHandle, UNICODE_STRING};
+    use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+    use windows::Win32::System::Threading::{
+        OpenProcess, PEB, PROCESS_BASIC_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_VM_READ, RTL_USER_PROCESS_PARAMETERS,
+    };
+
+    unsafe {
+        let handle = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+            false,
+            pid,
+        )
+        .map_err(|e| anyhow::anyhow!("OpenProcess({}) failed: {}", pid, e))?;
+
+        // Always close the handle on every exit path. Wrapped in a
+        // closure so the early-return arms don't need to repeat the
+        // CloseHandle call.
+        let result = (|| -> Result<String> {
+            // 1. PEB base address via NtQueryInformationProcess.
+            let mut pbi: PROCESS_BASIC_INFORMATION = std::mem::zeroed();
+            let mut returned: u32 = 0;
+            let status = NtQueryInformationProcess(
+                handle,
+                ProcessBasicInformation,
+                &mut pbi as *mut _ as *mut _,
+                std::mem::size_of::<PROCESS_BASIC_INFORMATION>() as u32,
+                &mut returned,
+            );
+            if status.0 < 0 {
+                return Err(anyhow::anyhow!(
+                    "NtQueryInformationProcess({}) status=0x{:x}",
+                    pid,
+                    status.0 as u32
+                ));
+            }
+            if pbi.PebBaseAddress.is_null() {
+                return Err(anyhow::anyhow!("PEB base address is null for pid {}", pid));
+            }
+
+            // 2. Read the PEB to get ProcessParameters pointer.
+            let mut peb: PEB = std::mem::zeroed();
+            ReadProcessMemory(
+                handle,
+                pbi.PebBaseAddress as *const _,
+                &mut peb as *mut _ as *mut _,
+                std::mem::size_of::<PEB>(),
+                None,
+            )
+            .map_err(|e| anyhow::anyhow!("ReadProcessMemory(PEB pid={}): {}", pid, e))?;
+
+            if peb.ProcessParameters.is_null() {
+                return Err(anyhow::anyhow!("ProcessParameters is null for pid {}", pid));
+            }
+
+            // 3. Read RTL_USER_PROCESS_PARAMETERS for the CommandLine
+            //    UNICODE_STRING. The struct's tail is variable-length on
+            //    paper but the binding only exposes up through CommandLine,
+            //    which is what we want anyway.
+            let mut params: RTL_USER_PROCESS_PARAMETERS = std::mem::zeroed();
+            ReadProcessMemory(
+                handle,
+                peb.ProcessParameters as *const _,
+                &mut params as *mut _ as *mut _,
+                std::mem::size_of::<RTL_USER_PROCESS_PARAMETERS>(),
+                None,
+            )
+            .map_err(|e| anyhow::anyhow!("ReadProcessMemory(params pid={}): {}", pid, e))?;
+
+            // 4. Read the command-line buffer itself. Length is in BYTES
+            //    (per Win32 UNICODE_STRING contract — not characters).
+            let cmdline_unicode: UNICODE_STRING = params.CommandLine;
+            if cmdline_unicode.Buffer.is_null() || cmdline_unicode.Length == 0 {
+                return Err(anyhow::anyhow!("Empty command line for pid {}", pid));
+            }
+            let byte_len = cmdline_unicode.Length as usize;
+            // Defensive cap: a sane command line is well under 32 KB.
+            // Anything larger means a bad read, not a real cmdline.
+            if byte_len > 64 * 1024 {
+                return Err(anyhow::anyhow!(
+                    "Command line for pid {} unexpectedly large: {} bytes",
+                    pid,
+                    byte_len
+                ));
+            }
+            let wchar_count = byte_len / 2;
+            let mut buf: Vec<u16> = vec![0u16; wchar_count];
+            ReadProcessMemory(
+                handle,
+                cmdline_unicode.Buffer.as_ptr() as *const _,
+                buf.as_mut_ptr() as *mut _,
+                byte_len,
+                None,
+            )
+            .map_err(|e| anyhow::anyhow!("ReadProcessMemory(cmdline pid={}): {}", pid, e))?;
+
+            Ok(String::from_utf16_lossy(&buf))
+        })();
+
+        let _ = CloseHandle(handle);
+        result
+    }
+}
+
 /// Set the current thread's description (name) via Win32 SetThreadDescription.
 /// This makes the thread identifiable in debuggers and in our thread dump command.
 pub fn set_thread_name(name: &str) {

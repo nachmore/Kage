@@ -129,6 +129,14 @@ async fn run() {
     // resources before we proceed.
     startup::wait_for_previous_instance_if_restart(flags.is_restart);
 
+    // Independently of the restart flow, every launch verifies the
+    // WebView2 user data folder is writable. If a previous kage was
+    // force-killed, its msedgewebview2 children may still be holding
+    // the directory lock — that surfaces as the "Frontend did not
+    // become ready" timeout 15 seconds into startup. This call kills
+    // those orphans before Tauri tries to attach. No-op on macOS/Linux.
+    startup::ensure_webview_directory_writable();
+
     let dev_mode = flags.dev_mode;
     let debug_mode = flags.debug_mode;
 
