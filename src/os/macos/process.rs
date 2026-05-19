@@ -64,7 +64,7 @@ pub fn install_kill_on_exit_job_impl() {}
 
 /// macOS uses WKWebView via Tauri; there's no user-data-dir lock
 /// contention pattern that requires foreign process cleanup. No-op.
-pub fn kill_orphan_kage_webview_processes_impl(_user_data_dir: &std::path::Path) -> usize {
+pub fn cleanup_stale_processes_impl(_marker_dir: &std::path::Path) -> usize {
     0
 }
 

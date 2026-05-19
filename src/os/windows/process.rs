@@ -91,11 +91,12 @@ where
 /// Find `msedgewebview2.exe` processes whose command line points at the
 /// given user data folder, and kill them. Returns the number killed.
 ///
-/// Used by `startup::ensure_webview_directory_writable` to clean up
+/// Used by `startup::ensure_webview_directory_writable` (via the
+/// platform-agnostic `os::cleanup_stale_processes`) to clean up
 /// orphan WebView2 host processes left behind by a previous kage that
 /// didn't shut down cleanly. WebView2 enforces single-writer semantics
 /// on its user data directory; an orphan child holding the lock makes
-/// the next launch fail with a "frontend never became ready" timeout.
+/// the next launch fail to render the floating window at all.
 ///
 /// # How it finds them
 ///
@@ -126,7 +127,7 @@ where
 /// remote read truncated, processes that died mid-enumeration, etc.) —
 /// this is a best-effort cleanup and any error just means "skip this
 /// PID and move on."
-pub fn kill_orphan_kage_webview_processes_impl(user_data_dir: &std::path::Path) -> usize {
+pub fn cleanup_stale_processes_impl(user_data_dir: &std::path::Path) -> usize {
     let pids = match enumerate_processes_by_name("msedgewebview2.exe") {
         Ok(v) => v,
         Err(e) => {
@@ -142,9 +143,7 @@ pub fn kill_orphan_kage_webview_processes_impl(user_data_dir: &std::path::Path) 
     for pid in pids {
         match read_process_command_line(pid) {
             Ok(cmdline) => {
-                // Match logic lives in startup.rs so we have one
-                // testable home for the substring contract.
-                if crate::startup::cmdline_matches_kage_webview(&cmdline, user_data_dir) {
+                if cmdline_matches_kage_webview(&cmdline, user_data_dir) {
                     matches.push(pid);
                 }
             }
@@ -178,7 +177,7 @@ pub fn kill_orphan_kage_webview_processes_impl(user_data_dir: &std::path::Path) 
 
 /// Enumerate every process whose image name (case-insensitive)
 /// matches `name`. Returns the list of PIDs. Used by
-/// `kill_orphan_kage_webview_processes`.
+/// `cleanup_stale_processes_impl`.
 fn enumerate_processes_by_name(name: &str) -> Result<Vec<u32>> {
     use windows::Win32::Foundation::CloseHandle;
     use windows::Win32::System::Diagnostics::ToolHelp::{
@@ -402,5 +401,98 @@ pub fn install_kill_on_exit_job_impl() {
         }
         // Deliberately leak the handle — see doc comment.
         let _ = job;
+    }
+}
+
+/// Test whether a `msedgewebview2.exe` command line belongs to a
+/// previous kage instance — i.e. its `--user-data-dir=` argument
+/// resolves to our EBWebView folder. Returns false for unrelated
+/// WebView2 processes (VS Code, Slack, Teams, etc. — they all use
+/// WebView2 and there can be dozens running).
+///
+/// Match strategy: WebView2 spawns its host process with the
+/// `--user-data-dir=<path>` flag in the command line, sometimes
+/// quoted, sometimes not. We look for the path string anywhere in
+/// the command line — case-insensitively because Windows paths can
+/// appear in any casing depending on how the spawning code referenced
+/// them — and the `--user-data-dir=` substring may appear with or
+/// without quotes depending on the WebView2 spawn flavour.
+///
+/// Pure logic kept private to the Windows process module so the
+/// substring contract has a single home and a single test surface.
+fn cmdline_matches_kage_webview(cmdline: &str, user_data_dir: &std::path::Path) -> bool {
+    let dir_str = match user_data_dir.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return false,
+    };
+    // Normalize for case-insensitive substring match. Windows paths
+    // are canonically mixed case but processes can pass them in any
+    // casing; doing a tolower-style compare avoids false negatives.
+    let cmd_lower = cmdline.to_ascii_lowercase();
+    let dir_lower = dir_str.to_ascii_lowercase();
+    cmd_lower.contains(&dir_lower)
+}
+
+#[cfg(test)]
+mod tests {
+    //! The native PEB-walking code in `cleanup_stale_processes_impl`
+    //! delegates the match decision to `cmdline_matches_kage_webview`
+    //! so the substring contract stays testable without spinning up
+    //! Windows processes.
+
+    use super::cmdline_matches_kage_webview;
+    use std::path::PathBuf;
+
+    #[test]
+    fn cmdline_match_hits_when_user_data_dir_appears_verbatim() {
+        let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+        let cmd = format!(
+            r#""C:\Program Files (x86)\Microsoft\EdgeWebView\msedgewebview2.exe" \
+               --embedded-browser-webview=1 --user-data-dir="{}" --gpu-preferences=..."#,
+            dir.display()
+        );
+        assert!(cmdline_matches_kage_webview(&cmd, &dir));
+    }
+
+    #[test]
+    fn cmdline_match_is_case_insensitive() {
+        // Process Explorer often shows path components in mixed case
+        // depending on how the spawning code referenced them. We must
+        // match regardless.
+        let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+        let cmd = r#"... --user-data-dir="C:\USERS\FOO\APPDATA\LOCAL\KAGE\EBWEBVIEW" ..."#;
+        assert!(cmdline_matches_kage_webview(cmd, &dir));
+    }
+
+    #[test]
+    fn cmdline_match_misses_when_user_data_dir_belongs_to_another_app() {
+        // Many other apps also use WebView2 — VS Code, Slack, Teams, etc.
+        // We must not kill those.
+        let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+        let other =
+            r#"... --user-data-dir="C:\Users\foo\AppData\Local\Microsoft\VSCode\EBWebView" ..."#;
+        assert!(!cmdline_matches_kage_webview(other, &dir));
+    }
+
+    #[test]
+    fn cmdline_match_misses_when_path_is_a_partial_substring_of_kage() {
+        // Kage isn't unique enough as a substring on its own. The match
+        // must use the full user-data-dir path, not just "kage", to avoid
+        // matching e.g. an unrelated tool that happens to have "kage" in
+        // its data path.
+        let dir = PathBuf::from(r"C:\Users\foo\AppData\Local\kage\EBWebView");
+        let other =
+            r#"... --user-data-dir="C:\Users\foo\AppData\Local\kage-old-cli\EBWebView" ..."#;
+        assert!(!cmdline_matches_kage_webview(other, &dir));
+    }
+
+    #[test]
+    fn cmdline_match_returns_false_for_empty_user_data_dir() {
+        // Defensive: a Path::to_str() failure (e.g. non-UTF-8 path)
+        // returns None inside the helper. We never want a falsy match
+        // to silently kill arbitrary processes.
+        let dir = PathBuf::new();
+        let cmd = "anything --user-data-dir=foo";
+        assert!(!cmdline_matches_kage_webview(cmd, &dir));
     }
 }

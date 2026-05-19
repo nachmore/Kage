@@ -183,57 +183,12 @@ pub fn webview_user_data_dir() -> Option<PathBuf> {
     Some(dirs::data_local_dir()?.join("kage").join("EBWebView"))
 }
 
-/// Test whether a `msedgewebview2.exe` command line belongs to a
-/// previous kage instance — i.e. its `--user-data-dir=` argument
-/// resolves to our EBWebView folder. Returns false for unrelated
-/// WebView2 processes (VS Code, Slack, Teams, etc. — they all use
-/// WebView2 and there can be dozens running).
-///
-/// Match strategy: WebView2 spawns its host process with the
-/// `--user-data-dir=<path>` flag in the command line, sometimes
-/// quoted, sometimes not. We look for the path string anywhere in
-/// the command line — case-insensitively on Windows where paths are
-/// canonicalized to mixed case — because the `--user-data-dir=`
-/// substring may appear without quotes, with quotes, or with the
-/// `=` replaced by a space depending on the WebView2 spawn flavour.
-///
-/// Pure logic so it's covered by a unit test without needing live
-/// processes.
-pub fn cmdline_matches_kage_webview(cmdline: &str, user_data_dir: &Path) -> bool {
-    let dir_str = match user_data_dir.to_str() {
-        Some(s) if !s.is_empty() => s,
-        _ => return false,
-    };
-    // Normalize for case-insensitive substring match. Windows paths
-    // are canonically mixed case but processes can pass them in any
-    // casing; doing a tolower-style compare avoids false negatives.
-    let cmd_lower = cmdline.to_ascii_lowercase();
-    let dir_lower = dir_str.to_ascii_lowercase();
-    cmd_lower.contains(&dir_lower)
-}
-
-/// Best-effort: enumerate `msedgewebview2.exe` processes whose
-/// command line points at our EBWebView folder, and kill them.
-/// Returns the number of processes killed.
-///
-/// Why this exists: WebView2 enforces single-writer semantics on its
-/// user data directory. If kage was force-killed (Task Manager, OS
-/// kill, debugger detach), the msedgewebview2 child processes can
-/// outlive the parent and continue holding the lock. The next launch
-/// then fails to load the floating window — the WebView2 process
-/// can't re-attach to the locked dir. We get out from under that by
-/// killing the orphans before opening the webview.
-///
-/// Implementation lives in `os::windows::process` — uses
-/// `CreateToolhelp32Snapshot` for enumeration plus a PEB walk via
-/// `NtQueryInformationProcess` + `ReadProcessMemory` to read each
-/// process's command line. No subprocess shell-out.
-///
-/// On non-Windows, this is a no-op — neither WKWebView nor WebKitGTK
-/// has the same user-data-dir lock contention pattern.
-pub fn kill_orphan_kage_webview_processes(user_data_dir: &Path) -> usize {
-    crate::os::kill_orphan_kage_webview_processes(user_data_dir)
-}
+// Note: the Windows-specific match logic for orphan WebView2 children
+// (`cmdline_matches_kage_webview`) used to live here so it could be
+// unit-tested without `#[cfg(target_os = "windows")]`. It was moved into
+// `os::windows::process` (alongside the rest of the PEB-walking code)
+// because exposing it cross-platform made it dead code on macOS / Linux,
+// which clippy --deny-warnings rejected. The tests moved with it.
 
 // -------------------------------------------------------------------
 // Post-config helpers
@@ -308,7 +263,7 @@ pub fn ensure_webview_directory_writable() {
     }
 
     // Phase 2: kill orphan WebView2 children that are pinned to our dir.
-    let killed = kill_orphan_kage_webview_processes(&webview_dir);
+    let killed = crate::os::cleanup_stale_processes(&webview_dir);
     if killed == 0 {
         log::warn!(
             "No matching orphan WebView2 processes found — lock may be held by something else; continuing"

@@ -42,18 +42,25 @@ pub fn install_kill_on_exit_job() {
     crate::os::platform::process::install_kill_on_exit_job_impl()
 }
 
-/// On Windows: enumerate `msedgewebview2.exe` processes whose command
-/// line points at the given WebView2 user data folder, and kill them.
-/// Returns the number killed.
+/// Best-effort: clean up stale processes that could prevent the next
+/// launch from succeeding. Returns the number killed.
 ///
-/// Used by the startup path to clean up orphan WebView2 children left
-/// behind by a previous kage instance that didn't shut down cleanly.
-/// WebView2 enforces single-writer semantics on its user data directory;
-/// an orphan child holding the lock makes the next launch fail with a
-/// "frontend never became ready" timeout.
+/// Currently implemented for Windows only, where it kills orphan
+/// `msedgewebview2.exe` children whose command line points at the
+/// given WebView2 user-data folder. WebView2 enforces single-writer
+/// semantics on that folder; an orphan child holding the lock makes
+/// the next launch fail to render a webview at all.
+///
+/// `marker_dir` is passed through to platform code so per-platform
+/// implementations can match against the relevant resource (the
+/// WebView2 user-data folder on Windows). It's accepted unconditionally
+/// at this layer to keep the cross-platform call site clean even
+/// though macOS / Linux ignore it today.
 ///
 /// No-op on macOS and Linux — neither WKWebView nor WebKitGTK has the
-/// same user-data-dir lock contention pattern.
-pub fn kill_orphan_kage_webview_processes(user_data_dir: &std::path::Path) -> usize {
-    crate::os::platform::process::kill_orphan_kage_webview_processes_impl(user_data_dir)
+/// same user-data-dir lock contention pattern. If a future platform
+/// needs equivalent cleanup (e.g. a stuck IPC socket), add the impl
+/// behind this same name.
+pub fn cleanup_stale_processes(marker_dir: &std::path::Path) -> usize {
+    crate::os::platform::process::cleanup_stale_processes_impl(marker_dir)
 }
