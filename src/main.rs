@@ -236,6 +236,30 @@ async fn run() {
         // user's channel choice (stable / beta / dev). See docs/RELEASE.md.
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
+            // Diagnostic logging for the floating window only — helps us
+            // see when something hides/destroys/focuses it externally.
+            // Other windows are too noisy (chat repaints, etc.) so we
+            // gate on label.
+            if window.label() == "floating" {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        log::info!("[floating-event] CloseRequested");
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        log::info!("[floating-event] Destroyed");
+                    }
+                    tauri::WindowEvent::Focused(focused) => {
+                        log::info!("[floating-event] Focused({})", focused);
+                    }
+                    tauri::WindowEvent::Resized(sz) => {
+                        log::info!(
+                            "[floating-event] Resized(w={}, h={})",
+                            sz.width, sz.height
+                        );
+                    }
+                    _ => {}
+                }
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 setup::handle_window_close(window, api);
             }

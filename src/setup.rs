@@ -1,8 +1,8 @@
 //! Tauri setup helpers extracted from main()'s `.setup(...)` closure.
 //!
 //! Each function here runs once during Tauri application setup and
-//! owns one concern (window configuration, hotkey hot-reload, watchdog,
-//! etc.). Moving them out of main.rs keeps the closure readable and
+//! owns one concern (window configuration, hotkey hot-reload, etc.).
+//! Moving them out of main.rs keeps the closure readable and
 //! gives each stage a place to grow.
 //!
 //! These can't be unit-tested without spinning up a Tauri app, so the
