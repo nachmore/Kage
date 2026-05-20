@@ -63,7 +63,22 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     window._floatingApp = app; // Expose for permission modal resize
     // Extension manager will be set asynchronously after extensions load in background
     app._onExtensionsReady = () => setMarkdownExtManager(app.extensionManager);
-    app.init();
+    // Don't await — init() does extension loading in the background and
+    // signals frontend_ready partway through. Awaiting would delay the
+    // mascot setup below. But we MUST surface failures: if init throws,
+    // notify_frontend_ready never fires and the floating window appears
+    // dead with no logs anywhere. Mirror the error to the backend so we
+    // notice instead of silently hanging.
+    app.init().catch((err) => {
+        const msg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err);
+        console.error('FloatingApp.init failed:', msg);
+        // Try to surface to the user even though most of the UI may be broken
+        invoke('app_log_write', {
+            level: 'error',
+            source: 'floating',
+            msg: `FloatingApp.init failed: ${msg}`,
+        }).catch(() => {});
+    });
 
     // Telemetry: count once per process when the floating window becomes
     // visible for the first time. Subsequent shows/hides are implicit in

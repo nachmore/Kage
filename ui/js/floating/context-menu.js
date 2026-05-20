@@ -1,12 +1,23 @@
 /**
  * Custom right-click context menu using a cached Tauri popup window.
  * The window is pre-created at startup and repositioned/shown on demand.
+ *
+ * Tauri readiness:
+ *   `window.__TAURI__` is injected by the runtime (`withGlobalTauri: true`),
+ *   but in release builds the module bundle can hit the parser before the
+ *   injection lands — destructuring `__TAURI__` at module top-level then
+ *   throws and aborts the whole `<script type="module">` graph, taking
+ *   `main.js` (and `notify_frontend_ready`) down with it. Defer all
+ *   `__TAURI__` access until `waitForTauri` confirms it's there.
  */
 
-const { invoke } = window.__TAURI__.core;
-const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+import { waitForTauri } from '../shared/tauri-init.js';
 
-async function initContextMenu() {
+waitForTauri(({ invoke, appWindow, listen }) => {
+    initContextMenu(invoke, appWindow, listen);
+});
+
+function initContextMenu(invoke, appWindow, listen) {
     // Suppress default context menu, show cached popup window
     document.addEventListener('contextmenu', async (e) => {
         e.preventDefault();
@@ -29,8 +40,7 @@ async function initContextMenu() {
     });
 
     // Listen for actions from the context menu popup (global event)
-    const { listen: globalListen } = window.__TAURI__.event;
-    globalListen('context-menu-action', async (event) => {
+    listen('context-menu-action', async (event) => {
         window._contextMenuOpen = false;
         const action = event.payload;
 
@@ -89,10 +99,4 @@ async function initContextMenu() {
                 break;
         }
     });
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initContextMenu);
-} else {
-    initContextMenu();
 }
