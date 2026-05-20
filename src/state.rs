@@ -42,7 +42,10 @@ pub struct UiState {
     pub source_window: Arc<std::sync::Mutex<Option<(String, String)>>>,
     /// Which window sent the last notification ('floating' or 'main')
     pub notification_source: Arc<std::sync::Mutex<String>>,
-    /// Whether the floating window frontend has finished initializing
+    /// Whether the floating window frontend's `init()` has completed.
+    /// Diagnostic-only — written by `notify_frontend_ready`, never read
+    /// as a gate (see comment on that command). The "Frontend signaled
+    /// ready" log line it emits is what we actually rely on.
     pub frontend_ready: Arc<AtomicBool>,
 }
 

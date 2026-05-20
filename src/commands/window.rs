@@ -52,12 +52,6 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
     let ui: tauri::State<'_, crate::state::UiState> = app.state();
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
 
-    // Don't show if frontend hasn't finished initializing yet
-    if !ui.frontend_ready.load(std::sync::atomic::Ordering::Acquire) {
-        info!("Ignoring show_floating_at_mouse — frontend not ready");
-        return;
-    }
-
     // Don't show during first-run wizard
     if !features.config.lock_or_recover().first_run_completed {
         info!("Ignoring show_floating_at_mouse — first run not completed");
@@ -70,6 +64,8 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
         return;
     }
 
+    // Position before showing so the window appears in its final spot —
+    // showing first and snapping creates a visible jump.
     position_floating_window_with_height(window, "mouse", None, None, Some(500));
     let _ = window.show();
     let _ = window.set_focus();
@@ -88,15 +84,6 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
     let ui_state: tauri::State<'_, crate::state::UiState> = app.state();
     let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
 
-    // Don't show if frontend hasn't finished initializing yet
-    if !ui_state
-        .frontend_ready
-        .load(std::sync::atomic::Ordering::Acquire)
-    {
-        info!("Ignoring hotkey — frontend not ready");
-        return;
-    }
-
     // Don't show during first-run wizard — user should complete onboarding first
     if !features.config.lock_or_recover().first_run_completed {
         info!("Ignoring hotkey — first run not completed");
@@ -104,6 +91,11 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
     }
 
     let is_showing = !window.is_visible().unwrap_or(true);
+    info!(
+        "[toggle] entry: is_visible={:?}, taking={} branch",
+        window.is_visible(),
+        if is_showing { "show" } else { "hide" }
+    );
 
     let config = features.config.lock_or_recover();
     let capture_enabled = config.system.capture_selection;
@@ -153,7 +145,8 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                         let _ = config.save();
                     }
                 }
-                let _ = window.hide();
+                let hide_res = window.hide();
+                info!("[toggle] hide() result: {:?}", hide_res);
                 // Clear source window info when hiding
                 if let Ok(mut sw) = ui_state.source_window.lock() {
                     *sw = None;
@@ -176,10 +169,16 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                         }
                     }
                 }
-                // Show window immediately — don't wait for clipboard poll
+                // Position the window before showing so it appears at
+                // its final location — showing first and then moving
+                // produces a visible jump.
                 position_floating_window(window, &start_pos, last_x, last_y);
-                let _ = window.show();
-                let _ = window.set_focus();
+                let show_res = window.show();
+                let focus_res = window.set_focus();
+                info!(
+                    "[toggle] show() result: {:?}, set_focus() result: {:?}",
+                    show_res, focus_res
+                );
 
                 // Record floating window activity for the updater idle check
                 features.updater.touch_activity();
@@ -651,9 +650,22 @@ pub async fn show_notification_source_window(
     }
     Ok(())
 }
-/// Called by the floating window frontend once initialization is complete.
-/// Until this is called, hotkey presses are silently ignored to prevent
-/// showing a half-initialized window.
+/// Called by the floating window frontend once `init()` completes.
+/// Used purely as a diagnostic / telemetry beacon — the backend log line
+/// "Frontend signaled ready" is the canonical signal that the floating
+/// JS bundle loaded and ran end-to-end. If you ever see hotkey presses
+/// without this line preceding them, the JS module graph aborted (e.g.
+/// a top-level `window.__TAURI__` access racing the global injection).
+///
+/// We used to gate `show_floating_at_mouse` / `toggle_floating_window`
+/// on the boolean this command sets, to suppress a brief flash of an
+/// unthemed window during the first ~200ms of startup. That gate was
+/// removed because Tauri doesn't load the floating window's HTML+JS
+/// until the window first shows (the window is configured
+/// `visible: false`), which made the gate a permanent deadlock if the
+/// JS init ever failed: window never shows → JS never runs →
+/// frontend_ready never flips → window never shows. A one-frame flash
+/// is fine; a permanently dead app is not.
 #[tauri::command]
 pub fn notify_frontend_ready(ui: tauri::State<'_, crate::state::UiState>) {
     info!("Frontend signaled ready");
