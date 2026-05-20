@@ -2,11 +2,63 @@ use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::os;
 use log::{error, info, warn};
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager, WebviewWindow};
+use tauri_plugin_notification::NotificationExt;
 
 /// Get cursor position via OS abstraction
 fn get_cursor_position() -> Option<(i32, i32)> {
     os::get_cursor_position()
+}
+
+/// Last time we surfaced a "floating window won't show" notification.
+/// Used to throttle the toast — without this, hotkey mashing into a
+/// stuck WebView2 would queue dozens of notifications that the user
+/// would only see when the system finally caught up.
+static LAST_SHOW_FAILURE_NOTIFY: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| Mutex::new(None));
+
+/// Minimum gap between consecutive "show failed" toasts. Long enough
+/// that a frustrated user mashing the hotkey only sees one toast per
+/// burst, short enough that if the situation goes south again later
+/// they get told.
+const SHOW_FAILURE_NOTIFY_THROTTLE: Duration = Duration::from_secs(60);
+
+/// Surface a system notification when a floating-window `show()` call
+/// returns Err. The HRESULT 0x8007139F family ("Class not registered" /
+/// "group or resource is not in the correct state") usually means the
+/// WebView2 controller is wedged and the only fix the user has is to
+/// restart kage. Without this, the failure is silent: the hotkey logs
+/// say "show() result: Err(...)" but nothing surfaces to the human.
+///
+/// Rate-limited so a user mashing Alt+Space at a stuck window doesn't
+/// queue up a stack of toasts; the throttle is per-process state so
+/// every fresh launch starts unmuted.
+fn notify_show_failed(app: &tauri::AppHandle, err: &tauri::Error) {
+    {
+        let mut guard = LAST_SHOW_FAILURE_NOTIFY.lock_or_recover();
+        if let Some(prev) = *guard {
+            if prev.elapsed() < SHOW_FAILURE_NOTIFY_THROTTLE {
+                return;
+            }
+        }
+        *guard = Some(Instant::now());
+    }
+
+    let body = format!(
+        "Something's gone wrong with the webview ({}). Restart Kage from the tray to recover.",
+        err
+    );
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title("Kage's floating window won't show")
+        .body(body)
+        .show()
+    {
+        warn!("Failed to send recovery notification: {}", e);
+    }
 }
 
 /// Find which monitor contains the given point
@@ -67,7 +119,11 @@ pub fn show_floating_at_mouse(window: &WebviewWindow) {
     // Position before showing so the window appears in its final spot —
     // showing first and snapping creates a visible jump.
     position_floating_window_with_height(window, "mouse", None, None, Some(500));
-    let _ = window.show();
+    if let Err(e) = window.show() {
+        error!("[show_at_mouse] show() failed: {}", e);
+        notify_show_failed(app, &e);
+        return;
+    }
     let _ = window.set_focus();
     features.updater.touch_activity();
 
@@ -179,6 +235,10 @@ pub fn toggle_floating_window(window: &WebviewWindow) {
                     "[toggle] show() result: {:?}, set_focus() result: {:?}",
                     show_res, focus_res
                 );
+                if let Err(e) = show_res {
+                    notify_show_failed(app, &e);
+                    return;
+                }
 
                 // Record floating window activity for the updater idle check
                 features.updater.touch_activity();
