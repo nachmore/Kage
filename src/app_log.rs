@@ -22,6 +22,16 @@
 //! is full we drop the on-disk copy silently; the in-memory ring still has
 //! the entry for the UI viewer and panic handler.
 //!
+//! # Pre-init buffering
+//!
+//! Frontend webviews start running JS several seconds before our `setup()`
+//! block reaches `init()` — the Tauri builder constructs and loads them
+//! while `setup()` is still loading config and connecting the ACP client.
+//! That means `invoke('app_log_write', ...)` calls from the top of a
+//! window's `main.js` arrive in `log()` before `WRITER_TX` is initialized.
+//! `PREINIT_BUFFER` captures those entries so they're not lost; `init()`
+//! drains the buffer into the writer once it's up.
+//!
 //! # Rotation
 //!
 //! When the file exceeds `ROTATE_SIZE_BYTES`, the writer renames it to
@@ -84,6 +94,18 @@ static APP_LOG: std::sync::OnceLock<Mutex<AppLog>> = std::sync::OnceLock::new();
 
 /// Sender handle for the writer thread. Initialized alongside `APP_LOG`.
 static WRITER_TX: std::sync::OnceLock<SyncSender<WriterMsg>> = std::sync::OnceLock::new();
+
+/// Pre-init buffer for entries that arrive before `init()` has run.
+/// Frontend webviews start loading their JS as soon as the Tauri builder
+/// constructs them — that's well before `setup()` runs and calls our
+/// `init()`. So a beacon like `invoke('app_log_write', ...)` at the top
+/// of `main.js` reaches the backend command handler while `WRITER_TX`
+/// is still `None`, and without this buffer the entry would silently
+/// vanish. Drained the first time `log()` runs after `init()`.
+///
+/// `Some(Vec)` means "pre-init, still buffering"; `None` means "drained,
+/// don't buffer anymore — `init()` is up".
+static PREINIT_BUFFER: Mutex<Option<Vec<LogEntry>>> = Mutex::new(Some(Vec::new()));
 
 struct AppLog {
     buffer: VecDeque<LogEntry>,
@@ -173,7 +195,33 @@ pub fn init(max_size: usize) -> Result<()> {
         .spawn(move || writer_loop(rx, log_path))
         .context("Failed to spawn app-log-writer thread")?;
 
+    drain_preinit_buffer();
+
     Ok(())
+}
+
+/// Drain the pre-init buffer into the now-running writer. Marks the buffer
+/// as drained (`None`) so subsequent calls to `log_with_ts` skip the
+/// pre-init path and go straight to the ring + writer. Idempotent — safe
+/// to call more than once, but `init()` already calls it once.
+fn drain_preinit_buffer() {
+    let buffered = match PREINIT_BUFFER.lock() {
+        Ok(mut guard) => guard.take(),
+        Err(p) => p.into_inner().take(),
+    };
+    let Some(entries) = buffered else { return };
+    for entry in entries {
+        // Replay through the same path as a fresh log call, minus the
+        // pre-init detour we just disabled by taking the buffer above.
+        if let Some(lock) = APP_LOG.get() {
+            if let Ok(mut log) = lock.lock() {
+                log.push(entry.clone());
+            }
+        }
+        if let Some(tx) = WRITER_TX.get() {
+            let _ = tx.try_send(WriterMsg::Entry(entry));
+        }
+    }
 }
 
 /// Background writer loop. Owns the file handle; no other code touches it.
@@ -381,6 +429,19 @@ pub fn log_with_ts(ts: &str, level: &str, source: &str, msg: &str) {
         source: source.to_string(),
         msg: truncate_msg(msg),
     };
+
+    // Pre-init path: webviews can call `app_log_write` before `init()` has
+    // run (the Tauri builder loads HTML/JS several seconds before our
+    // `setup()` block reaches `app_log::init`). Buffer here so the beacon
+    // at the top of main.js isn't silently discarded.
+    if WRITER_TX.get().is_none() {
+        if let Ok(mut guard) = PREINIT_BUFFER.lock() {
+            if let Some(buf) = guard.as_mut() {
+                buf.push(entry);
+                return;
+            }
+        }
+    }
 
     // In-memory ring first. Short critical section — only a VecDeque push.
     if let Some(lock) = APP_LOG.get() {
@@ -779,5 +840,41 @@ mod tests {
 
         drop(tx);
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn preinit_buffer_drain_replays_in_order_and_disables_buffering() {
+        // Frontend webviews can call `app_log_write` while the Tauri builder
+        // is still constructing the rest of the app — that lands in
+        // `app_log::log` before `init()` has set up `WRITER_TX`. Without the
+        // pre-init buffer, those entries would silently vanish. Verify here
+        // that `drain_preinit_buffer` replays them in order and that the
+        // buffer is marked drained so subsequent log calls don't recurse
+        // back into the pre-init path.
+        //
+        // We can't call the public `log_with_ts` because it touches the
+        // process-global `APP_LOG`/`WRITER_TX` that other tests already
+        // populate. Instead drive `PREINIT_BUFFER` directly. Take/restore
+        // the buffer state so we don't poison sibling tests.
+        let saved = PREINIT_BUFFER.lock().unwrap().take();
+
+        // Seed the buffer as if two early frontend invokes had landed.
+        *PREINIT_BUFFER.lock().unwrap() = Some(vec![
+            make_entry("info", "chat", "early-1"),
+            make_entry("warn", "floating", "early-2"),
+        ]);
+
+        drain_preinit_buffer();
+
+        // Buffer should be `None` now — the "drained" marker. A subsequent
+        // log_with_ts must NOT re-buffer; it should go straight to the
+        // ring/writer path.
+        assert!(
+            PREINIT_BUFFER.lock().unwrap().is_none(),
+            "drain should leave buffer in the drained (None) state"
+        );
+
+        // Restore so other tests aren't affected.
+        *PREINIT_BUFFER.lock().unwrap() = saved;
     }
 }
