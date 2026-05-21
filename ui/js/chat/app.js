@@ -750,16 +750,20 @@ export class ChatApp {
             this.startStreaming();
         });
 
-        // Real-time context usage from ACP metadata notifications
+        // Real-time context usage from ACP metadata notifications.
+        // `contextUsagePercentage` is already in percentage form (0..100)
+        // — both kage-cli and kiro-cli send it that way. The values are
+        // floats with many decimals (e.g. 0.9581 means 0.96%, not 96%);
+        // an earlier "scale up if ≤1" guess turned a barely-touched
+        // session into 96% and triggered an auto-compact loop.
         this.listen('context_metadata', (event) => {
-            const pct = event.payload?.params?.contextUsagePercentage;
-            if (pct != null) {
-                const rounded = Math.round(pct);
-                this.elements.contextPercent.textContent = rounded + '%';
-                document.getElementById('contextIndicator').title = rounded + '% context used';
-                this.drawContextRing(rounded);
-                this.maybeAutoCompact(rounded);
-            }
+            const raw = event.payload?.params?.contextUsagePercentage;
+            if (raw == null || !Number.isFinite(raw) || raw < 0) return;
+            const rounded = Math.round(raw);
+            this.elements.contextPercent.textContent = rounded + '%';
+            document.getElementById('contextIndicator').title = rounded + '% context used';
+            this.drawContextRing(rounded);
+            this.maybeAutoCompact(rounded);
         });
 
         // Compaction status from ACP notifications (works for both auto and manual /compact)
@@ -769,6 +773,11 @@ export class ChatApp {
                 this.showCompactingNotice();
             } else if (status === 'completed') {
                 this.hideCompactingNotice('Context compacted successfully');
+                // Compaction is fully done — release the auto-compact
+                // gate so the next *changed* metric can trigger another
+                // round if needed. Set after hideCompactingNotice so the
+                // UI settles before we'd accept another trigger.
+                this._isCompacting = false;
             }
         });
 
@@ -2495,7 +2504,12 @@ export class ChatApp {
     // --- Auto-Compact ---
 
     async maybeAutoCompact(percent) {
+        // Don't kick off a second compaction while one is in flight.
+        // `_isCompacting` is now cleared by the `compaction_status`
+        // "completed" listener — not immediately after the slash-command
+        // RPC returns — so the gate covers the agent's actual work.
         if (this._isCompacting) return;
+
         try {
             const config = await getConfig(this.invoke);
             const threshold = config.acp?.agent?.auto_compact_threshold ?? 90;
@@ -2504,7 +2518,23 @@ export class ChatApp {
             return;
         }
 
+        // Don't auto-compact on the same value twice. Some agents (kiro)
+        // report the same context-usage value before and after a
+        // compaction round when the metric they expose is cumulative
+        // (e.g. lifetime tokens) rather than live in-flight tokens. In
+        // that case retrying immediately just loops forever — request a
+        // change before the next attempt. Slack of 1pp guards float
+        // jitter; the threshold itself remains the gate for *whether* to
+        // compact at all.
+        if (
+            this._lastAutoCompactedAt != null &&
+            Math.abs(percent - this._lastAutoCompactedAt) < 1
+        ) {
+            return;
+        }
+
         this._isCompacting = true;
+        this._lastAutoCompactedAt = percent;
         try {
             await this.invoke('execute_slash_command', {
                 command: 'compact',
@@ -2513,8 +2543,12 @@ export class ChatApp {
         } catch (e) {
             console.error('[COMPACT] Auto-compact failed:', e);
             this.hideCompactingNotice('Auto-compact failed');
+            // Slash-command path failed — release the gate now since we
+            // won't get a `compaction_status` "completed" event.
+            this._isCompacting = false;
         }
-        this._isCompacting = false;
+        // On success, `_isCompacting` stays true until the
+        // `compaction_status` "completed" notification clears it.
     }
 
     showCompactingNotice() {
