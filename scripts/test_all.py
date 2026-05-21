@@ -27,7 +27,7 @@ def run(label, cmd, cwd=ROOT):
 run("Rust Tests", ["cargo", "test"])
 
 # JS tests — install deps if needed
-js_dir = os.path.join(ROOT, "ui", "tests")
+js_dir = os.path.join(ROOT, "ui-tests")
 if not os.path.isdir(os.path.join(js_dir, "node_modules")):
     run("JS Install", ["npm", "install", "--silent"], cwd=js_dir)
 

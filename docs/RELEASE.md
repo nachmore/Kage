@@ -47,6 +47,28 @@ cargo tauri build
 
 Output goes to `target/release/bundle/` and includes the `.sig` sidecar for each installer.
 
+### Faster iteration with `build_dev_installer`
+
+A clean release rebuild on Windows takes ~12-15 minutes, dominated by the full LTO link of the main `kage` binary. When you're iterating on a bug that only repros in the bundled installer (not under `cargo tauri dev`), that round-trip becomes the limit.
+
+The `scripts/build_dev_installer.{ps1,sh}` wrapper sets `CARGO_PROFILE_RELEASE_LTO=false` and `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16` for the duration of one build. Cargo honors those env vars per-invocation, overriding `Cargo.toml`. Build time drops to ~3 minutes; the resulting binary is a few MB larger and slightly slower at runtime, neither of which matter for diagnostic iteration. **CI ship builds and any plain `cargo tauri build` are unaffected** — the env vars are scoped to the wrapper.
+
+Edits to `ui/**` are picked up incrementally — `tauri-codegen`'s embedded asset cache invalidates correctly off `cargo:rerun-if-changed` directives Tauri emits internally, so only the proc-macro re-runs and the rest of the binary relinks. No manual cache busting needed.
+
+```powershell
+# Windows
+pwsh scripts/build_dev_installer.ps1            # fast iteration (default)
+pwsh scripts/build_dev_installer.ps1 -NoBundle  # skip NSIS, ~30s saved
+pwsh scripts/build_dev_installer.ps1 -Release   # use Cargo.toml defaults
+
+# macOS / Linux
+./scripts/build_dev_installer.sh
+./scripts/build_dev_installer.sh --no-bundle
+./scripts/build_dev_installer.sh --release
+```
+
+Use the plain `cargo tauri build` when you actually want to verify a ship-quality binary; use the wrapper otherwise.
+
 ## Cutting a stable release
 
 > [!WARNING]

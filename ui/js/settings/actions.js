@@ -12,7 +12,7 @@
 // it with `(arg, element, event)`. Handlers can read further context
 // from element data attributes if they need to.
 //
-// Tested via `ui/tests/shared/settings-actions.test.js`.
+// Tested via `ui-tests/shared/settings-actions.test.js`.
 
 const handlers = Object.create(null);
 let _installed = false;

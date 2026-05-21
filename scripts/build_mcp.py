@@ -10,9 +10,9 @@ Tauri sets TAURI_ENV_DEBUG=true for `cargo tauri dev` and
 `cargo tauri build --debug`, and to false (or leaves it unset) for a
 regular release build. That's the signal we key off.
 
-Tauri invokes `beforeBuildCommand` from the workspace's frontend dir
-(ui/tests in our case, inherited from the dev server setup), so this
-script explicitly cd's back to the repo root before calling cargo.
+Tauri invokes `beforeBuildCommand` from a CWD that depends on the host
+setup, so this script resolves the repo root from its own location and
+passes it explicitly to subprocess.
 
 Exit code is forwarded so a compile failure here fails the Tauri build.
 """

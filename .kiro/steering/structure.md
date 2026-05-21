@@ -121,7 +121,7 @@ kage/
 - All windows listen for `config_updated` to reapply theme
 
 ### Frontend Dependencies
-- Managed via npm in `ui/vendor/`, browser bundles copied to `ui/vendor/lib/` by `setup.js`
+- Managed via npm in `ui-vendor/` (outside `ui/`), browser bundles copied to `ui/vendor/lib/` by `setup.js`
 - `lib/` is gitignored — regenerated automatically on first `cargo tauri dev` or `cargo tauri build`
 - Loaded via `<script>` tags, not ES module imports
 

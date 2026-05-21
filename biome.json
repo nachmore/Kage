@@ -15,7 +15,6 @@
       "!ui/vendor/**",
       "!ui/extensions/**",
       "!store/**",
-      "!ui/tests/**",
       "!ui/**/*.min.js",
       "!ui/**/*.min.css"
     ]

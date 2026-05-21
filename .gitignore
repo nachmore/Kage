@@ -15,12 +15,15 @@ Thumbs.db
 # Sample data
 sample_sessions/
 
-# Vendor node_modules and generated lib (run `npm install` in ui/vendor/ to populate)
-ui/vendor/node_modules/
+# Vendor lib output (browser bundles copied in by ui-vendor/setup.js).
+# Regenerated on first dev/build via scripts/ensure_vendor.py.
 ui/vendor/lib/
 
-# Test dependencies
-ui/tests/node_modules/
+# Vendor and test npm tooling — kept outside ui/ so package.json and
+# node_modules don't get brotli-embedded by tauri-codegen into the
+# shipped binary. Run `npm install` in either dir to populate.
+ui-vendor/node_modules/
+ui-tests/node_modules/
 
 # Python cache
 __pycache__/

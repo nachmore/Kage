@@ -78,12 +78,12 @@ jobs:
           node-version: "24"
           cache: "npm"
           cache-dependency-path: |
-            ui/vendor/package-lock.json
-            ui/tests/package-lock.json
+            ui-vendor/package-lock.json
+            ui-tests/package-lock.json
             package-lock.json
 
       - name: Install JS test deps
-        working-directory: ui/tests
+        working-directory: ui-tests
         run: npm ci
 
       - name: Install root JS tooling (Biome)
@@ -194,7 +194,7 @@ jobs:
         run: cargo test
 
       - name: vitest
-        working-directory: ui/tests
+        working-directory: ui-tests
         run: npx vitest run
 
       # ----- Artifact upload ------------------------------------------

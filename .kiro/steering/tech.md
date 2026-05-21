@@ -30,7 +30,7 @@
 ## Frontend
 - Pure HTML/CSS/JavaScript (no framework)
 - Located in `ui/` directory
-- NPM-managed vendor dependencies in `ui/vendor/` (marked, mermaid, prismjs, mathjs)
+- NPM-managed vendor dependencies in `ui-vendor/` (marked, mermaid, prismjs, mathjs); browser bundles copied to `ui/vendor/lib/` at install time
 - Custom CSS theming with dark/light mode via CSS variables
 - ES modules across every window. Each HTML page loads a single
   `<script type="module" src="js/.../main.js"></script>` entry point that
@@ -71,8 +71,8 @@ cargo build --bin kage-computer-control-mcp
 
 # Testing
 cargo test                  # All Rust tests (lib + integration)
-cd ui/tests && npm test     # JS tests (shared modules: theme, tool-utils, etc.)
-cd ui/tests && npm install  # Install JS test deps (first time only)
+cd ui-tests && npm test     # JS tests (shared modules: theme, tool-utils, etc.)
+cd ui-tests && npm install  # Install JS test deps (first time only)
 python scripts/test_all.py  # Run ALL tests (Rust + JS) in one command
 
 # Note: `.cargo/config.toml` caps parallel build jobs at 2 repo-wide, to
@@ -88,7 +88,7 @@ cargo fmt                  # Format code
 cargo clippy               # Lint code
 
 # Frontend Dependencies
-cd ui/vendor && npm install  # Install deps + copy browser bundles to lib/ (auto-runs on first dev/build)
+cd ui-vendor && npm install  # Install deps + copy browser bundles to ui/vendor/lib/ (auto-runs on first dev/build)
 ```
 
 ### Dev vs Build: Frontend Assets

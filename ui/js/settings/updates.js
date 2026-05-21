@@ -12,7 +12,7 @@ import { registerSettingsActions } from './module-registry.js';
  * when present, fall through to a JSON dump otherwise.
  *
  * Exported so unit tests can lock the behavior in (see
- * `ui/tests/shared/updates-format-err.test.js`).
+ * `ui-tests/shared/updates-format-err.test.js`).
  */
 export function formatErr(e) {
     if (e == null) return 'Unknown error';

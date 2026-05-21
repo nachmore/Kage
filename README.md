@@ -11,7 +11,7 @@ Supported platforms: **Windows 10+** and **macOS 11+** (universal — Apple Sili
 All platforms:
 - [Rust](https://rustup.rs/) stable toolchain (Edition 2021).
 - Tauri CLI v2: `cargo install tauri-cli --version "^2" --locked`.
-- Node.js for JS vendor deps + tests: `cd ui/vendor && npm install`.
+- Node.js for JS vendor deps + tests: `cd ui-vendor && npm install`.
 
 Windows-specific:
 - WebView2 Runtime (ships with Windows 11; installed automatically on Windows 10).
@@ -125,7 +125,7 @@ cargo check                       # Fast type/borrow check, no codegen
 cargo fmt                         # Auto-format
 cargo clippy                      # Lint
 cargo test                        # All Rust tests
-cd ui/tests && npx vitest run     # JS tests
+cd ui-tests && npx vitest run     # JS tests
 python scripts/test_all.py        # Rust + JS tests combined
 ```
 
@@ -169,13 +169,13 @@ These live in System Settings → Privacy & Security. The Welcome wizard walks t
 
 ## Frontend Dependencies
 
-JavaScript libraries are managed via npm in `ui/vendor/`:
+JavaScript libraries are managed via npm in `ui-vendor/` (outside `ui/` so npm dev tooling doesn't get embedded into the shipped binary):
 
 ```bash
-cd ui/vendor && npm install
+cd ui-vendor && npm install
 ```
 
-After adding a new package, copy its browser bundle to `ui/vendor/lib/` and add a `<script>` tag to the relevant HTML files.
+The postinstall hook (`ui-vendor/setup.js`) copies the browser bundles into `ui/vendor/lib/`. After adding a new package, extend the COPIES manifest in `setup.js` and add a `<script>` tag pointing at `vendor/lib/...` in the relevant HTML files.
 
 Current dependencies: marked, mermaid, prismjs, @hpcc-js/wasm-graphviz, mathjs
 

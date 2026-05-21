@@ -40,9 +40,9 @@ To skip the MCP rebuild during dev (purely UI/main-binary iteration), pass `--no
 cargo test                          # all Rust tests; parallelism capped at jobs=2 in .cargo/config.toml to avoid paging-file exhaustion
 cargo test --test acp_client_test   # single integration test file
 cargo test test_name                # single test by name
-cd ui/tests && npm install          # first time only
-cd ui/tests && npx vitest run       # JS tests for ui/js/shared/*
-cd ui/tests && npx vitest run path/to/file.test.js  # single JS test file
+cd ui-tests && npm install          # first time only
+cd ui-tests && npx vitest run       # JS tests for ui/js/shared/*
+cd ui-tests && npx vitest run path/to/file.test.js  # single JS test file
 python scripts/test_all.py          # everything (Rust + JS) in one go
 
 cargo check                         # fast type/borrow check
@@ -82,7 +82,7 @@ JS is split:
 
 CSS variables and shared components live in `ui/css/shared-kage-tokens.css` and `ui/css/shared-components.css`. Both must be loaded in every window's HTML.
 
-Vendor JS (marked, mermaid, prismjs, mathjs, graphviz wasm) is npm-managed in `ui/vendor/` and loaded via `<script>` tags from `ui/vendor/lib/`, not ES module imports.
+Vendor JS (marked, mermaid, prismjs, mathjs, graphviz wasm) is npm-managed in `ui-vendor/` (outside `ui/` so npm tooling doesn't get embedded into the binary). Browser bundles get copied into `ui/vendor/lib/` by `ui-vendor/setup.js` and loaded via `<script>` tags, not ES module imports.
 
 ### Settings window pattern (`ui/js/settings/`)
 

@@ -5,9 +5,11 @@ Called from tauri.conf.json's beforeDevCommand and beforeBuildCommand
 place that checks whether vendor libs need installing.
 
 The vendor libs (marked, mermaid, prismjs, etc.) are not checked into
-git. Running `npm install` in ui/vendor/ downloads them and a
+git. Running `npm install` in ui-vendor/ downloads them and a
 postinstall hook (setup.js) copies the browser-ready bundles into
-ui/vendor/lib/.
+ui/vendor/lib/. The npm machinery deliberately lives outside ui/ so
+package.json and node_modules don't get brotli-embedded in the
+shipped binary.
 
 This script is a no-op when lib/ already exists.
 """
@@ -25,8 +27,8 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 
 def ensure_vendor(repo_root: Path) -> None:
-    vendor_dir = repo_root / "ui" / "vendor"
-    sentinel = vendor_dir / "lib" / "marked.min.js"
+    vendor_tooling = repo_root / "ui-vendor"
+    sentinel = repo_root / "ui" / "vendor" / "lib" / "marked.min.js"
 
     if sentinel.is_file():
         return  # Already populated
@@ -34,14 +36,14 @@ def ensure_vendor(repo_root: Path) -> None:
     print("[ensure_vendor] ui/vendor/lib/ not found — running npm install...", flush=True)
     result = subprocess.run(
         ["npm", "install"],
-        cwd=vendor_dir,
+        cwd=vendor_tooling,
         # shell=True needed on Windows where npm is a .cmd script
         shell=(sys.platform == "win32"),
     )
     if result.returncode != 0:
         print(
             f"[ensure_vendor] ❌ npm install failed (exit {result.returncode}). "
-            f"Install Node.js/npm and retry, or run manually: cd ui/vendor && npm install",
+            f"Install Node.js/npm and retry, or run manually: cd ui-vendor && npm install",
             flush=True,
         )
         sys.exit(result.returncode)
