@@ -19,6 +19,18 @@ import { trackEventOnce } from '../shared/telemetry.js';
 let app = null;
 
 waitForTauri(async ({ invoke, appWindow, listen }) => {
+    // Direct log beacon (bypasses interceptConsole) so we can tell from
+    // the structured log whether the chat window's JS is actually
+    // executing in the installer build. If you see this line in the
+    // backend log, the webview loaded HTML+JS and `waitForTauri`'s
+    // callback fired. If you don't, the webview is stuck before we
+    // ever get a chance to call `interceptConsole`.
+    invoke('app_log_write', {
+        level: 'info',
+        source: 'chat',
+        msg: '[CHAT] main.js: waitForTauri callback entered',
+    }).catch(() => {});
+
     // One-shot telemetry for the chat window opening. Fired here (not on
     // focus) because the chat window is typically opened deliberately,
     // unlike the floating window which can flash open-close as users
@@ -123,10 +135,24 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
 
     app = new ChatApp(invoke, appWindow, listen);
     window._chatApp = app; // Expose for permission modal flush
-    app.init().then(() => {
-        setMarkdownExtManager(app.extensionManager);
-        app.renderExtensionToolbarButtons();
-    });
+    // Surface init failures to the backend log — without this catch a
+    // throw inside any of the awaits below would silently leave the
+    // chat window in a half-initialized state with no signal anywhere.
+    // Mirrors the equivalent guard in ui/js/floating/main.js.
+    app.init()
+        .then(() => {
+            setMarkdownExtManager(app.extensionManager);
+            app.renderExtensionToolbarButtons();
+        })
+        .catch((err) => {
+            const msg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err);
+            console.error('ChatApp.init failed:', msg);
+            invoke('app_log_write', {
+                level: 'error',
+                source: 'chat',
+                msg: `ChatApp.init failed: ${msg}`,
+            }).catch(() => {});
+        });
 
     // Initialize Kage Desktop viewer
     let desktopViewer = null;
