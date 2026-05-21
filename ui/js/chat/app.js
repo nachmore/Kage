@@ -2627,10 +2627,14 @@ export class ChatApp {
             const el = document.createElement('button');
             el.className = 'chat-toolbar-btn ext-toolbar-btn';
             el.title = btn.tooltip || btn.id;
-            // Icons are plain text/emoji — no SVG passthrough from
-            // extensions, since they can always use emoji + a tooltip.
-            const iconText = typeof btn.icon === 'string' ? btn.icon : '🔧';
-            el.textContent = iconText;
+            // Icons are sanitized through the `icon` mode of the extension
+            // sanitizer: SVG markup renders as SVG; emoji / plain text
+            // passes through as a text node; anything else (script, anchor,
+            // img, scripts inside SVG, on* handlers, javascript: URLs) is
+            // stripped. Lets extensions ship sharp icons while keeping the
+            // sandbox boundary intact.
+            const iconStr = typeof btn.icon === 'string' && btn.icon ? btn.icon : '🔧';
+            el.appendChild(sanitizeExtensionHtmlStatic(iconStr, 'icon'));
             el.addEventListener('click', async () => {
                 try {
                     const ctx = {

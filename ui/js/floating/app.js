@@ -57,6 +57,7 @@ import { AutomationPlanController } from '../shared/automation-plan-controller.j
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
 import { showExtensionBar, hideExtensionBar } from '../shared/extension-bar.js';
+import { sanitizeExtensionHtml } from '../shared/extension-html-sanitizer.js';
 
 /**
  * Measure the natural (no-overflow) content height of a textarea without
@@ -1285,11 +1286,13 @@ export class FloatingApp {
             const el = document.createElement('button');
             el.className = 'floating-toolbar-btn ext-toolbar-btn';
             el.title = btn.tooltip || btn.id;
-            // Plain text/emoji only — sanitizer already strips anything
-            // dangerous out of declared icons, but since the icon string
-            // flows through the declarative toolbar contract we play it
-            // safe and treat it as text.
-            el.textContent = typeof btn.icon === 'string' ? btn.icon : '🔧';
+            // Icons are sanitized through the `icon` mode of the extension
+            // sanitizer: SVG markup renders as SVG; emoji / plain text
+            // passes through as a text node; everything else is stripped
+            // (anchors, images, scripts, on* handlers). Mirrors the chat
+            // window's approach.
+            const iconStr = typeof btn.icon === 'string' && btn.icon ? btn.icon : '🔧';
+            el.appendChild(sanitizeExtensionHtml(iconStr, 'icon'));
             el.addEventListener('click', async () => {
                 try {
                     const ctx = {

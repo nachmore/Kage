@@ -16,11 +16,17 @@
  *   - Link targets are restricted to http(s)/mailto/in-page; everything
  *     else is dropped.
  *
- * Two sanitize modes:
+ * Three sanitize modes:
  *   - `rich`: broad HTML for formatters and widgets. Allows structural
  *     tags, inline styles (color/background only), SVG.
- *   - `inline`: narrow subset for small UI (toolbar icons, result rows).
- *     No block-level layout, no scripts, no external images.
+ *   - `inline`: narrow subset for small UI (result rows, formatter
+ *     text). No block-level layout, no scripts, no external images.
+ *   - `icon`: SVG-only — used for toolbar button icons. Plain text
+ *     (emoji) passes through unchanged because emoji are text nodes,
+ *     not tags. Anything other than `<svg>` and its allowed children
+ *     is stripped to its text content. Picks intentional capability
+ *     over inline's broader allowance: a toolbar icon never needs an
+ *     anchor or `<img>`, so we don't permit them.
  *
  * Any extension-declared `data-ext-action="<name>"` attribute is
  * preserved so the host can wire it to an RPC handler — but only on
@@ -95,6 +101,11 @@ const INLINE_TAGS = new Set([
     'STRONG',
     'SVG',
 ]);
+
+// Icon mode allows SVG at the top level only; emoji / plain text
+// passes through as text nodes regardless. Children of <svg> are
+// further restricted to SVG_TAGS by the existing `inSvg` walk path.
+const ICON_TAGS = new Set(['SVG']);
 
 const SVG_TAGS = new Set([
     'CIRCLE',
@@ -255,13 +266,14 @@ function filterStyle(raw) {
  * Sanitize extension-provided HTML for injection into the host DOM.
  *
  * @param {string} html
- * @param {'rich'|'inline'} [mode='rich']
+ * @param {'rich'|'inline'|'icon'} [mode='rich']
  * @returns {DocumentFragment}
  */
 export function sanitizeExtensionHtml(html, mode = 'rich') {
     const tpl = document.createElement('template');
     tpl.innerHTML = String(html);
-    const tagsAllowed = mode === 'inline' ? INLINE_TAGS : RICH_TAGS;
+    const tagsAllowed =
+        mode === 'icon' ? ICON_TAGS : mode === 'inline' ? INLINE_TAGS : RICH_TAGS;
     walkAndFilter(tpl.content, { tagsAllowed, inSvg: false });
     return tpl.content;
 }

@@ -208,6 +208,58 @@ describe('sanitizeExtensionHtml', () => {
             expect(html).toContain('<code>');
             expect(html).toContain('<button>');
         });
+
+        it('icon mode keeps SVG markup', () => {
+            const html = sanitizeExtensionHtmlToString(
+                '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M9 11l3 3"/></svg>',
+                'icon',
+            );
+            expect(html).toContain('<svg');
+            expect(html).toContain('<path');
+            expect(html).toContain('d="M9 11l3 3"');
+        });
+
+        it('icon mode passes emoji / plain text through unchanged', () => {
+            // Toolbar buttons can pass emoji as the icon string. Emoji are
+            // text nodes, not tags, so the sanitizer leaves them alone.
+            const html = sanitizeExtensionHtmlToString('✅', 'icon');
+            expect(html).toBe('✅');
+        });
+
+        it('icon mode strips non-SVG tags to their text content', () => {
+            // A toolbar icon never needs an anchor or <img>. Stripping them
+            // (rather than supporting them like inline mode does) is
+            // intentional — capability narrowing.
+            const html = sanitizeExtensionHtmlToString(
+                '<a href="https://example.com"><img src="https://evil/p.gif">click</a>',
+                'icon',
+            );
+            expect(html).not.toContain('<a');
+            expect(html).not.toContain('<img');
+            expect(html).toContain('click');
+        });
+
+        it('icon mode strips script even outside SVG', () => {
+            const html = sanitizeExtensionHtmlToString(
+                '<script>evil()</script><svg><path d="M0 0"/></svg>',
+                'icon',
+            );
+            expect(html).not.toContain('<script');
+            expect(html).not.toContain('evil()');
+            expect(html).toContain('<svg');
+            expect(html).toContain('<path');
+        });
+
+        it('icon mode strips on* handlers from SVG itself', () => {
+            const html = sanitizeExtensionHtmlToString(
+                '<svg onload="evil()" onclick="x()" width="16"><path d="M0"/></svg>',
+                'icon',
+            );
+            expect(html).toContain('<svg');
+            expect(html).not.toContain('onload');
+            expect(html).not.toContain('onclick');
+            expect(html).not.toContain('evil');
+        });
     });
 
     describe('SVG', () => {

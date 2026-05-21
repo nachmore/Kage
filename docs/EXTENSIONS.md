@@ -675,10 +675,26 @@ export default class MyToolbarProvider {
 
 ### Button icon
 
-The icon field is rendered as **plain text** (typically an emoji).
-SVG and HTML are not supported — the sandbox security model doesn't
-let the host trust icon markup. Use a representative emoji or a short
-text label.
+The icon field accepts either:
+
+- **An emoji or short text string** — rendered as-is. Easiest, no
+  styling concerns.
+- **An inline SVG markup string** — rendered as a real SVG element.
+  The host runs the string through the extension sanitizer's `icon`
+  mode: `<svg>` and SVG-namespace children (`<path>`, `<circle>`,
+  `<rect>`, `<polyline>`, etc.) survive; anything else (`<script>`,
+  `<a>`, `<img>`, `on*` event handlers, `javascript:` URLs) is
+  stripped. Use `currentColor` for `stroke`/`fill` so the icon
+  inherits the toolbar's themed text colour.
+
+Example:
+
+```js
+getButtons() {
+    const icon = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>`;
+    return [{ id: 'show-summary', icon, tooltip: 'Show summary' }];
+}
+```
 
 ### Host effects from onClick
 
