@@ -172,6 +172,100 @@ async fn run() {
     // setup closure needs the raw argv to resolve the resume marker.
     let main_args = args.clone();
 
+    // Construct shared state BEFORE Tauri's builder so we can `.manage()`
+    // it on the builder itself. The motivation is correctness, not speed:
+    // Tauri loads each window's HTML/JS as soon as the builder constructs
+    // it, and the webview's `main.js` starts firing `invoke('get_config')`
+    // / `invoke('get_user_info')` / etc. several seconds before our
+    // `.setup()` block runs. If state is registered inside `setup()`, those
+    // early invokes return "state not managed for field 'features' on
+    // command 'get_config'. You must call `.manage()` before using this
+    // command" — and the chat window initialises against an empty backend.
+    //
+    // What stays in setup(): work that needs `&mut App` / `app.handle()`
+    // (notification handler wiring, tray construction, hotkey registration,
+    // window decoration, background tasks). Cheap object construction
+    // moves out here. A second instance now pays for these allocations
+    // before the single-instance plugin's setup hook exits the process,
+    // but the cost is bounded — `Config::load` is one small file read,
+    // `AcpClient::new` and `AppLauncher::new` are pure allocations
+    // (subprocess spawn / registry scan are deferred). The 50ms-ish
+    // single-instance IPC dance still dominates a second-instance launch.
+    let config = startup::load_config_with_overrides(debug_mode, Config::load);
+    info!("Configuration loaded");
+    if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
+
+    // Initialize the app log ring buffer so frontend `app_log_write`
+    // invokes from window startup land on disk. The pre-init buffer in
+    // `app_log` catches anything that arrives before this call.
+    if let Err(e) = app_log::init(config.system.log_buffer_size) {
+        warn!("Failed to initialize app log: {}", e);
+    } else {
+        app_log::log("info", "system", "App log initialized");
+    }
+
+    let active_mode = config.acp.active_mode();
+    let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&active_mode);
+    info!("{}", acp_mode_desc);
+    let acp_client = AcpClient::new(acp_connection_mode);
+    acp_client.set_debug_mode(config.debug_mode);
+
+    let process_manager = acp_client.get_process_manager();
+    process_manager::install_signal_handlers(process_manager);
+
+    let app_launcher = AppLauncher::new();
+    info!("App launcher initialized (scan deferred to background)");
+    if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
+
+    let acp_client_arc = Arc::new(acp_client);
+    let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
+    let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
+    let available_models_arc =
+        Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
+
+    // Clone Arcs for the notification handler setup (wired up inside
+    // setup() because it needs app.handle() to emit Tauri events).
+    let config_for_handler = config_arc.clone();
+    let slash_cmds_for_handler = slash_commands_arc.clone();
+    let pending_perm_for_handler = pending_permission_arc.clone();
+    let acp_for_handler = acp_client_arc.clone();
+
+    let acp_handles = state::AcpHandles {
+        client: acp_client_arc,
+        pending_permission: pending_permission_arc,
+        slash_commands: slash_commands_arc,
+        available_models: available_models_arc,
+        last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
+    };
+    let ui_state = state::UiState {
+        dev_mode,
+        floating_session_id: Arc::new(std::sync::Mutex::new(None)),
+        last_selection: Arc::new(std::sync::Mutex::new(None)),
+        source_window: Arc::new(std::sync::Mutex::new(None)),
+        notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
+        frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+    };
+    let child_processes = state::ChildProcesses {
+        pocket_tts: Arc::new(std::sync::Mutex::new(None)),
+        pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
+    };
+    let feature_services = state::FeatureServices {
+        config: config_arc,
+        app_launcher: Arc::new(Mutex::new(app_launcher)),
+        updater: Arc::new(updater::UpdaterState::new()),
+        user_info_cache: Arc::new(std::sync::Mutex::new(None)),
+        session_cache: Arc::new(std::sync::Mutex::new(None)),
+        automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
+        kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
+        automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
+    };
+
+    // Capture a clone of config for the parts of setup() that still
+    // need it (hotkey hot-reload installer, autostart pocket TTS, etc.).
+    let config_for_setup = config.clone();
+
     let mut builder = tauri::Builder::default()
         // Single-instance enforcement. Must be the FIRST plugin registered
         // (per the plugin's docs) so the second-process exit happens before
@@ -181,15 +275,15 @@ async fn run() {
         // `open_chat_window`. Same event name as the previous hand-rolled
         // TCP IPC, so the frontend wiring is unchanged.
         //
-        // Crucially: every expensive bit of startup (orphan cleanup,
-        // config load, AcpClient connection, app_log init, app launcher
-        // construction, signal handlers, the .manage() state) lives
-        // inside the `.setup()` block below. The plugin's setup hook
-        // runs *before* ours, so a second instance never reaches any of
-        // that work — it forwards argv to the primary and exits during
-        // plugin setup. The cost of a second launch is now bounded by
-        // logger init, panic-handler install, and the plugin's own IPC
-        // dance. Native named-pipe / AF_UNIX IPC is well under 50ms.
+        // The expensive startup work (orphan cleanup, ACP subprocess spawn,
+        // app registry scan, hotkey registration, tray construction, all
+        // the listener installs) still lives in `.setup()` below — the
+        // plugin exits the second process before any of that runs. The
+        // state construction above is cheap (Config::load is one small
+        // file read; AcpClient::new and AppLauncher::new are pure
+        // allocations; the rest is `Arc::new(Mutex::new(...))`), so the
+        // second-instance cost stays bounded by the plugin's own IPC dance
+        // (well under 50ms over named pipes / AF_UNIX).
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Emitter;
             info!("Second instance signaled via single-instance plugin");
@@ -235,6 +329,18 @@ async fn run() {
         // runtime in `updater::plugin_check` so we can honour the
         // user's channel choice (stable / beta / dev). See docs/RELEASE.md.
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Register Tauri-managed state at build time, BEFORE any window
+        // exists. This is essential: webview JS can fire `tauri::State<…>`
+        // -bound invokes the moment the window is constructed, which is
+        // before our `.setup()` block runs. Registering inside setup()
+        // produced "state not managed" errors for every chat-window-open
+        // until ~5s into startup. See the comment block above the state
+        // construction (start of `run`) for why this is correctness work,
+        // not optimisation.
+        .manage(acp_handles)
+        .manage(ui_state)
+        .manage(child_processes)
+        .manage(feature_services)
         .on_window_event(|window, event| {
             // Diagnostic logging for the floating window only — helps us
             // see when something hides/destroys/focuses it externally.
@@ -374,78 +480,11 @@ async fn run() {
             // orphan reaping happens via init/launchd.
             os::install_kill_on_exit_job();
 
-            let config = startup::load_config_with_overrides(debug_mode, Config::load);
-            info!("Configuration loaded");
-            if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
-
-            // Initialize the app log ring buffer
-            if let Err(e) = app_log::init(config.system.log_buffer_size) {
-                warn!("Failed to initialize app log: {}", e);
-            } else {
-                app_log::log("info", "system", "App log initialized");
-            }
-
-            let active_mode = config.acp.active_mode();
-            let (acp_connection_mode, acp_mode_desc) = startup::acp_mode_for(&active_mode);
-            info!("{}", acp_mode_desc);
-            let acp_client = AcpClient::new(acp_connection_mode);
-            acp_client.set_debug_mode(config.debug_mode);
-
-            let process_manager = acp_client.get_process_manager();
-            process_manager::install_signal_handlers(process_manager);
-
-            let app_launcher = AppLauncher::new();
-            info!("App launcher initialized (scan deferred to background)");
-            if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
-
-            let acp_client_arc = Arc::new(acp_client);
-            let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
-            let slash_commands_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
-            let pending_permission_arc = Arc::new(std::sync::Mutex::new(None));
-            let available_models_arc =
-                Arc::new(std::sync::Mutex::new(Vec::<crate::state::AcpModel>::new()));
-
-            // Clone Arcs for the notification handler setup
-            let config_for_handler = config_arc.clone();
-            let slash_cmds_for_handler = slash_commands_arc.clone();
-            let pending_perm_for_handler = pending_permission_arc.clone();
-            let acp_for_handler = acp_client_arc.clone();
-
-            // Register Tauri-managed state. Doing this from inside setup()
-            // (rather than via .manage() in the inline builder chain)
-            // means a second instance — which exits during plugin setup
-            // before this point — never pays for the Arc construction or
-            // the AcpClient handle.
-            app.manage(state::AcpHandles {
-                client: acp_client_arc,
-                pending_permission: pending_permission_arc,
-                slash_commands: slash_commands_arc,
-                available_models: available_models_arc,
-                last_tool_steering_hash: Arc::new(std::sync::Mutex::new(0)),
-            });
-            app.manage(state::UiState {
-                dev_mode,
-                floating_session_id: Arc::new(std::sync::Mutex::new(None)),
-                last_selection: Arc::new(std::sync::Mutex::new(None)),
-                source_window: Arc::new(std::sync::Mutex::new(None)),
-                notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
-                frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-            });
-            app.manage(state::ChildProcesses {
-                pocket_tts: Arc::new(std::sync::Mutex::new(None)),
-                pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
-            });
-            app.manage(state::FeatureServices {
-                config: config_arc,
-                app_launcher: Arc::new(Mutex::new(app_launcher)),
-                updater: Arc::new(updater::UpdaterState::new()),
-                user_info_cache: Arc::new(std::sync::Mutex::new(None)),
-                session_cache: Arc::new(std::sync::Mutex::new(None)),
-                automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
-                activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
-                kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
-                automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
-            });
+            // Config, app_log, AcpClient, AppLauncher, and all Tauri-managed
+            // state were constructed before `tauri::Builder::default()` so the
+            // state is registered on the Builder itself — see the comment
+            // block at the top of `run`. Setup() picks up where that leaves
+            // off: the work below needs `&mut App` / `app.handle()`.
 
             // Build system tray
             tray::setup_tray(app, dev_mode)?;
@@ -469,7 +508,7 @@ async fn run() {
             commands::system::register_all_hotkeys(app.handle());
 
             // Hot-reload hotkeys when config changes
-            setup::install_hotkey_hot_reload(app, &config);
+            setup::install_hotkey_hot_reload(app, &config_for_setup);
 
             info!("=== Setup Complete ===");
 
@@ -482,7 +521,7 @@ async fn run() {
             setup::spawn_automation_scheduler(app);
 
             // Auto-start Pocket TTS server if configured
-            setup::maybe_autostart_pocket_tts(app, &config);
+            setup::maybe_autostart_pocket_tts(app, &config_for_setup);
 
             // Watch the sessions directory for external changes (e.g., kage-cli creating sessions)
             setup::start_session_watcher(app);
@@ -494,13 +533,13 @@ async fn run() {
             // Start default session on launch if configured. Pass through
             // the resume id consumed at startup so the post-update launch
             // restores the user's session instead of silently dropping it.
-            setup::maybe_spawn_default_session(app, &config, resume_session_id);
+            setup::maybe_spawn_default_session(app, &config_for_setup, resume_session_id);
 
             // Start the auto-update background loop
             setup::start_updater(app);
 
             // Show welcome window on first run
-            setup::maybe_show_welcome_window(app.handle(), config.first_run_completed);
+            setup::maybe_show_welcome_window(app.handle(), config_for_setup.first_run_completed);
 
             Ok(())
         })
