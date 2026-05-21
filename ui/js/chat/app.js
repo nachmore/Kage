@@ -394,9 +394,17 @@ export class ChatApp {
         this.setupSpeech();
         this.setupEventListeners();
         this.setupStreamingListeners();
+        // Load user info early — before any of the awaits below — so that
+        // historical messages rendered by displaySession (triggered either
+        // from this init or from the tauri://focus listener in main.js)
+        // see populated `this.userInfo` and produce the avatar instead of
+        // a `?` fallback. Symptom pre-fix: chat opened, focus listener
+        // raced ahead of loadUserInfo, displaySession rendered all user
+        // messages with `?` in the avatar slot, and there was no
+        // re-render once userInfo arrived a few ms later.
+        await this.loadUserInfo();
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
-        await this.loadUserInfo();
         await this.loadActionButtonConfig();
         await loadSlashCommands(this.invoke);
         await this.loadShortcuts();
