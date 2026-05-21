@@ -21,7 +21,9 @@ pub struct AcpHandles {
     /// Pending permission request: set when a permission_request notification
     /// arrives, cleared when responded to.
     pub pending_permission: Arc<std::sync::Mutex<Option<PendingPermission>>>,
-    /// Slash commands received from the ACP server via _kage.dev/commands/available
+    /// Slash commands received from the ACP server via the
+    /// `commands/available` vendor extension notification (under either
+    /// `_kage.dev/` or `_kiro.dev/` — see acp_client::vendor_method_suffix).
     pub slash_commands: Arc<std::sync::Mutex<Vec<SlashCommand>>>,
     /// Available models from the ACP session/new response
     pub available_models: Arc<std::sync::Mutex<Vec<AcpModel>>>,

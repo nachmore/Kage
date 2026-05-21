@@ -729,16 +729,30 @@ pub async fn switch_acp_session(
                 }
             };
 
-            client_guard
+            let (loaded_id, models_json) = client_guard
                 .load_existing_session(&id, cwd)
-                .inspect(|_| {
-                    crate::telemetry::track(
-                        &app,
-                        "session_resumed",
-                        Some(serde_json::json!({ "source": "manual" })),
-                    );
-                })
-                .map_err(|e| AppError::internal(format!("Failed to load session: {}", e)))
+                .map_err(|e| AppError::internal(format!("Failed to load session: {}", e)))?;
+            crate::telemetry::track(
+                &app,
+                "session_resumed",
+                Some(serde_json::json!({ "source": "manual" })),
+            );
+            // Refresh the model dropdown if the agent included
+            // availableModels in the load response. Empty list is
+            // tolerated — the dropdown just keeps whatever was there
+            // (typically populated when the previous session was
+            // created), so the user-visible behaviour is "no
+            // regression" rather than "models reset to empty".
+            if !models_json.is_empty() {
+                if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::AcpModel>>(
+                    serde_json::Value::Array(models_json),
+                ) {
+                    if let Ok(mut m) = acp.available_models.lock() {
+                        *m = parsed;
+                    }
+                }
+            }
+            Ok(loaded_id)
         }
         None => {
             info!("Creating new session");
@@ -771,7 +785,7 @@ pub async fn switch_acp_session(
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);
                     let result = client_guard.send_request(
-                        "_kage.dev/commands/execute",
+                        &client_guard.vendor_method("commands/execute"),
                         serde_json::json!({
                             "sessionId": new_session_id,
                             "command": { "command": "model", "args": { "modelName": default_model } }

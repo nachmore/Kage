@@ -403,7 +403,7 @@ pub fn maybe_spawn_default_session(
         let session_id = if let Some(resume_id) = resume_session_id {
             info!("Resuming session on launch: {}", resume_id);
             match acp_client.load_existing_session(&resume_id, cwd) {
-                Ok(id) => {
+                Ok((id, models_json)) => {
                     info!("Resumed session on launch: {}", id);
                     if let Ok(mut fs) = floating_session.lock() {
                         *fs = Some(id.clone());
@@ -429,9 +429,11 @@ pub fn maybe_spawn_default_session(
                     // Loaded session already has its model + steering history;
                     // don't re-apply either or we'd duplicate the steering
                     // message and stomp the model the user actually picked.
-                    // Available-models stays empty until the user creates a
-                    // new session (frontend handles that gracefully and
-                    // refetches when needed).
+                    // We DO populate the model dropdown if the agent
+                    // included availableModels in the load response —
+                    // otherwise the toolbar reads "No models" until a new
+                    // session is created.
+                    store_available_models(models_json, &models_arc);
                     return;
                 }
                 Err(e) => {
@@ -520,7 +522,7 @@ fn apply_default_model_if_any(
     };
     info!("Applying default model: {}", model);
     let result = client.send_request(
-        "_kage.dev/commands/execute",
+        &client.vendor_method("commands/execute"),
         serde_json::json!({
             "sessionId": session_id,
             "command": { "command": "model", "args": { "modelName": model } }

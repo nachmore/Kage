@@ -45,6 +45,36 @@ pub struct AcpClient {
     pub streaming_accumulators: SessionAccumulators,
     /// True while the server is compacting context — outgoing prompts should wait
     pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
+    /// Vendor extension namespace observed from incoming notifications.
+    /// kage-cli uses `_kage.dev/`, kiro-cli uses `_kiro.dev/`; the two
+    /// share an identical extension surface (commands/available,
+    /// metadata, commands/execute, compaction/status, ...) under
+    /// different vendor prefixes. We pin to whichever we see first so
+    /// outgoing requests target the right namespace, and the
+    /// notification handler matches both interchangeably (see
+    /// `vendor_method_suffix`).
+    pub vendor_prefix: Arc<Mutex<Option<&'static str>>>,
+}
+
+/// Recognised JSON-RPC vendor extension prefixes. Both projects ship
+/// the same protocol shape under different prefixes — see the comment
+/// on `AcpClient::vendor_prefix`.
+pub const VENDOR_PREFIXES: &[&str] = &["_kage.dev/", "_kiro.dev/"];
+
+/// Default outgoing vendor prefix used until we've observed an inbound
+/// notification telling us which namespace the agent expects.
+pub const DEFAULT_VENDOR_PREFIX: &str = "_kage.dev/";
+
+/// If `method` is a vendor extension call, return the suffix after the
+/// prefix (e.g. `_kiro.dev/commands/available` → `Some("commands/available")`).
+/// Returns `None` for plain ACP methods like `session/load`.
+pub fn vendor_method_suffix(method: &str) -> Option<&str> {
+    for p in VENDOR_PREFIXES {
+        if let Some(rest) = method.strip_prefix(p) {
+            return Some(rest);
+        }
+    }
+    None
 }
 
 impl AcpClient {
@@ -55,7 +85,41 @@ impl AcpClient {
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
+            vendor_prefix: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Record the vendor prefix observed in an inbound method name. Idempotent
+    /// — once pinned, subsequent calls are no-ops. We pin to the first
+    /// observed prefix because mixing namespaces inside one session would
+    /// indicate a misbehaving agent, not a feature worth supporting.
+    pub fn observe_vendor_prefix(&self, method: &str) {
+        for p in VENDOR_PREFIXES {
+            if method.starts_with(p) {
+                let mut slot = self.vendor_prefix.lock_or_recover();
+                if slot.is_none() {
+                    log::info!("Observed vendor extension prefix from agent: {}", p);
+                    *slot = Some(*p);
+                }
+                return;
+            }
+        }
+    }
+
+    /// Vendor prefix to use for outgoing extension requests. Returns the
+    /// observed prefix if any, otherwise the default (`_kage.dev/`). The
+    /// returned slice is `'static` because the prefix set is compiled in.
+    pub fn vendor_prefix_for_send(&self) -> &'static str {
+        self.vendor_prefix
+            .lock_or_recover()
+            .unwrap_or(DEFAULT_VENDOR_PREFIX)
+    }
+
+    /// Build a fully-qualified vendor extension method name for outgoing
+    /// requests (e.g. `commands/execute` →
+    /// `_kage.dev/commands/execute` or `_kiro.dev/commands/execute`).
+    pub fn vendor_method(&self, suffix: &str) -> String {
+        format!("{}{}", self.vendor_prefix_for_send(), suffix)
     }
 
     // --- Per-session accumulator helpers ---
@@ -159,8 +223,8 @@ impl AcpClient {
         self.transport.write_line(&line)
     }
 
-    /// Cancel any in-flight prompt for the given session. The agent
-    /// (kage-cli) treats session/prompt as exclusive per session, so
+    /// Cancel any in-flight prompt for the given session. Both kage-cli
+    /// and kiro-cli treat session/prompt as exclusive per session, so
     /// shutdown paths and the user-facing Cancel button must clear that
     /// lock before issuing a new prompt or letting the connection drop.
     /// No-op if there's no current session.
@@ -248,5 +312,71 @@ impl AcpClient {
             info!("Compaction finished, proceeding with prompt");
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vendor_method_suffix_recognises_both_prefixes() {
+        assert_eq!(
+            vendor_method_suffix("_kage.dev/commands/execute"),
+            Some("commands/execute")
+        );
+        assert_eq!(
+            vendor_method_suffix("_kiro.dev/commands/available"),
+            Some("commands/available")
+        );
+        assert_eq!(vendor_method_suffix("_kage.dev/metadata"), Some("metadata"));
+    }
+
+    #[test]
+    fn vendor_method_suffix_returns_none_for_plain_acp_methods() {
+        // Standard ACP methods must NOT be treated as vendor extensions —
+        // session/load returning Some("load") would crash the suffix-match
+        // dispatch in messaging.rs into wrong branches.
+        assert_eq!(vendor_method_suffix("session/load"), None);
+        assert_eq!(vendor_method_suffix("session/update"), None);
+        assert_eq!(vendor_method_suffix("initialize"), None);
+        assert_eq!(vendor_method_suffix(""), None);
+    }
+
+    #[test]
+    fn vendor_prefix_for_send_defaults_until_observed() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
+        assert_eq!(client.vendor_method("commands/execute"), "_kage.dev/commands/execute");
+    }
+
+    #[test]
+    fn observe_vendor_prefix_pins_to_first_seen_namespace() {
+        // Once the agent has identified itself via an inbound notification,
+        // outgoing vendor calls track that namespace. Subsequent observations
+        // are no-ops — mixing namespaces inside a single session would
+        // indicate a misbehaving agent, not a feature worth supporting.
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.observe_vendor_prefix("_kiro.dev/commands/available");
+        assert_eq!(client.vendor_prefix_for_send(), "_kiro.dev/");
+        assert_eq!(client.vendor_method("metadata"), "_kiro.dev/metadata");
+
+        // Pinned — a later kage.dev sighting doesn't override.
+        client.observe_vendor_prefix("_kage.dev/metadata");
+        assert_eq!(client.vendor_prefix_for_send(), "_kiro.dev/");
+    }
+
+    #[test]
+    fn observe_vendor_prefix_ignores_non_vendor_methods() {
+        let client = AcpClient::new(AcpConnectionMode::Local {
+            spawn_command: "true".to_string(),
+        });
+        client.observe_vendor_prefix("session/update");
+        // Still default since no vendor prefix was observed.
+        assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
     }
 }

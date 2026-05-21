@@ -150,67 +150,71 @@ pub fn setup_notification_handler(
             return;
         }
 
-        if method == "_kage.dev/commands/available" {
-            if let Some(commands) = notification.get("params")
-                .and_then(|p| p.get("commands"))
-                .and_then(|c| c.as_array())
-            {
-                if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::SlashCommand>>(
-                    serde_json::Value::Array(commands.clone()),
-                ) {
-                    info!("Received {} slash commands from ACP", parsed.len());
-                    if let Ok(mut cmds) = slash_cmds.lock() {
-                        *cmds = parsed;
+        // Vendor extension dispatch. kage-cli sends `_kage.dev/*`,
+        // kiro-cli sends `_kiro.dev/*`; both ship an identical extension
+        // surface so we match by suffix and pin the agent's preferred
+        // prefix on the AcpClient (used by outgoing requests). See
+        // `acp_client::vendor_method_suffix`.
+        if let Some(suffix) = crate::acp_client::vendor_method_suffix(method) {
+            client_for_handler.observe_vendor_prefix(method);
+            match suffix {
+                "commands/available" => {
+                    if let Some(commands) = notification.get("params")
+                        .and_then(|p| p.get("commands"))
+                        .and_then(|c| c.as_array())
+                    {
+                        if let Ok(parsed) = serde_json::from_value::<Vec<crate::state::SlashCommand>>(
+                            serde_json::Value::Array(commands.clone()),
+                        ) {
+                            info!("Received {} slash commands from ACP", parsed.len());
+                            if let Ok(mut cmds) = slash_cmds.lock() {
+                                *cmds = parsed;
+                            }
+                        }
                     }
+                    let _ = app_handle.emit("slash_commands_available", &notification);
+                }
+                "metadata" => {
+                    let _ = app_handle.emit("context_metadata", &notification);
+                }
+                "compaction/status" => {
+                    if let Some(status) = notification.get("params")
+                        .and_then(|p| p.get("status"))
+                        .and_then(|s| s.get("type"))
+                        .and_then(|t| t.as_str())
+                    {
+                        let (lock, cvar) = &*compacting;
+                        let mut is_compacting = lock.lock_or_recover();
+                        match status {
+                            "started" => {
+                                info!("Compaction started — gating outgoing prompts");
+                                *is_compacting = true;
+                            }
+                            "completed" => {
+                                info!("Compaction completed — releasing prompt gate");
+                                *is_compacting = false;
+                                cvar.notify_all();
+                            }
+                            _ => {}
+                        }
+                    }
+                    let _ = app_handle.emit("compaction_status", &notification);
+                }
+                "error/rate_limit" => {
+                    let message = notification.get("params")
+                        .and_then(|p| p.get("message"))
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
+                    warn!("Rate limit hit: {}", message);
+                    let _ = app_handle.emit("message_error", message);
+                }
+                _ => {
+                    // Unknown vendor extension — forward to the frontend
+                    // as a generic tool_call_update, mirroring previous
+                    // behaviour.
+                    let _ = app_handle.emit("tool_call_update", &notification);
                 }
             }
-            let _ = app_handle.emit("slash_commands_available", &notification);
-            return;
-        }
-
-        if method.starts_with("_kage.dev/") {
-            // Emit metadata (context usage) to frontend
-            if method == "_kage.dev/metadata" {
-                let _ = app_handle.emit("context_metadata", &notification);
-                return;
-            }
-            // Emit compaction status to frontend
-            if method == "_kage.dev/compaction/status" {
-                // Gate outgoing prompts while compaction is in progress
-                if let Some(status) = notification.get("params")
-                    .and_then(|p| p.get("status"))
-                    .and_then(|s| s.get("type"))
-                    .and_then(|t| t.as_str())
-                {
-                    let (lock, cvar) = &*compacting;
-                    let mut is_compacting = lock.lock_or_recover();
-                    match status {
-                        "started" => {
-                            info!("Compaction started — gating outgoing prompts");
-                            *is_compacting = true;
-                        }
-                        "completed" => {
-                            info!("Compaction completed — releasing prompt gate");
-                            *is_compacting = false;
-                            cvar.notify_all();
-                        }
-                        _ => {}
-                    }
-                }
-                let _ = app_handle.emit("compaction_status", &notification);
-                return;
-            }
-            // Rate limit error — emit as a user-visible error
-            if method == "_kage.dev/error/rate_limit" {
-                let message = notification.get("params")
-                    .and_then(|p| p.get("message"))
-                    .and_then(|m| m.as_str())
-                    .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
-                warn!("Rate limit hit: {}", message);
-                let _ = app_handle.emit("message_error", message);
-                return;
-            }
-            let _ = app_handle.emit("tool_call_update", &notification);
             return;
         }
 
@@ -708,7 +712,7 @@ pub async fn execute_slash_command(
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
         let response = client.send_request(
-            "_kage.dev/commands/execute",
+            &client.vendor_method("commands/execute"),
             serde_json::json!({
                 "sessionId": session_id,
                 "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }

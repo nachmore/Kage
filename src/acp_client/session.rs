@@ -101,7 +101,19 @@ impl AcpClient {
         Ok((session_id, models_list))
     }
 
-    pub fn load_existing_session(&self, session_id: &str, cwd: Option<String>) -> Result<String> {
+    /// Load an existing session and return any model list the agent included
+    /// in its response. The ACP spec doesn't mandate `models.availableModels`
+    /// for `session/load` — but kage-cli and kiro-cli both ship the same
+    /// session resource, so when one populates it on `session/new` it tends
+    /// to populate it on `session/load` too. Returning the (possibly empty)
+    /// list lets callers refresh the model dropdown after a resume; the
+    /// previous "frontend will refetch when needed" comment was wishful
+    /// thinking — nothing in the frontend ever refetched.
+    pub fn load_existing_session(
+        &self,
+        session_id: &str,
+        cwd: Option<String>,
+    ) -> Result<(String, Vec<serde_json::Value>)> {
         info!("Loading existing ACP session: {}", session_id);
 
         {
@@ -131,9 +143,21 @@ impl AcpClient {
             anyhow::bail!("Session load failed: {}", format_acp_error(&error));
         }
 
+        let mut models_list = Vec::new();
+        if let Some(result) = response.result.as_ref() {
+            if let Some(models) = result
+                .get("models")
+                .and_then(|m| m.get("availableModels"))
+                .and_then(|a| a.as_array())
+            {
+                info!("Resumed session has {} available models", models.len());
+                models_list = models.clone();
+            }
+        }
+
         info!("Session loaded: {}", session_id);
         *self.session_id.lock_or_recover() = Some(session_id.to_string());
-        Ok(session_id.to_string())
+        Ok((session_id.to_string(), models_list))
     }
 
     // --- Steering ---
