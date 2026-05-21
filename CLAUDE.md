@@ -16,7 +16,7 @@ cargo tauri build                # platform-native installer/bundle (Windows: NS
 cargo build                      # debug binaries only — no installer, no bundling
 ```
 
-`cargo build --release` does **not** produce the installer; only `cargo tauri build` does.
+`cargo build --release` does **not** produce the installer or embed the frontend; only `cargo tauri build` does. A binary from `cargo build` will fail at runtime with `ERR_CONNECTION_REFUSED` because it still expects the dev server at `localhost:1420`. Use `cargo tauri build --no-bundle` if you want a standalone exe without the NSIS/DMG step. `cargo check` and `cargo build` are still the right commands for fast type/borrow validation during Rust iteration.
 
 ### Two binaries — built separately, chained automatically
 
