@@ -1723,7 +1723,17 @@ fn resolve_binary_path(token: &str) -> Option<String> {
         return p.exists().then(|| token.to_string());
     }
     let cmd = if cfg!(windows) { "where" } else { "which" };
-    let out = std::process::Command::new(cmd).arg(token).output().ok()?;
+    let mut command = std::process::Command::new(cmd);
+    command.arg(token);
+    // CREATE_NO_WINDOW: GUI subsystem processes spawning console
+    // children inherit no console — Windows allocates a fresh one for
+    // the child unless we suppress it, which flashes a DOS window.
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let out = command.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -1804,12 +1814,19 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
                 candidates.push(std::path::PathBuf::from("/snap/bin").join(bin_name));
             }
 
-            // Also check PATH via `which` / `where`
-            if let Ok(output) =
-                std::process::Command::new(if cfg!(windows) { "where" } else { "which" })
-                    .arg(bin_name)
-                    .output()
+            // Also check PATH via `which` / `where`. CREATE_NO_WINDOW
+            // matters because the settings UI's Connection page calls
+            // detect_agents during normal startup — without the flag
+            // each `where` flashes a DOS window.
+            let where_or_which = if cfg!(windows) { "where" } else { "which" };
+            let mut where_cmd = std::process::Command::new(where_or_which);
+            where_cmd.arg(bin_name);
+            #[cfg(target_os = "windows")]
             {
+                use std::os::windows::process::CommandExt;
+                where_cmd.creation_flags(0x08000000);
+            }
+            if let Ok(output) = where_cmd.output() {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     for line in stdout.lines() {
@@ -1838,8 +1855,16 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
                 let version = if hint.version_args.is_empty() {
                     None
                 } else {
-                    std::process::Command::new(&path)
-                        .args(hint.version_args)
+                    let mut version_cmd = std::process::Command::new(&path);
+                    version_cmd.args(hint.version_args);
+                    // CREATE_NO_WINDOW: see comment above on the
+                    // where/which call.
+                    #[cfg(target_os = "windows")]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        version_cmd.creation_flags(0x08000000);
+                    }
+                    version_cmd
                         .output()
                         .ok()
                         .and_then(|o| {
