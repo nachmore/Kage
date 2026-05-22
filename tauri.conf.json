@@ -46,20 +46,6 @@
         "dragDropEnabled": false
       },
       {
-        "label": "settings",
-        "url": "settings.html",
-        "fullscreen": false,
-        "resizable": true,
-        "title": "Settings - Kage",
-        "width": 800,
-        "height": 700,
-        "minWidth": 600,
-        "minHeight": 450,
-        "visible": false,
-        "skipTaskbar": false,
-        "center": true
-      },
-      {
         "label": "context-menu",
         "url": "context-menu.html",
         "fullscreen": false,

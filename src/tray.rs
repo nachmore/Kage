@@ -80,11 +80,17 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                     crate::setup::update_activation_policy(app_handle_inner);
                 }
                 "settings" => {
-                    if let Some(window) = app_handle_inner.get_webview_window("settings") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                    }
-                    crate::setup::update_activation_policy(app_handle_inner);
+                    // Delegate to open_settings_window so the
+                    // create-on-demand path lives in one place.
+                    let app_clone = app_handle_inner.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) =
+                            crate::commands::window::open_settings_window(app_clone, None, None)
+                                .await
+                        {
+                            log::warn!("Tray: open_settings_window failed: {}", e);
+                        }
+                    });
                 }
                 "inspect" => {
                     info!("Opening chat inspector");

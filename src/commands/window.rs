@@ -530,19 +530,43 @@ pub async fn open_settings_window(
     section: Option<String>,
     sub_section: Option<String>,
 ) -> Result<(), AppError> {
+    use tauri::WebviewWindowBuilder;
     info!(
         "Opening settings window (section: {:?}, sub: {:?})",
         section, sub_section
     );
-    if let Some(window) = app.get_webview_window("settings") {
-        let _ = window.show();
-        let _ = window.set_focus();
-        if let Some(ref s) = section {
-            let _ = window.emit("navigate_settings_section", s);
-        }
-        if let Some(ref sub) = sub_section {
-            let _ = window.emit("navigate_settings_subsection", sub);
-        }
+    // Reuse an existing settings window if it's already up (user
+    // already opened it, then dismissed without closing). Otherwise
+    // build a fresh one — settings is excluded from the initial
+    // tauri.conf.json windows array so we don't pay for the WebView2
+    // process + its JS init at every app launch (it calls
+    // detect_agents on startup, which used to flash DOS windows for
+    // each preset's `where`/`--version` probe).
+    let window = if let Some(w) = app.get_webview_window("settings") {
+        w
+    } else {
+        WebviewWindowBuilder::new(
+            &app,
+            "settings",
+            tauri::WebviewUrl::App("settings.html".into()),
+        )
+        .title("Settings - Kage")
+        .inner_size(800.0, 700.0)
+        .min_inner_size(600.0, 450.0)
+        .resizable(true)
+        .center()
+        .visible(false) // shown below after we know it built
+        .build()
+        .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
+    };
+
+    let _ = window.show();
+    let _ = window.set_focus();
+    if let Some(ref s) = section {
+        let _ = window.emit("navigate_settings_section", s);
+    }
+    if let Some(ref sub) = sub_section {
+        let _ = window.emit("navigate_settings_subsection", sub);
     }
     crate::setup::update_activation_policy(&app);
     crate::telemetry::track(
