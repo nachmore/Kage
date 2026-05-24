@@ -349,7 +349,10 @@ mod tests {
             spawn_command: "true".to_string(),
         });
         assert_eq!(client.vendor_prefix_for_send(), "_kage.dev/");
-        assert_eq!(client.vendor_method("commands/execute"), "_kage.dev/commands/execute");
+        assert_eq!(
+            client.vendor_method("commands/execute"),
+            "_kage.dev/commands/execute"
+        );
     }
 
     #[test]

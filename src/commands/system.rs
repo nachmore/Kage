@@ -1864,21 +1864,18 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
                         use std::os::windows::process::CommandExt;
                         version_cmd.creation_flags(0x08000000);
                     }
-                    version_cmd
-                        .output()
-                        .ok()
-                        .and_then(|o| {
-                            if o.status.success() {
-                                let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                                if !v.is_empty() {
-                                    Some(v)
-                                } else {
-                                    None
-                                }
+                    version_cmd.output().ok().and_then(|o| {
+                        if o.status.success() {
+                            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                            if !v.is_empty() {
+                                Some(v)
                             } else {
                                 None
                             }
-                        })
+                        } else {
+                            None
+                        }
+                    })
                 };
 
                 let spawn_command = if hint.acp_args.is_empty() {

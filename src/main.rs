@@ -193,7 +193,9 @@ async fn run() {
     // single-instance IPC dance still dominates a second-instance launch.
     let config = startup::load_config_with_overrides(debug_mode, Config::load);
     info!("Configuration loaded");
-    if dev_mode { info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis()); }
+    if dev_mode {
+        info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis());
+    }
 
     // Initialize the app log ring buffer so frontend `app_log_write`
     // invokes from window startup land on disk. The pre-init buffer in
@@ -215,7 +217,12 @@ async fn run() {
 
     let app_launcher = AppLauncher::new();
     info!("App launcher initialized (scan deferred to background)");
-    if dev_mode { info!("⏱ App launcher ready at +{}ms", startup_t0.elapsed().as_millis()); }
+    if dev_mode {
+        info!(
+            "⏱ App launcher ready at +{}ms",
+            startup_t0.elapsed().as_millis()
+        );
+    }
 
     let acp_client_arc = Arc::new(acp_client);
     let config_arc = Arc::new(std::sync::Mutex::new(config.clone()));
@@ -358,10 +365,7 @@ async fn run() {
                         log::info!("[floating-event] Focused({})", focused);
                     }
                     tauri::WindowEvent::Resized(sz) => {
-                        log::info!(
-                            "[floating-event] Resized(w={}, h={})",
-                            sz.width, sz.height
-                        );
+                        log::info!("[floating-event] Resized(w={}, h={})", sz.width, sz.height);
                     }
                     _ => {}
                 }
@@ -387,8 +391,7 @@ async fn run() {
                 let hide_others = MenuItemBuilder::with_id("macos-hide-others", "Hide Others")
                     .accelerator("CmdOrCtrl+Alt+H")
                     .build(app)?;
-                let show_all =
-                    MenuItemBuilder::with_id("macos-show-all", "Show All").build(app)?;
+                let show_all = MenuItemBuilder::with_id("macos-show-all", "Show All").build(app)?;
                 let quit_item = MenuItemBuilder::with_id("macos-quit", "Quit Kage")
                     .accelerator("CmdOrCtrl+Shift+Q")
                     .build(app)?;
@@ -445,7 +448,9 @@ async fn run() {
             #[cfg(target_os = "macos")]
             {
                 use tauri::ActivationPolicy;
-                if let Err(e) = app.handle().set_activation_policy(ActivationPolicy::Accessory)
+                if let Err(e) = app
+                    .handle()
+                    .set_activation_policy(ActivationPolicy::Accessory)
                 {
                     warn!("Failed to set initial activation policy: {}", e);
                 } else {
