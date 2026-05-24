@@ -1,4 +1,22 @@
 fn main() {
+    // Announce who's invoking this build.rs run. Cargo runs build.rs
+    // exactly once per `cargo build` invocation, so this gives us a
+    // tag in CI logs that lines up 1:1 with each compile pass —
+    // useful when debug_mcp.py builds first (`--bin
+    // kage-computer-control-mcp`) and then `cargo tauri build`
+    // re-enters cargo to build the main bin. Two announcements →
+    // two compile passes; one announcement → cache hit on the
+    // second invocation.
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "?".into());
+    let target = std::env::var("TARGET").unwrap_or_else(|_| "?".into());
+    let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "?".into());
+    let primary_pkg = std::env::var("CARGO_PRIMARY_PACKAGE").unwrap_or_default();
+    let bin_name = std::env::var("CARGO_BIN_NAME").unwrap_or_default();
+    println!(
+        "cargo:warning=[build.rs] kage {pkg_version} profile={profile} target={target} \
+         primary_package={primary_pkg:?} bin={bin_name:?}"
+    );
+
     // Only re-run this build script when these inputs change.
     println!("cargo:rerun-if-changed=tauri.conf.json");
     println!("cargo:rerun-if-changed=capabilities/");

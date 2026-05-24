@@ -514,11 +514,32 @@ jobs:
           cp latest.json release/
           ls -la release/
 
+      # Release name composition:
+      #   - Stable (tag pushes): `release_name` is already the tag (e.g.
+      #     `v0.9.0`), which is clear on its own.
+      #   - Rolling channels (dev / beta): include the stamped version
+      #     so the GitHub releases list shows what's actually in there
+      #     without the user having to expand the assets — e.g.
+      #     `Kage dev (0.9.202605241845+dev.27dac96)`.
+      - name: Compose release name
+        id: name
+        env:
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          BASE_NAME: ${{ needs.plan.outputs.release_name }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        shell: bash
+        run: |
+          if [[ "$CHANNEL" == "stable" ]]; then
+            echo "release_name=$BASE_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_name=Kage $CHANNEL ($VERSION)" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upsert GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.plan.outputs.release_tag }}
-          name: ${{ needs.plan.outputs.release_name }}
+          name: ${{ steps.name.outputs.release_name }}
           prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
           # softprops/action-gh-release replaces existing assets when a
           # release for the same tag already exists, so the rolling
