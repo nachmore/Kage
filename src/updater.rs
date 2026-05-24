@@ -98,9 +98,12 @@ pub fn endpoint_for_channel(channel: &str) -> &'static str {
 /// moment the user is idle, without an extra network round trip that
 /// might time out or change the available version.
 pub struct UpdaterState {
-    /// Timestamp of the last time the floating window was shown.
-    /// Updated from `commands::touch_floating_activity`.
-    pub last_floating_activity: std::sync::Mutex<Instant>,
+    /// Timestamp of the last time any user-facing window (floating,
+    /// chat, settings) was shown OR was observed visible by the
+    /// updater idle loop. Continuously refreshed by the idle poll
+    /// while any window is on screen, so the 5-minute "idle" gate
+    /// can never trip while the user has UI open.
+    pub last_user_activity: std::sync::Mutex<Instant>,
     /// True when `pending_update` holds an `Update` ready to install.
     pub update_ready: AtomicBool,
     /// The [`Update`] returned by the plugin when a newer version was
@@ -125,29 +128,52 @@ impl Default for UpdaterState {
 impl UpdaterState {
     pub fn new() -> Self {
         Self {
-            last_floating_activity: std::sync::Mutex::new(Instant::now()),
+            last_user_activity: std::sync::Mutex::new(Instant::now()),
             update_ready: AtomicBool::new(false),
             pending_update: std::sync::Mutex::new(None),
             available_version: std::sync::Mutex::new(None),
         }
     }
 
-    /// Record that the floating window was just shown.
+    /// Record that a user-facing window was just shown — or, from the
+    /// idle loop, that one is currently still visible. The 5-minute
+    /// idle gate measures "time since last touch", so refreshing this
+    /// while any window is on screen keeps the gate closed for the
+    /// duration of any visible UI session.
     pub fn touch_activity(&self) {
-        if let Ok(mut t) = self.last_floating_activity.lock() {
+        if let Ok(mut t) = self.last_user_activity.lock() {
             *t = Instant::now();
         }
     }
 
-    /// True when the user hasn't touched the floating window for 5+
-    /// minutes — the gate for silent auto-install so we don't yank the
-    /// app out from under an active session.
+    /// True when the user hasn't touched any user-facing window for
+    /// 5+ minutes — the gate for silent auto-install so we don't
+    /// yank the app out from under an active session.
     pub fn is_idle(&self) -> bool {
-        self.last_floating_activity
+        self.last_user_activity
             .lock()
             .map(|t| t.elapsed().as_secs() >= 300)
             .unwrap_or(false)
     }
+}
+
+/// User-facing windows whose visibility blocks silent auto-install.
+/// Excludes transient windows (context-menu, inline-assist) and
+/// install-flow windows (welcome, store) — those either pop up and
+/// disappear quickly or are explicitly out-of-band of regular use.
+const USER_WINDOW_LABELS: &[&str] = &["floating", "main", "settings"];
+
+/// True if any of the user-facing windows is currently shown. Used by
+/// the idle loop to refresh `last_user_activity` while UI is up
+/// (preventing the 5-minute idle gate from tripping during a long
+/// session) AND as a final guard before the install actually runs.
+fn is_any_user_window_visible(app: &tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    USER_WINDOW_LABELS.iter().any(|label| {
+        app.get_webview_window(label)
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(false)
+    })
 }
 
 /// Run a plugin `check()` for the given channel and return the resulting
@@ -639,10 +665,26 @@ pub fn start_update_loop(
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
 
+            // If any user-facing window is currently on screen, refresh
+            // the activity timestamp. This keeps the idle gate closed
+            // for the duration of the session — even if the user hasn't
+            // *triggered* a fresh show in the last 5 minutes (e.g.
+            // they've had the chat window open the whole time).
+            if is_any_user_window_visible(&app_for_idle) {
+                updater_for_idle.touch_activity();
+            }
+
             if !updater_for_idle.update_ready.load(Ordering::SeqCst) {
                 continue;
             }
             if !updater_for_idle.is_idle() {
+                continue;
+            }
+            // Belt + suspenders: even if the timer says idle, refuse to
+            // install while a window is visible. Closes the race where
+            // a user opens a window between the visibility refresh
+            // above and the install decision below.
+            if is_any_user_window_visible(&app_for_idle) {
                 continue;
             }
             let silent = {
