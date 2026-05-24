@@ -272,8 +272,7 @@ function filterStyle(raw) {
 export function sanitizeExtensionHtml(html, mode = 'rich') {
     const tpl = document.createElement('template');
     tpl.innerHTML = String(html);
-    const tagsAllowed =
-        mode === 'icon' ? ICON_TAGS : mode === 'inline' ? INLINE_TAGS : RICH_TAGS;
+    const tagsAllowed = mode === 'icon' ? ICON_TAGS : mode === 'inline' ? INLINE_TAGS : RICH_TAGS;
     walkAndFilter(tpl.content, { tagsAllowed, inSvg: false });
     return tpl.content;
 }
