@@ -8,9 +8,11 @@
     "lint:fix": "biome check --write ui --error-on-warnings",
     "format": "biome format --write ui",
     "format:check": "biome format ui",
-    "ci": "biome ci ui --error-on-warnings"
+    "ci": "biome ci ui --error-on-warnings",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15"
+    "@biomejs/biome": "2.4.15",
+    "husky": "^9.1.7"
   }
 }

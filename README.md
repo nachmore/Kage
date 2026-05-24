@@ -129,6 +129,10 @@ cd ui-tests && npx vitest run     # JS tests
 python scripts/test_all.py        # Rust + JS tests combined
 ```
 
+### Pre-push hook
+
+`npm install` at the repo root sets up a Husky `pre-push` hook that mirrors CI: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test --lib`, and `npm run ci` (biome). Every `git push` runs them and refuses to push if any fails. Bypass with `git push --no-verify` if you really need to (e.g. a docs-only commit on a clean tree where you trust the gates).
+
 ## Features
 
 ### Floating Window

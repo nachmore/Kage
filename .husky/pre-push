@@ -1,0 +1,38 @@
+# Pre-push hook: run the same gates that CI runs, fail fast.
+#
+# Mirrors the four checks ci.yml enforces:
+#   1. cargo fmt --all -- --check       (Rust formatting)
+#   2. cargo clippy --all-targets -- -D warnings  (Rust lints)
+#   3. cargo test --lib                 (Rust unit tests)
+#   4. npm run ci                       (biome ci on ui/)
+#
+# Total wall time on this repo is ~30-60s after the first run (Cargo
+# cache is hot). First run after a clean checkout takes longer because
+# Cargo has to compile everything once.
+#
+# Bypass: `git push --no-verify` skips the hook. Use sparingly — the
+# whole point is to catch fmt/clippy/biome regressions before they
+# turn into a red CI run that costs you a re-commit cycle.
+#
+# Why pre-push and not pre-commit:
+#   - cargo test takes a few seconds; running it on every commit
+#     (especially during fix-up commits) is too noisy.
+#   - The user iterates locally with many small commits and only
+#     pushes when they think a chunk is done. Push is the natural
+#     gate point.
+
+set -e
+
+echo "[pre-push] cargo fmt --all -- --check"
+cargo fmt --all -- --check
+
+echo "[pre-push] cargo clippy --all-targets -- -D warnings"
+cargo clippy --all-targets -- -D warnings
+
+echo "[pre-push] cargo test --lib"
+cargo test --lib
+
+echo "[pre-push] npm run ci"
+npm run ci
+
+echo "[pre-push] all gates passed"
