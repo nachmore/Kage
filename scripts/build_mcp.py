@@ -1,25 +1,10 @@
-"""Build BOTH binaries (kage-computer-control-mcp + kage) in one cargo
-invocation, matching the main build's profile.
+"""Build the kage-computer-control-mcp sidecar, matching the main build's profile.
 
 Invoked from `tauri.conf.json` → `beforeBuildCommand`. The sidecar is a
 separate binary (see src/bin/computer_control_mcp.rs) that kage spawns
 at runtime; shipping a release sidecar next to a debug kage.exe works
 but wastes a minute or two of compile time and produces mismatched
 symbols, so we mirror whatever profile the top-level Tauri build is in.
-
-Why build BOTH bins here: `cargo tauri build` runs us as
-beforeBuildCommand and then runs `cargo build` itself for the main
-kage binary. Building both up front (instead of just the MCP bin)
-populates Cargo's incremental cache so Tauri's subsequent build is a
-near-no-op — the second "Compiling kage" step in CI logs just becomes
-a quick relink + bundle. Saves 30-60s per CI build.
-
-If TAURI_ENV_TARGET_TRIPLE is set we forward it as `--target`. CI
-builds always set it (we pass `--target <triple>` to cargo tauri
-build per the matrix), so the cache hit is exact. Local desktop
-builds don't set it; cargo defaults to the host triple, which is
-the same triple Tauri's subsequent build uses, so the cache hit
-is exact there too.
 
 Tauri sets TAURI_ENV_DEBUG=true for `cargo tauri dev` and
 `cargo tauri build --debug`, and to false (or leaves it unset) for a
@@ -52,19 +37,9 @@ def main() -> int:
         return 0
 
     debug = os.environ.get("TAURI_ENV_DEBUG", "").lower() == "true"
-    # Build BOTH bins in one cargo invocation (no `--bin` filter). The
-    # kage crate has exactly two `[[bin]]` entries (kage and
-    # kage-computer-control-mcp) plus the lib, so this compiles
-    # everything Tauri's downstream `cargo build` will ask for.
-    cmd = ["cargo", "build", "--bins"]
+    cmd = ["cargo", "build", "--bin", "kage-computer-control-mcp"]
     if not debug:
         cmd.append("--release")
-    # Match Tauri's subsequent build's --target. Without this the cache
-    # hit would miss whenever Tauri builds for a non-host triple (CI
-    # matrix, cross-compiles).
-    target_triple = os.environ.get("TAURI_ENV_TARGET_TRIPLE", "").strip()
-    if target_triple:
-        cmd.extend(["--target", target_triple])
     # scripts/ sits at the repo root, so parent.parent lands there
     # regardless of Tauri's cwd for the hook.
     repo_root = Path(__file__).resolve().parent.parent
