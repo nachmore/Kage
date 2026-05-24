@@ -579,53 +579,101 @@ pub async fn open_settings_window(
     Ok(())
 }
 
+/// Logical (DIP) size of the context-menu window. Kept here as a single
+/// source of truth — used both for the initial WebviewWindowBuilder and
+/// for clamping math when the window's outer_size() isn't available
+/// yet (the very first show, before the WebView2 process has reported
+/// its rendered size).
+const CONTEXT_MENU_LOGICAL_W: f64 = 160.0;
+const CONTEXT_MENU_LOGICAL_H: f64 = 220.0;
+
 #[tauri::command]
 pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<(), AppError> {
+    use tauri::WebviewWindowBuilder;
     crate::telemetry::track(&app, "context_menu_shown", None);
-    if let Some(window) = app.get_webview_window("context-menu") {
-        // Get the menu window size
-        let win_size = window.outer_size().unwrap_or(tauri::PhysicalSize {
-            width: 160,
-            height: 220,
+
+    // Build the window on first show. Excluded from tauri.conf.json's
+    // initial windows so we don't pay for a WebView2 process at every
+    // launch — the menu is opened rarely and via explicit user action.
+    let window = if let Some(w) = app.get_webview_window("context-menu") {
+        w
+    } else {
+        let w = WebviewWindowBuilder::new(
+            &app,
+            "context-menu",
+            tauri::WebviewUrl::App("context-menu.html".into()),
+        )
+        .title("")
+        .inner_size(CONTEXT_MENU_LOGICAL_W, CONTEXT_MENU_LOGICAL_H)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .focused(false)
+        .visible(false)
+        .build()
+        .map_err(|e| AppError::internal(format!("Failed to build context menu: {}", e)))?;
+        // Match what configure_transparent_windows did for the
+        // preloaded version. set_shadow is Windows-only on the trait.
+        let _ = w.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
+        #[cfg(target_os = "windows")]
+        let _ = w.set_shadow(false);
+        w
+    };
+
+    let mut final_x = x;
+    let mut final_y = y;
+
+    // Find which monitor the click is on and clamp to its bounds
+    if let Some(monitor) = find_monitor_at_position(&window, x, y) {
+        let mon_pos = monitor.position();
+        let mon_size = monitor.size();
+        let scale = monitor.scale_factor();
+
+        let mon_right = mon_pos.x + mon_size.width as i32;
+        let mon_bottom = mon_pos.y + mon_size.height as i32;
+        // outer_size() can be 0×0 on a freshly-built window that hasn't
+        // rendered yet. Fall back to the configured logical size in that
+        // case so first-show clamping still works.
+        let outer = window.outer_size().unwrap_or(tauri::PhysicalSize {
+            width: 0,
+            height: 0,
         });
+        let menu_w = if outer.width > 0 {
+            (outer.width as f64 / scale) as i32
+        } else {
+            CONTEXT_MENU_LOGICAL_W as i32
+        };
+        let menu_h = if outer.height > 0 {
+            (outer.height as f64 / scale) as i32
+        } else {
+            CONTEXT_MENU_LOGICAL_H as i32
+        };
 
-        let mut final_x = x;
-        let mut final_y = y;
-
-        // Find which monitor the click is on and clamp to its bounds
-        if let Some(monitor) = find_monitor_at_position(&window, x, y) {
-            let mon_pos = monitor.position();
-            let mon_size = monitor.size();
-            let scale = monitor.scale_factor();
-
-            let mon_right = mon_pos.x + mon_size.width as i32;
-            let mon_bottom = mon_pos.y + mon_size.height as i32;
-            let menu_w = (win_size.width as f64 / scale) as i32;
-            let menu_h = (win_size.height as f64 / scale) as i32;
-
-            // If menu would overflow right edge, flip to left of cursor
-            if final_x + menu_w > mon_right {
-                final_x = (mon_right - menu_w).max(mon_pos.x);
-            }
-            // If menu would overflow bottom edge, flip upward
-            if final_y + menu_h > mon_bottom {
-                final_y = (mon_bottom - menu_h).max(mon_pos.y);
-            }
+        // If menu would overflow right edge, flip to left of cursor
+        if final_x + menu_w > mon_right {
+            final_x = (mon_right - menu_w).max(mon_pos.x);
         }
-
-        window
-            .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                x: final_x,
-                y: final_y,
-            }))
-            .map_err(|e| format!("Failed to position context menu: {}", e))?;
-        window
-            .show()
-            .map_err(|e| format!("Failed to show context menu: {}", e))?;
-        window
-            .set_focus()
-            .map_err(|e| format!("Failed to focus context menu: {}", e))?;
+        // If menu would overflow bottom edge, flip upward
+        if final_y + menu_h > mon_bottom {
+            final_y = (mon_bottom - menu_h).max(mon_pos.y);
+        }
     }
+
+    window
+        .set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: final_x,
+            y: final_y,
+        }))
+        .map_err(|e| format!("Failed to position context menu: {}", e))?;
+    window
+        .show()
+        .map_err(|e| format!("Failed to show context menu: {}", e))?;
+    window
+        .set_focus()
+        .map_err(|e| format!("Failed to focus context menu: {}", e))?;
     Ok(())
 }
 

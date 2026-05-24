@@ -46,22 +46,6 @@
         "dragDropEnabled": false
       },
       {
-        "label": "context-menu",
-        "url": "context-menu.html",
-        "fullscreen": false,
-        "resizable": false,
-        "title": "",
-        "width": 160,
-        "height": 220,
-        "visible": false,
-        "decorations": false,
-        "transparent": true,
-        "shadow": false,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "focus": false
-      },
-      {
         "label": "inline-assist",
         "url": "inline-assist.html",
         "fullscreen": false,
