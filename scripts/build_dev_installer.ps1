@@ -97,10 +97,15 @@ try {
     Write-Host "[build_dev_installer] cargo exit code: $exitCode (elapsed: $([math]::Round($sw.Elapsed.TotalMinutes, 1)) min)" -ForegroundColor Cyan
 
     if ($exitCode -eq 0 -and -not $NoBundle) {
-        $installer = Join-Path $repoRoot 'target\release\bundle\nsis\Kage_0.9.0_x64-setup.exe'
-        if (Test-Path $installer) {
-            $info = Get-Item $installer
-            Write-Host "[build_dev_installer] Installer: $($info.FullName) ($([math]::Round($info.Length / 1MB, 1)) MB)" -ForegroundColor Green
+        # Glob the installer name — version is read from Cargo.toml
+        # (tauri.conf.json no longer pins it) so the filename suffix
+        # depends on whatever the current Cargo.toml package.version is.
+        $nsisDir = Join-Path $repoRoot 'target\release\bundle\nsis'
+        $installer = Get-ChildItem -Path $nsisDir -Filter 'Kage_*_x64-setup.exe' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($installer) {
+            Write-Host "[build_dev_installer] Installer: $($installer.FullName) ($([math]::Round($installer.Length / 1MB, 1)) MB)" -ForegroundColor Green
         }
     }
 

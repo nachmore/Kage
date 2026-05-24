@@ -310,9 +310,14 @@ jobs:
           PY
           echo "--- Cargo.toml [package] (head) ---"
           head -n 15 Cargo.toml
-          # tauri.conf.json reads the version from Cargo.toml via
-          # "../Cargo.toml" so it inherits the new value automatically.
-          # No second rewrite needed.
+          # tauri.conf.json deliberately omits its own "version" field.
+          # When the field is absent Tauri reads CARGO_PKG_VERSION (i.e.
+          # what we just rewrote above), so the binary's runtime version,
+          # the bundler's installer name, and the latest.json manifest
+          # all agree on a single source of truth. If you ever add the
+          # field back, the rolling-channel updater will compare a
+          # stamped manifest version against a hardcoded tauri.conf
+          # version and prompt for "an update" forever.
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
