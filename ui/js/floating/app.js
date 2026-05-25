@@ -1034,6 +1034,15 @@ export class FloatingApp {
 
         this.appWindow.listen('tauri://blur', async () => {
             this._windowFocused = false;
+            // Suppress blur-hide briefly after a post-update banner
+            // show. The chat window's preloaded webview paints
+            // shortly after we show the floating window for the
+            // celebration banner, and its focus-grab triggers blur
+            // here — without this guard the banner would vanish
+            // before the user sees it. See checkForUpdateBanner.
+            if (this._suppressBlurHideUntil && Date.now() < this._suppressBlurHideUntil) {
+                return;
+            }
             // Don't hide if permission modal is open
             const permissionModal = document.getElementById('permissionModal');
             if (permissionModal && permissionModal.style.display !== 'none') {
@@ -1536,6 +1545,14 @@ export class FloatingApp {
                     'settings',
                     'updates'
                 );
+                // The post-install auto-show races against other
+                // windows' webviews painting for the first time
+                // (notably the preloaded chat window's main.js init).
+                // Whichever paints later steals focus and the blur
+                // handler below would hide us — taking the banner
+                // with it. Suppress the next ~2s of blur-hides so
+                // the user actually sees the celebration banner.
+                this._suppressBlurHideUntil = Date.now() + 2000;
                 // Clear the flag so it only shows once
                 this.invoke('clear_update_flag').catch(() => {});
             }
