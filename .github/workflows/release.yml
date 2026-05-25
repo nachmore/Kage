@@ -594,6 +594,13 @@ jobs:
           tag_name: ${{ needs.plan.outputs.release_tag }}
           name: ${{ steps.name.outputs.release_name }}
           prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
+          # Have GitHub auto-generate "What's Changed" release notes
+          # from the commits since the last release on the same tag
+          # path. Without this the release body is empty, and the
+          # in-app changelog viewer (fetch_changelog) would show
+          # "No release notes." for every dev/beta build even though
+          # the GitHub web UI shows commit messages on the page.
+          generate_release_notes: true
           # softprops/action-gh-release replaces existing assets when a
           # release for the same tag already exists, so the rolling
           # channels stay at "exactly the latest build" without
