@@ -1590,11 +1590,23 @@ export class FloatingApp {
         // Ensure the content area is visible so the banner shows
         if (contentArea) {
             contentArea.classList.add('visible');
-            // Banner-only mode: the content-area has nothing scrollable
-            // in it, so drop overflow:auto to keep the scrollbar away.
-            // The flag is cleared in dismissBanner and on the first
-            // streaming chunk, so long responses still scroll normally.
-            contentArea.classList.add('banner-only');
+            // Banner-only mode toggles content-area to overflow:visible
+            // so the scrollbar doesn't show for a tiny banner. But that
+            // also flips the flex item's min-height from 0 to auto —
+            // i.e. it can no longer shrink below its content. If there
+            // IS substantial content in here (a streamed response, an
+            // image, etc.), enabling banner-only means the content area
+            // refuses to shrink, the bubble can't fit within the OS
+            // window's max height, and the input gets pushed past the
+            // bottom edge. So only switch to banner-only when banner is
+            // truly the sole occupant.
+            const responseText = document.getElementById('responseText');
+            const isEmpty = !responseText?.textContent.trim();
+            if (isEmpty) {
+                contentArea.classList.add('banner-only');
+            } else {
+                contentArea.classList.remove('banner-only');
+            }
         }
         // Resize the window to fit the banner after DOM updates
         requestAnimationFrame(() => this.windowManager.resizeWindow());
