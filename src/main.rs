@@ -546,6 +546,13 @@ async fn run() {
             // Show welcome window on first run
             setup::maybe_show_welcome_window(app.handle(), config_for_setup.first_run_completed);
 
+            // If the previous run was a user-initiated install, show the
+            // floating window now so the user gets immediate visual
+            // feedback that their click completed. Idle installs leave
+            // the window hidden — banner shows next time the user
+            // summons it manually.
+            setup::maybe_show_floating_after_interactive_install(app.handle());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

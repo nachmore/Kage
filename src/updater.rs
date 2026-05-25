@@ -278,7 +278,18 @@ pub async fn plugin_download_and_install(update: Update) -> Result<()> {
         update.version, update.body
     );
     update
-        .download_and_install(|_, _| {}, || info!("Update downloaded, starting installer"))
+        .download_and_install(
+            |_, _| {},
+            || {
+                info!("Update downloaded, starting installer");
+                // Force the writer thread to flush before the plugin's
+                // ShellExecuteW + process::exit(0). Without this, the
+                // "starting installer" line can be lost on Windows
+                // because the periodic 500ms flush hasn't fired yet
+                // when the process tears down.
+                crate::app_log::flush();
+            },
+        )
         .await
         .context("Failed to download and install update")?;
     Ok(())
@@ -522,6 +533,75 @@ pub fn persist_resume_marker(session_id: Option<&str>) {
     }
 }
 
+/// Source of a triggered install — used to decide what UI to show on
+/// the post-install relaunch. Persisted to disk via
+/// `persist_install_source` because the installing process exits
+/// before the new one starts; in-memory state doesn't survive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallSource {
+    /// User clicked "Install" in Settings or on the floating banner.
+    /// Post-install: show the floating window with the "Kage updated!"
+    /// banner so the user gets immediate feedback that their action
+    /// completed.
+    Interactive,
+    /// Background idle-update applied without user interaction.
+    /// Post-install: don't show the floating window. The banner stays
+    /// queued and surfaces the next time the user manually summons
+    /// the floating window.
+    Idle,
+}
+
+impl InstallSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Interactive => "interactive",
+            Self::Idle => "idle",
+        }
+    }
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim() {
+            "interactive" => Some(Self::Interactive),
+            "idle" => Some(Self::Idle),
+            _ => None,
+        }
+    }
+}
+
+/// Persist the install source so the post-install launch can decide
+/// whether to show the floating window. Same write-before-install
+/// pattern as `persist_resume_marker` — a failed install leaves the
+/// marker behind, but `consume_install_source` deletes on read so a
+/// stale marker only affects one launch and is harmless either way
+/// (the worst case is we show or don't show the floating window once
+/// when the user wasn't expecting it).
+pub fn persist_install_source(source: InstallSource) {
+    if let Ok(cfg_dir) = dirs::config_dir().context("config dir") {
+        let marker = cfg_dir.join("kage").join("install-source.txt");
+        if let Some(parent) = marker.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        match std::fs::write(&marker, source.as_str()) {
+            Ok(()) => info!("Wrote install source marker: {}", source.as_str()),
+            Err(e) => warn!("Failed to write install source marker: {}", e),
+        }
+    }
+}
+
+/// Read and delete the install-source marker. Returns `None` if no
+/// marker is present (normal launch path) or if the marker is
+/// unreadable / unparseable. Always deletes on read so a stale marker
+/// can never leak into a future launch.
+pub fn consume_install_source() -> Option<InstallSource> {
+    let cfg_dir = dirs::config_dir()?;
+    let marker = cfg_dir.join("kage").join("install-source.txt");
+    if !marker.exists() {
+        return None;
+    }
+    let contents = std::fs::read_to_string(&marker).ok();
+    let _ = std::fs::remove_file(&marker);
+    contents.as_deref().and_then(InstallSource::parse)
+}
+
 /// Start the background update checker loop.
 ///
 /// Two tasks:
@@ -732,6 +812,7 @@ pub fn start_update_loop(
                 .and_then(|s| s.clone())
                 .or_else(|| acp_client_for_idle.get_session_id());
             persist_resume_marker(session_id.as_deref());
+            persist_install_source(InstallSource::Idle);
 
             match plugin_download_and_install(update).await {
                 Ok(()) => {

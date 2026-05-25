@@ -1470,6 +1470,11 @@ pub async fn download_and_install_update(
         .and_then(|s| s.clone())
         .or_else(|| acp.client.get_session_id());
     crate::updater::persist_resume_marker(session_id.as_deref());
+    // Tag this install as user-initiated so the post-install launch
+    // shows the floating window with the celebration banner. The idle
+    // path writes `Idle` instead, leaving the floating window hidden
+    // until the user manually summons it.
+    crate::updater::persist_install_source(crate::updater::InstallSource::Interactive);
 
     crate::updater::plugin_download_and_install(update)
         .await

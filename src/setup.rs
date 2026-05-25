@@ -345,6 +345,37 @@ pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bo
     });
 }
 
+/// Consume the install-source marker (if any) and show the floating
+/// window when the previous run was a *user-initiated* install. The
+/// idle-install path leaves the floating window hidden — the user will
+/// see the celebration banner the next time they summon it themselves.
+///
+/// We delete the marker as part of consuming it (see
+/// `updater::consume_install_source`) so a stale marker can never
+/// re-trigger this behaviour on a future launch.
+///
+/// Why deferred: at this point in setup the floating window's webview
+/// JS may still be initialising, but `show()` is fine to call
+/// regardless — the window appears as soon as its frontend is
+/// painted, and `checkForUpdateBanner` (in floating/app.js) will
+/// already have queued the banner DOM by the time the user looks at
+/// it.
+pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
+    use crate::updater::{consume_install_source, InstallSource};
+    let Some(source) = consume_install_source() else {
+        return;
+    };
+    info!("Install source marker: {:?}", source);
+    if source != InstallSource::Interactive {
+        return;
+    }
+    if let Some(floating) = app_handle.get_webview_window("floating") {
+        crate::commands::window::center_floating_on_active_monitor(&floating);
+        let _ = floating.show();
+        let _ = floating.set_focus();
+    }
+}
+
 /// Spawn the start-of-day session bootstrap in the background.
 ///
 /// `resume_session_id` is set when the user is launching a fresh process
