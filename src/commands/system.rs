@@ -1476,7 +1476,7 @@ pub async fn download_and_install_update(
     // until the user manually summons it.
     crate::updater::persist_install_source(crate::updater::InstallSource::Interactive);
 
-    crate::updater::plugin_download_and_install(update)
+    crate::updater::plugin_download_and_install(&app, update)
         .await
         .map_err(|e| format!("Install failed: {}", e))?;
 

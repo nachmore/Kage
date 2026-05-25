@@ -365,6 +365,13 @@ pub fn set_thread_name(name: &str) {
 ///
 /// Errors are logged but never propagated: if we can't create the
 /// job, the app still runs; we just lose the orphan-cleanup guarantee.
+/// Saved Job Object handle so `release_kill_on_exit_job_impl` can flip
+/// the kill-on-close flag back off when we're about to hand off to the
+/// updater installer. Without this, the spawned installer dies with us
+/// (kill-on-close kicks in the moment our last handle to the job
+/// closes, which the OS does on process exit).
+static JOB_HANDLE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+
 pub fn install_kill_on_exit_job_impl() {
     use windows::core::PCWSTR;
     use windows::Win32::System::JobObjects::*;
@@ -399,8 +406,54 @@ pub fn install_kill_on_exit_job_impl() {
             Ok(_) => info!("✅ Job Object created — child processes will be killed on exit"),
             Err(e) => warn!("Failed to assign process to Job Object: {}", e),
         }
-        // Deliberately leak the handle — see doc comment.
-        let _ = job;
+        // Save the handle for `release_kill_on_exit_job_impl`. The
+        // handle is also deliberately leaked from this function's
+        // perspective — the OS keeps the job alive as long as anyone
+        // holds it open, and on normal exit the OS closes it for us.
+        let _ = JOB_HANDLE.set(job.0 as usize);
+    }
+}
+
+/// Disable kill-on-close on the Job Object so the next process we
+/// exit doesn't take its children with it. Used right before the
+/// updater plugin's `process::exit(0)` so the installer survives our
+/// shutdown.
+///
+/// Effect: clears `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` in the job's
+/// extended limit info. The job itself stays in place (and any future
+/// children we spawn would still inherit it for `BREAKAWAY_OK`
+/// purposes), but the OS-level kill-on-last-handle-close behaviour
+/// is gone.
+///
+/// We don't restore the flag — by the time this is called we're
+/// committed to exiting in a moment, and any orphan-cleanup
+/// guarantees we lose are already moot.
+pub fn release_kill_on_exit_job_impl() {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::*;
+
+    let Some(&handle_usize) = JOB_HANDLE.get() else {
+        warn!("Job Object handle not stored — cannot release kill-on-close");
+        return;
+    };
+    let job = HANDLE(handle_usize as *mut _);
+
+    unsafe {
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+        // Keep BREAKAWAY_OK; drop KILL_ON_JOB_CLOSE.
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+        let set_ok = SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        );
+        if set_ok.is_err() {
+            warn!("Failed to release Job Object kill-on-close — installer may be killed with us");
+        } else {
+            info!("Job Object kill-on-close released — child processes will survive exit");
+        }
     }
 }
 

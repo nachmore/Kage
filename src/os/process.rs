@@ -42,6 +42,16 @@ pub fn install_kill_on_exit_job() {
     crate::os::platform::process::install_kill_on_exit_job_impl()
 }
 
+/// On Windows: disable the Job Object's kill-on-close behaviour so
+/// processes spawned in the moments before our exit (notably the
+/// updater installer) survive our shutdown. No-op on macOS/Linux
+/// where there's no equivalent OS-level kill mechanism. One-shot —
+/// not restored after the call, since the only caller is on the
+/// imminent-exit path.
+pub fn release_kill_on_exit_job() {
+    crate::os::platform::process::release_kill_on_exit_job_impl()
+}
+
 /// Best-effort: clean up stale processes that could prevent the next
 /// launch from succeeding. Returns the number killed.
 ///

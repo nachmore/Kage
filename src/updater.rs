@@ -28,7 +28,7 @@ use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// Compile-time endpoint URLs per channel (from Cargo.toml
@@ -272,21 +272,60 @@ fn is_manifest_not_found(e: &tauri_plugin_updater::Error) -> bool {
 /// running binary's executable was just replaced on disk; continuing
 /// to run it produces undefined behaviour the moment any file inside
 /// the bundle is referenced.
-pub async fn plugin_download_and_install(update: Update) -> Result<()> {
+pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update) -> Result<()> {
     info!(
         "Downloading update v{} (body: {:?})",
         update.version, update.body
     );
+    let app_for_finish = app.clone();
     update
         .download_and_install(
             |_, _| {},
-            || {
+            move || {
                 info!("Update downloaded, starting installer");
+                // Tear down our own children explicitly while the Job
+                // Object is still in kill-on-close mode. Doing this
+                // FIRST (before releasing the job) means a panic
+                // anywhere in this block before exit still kills our
+                // children — no orphan kage-cli / TTS leaks. The
+                // graceful_shutdown is the same path the tray Quit
+                // uses; it hides windows, kills TTS, and flushes
+                // the log.
+                crate::commands::system::graceful_shutdown(&app_for_finish);
+                // Disconnect the ACP client — kills kage-cli explicitly
+                // rather than relying on stdin-EOF semantics or the
+                // job kill (which is about to be released). Best
+                // effort; if state isn't available we let the existing
+                // implicit cleanup handle it.
+                if let Some(acp) = app_for_finish.try_state::<crate::state::AcpHandles>() {
+                    acp.client.disconnect();
+                }
+                // Now detach the installer-to-be from our Job Object.
+                // The plugin's about to ShellExecuteW the installer;
+                // without this it'd inherit the job and die the
+                // moment our process exit closes the job's last
+                // handle (kill-on-close fires for everything in the
+                // job).
+                //
+                // Order matters: graceful_shutdown above ran while
+                // kill-on-close was still active, so any panic
+                // between then and `process::exit(0)` is still safe.
+                // Once we cross THIS line, a panic could leak
+                // children — but the closure has nothing else to do
+                // and the plugin's next move is the spawn + exit
+                // (no allocations, no I/O on shared state) so the
+                // window is effectively zero.
+                //
+                // No-op on macOS/Linux — neither has the equivalent
+                // kill-on-close mechanism we set up on Windows.
+                crate::os::release_kill_on_exit_job();
                 // Force the writer thread to flush before the plugin's
                 // ShellExecuteW + process::exit(0). Without this, the
                 // "starting installer" line can be lost on Windows
                 // because the periodic 500ms flush hasn't fired yet
-                // when the process tears down.
+                // when the process tears down. graceful_shutdown
+                // already flushes once, but more lines may have been
+                // emitted since then so we flush again.
                 crate::app_log::flush();
             },
         )
@@ -814,7 +853,7 @@ pub fn start_update_loop(
             persist_resume_marker(session_id.as_deref());
             persist_install_source(InstallSource::Idle);
 
-            match plugin_download_and_install(update).await {
+            match plugin_download_and_install(&app_for_idle, update).await {
                 Ok(()) => {
                     // On Windows the plugin kills us before this
                     // returns. If we get here it's macOS: the plugin
