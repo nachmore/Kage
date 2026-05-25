@@ -15,6 +15,7 @@ mod computer_control;
 mod config;
 mod config_export;
 mod config_migrations;
+mod context_rules;
 mod error;
 mod extensions;
 mod link_metadata_cache;

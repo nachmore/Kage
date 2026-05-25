@@ -80,6 +80,12 @@ pub struct Config {
     /// model into the active connection.
     #[serde(default)]
     pub ollama: OllamaConfig,
+    /// Per-app context rules ("App Modes"). When the foreground app
+    /// matches a rule's `executable` at summon time, the rule's
+    /// `steering` is appended to the outgoing prompt as a small
+    /// `<_kage_app_steering>` tag. See `src/context_rules.rs`.
+    #[serde(default)]
+    pub context_rules: Vec<crate::context_rules::ContextRule>,
 }
 
 /// Ollama integration settings. None of these fields are required —
@@ -953,6 +959,7 @@ impl Default for Config {
             automation_power: AutomationPowerConfig::default(),
             telemetry: TelemetryConfig::default(),
             ollama: OllamaConfig::default(),
+            context_rules: Vec::new(),
         }
     }
 }
