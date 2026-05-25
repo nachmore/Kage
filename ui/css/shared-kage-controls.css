@@ -276,3 +276,61 @@ input:checked + .toggle-slider:before {
     padding: 0;
     white-space: pre;
 }
+
+/* Line Editor — line-oriented document editor (steering docs, etc.).
+ * One row per editable line, with reorder + delete buttons. See
+ * ui/js/shared/line-editor.js. */
+.line-editor-root {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.line-editor-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.line-editor-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.line-editor-row .line-editor-input {
+    flex: 1;
+    min-width: 0;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
+    font-size: 12px;
+}
+.line-editor-btn {
+    padding: 4px 8px;
+    border: 1px solid var(--kage-border);
+    background: var(--kage-bg-elevated, transparent);
+    color: var(--kage-text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    transition:
+        background 0.15s,
+        color 0.15s,
+        border-color 0.15s;
+}
+.line-editor-btn:hover {
+    background: var(--kage-surface-hover);
+    color: var(--kage-text-primary);
+    border-color: var(--kage-accent);
+}
+.line-editor-remove:hover {
+    border-color: #c44;
+    color: #c44;
+}
+.line-editor-empty {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+    font-style: italic;
+    padding: 8px 0;
+}
+.line-editor-add {
+    align-self: flex-start;
+    margin-top: 4px;
+}
