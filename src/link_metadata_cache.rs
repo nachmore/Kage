@@ -108,7 +108,11 @@ fn save_file(file: &CacheFile) -> Result<()> {
 
 /// True when an entry is still within its TTL relative to `now`. Pure
 /// so tests can pin the clock.
-pub fn is_fresh(entry_meta: &Option<serde_json::Value>, fetched_at: Option<&str>, now_secs: i64) -> bool {
+pub fn is_fresh(
+    entry_meta: &Option<serde_json::Value>,
+    fetched_at: Option<&str>,
+    now_secs: i64,
+) -> bool {
     let Some(ts) = fetched_at else {
         return false; // missing timestamp: treat as expired
     };
@@ -275,7 +279,11 @@ mod tests {
     #[test]
     fn unparseable_timestamp_is_always_stale() {
         let now = chrono::Utc::now().timestamp();
-        assert!(!is_fresh(&Some(serde_json::json!({})), Some("not-a-date"), now));
+        assert!(!is_fresh(
+            &Some(serde_json::json!({})),
+            Some("not-a-date"),
+            now
+        ));
     }
 
     #[test]
@@ -303,7 +311,9 @@ mod tests {
         // The oldest 3 should be gone — those were i=0..3 (because
         // they got the largest secs_ago).
         for i in 0..3 {
-            assert!(!file.entries.contains_key(&format!("https://example.com/{}", i)));
+            assert!(!file
+                .entries
+                .contains_key(&format!("https://example.com/{}", i)));
         }
     }
 

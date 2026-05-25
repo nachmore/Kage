@@ -504,11 +504,12 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
     // because a hit avoids a full HTTP round trip; we'd lose more
     // than we save by trying to be clever.
     let cache_url = url.clone();
-    let cached =
-        tauri::async_runtime::spawn_blocking(move || crate::link_metadata_cache::lookup(&cache_url))
-            .await
-            .ok()
-            .flatten();
+    let cached = tauri::async_runtime::spawn_blocking(move || {
+        crate::link_metadata_cache::lookup(&cache_url)
+    })
+    .await
+    .ok()
+    .flatten();
     if let Some(maybe_meta) = cached {
         return match maybe_meta {
             Some(value) => Ok(value),
@@ -643,9 +644,11 @@ pub async fn link_metadata_clear_cache() -> Result<(), AppError> {
 #[tauri::command]
 pub async fn link_metadata_cache_stats() -> Result<crate::link_metadata_cache::CacheStats, AppError>
 {
-    Ok(tauri::async_runtime::spawn_blocking(crate::link_metadata_cache::stats)
-        .await
-        .map_err(|e| AppError::from(format!("Stats task failed: {}", e)))?)
+    Ok(
+        tauri::async_runtime::spawn_blocking(crate::link_metadata_cache::stats)
+            .await
+            .map_err(|e| AppError::from(format!("Stats task failed: {}", e)))?,
+    )
 }
 
 /// Extract content from <meta property="X" content="..."> or <meta name="X" content="...">
