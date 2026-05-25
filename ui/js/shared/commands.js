@@ -170,6 +170,48 @@ const LOCAL_COMMANDS = [
             await appWindow.hide();
         },
     },
+    {
+        name: 'version',
+        description: 'Show version, channel, and check for updates',
+        icon: 'ℹ️',
+        execute: async (invoke) => {
+            const show = (text) =>
+                document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
+            let info = {};
+            let channel = 'stable';
+            try {
+                info = await invoke('get_app_info');
+            } catch (e) {
+                show('Error reading app info: ' + e);
+                return;
+            }
+            try {
+                const urls = await invoke('get_update_urls');
+                channel = urls?.channel || 'stable';
+            } catch {
+                // Non-fatal — fall back to "stable" label.
+            }
+
+            const header = `**Kage v${info.version || '?'}**\n\n- Channel: \`${channel}\`\n\n`;
+            show(header + '_Checking for updates..._');
+
+            try {
+                const result = await invoke('check_for_update');
+                if (result?.available_version) {
+                    show(
+                        header +
+                            `⬆ **Update available: v${result.available_version}**\n\n` +
+                            'Open Settings → Updates to install, or run `>settings`.'
+                    );
+                } else {
+                    show(header + `✓ You're up to date (v${result?.current_version || info.version || '?'}).`);
+                }
+            } catch (e) {
+                const msg = e && typeof e === 'object' ? e.message || JSON.stringify(e) : String(e);
+                show(header + `✕ Update check failed: ${msg}`);
+            }
+        },
+    },
 ];
 
 /** Cached ACP slash commands */

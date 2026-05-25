@@ -32,6 +32,12 @@ describe('matchCommands', () => {
     expect(result.some(c => c.name === 'clipboard')).toBe(true);
   });
 
+  it('matches version command', () => {
+    const result = matchCommands('>ver');
+    expect(result).not.toBeNull();
+    expect(result.some(c => c.name === 'version')).toBe(true);
+  });
+
   it('returns empty array for no matches', () => {
     const result = matchCommands('>zzzzz');
     expect(result).toEqual([]);
