@@ -644,11 +644,9 @@ pub async fn link_metadata_clear_cache() -> Result<(), AppError> {
 #[tauri::command]
 pub async fn link_metadata_cache_stats() -> Result<crate::link_metadata_cache::CacheStats, AppError>
 {
-    Ok(
-        tauri::async_runtime::spawn_blocking(crate::link_metadata_cache::stats)
-            .await
-            .map_err(|e| AppError::from(format!("Stats task failed: {}", e)))?,
-    )
+    tauri::async_runtime::spawn_blocking(crate::link_metadata_cache::stats)
+        .await
+        .map_err(|e| AppError::from(format!("Stats task failed: {}", e)))
 }
 
 /// Extract content from <meta property="X" content="..."> or <meta name="X" content="...">
