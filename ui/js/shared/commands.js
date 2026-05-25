@@ -47,7 +47,7 @@ const LOCAL_COMMANDS = [
         },
     },
     {
-        name: 'sessions',
+        name: 'chats',
         description: 'Open full chat with sessions',
         icon: '💬',
         execute: async (invoke, appWindow) => {
@@ -204,7 +204,10 @@ const LOCAL_COMMANDS = [
                             'Open Settings → Updates to install, or run `>settings`.'
                     );
                 } else {
-                    show(header + `✓ You're up to date (v${result?.current_version || info.version || '?'}).`);
+                    show(
+                        header +
+                            `✓ You're up to date (v${result?.current_version || info.version || '?'}).`
+                    );
                 }
             } catch (e) {
                 const msg = e && typeof e === 'object' ? e.message || JSON.stringify(e) : String(e);
