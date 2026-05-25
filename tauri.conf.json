@@ -65,7 +65,10 @@
   "plugins": {
     "updater": {
       "endpoints": [],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDNUQzRkE4NUI4NTk3RkYKUldUL2w0VmJxRDlkTEFEQ3hJUk5ZK3RpK3BFYksyaGYwbTNjQ09uaDFURkp1VnlxK3FrN3VjMnc="
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDNUQzRkE4NUI4NTk3RkYKUldUL2w0VmJxRDlkTEFEQ3hJUk5ZK3RpK3BFYksyaGYwbTNjQ09uaDFURkp1VnlxK3FrN3VjMnc=",
+      "windows": {
+        "installMode": "quiet"
+      }
     }
   },
   "bundle": {
