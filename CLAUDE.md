@@ -63,9 +63,13 @@ Tauri-dependent modules (`automation`, `commands`, `setup`, `single_instance`, `
 5. `AcpClient::new(mode)` — connection mode chosen from config (`stdio`/`pipe`/`tcp`).
 6. `AppState` (`src/state.rs`) is the single shared struct passed via `tauri::Builder::manage`. Most fields are `Arc<Mutex<…>>`. Frontend talks to backend through Tauri commands registered in `tauri::generate_handler!` — every public command must be added there or it won't be callable.
 
+**Register state on the Builder, not inside `setup()`.** Tauri starts loading window webviews — and the JS inside them — as soon as the Builder constructs them, well before the `setup()` closure runs. Frontend invokes that hit `tauri::State<...>` will fail with "state not managed" until ~5 seconds into startup if state registration is deferred to `setup()`. Construct cheap state up front and `.manage()` it on the Builder; reserve `setup()` for work that genuinely needs `&mut App` / `app.handle()` (notification handler wiring, tray construction, hotkey registration, listener installs). See `src/main.rs::run` for the canonical layout.
+
 ### ACP client (`src/acp_client/`)
 
 `mod.rs` is the public surface. `transport.rs` handles the stdio/pipe/tcp framing. `session.rs` tracks per-session state. `types.rs` is the JSON-RPC schema. The notification handler is wired up in `setup` (`commands::messaging::setup_notification_handler`) and routes streaming updates to the frontend via Tauri events.
+
+**Vendor extensions: `_kage.dev/*` and `_kiro.dev/*` are interchangeable.** kage-cli ships extensions under `_kage.dev/`, kiro-cli under `_kiro.dev/`; the surface (`commands/available`, `commands/execute`, `metadata`, `compaction/status`, `error/rate_limit`) is identical. Match incoming notifications by *suffix* via `acp_client::vendor_method_suffix`. For outgoing requests, build the method name with `client.vendor_method("commands/execute")` so it targets whichever prefix the agent has been observed using (pinned on first inbound notification, defaults to `_kage.dev/`).
 
 ### OS abstraction (`src/os/`)
 
@@ -73,7 +77,11 @@ Cross-platform API lives in `src/os/<module>.rs`. Per-platform impls are in `src
 
 ### Frontend (`ui/`)
 
-Five Tauri windows defined in `tauri.conf.json`: `main` (chat sessions), `floating`, `settings`, `context-menu`, `inline-assist`. Each loads its own HTML and JS entry point.
+Three Tauri windows preloaded via `tauri.conf.json`: `main` (chat sessions), `floating`, `inline-assist`. `settings` and `context-menu` are built on demand via `WebviewWindowBuilder` from `commands::window` — kept out of the initial windows array so we don't pay for their WebView2 process at every launch. `welcome` and `store` are also on-demand. Each window loads its own HTML and JS entry point.
+
+**Release builds embed `ui/` via brotli — don't grep the .exe for source strings to verify a build.** `tauri::generate_context!()` runs `tauri-codegen`, which brotli-compresses every file under `frontendDist` into the binary's `.rdata`. A marker like `[CHAT] foo` will never match `findstr` on `kage.exe` even when the latest source IS embedded; you must decompress the codegen cache files in `target/<profile>/build/kage-<hash>/out/tauri-codegen-assets/` to verify, or run the binary and look for the marker at runtime.
+
+**Window-show during startup is racy.** The floating, chat, and inline-assist webviews paint at slightly different times after `setup()`. Whichever paints LAST steals focus from any window we just `.show()`d, triggering its `tauri://blur` handler. The floating window's blur handler hides the window; if you programmatically show it during startup (e.g. post-update banner via `maybe_show_floating_after_interactive_install`), use a short-lived suppression flag like `_suppressBlurHideUntil` so the chat window's late paint doesn't dismiss it.
 
 JS is split:
 - `ui/js/shared/` — used by multiple windows. Anything reused belongs here, never duplicated.
@@ -153,6 +161,8 @@ Settings → Privacy (`ui/js/settings/privacy.js`) lets users toggle and reset t
 
 Signed in-app updates via `tauri-plugin-updater`. See `docs/RELEASE.md` for the full release + signing flow.
 
+**The version is sourced from `Cargo.toml`, never from `tauri.conf.json`.** CI rewrites `Cargo.toml`'s `version` line to a stamped value (`<major>.<minor>.<YYYYMMDDHHMM>+<channel>.<short_sha>`) before building. If `tauri.conf.json` carries a literal `"version"` field, Tauri uses *that* instead of `CARGO_PKG_VERSION` — defeating the stamp. The binary then reports `0.9.0` while `latest.json` advertises a stamped version, and the updater plugin sees them as different forever ("update available" loop). Don't add the field back; if you ever do see it, delete it.
+
 Key points for engineers touching the updater:
 
 - Three channels: `stable`, `beta`, `dev`. Endpoint URLs per channel live in `Cargo.toml [package.metadata.update]`; build.rs exposes them as compile-time env vars; `src/updater.rs::endpoint_for_channel` routes.
@@ -160,6 +170,10 @@ Key points for engineers touching the updater:
 - The plugin handles: manifest fetch, signature verification, download, and per-platform install + relaunch. `src/updater.rs` wraps it with our scheduling layer (daily check, 5-minute-idle gate for silent installs) and session-resume-after-update (`last-session.txt` handoff via `startup::resolve_resume_session_id`).
 - Never call `run_installer` — the plugin owns that now. Deleted from `src/os/mod.rs` in the migration.
 - `VALID_CHANNELS` in `src/updater.rs` is the authority; the JS dropdown in `ui/js/settings/updates.js` mirrors the list and normalises unknown values to stable. `save_config` also normalises on the way in so a hand-edited config.json can't trap a user on a dead channel.
+- **Windows install mode must be `quiet`** in `tauri.conf.json` → `plugins.updater.windows.installMode`. The default `BasicUi` mode passes only `/UPDATE /ARGS` to the NSIS installer; on Win11 the spawned installer can die silently before its UI surfaces (race between the parent's `process::exit(0)` and the child's window registration). `quiet` produces `/S /R /UPDATE /ARGS` — silent install + auto-relaunch — which avoids the UI race entirely. Verified by the user at the time it was changed.
+- **Detach the installer from the Job Object before exit.** `os::install_kill_on_exit_job` adds `KILL_ON_JOB_CLOSE` so our orphan children die with us on crash. ShellExecuteW children inherit the job by default, so the plugin's spawned installer would be reaped along with us. `plugin_download_and_install`'s `on_download_finish` callback runs `graceful_shutdown` → `acp.client.disconnect()` → `os::release_kill_on_exit_job()` (clears the kill flag) before the plugin's `process::exit(0)`. Order matters: explicit child cleanup first (while the job is still safety-netting), THEN release the flag.
+- **`fetch_changelog` reads each release's `body` field.** The CI publish action sets `generate_release_notes: true` so GitHub auto-fills the body from commits since the previous release. Without that, dev/beta releases would have empty bodies and the in-app changelog viewer would say "No release notes" even though the GitHub web UI shows commit messages (those come from a separate auto-generated section that isn't in the API's `body`).
+- **Install source (`interactive` vs `idle`) is persisted via `install-source.txt`.** Written by both call sites in `updater.rs::persist_install_source` before `plugin_download_and_install`. Consumed at startup by `setup::maybe_show_floating_after_interactive_install` to decide whether to auto-show the floating window post-relaunch (interactive only).
 
 Adding a new channel:
 1. Add entry to `[package.metadata.update]` and `[package.metadata.update.dev]` in `Cargo.toml`.
