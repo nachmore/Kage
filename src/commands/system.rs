@@ -1347,6 +1347,98 @@ pub async fn get_auto_steering_path() -> Result<String, AppError> {
         })?)
 }
 
+// --- Line-editor IO for the steering documents ----------------------
+//
+// The Personalization settings page edits the auto and user steering
+// docs as line lists. Read returns the resolved path so the UI can
+// render "we'll save this to …" + a Reveal-in-Explorer affordance.
+// Write updates `user_steering_path` in config the first time a user
+// saves a non-empty doc with no path configured — that pins the
+// default location into the user's settings so future installs find
+// it.
+
+fn parse_steering_kind(kind: &str) -> Result<crate::steering_io::SteeringKind, AppError> {
+    crate::steering_io::SteeringKind::parse(kind)
+        .ok_or_else(|| AppError::from(format!("Unknown steering kind: {}", kind)))
+}
+
+fn path_to_string(p: &std::path::Path) -> Result<String, AppError> {
+    p.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::from("Invalid path encoding".to_string()))
+}
+
+#[tauri::command]
+pub async fn read_steering_lines(
+    kind: String,
+    features: State<'_, FeatureServices>,
+) -> Result<serde_json::Value, AppError> {
+    let kind = parse_steering_kind(&kind)?;
+    let config = features.config.lock_or_recover();
+    let (path, lines) = crate::steering_io::read_lines(kind, &config)
+        .map_err(|e| format!("Failed to read steering doc: {}", e))?;
+    Ok(serde_json::json!({
+        "path": path_to_string(&path)?,
+        "lines": lines,
+        "exists": path.exists(),
+    }))
+}
+
+#[tauri::command]
+pub async fn write_steering_lines(
+    kind: String,
+    lines: Vec<String>,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle,
+) -> Result<serde_json::Value, AppError> {
+    let kind = parse_steering_kind(&kind)?;
+
+    // Capture whether the user had no explicit user_steering_path
+    // configured before this write — that's the trigger for pinning
+    // the default location into config so subsequent reads agree.
+    let needs_path_persist = matches!(kind, crate::steering_io::SteeringKind::User) && {
+        let cfg = features.config.lock_or_recover();
+        cfg.acp
+            .agent
+            .user_steering_path
+            .as_deref()
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true)
+    };
+
+    let path = {
+        let config = features.config.lock_or_recover();
+        crate::steering_io::write_lines(kind, &config, &lines)
+            .map_err(|e| format!("Failed to write steering doc: {}", e))?
+    };
+
+    if needs_path_persist {
+        let mut config = features.config.lock_or_recover();
+        config.acp.agent.user_steering_path = Some(path_to_string(&path)?);
+        if let Err(e) = config.save() {
+            warn!("Failed to persist user_steering_path: {}", e);
+        }
+        // Drop the lock before emitting so listeners that re-read
+        // config don't deadlock.
+        drop(config);
+        let _ = app.emit("config_updated", ());
+    }
+
+    Ok(serde_json::json!({
+        "path": path_to_string(&path)?,
+    }))
+}
+
+/// Read an arbitrary file path the user picked via the file dialog.
+/// Returns its lines without touching the on-disk steering doc — the
+/// frontend decides whether to merge with existing content or
+/// replace, and writes via `write_steering_lines`.
+#[tauri::command]
+pub async fn import_steering_lines(path: String) -> Result<Vec<String>, AppError> {
+    crate::steering_io::import_lines_from_path(&path)
+        .map_err(|e| AppError::from(format!("Failed to import steering doc: {}", e)))
+}
+
 // --- Update commands ---
 
 #[tauri::command]

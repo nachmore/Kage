@@ -22,6 +22,7 @@ pub mod panic_handler;
 pub mod permission_audit;
 pub mod process_manager;
 pub mod startup;
+pub mod steering_io;
 
 // Tauri-dependent modules — excluded from test compilation because
 // Tauri's type system doesn't support --test mode.

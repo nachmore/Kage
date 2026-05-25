@@ -26,6 +26,7 @@ mod process_manager;
 mod setup;
 mod startup;
 mod state;
+mod steering_io;
 mod telemetry;
 mod tray;
 mod updater;
@@ -647,6 +648,9 @@ async fn run() {
             commands::get_steering_content,
             commands::open_auto_steering_file,
             commands::get_auto_steering_path,
+            commands::read_steering_lines,
+            commands::write_steering_lines,
+            commands::import_steering_lines,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
             commands::has_pending_permission,
