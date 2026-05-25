@@ -1,20 +1,31 @@
 fn main() {
     // Announce who's invoking this build.rs run. Cargo runs build.rs
     // exactly once per `cargo build` invocation, so this gives us a
-    // tag in CI logs that lines up 1:1 with each compile pass —
-    // useful when debug_mcp.py builds first (`--bin
-    // kage-computer-control-mcp`) and then `cargo tauri build`
-    // re-enters cargo to build the main bin. Two announcements →
-    // two compile passes; one announcement → cache hit on the
-    // second invocation.
+    // tag in CI logs that lines up 1:1 with each compile pass.
+    //
+    // We can't reliably tell from cargo's own env vars which `--bin`
+    // a given build is producing (CARGO_BIN_NAME is set during BIN
+    // compilation, not during build.rs). So `scripts/build_mcp.py`
+    // sets `KAGE_BUILD_REASON=mcp-sidecar` before invoking cargo for
+    // the MCP build; the absence of the var means the invocation
+    // came from `cargo tauri build` directly (the main `kage`
+    // binary). The two-line CI sequence becomes:
+    //
+    //   [build.rs] reason=mcp-sidecar profile=release ...
+    //   ... build of kage-computer-control-mcp ...
+    //   [build.rs] reason=main-app profile=release ...
+    //   ... build of kage ...
+    //
+    // Tracking re-runs against KAGE_BUILD_REASON keeps the message
+    // correct: change the var (e.g. local cargo build vs. tauri
+    // build) and build.rs reruns to print the new tag.
+    println!("cargo:rerun-if-env-changed=KAGE_BUILD_REASON");
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "?".into());
     let target = std::env::var("TARGET").unwrap_or_else(|_| "?".into());
     let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "?".into());
-    let primary_pkg = std::env::var("CARGO_PRIMARY_PACKAGE").unwrap_or_default();
-    let bin_name = std::env::var("CARGO_BIN_NAME").unwrap_or_default();
+    let reason = std::env::var("KAGE_BUILD_REASON").unwrap_or_else(|_| "main-app".into());
     println!(
-        "cargo:warning=[build.rs] kage {pkg_version} profile={profile} target={target} \
-         primary_package={primary_pkg:?} bin={bin_name:?}"
+        "cargo:warning=[build.rs] reason={reason} kage {pkg_version} profile={profile} target={target}"
     );
 
     // Only re-run this build script when these inputs change.

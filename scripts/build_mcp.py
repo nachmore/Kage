@@ -70,7 +70,14 @@ def main() -> int:
         f"[build_mcp] profile={'debug' if debug else 'release'} cwd={repo_root} -> {' '.join(cmd)}",
         flush=True,
     )
-    return subprocess.call(cmd, cwd=repo_root)
+    # Tag this cargo invocation so build.rs's announce line says
+    # "reason=mcp-sidecar" — the only way to distinguish our
+    # `cargo build --bin kage-computer-control-mcp` call from the
+    # subsequent `cargo tauri build` that produces the main binary.
+    # See build.rs for the consumer side.
+    env = os.environ.copy()
+    env["KAGE_BUILD_REASON"] = "mcp-sidecar"
+    return subprocess.call(cmd, cwd=repo_root, env=env)
 
 
 if __name__ == "__main__":
