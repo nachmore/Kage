@@ -195,6 +195,16 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     open_welcome_window: null,
     open_store_window: null,
     open_auto_steering_file: null,
+    // --- Steering line editor + Ollama wizard — settings window only.
+    // None of these should be reachable from extensions; the steering
+    // docs are user-private and the Ollama wizard mutates the active
+    // agent connection.
+    read_steering_lines: null,
+    write_steering_lines: null,
+    import_steering_lines: null,
+    ollama_probe: null,
+    ollama_list_models: null,
+    ollama_codex_spawn_command: null,
     show_context_menu: null,
     show_notification_source_window: null,
     set_notification_source: null,
