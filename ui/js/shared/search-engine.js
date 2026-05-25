@@ -193,12 +193,17 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
                 });
             }
         }
-        // Don't return early for >find or >cb — let them fall through to file search / clipboard
+        // Don't return early for >find / >cb / >p / >prompts — those fall through
+        // to richer handling: file search, clipboard history, or the prompt browser.
         const lowerQuery = query.toLowerCase().trim();
         if (
             !lowerQuery.startsWith('>find ') &&
             !lowerQuery.startsWith('>cb') &&
-            !lowerQuery.startsWith('>clipboard')
+            !lowerQuery.startsWith('>clipboard') &&
+            lowerQuery !== '>p' &&
+            !lowerQuery.startsWith('>p ') &&
+            lowerQuery !== '>prompts' &&
+            !lowerQuery.startsWith('>prompts ')
         ) {
             return _applyFrecency(results, query);
         }
@@ -235,6 +240,53 @@ export async function unifiedSearch(query, invoke, shortcuts, onPartial) {
             score: 70,
             data: cmd,
         });
+    }
+
+    // > prompts / > p — dedicated browse view of prompt-type shortcuts.
+    // Fired when the query matches `>p`, `>p <filter>`, `>prompts`, or
+    // `>prompts <filter>`. Filters by trigger or name fragment after the
+    // command word; an empty filter shows all prompt-type shortcuts.
+    {
+        const lowerQuery = query.toLowerCase().trim();
+        const promptPrefixMatch = lowerQuery.match(/^>(p|prompts)(?:\s+(.*))?$/);
+        if (promptPrefixMatch && shortcuts && shortcuts.length > 0) {
+            // Drop the command-row results we collected above — `>p` is
+            // a browse mode, not a command-typeahead. Keep an
+            // explanatory header instead, so the user knows what they're
+            // looking at.
+            results.length = 0;
+            const filter = (promptPrefixMatch[2] || '').toLowerCase().trim();
+            const promptShortcuts = shortcuts
+                .filter((sc) => (sc.action_type || 'run_program') === 'prompt')
+                .filter((sc) => {
+                    if (!filter) return true;
+                    const trigger = (sc.shortcut || '').toLowerCase();
+                    const name = (sc.name || '').toLowerCase();
+                    const body = (sc.prompt || '').toLowerCase();
+                    return (
+                        trigger.includes(filter) || name.includes(filter) || body.includes(filter)
+                    );
+                });
+            for (const sc of promptShortcuts) {
+                // Two-line preview: name on top, trimmed prompt body
+                // (single line, ellipsised) below. Helps the user
+                // recognise prompts at a glance — the trigger word
+                // alone isn't always meaningful six months in.
+                const body = (sc.prompt || '').replace(/\s+/g, ' ').trim();
+                const preview = body.length > 90 ? body.slice(0, 87) + '…' : body;
+                results.push({
+                    id: 'prompt:' + sc.shortcut,
+                    type: 'shortcut',
+                    label: sc.name || sc.shortcut,
+                    description: '⚡ ' + sc.shortcut + ' · ' + preview,
+                    icon: sc.icon || '💬',
+                    score: 95,
+                    data: { shortcut: sc, args: [] },
+                });
+            }
+            // No fall-through: prompt browse owns this query.
+            return _applyFrecency(results, query);
+        }
     }
 
     // Shortcuts (sync matching + collect async history promises)

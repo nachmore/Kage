@@ -162,6 +162,26 @@ const LOCAL_COMMANDS = [
         },
     },
     {
+        name: 'prompts',
+        description: 'Browse saved prompts (Quick Commands of type Prompt)',
+        icon: '💬',
+        aliases: ['p'],
+        execute: async () => {
+            // The search engine special-cases `>p` / `>prompts` to
+            // render prompt-type Quick Commands. Selecting this entry
+            // from the autocomplete just nudges the input so the user
+            // lands in browse mode without typing the trailing space.
+            // Match floating's #promptInput first, chat's #chatInput
+            // second — only one is in scope per window.
+            const input =
+                document.querySelector('#promptInput') || document.querySelector('#chatInput');
+            if (input) {
+                input.value = '>p ';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        },
+    },
+    {
         name: 'logs',
         description: 'View application logs',
         icon: '📋',

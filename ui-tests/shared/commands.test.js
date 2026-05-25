@@ -38,6 +38,18 @@ describe('matchCommands', () => {
     expect(result.some(c => c.name === 'version')).toBe(true);
   });
 
+  it('matches prompts command', () => {
+    const result = matchCommands('>prom');
+    expect(result).not.toBeNull();
+    expect(result.some(c => c.name === 'prompts')).toBe(true);
+  });
+
+  it('matches prompts via the >p alias', () => {
+    const result = matchCommands('>p');
+    expect(result).not.toBeNull();
+    expect(result.some(c => c.name === 'prompts')).toBe(true);
+  });
+
   it('returns empty array for no matches', () => {
     const result = matchCommands('>zzzzz');
     expect(result).toEqual([]);
