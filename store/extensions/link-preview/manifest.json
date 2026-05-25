@@ -1,9 +1,9 @@
 {
   "id": "link-preview",
   "name": "Link Preview",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "extension",
-  "description": "Adds inline preview cards for URLs in AI responses — shows domain, favicon, and path.",
+  "description": "Rich link preview cards for URLs in AI responses — Open Graph hero images, descriptions, and favicons, with offline-friendly disk caching.",
   "icon": "🔗",
   "author": "kage",
 
@@ -11,7 +11,8 @@
 
   "config": {
     "enabled": { "type": "boolean", "default": true },
-    "max_previews": { "type": "number", "default": 5 }
+    "max_previews": { "type": "number", "default": 5 },
+    "show_images": { "type": "boolean", "default": true }
   },
 
   "contributes": {

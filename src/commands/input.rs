@@ -545,14 +545,28 @@ pub async fn fetch_link_metadata(url: String) -> Result<serde_json::Value, AppEr
         .or_else(|| extract_meta(&html, "description"))
         .or_else(|| extract_meta(&html, "twitter:description"));
 
-    // Extract favicon: og:image, then <link rel="icon">, then /favicon.ico fallback
-    let image = extract_meta(&html, "og:image");
-    let favicon = image.or_else(|| extract_link_icon(&html, &final_url));
+    // Hero image (Open Graph / Twitter Card) — separate from the
+    // favicon since the formatter renders them in different places.
+    // Folding both into one field (which previous versions did) meant
+    // the card always showed a 28-px favicon even when the page had a
+    // proper og:image; the result looked half-built next to peer link
+    // previews in Slack / Discord / Notion.
+    let image = extract_meta(&html, "og:image")
+        .or_else(|| extract_meta(&html, "twitter:image"))
+        .or_else(|| extract_meta(&html, "twitter:image:src"))
+        .map(|raw| resolve_url(&raw, &final_url));
+
+    // Favicon is a small site-identity glyph. We try the explicit
+    // <link rel="icon"> first, then a /favicon.ico fallback. Never
+    // reuse the hero image — they have different aspect ratios and
+    // CSS treatment.
+    let favicon = extract_link_icon(&html, &final_url);
 
     Ok(serde_json::json!({
         "url": final_url,
         "title": title,
         "description": description,
+        "image": image,
         "favicon": favicon,
     }))
 }
