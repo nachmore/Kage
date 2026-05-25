@@ -41,6 +41,11 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     launch_app_by_name: 'shell',
     fetch_favicon: 'shell',
     fetch_link_metadata: 'shell',
+    // The cache management commands are settings-only — extensions
+    // shouldn't be able to wipe a shared cache or read its size out
+    // of band. The fetch path itself stays gated on `shell`.
+    link_metadata_clear_cache: null,
+    link_metadata_cache_stats: null,
 
     // --- filesystem: folder/file discovery ---------------------------------
     pick_folder: 'filesystem',

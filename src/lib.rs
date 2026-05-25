@@ -14,6 +14,7 @@ pub mod config_export;
 pub mod config_migrations;
 pub mod error;
 pub mod extensions;
+pub mod link_metadata_cache;
 pub mod lock_ext;
 pub mod logger;
 pub mod mcp_json_rpc;

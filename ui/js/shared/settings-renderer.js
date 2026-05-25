@@ -469,6 +469,39 @@ export class RenderedSettings {
                 }
                 break;
             }
+            case 'link_metadata': {
+                // Host-side bridge for the Link Preview extension's
+                // cache management. Extensions can't call settings-only
+                // Tauri commands directly (and we don't want to widen
+                // the extension capability surface for what is, in the
+                // end, a tiny shared cache). Instead the extension's
+                // `runSettingsAction` returns a `host` effect with
+                // op = 'clear' or 'stats' and we run it here. Status
+                // text shown on the action row is whatever the host
+                // command returns.
+                const op = String(host.op || '');
+                const invoke = window?.__TAURI__?.core?.invoke;
+                if (!invoke) {
+                    setStatus('❌ host invoke unavailable');
+                    return;
+                }
+                try {
+                    if (op === 'clear') {
+                        await invoke('link_metadata_clear_cache');
+                        setStatus('✓ Cache cleared.');
+                    } else if (op === 'stats') {
+                        const stats = await invoke('link_metadata_cache_stats');
+                        const entries = stats?.entries ?? 0;
+                        const bytes = stats?.bytes ?? 0;
+                        setStatus(`${entries} URLs · ${formatBytes(bytes)}`);
+                    } else {
+                        setStatus(`❌ unknown link_metadata op: ${op}`);
+                    }
+                } catch (e) {
+                    setStatus(`❌ ${e?.message || e}`);
+                }
+                break;
+            }
             case 'play_timer_sound': {
                 // Preview a built-in or custom timer sound. Audio playback
                 // is a host capability because the extension sandbox
@@ -663,6 +696,24 @@ function pickFileContents(accept) {
 
         input.click();
     });
+}
+
+/**
+ * Format a byte count as a short human string ("12.4 KB", "3.2 MB").
+ * Used by the link_metadata host effect to render cache size in the
+ * action row's status. Kept local rather than reaching into a shared
+ * util because this is the only consumer in the renderer.
+ */
+function formatBytes(n) {
+    if (typeof n !== 'number' || n <= 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let v = n;
+    while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i += 1;
+    }
+    return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
 }
 
 /**

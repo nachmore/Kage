@@ -17,6 +17,7 @@ mod config_export;
 mod config_migrations;
 mod error;
 mod extensions;
+mod link_metadata_cache;
 mod lock_ext;
 mod logger;
 mod mcp_registration;
@@ -570,6 +571,8 @@ async fn run() {
             commands::launch_app_by_name,
             commands::open_url,
             commands::fetch_link_metadata,
+            commands::link_metadata_clear_cache,
+            commands::link_metadata_cache_stats,
             commands::open_path,
             commands::execute_shortcut,
             commands::test_floating_window,
