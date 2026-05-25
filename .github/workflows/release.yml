@@ -492,6 +492,59 @@ jobs:
           echo "--- latest.json ---"
           cat latest.json
 
+      # Rolling-channel cleanup: keep at most two releases per channel —
+      # `<channel>-latest` (about to be published below) and
+      # `<channel>-1` (the previous build, kept as a one-step rollback
+      # / "recently was the latest" reference). Anything older is
+      # deleted entirely, so the GitHub Releases page doesn't pile up
+      # with dozens of dev builds whose assets all have version-stamped
+      # filenames that don't collide with each other.
+      #
+      # Only applies to dev/beta. Stable releases are tag-versioned
+      # (`v0.9.0`, `v0.9.1`, ...), each one its own permanent release —
+      # we never delete those.
+      #
+      # Strategy:
+      #   1. Delete any `<channel>-N` release for N >= 1 (covers -1
+      #      from the previous run, plus -2/-3/... if a prior version
+      #      of this script ever left them around).
+      #   2. Edit the existing `<channel>-latest` release to point at a
+      #      new tag `<channel>-1` — this preserves its assets but
+      #      retags it. Subsequent download URLs now resolve through
+      #      `<channel>-1`. The old git tag `<channel>-latest` is left
+      #      dangling and gets force-moved to the new build SHA in the
+      #      "Move rolling tag" step below.
+      #   3. The publish step further down creates a fresh release at
+      #      `<channel>-latest` for this build's artefacts.
+      - name: Rotate rolling channel releases
+        if: needs.plan.outputs.channel != 'stable'
+        env:
+          CH: ${{ needs.plan.outputs.channel }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Wipe historical -N slots. The upper bound is generous; if a
+          # past bug ever left e.g. -7 around we still clean it up.
+          for n in 1 2 3 4 5 6 7 8 9 10; do
+            tag="${CH}-${n}"
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "Deleting historical release: $tag"
+              gh release delete "$tag" --yes --cleanup-tag
+            fi
+          done
+          # Rotate -latest → -1 by retagging the existing release
+          # object. Assets ride along with the release; only the tag
+          # pointer moves. The release title gets a "(previous)"
+          # suffix so the GitHub Releases page makes the relationship
+          # obvious at a glance.
+          if gh release view "${CH}-latest" >/dev/null 2>&1; then
+            echo "Rotating ${CH}-latest → ${CH}-1"
+            gh release edit "${CH}-latest" \
+              --tag "${CH}-1" \
+              --title "Kage ${CH} (previous)"
+          fi
+
       # For rolling channels (beta / dev) we force-move the alias tag
       # to the current HEAD so the GitHub Release's "this tag" link
       # reflects what's actually in the release.
