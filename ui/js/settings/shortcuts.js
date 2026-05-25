@@ -41,6 +41,11 @@ export class ShortcutsSettingsModule extends SettingsModule {
                 <button class="setting-button" data-action="shortcuts.exportShortcuts">Export</button>
                 <button class="setting-button" data-action="shortcuts.importShortcuts">Import</button>
             </div>
+            <div class="setting-description" style="font-size:11px;margin-top:6px;">
+                Export / Import here only covers your Quick Commands &amp; Prompts. To move
+                everything (config, steering, extensions) between machines, see
+                <a href="#" data-action="shortcuts.openFullBackup">About → Backup &amp; restore</a>.
+            </div>
 
             <div class="shortcuts-list" id="shortcutsList"></div>
 
@@ -958,6 +963,17 @@ export class ShortcutsSettingsModule extends SettingsModule {
             },
             'shortcuts.exportShortcuts': () => this.exportShortcuts(),
             'shortcuts.importShortcuts': () => this.importShortcuts(),
+            'shortcuts.openFullBackup': (_arg, _el, ev) => {
+                // Same routing the >logs command uses: switch the
+                // settings sidebar to About, then dispatch a
+                // settings-subsection event so the backup section
+                // expands and scrolls into view.
+                if (ev?.preventDefault) ev.preventDefault();
+                window.dispatchSettingsAction?.('switchSection', 'about');
+                document.dispatchEvent(
+                    new CustomEvent('settings-subsection', { detail: 'backup' })
+                );
+            },
             'shortcuts.closeDialog': () => this.closeDialog(),
             'shortcuts.openIconFilePicker': () =>
                 document.getElementById('shortcutIconFile')?.click(),

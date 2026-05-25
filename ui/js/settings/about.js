@@ -288,10 +288,20 @@ export class AboutSettingsModule extends SettingsModule {
             });
         }
 
-        // Listen for subsection navigation (e.g. >logs command)
+        // Listen for subsection navigation (e.g. >logs command, or
+        // a deep link from Commands & Prompts → "use full export").
         document.addEventListener('settings-subsection', (e) => {
             if (e.detail === 'logging' && !this._logExpanded) {
                 this._toggleLogging();
+            } else if (e.detail === 'backup') {
+                const body = document.getElementById('backupBody');
+                if (body && body.style.display === 'none') this._toggleBackup();
+                // Scroll the section into view so it's obvious where the
+                // user landed.
+                document.getElementById('backupToggle')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
             }
         });
     }
