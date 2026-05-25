@@ -36,6 +36,50 @@ export class AboutSettingsModule extends SettingsModule {
                     </div>
                 </div>
 
+                <!-- Backup & Restore Section -->
+                <div class="about-logging-section">
+                    <div class="about-logging-header" id="backupToggle">
+                        <span class="about-logging-arrow" id="backupArrow">▶</span>
+                        <span>💾 Backup &amp; restore</span>
+                    </div>
+                    <div class="about-logging-body" id="backupBody" style="display:none;">
+                        <div class="setting-description" style="margin-bottom:12px;">
+                            Move your Kage setup between machines. The backup includes config,
+                            saved prompts &amp; shortcuts, custom and learned steering, and extension
+                            data. Encryption with a passphrase is optional but recommended if the
+                            file will leave your machine.
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">Export</div>
+                            <div class="setting-checkbox-row">
+                                <label class="kage-checkbox">
+                                    <input type="checkbox" id="backupEncryptToggle">
+                                </label>
+                                <div class="setting-description">Encrypt with a passphrase (AES-256-GCM with Argon2id key derivation).</div>
+                            </div>
+                            <div id="backupPassphraseRow" style="display:none;margin-top:8px;">
+                                <input type="password" id="backupPassphrase" class="setting-input" placeholder="Passphrase" autocomplete="new-password" style="margin-bottom:6px;">
+                                <input type="password" id="backupPassphraseConfirm" class="setting-input" placeholder="Confirm passphrase" autocomplete="new-password">
+                                <div class="setting-description" style="margin-top:4px;font-size:11px;">Pick something memorable. There's no recovery — lose the passphrase and the file is unreadable.</div>
+                            </div>
+                            <div class="setting-control" style="margin-top:8px;">
+                                <button class="setting-button" id="backupExportBtn">Export…</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-row">
+                            <div class="setting-label">Import</div>
+                            <div class="setting-description">Pick a previously exported <code>.kage</code> or <code>.kage.enc</code> file. Imports replace your current config — your machine's window positions, telemetry install ID, and OS startup setting are kept local.</div>
+                            <div class="setting-control" style="margin-top:8px;">
+                                <button class="setting-button" id="backupImportBtn">Import…</button>
+                            </div>
+                        </div>
+
+                        <div id="backupStatus" class="setting-description" style="min-height:1em;margin-top:8px;"></div>
+                    </div>
+                </div>
+
                 <!-- Logging Section -->
                 <div class="about-logging-section">
                     <div class="about-logging-header" id="loggingToggle">
@@ -193,6 +237,9 @@ export class AboutSettingsModule extends SettingsModule {
         if (toggle) {
             toggle.addEventListener('click', () => this._toggleLogging());
         }
+
+        // Backup & restore wiring
+        this._wireBackupSection();
 
         // Filter listeners
         const levelFilter = document.getElementById('logFilterLevel');
@@ -449,4 +496,268 @@ export class AboutSettingsModule extends SettingsModule {
     }
 
     destroy() {}
+
+    // --- Backup & restore -------------------------------------------------
+
+    _wireBackupSection() {
+        const toggle = document.getElementById('backupToggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => this._toggleBackup());
+        }
+        const encrypt = document.getElementById('backupEncryptToggle');
+        if (encrypt) {
+            encrypt.addEventListener('change', () => {
+                const row = document.getElementById('backupPassphraseRow');
+                if (row) row.style.display = encrypt.checked ? '' : 'none';
+                if (!encrypt.checked) {
+                    // Wipe the field so a half-typed passphrase doesn't
+                    // linger in DOM if the user toggles off.
+                    const pw = document.getElementById('backupPassphrase');
+                    const pw2 = document.getElementById('backupPassphraseConfirm');
+                    if (pw) pw.value = '';
+                    if (pw2) pw2.value = '';
+                }
+            });
+        }
+        const exportBtn = document.getElementById('backupExportBtn');
+        if (exportBtn) exportBtn.addEventListener('click', () => this._runBackupExport());
+        const importBtn = document.getElementById('backupImportBtn');
+        if (importBtn) importBtn.addEventListener('click', () => this._runBackupImport());
+    }
+
+    _toggleBackup() {
+        const body = document.getElementById('backupBody');
+        const arrow = document.getElementById('backupArrow');
+        if (!body || !arrow) return;
+        const visible = body.style.display !== 'none';
+        body.style.display = visible ? 'none' : '';
+        arrow.classList.toggle('expanded', !visible);
+    }
+
+    _setBackupStatus(text, kind) {
+        const el = document.getElementById('backupStatus');
+        if (!el) return;
+        el.textContent = text || '';
+        el.style.color = kind === 'error' ? '#c44' : kind === 'success' ? 'var(--kage-accent)' : '';
+    }
+
+    async _runBackupExport() {
+        const encryptEl = document.getElementById('backupEncryptToggle');
+        const encrypt = !!encryptEl?.checked;
+        let passphrase = null;
+        if (encrypt) {
+            const pw = document.getElementById('backupPassphrase')?.value || '';
+            const pw2 = document.getElementById('backupPassphraseConfirm')?.value || '';
+            if (!pw) {
+                this._setBackupStatus('Enter a passphrase first.', 'error');
+                return;
+            }
+            if (pw !== pw2) {
+                this._setBackupStatus("Passphrases don't match.", 'error');
+                return;
+            }
+            passphrase = pw;
+        }
+
+        const invoke = window.__TAURI__.core.invoke;
+        const dialog = window.__TAURI__.dialog;
+        let defaultName = 'kage-backup.kage';
+        try {
+            defaultName = await invoke('export_config_default_filename', { encrypted: encrypt });
+        } catch {}
+
+        let target;
+        try {
+            target = await dialog.save({
+                defaultPath: defaultName,
+                filters: [
+                    {
+                        name: encrypt ? 'Kage encrypted backup' : 'Kage backup',
+                        extensions: encrypt ? ['enc', 'kage'] : ['kage'],
+                    },
+                ],
+            });
+        } catch (e) {
+            this._setBackupStatus('Save dialog cancelled: ' + this._formatError(e), 'error');
+            return;
+        }
+        if (!target) return; // user cancelled
+
+        this._setBackupStatus('Exporting…');
+        try {
+            const bytes = await invoke('export_config_bundle', {
+                path: target,
+                passphrase,
+            });
+            this._setBackupStatus(`✓ Saved ${this._formatBytes(bytes)} to ${target}`, 'success');
+            // Clear passphrase fields so the value doesn't persist
+            // visibly — Argon2id derived a key once and we don't need
+            // it again.
+            const pw = document.getElementById('backupPassphrase');
+            const pw2 = document.getElementById('backupPassphraseConfirm');
+            if (pw) pw.value = '';
+            if (pw2) pw2.value = '';
+        } catch (e) {
+            this._setBackupStatus('Export failed: ' + this._formatError(e), 'error');
+        }
+    }
+
+    async _runBackupImport() {
+        const invoke = window.__TAURI__.core.invoke;
+        const dialog = window.__TAURI__.dialog;
+
+        let chosen;
+        try {
+            chosen = await dialog.open({
+                multiple: false,
+                directory: false,
+                filters: [
+                    { name: 'Kage backup', extensions: ['kage', 'enc'] },
+                    { name: 'All files', extensions: ['*'] },
+                ],
+            });
+        } catch (e) {
+            this._setBackupStatus('Open dialog cancelled: ' + this._formatError(e), 'error');
+            return;
+        }
+        if (!chosen || typeof chosen !== 'string') return;
+
+        // Detect encryption by extension. `.kage.enc` and `.enc` both
+        // route through the encrypted unwrap; `.kage` is plain. The
+        // backend also has a runtime check on the magic prefix, so a
+        // user who renames their file is still safe.
+        const looksEncrypted = /\.enc$/i.test(chosen);
+        let passphrase = null;
+        if (looksEncrypted) {
+            passphrase = await this._promptForPassphrase();
+            if (passphrase === null) {
+                // user cancelled the passphrase prompt
+                return;
+            }
+        }
+
+        // Confirm before clobbering the local config — import
+        // *replaces* (after sanitising the device-local fields).
+        try {
+            const { ask } = window.__TAURI__.dialog || {};
+            if (typeof ask === 'function') {
+                const ok = await ask(
+                    'Import will replace your current Kage config (window positions, install ID, and OS startup setting are kept local).\n\nContinue?',
+                    { title: 'Import backup', kind: 'warning' }
+                );
+                if (!ok) return;
+            }
+        } catch {}
+
+        this._setBackupStatus('Importing…');
+        let summary;
+        try {
+            summary = await invoke('import_config_bundle', {
+                path: chosen,
+                passphrase,
+            });
+        } catch (e) {
+            this._setBackupStatus('Import failed: ' + this._formatError(e), 'error');
+            return;
+        }
+
+        const parts = [];
+        parts.push(`Restored ${summary.shortcuts} shortcut${summary.shortcuts === 1 ? '' : 's'}`);
+        parts.push(
+            `${summary.extensions} extension data file${summary.extensions === 1 ? '' : 's'}`
+        );
+        if (summary.steering_bytes > 0) {
+            parts.push(`${this._formatBytes(summary.steering_bytes)} of steering`);
+        }
+        const exportedAt = summary.exported_at ? ` (exported ${summary.exported_at})` : '';
+        this._setBackupStatus(`✓ ${parts.join(', ')}${exportedAt}.`, 'success');
+
+        try {
+            const { ask } = window.__TAURI__.dialog || {};
+            if (typeof ask === 'function') {
+                const restart = await ask(
+                    'Some changes only take effect on restart (agent connection, hotkeys, theme). Restart Kage now?',
+                    { title: 'Restart required', kind: 'info' }
+                );
+                if (restart) await invoke('restart_app');
+            }
+        } catch {
+            // Non-fatal — user can restart manually.
+        }
+    }
+
+    /**
+     * Prompt for a passphrase via a tiny inline overlay. Returns the
+     * string on Enter, or `null` on cancel/Escape. Lives inline (not as
+     * its own class) because every other passphrase prompt in the
+     * codebase is going through the same UX — keeping it focused here
+     * avoids the abstraction and stays auditable.
+     */
+    _promptForPassphrase() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'backup-passphrase-overlay';
+            overlay.innerHTML = `
+                <div class="backup-passphrase-box">
+                    <div class="backup-passphrase-title">Enter passphrase</div>
+                    <div class="backup-passphrase-desc">This file is encrypted. Enter the passphrase you used when exporting.</div>
+                    <input type="password" class="setting-input" autocomplete="off" spellcheck="false">
+                    <div class="backup-passphrase-actions">
+                        <button class="setting-button backup-passphrase-cancel" type="button">Cancel</button>
+                        <button class="setting-button backup-passphrase-ok" type="button">Unlock</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            const input = overlay.querySelector('input');
+            const cancel = () => {
+                overlay.remove();
+                resolve(null);
+            };
+            const ok = () => {
+                const v = input.value;
+                overlay.remove();
+                resolve(v);
+            };
+            overlay.querySelector('.backup-passphrase-cancel').addEventListener('click', cancel);
+            overlay.querySelector('.backup-passphrase-ok').addEventListener('click', ok);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    ok();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancel();
+                }
+            });
+            setTimeout(() => input.focus(), 0);
+        });
+    }
+
+    _formatBytes(n) {
+        if (typeof n !== 'number' || n <= 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let v = n;
+        while (v >= 1024 && i < units.length - 1) {
+            v /= 1024;
+            i += 1;
+        }
+        return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
+    }
+
+    _formatError(e) {
+        if (!e) return 'Unknown error';
+        if (typeof e === 'string') return e;
+        if (e instanceof Error) return e.message || String(e);
+        if (typeof e === 'object') {
+            if (typeof e.message === 'string' && e.message) return e.message;
+            try {
+                return JSON.stringify(e);
+            } catch {
+                return String(e);
+            }
+        }
+        return String(e);
+    }
 }

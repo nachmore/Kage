@@ -1455,37 +1455,47 @@ pub async fn export_config_default_filename(encrypted: bool) -> String {
     crate::config_export::default_filename(encrypted)
 }
 
-/// Build the backup bytes. Returns Vec<u8> so the frontend can hand
-/// the bytes to the Tauri dialog plugin's `save` API and write them
-/// to whichever path the user picked.
+/// Build the backup bytes and write them to the user-picked path.
+/// Returns the byte count so the UI can confirm a successful write.
+/// We do the disk write here rather than handing bytes back over IPC
+/// because a config + extension-data bundle can be tens of MB and
+/// the round-trip is wasteful.
 #[tauri::command]
 pub async fn export_config_bundle(
+    path: String,
     passphrase: Option<String>,
     features: State<'_, FeatureServices>,
-) -> Result<Vec<u8>, AppError> {
+) -> Result<u64, AppError> {
     let config = {
         let cfg = features.config.lock_or_recover();
         cfg.clone()
     };
-    tauri::async_runtime::spawn_blocking(move || {
+    let bytes = tauri::async_runtime::spawn_blocking(move || {
         crate::config_export::export(&config, passphrase.as_deref())
     })
     .await
     .map_err(|e| AppError::from(format!("Export task failed: {}", e)))?
-    .map_err(|e| AppError::from(format!("Failed to build backup: {}", e)))
+    .map_err(|e| AppError::from(format!("Failed to build backup: {}", e)))?;
+
+    let len = bytes.len() as u64;
+    std::fs::write(&path, &bytes)
+        .map_err(|e| AppError::from(format!("Failed to write backup to {}: {}", path, e)))?;
+    Ok(len)
 }
 
-/// Apply a backup bundle. Returns the import summary (counts) so the
-/// UI can render a concrete success toast. The new config is written
-/// to disk + the in-memory state is replaced; a `config_updated`
+/// Apply a backup bundle from disk. Returns the import summary (counts)
+/// so the UI can render a concrete success toast. The new config is
+/// written to disk + the in-memory state is replaced; a `config_updated`
 /// Tauri event lets every window reload theme / shortcuts / etc.
 #[tauri::command]
 pub async fn import_config_bundle(
-    bytes: Vec<u8>,
+    path: String,
     passphrase: Option<String>,
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<crate::config_export::ImportSummary, AppError> {
+    let bytes = std::fs::read(&path)
+        .map_err(|e| AppError::from(format!("Failed to read backup at {}: {}", path, e)))?;
     let local = {
         let cfg = features.config.lock_or_recover();
         cfg.clone()
