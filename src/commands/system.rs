@@ -1439,6 +1439,109 @@ pub async fn import_steering_lines(path: String) -> Result<Vec<String>, AppError
         .map_err(|e| AppError::from(format!("Failed to import steering doc: {}", e)))
 }
 
+// --- Cross-device backup commands -----------------------------------
+//
+// Export bundles the user's current config + steering docs +
+// extension data into a single zip (optionally AES-GCM-encrypted with
+// a passphrase). Import is the inverse — unwraps, sanitises away
+// device-local fields, and writes everything back. See
+// `src/config_export.rs` for the layout + sanitisation rules.
+
+/// Suggested filename for the export dialog. Frontend uses this so
+/// the date stamp matches Local time on the user's machine without
+/// the JS having to format dates itself.
+#[tauri::command]
+pub async fn export_config_default_filename(encrypted: bool) -> String {
+    crate::config_export::default_filename(encrypted)
+}
+
+/// Build the backup bytes. Returns Vec<u8> so the frontend can hand
+/// the bytes to the Tauri dialog plugin's `save` API and write them
+/// to whichever path the user picked.
+#[tauri::command]
+pub async fn export_config_bundle(
+    passphrase: Option<String>,
+    features: State<'_, FeatureServices>,
+) -> Result<Vec<u8>, AppError> {
+    let config = {
+        let cfg = features.config.lock_or_recover();
+        cfg.clone()
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::config_export::export(&config, passphrase.as_deref())
+    })
+    .await
+    .map_err(|e| AppError::from(format!("Export task failed: {}", e)))?
+    .map_err(|e| AppError::from(format!("Failed to build backup: {}", e)))
+}
+
+/// Apply a backup bundle. Returns the import summary (counts) so the
+/// UI can render a concrete success toast. The new config is written
+/// to disk + the in-memory state is replaced; a `config_updated`
+/// Tauri event lets every window reload theme / shortcuts / etc.
+#[tauri::command]
+pub async fn import_config_bundle(
+    bytes: Vec<u8>,
+    passphrase: Option<String>,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle,
+) -> Result<crate::config_export::ImportSummary, AppError> {
+    let local = {
+        let cfg = features.config.lock_or_recover();
+        cfg.clone()
+    };
+
+    // Disk + decryption work happens off the runtime so the dialog
+    // stays responsive even with Argon2's intentionally-slow KDF.
+    let (new_config, summary) = tauri::async_runtime::spawn_blocking(move || {
+        crate::config_export::import(&bytes, passphrase.as_deref(), &local)
+    })
+    .await
+    .map_err(|e| AppError::from(format!("Import task failed: {}", e)))?
+    .map_err(|e| AppError::from(format!("Failed to import backup: {}", e)))?;
+
+    // Persist + swap the in-memory state under the same lock —
+    // mirrors save_config so concurrent permission saves don't race.
+    let new_log_buffer = new_config.system.log_buffer_size;
+    let new_terminator = new_config.tool_permissions.terminator_mode;
+    let prior_terminator = {
+        let mut state_config = features.config.lock_or_recover();
+        let prior = state_config.tool_permissions.terminator_mode;
+        *state_config = new_config;
+        // Same channel-string normalisation as save_config so a hand-
+        // edited backup can't trap a user on a dead channel.
+        state_config.updates.channel =
+            crate::updater::normalize_channel(&state_config.updates.channel).to_string();
+        state_config
+            .save()
+            .map_err(|e| format!("Failed to persist imported config: {}", e))?;
+        prior
+    };
+
+    crate::app_log::set_max_size(new_log_buffer);
+    if prior_terminator != new_terminator {
+        crate::permission_audit::append(&crate::permission_audit::AuditEntry::now(
+            crate::permission_audit::AuditEvent::TerminatorModeChanged {
+                enabled: new_terminator,
+            },
+        ));
+    }
+
+    // Re-apply the OS-level startup hook so it agrees with whatever
+    // value is now in config (we already sanitised it to keep the
+    // local preference, so this is essentially a no-op write — we
+    // run it anyway so the registry / launchd entry state can never
+    // drift from the JSON).
+    let auto_start = {
+        let cfg = features.config.lock_or_recover();
+        cfg.system.auto_start
+    };
+    set_startup_enabled_impl(auto_start);
+
+    let _ = app.emit("config_updated", ());
+    Ok(summary)
+}
+
 // --- Ollama integration commands ------------------------------------
 //
 // All three are pure HTTP probes against the user's Ollama daemon —

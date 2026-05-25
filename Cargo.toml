@@ -94,6 +94,15 @@ lru = "0.18"
 # docs/PRIVACY.md for the full policy. The plugin is a no-op if the build
 # is produced without an APTABASE_KEY (see build.rs → option_env!).
 tauri-plugin-aptabase = "1.0"
+# Encryption for the optional passphrase-protected config bundle export
+# (Settings → About → Backup & restore). AES-GCM provides authenticated
+# encryption; Argon2id derives the key from the user's passphrase with
+# costs the OWASP Password Storage Cheat Sheet considers safe in 2025.
+# `rand` (already a transitive dep through everything else) is exposed
+# here so we can pull RNG fills directly. See src/config_export.rs.
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.9"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

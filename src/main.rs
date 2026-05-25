@@ -13,6 +13,7 @@ mod commands;
 #[allow(dead_code)] // Consumed by the kage-computer-control-mcp binary, not this one
 mod computer_control;
 mod config;
+mod config_export;
 mod config_migrations;
 mod error;
 mod extensions;
@@ -655,6 +656,9 @@ async fn run() {
             commands::ollama_probe,
             commands::ollama_list_models,
             commands::ollama_codex_spawn_command,
+            commands::export_config_default_filename,
+            commands::export_config_bundle,
+            commands::import_config_bundle,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
             commands::has_pending_permission,

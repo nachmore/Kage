@@ -205,6 +205,12 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     ollama_probe: null,
     ollama_list_models: null,
     ollama_codex_spawn_command: null,
+    // --- Cross-device backup — settings window only. Reads + writes
+    // every byte of user config; unconditionally off-limits to
+    // extensions.
+    export_config_default_filename: null,
+    export_config_bundle: null,
+    import_config_bundle: null,
     show_context_menu: null,
     show_notification_source_window: null,
     set_notification_source: null,

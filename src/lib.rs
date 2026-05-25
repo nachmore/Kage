@@ -10,6 +10,7 @@ pub mod auto_steering;
 pub mod chunk_batcher;
 pub mod computer_control;
 pub mod config;
+pub mod config_export;
 pub mod config_migrations;
 pub mod error;
 pub mod extensions;
