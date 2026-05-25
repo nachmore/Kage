@@ -157,6 +157,17 @@ export class UpdatesSettingsModule extends SettingsModule {
                 this.autoCheck();
             });
         }
+
+        // Cross-section navigation: when something dispatches
+        // settings-subsection with detail === 'changelog', scroll
+        // the changelog block into view. Used by the post-update
+        // banner click ("View changelog →") so the user lands at
+        // the relevant content, not at the top of Updates.
+        document.addEventListener('settings-subsection', (e) => {
+            if (e.detail !== 'changelog') return;
+            const el = document.getElementById('changelogContainer');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
     }
 
     /** Replace the static stable/beta/dev <option> tags with whatever

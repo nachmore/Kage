@@ -542,31 +542,72 @@ pub async fn open_settings_window(
     // process + its JS init at every app launch (it calls
     // detect_agents on startup, which used to flash DOS windows for
     // each preset's `where`/`--version` probe).
+    let already_open = app.get_webview_window("settings").is_some();
     let window = if let Some(w) = app.get_webview_window("settings") {
         w
     } else {
-        WebviewWindowBuilder::new(
-            &app,
-            "settings",
-            tauri::WebviewUrl::App("settings.html".into()),
-        )
-        .title("Settings - Kage")
-        .inner_size(800.0, 700.0)
-        .min_inner_size(600.0, 450.0)
-        .resizable(true)
-        .center()
-        .visible(false) // shown below after we know it built
-        .build()
-        .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
+        // Encode section/subsection in the URL so the fresh window's
+        // boot path can apply them synchronously. Going through the
+        // event channel races: we'd `emit()` immediately after `show()`
+        // but the new webview's listener isn't registered until its
+        // JS finishes booting, so the event is silently lost. Query
+        // params survive that race because they're attached to the
+        // initial document URL, available to JS the moment it runs.
+        // Section + subsection IDs are caller-supplied but always
+        // simple ASCII identifiers (e.g. 'updates', 'changelog') —
+        // they're code-defined, not user-input. Filter to that shape
+        // defensively so a future caller passing user content can't
+        // smuggle URL syntax. Anything outside [A-Za-z0-9_-] is
+        // dropped silently.
+        fn safe_id(s: &str) -> String {
+            s.chars()
+                .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+                .collect()
+        }
+        let mut params: Vec<(&str, String)> = Vec::new();
+        if let Some(s) = section.as_deref() {
+            let safe = safe_id(s);
+            if !safe.is_empty() {
+                params.push(("section", safe));
+            }
+        }
+        if let Some(s) = sub_section.as_deref() {
+            let safe = safe_id(s);
+            if !safe.is_empty() {
+                params.push(("subsection", safe));
+            }
+        }
+        let mut url = String::from("settings.html");
+        for (i, (k, v)) in params.iter().enumerate() {
+            url.push(if i == 0 { '?' } else { '&' });
+            url.push_str(k);
+            url.push('=');
+            url.push_str(v);
+        }
+        WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App(url.into()))
+            .title("Settings - Kage")
+            .inner_size(800.0, 700.0)
+            .min_inner_size(600.0, 450.0)
+            .resizable(true)
+            .center()
+            .visible(false) // shown below after we know it built
+            .build()
+            .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
     };
 
     let _ = window.show();
     let _ = window.set_focus();
-    if let Some(ref s) = section {
-        let _ = window.emit("navigate_settings_section", s);
-    }
-    if let Some(ref sub) = sub_section {
-        let _ = window.emit("navigate_settings_subsection", sub);
+    // Only emit nav events when the window already existed — the
+    // freshly-built case picked them up via URL params above. Doing
+    // both would re-invoke switchSection redundantly (harmless but
+    // noisy) and could trigger a flash of a different section.
+    if already_open {
+        if let Some(ref s) = section {
+            let _ = window.emit("navigate_settings_section", s);
+        }
+        if let Some(ref sub) = sub_section {
+            let _ = window.emit("navigate_settings_subsection", sub);
+        }
     }
     crate::setup::update_activation_policy(&app);
     crate::telemetry::track(

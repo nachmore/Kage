@@ -1543,7 +1543,11 @@ export class FloatingApp {
                     'Kage has been updated!',
                     'View changelog →',
                     'settings',
-                    'updates'
+                    // `<section>:<subsection>` — handleBannerClick
+                    // splits on the colon and forwards both to
+                    // open_settings_window so the user lands on the
+                    // changelog block, not just the Updates page.
+                    'updates:changelog'
                 );
                 // The post-install auto-show races against other
                 // windows' webviews painting for the first time
@@ -1601,9 +1605,14 @@ export class FloatingApp {
         this.dismissBanner();
         if (!action) return;
         if (action.type === 'settings') {
-            this.invoke('open_settings_window', { section: action.data || 'updates' }).catch(
-                () => {}
-            );
+            // action.data is either a bare section id (e.g. 'updates')
+            // or `<section>:<subsection>` (e.g. 'updates:changelog').
+            // The subsection is forwarded so the settings window can
+            // scroll to a specific element after switching sections.
+            const [section, subSection] = (action.data || 'updates').split(':');
+            const args = { section: section || 'updates' };
+            if (subSection) args.subSection = subSection;
+            this.invoke('open_settings_window', args).catch(() => {});
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
         } else if (action.type === 'update_install') {

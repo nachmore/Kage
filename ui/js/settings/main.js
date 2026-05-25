@@ -310,6 +310,33 @@ window.addEventListener('DOMContentLoaded', async () => {
     settingsManager.render();
     await settingsManager.load();
 
+    // Apply URL-param navigation. open_settings_window encodes
+    // section/subsection as query params when building a fresh
+    // settings window, since the alternative (emit a Tauri event
+    // immediately after window.show()) races against the new
+    // webview's JS boot — the listener isn't attached yet when the
+    // event fires, and it gets dropped. URL params survive that
+    // race because they're attached to the initial document URL.
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const section = params.get('section');
+        const subSection = params.get('subsection');
+        if (section) {
+            settingsManager.switchSection(section);
+        }
+        if (subSection) {
+            // Same delay as the event-channel path so the section
+            // switch above paints before the subsection scroll runs.
+            setTimeout(() => {
+                document.dispatchEvent(
+                    new CustomEvent('settings-subsection', { detail: subSection })
+                );
+            }, 100);
+        }
+    } catch (e) {
+        console.warn('[settings] URL-param navigation failed:', e);
+    }
+
     // Listen for extension install/uninstall — hot-load new settings modules
     const { listen } = window.__TAURI__.event;
     listen('extensions_changed', async () => {
