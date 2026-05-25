@@ -1,27 +1,36 @@
 import { SettingsModule } from './base.js';
+import { summarizeNamedPlaceholders } from '../shared/shortcuts.js';
 import { escapeHtml } from '../shared/tool-utils.js';
 import { registerSettingsActions } from './module-registry.js';
 /**
- * Shortcuts Settings Module
- * Manages custom command shortcuts
+ * Commands & Prompts settings module.
+ *
+ * Originally just "Quick Commands" — extended with named-placeholder
+ * support so the same machinery powers persistent prompt templates
+ * (e.g. `tr {lang}: {*}` for translate-to-X). Section title and
+ * sidebar label updated to reflect the broader purpose; the underlying
+ * config field is still `shortcuts` and the section id still
+ * `shortcuts` so existing config files / deep links keep working.
  */
 export class ShortcutsSettingsModule extends SettingsModule {
     constructor() {
-        super('shortcuts', 'Quick Commands', '⚡');
+        super('shortcuts', 'Commands & Prompts', '⚡');
         this.shortcuts = [];
         this.editingIndex = -1;
     }
 
     render() {
         return `
-            <div class="settings-section-header">${this.icon} Quick Commands</div>
-            
+            <div class="settings-section-header">${this.icon} Commands &amp; Prompts</div>
+
             <div class="setting-row">
                 <div class="setting-label-container">
-                    <div class="setting-label">Quick Commands</div>
+                    <div class="setting-label">Quick Commands &amp; saved prompts</div>
                     <div class="setting-description">
-                        Create quick commands to run programs, open URLs, send prompts to the agent, or run custom scripts.
-                        Use {*} for all arguments after the shortcut, or {0}, {1}, etc. for specific arguments.
+                        Run programs, open URLs, send prompt templates to the agent, or execute custom scripts.
+                        Use <code>{*}</code> for all arguments, <code>{0}</code>/<code>{1}</code> for positional,
+                        or <code>{name}</code> for named parameters (a small form pops up to fill them in if you
+                        run the trigger without supplying values).
                     </div>
                 </div>
             </div>
@@ -107,10 +116,12 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         <div id="promptFields" style="display: none;">
                             <div class="dialog-field">
                                 <label>Prompt Template</label>
-                                <textarea id="shortcutPrompt" class="setting-input" rows="3" placeholder="e.g., Explain this error: {*}"></textarea>
+                                <textarea id="shortcutPrompt" class="setting-input" rows="3" placeholder="e.g., Translate to {lang}: {*}"></textarea>
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    Use {*} for all arguments, or {0}, {1}, etc. The result is sent to the agent as a message.
+                                    <code>{*}</code> = all arguments · <code>{0}</code>, <code>{1}</code> = positional ·
+                                    <code>{name}</code> = named (form pops up if not filled) · <code>{selection}</code> = selected text.
                                 </div>
+                                <div id="shortcutPromptPlaceholders" class="prompt-placeholder-chips" style="margin-top:6px;display:none;"></div>
                             </div>
                         </div>
 
@@ -395,6 +406,8 @@ export class ShortcutsSettingsModule extends SettingsModule {
         this._setIconPreview('');
         this.onActionTypeChange();
         this._resetTestSection();
+        this._wirePlaceholderPreview();
+        this._renderPlaceholderChips();
         document.getElementById('shortcutDialog').style.display = 'flex';
     }
 
@@ -419,8 +432,45 @@ export class ShortcutsSettingsModule extends SettingsModule {
         this._setIconPreview(s.icon || '');
         this.onActionTypeChange();
         this._resetTestSection();
+        this._wirePlaceholderPreview();
+        this._renderPlaceholderChips();
         document.getElementById('shortcutDialog').style.display = 'flex';
         if ((s.action_type || 'run_program') === 'script') this.updateHighlight();
+    }
+
+    /**
+     * Wire the prompt textarea so the placeholder chips below it
+     * refresh as the user types. Idempotent — only attaches once per
+     * dialog instance via the `_placeholderListenerAttached` flag.
+     */
+    _wirePlaceholderPreview() {
+        if (this._placeholderListenerAttached) return;
+        const textarea = document.getElementById('shortcutPrompt');
+        if (!textarea) return;
+        textarea.addEventListener('input', () => this._renderPlaceholderChips());
+        this._placeholderListenerAttached = true;
+    }
+
+    _renderPlaceholderChips() {
+        const container = document.getElementById('shortcutPromptPlaceholders');
+        const textarea = document.getElementById('shortcutPrompt');
+        if (!container || !textarea) return;
+        const named = summarizeNamedPlaceholders(textarea.value);
+        if (named.length === 0) {
+            container.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+        container.style.display = '';
+        const label =
+            '<span class="prompt-placeholder-label">Will ask for:</span>' +
+            named
+                .map(
+                    (p) =>
+                        `<span class="prompt-placeholder-chip${p.optional ? ' optional' : ''}">${escapeHtml(p.name)}${p.optional ? '?' : ''}</span>`
+                )
+                .join('');
+        container.innerHTML = label;
     }
 
     onActionTypeChange() {

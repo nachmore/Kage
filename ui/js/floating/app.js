@@ -47,6 +47,7 @@ import {
     filterClipboardHistory,
     renderClipboardHistory,
 } from './clipboard-history.js';
+import { mountPromptForm } from '../shared/prompt-form.js';
 import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml } from '../shared/tool-utils.js';
@@ -1749,7 +1750,51 @@ export class FloatingApp {
                     this._startStopwatchUI();
                 }
             },
+            onPromptForm: (formCmd) => this._showPromptForm(formCmd),
         };
+    }
+
+    /**
+     * Render the missing-placeholders form in the response area. On
+     * submit, re-build the shortcut command with the collected params
+     * and re-enter the executor — single round trip back into the
+     * normal `prompt` flow.
+     */
+    _showPromptForm(formCmd) {
+        const responseEl = this.elements.responseText;
+        if (!responseEl) return;
+        // Hide the markdown response slot — we're using the same area
+        // for the form. The contentArea visibility flag ensures the
+        // window expands to fit the form.
+        this.elements.contentArea.classList.add('visible');
+        this.elements.contentArea.classList.remove('banner-only');
+
+        mountPromptForm(responseEl, formCmd, {
+            onSubmit: async (paramsByName) => {
+                const useSelection = document.getElementById('useSelectionCheckbox')?.checked;
+                const sel = useSelection && this.lastSelection ? this.lastSelection : '';
+                const rebuilt = buildShortcutCommandFn(
+                    formCmd.shortcut,
+                    formCmd.args,
+                    sel,
+                    paramsByName
+                );
+                // Clear the form before executing — rebuilt is a regular
+                // `prompt` command at this point so `onPrompt` will
+                // populate the response area normally.
+                responseEl.textContent = '';
+                this.elements.contentArea.classList.remove('visible');
+                this.windowManager.resizeWindow();
+                await this.executeShortcut(rebuilt);
+            },
+            onCancel: () => {
+                responseEl.textContent = '';
+                this.elements.contentArea.classList.remove('visible');
+                this.windowManager.resizeWindow();
+                this.elements.input.focus();
+            },
+        });
+        this.windowManager.resizeWindow();
     }
 
     async executeShortcut(command) {

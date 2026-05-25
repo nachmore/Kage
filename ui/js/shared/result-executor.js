@@ -152,6 +152,14 @@ export async function executeShortcutCommand(command, ctx) {
         await ctx.onPrompt(command.message);
         return { handled: true };
     }
+    if (command.type === 'prompt_form' && ctx.onPromptForm) {
+        // Prompt-type quick command needs named placeholders the user
+        // hasn't supplied positionally. Hand off to the launcher's
+        // form UI; on submit it re-runs buildShortcutCommand with
+        // paramsByName populated and re-enters this executor.
+        await ctx.onPromptForm(command);
+        return { handled: true };
+    }
     if (command.type === 'text' && ctx.onDisplay) {
         ctx.onDisplay(command.message);
         return { handled: true };

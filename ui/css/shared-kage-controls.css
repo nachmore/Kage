@@ -334,3 +334,76 @@ input:checked + .toggle-slider:before {
     align-self: flex-start;
     margin-top: 4px;
 }
+
+/* Prompt form — collects unfilled named placeholders for prompt-type
+ * Quick Commands. Lives in the floating window's response area; see
+ * ui/js/shared/prompt-form.js. */
+.prompt-form-root {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0;
+}
+.prompt-form-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--kage-text-primary, var(--kage-text));
+}
+.prompt-form-subtitle {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+}
+.prompt-form-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.prompt-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.prompt-form-label {
+    font-size: 12px;
+    color: var(--kage-text-secondary);
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
+}
+.prompt-form-input-error {
+    border-color: #c44 !important;
+    box-shadow: 0 0 0 2px rgba(204, 68, 68, 0.2);
+}
+.prompt-form-actions {
+    display: flex;
+    gap: 8px;
+}
+.prompt-form-cancel {
+    background: transparent;
+    color: var(--kage-text-secondary);
+    border: 1px solid var(--kage-border);
+}
+
+/* Placeholder chips shown below the prompt template textarea. */
+.prompt-placeholder-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    font-size: 11px;
+    color: var(--kage-text-secondary);
+}
+.prompt-placeholder-label {
+    margin-right: 2px;
+}
+.prompt-placeholder-chip {
+    padding: 2px 8px;
+    background: var(--kage-bg-elevated);
+    color: var(--kage-text-primary, var(--kage-text));
+    border: 1px solid var(--kage-border);
+    border-radius: 12px;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
+    font-size: 11px;
+}
+.prompt-placeholder-chip.optional {
+    opacity: 0.7;
+    border-style: dashed;
+}
