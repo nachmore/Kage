@@ -241,10 +241,7 @@ mod tests {
 
     #[test]
     fn first_matching_returns_first_in_order() {
-        let rules = vec![
-            rule("First", "code", "a"),
-            rule("Second", "code", "b"),
-        ];
+        let rules = vec![rule("First", "code", "a"), rule("Second", "code", "b")];
         let m = first_matching(&rules, "code").unwrap();
         assert_eq!(m.friendly_name, "First");
     }
