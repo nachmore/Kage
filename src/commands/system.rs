@@ -1439,6 +1439,50 @@ pub async fn import_steering_lines(path: String) -> Result<Vec<String>, AppError
         .map_err(|e| AppError::from(format!("Failed to import steering doc: {}", e)))
 }
 
+// --- Ollama integration commands ------------------------------------
+//
+// All three are pure HTTP probes against the user's Ollama daemon —
+// no app state required. Settings → Ollama uses these to surface
+// reachability + model list, and to seed the spawn command for the
+// "Use Ollama with Codex" wizard.
+
+/// Probe the Ollama daemon. Returns a `ProbeResult` — `Reachable {
+/// version }` on success or `Unreachable { reason }` with a short
+/// human-readable string the UI can render directly.
+#[tauri::command]
+pub async fn ollama_probe(base_url: String) -> Result<crate::ollama::ProbeResult, AppError> {
+    // The probe is blocking HTTP — push it to a worker so we don't
+    // tie up the Tauri command runtime if the user's local network
+    // misbehaves.
+    tauri::async_runtime::spawn_blocking(move || crate::ollama::probe(&base_url))
+        .await
+        .map_err(|e| AppError::from(format!("Probe task failed: {}", e)))
+}
+
+/// List installed Ollama models via `/api/tags`. Returns an empty
+/// list if reachable but nothing is pulled — the UI surfaces "no
+/// models — try `ollama pull llama3`" in that case.
+#[tauri::command]
+pub async fn ollama_list_models(
+    base_url: String,
+) -> Result<Vec<crate::ollama::ModelEntry>, AppError> {
+    tauri::async_runtime::spawn_blocking(move || crate::ollama::list_models(&base_url))
+        .await
+        .map_err(|e| AppError::from(format!("List task failed: {}", e)))?
+        .map_err(|e| AppError::from(format!("Failed to list Ollama models: {}", e)))
+}
+
+/// Build the spawn command used by the "Use Ollama with Codex"
+/// wizard. The frontend feeds it into the connections editor as a
+/// new Local-mode connection.
+#[tauri::command]
+pub async fn ollama_codex_spawn_command(
+    base_url: String,
+    model: String,
+) -> Result<String, AppError> {
+    Ok(crate::ollama::build_codex_spawn_command(&base_url, &model))
+}
+
 // --- Update commands ---
 
 #[tauri::command]

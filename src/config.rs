@@ -75,6 +75,48 @@ pub struct Config {
     /// is and isn't collected.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    /// Ollama integration settings — surfaced in Settings → Ollama and
+    /// used by the "Use Ollama with Codex" wizard to wire a local
+    /// model into the active connection.
+    #[serde(default)]
+    pub ollama: OllamaConfig,
+}
+
+/// Ollama integration settings. None of these fields are required —
+/// the user can leave the section untouched and Kage behaves exactly
+/// as before. The "first-class" claim is about discoverability, not
+/// forced opt-in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaConfig {
+    /// True when the user has confirmed they want Kage to integrate
+    /// with Ollama. The Settings → Ollama page sets this when the
+    /// user accepts the setup wizard. Independent of base_url being
+    /// populated — a user can save the URL without committing.
+    #[serde(default)]
+    pub enabled: bool,
+    /// HTTP base URL of the Ollama daemon. Defaults to the local
+    /// install location; advanced users can point at a remote.
+    #[serde(default = "default_ollama_base_url")]
+    pub base_url: String,
+    /// Last-selected model. The model picker re-fetches `/api/tags`
+    /// to populate the dropdown each visit, so this is only a
+    /// preselection hint.
+    #[serde(default)]
+    pub model: Option<String>,
+}
+
+impl Default for OllamaConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: default_ollama_base_url(),
+            model: None,
+        }
+    }
+}
+
+fn default_ollama_base_url() -> String {
+    crate::ollama::DEFAULT_BASE_URL.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -910,6 +952,7 @@ impl Default for Config {
             macros: vec![],
             automation_power: AutomationPowerConfig::default(),
             telemetry: TelemetryConfig::default(),
+            ollama: OllamaConfig::default(),
         }
     }
 }

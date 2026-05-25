@@ -17,6 +17,7 @@ pub mod lock_ext;
 pub mod logger;
 pub mod mcp_json_rpc;
 pub mod mcp_registration;
+pub mod ollama;
 pub mod os;
 pub mod panic_handler;
 pub mod permission_audit;

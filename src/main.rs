@@ -19,6 +19,7 @@ mod extensions;
 mod lock_ext;
 mod logger;
 mod mcp_registration;
+mod ollama;
 mod os;
 mod panic_handler;
 mod permission_audit;
@@ -651,6 +652,9 @@ async fn run() {
             commands::read_steering_lines,
             commands::write_steering_lines,
             commands::import_steering_lines,
+            commands::ollama_probe,
+            commands::ollama_list_models,
+            commands::ollama_codex_spawn_command,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
             commands::has_pending_permission,
