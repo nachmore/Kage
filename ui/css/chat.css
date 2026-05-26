@@ -1069,7 +1069,15 @@ body.light-theme .session-search::placeholder {
     color: #999;
 }
 
-/* Session item layout and action buttons */
+/* Session item layout and action buttons.
+ *
+ * The content takes the full width of the row; the action buttons
+ * float over the right side on hover instead of reserving real
+ * horizontal space. Without this, titles wrap with ellipsis at ~80%
+ * of the sidebar width even when the actions are invisible —
+ * leaving a dead band of empty pixels where the title could have
+ * fit. A gradient mask fades the title behind the buttons on hover
+ * so the text doesn't appear to abruptly truncate under them. */
 .session-item {
     position: relative;
     display: flex;
@@ -1081,15 +1089,34 @@ body.light-theme .session-search::placeholder {
     overflow: hidden;
 }
 .session-item-actions {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
     display: flex;
     gap: 2px;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.15s;
-    flex-shrink: 0;
-    padding-right: 4px;
+    /* Subtle backdrop fade-out so title text behind the buttons
+     * trails off rather than appearing chopped. The colour matches
+     * the sidebar hover state used by `.session-item:hover` below.
+     * Light-theme rule near the bottom of this file overrides. */
+    padding: 0 4px 0 18px;
+    background: linear-gradient(
+        to right,
+        transparent 0%,
+        var(--kage-sidebar-hover, #f3f4f6) 50%,
+        var(--kage-sidebar-hover, #f3f4f6) 100%
+    );
 }
 .session-item:hover .session-item-actions {
     opacity: 1;
+    pointer-events: auto;
+}
+/* Active session uses a tinted hover; match the gradient backdrop. */
+.session-item.active .session-item-actions {
+    background: linear-gradient(to right, transparent 0%, #ede9fe 50%, #ede9fe 100%);
 }
 .session-action-btn {
     background: none;

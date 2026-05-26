@@ -37,6 +37,17 @@ body.dark-theme .session-item.active {
     background: #352f3d;
 }
 
+/* Dark-theme gradient backdrop for the action-button overlay. The
+ * row's hover/active background colour bleeds into the right side
+ * so title text fades smoothly rather than getting chopped under
+ * the buttons. */
+body.dark-theme .session-item-actions {
+    background: linear-gradient(to right, transparent 0%, #28242e 50%, #28242e 100%);
+}
+body.dark-theme .session-item.active .session-item-actions {
+    background: linear-gradient(to right, transparent 0%, #352f3d 50%, #352f3d 100%);
+}
+
 body.dark-theme .session-item-title {
     color: #e5e7eb;
 }
