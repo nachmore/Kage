@@ -345,8 +345,16 @@ export class SettingsManager {
 
             // Start from the current config so fields not owned by any module
             // (e.g. first_run_completed) are preserved across saves.
+            //
+            // Do NOT touch `config.version` — the backend bumps it inside
+            // `Config::load`'s migration runner, and overwriting it here
+            // makes the next launch re-migrate from scratch. The 2→3
+            // migration interprets a v1-stamped config with
+            // first_run_completed=true as a pre-telemetry user and
+            // force-disables their opt-in. So a "harmless" `version = 1`
+            // here was silently flipping telemetry off on every Settings
+            // save. Trust whatever value `get_config` already returned.
             const config = await this.invoke('get_config');
-            config.version = 1;
             this.modules.forEach((module) => {
                 module.save(config);
                 // Save extension enabled state

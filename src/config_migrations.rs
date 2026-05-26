@@ -113,23 +113,45 @@ fn migrate_1_to_2(value: Value) -> Result<Value> {
 }
 
 /// v2 → v3: telemetry rollout. Existing users (those already past the
-/// welcome flow) never saw the privacy disclosure page, so we can't
-/// treat their default `enabled=true` as consent — that would be a
-/// silent opt-in. For already-completed first-run configs, force
+/// welcome flow under the old build) never saw the privacy disclosure
+/// page, so we can't treat their default `enabled=true` as consent —
+/// that would be a silent opt-in. For already-completed first-run
+/// configs that have NOT recorded a consent decision yet, force
 /// telemetry off; the user can turn it on from Settings → Privacy
-/// after reading the disclosure there. Brand-new installs still hit
-/// the welcome step and get the documented opt-out flow.
+/// after reading the disclosure there.
+///
+/// **Idempotency note:** this migration must not strip consent from
+/// users who *did* see the disclosure. We gate the force-disable on
+/// `consent_version == 0` (the schema default; means "the user has
+/// never confirmed a consent decision"). A user who completed the
+/// welcome flow under any post-rollout build has `consent_version >=
+/// 1` and we leave their choice alone — even if their config somehow
+/// regresses through this migration again. This was an actual bug:
+/// a JS-side `config.version = 1` overwrite forced this migration to
+/// re-run on every Settings save and silently flipped telemetry off
+/// on each save.
 fn migrate_2_to_3(mut value: Value) -> Result<Value> {
     if let Value::Object(ref mut map) = value {
         let already_completed = map
             .get("first_run_completed")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
-        if already_completed {
-            let telemetry = map
-                .entry("telemetry".to_string())
-                .or_insert_with(|| json!({}));
-            if let Value::Object(tmap) = telemetry {
+        if !already_completed {
+            return Ok(value);
+        }
+        let telemetry = map
+            .entry("telemetry".to_string())
+            .or_insert_with(|| json!({}));
+        if let Value::Object(tmap) = telemetry {
+            // Only force-disable if the user has never explicitly
+            // accepted a privacy policy. A non-zero consent_version
+            // means they saw the welcome step (or the Settings →
+            // Privacy page) and made a choice; honour it.
+            let consent_version = tmap
+                .get("consent_version")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            if consent_version == 0 {
                 tmap.insert("enabled".to_string(), json!(false));
             }
         }
@@ -228,7 +250,10 @@ mod tests {
     }
 
     #[test]
-    fn v2_to_v3_disables_telemetry_for_existing_users() {
+    fn v2_to_v3_disables_telemetry_for_existing_users_who_never_consented() {
+        // Pre-rollout user: completed first run before the privacy
+        // disclosure existed (consent_version absent → defaults to 0).
+        // Force-disable so they aren't silently opted in.
         let v = json!({
             "version": 2,
             "first_run_completed": true,
@@ -238,7 +263,44 @@ mod tests {
         assert_eq!(
             out.get("telemetry").and_then(|t| t.get("enabled")),
             Some(&json!(false)),
-            "completed-first-run users must not auto-opt-in silently"
+            "pre-rollout completed-first-run users must not auto-opt-in silently"
+        );
+    }
+
+    #[test]
+    fn v2_to_v3_preserves_explicit_consent() {
+        // Post-rollout user: completed welcome flow AND has a
+        // consent_version stamp. The force-disable from the rollout
+        // migration must not strip their explicit yes — this was the
+        // bug behind "every install kills telemetry": a JS-side
+        // `config.version = 1` overwrite caused this migration to
+        // re-run on every Settings save.
+        let v = json!({
+            "version": 2,
+            "first_run_completed": true,
+            "telemetry": { "enabled": true, "consent_version": 1 },
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(
+            out.get("telemetry").and_then(|t| t.get("enabled")),
+            Some(&json!(true)),
+            "consented users keep their opt-in across migration replays"
+        );
+    }
+
+    #[test]
+    fn v2_to_v3_preserves_explicit_opt_out() {
+        // Same as above but the explicit choice was OFF — must not
+        // flip back on, which would also be a regression.
+        let v = json!({
+            "version": 2,
+            "first_run_completed": true,
+            "telemetry": { "enabled": false, "consent_version": 1 },
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(
+            out.get("telemetry").and_then(|t| t.get("enabled")),
+            Some(&json!(false))
         );
     }
 
