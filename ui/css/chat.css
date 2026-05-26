@@ -164,6 +164,27 @@ body {
     text-overflow: ellipsis;
 }
 
+/* AI-title arrival flash. Applied transiently when the backend
+ * upgrades a session's title from extracted-first-prompt to an LLM
+ * summary; ChatApp adds the class for ~700ms then removes it. The
+ * animation runs in two passes (fade out → swap → fade in) timed
+ * against the JS-side text swap which happens on the same frame the
+ * fade-out begins. */
+@keyframes kd-title-flash {
+    0% {
+        opacity: 1;
+    }
+    25% {
+        opacity: 0.2;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+.kd-title-flash {
+    animation: kd-title-flash 600ms ease-in-out;
+}
+
 .session-item-date {
     font-size: 11px;
     color: #9ca3af;

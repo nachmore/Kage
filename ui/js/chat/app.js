@@ -54,6 +54,29 @@ import {
     formatError as formatErrorShared,
 } from '../shared/session-render.js';
 
+/**
+ * Swap text content with a brief crossfade. When `animate` is true
+ * (AI title arrival), the element fades out, swaps, then fades back
+ * in via the `kd-title-flash` CSS class. Falls through to a plain
+ * text-content swap otherwise so existing rename + delete paths
+ * stay synchronous.
+ */
+function animateTitleSwap(el, newText, animate) {
+    if (!el) return;
+    if (!animate) {
+        el.textContent = newText;
+        return;
+    }
+    el.classList.add('kd-title-flash');
+    // Wait one frame so the fade-out is visible before the text swap.
+    requestAnimationFrame(() => {
+        el.textContent = newText;
+        // The CSS animation handles the fade back in; remove the class
+        // once it completes so subsequent changes don't double-trigger.
+        setTimeout(() => el.classList.remove('kd-title-flash'), 700);
+    });
+}
+
 export class ChatApp {
     constructor(invoke, appWindow, listen) {
         this.invoke = invoke;
@@ -799,14 +822,19 @@ export class ChatApp {
         // or delete; we refresh the sidebar always, and react to the
         // pinned session specifically.
         this.listen('session_changed', async (event) => {
-            const { id, kind, title } = event.payload || {};
+            const { id, kind, title, source } = event.payload || {};
             if (!id) return;
-            // Re-fetch the session list so renames/deletions show.
+            // Re-fetch the session list so renames/deletions show. We
+            // pass the affected id so renderSessionList can flag the
+            // sidebar entry for an animation when source is "ai".
             await this.loadSessions(true);
+            if (source === 'ai') {
+                this._flashAiTitleInSidebar(id);
+            }
             const isOurs = id === this.activeSessionId || id === this.currentAcpSessionId;
             if (!isOurs) return;
             if (kind === 'renamed' && title) {
-                this.elements.chatHeaderTitle.textContent = title;
+                animateTitleSwap(this.elements.chatHeaderTitle, title, source === 'ai');
             } else if (kind === 'deleted') {
                 this.activeSessionId = null;
                 this.currentAcpSessionId = null;
@@ -941,18 +969,17 @@ export class ChatApp {
     }
 
     /**
-     * Bootstrap a chat-<uuid> peer window's session on first load.
-     * Reads `?resumeSessionId=<id>` from the URL (set by
-     * `open_new_chat_window`) — if present, loads that session;
-     * otherwise creates a fresh one. No-op for the privileged `main`
-     * window, which uses the existing launch-time bootstrap.
+     * Bootstrap this chat window's session on first load.
      *
-     * For `main`, normally `loadCurrentSessionId()` finds an entry
-     * already populated by `start_session_on_launch`. But if the user
-     * disabled that setting, or opens main before the launch session
-     * has been registered, the slot is empty and the first message
-     * would fail with "invalid type: null". Create one here in that
-     * case.
+     * - For `chat-<uuid>` peers, reads `?resumeSessionId=<id>` from the
+     *   URL (set by `open_new_chat_window`) — if present, loads that
+     *   session; otherwise creates a fresh one.
+     * - For `main`, normally `loadCurrentSessionId()` finds an entry
+     *   already populated by `start_session_on_launch`. But if the
+     *   user disabled that setting, or opens main before the launch
+     *   session has been registered, the slot is empty and the first
+     *   message would fail with "invalid type: null". Create one here
+     *   in that case.
      */
     async _bootstrapChatPeerSession() {
         if (this.currentAcpSessionId) return; // already bootstrapped
@@ -1093,6 +1120,22 @@ export class ChatApp {
             this._loadingMore = false;
             list.querySelector('.session-list-loader')?.remove();
         }
+    }
+
+    /**
+     * Briefly flash the sidebar entry for the session whose AI title
+     * just arrived. Called from the session_changed listener after
+     * loadSessions has rebuilt the list. The CSS class triggers a
+     * background-tinted fade matching the chat header animation.
+     */
+    _flashAiTitleInSidebar(sessionId) {
+        if (!this.elements.sessionList) return;
+        const item = this.elements.sessionList.querySelector(
+            `.session-item[data-session-id="${CSS.escape(sessionId)}"] .session-item-title`
+        );
+        if (!item) return;
+        item.classList.add('kd-title-flash');
+        setTimeout(() => item.classList.remove('kd-title-flash'), 700);
     }
 
     renderSessionList() {

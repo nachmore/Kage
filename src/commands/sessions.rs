@@ -152,6 +152,95 @@ fn strip_kage_tags(text: &str) -> String {
     stripped.trim().to_string()
 }
 
+/// Recover a previously-AI-summarised title from a session's JSONL.
+/// Looks for a `[KAGE_STEERING_IGNORE] [KAGE_TITLE]` Prompt and the
+/// next AssistantMessage; the cleaned reply (via
+/// `session_titler::clean_title`) is the recovered title.
+///
+/// Used by `list_sessions` when the title cache has no entry for a
+/// session. Three cases this handles:
+///   1. **Migration** — first list_sessions after this PR ships against
+///      a session that previously generated `[KAGE_TITLE]` exchanges
+///      (e.g. via an in-tree dev build) gets the recovered title with
+///      no extra prompt cost.
+///   2. **Cache loss** — `.title-cache.json` was deleted/corrupted.
+///   3. **Cross-machine** — JSONLs synced from another box without
+///      the cache file. Recovers titles instead of regenerating.
+///
+/// Walks the whole file (capped at 200 lines for safety) since the
+/// title prompt may not be the first one — earlier prompts could be
+/// steering, timestamp injections, etc.
+fn extract_ai_title_from_jsonl(jsonl_path: &std::path::Path) -> Option<String> {
+    use std::io::{BufRead, BufReader};
+
+    let file = fs::File::open(jsonl_path).ok()?;
+    let reader = BufReader::new(file);
+
+    let title_prompt_marker = "[KAGE_STEERING_IGNORE] [KAGE_TITLE]";
+    let mut saw_title_prompt = false;
+
+    for line in reader.lines().take(200) {
+        let Ok(line) = line else { continue };
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(val) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let kind = val.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+
+        if !saw_title_prompt {
+            if kind != "Prompt" {
+                continue;
+            }
+            // Look for the title-prompt marker in any text content block.
+            let matched = val
+                .get("data")
+                .and_then(|d| d.get("content"))
+                .and_then(|c| c.as_array())
+                .map(|arr| {
+                    arr.iter().any(|item| {
+                        item.get("kind").and_then(|k| k.as_str()) == Some("text")
+                            && item
+                                .get("data")
+                                .and_then(|d| d.as_str())
+                                .is_some_and(|s| s.starts_with(title_prompt_marker))
+                    })
+                })
+                .unwrap_or(false);
+            if matched {
+                saw_title_prompt = true;
+            }
+            continue;
+        }
+
+        // We've seen the title prompt — the next AssistantMessage is
+        // the reply we want.
+        if kind != "AssistantMessage" {
+            continue;
+        }
+        let arr = val
+            .get("data")
+            .and_then(|d| d.get("content"))
+            .and_then(|c| c.as_array())?;
+        let combined: String = arr
+            .iter()
+            .filter_map(|item| {
+                if item.get("kind").and_then(|k| k.as_str()) == Some("text") {
+                    item.get("data").and_then(|d| d.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        return crate::session_titler::clean_title(&combined);
+    }
+    None
+}
+
 /// Extract a title from the JSONL — use the first user prompt text.
 /// Skips steering messages, timestamp injections, and pure-tag prompts
 /// (e.g. inline-assist instruction-only messages).
@@ -549,23 +638,37 @@ fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, S
         // Extracted entries are flagged as `Extracted` so the AI
         // summarizer (in `session_titler`) is permitted to upgrade them
         // later; `Manual` and `Ai` entries are off-limits to that path.
+        // On cache miss, try recovering a prior AI summary from the
+        // JSONL first — preserves titles across cache loss / sync /
+        // upgrade without re-paying the agent for them.
         let title = if let Some(cached) = title_cache.get(&session_id) {
             cached.title.clone()
         } else {
             let jsonl_path = path.with_extension("jsonl");
-            let extracted = extract_title_from_jsonl(&jsonl_path);
-            // Only cache non-default titles (session has actual content)
-            if extracted != "New Chat" {
+            if let Some(recovered) = extract_ai_title_from_jsonl(&jsonl_path) {
                 title_cache.insert(
                     session_id.clone(),
                     TitleEntry {
-                        title: extracted.clone(),
-                        source: TitleSource::Extracted,
+                        title: recovered.clone(),
+                        source: TitleSource::Ai,
                     },
                 );
                 cache_dirty = true;
+                recovered
+            } else {
+                let extracted = extract_title_from_jsonl(&jsonl_path);
+                if extracted != "New Chat" {
+                    title_cache.insert(
+                        session_id.clone(),
+                        TitleEntry {
+                            title: extracted.clone(),
+                            source: TitleSource::Extracted,
+                        },
+                    );
+                    cache_dirty = true;
+                }
+                extracted
             }
-            extracted
         };
 
         sessions.push(SessionSummary {
@@ -1010,8 +1113,9 @@ pub fn update_window_title(
 }
 
 /// Look up a session's display title. Cache hit first; on miss falls
-/// back to extracting from the JSONL on disk. Returns None when the
-/// session has no extractable title (fresh, empty, or missing).
+/// back to extracting from the JSONL on disk (AI summary first, then
+/// first-prompt). Returns None when the session has no extractable
+/// title (fresh, empty, or missing).
 fn lookup_session_title(
     config_arc: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     session_cache_arc: &std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
@@ -1033,6 +1137,9 @@ fn lookup_session_title(
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
     if !jsonl_path.exists() {
         return None;
+    }
+    if let Some(ai_title) = extract_ai_title_from_jsonl(&jsonl_path) {
+        return Some(ai_title);
     }
     let title = extract_title_from_jsonl(&jsonl_path);
     if title == "New Chat" {
