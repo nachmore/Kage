@@ -16,6 +16,7 @@
 //! provider-specific UI affordances and is small enough not to be worth
 //! genericizing.
 
+pub mod claude_code;
 pub mod kage_desktop;
 pub mod kiro_cli;
 
@@ -117,6 +118,7 @@ impl AgentSessionRegistry {
             providers: vec![
                 Arc::new(kiro_cli::KiroCliProvider::new()),
                 Arc::new(kage_desktop::KageDesktopProvider::new()),
+                Arc::new(claude_code::ClaudeCodeProvider::new()),
             ],
         }
     }
@@ -193,6 +195,7 @@ mod tests {
         let ids: Vec<String> = reg.list_providers().into_iter().map(|p| p.id).collect();
         assert!(ids.contains(&"kiro-cli".to_string()));
         assert!(ids.contains(&"kage-desktop".to_string()));
+        assert!(ids.contains(&"claude-code".to_string()));
     }
 
     #[test]
