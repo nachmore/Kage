@@ -223,10 +223,10 @@
             </div>
         </div>
 
-        <!-- Step 2: Agent Connection -->
+        <!-- Step 2: Agent -->
         <div class="wizard-step" data-step="1">
             <div class="step-header">
-                <div class="step-title">Agent Connection</div>
+                <div class="step-title">Agent</div>
                 <div class="step-subtitle">Tell Kage how to reach your AI backend</div>
             </div>
             <div class="step-content">
@@ -235,9 +235,20 @@
                 <div class="agent-searching">🔍 Searching for agents…</div>
             </div>
 
+            <div style="margin-top:12px;text-align:center;">
+                <button type="button" id="wAgentTypePickerBtn" class="agent-manual-link"
+                        style="background:none;border:none;color:var(--kage-text-muted);font-size:12px;cursor:pointer;text-decoration:underline;">
+                    Or pick a different agent type…
+                </button>
+            </div>
+
+            <div id="wOllamaDeferredHint" class="section-desc" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(192,156,255,0.08);border:1px solid rgba(192,156,255,0.2);border-radius:8px;">
+                🦙 Ollama setup happens after first run. Finish this wizard, then open <strong>Settings → Agents → + Add agent → Ollama</strong> to wire up your local model. We've saved a placeholder so the rest of setup keeps working.
+            </div>
+
             <div id="wManualConfig" style="display:none;margin-top:16px;">
                 <div class="section-desc" style="margin-bottom:12px;">
-                    Configure the connection manually. You can change this later from Settings → Agent Connection.
+                    Configure the connection manually. You can change this later from Settings → Agents.
                 </div>
                 <div id="wConnectionEditor"></div>
             </div>
@@ -572,6 +583,30 @@
 
         // Start agent detection early (runs in background)
         runAgentDetection();
+
+        // Type-picker escape hatch. Welcome's default flow (auto-detect)
+        // covers the 90% case for new users; the picker lets the rest
+        // pick a different starting point without leaving first-run.
+        // Min implementation per the unification plan: detect / preset /
+        // custom drop into the manual editor; ollama gets a deferred
+        // hint pointing at Settings → Agents (the welcome window doesn't
+        // host the full Ollama wizard — Settings does).
+        document.getElementById('wAgentTypePickerBtn')?.addEventListener('click', async () => {
+            const kind = await kageAgentConnections.pickAgentType();
+            if (!kind) return;
+            const ollamaHint = document.getElementById('wOllamaDeferredHint');
+            if (ollamaHint) ollamaHint.style.display = 'none';
+            if (kind === 'detect') {
+                // Already on the detect view — nothing to do.
+                return;
+            }
+            if (kind === 'ollama') {
+                if (ollamaHint) ollamaHint.style.display = '';
+                return;
+            }
+            // 'acp_preset' and 'custom' both reveal the manual editor.
+            showManualConfig();
+        });
 
         // Privacy policy link — resolves via get_app_info() so we don't
         // hardcode the URL. Populated from [package.metadata.links] in
