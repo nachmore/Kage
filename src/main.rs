@@ -30,6 +30,7 @@ mod os;
 mod panic_handler;
 mod permission_audit;
 mod process_manager;
+mod session_titler;
 mod setup;
 mod startup;
 mod state;

@@ -535,6 +535,17 @@ pub async fn send_message_streaming(
             }
         }
 
+        // Background AI title summarisation. No-op if the session
+        // already has a Manual or Ai title cached. Runs first because
+        // it's quick and user-visible (window/sidebar titles flip);
+        // auto-steering takes longer and runs less often.
+        crate::commands::sessions::maybe_generate_ai_title(
+            app_for_send.clone(),
+            client_arc.clone(),
+            session_cache_for_send.clone(),
+            active_session_id.clone(),
+        );
+
         // Trigger auto-steering generation periodically on the session
         // the message just landed on (post-recovery if applicable).
         crate::auto_steering::maybe_generate_steering(client_arc, config_arc, active_session_id);

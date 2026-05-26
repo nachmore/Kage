@@ -27,6 +27,7 @@ pub mod os;
 pub mod panic_handler;
 pub mod permission_audit;
 pub mod process_manager;
+pub mod session_titler;
 pub mod startup;
 pub mod steering_io;
 
