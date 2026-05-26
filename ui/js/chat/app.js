@@ -946,24 +946,29 @@ export class ChatApp {
      * `open_new_chat_window`) — if present, loads that session;
      * otherwise creates a fresh one. No-op for the privileged `main`
      * window, which uses the existing launch-time bootstrap.
+     *
+     * For `main`, normally `loadCurrentSessionId()` finds an entry
+     * already populated by `start_session_on_launch`. But if the user
+     * disabled that setting, or opens main before the launch session
+     * has been registered, the slot is empty and the first message
+     * would fail with "invalid type: null". Create one here in that
+     * case.
      */
     async _bootstrapChatPeerSession() {
-        if (!this.windowLabel.startsWith('chat-')) return;
         if (this.currentAcpSessionId) return; // already bootstrapped
 
+        const isPeer = this.windowLabel.startsWith('chat-');
         const params = new URLSearchParams(window.location.search);
-        const resumeId = params.get('resumeSessionId');
+        const resumeId = isPeer ? params.get('resumeSessionId') : null;
         try {
             const adoptedId = await this.invoke('switch_acp_session', {
                 sessionId: resumeId || null,
             });
             this.currentAcpSessionId = adoptedId;
             this.activeSessionId = adoptedId;
-            console.log(
-                `[CHAT] Bootstrapped peer window ${this.windowLabel} -> session ${adoptedId}`
-            );
+            console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> session ${adoptedId}`);
         } catch (e) {
-            console.error('[CHAT] Failed to bootstrap peer-window session:', e);
+            console.error('[CHAT] Failed to bootstrap session:', e);
         }
     }
 

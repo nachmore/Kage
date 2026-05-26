@@ -460,6 +460,15 @@ export class FloatingApp {
                     this.floatingSessionId = null;
                 }),
         ]);
+        // If we still don't have a session id (start_session_on_launch
+        // disabled, or the user summoned floating before that finished),
+        // ensure one by sending the user straight into a fresh session.
+        // Without this, the first message_send fires with sessionId=null
+        // and the backend rejects it ("invalid type: null, expected a
+        // string").
+        if (!this.floatingSessionId) {
+            await this._ensureFloatingSession();
+        }
         _ts('Parallel IPC done (shortcuts + commands + frecency)');
 
         this.setupSpeech();
@@ -1666,6 +1675,23 @@ export class FloatingApp {
     }
     set _usedSpeechForLastMessage(v) {
         if (this.speech) this.speech.usedSpeechForLastMessage = v;
+    }
+
+    /**
+     * Ensure floating has a pinned session id, creating one if needed.
+     * Called on init when get_window_session("floating") returns null
+     * (start_session_on_launch disabled, or floating summoned before
+     * the launch session was registered). Without this the first send
+     * fires with sessionId=null and the backend rejects it.
+     */
+    async _ensureFloatingSession() {
+        try {
+            const id = await this.invoke('switch_acp_session', { sessionId: null });
+            this.floatingSessionId = id;
+            console.log(`[floating] bootstrapped session: ${id}`);
+        } catch (e) {
+            console.error('[floating] failed to bootstrap session:', e);
+        }
     }
 
     async loadShortcuts() {
