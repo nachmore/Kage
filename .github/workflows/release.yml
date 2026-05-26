@@ -381,6 +381,13 @@ jobs:
             echo "(no bundle_dmg.sh staged — failure happened before bundling)"
           fi
 
+      # `overwrite: true` because manual reruns of the same channel
+      # against the same SHA otherwise collide with artefacts left
+      # behind by a cancelled prior run (upload-artifact@v7 is
+      # immutable per name + run unless this is set). Hit this on
+      # 2026-05-25 — Win build succeeded, NSIS bundled, but the
+      # upload step failed silently because a cancelled run had
+      # already published an artefact under the same name.
       - name: Upload Windows artefacts
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v7
@@ -391,6 +398,7 @@ jobs:
             target/${{ matrix.target }}/release/bundle/nsis/*.exe.sig
           if-no-files-found: error
           retention-days: 3
+          overwrite: true
 
       - name: Upload macOS artefacts
         if: startsWith(matrix.os, 'macos')
@@ -403,6 +411,7 @@ jobs:
             target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error
           retention-days: 3
+          overwrite: true
 
   # Single assembly job: pull the matrix artefacts, stitch together the
   # `latest.json` manifest, and upsert the release + its assets. Doing
