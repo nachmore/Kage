@@ -84,7 +84,9 @@ waitForTauri(({ invoke, appWindow }) => {
 
             let floatingSessionId = null;
             try {
-                floatingSessionId = await invokeFn('get_floating_session_id');
+                floatingSessionId = await invokeFn('get_window_session', {
+                    label: 'floating',
+                });
             } catch (e) {
                 console.warn('[Permissions] Failed to get floating session ID:', e);
             }

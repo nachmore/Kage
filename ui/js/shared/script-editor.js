@@ -153,7 +153,11 @@ export function createScriptEditor(container, opts = {}) {
                         completionPromise._unlisten = fn;
                     });
                 });
+                const sessionId = await invoke('get_window_session', {
+                    label: 'main',
+                }).catch(() => null);
                 await invoke('send_message_streaming', {
+                    sessionId,
                     message: parts.join('\n'),
                     attachments: null,
                 });

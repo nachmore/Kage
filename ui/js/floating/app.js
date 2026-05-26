@@ -94,6 +94,11 @@ export class FloatingApp {
         this.searchTimeout = null;
         this._searchGeneration = 0;
         this.currentResponse = '';
+        // Floating window's pinned session id. Bootstrapped from
+        // window_sessions["floating"] on init; updated on every message
+        // send via the recovery-session-id passthrough on message_complete
+        // (image-error recovery may swap us to a fresh session).
+        this.floatingSessionId = null;
         this.isWaitingForResponse = false;
         this.shortcuts = [];
         // Track the length at which pattern matching last failed (returned "chat").
@@ -108,6 +113,7 @@ export class FloatingApp {
         this.extensionManager = new ExtensionManager(invoke);
         this.extensionToolController = new ExtensionToolController({
             invoke,
+            getSessionId: () => this.floatingSessionId,
             extensionManager: this.extensionManager,
             permissionModal: {
                 showForExtensionTool: (...args) =>
@@ -146,6 +152,7 @@ export class FloatingApp {
         this.automationPlanController = new AutomationPlanController({
             invoke,
             listen,
+            getSessionId: () => this.floatingSessionId,
             renderTasks: (tasks) => {
                 const wrapper = createTaskPlanElement(tasks);
                 this.elements.responseText.innerHTML = '';
@@ -445,6 +452,13 @@ export class FloatingApp {
             this.loadShortcuts(),
             loadSlashCommands(this.invoke),
             loadFrecency(this.invoke),
+            this.invoke('get_window_session', { label: 'floating' })
+                .then((id) => {
+                    this.floatingSessionId = id;
+                })
+                .catch(() => {
+                    this.floatingSessionId = null;
+                }),
         ]);
         _ts('Parallel IPC done (shortcuts + commands + frecency)');
 
@@ -787,10 +801,33 @@ export class FloatingApp {
 
     setupStreamingListeners() {
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
-        this.listen('message_complete', () => this.handleMessageComplete());
+        this.listen('message_complete', (event) => {
+            // Recovery may have moved us to a fresh session; pick up
+            // the new id so subsequent sends/cancels target it.
+            const newId = event?.payload?.sessionId;
+            if (newId && newId !== this.floatingSessionId) {
+                console.log('[floating] adopting recovery session id:', newId);
+                this.floatingSessionId = newId;
+                this.invoke('set_window_session', {
+                    label: 'floating',
+                    sessionId: newId,
+                }).catch(() => {});
+            }
+            this.handleMessageComplete();
+        });
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
-        this.listen('session_reset', (event) => this.handleSessionReset(event));
+        this.listen('session_reset', (event) => {
+            const newId = event?.payload?.newSessionId;
+            if (newId) {
+                this.floatingSessionId = newId;
+                this.invoke('set_window_session', {
+                    label: 'floating',
+                    sessionId: newId,
+                }).catch(() => {});
+            }
+            this.handleSessionReset(event);
+        });
         this.toolSources = [];
 
         // Track compaction state — queue outgoing messages while compacting
@@ -1267,7 +1304,9 @@ export class FloatingApp {
         }
 
         this.windowManager.resizeWindow();
-        this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
+        this.invoke('cancel_generation', { sessionId: this.floatingSessionId }).catch((e) =>
+            console.log('Cancel:', e)
+        );
     }
 
     // --- Speech ---
@@ -1539,6 +1578,7 @@ export class FloatingApp {
     async _refreshContextUsage() {
         try {
             const result = await this.invoke('execute_slash_command', {
+                sessionId: this.floatingSessionId,
                 command: 'context',
                 args: {},
             });
@@ -2306,6 +2346,7 @@ export class FloatingApp {
             // e.g. "model" command → { modelName: value }
             const argKey = command + 'Name';
             const result = await this.invoke('execute_slash_command', {
+                sessionId: this.floatingSessionId,
                 command: command,
                 args: { [argKey]: value },
             });
@@ -2522,9 +2563,6 @@ export class FloatingApp {
         this._historyIndex = -1;
         this._historySaved = '';
 
-        // Mark that this message originates from the floating window
-        this.invoke('set_notification_source', { source: 'floating' }).catch(() => {});
-
         // Stop any ongoing TTS; in voice mode, don't kill the mic — it will restart after response
         if (this.speech) {
             this.speech.cancelSpeech();
@@ -2555,7 +2593,11 @@ export class FloatingApp {
                     source: 'floating',
                     length: messageLengthBucket(message),
                 });
-                await this.invoke('send_message_streaming', { message, attachments: null });
+                await this.invoke('send_message_streaming', {
+                    sessionId: this.floatingSessionId,
+                    message,
+                    attachments: null,
+                });
             } catch (e) {
                 this.showError('Error: ' + e);
             }
@@ -2623,7 +2665,9 @@ export class FloatingApp {
                 // No actionable match — send to agent. Reset UI now.
                 // If a response is in progress, cancel it first
                 if (this.isWaitingForResponse) {
-                    this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
+                    this.invoke('cancel_generation', {
+                        sessionId: this.floatingSessionId,
+                    }).catch((e) => console.log('Cancel:', e));
                     this.isWaitingForResponse = false;
                     this.stopThinking();
                     this.elements.floatingStopBtn.style.display = 'none';
@@ -2692,7 +2736,11 @@ export class FloatingApp {
                     length: messageLengthBucket(message),
                     attachments: attachments?.length || 0,
                 });
-                await this.invoke('send_message_streaming', { message, attachments });
+                await this.invoke('send_message_streaming', {
+                    sessionId: this.floatingSessionId,
+                    message,
+                    attachments,
+                });
             }
         } catch (error) {
             console.error('Error handling input:', error);

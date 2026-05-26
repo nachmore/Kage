@@ -255,10 +255,12 @@ async fn run() {
     };
     let ui_state = state::UiState {
         dev_mode,
-        floating_session_id: Arc::new(std::sync::Mutex::new(None)),
+        window_sessions: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+        pending_prompt_originators: Arc::new(std::sync::Mutex::new(
+            std::collections::HashMap::new(),
+        )),
         last_selection: Arc::new(std::sync::Mutex::new(None)),
         source_window: Arc::new(std::sync::Mutex::new(None)),
-        notification_source: Arc::new(std::sync::Mutex::new("floating".to_string())),
         frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
     let child_processes = state::ChildProcesses {
@@ -636,8 +638,6 @@ async fn run() {
             commands::save_window_position,
             commands::save_chat_window_geometry,
             commands::get_last_selection,
-            commands::set_notification_source,
-            commands::show_notification_source_window,
             commands::get_user_info,
             commands::list_sessions,
             commands::load_session,
@@ -646,9 +646,9 @@ async fn run() {
             commands::reveal_session_file,
             commands::get_sessions_directory,
             commands::delete_session,
-            commands::get_current_session_id,
-            commands::get_floating_session_id,
-            commands::restore_floating_session,
+            commands::get_window_session,
+            commands::set_window_session,
+            commands::clear_window_session,
             commands::get_steering_content,
             commands::open_auto_steering_file,
             commands::get_auto_steering_path,

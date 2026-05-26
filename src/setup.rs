@@ -414,7 +414,7 @@ pub fn maybe_spawn_default_session(
     let features: tauri::State<'_, FeatureServices> = app.state();
     let ui: tauri::State<'_, UiState> = app.state();
     let acp_client = acp.client.clone();
-    let floating_session = ui.floating_session_id.clone();
+    let window_sessions = ui.window_sessions.clone();
     let config_arc = features.config.clone();
     let models_arc = acp.available_models.clone();
     let app_handle = app.handle().clone();
@@ -436,8 +436,9 @@ pub fn maybe_spawn_default_session(
             match acp_client.load_existing_session(&resume_id, cwd) {
                 Ok((id, models_json)) => {
                     info!("Resumed session on launch: {}", id);
-                    if let Ok(mut fs) = floating_session.lock() {
-                        *fs = Some(id.clone());
+                    if let Ok(mut ws) = window_sessions.lock() {
+                        ws.insert("main".to_string(), id.clone());
+                        ws.insert("floating".to_string(), id.clone());
                     }
                     // Source: was this a post-update relaunch, or a
                     // user picking up where they left off? Reading
@@ -514,12 +515,13 @@ pub fn maybe_spawn_default_session(
             }
         };
 
-        if let Ok(mut fs) = floating_session.lock() {
-            *fs = Some(session_id.clone());
+        if let Ok(mut ws) = window_sessions.lock() {
+            ws.insert("main".to_string(), session_id.clone());
+            ws.insert("floating".to_string(), session_id.clone());
         }
 
         apply_default_model_if_any(&acp_client, &config_arc, &session_id);
-        send_startup_steering(&acp_client, &config_arc);
+        send_startup_steering(&acp_client, &config_arc, &session_id);
     });
 }
 
@@ -568,6 +570,7 @@ fn apply_default_model_if_any(
 fn send_startup_steering(
     client: &crate::acp_client::AcpClient,
     config_arc: &Arc<std::sync::Mutex<crate::config::Config>>,
+    session_id: &str,
 ) {
     let steering_msg = {
         let cfg = config_arc.lock_or_recover();
@@ -576,7 +579,7 @@ fn send_startup_steering(
         )
     };
     info!("Sending steering message ({} chars)", steering_msg.len());
-    if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
+    if let Err(e) = client.send_chat_streaming(session_id, &steering_msg, None) {
         error!("Failed to send steering message: {}", e);
     }
 }
@@ -590,7 +593,7 @@ pub fn start_updater(app: &App) {
         features.updater.clone(),
         features.config.clone(),
         app.handle().clone(),
-        ui.floating_session_id.clone(),
+        ui.window_sessions.clone(),
         acp.client.clone(),
     );
 }

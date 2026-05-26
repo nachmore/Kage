@@ -81,8 +81,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // --- session (chat sessions) -------------------------------------------
     list_sessions: 'session',
     load_session: 'session',
-    get_current_session_id: 'session',
-    get_floating_session_id: 'session',
+    get_window_session: 'session',
     get_sessions_directory: 'session',
 
     // --- agent (LLM communication) -----------------------------------------
@@ -228,11 +227,10 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_recent_crash: null,
     dismiss_recent_crash: null,
     show_context_menu: null,
-    show_notification_source_window: null,
-    set_notification_source: null,
     test_floating_window: null,
     handle_floating_input: null,
-    restore_floating_session: null,
+    set_window_session: null,
+    clear_window_session: null,
     touch_floating_activity: null,
     get_last_selection: null,
 

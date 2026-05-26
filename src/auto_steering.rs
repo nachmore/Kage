@@ -200,25 +200,18 @@ fn read_recent_conversation(session_id: &str, max_turns: usize) -> Result<Vec<St
     Ok(turns.into_iter().collect())
 }
 
-/// Generate the auto-steering document by sending conversation excerpts to the LLM.
-/// This creates a new temporary session, sends the extraction prompt, and writes
-/// the result to the auto-steering file.
-pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
-    let session_id = match client.get_session_id() {
-        Some(id) => id,
-        None => {
-            info!("No active session — skipping auto-steering generation");
-            return Ok(());
-        }
-    };
-
+/// Generate the auto-steering document by sending conversation excerpts
+/// to the LLM. The caller passes the session id to analyse — typically
+/// the one the user just sent a message on (post-prompt epilogue) or
+/// `window_sessions["main"]` (quit-time hook).
+pub fn generate_steering_document(client: &AcpClient, session_id: &str) -> Result<()> {
     info!(
         "Starting auto-steering document generation for session {}",
         session_id
     );
 
     // Read recent conversation turns (last 50 turns = ~25 exchanges)
-    let turns = read_recent_conversation(&session_id, 50)?;
+    let turns = read_recent_conversation(session_id, 50)?;
 
     if turns.len() < 2 {
         info!(
@@ -255,7 +248,7 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
     };
 
     // Reset this session's accumulator so we read just the response below.
-    client.reset_session_accumulator(&session_id);
+    client.reset_session_accumulator(session_id);
 
     // Send as a regular prompt on the current session
     // We use a special prefix so the UI can potentially hide this exchange
@@ -276,12 +269,12 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
         warn!("Auto-steering extraction failed: {}", error.message);
         // Drop the (possibly partial) accumulator so it doesn't bleed into
         // the next read on the same session.
-        client.reset_session_accumulator(&session_id);
+        client.reset_session_accumulator(session_id);
         return Ok(()); // Non-fatal
     }
 
     // Read the accumulated response and clear its bucket.
-    let result = client.take_session_accumulator(&session_id);
+    let result = client.take_session_accumulator(session_id);
 
     let cleaned = match parse_extraction_response(&result) {
         ExtractionOutcome::Empty => {
@@ -314,9 +307,14 @@ pub fn generate_steering_document(client: &AcpClient) -> Result<()> {
 }
 
 /// Run auto-steering generation in the background if enabled.
-/// Called from the message completion handler. Triggers every 5 messages
-/// but no more than once per hour. On-exit generation bypasses the cooldown.
-pub fn maybe_generate_steering(client: Arc<AcpClient>, config: Arc<std::sync::Mutex<Config>>) {
+/// Called from the message completion handler with the session id of
+/// the message that just completed. Triggers every 5 messages but no
+/// more than once per hour. On-exit generation bypasses the cooldown.
+pub fn maybe_generate_steering(
+    client: Arc<AcpClient>,
+    config: Arc<std::sync::Mutex<Config>>,
+    session_id: String,
+) {
     if !tick_message_counter() {
         return;
     }
@@ -338,7 +336,7 @@ pub fn maybe_generate_steering(client: Arc<AcpClient>, config: Arc<std::sync::Mu
             "Auto-steering update triggered (every {} messages, ≥{}s cooldown)",
             UPDATE_INTERVAL_MESSAGES, MIN_UPDATE_INTERVAL_SECS
         );
-        match generate_steering_document(&client) {
+        match generate_steering_document(&client, &session_id) {
             Ok(()) => mark_generation(),
             Err(e) => error!("Auto-steering generation failed: {}", e),
         }
@@ -346,9 +344,10 @@ pub fn maybe_generate_steering(client: Arc<AcpClient>, config: Arc<std::sync::Mu
 }
 
 /// Force an immediate steering document generation (e.g., on quit).
-/// This runs synchronously and blocks until complete.
-/// Skipped if no messages have been sent since the last generation.
-pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
+/// This runs synchronously and blocks until complete. Skipped if no
+/// messages have been sent since the last generation. The caller picks
+/// the session id — quit-time uses `window_sessions["main"]`.
+pub fn generate_steering_on_quit(client: &AcpClient, config: &Config, session_id: &str) {
     if !config.acp.agent.auto_steering_enabled {
         return;
     }
@@ -363,7 +362,7 @@ pub fn generate_steering_on_quit(client: &AcpClient, config: &Config) {
     }
 
     info!("Generating auto-steering document before quit");
-    match generate_steering_document(client) {
+    match generate_steering_document(client, session_id) {
         Ok(()) => mark_generation(),
         Err(e) => error!("Auto-steering generation on quit failed: {}", e),
     }

@@ -89,8 +89,16 @@ export class ExtensionToolController {
     async sendSteering() {
         const block = await this.host.extensionManager.buildToolSteeringBlock();
         if (!block) return;
+        const sessionId = this.host.getSessionId?.();
+        if (!sessionId) {
+            console.warn('Skipping extension tool steering — no session id from host');
+            return;
+        }
         try {
-            await this.host.invoke('send_extension_tool_steering', { toolSteering: block });
+            await this.host.invoke('send_extension_tool_steering', {
+                sessionId,
+                toolSteering: block,
+            });
         } catch (e) {
             console.warn('Failed to send extension tool steering:', e);
         }
@@ -167,6 +175,7 @@ export class ExtensionToolController {
 
         try {
             await this.host.invoke('extension_tool_response', {
+                sessionId: this.host.getSessionId?.() || null,
                 extensionId: extension,
                 toolName: tool,
                 resultJson,
@@ -206,6 +215,7 @@ export class ExtensionToolController {
     async _sendResponse(extension, tool, message, success) {
         try {
             await this.host.invoke('extension_tool_response', {
+                sessionId: this.host.getSessionId?.() || null,
                 extensionId: extension,
                 toolName: tool,
                 resultJson: JSON.stringify(message),

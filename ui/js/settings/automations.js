@@ -644,7 +644,14 @@ export class AutomationsSettingsModule extends SettingsModule {
                     done._ul = fn;
                 });
             });
-            await invoke('send_message_streaming', { message: prompt, attachments: null });
+            const sessionId = await invoke('get_window_session', { label: 'main' }).catch(
+                () => null
+            );
+            await invoke('send_message_streaming', {
+                sessionId,
+                message: prompt,
+                attachments: null,
+            });
             await done;
             unlisten();
             if (done._ul) done._ul();

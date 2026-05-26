@@ -39,7 +39,6 @@ pub type SessionAccumulators = Arc<Mutex<HashMap<String, String>>>;
 
 pub struct AcpClient {
     transport: AcpTransport,
-    session_id: Arc<Mutex<Option<String>>>,
     initialized: Arc<Mutex<bool>>,
     /// Per-session accumulated streaming text. See SessionAccumulators.
     pub streaming_accumulators: SessionAccumulators,
@@ -81,7 +80,6 @@ impl AcpClient {
     pub fn new(mode: AcpConnectionMode) -> Self {
         Self {
             transport: AcpTransport::new(mode),
-            session_id: Arc::new(Mutex::new(None)),
             initialized: Arc::new(Mutex::new(false)),
             streaming_accumulators: Arc::new(Mutex::new(HashMap::new())),
             compacting: Arc::new((Mutex::new(false), std::sync::Condvar::new())),
@@ -258,16 +256,6 @@ impl AcpClient {
         });
         let line = serde_json::to_string(&response)?;
         self.transport.write_line(&line)
-    }
-
-    // --- Session state ---
-
-    pub fn get_session_id(&self) -> Option<String> {
-        self.session_id.lock_or_recover().clone()
-    }
-
-    pub fn set_session_id(&self, session_id: Option<String>) {
-        *self.session_id.lock_or_recover() = session_id;
     }
 
     // --- Connection lifecycle (used by session.rs recovery) ---

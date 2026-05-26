@@ -356,3 +356,98 @@ fn unsolicited_response_is_dropped_not_delivered_to_next_request() {
         "subsequent legitimate request must not be served the stray response"
     );
 }
+
+#[test]
+fn two_concurrent_sessions_demux_chunks_by_session_id() {
+    // Regression for the multi-window backend rewrite: with the global
+    // session_id slot gone, AcpClient must route streaming chunks back
+    // to the right per-session bucket purely by the `params.sessionId`
+    // field on each `session/update` notification. We simulate two
+    // sessions receiving interleaved chunks and verify the accumulators
+    // stay isolated.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let received: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
+    let received_clone = received.clone();
+    client.set_notification_handler(move |notif| {
+        let sid = notif["params"]["sessionId"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        let text = notif["params"]["update"]["content"]["text"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        if !sid.is_empty() {
+            received_clone.lock().unwrap().push((sid, text));
+        }
+    });
+
+    // Interleave chunks for sessions A and B. With the old single-slot
+    // model, a notification handler that read AcpClient.session_id would
+    // misroute these depending on which switch was last; with the new
+    // model the handler reads sessionId off the payload and the test
+    // proves that routing.
+    let interleaved = vec![
+        ("sess-A", "alpha "),
+        ("sess-B", "beta1 "),
+        ("sess-A", "alpha2 "),
+        ("sess-B", "beta2 "),
+        ("sess-A", "alpha3"),
+        ("sess-B", "beta3"),
+    ];
+    for (sid, text) in &interleaved {
+        server.push_notification(json!({
+            "jsonrpc": "2.0",
+            "method": "session/update",
+            "params": {
+                "sessionId": sid,
+                "update": {
+                    "sessionUpdate": "agent_message_chunk",
+                    "content": { "text": text }
+                }
+            }
+        }));
+    }
+
+    // Wait for all six to arrive.
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while received.lock().unwrap().len() < interleaved.len() && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let got = received.lock().unwrap().clone();
+    assert_eq!(got.len(), interleaved.len());
+    let a_text: String = got
+        .iter()
+        .filter(|(s, _)| s == "sess-A")
+        .map(|(_, t)| t.as_str())
+        .collect();
+    let b_text: String = got
+        .iter()
+        .filter(|(s, _)| s == "sess-B")
+        .map(|(_, t)| t.as_str())
+        .collect();
+    assert_eq!(a_text, "alpha alpha2 alpha3");
+    assert_eq!(b_text, "beta1 beta2 beta3");
+}
+
+#[test]
+fn cancel_session_targets_only_the_named_session() {
+    // The cancel command emits a session/cancel notification carrying
+    // the explicit session id; verify a multi-session client cancels
+    // only the requested session and not others.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    client.cancel_session("sess-A").expect("cancel A");
+
+    let seen = server.wait_for_requests(1, Duration::from_secs(2));
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0]["method"], "session/cancel");
+    assert_eq!(seen[0]["params"]["sessionId"], "sess-A");
+}

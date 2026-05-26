@@ -204,6 +204,7 @@ export class AutomationPlanController {
 
         try {
             await this.host.invoke('execute_automation_plan', {
+                sessionId: this.host.getSessionId?.() || null,
                 planJson: JSON.stringify(plan),
             });
         } catch (e) {

@@ -667,19 +667,22 @@ pub async fn delete_session(
     Ok(())
 }
 
-/// Switch the ACP client to a different session.
-/// If session_id is provided, loads that session via session/load.
-/// If session_id is None, creates a new session via session/new.
-/// Saves the floating session before switching so it can be restored.
+/// Adopt or create a session for the calling window. If `session_id`
+/// is provided, loads that session via session/load. If absent, creates
+/// a new session via session/new. The returned id is what the frontend
+/// will pass on subsequent send/cancel/slash invokes; the backend also
+/// records it in `UiState.window_sessions[window_label]`.
 #[tauri::command]
 pub async fn switch_acp_session(
     session_id: Option<String>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     ui: State<'_, crate::state::UiState>,
+    window: tauri::WebviewWindow,
     app: tauri::AppHandle,
 ) -> Result<String, AppError> {
     let client_guard = acp.client.clone();
+    let window_label = window.label().to_string();
 
     // Ensure connected
     if !client_guard.is_connected() {
@@ -690,17 +693,6 @@ pub async fn switch_acp_session(
                 "Failed to connect: {}",
                 e
             )));
-        }
-    }
-
-    // Save the current session as floating session if we don't have one yet
-    {
-        let mut floating = ui
-            .floating_session_id
-            .lock()
-            .map_err(|e| format!("Lock error: {}", e))?;
-        if floating.is_none() {
-            *floating = client_guard.get_session_id();
         }
     }
 
@@ -751,6 +743,9 @@ pub async fn switch_acp_session(
                         *m = parsed;
                     }
                 }
+            }
+            if let Ok(mut ws) = ui.window_sessions.lock() {
+                ws.insert(window_label, loaded_id.clone());
             }
             Ok(loaded_id)
         }
@@ -806,7 +801,7 @@ pub async fn switch_acp_session(
                     crate::commands::system::STEERING_MSG_PREFIX,
                     parts.join("\n\n---\n\n")
                 );
-                let _ = client_guard.send_chat_streaming(&steering_msg, None);
+                let _ = client_guard.send_chat_streaming(&new_session_id, &steering_msg, None);
             }
 
             // Invalidate session list cache (new session was created)
@@ -815,55 +810,61 @@ pub async fn switch_acp_session(
                 *cache = None;
             }
 
+            if let Ok(mut ws) = ui.window_sessions.lock() {
+                ws.insert(window_label, new_session_id.clone());
+            }
+
             Ok(new_session_id)
         }
     }
 }
 
-/// Get the current ACP session ID
+/// Read the session id pinned to a window. Frontends call this on
+/// boot to discover their own pinned session, and call it for other
+/// windows when implementing handoff (e.g. floating "expand to chat"
+/// looks up `main`'s session).
 #[tauri::command]
-pub async fn get_current_session_id(
-    acp: State<'_, AcpHandles>,
-) -> Result<Option<String>, AppError> {
-    // The pre-2026-05 codebase had this guarded by try_lock to avoid blocking
-    // behind in-flight prompts on the outer mutex. AcpClient is now an
-    // Arc<AcpClient> with internal locks scoped to the bits that need them,
-    // so this is just a read.
-    Ok(acp.client.get_session_id())
-}
-
-/// Get the floating window's session ID
-#[tauri::command]
-pub async fn get_floating_session_id(
+pub async fn get_window_session(
+    label: String,
     ui: State<'_, crate::state::UiState>,
 ) -> Result<Option<String>, AppError> {
-    let floating = ui
-        .floating_session_id
+    let map = ui
+        .window_sessions
         .lock()
         .map_err(|e| format!("Lock error: {}", e))?;
-    Ok(floating.clone())
+    Ok(map.get(&label).cloned())
 }
 
-/// Restore the floating session as the active ACP session
+/// Pin a session to a window. The frontend writes here on every adopt
+/// (boot, switch, new) so the backend's quit-time hook, updater
+/// resume-marker, and permission router can all look up "what session
+/// does window X own?" without guessing.
 #[tauri::command]
-pub async fn restore_floating_session(
-    acp: State<'_, AcpHandles>,
+pub async fn set_window_session(
+    label: String,
+    session_id: String,
     ui: State<'_, crate::state::UiState>,
-) -> Result<Option<String>, AppError> {
-    let floating_id = {
-        let floating = ui
-            .floating_session_id
-            .lock()
-            .map_err(|e| format!("Lock error: {}", e))?;
-        floating.clone()
-    };
+) -> Result<(), AppError> {
+    let mut map = ui
+        .window_sessions
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
+    map.insert(label, session_id);
+    Ok(())
+}
 
-    if let Some(ref id) = floating_id {
-        acp.client.set_session_id(Some(id.clone()));
-        info!("Restored floating session: {}", id);
-    }
-
-    Ok(floating_id)
+/// Drop a window's pinned session. Called when a window closes.
+#[tauri::command]
+pub async fn clear_window_session(
+    label: String,
+    ui: State<'_, crate::state::UiState>,
+) -> Result<(), AppError> {
+    let mut map = ui
+        .window_sessions
+        .lock()
+        .map_err(|e| format!("Lock error: {}", e))?;
+    map.remove(&label);
+    Ok(())
 }
 
 /// Rename a session by updating its title in the cache

@@ -124,6 +124,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             }
 
             await invoke('send_permission_response', {
+                sessionId: currentPermissionRequest.sessionId || null,
                 requestId: currentPermissionRequest.id,
                 optionId: optionId,
                 toolTitle: policyTitle,
@@ -250,6 +251,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
 
             if (auto_approve) {
                 invoke('send_permission_response', {
+                    sessionId: notification.params?.sessionId || null,
                     requestId: notification.id,
                     optionId: 'allow_once',
                     toolTitle: notification.params?.toolCall?.title || 'Unknown',

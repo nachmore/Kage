@@ -790,39 +790,12 @@ pub async fn get_last_selection(
     Ok(sel.clone())
 }
 
-#[tauri::command]
-pub async fn set_notification_source(
-    ui: tauri::State<'_, crate::state::UiState>,
-    source: String,
-) -> Result<(), AppError> {
-    if let Ok(mut s) = ui.notification_source.lock() {
-        *s = source;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn show_notification_source_window(
-    app: tauri::AppHandle,
-    ui: tauri::State<'_, crate::state::UiState>,
-) -> Result<(), AppError> {
-    let source = ui
-        .notification_source
-        .lock()
-        .map(|s| s.clone())
-        .unwrap_or_else(|_| "floating".to_string());
-
-    if source == "main" {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.show();
-            let _ = window.set_focus();
-        }
-    } else if let Some(window) = app.get_webview_window("floating") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-    Ok(())
-}
+// `set_notification_source` and `show_notification_source_window`
+// existed under the single-session model where one global string told
+// the backend which window owned the in-flight prompt. Permission
+// routing is now done per-session via
+// `UiState.pending_prompt_originators` — see
+// `commands::messaging::handle_permission_notification`.
 /// Called by the floating window frontend once `init()` completes.
 /// Used purely as a diagnostic / telemetry beacon — the backend log line
 /// "Frontend signaled ready" is the canonical signal that the floating

@@ -60,68 +60,43 @@ pub fn setup_notification_handler(
 
         if method == "session/update" {
             // Every session/update carries the session id it belongs to.
-            // Chunks for a session that isn't currently active are dropped
-            // from the UI emit — otherwise switching sessions mid-stream
-            // (or auto_steering's hidden prompt overlapping with the user's
-            // prompt) would leak the wrong tokens into the wrong UI bucket.
-            // Server-issued updates may legitimately omit sessionId for
-            // some kinds; in that case fall back to the current session.
+            // We forward chunks and tool_call events to *all* windows
+            // tagged with the session id; each window's frontend filters
+            // by `acceptSessionId`, so a window only renders updates for
+            // its own pinned session. Backgrounded sessions still
+            // accumulate their bytes into the per-session bucket (used
+            // by auto_steering and sub-agent reads) but their windows
+            // see no chunks because no window has them pinned.
             let update_session_id = notification
                 .get("params")
                 .and_then(|p| p.get("sessionId"))
                 .and_then(|s| s.as_str())
                 .map(|s| s.to_string());
-            let current_session_id = client_for_handler.get_session_id();
-            let is_current = match (&update_session_id, &current_session_id) {
-                (Some(u), Some(c)) => u == c,
-                _ => true, // missing on either side — be permissive, see comment above
-            };
 
             if let Some(update) = notification.get("params").and_then(|p| p.get("update")) {
                 if let Some(kind) = update.get("sessionUpdate").and_then(|v| v.as_str()) {
                     if kind == "agent_message_chunk" {
                         if let Some(text) = update.get("content").and_then(|c| c.get("text")).and_then(|t| t.as_str()) {
-                            // Always accumulate into the *update's* session
-                            // bucket — that's the source of truth and helpers
-                            // like auto_steering read by the session id they
-                            // sent to. The current-session check below only
-                            // gates the UI emit.
-                            let acc_session = update_session_id
-                                .clone()
-                                .or_else(|| current_session_id.clone());
-                            let emitted_owned: Option<String> = if let Some(sid) = &acc_session {
-                                client_for_handler
-                                    .accumulate_chunk(sid, text)
-                                    .map(|s| s.to_string())
-                            } else {
-                                None
+                            let Some(sid) = update_session_id else {
+                                // No session id on the chunk — can't route. Drop.
+                                return;
                             };
+                            let emitted_owned: Option<String> = client_for_handler
+                                .accumulate_chunk(&sid, text)
+                                .map(|s| s.to_string());
 
-                            if is_current {
-                                if let Some(emitted) = emitted_owned {
-                                    if !emitted.is_empty() {
-                                        // Append to the per-session pending
-                                        // buffer. The flush thread emits
-                                        // `message_chunk` events with this
-                                        // text every CHUNK_FLUSH_INTERVAL_MS,
-                                        // one per non-empty session bucket.
-                                        // The frontend appends `text` on
-                                        // each chunk to its local
-                                        // accumulator; sending a longer
-                                        // string per emit is strictly
-                                        // better than one-emit-per-token.
-                                        if let Some(sid) = acc_session {
-                                            if let Ok(mut map) = pending_chunks.lock() {
-                                                map.entry(sid).or_default().push_str(&emitted);
-                                            }
-                                        }
+                            if let Some(emitted) = emitted_owned {
+                                if !emitted.is_empty() {
+                                    // Append to the per-session pending
+                                    // buffer. The flush thread emits
+                                    // `message_chunk` events with this
+                                    // text every CHUNK_FLUSH_INTERVAL_MS,
+                                    // one per non-empty session bucket.
+                                    // Frontend filters by sessionId.
+                                    if let Ok(mut map) = pending_chunks.lock() {
+                                        map.entry(sid).or_default().push_str(&emitted);
                                     }
                                 }
-                            } else {
-                                log::debug!(
-                                    "dropping message_chunk for non-current session {:?} (current is {:?})",
-                                    update_session_id, current_session_id
-                                );
                             }
                         }
                         return;
@@ -136,13 +111,9 @@ pub fn setup_notification_handler(
                                 names.entry(call_id.to_string()).or_insert_with(|| title.to_string());
                             }
                         }
-                        // Only forward tool-call updates for the active session.
-                        // A tool call belonging to a backgrounded session would
-                        // confuse the active session's UI (the floating window's
-                        // tool indicator would show another session's progress).
-                        if is_current {
-                            let _ = app_handle.emit("tool_call_update", &notification);
-                        }
+                        // Forward unconditionally; frontend filters by
+                        // sessionId in the payload.
+                        let _ = app_handle.emit("tool_call_update", &notification);
                         return;
                     }
                 }
@@ -375,10 +346,28 @@ fn handle_permission_notification(
                 });
             }
 
-            // Determine which window originated this conversation
+            // Route the modal back to the window that issued the
+            // prompt this permission belongs to. The session id arrives
+            // on every permission notification; the originator map was
+            // written by `send_message_streaming` before the ACP call.
+            // Falling back to "floating" preserves the historical
+            // default for hotkey-driven prompts that bypass the map
+            // (e.g. inline-assist).
+            let session_id = notification
+                .get("params")
+                .and_then(|p| p.get("sessionId"))
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
             let source = app_handle
                 .try_state::<UiState>()
-                .and_then(|s| s.notification_source.lock().ok().map(|s| s.clone()))
+                .and_then(|state| {
+                    let sid = session_id.as_deref()?;
+                    state
+                        .pending_prompt_originators
+                        .lock()
+                        .ok()
+                        .and_then(|m| m.get(sid).cloned())
+                })
                 .unwrap_or_else(|| "floating".to_string());
 
             let payload = serde_json::json!({
@@ -406,16 +395,27 @@ fn handle_permission_notification(
 
 #[tauri::command]
 pub async fn send_message_streaming(
+    session_id: String,
     message: String,
     attachments: Option<Vec<serde_json::Value>>,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
+    ui: State<'_, UiState>,
     window: WebviewWindow,
 ) -> Result<(), String> {
-    info!("Sending message: {}", message);
+    info!("Sending message on {}: {}", session_id, message);
     let client = acp.client.clone();
     let config = features.config.clone();
     let window_clone = window.clone();
+    let window_label = window.label().to_string();
+    let originators = ui.pending_prompt_originators.clone();
+
+    // Tag this session as originated from this window. The permission
+    // handler reads this map to decide which window the modal goes to;
+    // we clear it on every send termination (success or error).
+    if let Ok(mut m) = originators.lock() {
+        m.insert(session_id.clone(), window_label.clone());
+    }
 
     async_runtime::spawn_blocking(move || {
         let client_arc = client.clone();
@@ -424,6 +424,9 @@ pub async fn send_message_streaming(
         if !client.is_connected() {
             if let Err(e) = client.connect() {
                 let _ = window.emit("message_error", format!("Unable to connect: {}", e));
+                if let Ok(mut m) = originators.lock() {
+                    m.remove(&session_id);
+                }
                 return;
             }
         }
@@ -431,7 +434,17 @@ pub async fn send_message_streaming(
         // The notification handler (set up at app init) handles all streaming
         // chunks, permissions, and tool calls via Tauri events.
         let had_attachments = attachments.as_ref().is_some_and(|a| !a.is_empty());
-        if let Err(e) = client.send_chat_streaming_with_recovery(message, attachments) {
+        let send_result =
+            client.send_chat_streaming_with_recovery(session_id.clone(), message, attachments);
+
+        // Recovery may have moved us to a fresh session; pick that up
+        // for the post-send epilogue (auto_steering, originator clear).
+        let active_session_id = match &send_result {
+            Ok(id) => id.clone(),
+            Err(_) => session_id.clone(),
+        };
+
+        if let Err(e) = send_result {
             let error_str = format!("{}", e);
             let is_image_error = had_attachments
                 && (error_str.contains("Internal error")
@@ -441,25 +454,27 @@ pub async fn send_message_streaming(
 
             if is_image_error {
                 // The ACP connection is likely stuck after an image error.
-                // Disconnect, clear the session, reconnect, and start fresh.
+                // Disconnect, reconnect, create a fresh session, and tell
+                // the originating window to adopt it. Other windows'
+                // sessions are unaffected — they'll reconnect lazily on
+                // their next send.
                 info!("Image-related error detected — resetting ACP connection and session");
                 client.disconnect();
-                client.set_session_id(None);
 
-                let reconnected = match client.connect() {
+                let new_session_id = match client.connect() {
                     Ok(_) => match client.create_session(None) {
-                        Ok(_) => {
-                            client.send_builtin_steering();
-                            true
+                        Ok((id, _)) => {
+                            client.send_builtin_steering(&id);
+                            Some(id)
                         }
                         Err(e) => {
                             error!("Failed to create new session after image error: {}", e);
-                            false
+                            None
                         }
                     },
                     Err(e) => {
                         error!("Failed to reconnect after image error: {}", e);
-                        false
+                        None
                     }
                 };
 
@@ -467,20 +482,35 @@ pub async fn send_message_streaming(
                     "session_reset",
                     serde_json::json!({
                         "reason": "image_unsupported",
-                        "reconnected": reconnected,
+                        "reconnected": new_session_id.is_some(),
+                        "newSessionId": new_session_id,
                     }),
                 );
             } else {
                 let _ = window.emit("message_error", format!("Failed to send: {}", error_str));
             }
+            if let Ok(mut m) = originators.lock() {
+                m.remove(&session_id);
+            }
             return;
         }
 
-        let _ = window_clone.emit("message_complete", ());
+        let _ = window_clone.emit(
+            "message_complete",
+            serde_json::json!({ "sessionId": &active_session_id }),
+        );
 
-        // Trigger auto-steering generation periodically. No lock to drop —
-        // the client is just an Arc<AcpClient> now.
-        crate::auto_steering::maybe_generate_steering(client_arc, config_arc);
+        // Clear the originator now that the prompt is finished.
+        if let Ok(mut m) = originators.lock() {
+            m.remove(&active_session_id);
+            if active_session_id != session_id {
+                m.remove(&session_id);
+            }
+        }
+
+        // Trigger auto-steering generation periodically on the session
+        // the message just landed on (post-recovery if applicable).
+        crate::auto_steering::maybe_generate_steering(client_arc, config_arc, active_session_id);
     });
 
     Ok(())
@@ -488,6 +518,7 @@ pub async fn send_message_streaming(
 
 #[tauri::command]
 pub async fn send_permission_response(
+    session_id: Option<String>,
     request_id: serde_json::Value,
     option_id: String,
     tool_title: String,
@@ -522,7 +553,8 @@ pub async fn send_permission_response(
     // Audit log: record the user's decision. We classify option_id into
     // our event kinds; unrecognised strings are recorded as Denied with
     // the raw option_id in the tool field so the UI still shows them.
-    let session_id = acp.client.get_session_id();
+    // Frontend passes the session id from the permission notification
+    // payload — None is tolerated for legacy callers.
     let audit_event = match option_id.as_str() {
         "allow_once" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
@@ -574,6 +606,7 @@ pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError>
 
 #[tauri::command]
 pub async fn cancel_generation(
+    session_id: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
@@ -581,13 +614,6 @@ pub async fn cancel_generation(
     features
         .automation_plan_cancelled
         .store(true, std::sync::atomic::Ordering::Relaxed);
-
-    // Direct read — the AcpClient is no longer wrapped in an outer mutex,
-    // so this never has to fall back to guessing the floating session id.
-    let session_id = acp
-        .client
-        .get_session_id()
-        .ok_or_else(|| AppError::internal("No active session to cancel"))?;
 
     acp.client
         .cancel_session(&session_id)
@@ -598,6 +624,7 @@ pub async fn cancel_generation(
 
 #[tauri::command]
 pub async fn open_chat_with_message(
+    session_id: String,
     message: String,
     acp: State<'_, AcpHandles>,
     ui: State<'_, UiState>,
@@ -606,9 +633,10 @@ pub async fn open_chat_with_message(
     if let Some(floating) = app.get_webview_window("floating") {
         let _ = floating.hide();
     }
-    // Route notifications to the chat window while this message is in flight
-    if let Ok(mut s) = ui.notification_source.lock() {
-        *s = "main".to_string();
+    // Tag the in-flight prompt so permission notifications route to
+    // the main chat window, not the (now hidden) floating one.
+    if let Ok(mut m) = ui.pending_prompt_originators.lock() {
+        m.insert(session_id.clone(), "main".to_string());
     }
     if let Some(main) = app.get_webview_window("main") {
         // Center on the active monitor
@@ -619,19 +647,41 @@ pub async fn open_chat_with_message(
 
         let client = acp.client.clone();
         let window = main.clone();
+        let originators = ui.pending_prompt_originators.clone();
 
         async_runtime::spawn_blocking(move || {
             if !client.is_connected() {
                 if let Err(e) = client.connect() {
                     let _ = window.emit("message_error", format!("Unable to connect: {}", e));
+                    if let Ok(mut m) = originators.lock() {
+                        m.remove(&session_id);
+                    }
                     return;
                 }
             }
-            if let Err(e) = client.send_chat_streaming_with_recovery(message, None) {
+            let result =
+                client.send_chat_streaming_with_recovery(session_id.clone(), message, None);
+            let active_session_id = match &result {
+                Ok(id) => id.clone(),
+                Err(_) => session_id.clone(),
+            };
+            if let Err(e) = result {
                 let _ = window.emit("message_error", format!("Failed to send: {}", e));
+                if let Ok(mut m) = originators.lock() {
+                    m.remove(&session_id);
+                }
                 return;
             }
-            let _ = window.emit("message_complete", ());
+            let _ = window.emit(
+                "message_complete",
+                serde_json::json!({ "sessionId": &active_session_id }),
+            );
+            if let Ok(mut m) = originators.lock() {
+                m.remove(&active_session_id);
+                if active_session_id != session_id {
+                    m.remove(&session_id);
+                }
+            }
         });
     }
     Ok(())
@@ -692,6 +742,7 @@ pub async fn get_slash_commands(
 
 #[tauri::command]
 pub async fn execute_slash_command(
+    session_id: String,
     command: String,
     args: Option<serde_json::Value>,
     acp: State<'_, AcpHandles>,
@@ -708,7 +759,6 @@ pub async fn execute_slash_command(
         if !client.is_connected() {
             return Err("Not connected".to_string());
         }
-        let session_id = client.get_session_id().ok_or("No active session")?;
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
         let response = client.send_request(
@@ -771,6 +821,7 @@ pub async fn get_slash_command_options(_command: String) -> Result<serde_json::V
 
 #[tauri::command]
 pub async fn send_steering_message(
+    session_id: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
 ) -> Result<bool, String> {
@@ -787,7 +838,7 @@ pub async fn send_steering_message(
     let client = acp.client.clone();
     async_runtime::spawn_blocking(move || {
         if client.is_connected() {
-            if let Err(e) = client.send_chat_streaming(&steering_msg, None) {
+            if let Err(e) = client.send_chat_streaming(&session_id, &steering_msg, None) {
                 warn!("Failed to send auto-steering message: {}", e);
             }
         }
@@ -824,6 +875,7 @@ pub async fn get_available_models(
 /// Progress events are emitted to the frontend as each step completes.
 #[tauri::command]
 pub async fn execute_automation_plan(
+    session_id: String,
     plan_json: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
@@ -911,7 +963,7 @@ pub async fn execute_automation_plan(
             );
 
             // Invoke the sub-agent
-            match client.invoke_subagent(&query) {
+            match client.invoke_subagent(&session_id, &query) {
                 Ok(result) => {
                     info!(
                         "Step {}/{} completed: {} chars",
@@ -1038,6 +1090,7 @@ pub async fn execute_automation_plan(
 /// can continue its response with the data.
 #[tauri::command]
 pub async fn extension_tool_response(
+    session_id: String,
     extension_id: String,
     tool_name: String,
     result_json: String,
@@ -1075,7 +1128,7 @@ pub async fn extension_tool_response(
         };
 
         // Send as a follow-up user message so the agent continues
-        if let Err(e) = client.send_chat_streaming(&content, None) {
+        if let Err(e) = client.send_chat_streaming(&session_id, &content, None) {
             let _ = window.emit(
                 "message_error",
                 format!("Failed to send tool result: {}", e),
@@ -1083,7 +1136,10 @@ pub async fn extension_tool_response(
         }
 
         // Emit message_complete so the frontend knows the follow-up response is done
-        let _ = window.emit("message_complete", ());
+        let _ = window.emit(
+            "message_complete",
+            serde_json::json!({ "sessionId": &session_id }),
+        );
     });
 
     Ok(())
@@ -1094,6 +1150,7 @@ pub async fn extension_tool_response(
 /// which local extension tools are available.
 #[tauri::command]
 pub async fn send_extension_tool_steering(
+    session_id: String,
     tool_steering: String,
     acp: State<'_, AcpHandles>,
 ) -> Result<(), String> {
@@ -1135,7 +1192,7 @@ pub async fn send_extension_tool_steering(
             tool_steering
         );
 
-        match client.send_chat_streaming(&msg, None) {
+        match client.send_chat_streaming(&session_id, &msg, None) {
             Ok(_) => info!("Extension tool steering sent"),
             Err(e) => warn!("Failed to send extension tool steering: {}", e),
         }
@@ -1218,9 +1275,12 @@ pub async fn check_extension_tool_permission(
 // Inline Assist messaging
 // ---------------------------------------------------------------------------
 
-/// Send a message for inline assist and stream the response to the inline-assist window.
+/// Send a message for inline assist and stream the response to the
+/// inline-assist window. The frontend passes the session id to use
+/// (typically the floating window's session).
 #[tauri::command]
 pub async fn send_inline_assist(
+    session_id: String,
     message: String,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
@@ -1237,19 +1297,11 @@ pub async fn send_inline_assist(
 
         // send_chat_streaming resets its own session bucket; once it
         // returns, the response is available in that bucket.
-        if let Err(e) = client.send_chat_streaming(&message, None) {
+        if let Err(e) = client.send_chat_streaming(&session_id, &message, None) {
             let _ = app.emit("inline_assist_error", format!("Failed: {}", e));
             return;
         }
 
-        // Read the final result by the session id this prompt landed on.
-        let session_id = match client.get_session_id() {
-            Some(id) => id,
-            None => {
-                let _ = app.emit("inline_assist_error", "No active session after send");
-                return;
-            }
-        };
         let result = client.take_session_accumulator(&session_id);
         if result.trim().is_empty() {
             let _ = app.emit("inline_assist_error", "Empty response");
@@ -1268,9 +1320,12 @@ pub async fn send_inline_assist(
 
 /// Execute a macro: run each step sequentially, feeding output into the next.
 /// Steps can be AI prompts, find/replace, built-in transforms, or JS scripts.
-/// Returns the final result text.
+/// Returns the final result text. The caller passes the session id that
+/// AI-prompt steps should land on (typically the calling window's
+/// pinned session).
 #[tauri::command]
 pub async fn execute_macro(
+    session_id: String,
     steps: Vec<serde_json::Value>,
     initial_input: String,
     acp: State<'_, AcpHandles>,
@@ -1306,11 +1361,9 @@ pub async fn execute_macro(
                             return Err(format!("Step {}: Unable to connect: {}", i + 1, e));
                         }
                     }
-                    if let Err(e) = client.send_chat_streaming(&full_prompt, None) {
+                    if let Err(e) = client.send_chat_streaming(&session_id, &full_prompt, None) {
                         return Err(format!("Step {} failed: {}", i + 1, e));
                     }
-                    let session_id = client.get_session_id()
-                        .ok_or_else(|| format!("Step {}: no active session", i + 1))?;
                     let result = client.take_session_accumulator(&session_id);
                     if result.trim().is_empty() {
                         return Err(format!("Step {} returned empty result", i + 1));

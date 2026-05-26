@@ -63,39 +63,53 @@ async fn shutdown_and_exit_inner(
         let acp_client = acp.client.clone();
         let config = features.config.clone();
 
+        // Quit-time steering operates on main's pinned session — that's
+        // the conventional "primary" conversation and the one users
+        // expect to be analysed. Floating sessions are typically short
+        // and transactional; chat-<uuid> windows aren't yet ubiquitous
+        // enough to be worth picking between. If main has no pinned
+        // session, skip steering entirely.
+        let main_session_id = app.try_state::<crate::state::UiState>().and_then(|ui| {
+            ui.window_sessions
+                .lock()
+                .ok()
+                .and_then(|m| m.get("main").cloned())
+        });
+
         // Snapshot whether auto-steering will actually run before we pay any
         // cancel-and-wait cost. If there's nothing to steer, quit can skip
         // straight to disconnect.
-        let will_run_steering = if let Ok(cfg) = config.try_lock() {
-            cfg.acp.agent.auto_steering_enabled
-                && acp_client.is_connected()
-                && crate::auto_steering::has_pending_messages()
-        } else {
-            false
-        };
+        let will_run_steering = main_session_id.is_some()
+            && if let Ok(cfg) = config.try_lock() {
+                cfg.acp.agent.auto_steering_enabled
+                    && acp_client.is_connected()
+                    && crate::auto_steering::has_pending_messages()
+            } else {
+                false
+            };
 
         if will_run_steering {
-            // Cancel any in-flight prompt before issuing a new one. The agent
-            // (kiro-cli) holds an internal "prompt in progress" lock that
-            // rejects any subsequent session/prompt — including the one
-            // auto_steering is about to send — until the active prompt
-            // finishes or is cancelled. Without this, on-quit steering races
-            // with the user's last prompt and the agent replies with
-            // "Prompt already in progress" instead of generating the doc.
-            if let Some(session_id) = acp_client.get_session_id() {
-                if let Err(e) = acp_client.cancel_session(&session_id) {
-                    warn!("Failed to send session/cancel on quit: {}", e);
-                } else {
-                    // Brief pause so the agent can release its prompt
-                    // lock before auto_steering issues a new prompt.
-                    // 150ms is plenty for a local stdio agent; kept
-                    // small so quit still feels instant.
-                    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-                }
+            let session_id = main_session_id.expect("checked above");
+            // Cancel any in-flight prompt on this session before
+            // issuing the steering prompt. The agent (kiro-cli) holds
+            // an internal "prompt in progress" lock per session that
+            // rejects any subsequent session/prompt until the active
+            // prompt finishes or is cancelled. Without this, on-quit
+            // steering races with the user's last prompt and the
+            // agent replies with "Prompt already in progress" instead
+            // of generating the doc.
+            if let Err(e) = acp_client.cancel_session(&session_id) {
+                warn!("Failed to send session/cancel on quit: {}", e);
+            } else {
+                // Brief pause so the agent can release its prompt
+                // lock before auto_steering issues a new prompt.
+                // 150ms is plenty for a local stdio agent; kept
+                // small so quit still feels instant.
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             }
 
             if let Ok(config) = config.try_lock() {
-                crate::auto_steering::generate_steering_on_quit(&acp_client, &config);
+                crate::auto_steering::generate_steering_on_quit(&acp_client, &config, &session_id);
             }
         }
 
@@ -1783,7 +1797,7 @@ pub async fn download_and_install_update(
     app: tauri::AppHandle,
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
-    acp: State<'_, AcpHandles>,
+    _acp: State<'_, AcpHandles>,
 ) -> Result<(), AppError> {
     // Prefer the Update cached from a previous check_for_update call —
     // it might carry channel-specific metadata the plugin would need to
@@ -1817,12 +1831,13 @@ pub async fn download_and_install_update(
     }
 
     // Write the resume marker so the relaunch restores the session.
-    let session_id = ui
-        .floating_session_id
-        .lock()
-        .ok()
-        .and_then(|s| s.clone())
-        .or_else(|| acp.client.get_session_id());
+    // Prefer floating's session (post-update banner shows the floating
+    // window first); fall back to main's session if floating has none.
+    let session_id = ui.window_sessions.lock().ok().and_then(|m| {
+        m.get("floating")
+            .cloned()
+            .or_else(|| m.get("main").cloned())
+    });
     crate::updater::persist_resume_marker(session_id.as_deref());
     // Tag this install as user-initiated so the post-install launch
     // shows the floating window with the celebration banner. The idle

@@ -62,7 +62,7 @@ const LOCAL_COMMANDS = [
         icon: '🔑',
         execute: async (invoke) => {
             try {
-                const id = await invoke('get_current_session_id');
+                const id = await invoke('get_window_session', { label: 'main' });
                 const text = id || 'No active session';
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
@@ -87,7 +87,7 @@ const LOCAL_COMMANDS = [
                 return;
             }
             try {
-                const sessionId = await invoke('get_current_session_id');
+                const sessionId = await invoke('get_window_session', { label: 'main' });
                 if (!sessionId) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', {
@@ -124,7 +124,7 @@ const LOCAL_COMMANDS = [
         icon: '📂',
         execute: async (invoke) => {
             try {
-                const sessionId = await invoke('get_current_session_id');
+                const sessionId = await invoke('get_window_session', { label: 'main' });
                 if (!sessionId) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', { detail: 'No active session' })
@@ -315,11 +315,18 @@ export function matchSlashCommands(input) {
             meta: cmd.meta,
             execute: async (invoke, _appWindow) => {
                 const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
+                // Slash commands need a session id; the calling window
+                // tells us its label so we can look up its pinned session.
+                const winLabel = _appWindow?.label || 'floating';
+                const sessionId = await invoke('get_window_session', { label: winLabel }).catch(
+                    () => null
+                );
 
                 // Selection-type commands: show options as a selectable list
                 if (cmd.meta?.inputType === 'selection') {
                     try {
                         const result = await invoke('execute_slash_command', {
+                            sessionId,
                             command: cmdName,
                             args: null,
                         });
@@ -365,6 +372,7 @@ export function matchSlashCommands(input) {
                 // Regular commands: execute and show result
                 try {
                     const result = await invoke('execute_slash_command', {
+                        sessionId,
                         command: cmdName,
                         args: null,
                     });

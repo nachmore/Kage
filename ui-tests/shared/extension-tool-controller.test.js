@@ -4,6 +4,7 @@ import { ExtensionToolController } from '../../ui/js/shared/extension-tool-contr
 function makeHost(overrides = {}) {
     return {
         invoke: vi.fn().mockResolvedValue('allow'),
+        getSessionId: vi.fn().mockReturnValue('sess-1'),
         extensionManager: {
             buildToolSteeringBlock: vi.fn().mockResolvedValue('STEER'),
             getToolDefinitionsCached: vi.fn().mockReturnValue([]),
@@ -192,16 +193,26 @@ describe('ExtensionToolController._handleToolCall', () => {
 });
 
 describe('ExtensionToolController.sendSteering', () => {
-    it('ships the block to the agent', async () => {
+    it('ships the block to the agent with the host session id', async () => {
         const host = makeHost();
         const c = new ExtensionToolController(host);
         await c.sendSteering();
-        expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', { toolSteering: 'STEER' });
+        expect(host.invoke).toHaveBeenCalledWith('send_extension_tool_steering', {
+            sessionId: 'sess-1',
+            toolSteering: 'STEER',
+        });
     });
 
     it('skips the IPC when buildToolSteeringBlock returns falsy', async () => {
         const host = makeHost();
         host.extensionManager.buildToolSteeringBlock = vi.fn().mockResolvedValue(null);
+        const c = new ExtensionToolController(host);
+        await c.sendSteering();
+        expect(host.invoke).not.toHaveBeenCalled();
+    });
+
+    it('skips the IPC when the host has no session id', async () => {
+        const host = makeHost({ getSessionId: vi.fn().mockReturnValue(null) });
         const c = new ExtensionToolController(host);
         await c.sendSteering();
         expect(host.invoke).not.toHaveBeenCalled();

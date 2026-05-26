@@ -1,6 +1,7 @@
 use crate::acp_client::AcpClient;
 use crate::app_launcher::AppLauncher;
 use crate::config::Config;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -36,14 +37,26 @@ pub struct AcpHandles {
 /// these survive a restart.
 pub struct UiState {
     pub dev_mode: bool,
-    /// The session ID used by the floating window (persists across session switches)
-    pub floating_session_id: Arc<std::sync::Mutex<Option<String>>>,
+    /// Per-window pinned session ids. Keyed by Tauri webview label
+    /// (`main`, `floating`, future `chat-<uuid>`). The frontend writes
+    /// to this via `set_window_session` whenever a window adopts a
+    /// session (boot, switch, new); the backend reads it where it
+    /// needs to know "which session does X belong to" — quit-time
+    /// auto-steering, the updater's resume marker, the floating
+    /// expand-to-chat handoff. No entry means the window has no
+    /// pinned session yet.
+    pub window_sessions: Arc<std::sync::Mutex<HashMap<String, String>>>,
+    /// Maps an in-flight session id to the window label that issued
+    /// the prompt. Written by `send_message_streaming` before the ACP
+    /// call, read by the permission handler to route the modal back
+    /// to the originating window, cleared on prompt complete/error.
+    /// A miss falls back to "floating" — the historical default for
+    /// hotkey-driven prompts.
+    pub pending_prompt_originators: Arc<std::sync::Mutex<HashMap<String, String>>>,
     /// Text that was selected in the previously active window when the hotkey was pressed
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
     /// Info about the foreground window when the hotkey was pressed (title, process_name)
     pub source_window: Arc<std::sync::Mutex<Option<(String, String)>>>,
-    /// Which window sent the last notification ('floating' or 'main')
-    pub notification_source: Arc<std::sync::Mutex<String>>,
     /// Whether the floating window frontend's `init()` has completed.
     /// Diagnostic-only — written by `notify_frontend_ready`, never read
     /// as a gate (see comment on that command). The "Frontend signaled

@@ -760,14 +760,14 @@ pub fn start_update_loop(
     updater_state: Arc<UpdaterState>,
     config: Arc<std::sync::Mutex<Config>>,
     app_handle: tauri::AppHandle,
-    floating_session_id: Arc<std::sync::Mutex<Option<String>>>,
+    window_sessions: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
     acp_client: Arc<crate::acp_client::AcpClient>,
 ) {
     let updater_for_idle = updater_state.clone();
     let config_for_idle = config.clone();
     let app_for_idle = app_handle.clone();
-    let floating_session_for_idle = floating_session_id;
-    let acp_client_for_idle = acp_client;
+    let window_sessions_for_idle = window_sessions;
+    let _acp_client_for_idle = acp_client;
 
     tauri::async_runtime::spawn(async move {
         crate::os::set_current_thread_name("updater-check");
@@ -950,12 +950,14 @@ pub fn start_update_loop(
             }
 
             // Write the resume marker so the restarted process picks
-            // up the session the user was on.
-            let session_id = floating_session_for_idle
-                .lock()
-                .ok()
-                .and_then(|s| s.clone())
-                .or_else(|| acp_client_for_idle.get_session_id());
+            // up the session the user was on. Prefer floating's session
+            // (post-update banner shows the floating window first);
+            // fall back to main's session.
+            let session_id = window_sessions_for_idle.lock().ok().and_then(|m| {
+                m.get("floating")
+                    .cloned()
+                    .or_else(|| m.get("main").cloned())
+            });
             persist_resume_marker(session_id.as_deref());
             persist_install_source(InstallSource::Idle);
 

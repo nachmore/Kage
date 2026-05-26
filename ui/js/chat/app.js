@@ -91,6 +91,7 @@ export class ChatApp {
         const app = this;
         this.extensionToolController = new ExtensionToolController({
             invoke,
+            getSessionId: () => app.activeSessionId,
             get extensionManager() {
                 return app.extensionManager;
             },
@@ -126,6 +127,7 @@ export class ChatApp {
         this.automationPlanController = new AutomationPlanController({
             invoke,
             listen,
+            getSessionId: () => app.activeSessionId,
             renderTasks: (tasks) => {
                 if (!app._automationContentDiv) return;
                 const wrapper = createTaskPlanElement(tasks);
@@ -734,10 +736,35 @@ export class ChatApp {
         });
 
         this.listen('message_chunk', (event) => this.handleMessageChunk(event));
-        this.listen('message_complete', () => this.handleMessageComplete());
+        this.listen('message_complete', (event) => {
+            // Recovery may have moved us to a fresh session; pick up
+            // the new id so subsequent sends/cancels target it.
+            const newId = event?.payload?.sessionId;
+            if (newId && newId !== this.activeSessionId) {
+                console.log('[chat] adopting recovery session id:', newId);
+                this.activeSessionId = newId;
+                this.currentAcpSessionId = newId;
+                this.invoke('set_window_session', {
+                    label: 'main',
+                    sessionId: newId,
+                }).catch(() => {});
+            }
+            this.handleMessageComplete();
+        });
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
-        this.listen('session_reset', (event) => this.handleSessionReset(event));
+        this.listen('session_reset', (event) => {
+            const newId = event?.payload?.newSessionId;
+            if (newId) {
+                this.activeSessionId = newId;
+                this.currentAcpSessionId = newId;
+                this.invoke('set_window_session', {
+                    label: 'main',
+                    sessionId: newId,
+                }).catch(() => {});
+            }
+            this.handleSessionReset(event);
+        });
 
         // Refresh session list when the backend detects directory changes
         this.listen('sessions_changed', () => this.loadSessions(true));
@@ -820,6 +847,7 @@ export class ChatApp {
                 btn.addEventListener('click', async () => {
                     try {
                         const result = await this.invoke('execute_slash_command', {
+                            sessionId: this.activeSessionId,
                             command,
                             args: { input: opt.value },
                         });
@@ -842,7 +870,9 @@ export class ChatApp {
 
     async loadFloatingSessionId() {
         try {
-            this.floatingSessionId = await this.invoke('get_floating_session_id');
+            this.floatingSessionId = await this.invoke('get_window_session', {
+                label: 'floating',
+            });
         } catch (e) {
             console.error('Failed to get floating session ID:', e);
             this.floatingSessionId = null;
@@ -850,8 +880,13 @@ export class ChatApp {
     }
 
     async loadCurrentSessionId() {
+        // The chat window's own pinned session is whatever main is
+        // tracking. Boot reads it; later changes are written by
+        // switch_acp_session via set_window_session.
         try {
-            this.currentAcpSessionId = await this.invoke('get_current_session_id');
+            this.currentAcpSessionId = await this.invoke('get_window_session', {
+                label: 'main',
+            });
         } catch (e) {
             console.error('Failed to get current session ID:', e);
             this.currentAcpSessionId = null;
@@ -1229,8 +1264,9 @@ export class ChatApp {
 
         // Switch ACP session in parallel
         try {
-            await this.invoke('switch_acp_session', { sessionId });
-            console.log('ACP session switched to:', sessionId);
+            const adoptedId = await this.invoke('switch_acp_session', { sessionId });
+            this.currentAcpSessionId = adoptedId;
+            console.log('ACP session switched to:', adoptedId);
             this.isConnected = true;
             this.updateConnectionStatus();
             this.elements.chatInput.disabled = false;
@@ -1423,6 +1459,7 @@ export class ChatApp {
         try {
             const newId = await this.invoke('switch_acp_session', { sessionId: null });
             this.activeSessionId = newId;
+            this.currentAcpSessionId = newId;
             this._seenSessionIds.add(newId);
             // Add the new session to the list so it appears immediately
             if (!this.sessions.find((s) => s.session_id === newId)) {
@@ -1438,7 +1475,7 @@ export class ChatApp {
 
             // Send steering for the new session (fire and forget)
             try {
-                await this.invoke('send_steering_message');
+                await this.invoke('send_steering_message', { sessionId: newId });
             } catch (e) {
                 console.log('Steering message not sent (may be disabled):', e);
             }
@@ -1513,9 +1550,6 @@ export class ChatApp {
     // --- Messaging ---
 
     async sendMessage() {
-        // Mark that this message originates from the chat window
-        this.invoke('set_notification_source', { source: 'main' }).catch(() => {});
-
         // Stop any ongoing TTS and speech recognition
         if (this.speech) {
             this.speech.cancelSpeech();
@@ -1558,7 +1592,11 @@ export class ChatApp {
                     source: 'chat',
                     length: messageLengthBucket(message),
                 });
-                await this.invoke('send_message_streaming', { message, attachments: null });
+                await this.invoke('send_message_streaming', {
+                    sessionId: this.activeSessionId,
+                    message,
+                    attachments: null,
+                });
             } catch (e) {
                 this.handleMessageError({ payload: 'Error: ' + e });
             }
@@ -1611,6 +1649,7 @@ export class ChatApp {
                 const cmdName = parts[0].substring(1); // strip leading /
                 const cmdArgs = parts.length > 1 ? { input: parts.slice(1).join(' ') } : {};
                 const result = await this.invoke('execute_slash_command', {
+                    sessionId: this.activeSessionId,
                     command: cmdName,
                     args: cmdArgs,
                 });
@@ -1640,7 +1679,11 @@ export class ChatApp {
                 length: messageLengthBucket(message),
                 attachments: attachments?.length || 0,
             });
-            await this.invoke('send_message_streaming', { message, attachments });
+            await this.invoke('send_message_streaming', {
+                sessionId: this.activeSessionId,
+                message,
+                attachments,
+            });
             this.isConnected = true;
             this.updateConnectionStatus();
         } catch (error) {
@@ -1734,7 +1777,9 @@ export class ChatApp {
         this.updateInputState();
         this.elements.chatInput.focus();
         this.scrollToBottom();
-        this.invoke('cancel_generation').catch((e) => console.log('Cancel:', e));
+        this.invoke('cancel_generation', { sessionId: this.activeSessionId }).catch((e) =>
+            console.log('Cancel:', e)
+        );
     }
 
     createMessageElement(role, content) {
@@ -2514,6 +2559,7 @@ export class ChatApp {
     async refreshContextUsage() {
         try {
             const result = await this.invoke('execute_slash_command', {
+                sessionId: this.activeSessionId,
                 command: 'context',
                 args: {},
             });
@@ -2602,6 +2648,7 @@ export class ChatApp {
         this._lastAutoCompactedAt = percent;
         try {
             await this.invoke('execute_slash_command', {
+                sessionId: this.activeSessionId,
                 command: 'compact',
                 args: {},
             });
@@ -2693,6 +2740,7 @@ export class ChatApp {
         this.currentModelId = model.modelId;
         try {
             await this.invoke('execute_slash_command', {
+                sessionId: this.activeSessionId,
                 command: 'model',
                 args: { modelName: model.modelId },
             });

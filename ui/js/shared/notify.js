@@ -24,15 +24,10 @@ export async function sendAppNotification(invoke, title, body, source) {
         if (!granted) return;
 
         notif.sendNotification({ title, body });
-
-        // Also emit a Tauri event so the Rust side can handle the click
-        // (notification clicks bring the app to foreground in production;
-        // we emit the source so the right window can be shown)
-        try {
-            await invoke('set_notification_source', { source: source || 'floating' });
-        } catch {
-            /* command may not exist yet */
-        }
+        // The single-session "notification source" routing was removed
+        // when chat windows became 1:1 with sessions. Notification
+        // click-to-foreground now defers to the OS / Tauri default.
+        void source;
     } catch {
         /* ignore */
     }

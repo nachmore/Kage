@@ -97,7 +97,6 @@ impl AcpClient {
         }
 
         info!("Session created: {}", session_id);
-        *self.session_id.lock_or_recover() = Some(session_id.clone());
         Ok((session_id, models_list))
     }
 
@@ -156,25 +155,19 @@ impl AcpClient {
         }
 
         info!("Session loaded: {}", session_id);
-        *self.session_id.lock_or_recover() = Some(session_id.to_string());
         Ok((session_id.to_string(), models_list))
     }
 
     // --- Steering ---
 
-    pub fn send_builtin_steering(&self) {
-        let session_id = match self.get_session_id() {
-            Some(id) => id,
-            None => return,
-        };
-
+    pub fn send_builtin_steering(&self, session_id: &str) {
         let steering_msg = format!(
             "{} {}",
             crate::auto_steering::STEERING_MSG_PREFIX,
             crate::auto_steering::BUILTIN_STEERING
         );
 
-        self.reset_session_accumulator(&session_id);
+        self.reset_session_accumulator(session_id);
 
         let result = self.send_request(
             "session/prompt",
@@ -194,6 +187,7 @@ impl AcpClient {
 
     pub fn send_chat_streaming(
         &self,
+        session_id: &str,
         content: &str,
         attachments: Option<&[serde_json::Value]>,
     ) -> Result<()> {
@@ -204,29 +198,22 @@ impl AcpClient {
 
         if debug {
             info!(
-                "[CHAT] Sending message ({} chars): {}",
+                "[CHAT] Sending message on {} ({} chars): {}",
+                session_id,
                 content.chars().count(),
                 content
             );
         } else {
-            info!("Sending chat message ({} chars)", content.chars().count());
+            info!(
+                "Sending chat message on {} ({} chars)",
+                session_id,
+                content.chars().count()
+            );
         }
-
-        let session_id = {
-            let guard = self.session_id.lock_or_recover();
-            if let Some(ref id) = *guard {
-                id.clone()
-            } else {
-                drop(guard);
-                let (id, _) = self.create_session(None)?;
-                self.send_builtin_steering();
-                id
-            }
-        };
 
         // Reset only this session's bucket — other sessions' in-flight
         // accumulators (auto-steering, sub-agents) must not be wiped.
-        self.reset_session_accumulator(&session_id);
+        self.reset_session_accumulator(session_id);
 
         let mut prompt: Vec<serde_json::Value> = Vec::new();
 
@@ -291,16 +278,21 @@ impl AcpClient {
     /// Send a chat message with automatic recovery on timeout/disconnect.
     ///
     /// Strategy: try normally → restart + reload session → restart + fresh session.
+    /// Returns the session id that was actually used to send — same as the
+    /// input on success or transient-failure recovery, but on
+    /// "session corrupted" / "fresh session" recovery the returned id is the
+    /// new session id that the caller should adopt.
     pub fn send_chat_streaming_with_recovery(
         &self,
+        session_id: String,
         content: String,
         attachments: Option<Vec<serde_json::Value>>,
-    ) -> Result<()> {
+    ) -> Result<String> {
         let att_ref = attachments.as_deref();
 
         // --- Attempt 1: normal send ---
-        match self.send_chat_streaming(&content, att_ref) {
-            Ok(()) => return Ok(()),
+        match self.send_chat_streaming(&session_id, &content, att_ref) {
+            Ok(()) => return Ok(session_id),
             Err(e) => {
                 let err_str = format!("{}", e);
                 if Self::is_recoverable_error(&err_str) {
@@ -308,10 +300,10 @@ impl AcpClient {
                     if Self::is_corrupted_session(&err_str) {
                         warn!("Session corrupted — skipping reload, creating fresh session");
                         self.restart_connection()?;
-                        self.set_session_id(None);
-                        self.create_session(None)?;
-                        self.send_builtin_steering();
-                        return self.send_chat_streaming(&content, att_ref);
+                        let (new_id, _) = self.create_session(None)?;
+                        self.send_builtin_steering(&new_id);
+                        self.send_chat_streaming(&new_id, &content, att_ref)?;
+                        return Ok(new_id);
                     }
                 } else {
                     return Err(e);
@@ -320,32 +312,24 @@ impl AcpClient {
         }
 
         // --- Attempt 2: restart + reload session + resend ---
-        let old_session_id = self.get_session_id();
         self.restart_connection()?;
 
-        let mut session_restored = false;
-        if let Some(ref sid) = old_session_id {
-            info!("Attempting to reload session {} after restart", sid);
-            match self.load_existing_session(sid, None) {
-                Ok(_) => {
-                    info!("Session {} reloaded successfully", sid);
-                    session_restored = true;
-                }
-                Err(e) => {
-                    warn!("Could not reload session {}: {}", sid, e);
-                }
+        let session_id = match self.load_existing_session(&session_id, None) {
+            Ok(_) => {
+                info!("Session {} reloaded successfully", session_id);
+                session_id
             }
-        }
+            Err(e) => {
+                warn!("Could not reload session {}: {}", session_id, e);
+                info!("Creating fresh session for retry");
+                let (new_id, _) = self.create_session(None)?;
+                self.send_builtin_steering(&new_id);
+                new_id
+            }
+        };
 
-        if !session_restored {
-            info!("Creating fresh session for retry");
-            self.set_session_id(None);
-            self.create_session(None)?;
-            self.send_builtin_steering();
-        }
-
-        match self.send_chat_streaming(&content, att_ref) {
-            Ok(()) => return Ok(()),
+        match self.send_chat_streaming(&session_id, &content, att_ref) {
+            Ok(()) => return Ok(session_id),
             Err(e) => {
                 let err_str = format!("{}", e);
                 if Self::is_recoverable_error(&err_str) {
@@ -361,11 +345,11 @@ impl AcpClient {
 
         // --- Attempt 3: restart + brand-new session + resend (last chance) ---
         self.restart_connection()?;
-        self.set_session_id(None);
-        self.create_session(None)?;
-        self.send_builtin_steering();
+        let (new_id, _) = self.create_session(None)?;
+        self.send_builtin_steering(&new_id);
 
-        self.send_chat_streaming(&content, att_ref)
+        self.send_chat_streaming(&new_id, &content, att_ref)?;
+        Ok(new_id)
     }
 
     // --- Error classification ---
@@ -395,26 +379,15 @@ impl AcpClient {
     /// accumulated response text — the bucket is consumed, so the caller
     /// gets the response as a value rather than reaching into the
     /// accumulator map themselves.
-    pub fn invoke_subagent(&self, query: &str) -> Result<String> {
-        let session_id = {
-            let guard = self.session_id.lock_or_recover();
-            if let Some(ref id) = *guard {
-                id.clone()
-            } else {
-                drop(guard);
-                let (id, _) = self.create_session(None)?;
-                self.send_builtin_steering();
-                id
-            }
-        };
-
+    pub fn invoke_subagent(&self, session_id: &str, query: &str) -> Result<String> {
         info!(
-            "Invoking sub-agent with query: {}",
+            "Invoking sub-agent on {} with query: {}",
+            session_id,
             &query[..query.len().min(100)]
         );
 
         // Reset this session's bucket so we read just the sub-agent's reply
-        self.reset_session_accumulator(&session_id);
+        self.reset_session_accumulator(session_id);
 
         let command = serde_json::json!({
             "command": "invoke_subagents",
@@ -447,7 +420,7 @@ impl AcpClient {
 
         // Get the accumulated response from the sub-agent and clear its
         // bucket — this read is one-shot, no other caller wants it.
-        let result = self.take_session_accumulator(&session_id);
+        let result = self.take_session_accumulator(session_id);
         info!("Sub-agent completed ({} chars)", result.len());
         Ok(result)
     }
