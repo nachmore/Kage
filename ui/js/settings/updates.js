@@ -59,11 +59,11 @@ export class UpdatesSettingsModule extends SettingsModule {
 
                 ${this.createControlRow(
                     'Update Channel',
-                    "Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Beta</strong> is for previewing what's coming next. <strong>Dev</strong> tracks every commit — expect rough edges.",
+                    "Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Preview</strong> is for trying what's coming next. <strong>Nightly</strong> tracks every commit — expect rough edges.",
                     `<select class="setting-input" id="updateChannel">
                         <option value="stable">Stable (recommended)</option>
-                        <option value="beta">Beta</option>
-                        <option value="dev">Dev (bleeding edge)</option>
+                        <option value="beta">Preview</option>
+                        <option value="dev">Nightly (bleeding edge)</option>
                     </select>`
                 )}
 
@@ -171,14 +171,21 @@ export class UpdatesSettingsModule extends SettingsModule {
     }
 
     /** Replace the static stable/beta/dev <option> tags with whatever
-     *  the backend reports. Idempotent — safe to call before load(). */
+     *  the backend reports. Idempotent — safe to call before load().
+     *
+     *  Internal IDs (`stable`, `beta`, `dev`) are unchanged — they
+     *  feed into Cargo.toml's [package.metadata.update] endpoint
+     *  routing and existing saved config values. The user-facing
+     *  labels are friendlier ("Preview" beats "Beta" for non-
+     *  developers; "Nightly" sets the right "expect breakage"
+     *  expectation that "Dev" left vague). */
     _renderChannelOptions() {
         const channelEl = document.getElementById('updateChannel');
         if (!channelEl || !Array.isArray(this._validChannels)) return;
         const labels = {
             stable: 'Stable (recommended)',
-            beta: 'Beta',
-            dev: 'Dev (bleeding edge)',
+            beta: 'Preview',
+            dev: 'Nightly (bleeding edge)',
         };
         const previous = channelEl.value;
         channelEl.innerHTML = this._validChannels
