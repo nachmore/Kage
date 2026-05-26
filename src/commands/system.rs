@@ -1483,6 +1483,26 @@ pub async fn export_config_bundle(
     Ok(len)
 }
 
+/// Write a UTF-8 string to the given path. The frontend uses this for
+/// any "save text" workflow that's already routed a path through the
+/// Tauri dialog plugin (chat markdown export, today; future "save as"
+/// flows can land here too without the frontend needing a new
+/// command). Returns the byte count so the caller can confirm a
+/// successful write.
+///
+/// Why an in-process command rather than `tauri-plugin-fs`: the fs
+/// plugin requires per-path scope grants in `capabilities/`, which
+/// would force us to pre-declare every directory the user might
+/// pick. The dialog plugin already returns an absolute path the user
+/// just consented to, so we just write it.
+#[tauri::command]
+pub async fn write_text_file(path: String, contents: String) -> Result<u64, AppError> {
+    let len = contents.len() as u64;
+    std::fs::write(&path, contents.as_bytes())
+        .map_err(|e| AppError::from(format!("Failed to write {}: {}", path, e)))?;
+    Ok(len)
+}
+
 /// Apply a backup bundle from disk. Returns the import summary (counts)
 /// so the UI can render a concrete success toast. The new config is
 /// written to disk + the in-memory state is replaced; a `config_updated`

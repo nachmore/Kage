@@ -14,6 +14,7 @@ import {
     sessionImageToDataUrl,
 } from '../shared/attachments.js';
 import { loadSlashCommands, executeCommand } from '../shared/commands.js';
+import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { mascotHTML } from '../shared/mascot.js';
 import {
@@ -497,6 +498,7 @@ export class ChatApp {
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
             chatHeaderTitleInput: document.getElementById('chatHeaderTitleInput'),
+            chatExportBtn: document.getElementById('chatExportBtn'),
             errorContainer: document.getElementById('errorContainer'),
             chatSuggestions: document.getElementById('chatSuggestions'),
             attachmentPreviews: document.getElementById('attachmentPreviews'),
@@ -604,6 +606,9 @@ export class ChatApp {
         this.elements.chatInput.addEventListener('paste', (e) =>
             handlePasteEvent(e, this.attachmentManager)
         );
+
+        // Export the current chat to a Markdown file the user picks.
+        this.elements.chatExportBtn?.addEventListener('click', () => this.exportChatAsMarkdown());
 
         // Double-click header title to rename session
         this.elements.chatHeaderTitle.addEventListener('dblclick', () => this.startTitleEdit());
@@ -2069,6 +2074,48 @@ export class ChatApp {
      */
     formatError(error) {
         return formatErrorShared(error);
+    }
+
+    /**
+     * Export the active chat to a Markdown file.
+     *
+     * Uses the same `messages` array we render from, so what the user
+     * sees on screen is what they get in the export — minus tool
+     * call internals and the streaming-state UI chrome. Title +
+     * model + session id come from the existing on-screen state.
+     */
+    async exportChatAsMarkdown() {
+        if (!Array.isArray(this.messages) || this.messages.length === 0) {
+            return;
+        }
+        const dialog = window.__TAURI__?.dialog;
+        if (!dialog?.save) return;
+
+        const title = stripKageTags(this.elements.chatHeaderTitle?.textContent || '') || '';
+        const md = buildChatMarkdown({
+            messages: this.messages,
+            title,
+            model: this.elements.modelName?.textContent?.trim() || '',
+            sessionId: this.currentAcpSessionId || this.activeSessionId || '',
+        });
+
+        let target;
+        try {
+            target = await dialog.save({
+                defaultPath: defaultExportFilename(title),
+                filters: [{ name: 'Markdown', extensions: ['md'] }],
+            });
+        } catch {
+            return;
+        }
+        if (!target) return; // user cancelled
+
+        try {
+            await this.invoke('write_text_file', { path: target, contents: md });
+        } catch (e) {
+            console.error('Failed to export chat:', e);
+            alert('Export failed: ' + (e?.message || e));
+        }
     }
 
     startTitleEdit() {

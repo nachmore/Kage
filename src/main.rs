@@ -665,6 +665,7 @@ async fn run() {
             commands::export_config_default_filename,
             commands::export_config_bundle,
             commands::import_config_bundle,
+            commands::write_text_file,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
             commands::has_pending_permission,

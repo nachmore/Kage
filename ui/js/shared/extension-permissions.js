@@ -221,6 +221,12 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     export_config_default_filename: null,
     export_config_bundle: null,
     import_config_bundle: null,
+    // Generic "write text to a user-picked path". Backs the chat
+    // markdown export and any future save-as flows. Off-limits to
+    // extensions because it can write anywhere (path comes from a
+    // dialog the host owns); arbitrary write is not in any extension
+    // capability.
+    write_text_file: null,
     show_context_menu: null,
     show_notification_source_window: null,
     set_notification_source: null,
