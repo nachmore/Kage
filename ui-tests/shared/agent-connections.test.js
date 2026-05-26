@@ -27,6 +27,7 @@ import {
     escapeHtml,
     listPresets,
     readEditForm,
+    pickAgentType,
     renderEditForm,
     uuidLite,
     validateMode,
@@ -247,5 +248,47 @@ describe('validateMode + listPresets', () => {
         const invoke = vi.fn().mockResolvedValue([{ id: 'kiro', display_name: 'Kiro' }]);
         window.__TAURI__ = { core: { invoke } };
         await expect(listPresets()).resolves.toEqual([{ id: 'kiro', display_name: 'Kiro' }]);
+    });
+});
+
+describe('pickAgentType', () => {
+    it('renders an overlay with the four expected options', () => {
+        // Don't await — just verify the DOM after the synchronous mount.
+        pickAgentType();
+        const cards = document.querySelectorAll('.agent-type-card');
+        const kinds = [...cards].map((c) => c.getAttribute('data-kind'));
+        expect(kinds).toEqual(['detect', 'ollama', 'acp_preset', 'custom']);
+        // Cleanup so other tests in the file start fresh.
+        document.querySelector('.agent-type-cancel').click();
+    });
+
+    it('resolves with the clicked card kind', async () => {
+        const promise = pickAgentType();
+        document.querySelector('.agent-type-card[data-kind="ollama"]').click();
+        await expect(promise).resolves.toBe('ollama');
+        // Overlay removed on resolve.
+        expect(document.querySelector('.agent-type-picker-overlay')).toBeNull();
+    });
+
+    it('resolves null when Cancel is clicked', async () => {
+        const promise = pickAgentType();
+        document.querySelector('.agent-type-cancel').click();
+        await expect(promise).resolves.toBeNull();
+    });
+
+    it('resolves null when Escape is pressed', async () => {
+        const promise = pickAgentType();
+        document.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+        );
+        await expect(promise).resolves.toBeNull();
+    });
+
+    it('resolves null when the backdrop is clicked', async () => {
+        const promise = pickAgentType();
+        const overlay = document.querySelector('.agent-type-picker-overlay');
+        // Dispatch a click whose target is the overlay itself, not a child.
+        overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await expect(promise).resolves.toBeNull();
     });
 });

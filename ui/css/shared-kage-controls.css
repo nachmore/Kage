@@ -454,3 +454,87 @@ input:checked + .toggle-slider:before {
     color: var(--kage-text-secondary);
     border: 1px solid var(--kage-border);
 }
+
+/* Agent type picker — modal that asks "what kind of agent are you
+ * adding?" before routing to the matching sub-flow. Shared by the
+ * welcome wizard and the connections list. See pickAgentType() in
+ * ui/js/shared/agent-connections.js. */
+.agent-type-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.agent-type-picker-box {
+    background: var(--kage-bg, #1f1c24);
+    border: 1px solid var(--kage-border);
+    border-radius: 10px;
+    padding: 18px 18px 14px;
+    width: 460px;
+    max-width: 90vw;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.agent-type-picker-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--kage-text-primary, var(--kage-text));
+}
+.agent-type-picker-desc {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+    margin-bottom: 6px;
+}
+.agent-type-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--kage-bg-elevated);
+    border: 1px solid var(--kage-border);
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--kage-text-primary, var(--kage-text));
+    font: inherit;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+.agent-type-card:hover {
+    background: var(--kage-surface-hover, var(--kage-bg-elevated));
+    border-color: var(--kage-accent);
+}
+.agent-type-card:focus-visible {
+    outline: 2px solid var(--kage-accent);
+    outline-offset: 1px;
+}
+.agent-type-icon {
+    font-size: 24px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.agent-type-text {
+    flex: 1;
+    min-width: 0;
+}
+.agent-type-name {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+.agent-type-sub {
+    font-size: 12px;
+    color: var(--kage-text-muted);
+    line-height: 1.35;
+}
+.agent-type-picker-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+}

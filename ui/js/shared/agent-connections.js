@@ -16,6 +16,96 @@
  *   - `window.__TAURI__.core.invoke`
  */
 
+/**
+ * "What kind of agent are you adding?" picker.
+ *
+ * Renders a modal overlay with four options, returns a Promise that
+ * resolves to one of:
+ *
+ *   - `'detect'`     — auto-scan for installed ACP binaries
+ *   - `'ollama'`     — open the Ollama wizard sub-flow
+ *   - `'acp_preset'` — pick from the ACP preset list (Kiro / Claude / Codex)
+ *   - `'custom'`     — raw spawn command / remote
+ *   - `null`         — user cancelled
+ *
+ * Used by both the welcome wizard's "Or configure something else"
+ * link and the connections list's `+ Add agent` button. Lives in
+ * shared/ so neither owns the picker chrome and a future surface
+ * (settings sub-page, command palette) can call it too.
+ */
+export function pickAgentType() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'agent-type-picker-overlay';
+        overlay.innerHTML = `
+            <div class="agent-type-picker-box" role="dialog" aria-label="Add an agent">
+                <div class="agent-type-picker-title">Add an agent</div>
+                <div class="agent-type-picker-desc">What kind of agent are you adding?</div>
+                <button type="button" class="agent-type-card" data-kind="detect">
+                    <span class="agent-type-icon">⚡</span>
+                    <div class="agent-type-text">
+                        <div class="agent-type-name">Auto-detect</div>
+                        <div class="agent-type-sub">Scan this machine for installed agents (Kiro, Claude, Codex).</div>
+                    </div>
+                </button>
+                <button type="button" class="agent-type-card" data-kind="ollama">
+                    <span class="agent-type-icon">🦙</span>
+                    <div class="agent-type-text">
+                        <div class="agent-type-name">Ollama (local model)</div>
+                        <div class="agent-type-sub">Pick a model running on a local Ollama daemon. Free, private, no API key.</div>
+                    </div>
+                </button>
+                <button type="button" class="agent-type-card" data-kind="acp_preset">
+                    <span class="agent-type-icon">🔌</span>
+                    <div class="agent-type-text">
+                        <div class="agent-type-name">ACP-compatible agent</div>
+                        <div class="agent-type-sub">Wire up Kiro, Claude Code, or OpenAI Codex by hand.</div>
+                    </div>
+                </button>
+                <button type="button" class="agent-type-card" data-kind="custom">
+                    <span class="agent-type-icon">⚙️</span>
+                    <div class="agent-type-text">
+                        <div class="agent-type-name">Custom</div>
+                        <div class="agent-type-sub">Raw spawn command or remote TCP connection. Advanced.</div>
+                    </div>
+                </button>
+                <div class="agent-type-picker-actions">
+                    <button type="button" class="setting-button agent-type-cancel">Cancel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const close = (value) => {
+            overlay.remove();
+            document.removeEventListener('keydown', onKey);
+            resolve(value);
+        };
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                close(null);
+            }
+        };
+        document.addEventListener('keydown', onKey);
+
+        // Click on any card resolves with that kind. Backdrop click
+        // (overlay itself, not the inner box) cancels.
+        overlay.addEventListener('click', (e) => {
+            const card = e.target.closest('.agent-type-card');
+            if (card) {
+                close(card.getAttribute('data-kind'));
+                return;
+            }
+            if (e.target === overlay) {
+                close(null);
+                return;
+            }
+        });
+        overlay.querySelector('.agent-type-cancel').addEventListener('click', () => close(null));
+    });
+}
+
 export function escapeHtml(s) {
     return String(s == null ? '' : s)
         .replace(/&/g, '&amp;')
