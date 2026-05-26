@@ -281,7 +281,11 @@ export class UpdatesSettingsModule extends SettingsModule {
         try {
             await window.__TAURI__.core.invoke('download_and_install_update');
         } catch (e) {
-            this.showCheckFailed('Install failed: ' + formatErr(e));
+            // Backend already returns a user-readable, classified
+            // message (signature / network / disk full / permission /
+            // …). No prefix here — it would double-stack ("Install
+            // failed: Install failed: …") with the historical wrap.
+            this.showCheckFailed(formatErr(e));
         }
     }
 

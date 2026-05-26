@@ -278,7 +278,7 @@ pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update)
         update.version, update.body
     );
     let app_for_finish = app.clone();
-    update
+    let result = update
         .download_and_install(
             |_, _| {},
             move || {
@@ -329,9 +329,115 @@ pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update)
                 crate::app_log::flush();
             },
         )
-        .await
-        .context("Failed to download and install update")?;
+        .await;
+
+    if let Err(e) = result {
+        // Classify and translate to a user-readable message before
+        // bubbling up. The previous generic
+        // "Failed to download and install update" was true but
+        // useless — the user couldn't tell whether their network had
+        // dropped, the signature was bad, the disk was full, or the
+        // installer needed admin rights. The variants below cover the
+        // failures we've actually observed in telemetry +
+        // bug reports; everything else falls through to the plugin's
+        // own message (which usually carries the underlying IO /
+        // reqwest detail).
+        //
+        // The signal is also recorded as a telemetry event so we can
+        // see in aggregate which class of failure dominates.
+        let reason = classify_install_error(&e);
+        crate::telemetry::track(
+            app,
+            "update_install_failed",
+            Some(serde_json::json!({ "reason": reason })),
+        );
+        return Err(format_install_error(&e, reason));
+    }
     Ok(())
+}
+
+/// Coarse bucket for an install failure. Returned as a stable string
+/// so telemetry aggregates cleanly across versions.
+pub fn classify_install_error(e: &tauri_plugin_updater::Error) -> &'static str {
+    let msg = e.to_string().to_lowercase();
+    if msg.contains("signature")
+        || msg.contains("verify")
+        || msg.contains("public key")
+        || msg.contains("minisign")
+    {
+        return "signature";
+    }
+    if msg.contains("403") || msg.contains("forbidden") {
+        return "forbidden";
+    }
+    if msg.contains("404") || msg.contains("not found") {
+        return "not_found";
+    }
+    if msg.contains("disk")
+        || msg.contains("space")
+        || msg.contains("os error 112") // Windows ERROR_DISK_FULL
+        || msg.contains("os error 28")
+    // Linux ENOSPC
+    {
+        return "disk_full";
+    }
+    if msg.contains("denied")
+        || msg.contains("permission")
+        || msg.contains("os error 5") // Windows ERROR_ACCESS_DENIED
+        || msg.contains("os error 13")
+    // Linux EACCES
+    {
+        return "permission";
+    }
+    if msg.contains("dns")
+        || msg.contains("connect")
+        || msg.contains("network")
+        || msg.contains("timeout")
+        || msg.contains("transport")
+    {
+        return "network";
+    }
+    if msg.contains("cancel") || msg.contains("interrupt") {
+        return "cancelled";
+    }
+    "other"
+}
+
+/// Build the user-facing error message. Each known reason gets a
+/// short explanation tailored to the most common cause; the
+/// underlying error's `Display` is appended in parens so a power
+/// user can still see the raw signal.
+fn format_install_error(e: &tauri_plugin_updater::Error, reason: &'static str) -> anyhow::Error {
+    let detail = e.to_string();
+    let msg = match reason {
+        "signature" => format!(
+            "Update signature didn't verify. The download may be corrupted; try again. ({})",
+            detail
+        ),
+        "forbidden" => format!(
+            "Server refused the download (HTTP 403). If you're behind a proxy or filter, that's the most likely cause. ({})",
+            detail
+        ),
+        "not_found" => format!(
+            "Update file is missing on the server (HTTP 404). The release may have been pulled — try again later or check the channel in Settings → Updates. ({})",
+            detail
+        ),
+        "disk_full" => format!(
+            "Not enough disk space to download or install the update. ({})",
+            detail
+        ),
+        "permission" => format!(
+            "Kage doesn't have permission to write the installer file. Close any antivirus / EDR holding the directory and try again. ({})",
+            detail
+        ),
+        "network" => format!(
+            "Network error while downloading the update. Check your connection and try again. ({})",
+            detail
+        ),
+        "cancelled" => format!("Update was cancelled. ({})", detail),
+        _ => format!("Update install failed. ({})", detail),
+    };
+    anyhow::anyhow!(msg)
 }
 
 /// Maximum bytes of rendered markdown returned to the UI. Caps the

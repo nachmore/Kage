@@ -48,6 +48,7 @@ import {
     renderClipboardHistory,
 } from './clipboard-history.js';
 import { mountPromptForm } from '../shared/prompt-form.js';
+import { formatError } from '../shared/session-render.js';
 import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml } from '../shared/tool-utils.js';
@@ -1684,10 +1685,14 @@ export class FloatingApp {
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
         } else if (action.type === 'update_install') {
-            // Same flow as the "Install Now" button in settings
+            // Same flow as the "Install Now" button in settings.
+            // Backend produces a classified, user-readable string;
+            // formatError unwraps the AppError shape so we don't show
+            // "[object Object]" when the rejection is a serialised
+            // struct (which it is over the Tauri invoke boundary).
             this.showBanner('⬇️', 'Downloading and installing update...', '', 'dismiss', '');
             this.invoke('download_and_install_update').catch((e) => {
-                this.showBanner('❌', 'Update failed: ' + e, 'Dismiss', 'dismiss', '');
+                this.showBanner('❌', formatError(e), 'Dismiss', 'dismiss', '');
             });
         } else {
             // 'dismiss' — reset the UI and refocus input

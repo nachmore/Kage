@@ -1762,9 +1762,14 @@ pub async fn download_and_install_update(
     // until the user manually summons it.
     crate::updater::persist_install_source(crate::updater::InstallSource::Interactive);
 
+    // Bubble the plugin error up verbatim — `plugin_download_and_install`
+    // now classifies failures (signature / network / disk full /
+    // permission / 403 / 404 / cancelled / other) and produces a
+    // user-readable string. Wrapping with another "Install failed:"
+    // here would double up by the time it reaches the UI.
     crate::updater::plugin_download_and_install(&app, update)
         .await
-        .map_err(|e| format!("Install failed: {}", e))?;
+        .map_err(|e| AppError::from(e.to_string()))?;
 
     // On Windows the plugin called process::exit(0) inside
     // download_and_install and we never reached this line. On macOS
