@@ -21,7 +21,13 @@ import * as agentConnectionsApi from '../shared/agent-connections.js';
  */
 export class ConnectionSettingsModule extends SettingsModule {
     constructor() {
-        super('connection', 'Agent Connection', '🔌');
+        // Section id stays `connection` so deep links (>logs-style
+        // settings-subsection routes, the >version → Updates panel,
+        // and any external tutorials) keep working. Display name +
+        // sidebar label are user-facing and renamed to "Agents" —
+        // since this page now also owns the Ollama wizard, "Agent
+        // Connection" understated what's here.
+        super('connection', 'Agents', '🤖');
         this._connections = [];
         this._activeId = '';
         this._presets = [];
@@ -268,7 +274,7 @@ export class ConnectionSettingsModule extends SettingsModule {
                     }
                 </div>
                 <div class="conn-list-actions">
-                    <button type="button" class="setting-btn-secondary" id="connAddManualBtn">+ New connection</button>
+                    <button type="button" class="setting-btn-secondary" id="connAddBtn">+ Add agent</button>
                     <button type="button" class="setting-btn-secondary" id="connRescanBtn">Rescan</button>
                 </div>
             </div>
@@ -367,8 +373,15 @@ export class ConnectionSettingsModule extends SettingsModule {
             this._renderRoot();
             this._kickDetect();
         });
-        document.getElementById('connAddManualBtn')?.addEventListener('click', () => {
-            this._enterEdit(this._draftBlankConnection(), { isNew: true });
+        document.getElementById('connAddBtn')?.addEventListener('click', async () => {
+            // Pick a type first, then route to the matching sub-flow.
+            // Rationale: each agent type has a different ideal editor
+            // (raw spawn for advanced users, wizard for Ollama, preset
+            // form for ACP-compatible agents). Showing the right
+            // editor up front beats one-form-fits-all.
+            const kind = await this._api().pickAgentType();
+            if (!kind) return;
+            await this._handleAddAgentType(kind);
         });
 
         document.querySelectorAll('.conn-set-active-btn').forEach((btn) => {
@@ -407,6 +420,48 @@ export class ConnectionSettingsModule extends SettingsModule {
                 this._enterEdit(draft, { isNew: true });
             });
         });
+    }
+
+    /**
+     * Route a type-picker result to the right add flow.
+     *
+     *   - 'detect'     — fall through to detect; if exactly one
+     *     auto-detected agent is unsaved, open it pre-filled in the
+     *     standard edit form. Otherwise nudge the user toward the
+     *     existing "Auto-detected agents" group on the list.
+     *   - 'ollama'     — open the Ollama wizard with a fresh draft.
+     *   - 'acp_preset' — same standard edit form, with preset metadata
+     *     surfaced. We let the user pick a preset inside the form.
+     *     For now this resolves to the same blank-connection editor
+     *     the old "+ New connection" button used; preset selection
+     *     UI inside the form is a P2 polish item.
+     *   - 'custom'     — same blank-connection editor.
+     */
+    async _handleAddAgentType(kind) {
+        if (kind === 'ollama') {
+            this._enterOllamaEdit(null, { isNew: true });
+            return;
+        }
+        if (kind === 'detect') {
+            // Make sure detect has run at least once. If we already
+            // have results, surface the first un-saved one.
+            this._detectLoading = true;
+            this._renderRoot();
+            await this._kickDetect();
+            const unsaved = (this._detected || []).filter(
+                (d) => !this._connections.some((c) => this._matchesDetected(c, d))
+            );
+            if (unsaved.length > 0) {
+                const draft = this._api().connectionFromDetected(unsaved[0]);
+                this._enterEdit(draft, { isNew: true });
+            }
+            // If nothing auto-detected, the list view shows the
+            // "Searching…" / "no agents found" copy and the user
+            // can fall back to + Add agent → Custom.
+            return;
+        }
+        // 'acp_preset' and 'custom' both use the blank editor today.
+        this._enterEdit(this._draftBlankConnection(), { isNew: true });
     }
 
     _draftBlankConnection() {

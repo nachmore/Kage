@@ -35,7 +35,6 @@ import { SystemSettingsModule } from './system.js';
 import { MacPermissionsSettingsModule } from './permissions.js';
 import { AssistantSettingsModule } from './assistant.js';
 import { ConnectionSettingsModule } from './connection.js';
-import { OllamaSettingsModule } from './ollama.js';
 import { ModelSettingsModule } from './model.js';
 import { McpSettingsModule } from './mcp.js';
 import { ToolPermissionsSettingsModule } from './tool-permissions.js';
@@ -186,7 +185,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     settingsManager.registerModule(new AssistantSettingsModule());
     settingsManager.registerModule(new ConnectionSettingsModule());
-    settingsManager.registerModule(new OllamaSettingsModule());
     settingsManager.registerModule(new ModelSettingsModule());
     settingsManager.registerModule(new McpSettingsModule());
     settingsManager.registerModule(new ToolPermissionsSettingsModule());
