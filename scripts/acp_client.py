@@ -22,13 +22,13 @@ from acp.connection import StreamDirection, StreamEvent
 from acp.interfaces import Client
 
 def _default_cli_command() -> str:
-    """Resolve the default kage-cli command: env override → PATH lookup → bare name."""
-    env = os.environ.get("KAGE_CLI_PATH")
+    """Resolve the default agent CLI command: env override → PATH lookup → bare name."""
+    env = os.environ.get("KAGE_CLI_PATH") or os.environ.get("KIRO_CLI_PATH")
     if env:
         return env
     import shutil
-    found = shutil.which("kage-cli") or shutil.which("kage-cli.exe")
-    return found or "kage-cli"
+    found = shutil.which("kiro-cli") or shutil.which("kiro-cli.exe")
+    return found or "kiro-cli"
 
 
 DEFAULT_COMMAND = _default_cli_command()

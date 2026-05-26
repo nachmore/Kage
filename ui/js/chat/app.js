@@ -757,10 +757,11 @@ export class ChatApp {
 
         // Real-time context usage from ACP metadata notifications.
         // `contextUsagePercentage` is already in percentage form (0..100)
-        // — both kage-cli and kiro-cli send it that way. The values are
-        // floats with many decimals (e.g. 0.9581 means 0.96%, not 96%);
-        // an earlier "scale up if ≤1" guess turned a barely-touched
-        // session into 96% and triggered an auto-compact loop.
+        // — agents using either vendor namespace send it that way. The
+        // values are floats with many decimals (e.g. 0.9581 means
+        // 0.96%, not 96%); an earlier "scale up if ≤1" guess turned a
+        // barely-touched session into 96% and triggered an
+        // auto-compact loop.
         this.listen('context_metadata', (event) => {
             const raw = event.payload?.params?.contextUsagePercentage;
             if (raw == null || !Number.isFinite(raw) || raw < 0) return;

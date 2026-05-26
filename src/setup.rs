@@ -595,8 +595,8 @@ pub fn start_updater(app: &App) {
     );
 }
 
-/// Watch the sessions directory for external changes (e.g., kage-cli
-/// creating sessions outside of this process).
+/// Watch the sessions directory for external changes (e.g., the agent
+/// backend creating sessions outside of this process).
 pub fn start_session_watcher(app: &App) {
     let features: tauri::State<'_, FeatureServices> = app.state();
     crate::commands::sessions::start_session_watcher(

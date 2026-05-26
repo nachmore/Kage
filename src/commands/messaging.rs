@@ -150,11 +150,11 @@ pub fn setup_notification_handler(
             return;
         }
 
-        // Vendor extension dispatch. kage-cli sends `_kage.dev/*`,
-        // kiro-cli sends `_kiro.dev/*`; both ship an identical extension
-        // surface so we match by suffix and pin the agent's preferred
-        // prefix on the AcpClient (used by outgoing requests). See
-        // `acp_client::vendor_method_suffix`.
+        // Vendor extension dispatch. Two ACP vendor namespaces are
+        // recognised — `_kage.dev/*` and `_kiro.dev/*` — with an
+        // identical extension surface. Match by suffix and pin the
+        // agent's preferred prefix on the AcpClient (used by outgoing
+        // requests). See `acp_client::vendor_method_suffix`.
         if let Some(suffix) = crate::acp_client::vendor_method_suffix(method) {
             client_for_handler.observe_vendor_prefix(method);
             match suffix {

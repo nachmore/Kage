@@ -3,7 +3,7 @@
 //! lifecycle (disconnect, reconnect).
 //!
 //! Uses a lightweight in-process TCP mock so these run without any
-//! external kage-cli binary.
+//! external agent binary.
 
 mod common;
 

@@ -287,12 +287,12 @@ pub async fn plugin_download_and_install(app: &tauri::AppHandle, update: Update)
                 // Object is still in kill-on-close mode. Doing this
                 // FIRST (before releasing the job) means a panic
                 // anywhere in this block before exit still kills our
-                // children — no orphan kage-cli / TTS leaks. The
+                // children — no orphan agent backend / TTS leaks. The
                 // graceful_shutdown is the same path the tray Quit
                 // uses; it hides windows, kills TTS, and flushes
                 // the log.
                 crate::commands::system::graceful_shutdown(&app_for_finish);
-                // Disconnect the ACP client — kills kage-cli explicitly
+                // Disconnect the ACP client — kills the agent backend explicitly
                 // rather than relying on stdin-EOF semantics or the
                 // job kill (which is about to be released). Best
                 // effort; if state isn't available we let the existing

@@ -12,7 +12,7 @@
         "preset_id": "kiro",
         "mode": {
           "type": "local",
-          "spawn_command": "C:\\workplace\\kage-cli\\target\\release\\chat_cli.exe acp"
+          "spawn_command": "<path-to-agent-binary> acp"
         }
       }
     ],

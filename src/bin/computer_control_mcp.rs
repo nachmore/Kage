@@ -1,7 +1,8 @@
 //! Computer Control MCP Server — standalone binary.
 //!
 //! Speaks MCP (JSON-RPC over stdio) and provides accessibility-based
-//! desktop automation tools. Spawned by kage-cli as an MCP server.
+//! desktop automation tools. Spawned by the agent backend (e.g.
+//! kiro-cli) as an MCP server.
 
 use std::io::{self, BufRead, Read, Write};
 

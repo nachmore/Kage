@@ -1,3 +1,4 @@
+pub mod agent_sessions;
 pub mod extensions;
 pub mod folder_tools;
 pub mod input;
@@ -9,6 +10,7 @@ pub mod system;
 pub mod window;
 
 // Re-export all commands for convenient registration in main.rs
+pub use agent_sessions::*;
 pub use extensions::*;
 pub use folder_tools::*;
 pub use input::*;

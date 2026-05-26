@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-**Kage** — cross-platform desktop AI assistant built on Tauri 2.10. Rust backend, vanilla HTML/CSS/JS frontend (no framework). Talks to a separate `kage-cli` agent backend over ACP (Agent Communication Protocol).
+**Kage** — cross-platform desktop AI assistant built on Tauri 2.10. Rust backend, vanilla HTML/CSS/JS frontend (no framework). Talks to a separate agent backend (e.g. `kiro-cli`) over ACP (Agent Communication Protocol).
 
 ## Build & Run
 
@@ -20,7 +20,7 @@ cargo build                      # debug binaries only — no installer, no bund
 
 ### Two binaries — built separately, chained automatically
 
-`src/main.rs` → `kage` (the app). `src/bin/computer_control_mcp.rs` → `kage-computer-control-mcp` (standalone MCP server spawned by kage-cli over stdio).
+`src/main.rs` → `kage` (the app). `src/bin/computer_control_mcp.rs` → `kage-computer-control-mcp` (standalone MCP server spawned by the agent backend over stdio).
 
 `cargo tauri dev` rebuilds the MCP binary first (chained through `scripts/dev_server.py` → `build_mcp_binary()`), then builds and runs `kage`. Plain `cargo check` and `cargo build` only touch `kage`, so if you're iterating with those without `cargo tauri dev`, after editing `src/bin/computer_control_mcp.rs` or any module it pulls in (notably `src/os/accessibility.rs`, `src/computer_control/`) run:
 
@@ -28,7 +28,7 @@ cargo build                      # debug binaries only — no installer, no bund
 cargo build --bin kage-computer-control-mcp
 ```
 
-If the binary is locked because it's running, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), then rebuild and restart the app so kage-cli picks up the new binary.
+If the binary is locked because it's running, kill it first (Windows: `Get-Process -Name kage-computer-control-mcp | Stop-Process -Force`; macOS/Linux: `pkill -f kage-computer-control-mcp`), then rebuild and restart the app so the agent backend picks up the new binary.
 
 `cargo tauri build` rebuilds it automatically too (see `tauri.conf.json` → `beforeBuildCommand`).
 
@@ -59,7 +59,7 @@ Tauri-dependent modules (`automation`, `commands`, `setup`, `single_instance`, `
 1. `single_instance::try_acquire` — OS-level file lock. Second instance signals the running one over TCP and exits.
 2. `panic_handler::install` — captures panics into `crash.log` before logger init.
 3. `logger::init_logger` then `app_log::init` (in-memory ring buffer surfaced in the About settings).
-4. On Windows, `os::windows::process::install_kill_on_exit_job` creates a Job Object so children (TTS server, kage-cli, MCP servers) die with the parent.
+4. On Windows, `os::windows::process::install_kill_on_exit_job` creates a Job Object so children (TTS server, agent backend, MCP servers) die with the parent.
 5. `AcpClient::new(mode)` — connection mode chosen from config (`stdio`/`pipe`/`tcp`).
 6. `AppState` (`src/state.rs`) is the single shared struct passed via `tauri::Builder::manage`. Most fields are `Arc<Mutex<…>>`. Frontend talks to backend through Tauri commands registered in `tauri::generate_handler!` — every public command must be added there or it won't be callable.
 
@@ -69,7 +69,7 @@ Tauri-dependent modules (`automation`, `commands`, `setup`, `single_instance`, `
 
 `mod.rs` is the public surface. `transport.rs` handles the stdio/pipe/tcp framing. `session.rs` tracks per-session state. `types.rs` is the JSON-RPC schema. The notification handler is wired up in `setup` (`commands::messaging::setup_notification_handler`) and routes streaming updates to the frontend via Tauri events.
 
-**Vendor extensions: `_kage.dev/*` and `_kiro.dev/*` are interchangeable.** kage-cli ships extensions under `_kage.dev/`, kiro-cli under `_kiro.dev/`; the surface (`commands/available`, `commands/execute`, `metadata`, `compaction/status`, `error/rate_limit`) is identical. Match incoming notifications by *suffix* via `acp_client::vendor_method_suffix`. For outgoing requests, build the method name with `client.vendor_method("commands/execute")` so it targets whichever prefix the agent has been observed using (pinned on first inbound notification, defaults to `_kage.dev/`).
+**Vendor extensions: `_kage.dev/*` and `_kiro.dev/*` are interchangeable.** Two ACP vendor namespaces are recognised; the extension surface (`commands/available`, `commands/execute`, `metadata`, `compaction/status`, `error/rate_limit`) is identical across both prefixes. Match incoming notifications by *suffix* via `acp_client::vendor_method_suffix`. For outgoing requests, build the method name with `client.vendor_method("commands/execute")` so it targets whichever prefix the agent has been observed using (pinned on first inbound notification, defaults to `_kage.dev/`).
 
 ### OS abstraction (`src/os/`)
 

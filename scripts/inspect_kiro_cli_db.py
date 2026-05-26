@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Inspect the kage-cli SQLite database to understand the conversation format."""
+"""Inspect the kiro-cli SQLite database to understand the conversation format."""
 import sqlite3, json, os, sys
 
-db_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "kage-cli", "data.sqlite3")
+db_path = os.path.join(os.environ.get("LOCALAPPDATA", ""), "kiro-cli", "data.sqlite3")
 if not os.path.exists(db_path):
     print(f"Database not found: {db_path}")
     sys.exit(1)

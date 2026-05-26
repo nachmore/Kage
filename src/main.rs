@@ -4,6 +4,7 @@
 mod acp_client;
 mod activity_tracker;
 mod agent_presets;
+mod agent_sessions;
 mod app_launcher;
 mod app_log;
 mod auto_steering;
@@ -272,7 +273,7 @@ async fn run() {
         session_cache: Arc::new(std::sync::Mutex::new(None)),
         automation_plan_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         activity_tracker: Arc::new(crate::activity_tracker::ActivityTrackerState::new()),
-        kage_desktop_cache: Arc::new(crate::commands::kage_desktop::KageDesktopCache::new()),
+        agent_session_registry: Arc::new(crate::agent_sessions::AgentSessionRegistry::new()),
         automation_signal_tx: Arc::new(std::sync::Mutex::new(None)),
     };
 
@@ -535,7 +536,7 @@ async fn run() {
             // Auto-start Pocket TTS server if configured
             setup::maybe_autostart_pocket_tts(app, &config_for_setup);
 
-            // Watch the sessions directory for external changes (e.g., kage-cli creating sessions)
+            // Watch the sessions directory for external changes (e.g., the agent backend creating sessions)
             setup::start_session_watcher(app);
 
             // Background app registry scan (deferred from startup for speed)
@@ -610,18 +611,13 @@ async fn run() {
             commands::get_mcp_json_path,
             commands::get_mcp_config,
             commands::save_mcp_config,
-            commands::kage_desktop_available,
+            commands::agent_session_providers,
+            commands::agent_list_sessions,
+            commands::agent_load_session,
+            commands::agent_check_session_updated,
             commands::kage_desktop_workspaces,
-            commands::kage_desktop_sessions,
-            commands::kage_desktop_load_session,
-            commands::kage_desktop_load_chat_file,
-            commands::kage_desktop_chat_sessions,
             commands::kage_desktop_delete_session,
             commands::kage_desktop_open_folder,
-            commands::kage_cli_available,
-            commands::kage_cli_sessions,
-            commands::kage_cli_load_session,
-            commands::kage_cli_check_updated,
             commands::quit_app,
             commands::restart_app,
             commands::read_clipboard,

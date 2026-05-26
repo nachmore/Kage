@@ -7,7 +7,7 @@ use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// Check if a PID belongs to a kage-related process (kage-cli, node, etc.)
+/// Check if a PID belongs to a kage-related process (agent backend, node, etc.)
 /// Returns the process name if found, None if the process doesn't exist or isn't ours.
 pub fn get_process_name_impl(pid: u32) -> Option<String> {
     use windows::core::PWSTR;
@@ -68,7 +68,7 @@ const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
 /// Spawn a process that is detached from our Job Object so it survives
 /// when Kage exits. Use this for user-facing launches (apps,
 /// URLs, explorer, system commands) — NOT for internal child processes
-/// like kage-cli or TTS servers that should die with us.
+/// like the agent backend or TTS servers that should die with us.
 pub fn spawn_detached_impl(cmd: &mut Command) -> std::io::Result<std::process::Child> {
     cmd.creation_flags(CREATE_BREAKAWAY_FROM_JOB | CREATE_NO_WINDOW);
     cmd.spawn()

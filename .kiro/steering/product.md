@@ -10,7 +10,7 @@ Kage is a cross-platform desktop AI assistant with a floating window interface. 
 - Script shortcuts with JS execution and AI-assisted script generation
 - Inline math calculator (evaluates expressions as you type)
 - Selected text capture from active window (included as context for prompts)
-- Agent Communication Protocol (ACP) client for connecting to kage-cli backend
+- Agent Communication Protocol (ACP) client for connecting to an agent backend (e.g. kiro-cli)
 - Cross-platform support (Windows fully implemented, macOS fully implemented except descoped clipboard history, Linux partial)
 - Dark/Light/System theme with configurable opacity and font size
 - Configurable window positioning (center, near mouse, remember last position)

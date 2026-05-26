@@ -184,16 +184,16 @@ fn resume_session_cli_arg_missing_value_falls_through() {
 #[test]
 fn acp_mode_local_maps_one_to_one() {
     let (mode, desc) = acp_mode_for(&AcpMode::Local {
-        spawn_command: "kage-cli acp".to_string(),
+        spawn_command: "kiro-cli acp".to_string(),
     });
     match mode {
         AcpConnectionMode::Local { spawn_command } => {
-            assert_eq!(spawn_command, "kage-cli acp");
+            assert_eq!(spawn_command, "kiro-cli acp");
         }
         _ => panic!("expected Local"),
     }
     assert!(desc.contains("Local"));
-    assert!(desc.contains("kage-cli acp"));
+    assert!(desc.contains("kiro-cli acp"));
 }
 
 #[test]

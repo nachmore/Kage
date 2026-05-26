@@ -64,7 +64,7 @@ cargo tauri build          # Release build + NSIS installer (output: target/rele
 # `cargo tauri dev` only rebuilds the main kage binary.
 # After changing kage-computer-control-mcp, you MUST rebuild it explicitly:
 cargo build --bin kage-computer-control-mcp
-# Then restart the app so kage-cli picks up the new binary.
+# Then restart the app so the agent backend picks up the new binary.
 # If the old binary is locked (running), kill it first:
 # Windows (PowerShell): Get-Process -Name "kage-computer-control-mcp" | Stop-Process -Force
 # macOS/Linux:          pkill -f kage-computer-control-mcp

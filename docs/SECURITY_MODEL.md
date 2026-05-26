@@ -216,7 +216,7 @@ not webview CSP.
 Kage's first-party UI does not load external web content. All
 content sources are:
 
-- **Agent responses** — from the trusted ACP backend (kage-cli),
+- **Agent responses** — from the trusted ACP backend (e.g. kiro-cli),
   rendered as markdown.
 - **Local UI** — HTML/JS/CSS bundled into the binary.
 - **Extensions** — loaded into sandboxed iframes subject to the

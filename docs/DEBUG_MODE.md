@@ -72,7 +72,7 @@ location varies by platform:
 
 ## Use Cases
 
-- Troubleshooting connection issues with kage-cli
+- Troubleshooting connection issues with the agent backend
 - Debugging message format problems
 - Understanding the ACP protocol flow
 - Development and testing of new features

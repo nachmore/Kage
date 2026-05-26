@@ -2,24 +2,30 @@ import { renderMarkdown } from '../shared/markdown.js';
 import { mascotHTML } from '../shared/mascot.js';
 
 /**
- * Kage Desktop session viewer — read-only display of Kage IDE chat sessions.
- * Reuses the ChatApp's message rendering for consistent UX.
+ * Agent session viewer — read-only display of sessions from registered
+ * `AgentSessionProvider`s on the Rust side (kiro-cli, kage-desktop,
+ * future Claude Code / Codex / Ollama).
+ *
+ * The frontend is provider-agnostic: it bootstraps the list of
+ * available providers via `agent_session_providers`, fetches sessions
+ * for each available one in parallel, and merges them into a single
+ * date-sorted list with provider chips on each item. Adding a new
+ * agent on the backend requires no frontend changes beyond optionally
+ * tweaking the chip icon for that provider.
  */
 
-export class KageDesktopViewer {
+export class AgentSessionViewer {
     constructor(invoke, elements, chatApp) {
         this.invoke = invoke;
         this.elements = elements;
-        this.chatApp = chatApp; // Reference to ChatApp for message rendering
+        this.chatApp = chatApp;
+        this.providers = [];
         this.sessions = [];
-        this.workspaces = [];
         this.activeSessionId = null;
-        this.activeWorkspace = null;
         this._pollInterval = null;
-        this._pollUpdatedAt = 0;
+        this._pollUpdatedMs = 0;
     }
 
-    /** Stop polling for CLI session updates. */
     _stopPolling() {
         if (this._pollInterval) {
             clearInterval(this._pollInterval);
@@ -27,118 +33,116 @@ export class KageDesktopViewer {
         }
     }
 
-    /** Start polling a CLI session for updates every 3 seconds. */
-    _startPolling(conversationId, updatedAt) {
+    /** Poll for updates on the currently-loaded session; reload + render on change. */
+    _startPolling(providerId, locator, updatedMs) {
         this._stopPolling();
-        this._pollUpdatedAt = updatedAt;
+        this._pollUpdatedMs = updatedMs;
         this._pollInterval = setInterval(async () => {
             try {
-                const newTs = await this.invoke('kage_cli_check_updated', {
-                    conversationId,
-                    lastUpdatedAt: this._pollUpdatedAt,
+                const newTs = await this.invoke('agent_check_session_updated', {
+                    providerId,
+                    locator,
+                    sinceMs: this._pollUpdatedMs,
                 });
-                if (newTs) {
-                    console.log(`[KageDesktop] CLI session updated, reloading...`);
-                    this._pollUpdatedAt = newTs;
-                    // Reload and re-render, preserving scroll + marking new messages
-                    const messages = await this.invoke('kage_cli_load_session', { conversationId });
-                    const area = this.chatApp.elements.messagesArea;
-                    const session = this.sessions.find((s) => s.id === conversationId);
-                    if (area) {
-                        const prevCount = area.querySelectorAll('.message').length;
-                        const wasAtBottom =
-                            area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
-                        this.renderMessages(area, messages, session);
-                        const newCount = area.querySelectorAll('.message').length;
-                        // Insert a "new" divider before the new messages
-                        if (newCount > prevCount && prevCount > 0) {
-                            const allMsgs = area.querySelectorAll('.message');
-                            const dividerTarget = allMsgs[prevCount];
-                            if (dividerTarget) {
-                                const divider = document.createElement('div');
-                                divider.className = 'kd-new-divider';
-                                divider.textContent = '● New';
-                                dividerTarget.before(divider);
-                                // Fade out when scrolled into view
-                                const observer = new IntersectionObserver(
-                                    (entries) => {
-                                        if (entries[0].isIntersecting) {
-                                            setTimeout(
-                                                () => divider.classList.add('kd-new-divider-seen'),
-                                                2000
-                                            );
-                                            observer.disconnect();
-                                        }
-                                    },
-                                    { root: area, threshold: 0.5 }
-                                );
-                                observer.observe(divider);
-                            }
-                        }
-                        if (wasAtBottom) area.scrollTop = area.scrollHeight;
+                if (!newTs) return;
+                console.log('[AgentSessions] Session updated, reloading...');
+                this._pollUpdatedMs = newTs;
+                const messages = await this.invoke('agent_load_session', {
+                    providerId,
+                    locator,
+                });
+                const area = this.chatApp.elements.messagesArea;
+                const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
+                if (!area) return;
+                const prevCount = area.querySelectorAll('.message').length;
+                const wasAtBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
+                this.renderMessages(area, messages, session);
+                const newCount = area.querySelectorAll('.message').length;
+                if (newCount > prevCount && prevCount > 0) {
+                    const allMsgs = area.querySelectorAll('.message');
+                    const dividerTarget = allMsgs[prevCount];
+                    if (dividerTarget) {
+                        const divider = document.createElement('div');
+                        divider.className = 'kd-new-divider';
+                        divider.textContent = '● New';
+                        dividerTarget.before(divider);
+                        const observer = new IntersectionObserver(
+                            (entries) => {
+                                if (entries[0].isIntersecting) {
+                                    setTimeout(
+                                        () => divider.classList.add('kd-new-divider-seen'),
+                                        2000
+                                    );
+                                    observer.disconnect();
+                                }
+                            },
+                            { root: area, threshold: 0.5 }
+                        );
+                        observer.observe(divider);
                     }
                 }
+                if (wasAtBottom) area.scrollTop = area.scrollHeight;
             } catch (_e) {
                 // Silently ignore poll errors (db might be locked momentarily)
             }
         }, 3000);
     }
 
+    /**
+     * Load the registered providers and decide whether the source
+     * toggle is worth showing. Returns true when at least one external
+     * provider is available.
+     */
     async init() {
-        const [desktopAvailable, cliAvailable] = await Promise.all([
-            this.invoke('kage_desktop_available'),
-            this.invoke('kage_cli_available'),
-        ]);
-        if (!desktopAvailable && !cliAvailable) return false;
-
-        this._hasDesktop = desktopAvailable;
-        this._hasCli = cliAvailable;
+        try {
+            this.providers = await this.invoke('agent_session_providers');
+        } catch (e) {
+            console.warn('[AgentSessions] providers fetch failed:', e);
+            this.providers = [];
+        }
+        const anyAvailable = this.providers.some((p) => p.available);
+        if (!anyAvailable) return false;
 
         const toggle = document.getElementById('sessionSourceToggle');
         if (toggle) {
             toggle.style.display = 'flex';
-            // Update label to reflect available sources
             const btn = toggle.querySelector('[data-source="desktop"]');
-            if (btn) btn.textContent = 'Kage IDE & CLI';
-        }
-
-        if (desktopAvailable) {
-            this.workspaces = await this.invoke('kage_desktop_workspaces');
+            if (btn) {
+                const labels = this.providers.filter((p) => p.available).map((p) => p.label);
+                btn.textContent = labels.length === 1 ? labels[0] : 'Other Agents';
+            }
         }
         return true;
     }
 
-    async loadSessions(_workspaceEncoded = null) {
+    async loadSessions() {
         try {
-            console.log('[KageDesktop] Loading sessions...');
+            console.log('[AgentSessions] Loading sessions...');
             const list = this.elements.sessionList;
             list.innerHTML =
                 '<div class="kd-loading" style="display:flex;justify-content:center;padding:24px 0;"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>';
 
-            // Load from both sources in parallel
-            const promises = [];
-            if (this._hasDesktop) {
-                promises.push(this.invoke('kage_desktop_chat_sessions', { limit: 100 }));
-            } else {
-                promises.push(Promise.resolve([]));
-            }
-            if (this._hasCli) {
-                promises.push(this.invoke('kage_cli_sessions', { limit: 100 }));
-            } else {
-                promises.push(Promise.resolve([]));
-            }
+            const available = this.providers.filter((p) => p.available);
+            const results = await Promise.all(
+                available.map((p) =>
+                    this.invoke('agent_list_sessions', {
+                        providerId: p.id,
+                        limit: 100,
+                    }).catch((e) => {
+                        console.warn(`[AgentSessions] ${p.id} list failed:`, e);
+                        return [];
+                    })
+                )
+            );
 
-            const [desktopSessions, cliSessions] = await Promise.all(promises);
-
-            // Merge and sort by date
-            this.sessions = [...desktopSessions, ...cliSessions];
+            this.sessions = results.flat();
             this.sessions.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
             console.log(
-                `[KageDesktop] Loaded ${this.sessions.length} sessions (${desktopSessions.length} desktop + ${cliSessions.length} cli)`
+                `[AgentSessions] Loaded ${this.sessions.length} sessions across ${available.length} providers`
             );
             this.renderSessionList();
         } catch (e) {
-            console.warn('[KageDesktop] Failed to load sessions:', e);
+            console.warn('[AgentSessions] Failed to load sessions:', e);
             this.sessions = [];
             this.renderSessionList();
         }
@@ -149,7 +153,7 @@ export class KageDesktopViewer {
         const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
         if (this.sessions.length === 0) {
-            list.innerHTML = '<div class="session-list-empty">No Kage Desktop sessions found</div>';
+            list.innerHTML = '<div class="session-list-empty">No external sessions found</div>';
             return;
         }
 
@@ -162,32 +166,41 @@ export class KageDesktopViewer {
             return;
         }
 
-        // Render interleaved by date (no workspace grouping)
         let html = '';
         for (const s of filtered) {
-            const isActive = s.id === this.activeSessionId;
+            const isActive = s.session_id === this.activeSessionId;
             const date = new Date(s.updated_at);
             const dateStr = formatRelativeDate(date);
-            const sourceIcon =
-                s.session_type === 'cli'
-                    ? '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-                    : mascotHTML({ size: 14, className: 'kd-source-icon' });
-            const sourceLabel = s.session_type === 'cli' ? 'CLI' : 'Desktop';
-            const _wsShort = (s.workspace || '').split(/[/\\]/).pop() || '';
+            const provider = this.providers.find((p) => p.id === s.provider_id);
+            const providerLabel = provider?.label || s.provider_id;
+            const sourceIcon = providerIcon(s.provider_id);
+            const filePath = s.extras?.file_path || '';
+            const locatorJson = JSON.stringify(s.locator);
 
             html += `<div class="session-item kd-session-item ${isActive ? 'active' : ''}"
-                data-session-id="${esc(s.id)}" data-workspace="${esc(s.workspace_encoded)}" data-filepath="${esc(s.file_path || '')}">
+                data-session-id="${esc(s.session_id)}"
+                data-provider-id="${esc(s.provider_id)}"
+                data-locator="${esc(locatorJson)}"
+                data-filepath="${esc(filePath)}">
                 <div class="kd-session-content">
                     <div class="session-item-title">${sourceIcon} ${esc(s.title)}</div>
-                    <div class="session-item-date">${dateStr} · ${esc(sourceLabel)} · ${s.message_count} turns</div>
+                    <div class="session-item-date">${dateStr} · ${esc(providerLabel)} · ${s.message_count} turns</div>
                 </div>
                 <div class="kd-session-actions">
-                    <button class="kd-action-btn kd-folder-btn" title="Open folder">
+                    ${
+                        filePath
+                            ? `<button class="kd-action-btn kd-folder-btn" title="Open folder">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    </button>
-                    <button class="kd-action-btn kd-delete-btn" title="Delete">
+                    </button>`
+                            : ''
+                    }
+                    ${
+                        s.provider_id === 'kage-desktop' && filePath.endsWith('.json')
+                            ? `<button class="kd-action-btn kd-delete-btn" title="Delete">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                    </button>
+                    </button>`
+                            : ''
+                    }
                 </div>
             </div>`;
         }
@@ -195,20 +208,17 @@ export class KageDesktopViewer {
         list.innerHTML = html;
 
         list.querySelectorAll('.kd-session-item').forEach((item) => {
-            // Session click — load conversation
             item.addEventListener('click', async (e) => {
-                // Don't trigger on action button clicks
                 if (e.target.closest('.kd-action-btn')) return;
-                console.log(`[KageDesktop] Clicked session: ${item.dataset.sessionId}`);
-                this.activeSessionId = item.dataset.sessionId;
-                this.activeWorkspace = item.dataset.workspace;
+                const sessionId = item.dataset.sessionId;
+                const providerId = item.dataset.providerId;
+                const locator = JSON.parse(item.dataset.locator);
+                console.log(`[AgentSessions] Clicked session: ${providerId}/${sessionId}`);
+                this.activeSessionId = sessionId;
                 try {
-                    await this.loadAndDisplaySession(
-                        item.dataset.workspace,
-                        item.dataset.sessionId
-                    );
+                    await this.loadAndDisplaySession(providerId, locator, sessionId);
                 } catch (e) {
-                    console.error('[KageDesktop] Error loading session:', e);
+                    console.error('[AgentSessions] Error loading session:', e);
                 }
                 list.querySelectorAll('.kd-session-item').forEach((el) =>
                     el.classList.remove('active')
@@ -216,7 +226,6 @@ export class KageDesktopViewer {
                 item.classList.add('active');
             });
 
-            // Folder button
             const folderBtn = item.querySelector('.kd-folder-btn');
             if (folderBtn) {
                 folderBtn.addEventListener('click', (e) => {
@@ -229,7 +238,6 @@ export class KageDesktopViewer {
                 });
             }
 
-            // Delete button
             const deleteBtn = item.querySelector('.kd-delete-btn');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', async (e) => {
@@ -239,62 +247,46 @@ export class KageDesktopViewer {
                     try {
                         await this.invoke('kage_desktop_delete_session', { filePath: fp });
                         item.remove();
-                        this.sessions = this.sessions.filter((s) => s.file_path !== fp);
+                        const sid = item.dataset.sessionId;
+                        this.sessions = this.sessions.filter((s) => s.session_id !== sid);
                     } catch (err) {
-                        console.warn('[KageDesktop] Delete failed:', err);
+                        console.warn('[AgentSessions] Delete failed:', err);
                     }
                 });
             }
         });
     }
 
-    async loadAndDisplaySession(workspaceEncoded, sessionId) {
+    async loadAndDisplaySession(providerId, locator, sessionId) {
         const area = this.chatApp.elements.messagesArea;
         if (!area) {
-            console.error('[KageDesktop] messagesArea not found');
+            console.error('[AgentSessions] messagesArea not found');
             return;
         }
 
-        // Stop any existing polling
         this._stopPolling();
 
         area.innerHTML = '<div class="kd-loading">Loading session...</div>';
 
-        // Hide input area for read-only mode
         const inputContainer = document.querySelector('.chat-input-container');
         if (inputContainer) inputContainer.style.display = 'none';
 
         try {
-            let messages;
-            const session = this.sessions.find(
-                (s) => s.id === sessionId && s.workspace_encoded === workspaceEncoded
-            );
-
-            if (session?.session_type === 'cli') {
-                console.log(`[KageDesktop] Loading CLI session: ${sessionId}`);
-                messages = await this.invoke('kage_cli_load_session', {
-                    conversationId: sessionId,
-                });
-                // Start polling for live updates
-                const updatedMs = new Date(session.updated_at).getTime();
-                this._startPolling(sessionId, updatedMs);
-            } else if (session?.file_path?.endsWith('.chat')) {
-                console.log(`[KageDesktop] Loading .chat file: ${session.file_path}`);
-                messages = await this.invoke('kage_desktop_load_chat_file', {
-                    filePath: session.file_path,
-                });
-            } else {
-                console.log(`[KageDesktop] Loading workspace session: ${sessionId}`);
-                messages = await this.invoke('kage_desktop_load_session', {
-                    workspaceEncoded,
-                    sessionId,
-                });
-            }
-
-            console.log(`[KageDesktop] Loaded ${messages.length} messages`);
+            const messages = await this.invoke('agent_load_session', {
+                providerId,
+                locator,
+            });
+            const session = this.sessions.find((s) => s.session_id === sessionId);
+            console.log(`[AgentSessions] Loaded ${messages.length} messages`);
             this.renderMessages(area, messages, session);
+
+            // Start live-polling for providers that support it. The
+            // backend returns None for providers that don't, which the
+            // poll loop handles gracefully.
+            const updatedMs = new Date(session?.updated_at || Date.now()).getTime();
+            this._startPolling(providerId, locator, updatedMs);
         } catch (e) {
-            console.error('[KageDesktop] Failed to load session:', e);
+            console.error('[AgentSessions] Failed to load session:', e);
             area.innerHTML = `<div class="kd-loading">Failed to load: ${esc(String(e))}</div>`;
         }
     }
@@ -302,21 +294,21 @@ export class KageDesktopViewer {
     renderMessages(container, messages, session) {
         container.innerHTML = '';
 
-        // Read-only banner with expandable details
-        const sourceLabel = session?.session_type === 'cli' ? 'Kage CLI' : 'Kage Desktop';
-        const bannerIcon =
-            session?.session_type === 'cli'
-                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>'
-                : mascotHTML({ size: 14 });
+        const provider = this.providers.find((p) => p.id === session?.provider_id);
+        const sourceLabel = provider?.label || session?.provider_id || 'Agent';
+        const bannerIcon = providerIcon(session?.provider_id);
         const banner = document.createElement('div');
         banner.className = 'kd-readonly-banner';
+        const workspace = session?.extras?.workspace;
+        const model = session?.extras?.model;
+        const filePath = session?.extras?.file_path;
         banner.innerHTML = `<details class="kd-banner-details">
             <summary>${bannerIcon} Read-only — ${esc(sourceLabel)} session</summary>
             <div class="kd-banner-info">
-                ${session?.workspace ? `<div>📁 Workspace: <code>${esc(session.workspace)}</code></div>` : ''}
-                ${session?.id ? `<div>🆔 Session: <code>${esc(session.id)}</code></div>` : ''}
-                ${session?.model ? `<div>🤖 Model: ${esc(session.model)}</div>` : ''}
-                ${session?.file_path ? `<div>📄 File: <code>${esc(session.file_path)}</code></div>` : ''}
+                ${workspace ? `<div>📁 Workspace: <code>${esc(workspace)}</code></div>` : ''}
+                ${session?.session_id ? `<div>🆔 Session: <code>${esc(session.session_id)}</code></div>` : ''}
+                ${model ? `<div>🤖 Model: ${esc(model)}</div>` : ''}
+                ${filePath ? `<div>📄 File: <code>${esc(filePath)}</code></div>` : ''}
             </div>
         </details>`;
         container.appendChild(banner);
@@ -328,7 +320,6 @@ export class KageDesktopViewer {
                 const el = this.chatApp.createMessageElement('user', '');
                 const contentDiv = el.querySelector('.message-content');
                 if (contentDiv) {
-                    // Check for inline base64 images in the text
                     const { cleanText, images } = extractInlineImages(text);
                     if (cleanText.trim()) renderMarkdown(cleanText, contentDiv);
                     for (const img of images) {
@@ -359,7 +350,6 @@ export class KageDesktopViewer {
                     </summary>
                     <pre class="kd-tool-output">${esc(toolContent)}</pre>
                 </details>`;
-                // Wire up copy button
                 el.querySelector('.kd-tool-copy-btn')?.addEventListener('click', (e) => {
                     e.stopPropagation();
                     navigator.clipboard.writeText(toolContent).then(() => {
@@ -380,20 +370,6 @@ export class KageDesktopViewer {
     }
 
     extractUserText(msg) {
-        if (msg.content_blocks && msg.content_blocks.length > 0) {
-            const userBlocks = msg.content_blocks.filter(
-                (b) =>
-                    b.block_type === 'text' &&
-                    !b.text.startsWith('<identity>') &&
-                    !b.text.startsWith('## Included Rules') &&
-                    !b.text.startsWith('[KAGE_STEERING') &&
-                    !b.text.startsWith('Follow these instructions') &&
-                    b.text.length < 5000
-            );
-            if (userBlocks.length > 0) {
-                return userBlocks.map((b) => b.text).join('\n');
-            }
-        }
         return msg.content;
     }
 
@@ -407,6 +383,16 @@ export class KageDesktopViewer {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const PROVIDER_ICONS = {
+    'kiro-cli':
+        '<svg class="kd-source-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><polyline points="7 10 10 13 7 16"/><line x1="13" y1="16" x2="17" y2="16"/></svg>',
+};
+
+function providerIcon(providerId) {
+    return PROVIDER_ICONS[providerId] || mascotHTML({ size: 14, className: 'kd-source-icon' });
+}
+
 function esc(s) {
     const d = document.createElement('div');
     d.textContent = s;
@@ -429,18 +415,15 @@ function formatRelativeDate(date) {
 /** Extract base64 images from text that contains JSON-RPC prompt structures. */
 function extractInlineImages(text) {
     const images = [];
-    // Match "data":"<base64>","mimeType":"<mime>" patterns
     const regex = /"data":"([A-Za-z0-9+/=]{100,})","mimeType":"(image\/[a-z]+)"/g;
     let match;
     while ((match = regex.exec(text)) !== null) {
         images.push({ data: match[1], mime: match[2] });
     }
-    // Also match markdown image syntax: ![...](data:image/...;base64,...)
     const mdRegex = /!\[.*?\]\(data:(image\/[a-z]+);base64,([A-Za-z0-9+/=]{100,})\)/g;
     while ((match = mdRegex.exec(text)) !== null) {
         images.push({ data: match[2], mime: match[1] });
     }
-    // Clean the text — remove the base64 data blobs
     const cleanText = text
         .replace(/"data":"[A-Za-z0-9+/=]{100,}","mimeType":"image\/[a-z]+"/g, '[image]')
         .replace(/!\[.*?\]\(data:image\/[a-z]+;base64,[A-Za-z0-9+/=]{100,}\)/g, '[image]');

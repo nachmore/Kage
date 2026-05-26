@@ -89,7 +89,7 @@ def build_mcp_binary():
     notably `src/os/accessibility.rs`) silently produce a stale MCP
     binary unless the developer remembers to run this command by hand.
     Running it here on every dev start makes the dev loop honest:
-    the binary kage-cli spawns is always up-to-date with the source.
+    the binary the agent spawns is always up-to-date with the source.
 
     Cargo's incremental cache makes this a no-op when nothing changed
     (sub-second on a warm tree); when it isn't, the dev server start

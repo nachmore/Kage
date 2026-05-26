@@ -46,13 +46,13 @@ pub struct AcpClient {
     /// True while the server is compacting context — outgoing prompts should wait
     pub compacting: Arc<(Mutex<bool>, std::sync::Condvar)>,
     /// Vendor extension namespace observed from incoming notifications.
-    /// kage-cli uses `_kage.dev/`, kiro-cli uses `_kiro.dev/`; the two
-    /// share an identical extension surface (commands/available,
-    /// metadata, commands/execute, compaction/status, ...) under
-    /// different vendor prefixes. We pin to whichever we see first so
-    /// outgoing requests target the right namespace, and the
-    /// notification handler matches both interchangeably (see
-    /// `vendor_method_suffix`).
+    /// Two ACP vendor namespaces are recognised: `_kage.dev/` and
+    /// `_kiro.dev/`. The extension surface (commands/available,
+    /// metadata, commands/execute, compaction/status, ...) is identical
+    /// across both prefixes. We pin to whichever we observe first on an
+    /// inbound notification so outgoing requests target the right
+    /// namespace, and the notification handler matches both
+    /// interchangeably (see `vendor_method_suffix`).
     pub vendor_prefix: Arc<Mutex<Option<&'static str>>>,
 }
 
@@ -223,8 +223,8 @@ impl AcpClient {
         self.transport.write_line(&line)
     }
 
-    /// Cancel any in-flight prompt for the given session. Both kage-cli
-    /// and kiro-cli treat session/prompt as exclusive per session, so
+    /// Cancel any in-flight prompt for the given session. The agent
+    /// (kiro-cli) treats session/prompt as exclusive per session, so
     /// shutdown paths and the user-facing Cancel button must clear that
     /// lock before issuing a new prompt or letting the connection drop.
     /// No-op if there's no current session.

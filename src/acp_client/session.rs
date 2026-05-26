@@ -103,8 +103,8 @@ impl AcpClient {
 
     /// Load an existing session and return any model list the agent included
     /// in its response. The ACP spec doesn't mandate `models.availableModels`
-    /// for `session/load` — but kage-cli and kiro-cli both ship the same
-    /// session resource, so when one populates it on `session/new` it tends
+    /// for `session/load` — but kiro-cli ships the same session resource
+    /// for both, so when it populates `models` on `session/new` it tends
     /// to populate it on `session/load` too. Returning the (possibly empty)
     /// list lets callers refresh the model dropdown after a resume; the
     /// previous "frontend will refetch when needed" comment was wishful

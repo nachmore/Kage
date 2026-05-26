@@ -76,7 +76,7 @@ async fn shutdown_and_exit_inner(
 
         if will_run_steering {
             // Cancel any in-flight prompt before issuing a new one. The agent
-            // (kage-cli) holds an internal "prompt in progress" lock that
+            // (kiro-cli) holds an internal "prompt in progress" lock that
             // rejects any subsequent session/prompt — including the one
             // auto_steering is about to send — until the active prompt
             // finishes or is cancelled. Without this, on-quit steering races

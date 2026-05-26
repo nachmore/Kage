@@ -76,10 +76,10 @@ pub struct FeatureServices {
     pub automation_plan_cancelled: Arc<AtomicBool>,
     /// Activity tracker for focus/screen time reports
     pub activity_tracker: Arc<crate::activity_tracker::ActivityTrackerState>,
-    /// Per-file cache for Kage Desktop session enumeration — keyed by
-    /// (mtime, size), so new/modified session files are picked up without
-    /// re-parsing unchanged ones. See `kage_desktop::KageDesktopCache`.
-    pub kage_desktop_cache: crate::commands::kage_desktop::KageDesktopCacheHandle,
+    /// Runtime registry of agent session providers (kiro-cli sqlite, kage
+    /// desktop json/.chat, future Claude Code/Codex/Ollama). Owns each
+    /// provider's per-instance cache. See `agent_sessions::AgentSessionRegistry`.
+    pub agent_session_registry: Arc<crate::agent_sessions::AgentSessionRegistry>,
     /// Automation signal sender (for extensions to emit signals)
     pub automation_signal_tx: Arc<
         std::sync::Mutex<Option<tokio::sync::mpsc::Sender<crate::automation::AutomationSignal>>>,

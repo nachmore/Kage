@@ -150,7 +150,7 @@ impl AcpTransport {
                 self.start_reader_thread(ReaderSource::Tcp(BufReader::new(read_clone)));
 
                 *self.connected.lock_or_recover() = true;
-                info!("Connected to kage-cli at {}", addr);
+                info!("Connected to agent backend at {}", addr);
                 Ok(())
             }
             Err(e) => {

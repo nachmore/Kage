@@ -3,8 +3,8 @@
 `kage-computer-control-mcp` is a standalone executable built from
 `src/bin/computer_control_mcp.rs`. It ships alongside the main `kage`
 binary, is registered in `mcp.json` by `src/mcp_registration.rs`, and is
-spawned over stdio by `kage-cli` (the agent) as a child process — not by
-Kage itself.
+spawned over stdio by the agent backend (e.g. `kiro-cli`) as a child
+process — not by Kage itself.
 
 This doc records **why** that responsibility lives in its own process
 rather than folded into the main binary.
@@ -14,7 +14,7 @@ rather than folded into the main binary.
 Kage exposes agent-callable tools through two distinct mechanisms:
 
 1. **MCP servers** — separate processes registered in `mcp.json` and
-   spawned by kage-cli over stdio. JSON-RPC 2.0 on the wire. This is what
+   spawned by the agent over stdio. JSON-RPC 2.0 on the wire. This is what
    computer-control uses.
 2. **Local extensions** — JS in the WebView declares tools in its
    manifest. `send_extension_tool_steering` pushes those declarations to
@@ -82,15 +82,15 @@ These wouldn't justify the split on their own, but they reinforce it:
 
 - **Crash isolation.** UIA and AX can hang on pathological windows, and
   `SendInput` sits on top of Win32 kernel paths that have their own
-  failure modes. A crash in the MCP child kills just that child;
-  kage-cli respawns it. Folded into the GUI process, the same crash
-  would take down chat, tray, hotkeys, settings, everything.
+  failure modes. A crash in the MCP child kills just that child; the
+  agent respawns it. Folded into the GUI process, the same crash would
+  take down chat, tray, hotkeys, settings, everything.
 - **macOS TCC permission scope.** Accessibility and Screen Recording
   grants attach per-executable. A dedicated automation binary can
   request those permissions narrowly without escalating the main app's
   permission footprint.
 - **Iteration loop.** `cargo build --bin kage-computer-control-mcp`,
-  kill the old child, kage-cli respawns the new one — no GUI restart,
+  kill the old child, the agent respawns the new one — no GUI restart,
   no chat state loss. The dev-only papercut is that `cargo tauri dev`
   and `cargo check` don't rebuild the MCP binary. That's a build
   ergonomics issue, not an architectural one.

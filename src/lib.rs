@@ -4,6 +4,7 @@
 pub mod acp_client;
 pub mod activity_tracker;
 pub mod agent_presets;
+pub mod agent_sessions;
 pub mod app_launcher;
 pub mod app_log;
 pub mod auto_steering;

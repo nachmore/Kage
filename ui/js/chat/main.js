@@ -1,6 +1,6 @@
 // Main entry point for expanded chat window
 import { ChatApp } from './app.js';
-import { KageDesktopViewer } from './kage-desktop.js';
+import { AgentSessionViewer } from './agent-sessions.js';
 import { initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { initLinkHandler } from '../shared/link-handler.js';
 import { setExtensionManager as setMarkdownExtManager } from '../shared/markdown.js';
@@ -165,7 +165,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     };
 
     (async () => {
-        const viewer = new KageDesktopViewer(invoke, kdElements, app);
+        const viewer = new AgentSessionViewer(invoke, kdElements, app);
         const available = await viewer.init();
         if (available) {
             desktopViewer = viewer;
