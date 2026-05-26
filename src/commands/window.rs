@@ -497,6 +497,10 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        // Showing main is a chat-experience activation — cancel any
+        // pending agent shutdown so the user's first message-send
+        // hits a live agent.
+        cancel_chat_shutdown(&app);
         crate::setup::update_activation_policy(&app);
     } else {
         warn!("Main window not found");
@@ -553,6 +557,103 @@ fn cleanup_chat_window_state(app: &tauri::AppHandle, label: &str) {
         "Cleaned up window_sessions for closed chat window: {}",
         label
     );
+
+    // Maybe disconnect the agent. The full chat experience holds the
+    // agent open; once the last chat window closes (and floating isn't
+    // preloaded with a session), we want to release the kiro-cli
+    // subprocess to be respectful of memory.
+    schedule_chat_shutdown_check(app);
+}
+
+/// How long to wait after the last chat window closes before checking
+/// whether the agent should be disconnected. Long enough to be
+/// forgiving (user closes the X then realises they wanted to copy
+/// something — within 30s they reopen, agent stays); short enough
+/// that closing for real frees memory promptly.
+const CHAT_SHUTDOWN_DELAY_SECS: u64 = 30;
+
+/// Public entry point for the same logic — used by `handle_window_close`
+/// in setup.rs when the user closes main via the OS chrome (which hides
+/// rather than destroys). The internal `cleanup_chat_window_state` path
+/// is for chat-* peer windows that actually destroy.
+pub fn schedule_chat_shutdown_check_public(app: &tauri::AppHandle) {
+    schedule_chat_shutdown_check(app);
+}
+
+/// Schedule a check to disconnect the agent if no chat window is open
+/// and floating doesn't have a pinned session. Bumps the generation
+/// counter so any in-flight task from a previous close observes the
+/// change and exits early. The actual decision (and the disconnect)
+/// is in [`run_chat_shutdown_check`].
+fn schedule_chat_shutdown_check(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    use tauri::Manager;
+    let Some(ui) = app.try_state::<crate::state::UiState>() else {
+        return;
+    };
+    let gen = ui.chat_shutdown_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(CHAT_SHUTDOWN_DELAY_SECS)).await;
+        run_chat_shutdown_check(&app, gen);
+    });
+}
+
+/// Cancel any pending chat-shutdown task by bumping the generation.
+/// Called when a chat window opens (or any path that should keep the
+/// agent alive) — the in-flight sleep wakes up and finds its
+/// generation stale.
+pub fn cancel_chat_shutdown(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    use tauri::Manager;
+    let Some(ui) = app.try_state::<crate::state::UiState>() else {
+        return;
+    };
+    ui.chat_shutdown_generation.fetch_add(1, Ordering::SeqCst);
+}
+
+fn run_chat_shutdown_check(app: &tauri::AppHandle, my_generation: u64) {
+    use std::sync::atomic::Ordering;
+    use tauri::Manager;
+    let Some(ui) = app.try_state::<crate::state::UiState>() else {
+        return;
+    };
+    let current = ui.chat_shutdown_generation.load(Ordering::SeqCst);
+    if current != my_generation {
+        // A newer chat-shutdown task superseded us, OR a chat window
+        // opened (cancel_chat_shutdown bumps too). Stand down.
+        return;
+    }
+
+    // Any chat windows still visible? If so, leave the agent alone —
+    // they need it. Hidden main counts as closed (the user could have
+    // typed Cmd+Q on macOS or hidden via tray).
+    if count_visible_chat_windows(app) > 0 {
+        return;
+    }
+
+    // Floating preloaded with a session means the agent persists for
+    // the app lifetime — don't disconnect.
+    let floating_has_session = ui
+        .window_sessions
+        .lock()
+        .ok()
+        .map(|m| m.get("floating").is_some())
+        .unwrap_or(false);
+    if floating_has_session {
+        return;
+    }
+
+    // No chat windows, no preloaded floating session — disconnect.
+    if let Some(acp) = app.try_state::<crate::state::AcpHandles>() {
+        if acp.client.is_connected() {
+            info!(
+                "No chat windows open and no floating session pinned — disconnecting agent after {}s idle",
+                CHAT_SHUTDOWN_DELAY_SECS
+            );
+            acp.client.disconnect();
+        }
+    }
 }
 
 /// Spawn a new chat window, peer to `main`. The new window has a
@@ -611,6 +712,10 @@ pub async fn open_new_chat_window(
     let _ = window.show();
     let _ = window.set_focus();
 
+    // Opening a chat window cancels any pending agent-shutdown task
+    // — the user came back within the grace window, agent stays.
+    cancel_chat_shutdown(&app);
+
     crate::setup::update_activation_policy(&app);
     let open_count = count_open_chat_windows(&app);
     crate::telemetry::track(
@@ -644,6 +749,21 @@ fn count_open_chat_windows(app: &tauri::AppHandle) -> usize {
     app.webview_windows()
         .keys()
         .filter(|label| label.as_str() == "main" || label.starts_with("chat-"))
+        .count()
+}
+
+/// Number of chat windows currently *visible* (not just constructed).
+/// `main` is created at app launch but typically hidden until the user
+/// brings it up; for the agent-shutdown decision we treat hidden the
+/// same as closed. Falls back to "exists" if Tauri can't report
+/// visibility (treat as visible to err on the side of keeping the
+/// agent up).
+fn count_visible_chat_windows(app: &tauri::AppHandle) -> usize {
+    use tauri::Manager;
+    app.webview_windows()
+        .iter()
+        .filter(|(label, _)| label.as_str() == "main" || label.starts_with("chat-"))
+        .filter(|(_, w)| w.is_visible().unwrap_or(true))
         .count()
 }
 

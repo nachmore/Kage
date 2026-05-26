@@ -971,31 +971,58 @@ export class ChatApp {
     /**
      * Bootstrap this chat window's session on first load.
      *
-     * - For `chat-<uuid>` peers, reads `?resumeSessionId=<id>` from the
-     *   URL (set by `open_new_chat_window`) — if present, loads that
-     *   session; otherwise creates a fresh one.
-     * - For `main`, normally `loadCurrentSessionId()` finds an entry
-     *   already populated by `start_session_on_launch`. But if the
-     *   user disabled that setting, or opens main before the launch
-     *   session has been registered, the slot is empty and the first
-     *   message would fail with "invalid type: null". Create one here
-     *   in that case.
+     * - For `chat-<uuid>` peers (Ctrl+Shift+N "new chat window"
+     *   intent): read `?resumeSessionId=<id>` from the URL — if
+     *   present, load that session via `switch_acp_session`; otherwise
+     *   create a fresh one.
+     *
+     * - For `main`: never eagerly create. Default to floating's
+     *   pinned session so the user immediately sees the conversation
+     *   they were having. If floating doesn't have one yet (e.g.
+     *   `start_session_on_launch=false`), leave the chat empty —
+     *   the user picks a session from the sidebar or hits "New Chat"
+     *   to create one explicitly. This avoids the "spawn 3 sessions
+     *   on launch" race the eager-create version produced.
      */
     async _bootstrapChatPeerSession() {
         if (this.currentAcpSessionId) return; // already bootstrapped
 
         const isPeer = this.windowLabel.startsWith('chat-');
-        const params = new URLSearchParams(window.location.search);
-        const resumeId = isPeer ? params.get('resumeSessionId') : null;
+        if (isPeer) {
+            const params = new URLSearchParams(window.location.search);
+            const resumeId = params.get('resumeSessionId');
+            try {
+                const adoptedId = await this.invoke('switch_acp_session', {
+                    sessionId: resumeId || null,
+                });
+                this.currentAcpSessionId = adoptedId;
+                this.activeSessionId = adoptedId;
+                console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> ${adoptedId}`);
+            } catch (e) {
+                console.error('[CHAT] Failed to bootstrap peer:', e);
+            }
+            return;
+        }
+
+        // main — adopt floating's session so the user sees their
+        // ongoing conversation. switch_acp_session sends session/load
+        // and pins to this window's label (`main`).
+        const floatingId = await this.invoke('get_window_session', {
+            label: 'floating',
+        }).catch(() => null);
+        if (!floatingId) {
+            console.log('[CHAT] main bootstrap: no floating session yet, leaving empty');
+            return;
+        }
         try {
             const adoptedId = await this.invoke('switch_acp_session', {
-                sessionId: resumeId || null,
+                sessionId: floatingId,
             });
             this.currentAcpSessionId = adoptedId;
             this.activeSessionId = adoptedId;
-            console.log(`[CHAT] Bootstrapped ${this.windowLabel} -> session ${adoptedId}`);
+            console.log(`[CHAT] main adopted floating's session: ${adoptedId}`);
         } catch (e) {
-            console.error('[CHAT] Failed to bootstrap session:', e);
+            console.error('[CHAT] Failed to adopt floating session:', e);
         }
     }
 

@@ -99,6 +99,17 @@ export class FloatingApp {
         // send via the recovery-session-id passthrough on message_complete
         // (image-error recovery may swap us to a fresh session).
         this.floatingSessionId = null;
+        // True while `_adoptFloatingSession` is awaiting setup's
+        // `session_pinned` event (or creating its own session in the
+        // start_session_on_launch=false path). The send/typing UX
+        // checks this so the user sees a "Spinning up agent…"
+        // placeholder rather than an error when they type before the
+        // session arrives.
+        this.bootstrappingSession = false;
+        // Set when bootstrap *fails* (both setup and our recovery
+        // session/new failed). Surfaces an error notice in the UI so
+        // the user understands floating won't work this session.
+        this.sessionBootstrapError = null;
         this.isWaitingForResponse = false;
         this.shortcuts = [];
         // Track the length at which pattern matching last failed (returned "chat").
@@ -195,7 +206,14 @@ export class FloatingApp {
         });
         this.messageStreamController = new MessageStreamController({
             isWaiting: () => this.isWaitingForResponse,
-            acceptSessionId: () => true, // floating doesn't filter by session
+            // Filter chunks by our pinned session id. Pre-multi-session
+            // this returned `true` because there was only one session
+            // global to the app; under the multi-session backend that
+            // accepts ANY session's chunks — including the launch
+            // steering reply, the auto-titler's hidden response, and
+            // any chat-* peer's stream. The session_id-on-the-event
+            // check rejects all of those.
+            acceptSessionId: (sid) => !sid || sid === this.floatingSessionId,
             getAccumulator: () => this.currentResponse,
             appendToAccumulator: (delta) => {
                 this.currentResponse = (this.currentResponse || '') + delta;
@@ -452,23 +470,8 @@ export class FloatingApp {
             this.loadShortcuts(),
             loadSlashCommands(this.invoke),
             loadFrecency(this.invoke),
-            this.invoke('get_window_session', { label: 'floating' })
-                .then((id) => {
-                    this.floatingSessionId = id;
-                })
-                .catch(() => {
-                    this.floatingSessionId = null;
-                }),
+            this._adoptFloatingSession(),
         ]);
-        // If we still don't have a session id (start_session_on_launch
-        // disabled, or the user summoned floating before that finished),
-        // ensure one by sending the user straight into a fresh session.
-        // Without this, the first message_send fires with sessionId=null
-        // and the backend rejects it ("invalid type: null, expected a
-        // string").
-        if (!this.floatingSessionId) {
-            await this._ensureFloatingSession();
-        }
         _ts('Parallel IPC done (shortcuts + commands + frecency)');
 
         this.setupSpeech();
@@ -1678,20 +1681,185 @@ export class FloatingApp {
     }
 
     /**
-     * Ensure floating has a pinned session id, creating one if needed.
-     * Called on init when get_window_session("floating") returns null
-     * (start_session_on_launch disabled, or floating summoned before
-     * the launch session was registered). Without this the first send
-     * fires with sessionId=null and the backend rejects it.
+     * Resolve floating's pinned session id.
+     *
+     * Behaviour depends on the user's `start_session_on_launch` setting:
+     *
+     * - **Enabled (default).** Setup is preloading a session in the
+     *   background; wait for the `session_pinned` event with NO
+     *   timeout (kiro-cli cold-start can take 10s+). `session_pin_failed`
+     *   covers the deadlock: setup emits it on connect/load/create
+     *   failures, we react by creating our own session. Either way,
+     *   we don't hang the user forever.
+     *
+     * - **Disabled.** Don't wait — create our own session immediately.
+     *
+     * In both cases the listener is registered BEFORE the synchronous
+     * `get_window_session` check, so we can't miss a `session_pinned`
+     * that fires between the two (which would otherwise leave us
+     * permanently stalled).
+     *
+     * The frontend "spinning up agent…" UX is driven by
+     * `this.bootstrappingSession` — true while we're in the wait phase
+     * so onChunkAppended / typing handlers can show the placeholder.
      */
-    async _ensureFloatingSession() {
+    async _adoptFloatingSession() {
+        this.bootstrappingSession = true;
+        // Register both listeners first so a fast event can't fire
+        // between our synchronous check and the await below.
+        let resolveAdopted;
+        let resolveFailed;
+        const adopted = new Promise((resolve) => {
+            resolveAdopted = resolve;
+        });
+        const failed = new Promise((resolve) => {
+            resolveFailed = resolve;
+        });
+        const unlistenPinned = await this.listen('session_pinned', (event) => {
+            const { label, sessionId } = event?.payload || {};
+            if (label === 'floating' && sessionId) {
+                resolveAdopted(sessionId);
+            }
+        });
+        const unlistenFailed = await this.listen('session_pin_failed', (event) => {
+            const { label, reason } = event?.payload || {};
+            if (label === 'floating') {
+                resolveFailed(reason || 'unknown');
+            }
+        });
+
         try {
-            const id = await this.invoke('switch_acp_session', { sessionId: null });
-            this.floatingSessionId = id;
-            console.log(`[floating] bootstrapped session: ${id}`);
+            // Setup may have already pinned us before our init ran.
+            const existing = await this.invoke('get_window_session', {
+                label: 'floating',
+            }).catch(() => null);
+            if (existing) {
+                this.floatingSessionId = existing;
+                this.bootstrappingSession = false;
+                console.log(`[floating] adopted pre-pinned session: ${existing}`);
+                return;
+            }
+
+            // Read the config so we know whether to wait or create now.
+            // Default to true on read failure — the wait + failure path
+            // below recovers gracefully if setup never emits anything.
+            let willPreload = true;
+            try {
+                const config = await getConfig(this.invoke);
+                willPreload = config?.acp?.agent?.start_session_on_launch !== false;
+            } catch (e) {
+                console.warn('[floating] config read failed, assuming preload:', e);
+            }
+
+            if (!willPreload) {
+                console.log('[floating] start_session_on_launch=false, creating session now');
+                const id = await this.invoke('switch_acp_session', { sessionId: null });
+                this.floatingSessionId = id;
+                this.bootstrappingSession = false;
+                return;
+            }
+
+            // Race the two outcomes. No timeout — failure events
+            // bound the wait, kiro-cli cold-start can be slow.
+            const winner = await Promise.race([
+                adopted.then((sid) => ({ kind: 'pinned', sid })),
+                failed.then((reason) => ({ kind: 'failed', reason })),
+            ]);
+
+            if (winner.kind === 'pinned') {
+                this.floatingSessionId = winner.sid;
+                this.bootstrappingSession = false;
+                console.log(`[floating] adopted pinned session via event: ${winner.sid}`);
+                return;
+            }
+
+            // Setup told us it failed. Try to create our own as a
+            // last resort; if THAT fails the user gets an explicit
+            // error rather than a silent hang.
+            console.warn(`[floating] setup reported pin failure: ${winner.reason}`);
+            try {
+                const id = await this.invoke('switch_acp_session', { sessionId: null });
+                this.floatingSessionId = id;
+                console.log(`[floating] recovered with own session: ${id}`);
+            } catch (e) {
+                console.error('[floating] recovery session/new also failed:', e);
+                this.floatingSessionId = null;
+                this.sessionBootstrapError = String(e);
+            } finally {
+                this.bootstrappingSession = false;
+            }
         } catch (e) {
-            console.error('[floating] failed to bootstrap session:', e);
+            console.error('[floating] failed to adopt session:', e);
+            this.floatingSessionId = null;
+            this.sessionBootstrapError = String(e);
+            this.bootstrappingSession = false;
+        } finally {
+            if (typeof unlistenPinned === 'function') unlistenPinned();
+            if (typeof unlistenFailed === 'function') unlistenFailed();
         }
+    }
+
+    /**
+     * Show a "Spinning up agent…" placeholder in floating's response
+     * area while we're waiting for the launch session to be pinned.
+     * Removed once `_flushPendingSend()` runs OR the bootstrap fails
+     * (showError replaces it).
+     */
+    _showBootstrapSpinner() {
+        if (!this.elements.responseText) return;
+        this.elements.contentArea.classList.add('visible');
+        this.elements.responseText.innerHTML = `
+            <div class="bootstrap-spinner">
+                Spinning up agent
+                <span class="bootstrap-dot">.</span><span class="bootstrap-dot">.</span><span class="bootstrap-dot">.</span>
+            </div>`;
+        this.windowManager.resizeWindow();
+    }
+
+    /**
+     * After bootstrap completes (or fails), flush a queued send. Called
+     * from `_waitForBootstrapAndSend`. On success, replays the original
+     * `sendChatMessage`; on failure, surfaces the error.
+     */
+    _flushPendingSend() {
+        const pending = this._pendingSend;
+        this._pendingSend = null;
+        if (!pending) return;
+        // Clear the spinner — sendChatMessage's normal path will set
+        // up its own thinking indicator.
+        if (this.elements.responseText) {
+            this.elements.responseText.innerHTML = '';
+        }
+        if (this.sessionBootstrapError) {
+            this.showError(`Agent unavailable: ${this.sessionBootstrapError}`);
+            return;
+        }
+        if (!this.floatingSessionId) {
+            this.showError('No session available — cannot send message');
+            return;
+        }
+        // Re-enter sendChatMessage; the bootstrap-guard at the top
+        // will pass through now.
+        this.sendChatMessage(pending.message, pending.options);
+    }
+
+    /**
+     * Poll once-per-100ms for bootstrap completion (success or failure)
+     * and flush. Cheap because we're only running while the user has a
+     * pending send queued — usually <1s on hot launches, ~10s on cold.
+     */
+    async _waitForBootstrapAndSend() {
+        // If multiple calls race, only one polling loop should run.
+        if (this._waitingForBootstrap) return;
+        this._waitingForBootstrap = true;
+        try {
+            while (this.bootstrappingSession) {
+                await new Promise((r) => setTimeout(r, 100));
+            }
+        } finally {
+            this._waitingForBootstrap = false;
+        }
+        this._flushPendingSend();
     }
 
     async loadShortcuts() {
@@ -2583,6 +2751,22 @@ export class FloatingApp {
     }
 
     async sendChatMessage(message, options = {}) {
+        // If bootstrap is still running, show a "Spinning up agent…"
+        // placeholder and queue the send. The bootstrap path will
+        // call _flushPendingSend() once the session arrives.
+        if (this.bootstrappingSession) {
+            this._showBootstrapSpinner();
+            this._pendingSend = { message, options };
+            this._waitForBootstrapAndSend();
+            return;
+        }
+        // Bootstrap explicitly failed — surface the error rather than
+        // letting the user wonder why nothing happens.
+        if (this.sessionBootstrapError) {
+            this.showError(`Agent unavailable: ${this.sessionBootstrapError}`);
+            return;
+        }
+
         // Track message in shell-style history (skip duplicates of the last entry)
         if (
             message.trim() &&

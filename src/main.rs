@@ -261,6 +261,7 @@ async fn run() {
             std::collections::HashMap::new(),
         )),
         last_focused_chat: Arc::new(std::sync::Mutex::new(None)),
+        chat_shutdown_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         last_selection: Arc::new(std::sync::Mutex::new(None)),
         source_window: Arc::new(std::sync::Mutex::new(None)),
         frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),

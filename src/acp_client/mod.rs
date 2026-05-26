@@ -198,6 +198,12 @@ impl AcpClient {
 
     pub fn disconnect(&self) {
         self.transport.disconnect();
+        // Reset the initialized flag — a new agent subprocess started
+        // via the next `connect()` call needs `initialize` re-sent
+        // before any `session/new` will work. Without this we'd send
+        // session/new straight at a fresh kiro-cli that hadn't seen
+        // the protocol handshake and it'd reject the request.
+        *self.initialized.lock_or_recover() = false;
     }
 
     /// Send a JSON-RPC request and wait for its matching response. The

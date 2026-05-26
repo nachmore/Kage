@@ -60,6 +60,13 @@ pub struct UiState {
     /// to surface. None means no chat window has been focused this
     /// session — fall back to `main`.
     pub last_focused_chat: Arc<std::sync::Mutex<Option<String>>>,
+    /// Generation counter for the chat-window shutdown timer. When the
+    /// last chat window closes we schedule a "disconnect the agent in
+    /// 30s" task; if a chat window opens before the task fires it
+    /// bumps this counter so the pending task observes the change and
+    /// exits without disconnecting. Avoids needing a JoinHandle that
+    /// can be aborted (which Tauri's runtime makes awkward).
+    pub chat_shutdown_generation: Arc<std::sync::atomic::AtomicU64>,
     /// Text that was selected in the previously active window when the hotkey was pressed
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
     /// Info about the foreground window when the hotkey was pressed (title, process_name)

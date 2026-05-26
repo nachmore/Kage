@@ -12,11 +12,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cargo tauri dev -- /dev          # dev mode (DevTools, tray reload, RUST_BACKTRACE=1)
 cargo tauri dev -- /debug        # ACP protocol message logging to stdout
 cargo tauri dev -- /dev /debug   # both
-cargo tauri build                # platform-native installer/bundle (Windows: NSIS; macOS: .app + .dmg)
+
+# Fast dev release build (USE THESE for hand-off-the-binary iteration):
+pwsh scripts/build_dev_installer.ps1            # Windows: full installer, ~3 min
+pwsh scripts/build_dev_installer.ps1 -NoBundle  # Windows: just kage.exe, no NSIS step
+bash scripts/build_dev_installer.sh             # macOS/Linux equivalent
+bash scripts/build_dev_installer.sh --no-bundle
+
+# Ship-quality build (slow — full LTO, single codegen unit):
+cargo tauri build                # ~13 min on Windows; CI uses this for releases
 cargo build                      # debug binaries only — no installer, no bundling
 ```
 
-`cargo build --release` does **not** produce the installer or embed the frontend; only `cargo tauri build` does. A binary from `cargo build` will fail at runtime with `ERR_CONNECTION_REFUSED` because it still expects the dev server at `localhost:1420`. Use `cargo tauri build --no-bundle` if you want a standalone exe without the NSIS/DMG step. `cargo check` and `cargo build` are still the right commands for fast type/borrow validation during Rust iteration.
+**Default for dev iteration: `scripts/build_dev_installer.{ps1,sh}`** — it overrides `CARGO_PROFILE_RELEASE_LTO=false` and `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16` per-invocation, dropping a clean rebuild from ~13 min to ~3 min at the cost of a slightly larger / slightly slower binary that doesn't matter for testing. Add `-NoBundle` / `--no-bundle` to skip the ~30s NSIS bundling and produce just `target/release/kage.exe`. Pass `-Release` / `--release` to the script to verify the final ship-quality config when needed.
+
+`cargo build --release` does **not** produce the installer or embed the frontend; only `cargo tauri build` does. A binary from `cargo build` will fail at runtime with `ERR_CONNECTION_REFUSED` because it still expects the dev server at `localhost:1420`. `cargo check` and `cargo build` are still the right commands for fast type/borrow validation during Rust iteration.
 
 ### Two binaries — built separately, chained automatically
 

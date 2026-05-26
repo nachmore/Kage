@@ -256,6 +256,14 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
     }
     api.prevent_close();
 
+    // Hidden chat window counts as closed for the agent-shutdown
+    // decision. Schedule the check; if the user reopens within the
+    // grace window (e.g. by clicking the tray) we cancel.
+    let label = window.label();
+    if label == "main" || label.starts_with("chat-") {
+        crate::commands::window::schedule_chat_shutdown_check_public(window.app_handle());
+    }
+
     // On macOS: update activation policy (exclude the closing window since
     // is_visible() may not reflect the hide yet), then hide the app to
     // deactivate and return focus to the previous application.
@@ -456,6 +464,7 @@ pub fn maybe_spawn_default_session(
         info!("Connecting ACP client on launch...");
         if let Err(e) = acp_client.connect() {
             error!("Failed to connect on launch: {}", e);
+            emit_session_pin_failed(&app_handle, "floating", &format!("connect failed: {}", e));
             return;
         }
 
@@ -469,22 +478,11 @@ pub fn maybe_spawn_default_session(
             match acp_client.load_existing_session(&resume_id, cwd) {
                 Ok((id, models_json)) => {
                     info!("Resumed session on launch: {}", id);
-                    if let Ok(mut ws) = window_sessions.lock() {
-                        ws.insert("main".to_string(), id.clone());
-                        ws.insert("floating".to_string(), id.clone());
-                    }
-                    crate::commands::sessions::update_window_title(
+                    pin_session_to_floating(
                         &app_handle,
+                        &window_sessions,
                         &config_arc,
                         &session_cache_arc,
-                        "main",
-                        &id,
-                    );
-                    crate::commands::sessions::update_window_title(
-                        &app_handle,
-                        &config_arc,
-                        &session_cache_arc,
-                        "floating",
                         &id,
                     );
                     // Source: was this a post-update relaunch, or a
@@ -537,6 +535,11 @@ pub fn maybe_spawn_default_session(
                         }
                         Err(e) => {
                             error!("Fallback session creation also failed: {}", e);
+                            emit_session_pin_failed(
+                                &app_handle,
+                                "floating",
+                                &format!("fallback session/new failed: {}", e),
+                            );
                             return;
                         }
                     }
@@ -557,33 +560,81 @@ pub fn maybe_spawn_default_session(
                 }
                 Err(e) => {
                     error!("Failed to create default session on launch: {}", e);
+                    emit_session_pin_failed(
+                        &app_handle,
+                        "floating",
+                        &format!("session/new failed: {}", e),
+                    );
                     return;
                 }
             }
         };
 
-        if let Ok(mut ws) = window_sessions.lock() {
-            ws.insert("main".to_string(), session_id.clone());
-            ws.insert("floating".to_string(), session_id.clone());
-        }
-        crate::commands::sessions::update_window_title(
+        pin_session_to_floating(
             &app_handle,
+            &window_sessions,
             &config_arc,
             &session_cache_arc,
-            "main",
-            &session_id,
-        );
-        crate::commands::sessions::update_window_title(
-            &app_handle,
-            &config_arc,
-            &session_cache_arc,
-            "floating",
             &session_id,
         );
 
         apply_default_model_if_any(&acp_client, &config_arc, &session_id);
         send_startup_steering(&acp_client, &config_arc, &session_id);
     });
+}
+
+/// Pin a launch-created session to the floating window, update its
+/// title, and broadcast `session_pinned` so the floating frontend can
+/// adopt it without polling. Main and chat-* peers don't get a pin
+/// here — they default to floating's session lazily when opened, or
+/// create their own when the user clicks "New Chat".
+/// Tell the floating frontend the launch sequence failed and it
+/// should stop waiting for `session_pinned`. Without this, floating
+/// would hang on its `_adoptFloatingSession` await indefinitely
+/// (since we removed the timeout) — the user types and sees a
+/// "Spinning up agent…" placeholder forever.
+fn emit_session_pin_failed(app: &tauri::AppHandle, label: &str, reason: &str) {
+    use tauri::Emitter;
+    log::warn!("session_pin_failed for {}: {}", label, reason);
+    let _ = app.emit(
+        "session_pin_failed",
+        serde_json::json!({
+            "label": label,
+            "reason": reason,
+        }),
+    );
+}
+
+fn pin_session_to_floating(
+    app: &tauri::AppHandle,
+    window_sessions: &Arc<std::sync::Mutex<std::collections::HashMap<String, String>>>,
+    config_arc: &Arc<std::sync::Mutex<crate::config::Config>>,
+    session_cache_arc: &Arc<std::sync::Mutex<Option<crate::commands::sessions::SessionCache>>>,
+    session_id: &str,
+) {
+    use tauri::Emitter;
+    if let Ok(mut ws) = window_sessions.lock() {
+        ws.insert("floating".to_string(), session_id.to_string());
+    }
+    crate::commands::sessions::update_window_title(
+        app,
+        config_arc,
+        session_cache_arc,
+        "floating",
+        session_id,
+    );
+    // Broadcast so the floating webview can adopt this id without
+    // racing against the launch sequence. The frontend listens for
+    // `session_pinned { label: "floating", sessionId }` during init
+    // and falls back to creating its own session if the event hasn't
+    // arrived within a short timeout.
+    let _ = app.emit(
+        "session_pinned",
+        serde_json::json!({
+            "label": "floating",
+            "sessionId": session_id,
+        }),
+    );
 }
 
 fn store_available_models(
