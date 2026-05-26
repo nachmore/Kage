@@ -3,6 +3,33 @@
  */
 
 /**
+ * Format a byte count as a short, human-readable string ("3.4 GB",
+ * "12 KB"). Returns `''` for zero / negative / non-number input —
+ * callers gate display on truthiness ("show nothing for unknown
+ * size") rather than rendering a misleading "0 B".
+ *
+ * Consolidates four near-identical copies that grew up across
+ * settings/about.js, settings/connection.js, settings-renderer.js,
+ * and the floating window's Ollama status widget. Behaviour matches
+ * the pre-existing `_formatBytes` in those modules:
+ *   - 1024-based units up to TB.
+ *   - 1 decimal place for values < 100, 0 decimals from 100 up.
+ *   - Single-space separator between number and unit.
+ */
+export function formatBytes(n) {
+    if (typeof n !== 'number' || n <= 0) return '';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    let v = n;
+    while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i += 1;
+    }
+    const rounded = v >= 100 ? v.toFixed(0) : v.toFixed(1);
+    return `${rounded} ${units[i]}`;
+}
+
+/**
  * Get emoji icon for a tool kind (used in streaming tool chips)
  */
 export function getToolIcon(kind) {

@@ -51,14 +51,14 @@ import { mountPromptForm } from '../shared/prompt-form.js';
 import { formatError } from '../shared/session-render.js';
 import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
-import { escapeHtml } from '../shared/tool-utils.js';
+import { escapeHtml, formatBytes } from '../shared/tool-utils.js';
 import { checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
 import { MessageStreamController } from '../shared/message-stream-controller.js';
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
-import { showExtensionBar, hideExtensionBar } from '../shared/extension-bar.js';
+import { hideExtensionBar, showExtensionBar, updateExtensionBar } from '../shared/extension-bar.js';
 import { sanitizeExtensionHtml } from '../shared/extension-html-sanitizer.js';
 
 /**
@@ -459,6 +459,7 @@ export class FloatingApp {
             this.updateSpeechButtonVisibility();
             this._updateToolbarVisibility();
             this._checkTerminatorMode();
+            this._refreshOllamaStatusWidget();
             this.updateDatetimeVisibility();
         });
 
@@ -537,6 +538,10 @@ export class FloatingApp {
 
         // Check for terminator mode and show a one-time banner
         this._checkTerminatorMode();
+
+        // Spin up the optional Ollama status widget — no-op when the
+        // active connection isn't Ollama or the widget toggle is off.
+        this._refreshOllamaStatusWidget();
 
         // Enable app-icon rendering in markdown
         setAppIconInvoke(this.invoke);
@@ -1319,6 +1324,114 @@ export class FloatingApp {
         } catch (e) {
             console.log('match_context_rule failed:', e);
         }
+    }
+
+    /**
+     * Optional Ollama status widget. Off by default, configured per
+     * Ollama connection in the Agents wizard. When the active
+     * connection is Ollama-shaped and `show_status_widget=true`,
+     * render a small "🦙 <model> · ready" chip via the existing
+     * extension-bar slot and refresh it every 30s while the floating
+     * window is being used. Anything else hides the widget.
+     *
+     * Reuses the extension-bar API rather than rolling its own DOM
+     * because that path already handles window-resize accounting,
+     * blur-without-focus-steal, and theme inversion. The "extension"
+     * label is a misnomer — it's just a styled bar slot — but
+     * adopting an existing pattern beats inventing a new chip system
+     * for a six-row feature.
+     */
+    async _refreshOllamaStatusWidget() {
+        let cfg;
+        try {
+            cfg = await getConfig(this.invoke);
+        } catch {
+            return;
+        }
+        const active = cfg.acp?.connections?.find((c) => c.id === cfg.acp?.active_connection_id);
+        const settings = active?.preset_id === 'ollama' ? active.ollama_settings : null;
+        const enabled = !!settings?.show_status_widget && !!settings?.base_url;
+
+        if (!enabled) {
+            this._stopOllamaStatusPoll();
+            hideExtensionBar('ollama-status');
+            return;
+        }
+
+        // Show a placeholder immediately so the user sees the widget
+        // appear even before the first probe completes. The poll
+        // below replaces "checking..." with the resolved state.
+        this._ollamaStatus = {
+            baseUrl: settings.base_url,
+            model: settings.model || '',
+            // Tracking the same params the poll reads from. If the
+            // user changes model in Settings while the floating
+            // window is open, the config_updated listener calls us
+            // again and we re-seed.
+        };
+        showExtensionBar({
+            id: 'ollama-status',
+            icon: '🦙',
+            text: settings.model ? `${settings.model} · checking…` : 'Ollama · checking…',
+            className: 'ollama-status-bar',
+        });
+        this._startOllamaStatusPoll();
+        // Kick one immediate refresh too — saves the user a 30s wait
+        // when the widget first appears.
+        this._pollOllamaStatusOnce().catch(() => {});
+    }
+
+    _startOllamaStatusPoll() {
+        this._stopOllamaStatusPoll();
+        // 30s is the same cadence the existing extension status widgets
+        // use; balances "is it still up" reassurance with avoiding LAN
+        // chatter for users on metered or finicky networks.
+        this._ollamaStatusInterval = setInterval(
+            () => this._pollOllamaStatusOnce().catch(() => {}),
+            30 * 1000
+        );
+    }
+
+    _stopOllamaStatusPoll() {
+        if (this._ollamaStatusInterval) {
+            clearInterval(this._ollamaStatusInterval);
+            this._ollamaStatusInterval = null;
+        }
+    }
+
+    async _pollOllamaStatusOnce() {
+        const s = this._ollamaStatus;
+        if (!s) return;
+        let probe = null;
+        try {
+            probe = await this.invoke('ollama_probe', { baseUrl: s.baseUrl });
+        } catch (e) {
+            updateExtensionBar('ollama-status', {
+                text: `${s.model || 'Ollama'} · offline`,
+            });
+            return;
+        }
+        if (probe?.status !== 'Reachable') {
+            updateExtensionBar('ollama-status', {
+                text: `${s.model || 'Ollama'} · offline`,
+            });
+            return;
+        }
+        // Reachable — hit /api/tags too, since it's the only way to
+        // surface the resident size. allSettled-style: if list_models
+        // fails for a transient reason, leave the size off.
+        let sizeStr = '';
+        try {
+            const models = await this.invoke('ollama_list_models', {
+                baseUrl: s.baseUrl,
+            });
+            const match = (Array.isArray(models) ? models : []).find((m) => m?.name === s.model);
+            if (match?.size) sizeStr = ` · ${formatBytes(match.size)}`;
+        } catch {}
+        const versionStr = probe.version ? ` (Ollama ${probe.version})` : '';
+        updateExtensionBar('ollama-status', {
+            text: `${s.model || 'Ollama'}${sizeStr} · ready${versionStr}`,
+        });
     }
 
     async _updateToolbarVisibility() {

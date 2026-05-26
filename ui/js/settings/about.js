@@ -1,3 +1,4 @@
+import { formatBytes } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 /**
  * About Settings Module
@@ -599,7 +600,7 @@ export class AboutSettingsModule extends SettingsModule {
                 path: target,
                 passphrase,
             });
-            this._setBackupStatus(`✓ Saved ${this._formatBytes(bytes)} to ${target}`, 'success');
+            this._setBackupStatus(`✓ Saved ${formatBytes(bytes)} to ${target}`, 'success');
             // Clear passphrase fields so the value doesn't persist
             // visibly — Argon2id derived a key once and we don't need
             // it again.
@@ -677,7 +678,7 @@ export class AboutSettingsModule extends SettingsModule {
             `${summary.extensions} extension data file${summary.extensions === 1 ? '' : 's'}`
         );
         if (summary.steering_bytes > 0) {
-            parts.push(`${this._formatBytes(summary.steering_bytes)} of steering`);
+            parts.push(`${formatBytes(summary.steering_bytes)} of steering`);
         }
         const exportedAt = summary.exported_at ? ` (exported ${summary.exported_at})` : '';
         this._setBackupStatus(`✓ ${parts.join(', ')}${exportedAt}.`, 'success');
@@ -742,18 +743,6 @@ export class AboutSettingsModule extends SettingsModule {
             });
             setTimeout(() => input.focus(), 0);
         });
-    }
-
-    _formatBytes(n) {
-        if (typeof n !== 'number' || n <= 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB'];
-        let i = 0;
-        let v = n;
-        while (v >= 1024 && i < units.length - 1) {
-            v /= 1024;
-            i += 1;
-        }
-        return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
     }
 
     _formatError(e) {

@@ -17,6 +17,7 @@ import {
     sanitizeInfoHtml,
     validateSchema,
 } from './settings-schema.js';
+import { formatBytes } from './tool-utils.js';
 
 /**
  * Rendered settings instance. Produced by renderSchema().
@@ -493,7 +494,7 @@ export class RenderedSettings {
                         const stats = await invoke('link_metadata_cache_stats');
                         const entries = stats?.entries ?? 0;
                         const bytes = stats?.bytes ?? 0;
-                        setStatus(`${entries} URLs · ${formatBytes(bytes)}`);
+                        setStatus(`${entries} URLs · ${formatBytes(bytes) || '0 B'}`);
                     } else {
                         setStatus(`❌ unknown link_metadata op: ${op}`);
                     }
@@ -696,24 +697,6 @@ function pickFileContents(accept) {
 
         input.click();
     });
-}
-
-/**
- * Format a byte count as a short human string ("12.4 KB", "3.2 MB").
- * Used by the link_metadata host effect to render cache size in the
- * action row's status. Kept local rather than reaching into a shared
- * util because this is the only consumer in the renderer.
- */
-function formatBytes(n) {
-    if (typeof n !== 'number' || n <= 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    let v = n;
-    while (v >= 1024 && i < units.length - 1) {
-        v /= 1024;
-        i += 1;
-    }
-    return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
 }
 
 /**

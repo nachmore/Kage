@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
+import { formatBytes } from '../shared/tool-utils.js';
 /**
  * Connection Settings Module
  *
@@ -621,6 +622,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             ollama_settings: {
                 base_url: seeded.base_url || 'http://localhost:11434',
                 model: seeded.model || '',
+                show_status_widget: !!seeded.show_status_widget,
             },
         };
         this._editingIsNew = isNew;
@@ -687,6 +689,18 @@ export class ConnectionSettingsModule extends SettingsModule {
                     <button class="setting-button" type="button" id="ollEditRefreshBtn">Refresh</button>
                 </div>
                 <div id="ollEditModelHint" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Show status widget in floating window</div>
+                <div class="setting-checkbox-row">
+                    <label class="kage-checkbox">
+                        <input type="checkbox" id="ollEditShowWidget"${settings.show_status_widget ? ' checked' : ''}>
+                    </label>
+                    <div class="setting-description">
+                        Adds a small "🦙 ${escape(settings.model || 'model')} · ready" chip near the top of the floating window so you can see at a glance that the local model is up. Polls Ollama every ~30 seconds.
+                    </div>
+                </div>
             </div>
 
             <details style="margin-top:12px;">
@@ -812,25 +826,12 @@ export class ConnectionSettingsModule extends SettingsModule {
             );
         const opts = ['<option value="">—</option>'];
         for (const m of models || []) {
-            const sizeStr = this._formatBytes(m.size);
+            const sizeStr = formatBytes(m.size);
             const label = sizeStr ? `${m.name} — ${sizeStr}` : m.name;
             opts.push(`<option value="${escapeAttr(m.name)}">${escapeAttr(label)}</option>`);
         }
         sel.innerHTML = opts.join('');
         if (selected) sel.value = selected;
-    }
-
-    _formatBytes(bytes) {
-        if (typeof bytes !== 'number' || bytes <= 0) return '';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        let i = 0;
-        let v = bytes;
-        while (v >= 1024 && i < units.length - 1) {
-            v /= 1024;
-            i += 1;
-        }
-        const rounded = v >= 100 ? v.toFixed(0) : v.toFixed(1);
-        return `${rounded} ${units[i]}`;
     }
 
     async _saveOllamaEdit() {
@@ -864,6 +865,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             return;
         }
 
+        const showWidget = !!document.getElementById('ollEditShowWidget')?.checked;
         const merged = {
             id: this._editing.id,
             // Default the friendly name to "Ollama: <model>" on save
@@ -873,7 +875,11 @@ export class ConnectionSettingsModule extends SettingsModule {
             preset_id: 'ollama',
             mode: { type: 'local', spawn_command: spawnCommand },
             sessions_directory: this._editing.sessions_directory ?? null,
-            ollama_settings: { base_url: baseUrl, model },
+            ollama_settings: {
+                base_url: baseUrl,
+                model,
+                show_status_widget: showWidget,
+            },
         };
         const idx = this._connections.findIndex((c) => c.id === merged.id);
         if (idx >= 0) {

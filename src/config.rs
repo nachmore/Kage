@@ -361,6 +361,13 @@ pub struct OllamaConnectionSettings {
     /// Tag-form model name (e.g. `llama3:8b`). Plumbed into the
     /// codex-acp adapter via `OPENAI_MODEL`.
     pub model: String,
+    /// Show a small "🦙 <model> · <size>" status widget in the
+    /// floating window. Off by default — the widget polls
+    /// `/api/tags` every ~30s and that adds chatter on the LAN. Users
+    /// who want at-a-glance reassurance that the local model is
+    /// alive can enable it from the Ollama wizard.
+    #[serde(default)]
+    pub show_status_widget: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
