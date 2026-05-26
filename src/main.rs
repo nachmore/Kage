@@ -15,6 +15,7 @@ mod computer_control;
 mod config;
 mod config_export;
 mod config_migrations;
+#[allow(dead_code)] // Used in lib.rs; main.rs wires the IPC commands in the next commit.
 mod context_rules;
 mod error;
 mod extensions;
