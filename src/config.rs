@@ -75,54 +75,12 @@ pub struct Config {
     /// is and isn't collected.
     #[serde(default)]
     pub telemetry: TelemetryConfig,
-    /// Ollama integration settings — surfaced in Settings → Ollama and
-    /// used by the "Use Ollama with Codex" wizard to wire a local
-    /// model into the active connection.
-    #[serde(default)]
-    pub ollama: OllamaConfig,
     /// Per-app context rules ("App Modes"). When the foreground app
     /// matches a rule's `executable` at summon time, the rule's
     /// `steering` is appended to the outgoing prompt as a small
     /// `<_kage_app_steering>` tag. See `src/context_rules.rs`.
     #[serde(default)]
     pub context_rules: Vec<crate::context_rules::ContextRule>,
-}
-
-/// Ollama integration settings. None of these fields are required —
-/// the user can leave the section untouched and Kage behaves exactly
-/// as before. The "first-class" claim is about discoverability, not
-/// forced opt-in.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OllamaConfig {
-    /// True when the user has confirmed they want Kage to integrate
-    /// with Ollama. The Settings → Ollama page sets this when the
-    /// user accepts the setup wizard. Independent of base_url being
-    /// populated — a user can save the URL without committing.
-    #[serde(default)]
-    pub enabled: bool,
-    /// HTTP base URL of the Ollama daemon. Defaults to the local
-    /// install location; advanced users can point at a remote.
-    #[serde(default = "default_ollama_base_url")]
-    pub base_url: String,
-    /// Last-selected model. The model picker re-fetches `/api/tags`
-    /// to populate the dropdown each visit, so this is only a
-    /// preselection hint.
-    #[serde(default)]
-    pub model: Option<String>,
-}
-
-impl Default for OllamaConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            base_url: default_ollama_base_url(),
-            model: None,
-        }
-    }
-}
-
-fn default_ollama_base_url() -> String {
-    crate::ollama::DEFAULT_BASE_URL.to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -378,6 +336,31 @@ pub struct AgentConnection {
     /// in different places.
     #[serde(default)]
     pub sessions_directory: Option<String>,
+    /// Ollama-specific settings, when this connection points at a
+    /// local model running through codex-acp's OpenAI-compatible
+    /// endpoint. Optional — only set when `preset_id == "ollama"`.
+    /// Stored alongside the spawn command so the Edit flow can
+    /// reopen the Ollama wizard pre-filled instead of dumping the
+    /// user into raw env-var-prefixed shell syntax.
+    #[serde(default)]
+    pub ollama_settings: Option<OllamaConnectionSettings>,
+}
+
+/// Ollama-specific knobs persisted on an Ollama-shaped agent
+/// connection. The connection's `mode.spawn_command` is the only
+/// thing that actually runs at startup; this struct is the
+/// editable source of truth the wizard reads + writes so a user
+/// can change models or base URL without reverse-engineering the
+/// shell incantation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaConnectionSettings {
+    /// HTTP base URL of the Ollama daemon — scheme, host, and port.
+    /// The wizard appends `/v1` when building the `OPENAI_BASE_URL`
+    /// env var. Defaults to the local install.
+    pub base_url: String,
+    /// Tag-form model name (e.g. `llama3:8b`). Plumbed into the
+    /// codex-acp adapter via `OPENAI_MODEL`.
+    pub model: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -895,6 +878,7 @@ impl Default for Config {
                         timeout_ms: 30000,
                     },
                     sessions_directory: None,
+                    ollama_settings: None,
                 }],
                 active_connection_id: "default".to_string(),
                 agent: AgentConfig::default(),
@@ -958,7 +942,6 @@ impl Default for Config {
             macros: vec![],
             automation_power: AutomationPowerConfig::default(),
             telemetry: TelemetryConfig::default(),
-            ollama: OllamaConfig::default(),
             context_rules: Vec::new(),
         }
     }

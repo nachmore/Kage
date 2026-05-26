@@ -29,6 +29,13 @@ pub enum AgentKind {
     ClaudeCode,
     /// OpenAI Codex via the @zed-industries/codex-acp adapter.
     Codex,
+    /// Local model running on Ollama, routed through the Codex
+    /// adapter's OpenAI-compatible endpoint. Distinct from `Codex`
+    /// proper because the UI's edit experience is the Ollama wizard
+    /// (test connection, model dropdown) — not the raw spawn-command
+    /// form. Detection-wise we don't probe binaries for this preset:
+    /// it's only ever set when the user runs the Ollama wizard.
+    Ollama,
 }
 
 /// Static preset metadata. Returned by `preset()` and used by both
@@ -51,9 +58,17 @@ pub struct AgentPreset {
 }
 
 impl AgentKind {
-    /// All known kinds in detect-probe order.
+    /// All known kinds in detect-probe order. Ollama is included so
+    /// `from_id("ollama")` resolves, but the binary-probe path
+    /// (`detection_hints`) skips it — Ollama connections are only
+    /// created via the wizard, never auto-detected as a binary.
     pub fn all() -> &'static [AgentKind] {
-        &[AgentKind::Kiro, AgentKind::ClaudeCode, AgentKind::Codex]
+        &[
+            AgentKind::Kiro,
+            AgentKind::ClaudeCode,
+            AgentKind::Codex,
+            AgentKind::Ollama,
+        ]
     }
 
     /// Resolve the static preset metadata.
@@ -83,6 +98,14 @@ impl AgentKind {
                 requires_auth: true,
                 auth_hint: Some("Set OPENAI_API_KEY (or CODEX_API_KEY)."),
             },
+            AgentKind::Ollama => AgentPreset {
+                id: "ollama",
+                display_name: "Ollama (local model)",
+                description: "Local model via Ollama, routed through the Codex ACP adapter.",
+                install_url: "https://ollama.com/download",
+                requires_auth: false,
+                auth_hint: None,
+            },
         }
     }
 
@@ -100,8 +123,9 @@ impl AgentKind {
         match self {
             AgentKind::Kiro => Some(".kiro"),
             // ClaudeCode and Codex talk to their own backends and don't
-            // expose a session-store layout we read from.
-            AgentKind::ClaudeCode | AgentKind::Codex => None,
+            // expose a session-store layout we read from. Ollama runs
+            // through the Codex adapter, same story.
+            AgentKind::ClaudeCode | AgentKind::Codex | AgentKind::Ollama => None,
         }
     }
 
@@ -330,5 +354,16 @@ mod tests {
         assert_eq!(AgentKind::Kiro.dot_dir(), Some(".kiro"));
         assert_eq!(AgentKind::ClaudeCode.dot_dir(), None);
         assert_eq!(AgentKind::Codex.dot_dir(), None);
+        assert_eq!(AgentKind::Ollama.dot_dir(), None);
+    }
+
+    #[test]
+    fn ollama_preset_resolves_but_has_no_detection_hint() {
+        // Ollama is intentionally NOT in `detection_hints()` — there's
+        // no binary to probe — but `from_id("ollama")` must still
+        // resolve so a saved connection can round-trip.
+        assert_eq!(AgentKind::from_id("ollama"), Some(AgentKind::Ollama));
+        let hint_kinds: Vec<AgentKind> = detection_hints().iter().map(|h| h.kind).collect();
+        assert!(!hint_kinds.contains(&AgentKind::Ollama));
     }
 }
