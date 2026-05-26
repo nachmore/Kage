@@ -199,6 +199,8 @@ export class ConnectionSettingsModule extends SettingsModule {
         if (!root) return;
         if (this._view === 'edit') {
             this._renderEditView(root);
+        } else if (this._view === 'ollama-edit') {
+            this._renderOllamaEditView(root);
         } else {
             this._renderListView(root);
         }
@@ -379,7 +381,16 @@ export class ConnectionSettingsModule extends SettingsModule {
             btn.addEventListener('click', () => {
                 const id = btn.getAttribute('data-id');
                 const conn = this._connections.find((c) => c.id === id);
-                if (conn) this._enterEdit(conn, { isNew: false });
+                if (!conn) return;
+                // Ollama-shaped connections route to the wizard
+                // sub-view, not the raw spawn-command form. The
+                // wizard understands ollama_settings + builds the
+                // right shell incantation on save.
+                if (conn.preset_id === 'ollama') {
+                    this._enterOllamaEdit(conn, { isNew: false });
+                } else {
+                    this._enterEdit(conn, { isNew: false });
+                }
             });
         });
         document.querySelectorAll('.conn-delete-btn').forEach((btn) => {
@@ -526,6 +537,329 @@ export class ConnectionSettingsModule extends SettingsModule {
         document
             .getElementById('connEditSaveBtn')
             ?.addEventListener('click', () => this._saveEdit());
+    }
+
+    // ---------------- OLLAMA WIZARD SUB-VIEW -------------------------
+    //
+    // Reached when the user clicks Edit on an Ollama-shaped connection
+    // (preset_id === 'ollama') or when the type picker resolves with
+    // 'ollama' on Add. Same wizard the standalone Settings → Ollama
+    // page used to host: probe the daemon, list models, save back as
+    // a Codex-via-Ollama connection.
+    //
+    // The wizard owns one connection draft (`this._editing`) the same
+    // way the standard edit view does. On save we write both the
+    // shell-wrapped spawn_command and the round-trippable
+    // ollama_settings { base_url, model } together — a future Edit
+    // can read settings without parsing the spawn string.
+
+    _enterOllamaEdit(connection, { isNew }) {
+        // Seed a draft. For "new" connections the type picker calls
+        // through with a half-formed object; we fill in defaults here.
+        const seeded = connection?.ollama_settings || {};
+        this._editing = {
+            id: connection?.id || this._api().uuidLite(),
+            name: connection?.name || '',
+            preset_id: 'ollama',
+            mode: connection?.mode || { type: 'local', spawn_command: '' },
+            sessions_directory: connection?.sessions_directory || null,
+            ollama_settings: {
+                base_url: seeded.base_url || 'http://localhost:11434',
+                model: seeded.model || '',
+            },
+        };
+        this._editingIsNew = isNew;
+        this._view = 'ollama-edit';
+        // Cached probe + model list — cleared each enter so a re-edit
+        // gets fresh data.
+        this._ollamaProbe = null;
+        this._ollamaModels = [];
+        this._renderRoot();
+        // Kick a background probe + model fetch immediately so the
+        // page lands populated for users who already have Ollama
+        // running.
+        this._kickOllamaProbe(false);
+    }
+
+    _renderOllamaEditView(root) {
+        const api = this._api();
+        const escape = api?.escapeHtml || ((s) => s);
+        if (!api || !this._editing) {
+            root.innerHTML = '';
+            return;
+        }
+        const subtitle = this._editingIsNew ? 'New Ollama agent' : 'Editing Ollama agent';
+        const settings = this._editing.ollama_settings || {};
+        root.innerHTML = `
+            <div class="conn-edit-header">
+                <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">← Back</button>
+                <div class="conn-edit-subtitle">🦙 ${escape(subtitle)}</div>
+            </div>
+            <p class="setting-description" style="margin-bottom:12px;">
+                Use a local model running on <a href="https://ollama.com/" target="_blank" rel="noreferrer noopener">Ollama</a> with Kage.
+                Free, private, no API key. Wired through the Codex ACP adapter — Kage handles the env-var dance for you.
+            </p>
+
+            <div class="setting-row">
+                <div class="setting-label">Friendly name</div>
+                <div class="setting-description">Shown in the connections list. Defaults to "Ollama: &lt;model&gt;" on save if left empty.</div>
+                <div class="setting-control">
+                    <input type="text" class="setting-input" id="ollEditName"
+                        value="${escape(this._editing.name || '')}"
+                        placeholder="e.g. Ollama: llama3:8b">
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Ollama base URL</div>
+                <div class="setting-description">Where the Ollama daemon is listening. Default is the local install.</div>
+                <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" class="setting-input" id="ollEditBaseUrl"
+                        value="${escape(settings.base_url || 'http://localhost:11434')}"
+                        placeholder="http://localhost:11434" style="flex:1;">
+                    <button class="setting-button" type="button" id="ollEditTestBtn">Test connection</button>
+                </div>
+                <div id="ollEditProbeStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
+            </div>
+
+            <div class="setting-row">
+                <div class="setting-label">Model</div>
+                <div class="setting-description">Pulled models from this Ollama daemon. Click Refresh to re-scan.</div>
+                <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
+                    <select class="setting-select" id="ollEditModel" style="flex:1;">
+                        <option value="">—</option>
+                    </select>
+                    <button class="setting-button" type="button" id="ollEditRefreshBtn">Refresh</button>
+                </div>
+                <div id="ollEditModelHint" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
+            </div>
+
+            <details style="margin-top:12px;">
+                <summary style="cursor:pointer;font-size:12px;color:var(--kage-text-secondary);">Don't have Ollama yet?</summary>
+                <div class="setting-description" style="margin-top:8px;line-height:1.6;">
+                    1. Install Ollama from <a href="https://ollama.com/download" target="_blank" rel="noreferrer noopener">ollama.com/download</a>.<br>
+                    2. Start the daemon (it runs in the background).<br>
+                    3. Pull a model — for example <code>ollama pull llama3</code> or <code>ollama pull qwen2.5-coder</code>.<br>
+                    4. Click Test connection above, pick the model, then save.
+                </div>
+            </details>
+
+            <div class="conn-edit-actions">
+                <button type="button" class="setting-btn-secondary" id="connEditCancelBtn">Cancel</button>
+                <button type="button" class="setting-btn-primary" id="ollEditSaveBtn">${this._editingIsNew ? 'Add agent' : 'Save changes'}</button>
+            </div>
+            <div id="ollEditStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
+        `;
+
+        // Re-populate the model dropdown if we already have a list
+        // cached (e.g. user came back via Cancel + re-Edit).
+        this._populateOllamaModelDropdown(this._ollamaModels, settings.model || '');
+
+        document
+            .getElementById('connBackBtn')
+            ?.addEventListener('click', () => this._exitEditWithoutSaving());
+        document
+            .getElementById('connEditCancelBtn')
+            ?.addEventListener('click', () => this._exitEditWithoutSaving());
+        document
+            .getElementById('ollEditTestBtn')
+            ?.addEventListener('click', () => this._kickOllamaProbe(true));
+        document
+            .getElementById('ollEditRefreshBtn')
+            ?.addEventListener('click', () => this._kickOllamaModelRefresh(true));
+        document
+            .getElementById('ollEditSaveBtn')
+            ?.addEventListener('click', () => this._saveOllamaEdit());
+    }
+
+    _currentOllamaBaseUrl() {
+        const v = document.getElementById('ollEditBaseUrl')?.value?.trim();
+        return v || 'http://localhost:11434';
+    }
+
+    async _kickOllamaProbe(verbose) {
+        const baseUrl = this._currentOllamaBaseUrl();
+        const status = document.getElementById('ollEditProbeStatus');
+        if (verbose && status) {
+            status.textContent = 'Probing…';
+            status.style.color = '';
+        }
+        try {
+            this._ollamaProbe = await window.__TAURI__.core.invoke('ollama_probe', {
+                baseUrl,
+            });
+        } catch (e) {
+            this._ollamaProbe = { status: 'Unreachable', reason: this._formatError(e) };
+        }
+        if (status) {
+            if (this._ollamaProbe?.status === 'Reachable') {
+                const v = this._ollamaProbe.version ? ` (Ollama ${this._ollamaProbe.version})` : '';
+                status.textContent = `✓ Reachable${v}`;
+                status.style.color = 'var(--kage-accent)';
+            } else if (this._ollamaProbe) {
+                status.textContent = `✕ ${this._ollamaProbe.reason || 'Unreachable'}`;
+                status.style.color = '#c44';
+            }
+        }
+        // After a successful probe, freshen the model list. On a
+        // failed probe, leave whatever was last loaded — the user
+        // may want to reuse a known model name and just fix the URL
+        // before Save.
+        if (this._ollamaProbe?.status === 'Reachable') {
+            await this._kickOllamaModelRefresh(false);
+        }
+    }
+
+    async _kickOllamaModelRefresh(verbose) {
+        const baseUrl = this._currentOllamaBaseUrl();
+        const hint = document.getElementById('ollEditModelHint');
+        if (verbose && hint) {
+            hint.textContent = 'Loading…';
+            hint.style.color = '';
+        }
+        let models = [];
+        try {
+            models = await window.__TAURI__.core.invoke('ollama_list_models', { baseUrl });
+        } catch (e) {
+            this._ollamaModels = [];
+            this._populateOllamaModelDropdown([], '');
+            if (hint) {
+                hint.textContent = `Couldn't list models: ${this._formatError(e)}`;
+                hint.style.color = '#c44';
+            }
+            return;
+        }
+        this._ollamaModels = Array.isArray(models) ? models : [];
+        const previous =
+            document.getElementById('ollEditModel')?.value ||
+            this._editing?.ollama_settings?.model ||
+            '';
+        this._populateOllamaModelDropdown(this._ollamaModels, previous);
+        if (hint) {
+            if (this._ollamaModels.length === 0) {
+                hint.textContent =
+                    'No models pulled yet. Try `ollama pull llama3` or `ollama pull qwen2.5-coder`.';
+                hint.style.color = '';
+            } else {
+                hint.textContent = `${this._ollamaModels.length} model${this._ollamaModels.length === 1 ? '' : 's'} available.`;
+                hint.style.color = 'var(--kage-text-secondary)';
+            }
+        }
+    }
+
+    _populateOllamaModelDropdown(models, selected) {
+        const sel = document.getElementById('ollEditModel');
+        if (!sel) return;
+        const escapeAttr = (s) =>
+            String(s).replace(
+                /[&<>"']/g,
+                (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+            );
+        const opts = ['<option value="">—</option>'];
+        for (const m of models || []) {
+            const sizeStr = this._formatBytes(m.size);
+            const label = sizeStr ? `${m.name} — ${sizeStr}` : m.name;
+            opts.push(`<option value="${escapeAttr(m.name)}">${escapeAttr(label)}</option>`);
+        }
+        sel.innerHTML = opts.join('');
+        if (selected) sel.value = selected;
+    }
+
+    _formatBytes(bytes) {
+        if (typeof bytes !== 'number' || bytes <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        let v = bytes;
+        while (v >= 1024 && i < units.length - 1) {
+            v /= 1024;
+            i += 1;
+        }
+        const rounded = v >= 100 ? v.toFixed(0) : v.toFixed(1);
+        return `${rounded} ${units[i]}`;
+    }
+
+    async _saveOllamaEdit() {
+        const status = document.getElementById('ollEditStatus');
+        const setStatus = (text, kind) => {
+            if (!status) return;
+            status.textContent = text || '';
+            status.style.color =
+                kind === 'error' ? '#c44' : kind === 'success' ? 'var(--kage-accent)' : '';
+        };
+        const baseUrl = this._currentOllamaBaseUrl();
+        const model = document.getElementById('ollEditModel')?.value?.trim();
+        const enteredName = document.getElementById('ollEditName')?.value?.trim() || '';
+
+        if (!model) {
+            setStatus('Pick a model before saving.', 'error');
+            return;
+        }
+
+        // Build the spawn command server-side so the env-var quoting
+        // is correct for the host platform (Windows wraps with `cmd
+        // /c set ...`, macOS / Linux uses `env ...`).
+        let spawnCommand;
+        try {
+            spawnCommand = await window.__TAURI__.core.invoke('ollama_codex_spawn_command', {
+                baseUrl,
+                model,
+            });
+        } catch (e) {
+            setStatus('Could not build spawn command: ' + this._formatError(e), 'error');
+            return;
+        }
+
+        const merged = {
+            id: this._editing.id,
+            // Default the friendly name to "Ollama: <model>" on save
+            // when the user left it blank — matches the templating
+            // convention agreed with the user.
+            name: enteredName || `Ollama: ${model}`,
+            preset_id: 'ollama',
+            mode: { type: 'local', spawn_command: spawnCommand },
+            sessions_directory: this._editing.sessions_directory ?? null,
+            ollama_settings: { base_url: baseUrl, model },
+        };
+        const idx = this._connections.findIndex((c) => c.id === merged.id);
+        if (idx >= 0) {
+            this._connections[idx] = merged;
+        } else {
+            this._connections.push(merged);
+            // Same first-add affordance as _saveEdit: replace the
+            // auto-created "Default" with the new connection if the
+            // user is just bootstrapping.
+            if (
+                this._editingIsNew &&
+                this._connections.length === 2 &&
+                this._activeId === 'default'
+            ) {
+                const def = this._connections.find((c) => c.id === 'default');
+                if (def && def.name === 'Default' && def.preset_id === null) {
+                    this._activeId = merged.id;
+                    this._connections = this._connections.filter((c) => c.id !== 'default');
+                }
+            }
+        }
+        this._validateOne(merged.id);
+        this._editing = null;
+        this._editingIsNew = false;
+        this._view = 'list';
+        this._renderRoot();
+    }
+
+    _formatError(e) {
+        if (!e) return 'Unknown error';
+        if (typeof e === 'string') return e;
+        if (e instanceof Error) return e.message || String(e);
+        if (typeof e === 'object') {
+            if (typeof e.message === 'string' && e.message) return e.message;
+            try {
+                return JSON.stringify(e);
+            } catch {
+                return String(e);
+            }
+        }
+        return String(e);
     }
 
     // ---------------- async background work --------------------------
