@@ -231,6 +231,9 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     handle_floating_input: null,
     set_window_session: null,
     clear_window_session: null,
+    open_new_chat_window: null,
+    close_chat_window: null,
+    list_chat_windows: null,
     touch_floating_activity: null,
     get_last_selection: null,
 

@@ -92,18 +92,50 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
 }
 
 /// Route `show-sessions` events (fired by the single-instance IPC
-/// listener when a second launch tries to open) into the chat window.
+/// listener when a second launch tries to open) into the most-recently
+/// focused chat window. Falls back to `main` if no chat window has been
+/// focused this session — a fresh install or one where the user only
+/// ever uses the floating widget.
 pub fn install_show_sessions_listener(app: &App) {
     let app_handle = app.handle().clone();
     app.listen("show-sessions", move |_| {
-        info!("show-sessions event received, opening chat window");
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = crate::commands::window::open_chat_window(handle).await {
-                log::error!("Failed to open chat window from IPC signal: {}", e);
+            let target_label = handle
+                .try_state::<UiState>()
+                .and_then(|ui| ui.last_focused_chat.lock().ok().and_then(|s| s.clone()))
+                .filter(|label| handle.get_webview_window(label).is_some())
+                .unwrap_or_else(|| "main".to_string());
+            info!(
+                "show-sessions event received, surfacing window: {}",
+                target_label
+            );
+            if target_label == "main" {
+                if let Err(e) = crate::commands::window::open_chat_window(handle.clone()).await {
+                    log::error!("Failed to open chat window from IPC signal: {}", e);
+                }
+            } else if let Some(window) = handle.get_webview_window(&target_label) {
+                let _ = window.show();
+                let _ = window.set_focus();
+                crate::setup::update_activation_policy(&handle);
             }
         });
     });
+}
+
+/// Install a focus listener on `main` so the
+/// `UiState.last_focused_chat` tracker stays accurate without each
+/// chat-* peer having to coordinate with main. `chat-<uuid>` peers
+/// install their own listener in `open_new_chat_window`.
+pub fn install_main_focus_tracker(app: &App) {
+    if let Some(window) = app.get_webview_window("main") {
+        let app_handle = app.handle().clone();
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Focused(true)) {
+                crate::commands::window::mark_focused_chat(&app_handle, "main");
+            }
+        });
+    }
 }
 
 /// Boot the automation scheduler in the background and stash its

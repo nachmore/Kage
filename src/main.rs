@@ -259,6 +259,7 @@ async fn run() {
         pending_prompt_originators: Arc::new(std::sync::Mutex::new(
             std::collections::HashMap::new(),
         )),
+        last_focused_chat: Arc::new(std::sync::Mutex::new(None)),
         last_selection: Arc::new(std::sync::Mutex::new(None)),
         source_window: Arc::new(std::sync::Mutex::new(None)),
         frontend_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -529,8 +530,13 @@ async fn run() {
 
             // Listen for show-sessions event. Emitted by the
             // single-instance plugin's callback when a second process
-            // launches; routed here into `open_chat_window`.
+            // launches; routed to the most-recently focused chat window.
             setup::install_show_sessions_listener(app);
+
+            // Track focus on main so single-instance / show-sessions
+            // routing has an accurate "most recent" target. Peer chat
+            // windows install their own listener at construction.
+            setup::install_main_focus_tracker(app);
 
             // Start automation scheduler
             setup::spawn_automation_scheduler(app);
@@ -584,6 +590,9 @@ async fn run() {
             commands::test_floating_window,
             commands::start_drag_window,
             commands::open_chat_window,
+            commands::open_new_chat_window,
+            commands::close_chat_window,
+            commands::list_chat_windows,
             commands::resize_floating_window,
             commands::send_permission_response,
             commands::remove_tool_permission,

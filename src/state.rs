@@ -53,6 +53,13 @@ pub struct UiState {
     /// A miss falls back to "floating" — the historical default for
     /// hotkey-driven prompts.
     pub pending_prompt_originators: Arc<std::sync::Mutex<HashMap<String, String>>>,
+    /// Label of the most recently focused chat window (`main` or
+    /// `chat-<uuid>`). Written by the global `WindowEvent::Focused`
+    /// listener installed in setup; read by the single-instance handler
+    /// and any "bring chat to front" affordance to decide which window
+    /// to surface. None means no chat window has been focused this
+    /// session — fall back to `main`.
+    pub last_focused_chat: Arc<std::sync::Mutex<Option<String>>>,
     /// Text that was selected in the previously active window when the hotkey was pressed
     pub last_selection: Arc<std::sync::Mutex<Option<String>>>,
     /// Info about the foreground window when the hotkey was pressed (title, process_name)

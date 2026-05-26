@@ -505,6 +505,189 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Record this chat window as the most-recently-focused. Read by the
+/// single-instance handler and "show chat" affordances to decide which
+/// window to surface when the user has multiple open.
+pub fn mark_focused_chat(app: &tauri::AppHandle, label: &str) {
+    if !(label == "main" || label.starts_with("chat-")) {
+        return;
+    }
+    if let Some(ui) = app.try_state::<crate::state::UiState>() {
+        if let Ok(mut last) = ui.last_focused_chat.lock() {
+            *last = Some(label.to_string());
+        }
+    }
+}
+
+/// Drop a chat window's `window_sessions` and originator-routing
+/// entries. Called from the window's `Destroyed` event listener so a
+/// user closing a chat window (OS chrome or `close_chat_window`) leaves
+/// the backend state clean. Safe to call when the entries don't exist.
+fn cleanup_chat_window_state(app: &tauri::AppHandle, label: &str) {
+    use tauri::Manager;
+    let Some(ui) = app.try_state::<crate::state::UiState>() else {
+        return;
+    };
+    if let Ok(mut ws) = ui.window_sessions.lock() {
+        ws.remove(label);
+    }
+    if let Ok(mut originators) = ui.pending_prompt_originators.lock() {
+        originators.retain(|_, owner| owner != label);
+    }
+    info!(
+        "Cleaned up window_sessions for closed chat window: {}",
+        label
+    );
+}
+
+/// Spawn a new chat window, peer to `main`. The new window has a
+/// label of the form `chat-<uuid>` and loads the same `index.html` as
+/// main; the frontend reads its label on boot via
+/// `getCurrentWebviewWindow().label`, calls `switch_acp_session` with
+/// the optional `resume_session_id` URL param to either load that
+/// session or create a fresh one, and writes the result into
+/// `window_sessions[label]`.
+///
+/// Returns the new window's label so the caller can route follow-up
+/// invocations.
+#[tauri::command]
+pub async fn open_new_chat_window(
+    resume_session_id: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<String, AppError> {
+    use tauri::WebviewWindowBuilder;
+
+    let label = format!("chat-{}", uuid::Uuid::new_v4().simple());
+    info!("Opening new chat window: {}", label);
+
+    let url = if let Some(ref sid) = resume_session_id {
+        let qs = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("resumeSessionId", sid)
+            .finish();
+        format!("index.html?{}", qs)
+    } else {
+        "index.html".to_string()
+    };
+
+    let window = WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::App(url.into()))
+        .title("Kage Chat")
+        .inner_size(800.0, 600.0)
+        .min_inner_size(400.0, 300.0)
+        .resizable(true)
+        .center()
+        .visible(false)
+        .build()
+        .map_err(|e| AppError::internal(format!("Failed to build chat window: {}", e)))?;
+
+    // Per-window event handler: track focus for "most recent chat
+    // window" routing, and clean up bookkeeping on close.
+    let label_for_event = label.clone();
+    let app_for_event = app.clone();
+    window.on_window_event(move |event| match event {
+        tauri::WindowEvent::Focused(true) => {
+            mark_focused_chat(&app_for_event, &label_for_event);
+        }
+        tauri::WindowEvent::Destroyed => {
+            cleanup_chat_window_state(&app_for_event, &label_for_event);
+        }
+        _ => {}
+    });
+
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    crate::setup::update_activation_policy(&app);
+    crate::telemetry::track(
+        &app,
+        "chat_window_opened",
+        Some(serde_json::json!({
+            "resumed": resume_session_id.is_some(),
+        })),
+    );
+
+    Ok(label)
+}
+
+/// Close a chat window by its label and clear its session bookkeeping.
+/// Refuses to close `main` or `floating` — those persist for the app's
+/// lifetime; the caller should hide them instead.
+#[tauri::command]
+pub async fn close_chat_window(
+    label: String,
+    app: tauri::AppHandle,
+    ui: tauri::State<'_, crate::state::UiState>,
+) -> Result<(), AppError> {
+    if label == "main" || label == "floating" {
+        return Err(AppError::internal(format!(
+            "{} is a privileged window and can't be closed via close_chat_window",
+            label
+        )));
+    }
+    if !label.starts_with("chat-") {
+        return Err(AppError::internal(format!(
+            "Refusing to close non-chat window: {}",
+            label
+        )));
+    }
+
+    if let Some(window) = app.get_webview_window(&label) {
+        window
+            .close()
+            .map_err(|e| AppError::internal(format!("Close failed: {}", e)))?;
+    }
+
+    if let Ok(mut ws) = ui.window_sessions.lock() {
+        ws.remove(&label);
+    }
+    if let Ok(mut originators) = ui.pending_prompt_originators.lock() {
+        originators.retain(|_, owner| owner != &label);
+    }
+
+    info!("Closed chat window: {}", label);
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct ChatWindowInfo {
+    pub label: String,
+    pub session_id: Option<String>,
+}
+
+/// Enumerate all chat-* windows and main, with their pinned session
+/// ids (if any). Used by the tray submenu and by the single-instance
+/// handler to decide which window to focus.
+#[tauri::command]
+pub async fn list_chat_windows(
+    app: tauri::AppHandle,
+    ui: tauri::State<'_, crate::state::UiState>,
+) -> Result<Vec<ChatWindowInfo>, AppError> {
+    let sessions = ui
+        .window_sessions
+        .lock()
+        .map(|m| m.clone())
+        .unwrap_or_default();
+
+    let mut out: Vec<ChatWindowInfo> = app
+        .webview_windows()
+        .keys()
+        .filter(|label| label.as_str() == "main" || label.starts_with("chat-"))
+        .map(|label| ChatWindowInfo {
+            label: label.to_string(),
+            session_id: sessions.get(label.as_str()).cloned(),
+        })
+        .collect();
+
+    // Stable order: main first, then chat-* by label (insertion-time
+    // ordering would be nicer but Tauri's webview_windows() doesn't
+    // expose creation order).
+    out.sort_by(|a, b| match (a.label.as_str(), b.label.as_str()) {
+        ("main", _) => std::cmp::Ordering::Less,
+        (_, "main") => std::cmp::Ordering::Greater,
+        (l, r) => l.cmp(r),
+    });
+    Ok(out)
+}
+
 #[tauri::command]
 pub async fn resize_floating_window(
     window: WebviewWindow,

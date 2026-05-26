@@ -60,6 +60,13 @@ export class ChatApp {
         this.appWindow = appWindow;
         this.listen = listen;
 
+        // Tauri webview label of the window we run in. `main` is the
+        // privileged chat window from tauri.conf.json; `chat-<uuid>`
+        // are peers spawned via open_new_chat_window. Used everywhere
+        // we need to read/write per-window state (session bookkeeping,
+        // permission routing).
+        this.windowLabel = appWindow?.label || 'main';
+
         this.messages = [];
         this.currentStreamingMessage = null;
         this.currentStreamingContent = '';
@@ -408,6 +415,9 @@ export class ChatApp {
         await this.loadUserInfo();
         await this.loadFloatingSessionId();
         await this.loadCurrentSessionId();
+        // Peer chat windows (`chat-<uuid>`) have no pinned session
+        // until they bootstrap one — load from URL or create fresh.
+        await this._bootstrapChatPeerSession();
         await this.loadActionButtonConfig();
         await loadSlashCommands(this.invoke);
         await this.loadShortcuts();
@@ -496,6 +506,7 @@ export class ChatApp {
             sessionList: document.getElementById('sessionList'),
             sessionSearch: document.getElementById('sessionSearch'),
             newSessionBtn: document.getElementById('newSessionBtn'),
+            newWindowBtn: document.getElementById('newWindowBtn'),
             settingsBtn: document.getElementById('settingsBtn'),
             connectionStatus: document.getElementById('connectionStatus'),
             chatHeaderTitle: document.getElementById('chatHeaderTitle'),
@@ -576,6 +587,16 @@ export class ChatApp {
             }
         });
         this.elements.newSessionBtn.addEventListener('click', () => this.createNewSession());
+        if (this.elements.newWindowBtn) {
+            this.elements.newWindowBtn.addEventListener('click', () => this.openNewChatWindow());
+        }
+        // Ctrl/Cmd+Shift+N — spawn a new chat window pinned to a fresh session
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                this.openNewChatWindow();
+            }
+        });
 
         // Session search — load all sessions when user starts searching
         this.elements.sessionSearch.addEventListener('input', () => {
@@ -745,7 +766,7 @@ export class ChatApp {
                 this.activeSessionId = newId;
                 this.currentAcpSessionId = newId;
                 this.invoke('set_window_session', {
-                    label: 'main',
+                    label: this.windowLabel,
                     sessionId: newId,
                 }).catch(() => {});
             }
@@ -759,7 +780,7 @@ export class ChatApp {
                 this.activeSessionId = newId;
                 this.currentAcpSessionId = newId;
                 this.invoke('set_window_session', {
-                    label: 'main',
+                    label: this.windowLabel,
                     sessionId: newId,
                 }).catch(() => {});
             }
@@ -880,16 +901,43 @@ export class ChatApp {
     }
 
     async loadCurrentSessionId() {
-        // The chat window's own pinned session is whatever main is
-        // tracking. Boot reads it; later changes are written by
-        // switch_acp_session via set_window_session.
+        // Read this window's own pinned session id. For `main` that's
+        // bootstrapped at app launch. For `chat-<uuid>` peers it's
+        // bootstrapped on first load via _bootstrapChatPeerSession.
         try {
             this.currentAcpSessionId = await this.invoke('get_window_session', {
-                label: 'main',
+                label: this.windowLabel,
             });
         } catch (e) {
             console.error('Failed to get current session ID:', e);
             this.currentAcpSessionId = null;
+        }
+    }
+
+    /**
+     * Bootstrap a chat-<uuid> peer window's session on first load.
+     * Reads `?resumeSessionId=<id>` from the URL (set by
+     * `open_new_chat_window`) — if present, loads that session;
+     * otherwise creates a fresh one. No-op for the privileged `main`
+     * window, which uses the existing launch-time bootstrap.
+     */
+    async _bootstrapChatPeerSession() {
+        if (!this.windowLabel.startsWith('chat-')) return;
+        if (this.currentAcpSessionId) return; // already bootstrapped
+
+        const params = new URLSearchParams(window.location.search);
+        const resumeId = params.get('resumeSessionId');
+        try {
+            const adoptedId = await this.invoke('switch_acp_session', {
+                sessionId: resumeId || null,
+            });
+            this.currentAcpSessionId = adoptedId;
+            this.activeSessionId = adoptedId;
+            console.log(
+                `[CHAT] Bootstrapped peer window ${this.windowLabel} -> session ${adoptedId}`
+            );
+        } catch (e) {
+            console.error('[CHAT] Failed to bootstrap peer-window session:', e);
         }
     }
 
@@ -1444,6 +1492,19 @@ export class ChatApp {
 
     _formatDuration(totalSecs) {
         return formatDuration(totalSecs);
+    }
+
+    /**
+     * Spawn a new peer chat window pinned to a fresh session. Different
+     * from `createNewSession`, which swaps the *current* window's
+     * session in place.
+     */
+    async openNewChatWindow() {
+        try {
+            await this.invoke('open_new_chat_window', { resumeSessionId: null });
+        } catch (e) {
+            console.error('Failed to open new chat window:', e);
+        }
     }
 
     async createNewSession() {

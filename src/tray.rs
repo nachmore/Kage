@@ -8,6 +8,8 @@ use tauri::{
 /// Build and configure the system tray icon with menu
 pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItemBuilder::with_id("show", "Show").build(app)?;
+    let new_chat_window =
+        MenuItemBuilder::with_id("new-chat-window", "New Chat Window").build(app)?;
     let settings = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
 
@@ -28,7 +30,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             MenuItemBuilder::with_id("test-first-run", "Show First Run").build(app)?;
         let dump_threads = MenuItemBuilder::with_id("dump-threads", "Dump Threads").build(app)?;
         MenuBuilder::new(app)
-            .items(&[&show, &settings])
+            .items(&[&show, &new_chat_window, &settings])
             .separator()
             .items(&[
                 &inspect,
@@ -45,7 +47,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             .build()?
     } else {
         MenuBuilder::new(app)
-            .items(&[&show, &settings])
+            .items(&[&show, &new_chat_window, &settings])
             .separator()
             .item(&quit)
             .build()?
@@ -78,6 +80,16 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                         let _ = window.set_focus();
                     }
                     crate::setup::update_activation_policy(app_handle_inner);
+                }
+                "new-chat-window" => {
+                    let app_clone = app_handle_inner.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) =
+                            crate::commands::window::open_new_chat_window(None, app_clone).await
+                        {
+                            log::warn!("Tray: open_new_chat_window failed: {:?}", e);
+                        }
+                    });
                 }
                 "settings" => {
                     // Delegate to open_settings_window so the
