@@ -227,6 +227,11 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     // dialog the host owns); arbitrary write is not in any extension
     // capability.
     write_text_file: null,
+    // Crash recovery. Surfaces a "Kage crashed last session" banner
+    // and acknowledges it. Settings/about diagnostic surface — host
+    // chrome only.
+    get_recent_crash: null,
+    dismiss_recent_crash: null,
     show_context_menu: null,
     show_notification_source_window: null,
     set_notification_source: null,

@@ -508,6 +508,11 @@ export class FloatingApp {
         setTimeout(() => this.elements.input.focus(), 100);
 
         this.checkForUpdateBanner();
+        // The crash banner runs after the update banner so a fresh
+        // post-update launch doesn't replace the celebration banner
+        // with a stale crash report from a previous session. Update
+        // takes priority for that one-launch window.
+        this.checkForCrashBanner();
 
         this.listen('show_floating_banner', (event) => {
             const { icon, text, action_label, action_type, action_data } = event.payload;
@@ -1623,12 +1628,49 @@ export class FloatingApp {
     }
 
     /**
+     * Show a "Kage crashed last session" banner if the previous run
+     * left a crash report and the user hasn't acknowledged it yet.
+     * Only fires once per crash — `dismiss_recent_crash` stamps the
+     * timestamp so subsequent launches stay quiet.
+     *
+     * Held off until after `checkForUpdateBanner` so the celebration
+     * banner from a clean post-update relaunch wins the priority
+     * fight; in steady state only one of the two ever has anything
+     * to say.
+     */
+    async checkForCrashBanner() {
+        try {
+            const crash = await this.invoke('get_recent_crash');
+            if (!crash) return;
+            // Don't stomp on a banner that's already visible (e.g.
+            // "Kage has been updated!"). The next launch will check
+            // again, and this crash has already been recorded — the
+            // user will see the banner the next time they're actually
+            // free to read it.
+            if (this._bannerVisible) return;
+
+            const msg = crash.panic_message
+                ? `Kage crashed last session: ${crash.panic_message}`
+                : 'Kage crashed last session.';
+            this.showBanner('💥', msg, 'View log →', 'crash_log', crash.log_path);
+            // Mark seen now — we've shown the user once. If they
+            // ignore the banner we don't re-show; "View log" / any
+            // dismiss completes the lifecycle either way. Failure to
+            // persist is non-fatal (worst case the dialog reappears
+            // next launch).
+            this.invoke('dismiss_recent_crash', { timestamp: crash.timestamp }).catch(() => {});
+        } catch (e) {
+            console.log('Crash banner check failed:', e);
+        }
+    }
+
+    /**
      * Show a banner at the top of the content area.
      * @param {string} icon - Emoji or text icon
      * @param {string} html - Banner message (supports HTML for keycaps etc.)
      * @param {string} actionLabel - Text for the action hint
-     * @param {string} actionType - 'settings', 'url', or 'dismiss'
-     * @param {string} actionData - Section name, URL, or ignored
+     * @param {string} actionType - 'settings', 'url', 'crash_log', or 'dismiss'
+     * @param {string} actionData - Section name, URL, file path, or ignored
      */
     showBanner(icon, html, actionLabel, actionType, actionData) {
         this._bannerVisible = true;
@@ -1684,6 +1726,13 @@ export class FloatingApp {
             this.invoke('open_settings_window', args).catch(() => {});
         } else if (action.type === 'url') {
             this.invoke('open_url', { url: action.data }).catch(() => {});
+        } else if (action.type === 'crash_log') {
+            // Open the crash report file in the OS default editor —
+            // text editors handle .log fine on every platform we
+            // ship to. Fall back to opening the logs folder if the
+            // path is missing for any reason.
+            const path = action.data || '';
+            this.invoke('open_path', { path }).catch(() => {});
         } else if (action.type === 'update_install') {
             // Same flow as the "Install Now" button in settings.
             // Backend produces a classified, user-readable string;

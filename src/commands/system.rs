@@ -1483,6 +1483,54 @@ pub async fn export_config_bundle(
     Ok(len)
 }
 
+/// Return the most recent unseen crash summary (or null) so the
+/// floating window can decide whether to surface a "Kage crashed
+/// last session" banner. Returns null when there's no crash log,
+/// when the latest report has already been acknowledged, or when
+/// the file is too malformed to parse useful fields out of.
+///
+/// Acknowledging happens via `dismiss_recent_crash` — that command
+/// stamps `system.last_seen_crash_timestamp` so subsequent
+/// invocations of THIS command return null until a NEW crash is
+/// recorded.
+#[tauri::command]
+pub async fn get_recent_crash(
+    features: State<'_, FeatureServices>,
+) -> Result<Option<crate::crash_recovery::CrashSummary>, AppError> {
+    let summary = match crate::crash_recovery::read_recent_crash() {
+        Some(s) => s,
+        None => return Ok(None),
+    };
+    let last_seen = features
+        .config
+        .lock_or_recover()
+        .system
+        .last_seen_crash_timestamp
+        .clone();
+    if !crate::crash_recovery::is_unseen(&summary, last_seen.as_deref()) {
+        return Ok(None);
+    }
+    Ok(Some(summary))
+}
+
+/// Mark a crash report as acknowledged. The frontend calls this when
+/// the user clicks any of the banner actions (View log / Report /
+/// Dismiss) so the dialog doesn't fire again on the next launch.
+/// `timestamp` must match the value returned by `get_recent_crash`
+/// — we don't trust an arbitrary string from the UI to overwrite the
+/// stamp, but the report header is the canonical id and the UI
+/// already has it.
+#[tauri::command]
+pub async fn dismiss_recent_crash(
+    timestamp: String,
+    features: State<'_, FeatureServices>,
+) -> Result<(), AppError> {
+    let mut cfg = features.config.lock_or_recover();
+    cfg.system.last_seen_crash_timestamp = Some(timestamp);
+    let _ = cfg.save();
+    Ok(())
+}
+
 /// Write a UTF-8 string to the given path. The frontend uses this for
 /// any "save text" workflow that's already routed a path through the
 /// Tauri dialog plugin (chat markdown export, today; future "save as"

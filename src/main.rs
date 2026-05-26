@@ -17,6 +17,7 @@ mod config_export;
 mod config_migrations;
 #[allow(dead_code)] // Used in lib.rs; main.rs wires the IPC commands in the next commit.
 mod context_rules;
+mod crash_recovery;
 mod error;
 mod extensions;
 mod link_metadata_cache;
@@ -666,6 +667,8 @@ async fn run() {
             commands::export_config_bundle,
             commands::import_config_bundle,
             commands::write_text_file,
+            commands::get_recent_crash,
+            commands::dismiss_recent_crash,
             commands::send_steering_message,
             commands::dismiss_pending_permission,
             commands::has_pending_permission,

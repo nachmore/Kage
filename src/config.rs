@@ -547,6 +547,13 @@ pub struct SystemConfig {
     /// disk I/O so it's not suitable for steady-state use.
     #[serde(default)]
     pub verbose_frontend_logging: bool,
+    /// Header timestamp of the most recent crash the user has been
+    /// shown the recovery dialog for. Used by `crash_recovery` to
+    /// suppress repeated dialogs for the same crash across launches.
+    /// Stored as the literal `=== Kage crash report @ <ts>` value so
+    /// string-equality is enough — no time-zone parsing.
+    #[serde(default)]
+    pub last_seen_crash_timestamp: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -917,6 +924,7 @@ impl Default for Config {
                 screen_context: true,
                 log_buffer_size: 1000,
                 verbose_frontend_logging: false,
+                last_seen_crash_timestamp: None,
             },
             shortcuts: vec![],
             debug_mode: false,

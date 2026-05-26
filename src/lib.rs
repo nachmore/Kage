@@ -13,6 +13,7 @@ pub mod config;
 pub mod config_export;
 pub mod config_migrations;
 pub mod context_rules;
+pub mod crash_recovery;
 pub mod error;
 pub mod extensions;
 pub mod link_metadata_cache;
