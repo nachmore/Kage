@@ -1552,6 +1552,43 @@ pub async fn import_config_bundle(
     Ok(summary)
 }
 
+// --- App Modes / context rules --------------------------------------
+//
+// The floating window's send path calls `match_context_rule` with the
+// foreground process name (already captured for the `<_kage_ctx>`
+// tag). On a hit we return both the formatted `<_kage_app_steering>`
+// payload (ready to splice into the prompt) and the rule's friendly
+// name so the chip in the input bar can show "🎯 VS Code mode" before
+// the user sends. Returning `None` is fine — the caller skips the
+// injection entirely. See `src/context_rules.rs` for the matcher.
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct MatchedContextRule {
+    pub friendly_name: String,
+    pub steering_payload: String,
+}
+
+#[tauri::command]
+pub async fn match_context_rule(
+    executable: String,
+    features: State<'_, FeatureServices>,
+) -> Result<Option<MatchedContextRule>, AppError> {
+    let cfg = features.config.lock_or_recover();
+    let Some(rule) = crate::context_rules::first_matching(&cfg.context_rules, &executable) else {
+        return Ok(None);
+    };
+    let Some(payload) = crate::context_rules::format_steering_payload(rule) else {
+        // Rule matched but its steering body is empty — treat as a
+        // no-op so the chip doesn't claim a mode that contributes
+        // nothing to the prompt.
+        return Ok(None);
+    };
+    Ok(Some(MatchedContextRule {
+        friendly_name: rule.friendly_name.clone(),
+        steering_payload: payload,
+    }))
+}
+
 // --- Ollama integration commands ------------------------------------
 //
 // All three are pure HTTP probes against the user's Ollama daemon —

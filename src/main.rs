@@ -658,6 +658,7 @@ async fn run() {
             commands::read_steering_lines,
             commands::write_steering_lines,
             commands::import_steering_lines,
+            commands::match_context_rule,
             commands::ollama_probe,
             commands::ollama_list_models,
             commands::ollama_codex_spawn_command,

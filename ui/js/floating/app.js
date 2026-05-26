@@ -971,6 +971,11 @@ export class FloatingApp {
             // Notify updater of activity
             this.invoke('touch_floating_activity').catch(() => {});
 
+            // Refresh App Mode chip — the foreground app at summon
+            // time is what we'll inject steering for, and that's
+            // captured here just before the user starts typing.
+            this._refreshAppModeChip().catch((e) => console.log('App Mode lookup failed:', e));
+
             // Check network status when launcher is invoked (debounced)
             checkOnline().then((online) => {
                 const bar = document.getElementById('offlineBar');
@@ -1258,6 +1263,56 @@ export class FloatingApp {
 
     async updateSpeechButtonVisibility() {
         await this.speech.updateVisibility();
+    }
+
+    /**
+     * App Modes (P1.4 from product_suggestions.md). Looks up the
+     * foreground app's process name and asks the backend whether any
+     * configured rule matches. On a hit, paints a small chip above the
+     * input ("🎯 VS Code mode") and stashes the steering payload on
+     * `this._appModeMatch` so `sendChatMessage` can splice it into the
+     * outgoing prompt next to `<_kage_ctx>`.
+     *
+     * The chip is also a one-shot dismiss control — clicking it nulls
+     * `_appModeMatch` and hides the chip without touching config, so
+     * the rule still fires next summon. The state lives outside the
+     * config update flow so the click is instantaneous (no IPC).
+     */
+    async _refreshAppModeChip() {
+        const chip = document.getElementById('appModeChip');
+        const labelEl = document.getElementById('appModeChipLabel');
+        if (!chip || !labelEl) return;
+
+        // Always start the chip hidden — only re-show on a confirmed
+        // match. The previous summon's match should never linger.
+        chip.style.display = 'none';
+        this._appModeMatch = null;
+
+        let exe = '';
+        try {
+            const sw = await this.invoke('get_source_window');
+            exe = sw?.processName || '';
+        } catch {
+            return;
+        }
+        if (!exe) return;
+
+        try {
+            const matched = await this.invoke('match_context_rule', { executable: exe });
+            if (!matched) return;
+            this._appModeMatch = matched;
+            labelEl.textContent = `${matched.friendly_name} mode`;
+            chip.style.display = 'inline-flex';
+            // Wire dismiss once — first event we see clears state.
+            // We swap the listener each refresh because the matched
+            // rule may have changed between summons.
+            chip.onclick = () => {
+                this._appModeMatch = null;
+                chip.style.display = 'none';
+            };
+        } catch (e) {
+            console.log('match_context_rule failed:', e);
+        }
     }
 
     async _updateToolbarVisibility() {
@@ -2436,7 +2491,13 @@ export class FloatingApp {
                 await this.windowManager.resizeWindow();
                 this.dismissBanner();
 
-                // Prepend screen context (source window info) if available
+                // Prepend screen context (source window info) and any
+                // App Mode steering. Both ride at the head of the
+                // outgoing prompt so the agent sees them before the
+                // actual user message. App-mode steering travels with
+                // every prompt where it applies — consciously kept
+                // light (per-rule cap of 500 chars) so token cost
+                // stays small even on long conversations.
                 try {
                     const config = await getConfig(this.invoke);
                     if (config?.system?.screen_context) {
@@ -2447,6 +2508,14 @@ export class FloatingApp {
                     }
                 } catch (e) {
                     console.log('Screen context unavailable:', e);
+                }
+
+                // App Mode steering — _appModeMatch was set by
+                // _refreshAppModeChip when the user summoned. Click-
+                // dismiss clears it without touching config; we just
+                // skip the splice in that case.
+                if (this._appModeMatch?.steering_payload) {
+                    message = `${this._appModeMatch.steering_payload}\n${message}`;
                 }
 
                 // Notify the chat window so it can show the user bubble

@@ -210,6 +210,11 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     ollama_probe: null,
     ollama_list_models: null,
     ollama_codex_spawn_command: null,
+    // Per-app context rules (App Modes). Settings + the host send-
+    // path lookup need this; extensions never should — a malicious
+    // extension could otherwise probe what apps the user has rules
+    // for, which leaks app fingerprints.
+    match_context_rule: null,
     // --- Cross-device backup — settings window only. Reads + writes
     // every byte of user config; unconditionally off-limits to
     // extensions.

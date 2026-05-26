@@ -429,6 +429,56 @@ body.clipboard-mode .floating-banner {
     font-size: 10px;
 }
 
+/* App Mode chip — visible when a context rule matches the foreground
+ * app at summon time. Clicking dismisses for the next message only;
+ * the rule itself stays enabled. Sits above the input textarea so the
+ * user sees what's about to fire before they press Enter. */
+.app-mode-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 8px;
+    background: rgba(192, 156, 255, 0.12);
+    border: 1px solid rgba(192, 156, 255, 0.35);
+    color: var(--kage-accent-light, #c09cff);
+    border-radius: 12px;
+    font-size: 11px;
+    width: fit-content;
+    margin: 0 0 4px;
+    cursor: pointer;
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+    user-select: none;
+}
+.app-mode-chip:hover {
+    background: rgba(192, 156, 255, 0.2);
+    border-color: var(--kage-accent, #7138cc);
+}
+.app-mode-chip-icon {
+    font-size: 12px;
+    line-height: 1;
+}
+.app-mode-chip-label {
+    font-weight: 500;
+}
+.app-mode-chip-dismiss {
+    opacity: 0.5;
+    margin-left: 2px;
+    font-size: 10px;
+}
+.app-mode-chip:hover .app-mode-chip-dismiss {
+    opacity: 1;
+}
+body.light-theme .app-mode-chip {
+    background: rgba(113, 56, 204, 0.08);
+    border-color: rgba(113, 56, 204, 0.25);
+    color: var(--kage-accent, #7138cc);
+}
+body.light-theme .app-mode-chip:hover {
+    background: rgba(113, 56, 204, 0.14);
+}
+
 /* Date/time display in input area */
 .datetime-display {
     position: absolute;
