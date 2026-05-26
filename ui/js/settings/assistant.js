@@ -61,6 +61,15 @@ export class AssistantSettingsModule extends SettingsModule {
                         </div>
                     </div>
 
+                    <div class="setting-row">
+                        <div class="setting-label">App Modes</div>
+                        <div class="setting-description">Per-app steering — short instructions Kage will append to your prompt only when you summon it from a specific application. Capped at ~125 tokens per rule so it doesn't bloat your context.</div>
+                        <div class="setting-control" style="margin-top: 8px; display:flex; gap:8px; align-items: center;">
+                            <button class="setting-button" data-action="openAppModesEditor">Manage App Modes</button>
+                            <span id="appModesSummary" class="setting-description" style="margin: 0;"></span>
+                        </div>
+                    </div>
+
                     <div class="setting-section-label">Quick Actions</div>
 
                     ${this.createCheckboxRow(
@@ -93,6 +102,28 @@ export class AssistantSettingsModule extends SettingsModule {
                     </div>
                 </div>
 
+                <div id="personalization-app-modes" hidden>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">‹ Back</button>
+                        <h2 class="settings-section-header" style="margin:0;flex:1;">🎯 App Modes</h2>
+                    </div>
+                    <div class="setting-description" style="margin-bottom:8px;">
+                        Each rule fires when its <code>Executable</code> matches the foreground app at summon time.
+                        Match is whole-token, case-insensitive, and ignores <code>.exe</code>, so <code>Code</code> matches
+                        <code>Code.exe</code> on Windows, <code>Visual Studio Code</code> on macOS, and <code>code</code> on Linux.
+                    </div>
+                    <div class="setting-description" style="margin-bottom:12px;font-size:11px;opacity:0.75;">
+                        <strong>Steering tip:</strong> short, imperative instructions work best. "Be concise. Prefer code blocks." not "Please consider…". The cap is ${500} characters per rule.
+                    </div>
+                    <div id="appModesContainer" style="display:flex;flex-direction:column;gap:10px;"></div>
+                    <button class="setting-button" data-action="addAppMode" style="margin-top:10px;">+ Add App Mode</button>
+                    <div style="display:flex;gap:8px;margin-top:14px;">
+                        <button class="setting-button" data-action="saveAppModes">Save</button>
+                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">Cancel</button>
+                    </div>
+                    <div id="appModesStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
+                </div>
+
                 <div id="personalization-editor" hidden>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                         <button class="setting-button" data-action="closeSteeringEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">‹ Back</button>
@@ -120,6 +151,15 @@ export class AssistantSettingsModule extends SettingsModule {
         const autoSteering = document.getElementById('autoSteeringEnabled');
         if (autoSteering) autoSteering.checked = agentCfg.auto_steering_enabled || false;
 
+        // App Modes — keep a snapshot for the editor + populate the
+        // summary chip on the main view ("3 active rules" / "None").
+        // Storing on `this` so the editor can read without an extra
+        // get_config invoke.
+        this._appModesSnapshot = Array.isArray(config.context_rules)
+            ? config.context_rules.slice()
+            : [];
+        this._renderAppModesSummary();
+
         // Quick actions
         const qaEnabled = document.getElementById('quickActionsEnabled');
         const qa = config.quick_actions || { enabled: true, custom_actions: [] };
@@ -131,8 +171,9 @@ export class AssistantSettingsModule extends SettingsModule {
         if (translateLang) translateLang.value = qa.translate_language || '';
         this._renderCustomActions(qa.custom_actions || []);
 
-        // Switching to this section while the editor is open is unusual but
-        // possible if the user clicked the sidebar — drop back to main view.
+        // Switching to this section while either editor sub-view is open
+        // is unusual but possible if the user clicked the sidebar — drop
+        // back to main view.
         this._showMainView();
     }
 
@@ -195,6 +236,11 @@ export class AssistantSettingsModule extends SettingsModule {
             saveSteering: () => this._saveCurrentEditor(),
             importSteering: () => this._importIntoEditor(),
             revealSteering: () => this._revealCurrentFile(),
+            // App Modes
+            openAppModesEditor: () => this._openAppModesEditor(),
+            closeAppModesEditor: () => this._showMainView(),
+            addAppMode: () => this._addAppModeRow(),
+            saveAppModes: () => this._saveAppModes(),
         });
     }
 
@@ -203,8 +249,10 @@ export class AssistantSettingsModule extends SettingsModule {
     _showMainView() {
         const main = document.getElementById('personalization-main');
         const editor = document.getElementById('personalization-editor');
+        const appModes = document.getElementById('personalization-app-modes');
         if (main) main.hidden = false;
         if (editor) editor.hidden = true;
+        if (appModes) appModes.hidden = true;
         if (this._editor) {
             try {
                 this._editor.destroy();
@@ -214,6 +262,7 @@ export class AssistantSettingsModule extends SettingsModule {
         this._editingKind = null;
         this._editingPath = '';
         this._setStatus('');
+        this._setAppModesStatus('');
     }
 
     async _openEditor(kind) {
@@ -372,6 +421,166 @@ export class AssistantSettingsModule extends SettingsModule {
             }
         }
         return String(e);
+    }
+
+    // --- app modes ------------------------------------------------------
+
+    /**
+     * Per-rule cap. Mirrors `MAX_STEERING_LEN` in `src/context_rules.rs`.
+     * Kept as a JS-side const so the live counter doesn't need an IPC
+     * round trip on every keypress; if we change one we change the
+     * other.
+     */
+    static APP_MODE_STEERING_MAX = 500;
+
+    _renderAppModesSummary() {
+        const summary = document.getElementById('appModesSummary');
+        if (!summary) return;
+        const list = this._appModesSnapshot || [];
+        const enabledCount = list.filter((r) => r.enabled !== false).length;
+        if (list.length === 0) {
+            summary.textContent = 'None configured.';
+        } else {
+            summary.textContent = `${enabledCount} active${list.length > enabledCount ? `, ${list.length - enabledCount} disabled` : ''}.`;
+        }
+    }
+
+    _openAppModesEditor() {
+        const main = document.getElementById('personalization-main');
+        const view = document.getElementById('personalization-app-modes');
+        const container = document.getElementById('appModesContainer');
+        if (!view || !container) return;
+        // Re-render rows from the in-memory snapshot every open. The
+        // user may have hit Cancel last time and we want fresh state.
+        container.innerHTML = '';
+        const rules = this._appModesSnapshot || [];
+        if (rules.length === 0) {
+            this._addAppModeRow(); // start with one empty row
+        } else {
+            for (const rule of rules) this._addAppModeRow(rule);
+        }
+        if (main) main.hidden = true;
+        view.hidden = false;
+        this._setAppModesStatus('');
+    }
+
+    _addAppModeRow(rule = null) {
+        const container = document.getElementById('appModesContainer');
+        if (!container) return;
+        const row = document.createElement('div');
+        row.className = 'app-mode-row';
+        row.style.cssText =
+            'border:1px solid var(--kage-border);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;';
+        const nameVal = (rule?.friendly_name || '').replace(/"/g, '&quot;');
+        const exeVal = (rule?.executable || '').replace(/"/g, '&quot;');
+        const steeringVal = rule?.steering || '';
+        const enabledChecked = rule?.enabled === false ? '' : ' checked';
+        row.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" class="setting-input am-name" placeholder="Friendly name (e.g. VS Code)" value="${nameVal}" style="flex:1;">
+                <input type="text" class="setting-input am-exe" placeholder="Executable (e.g. Code)" value="${exeVal}" style="flex:1;">
+                <label class="kage-checkbox" title="Enable this rule" style="margin-left:4px;">
+                    <input type="checkbox" class="am-enabled"${enabledChecked}>
+                    <span style="font-size:11px;">on</span>
+                </label>
+                <button class="setting-button am-remove" type="button" style="padding:4px 8px;">✕</button>
+            </div>
+            <textarea class="setting-input am-steering" rows="3" placeholder="Steering — short imperative instructions, e.g. &quot;Be concise. Prefer code blocks.&quot;"></textarea>
+            <div class="setting-description am-counter" style="font-size:11px;text-align:right;margin:0;"></div>
+        `;
+        const ta = row.querySelector('.am-steering');
+        ta.value = steeringVal;
+        const counter = row.querySelector('.am-counter');
+        const updateCounter = () => {
+            const len = ta.value.length;
+            const max = AssistantSettingsModule.APP_MODE_STEERING_MAX;
+            counter.textContent = `${len} / ${max}`;
+            counter.style.color = len > max ? '#c44' : '';
+        };
+        ta.addEventListener('input', updateCounter);
+        updateCounter();
+        row.querySelector('.am-remove').addEventListener('click', () => {
+            row.remove();
+            // Empty container is fine — user can re-add or leave blank.
+        });
+        container.appendChild(row);
+    }
+
+    _collectAppModes() {
+        const container = document.getElementById('appModesContainer');
+        if (!container) return [];
+        const rules = [];
+        for (const row of container.querySelectorAll('.app-mode-row')) {
+            const friendly = row.querySelector('.am-name')?.value?.trim() || '';
+            const exe = row.querySelector('.am-exe')?.value?.trim() || '';
+            const steering = row.querySelector('.am-steering')?.value?.trim() || '';
+            const enabled = !!row.querySelector('.am-enabled')?.checked;
+            // Drop completely empty rows silently — they're abandoned
+            // additions, not data the user wants saved.
+            if (!friendly && !exe && !steering) continue;
+            rules.push({
+                friendly_name: friendly,
+                executable: exe,
+                steering,
+                enabled,
+            });
+        }
+        return rules;
+    }
+
+    async _saveAppModes() {
+        const rules = this._collectAppModes();
+        // Validate: every populated row needs at minimum a friendly
+        // name and executable. Steering may be empty (the rule will
+        // simply not contribute anything).
+        const max = AssistantSettingsModule.APP_MODE_STEERING_MAX;
+        for (const r of rules) {
+            if (!r.friendly_name) {
+                this._setAppModesStatus('Every rule needs a friendly name.', 'error');
+                return;
+            }
+            if (!r.executable) {
+                this._setAppModesStatus(
+                    `"${r.friendly_name}" is missing an executable to match.`,
+                    'error'
+                );
+                return;
+            }
+            if (r.steering.length > max) {
+                this._setAppModesStatus(
+                    `"${r.friendly_name}" steering is ${r.steering.length} chars (cap: ${max}).`,
+                    'error'
+                );
+                return;
+            }
+        }
+
+        // Read full config, splice, save. We don't go through the
+        // SettingsManager save path because that would also overwrite
+        // every other field on the page from current DOM state — fine
+        // for normal saves but surprising for a sub-view that only
+        // owns context_rules.
+        try {
+            const invoke = window.__TAURI__.core.invoke;
+            const config = await invoke('get_config');
+            config.context_rules = rules;
+            await invoke('save_config', { config });
+            this._appModesSnapshot = rules.slice();
+            this._renderAppModesSummary();
+            this._setAppModesStatus('Saved.', 'success');
+            // Brief delay so the user sees the success toast, then
+            // back to the main view.
+            setTimeout(() => this._showMainView(), 450);
+        } catch (e) {
+            this._setAppModesStatus('Failed to save: ' + this._formatError(e), 'error');
+        }
+    }
+
+    _setAppModesStatus(text, kind) {
+        const el = document.getElementById('appModesStatus');
+        if (!el) return;
+        el.textContent = text || '';
+        el.style.color = kind === 'error' ? '#c44' : kind === 'success' ? 'var(--kage-accent)' : '';
     }
 
     // --- quick actions (unchanged) --------------------------------------
