@@ -818,7 +818,12 @@ export class FloatingApp {
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => {
+            // session_reset is broadcast to all windows; only adopt the
+            // new id if our pinned session was the one that died.
+            const oldId = event?.payload?.oldSessionId;
             const newId = event?.payload?.newSessionId;
+            const ours = oldId && oldId === this.floatingSessionId;
+            if (!ours) return;
             if (newId) {
                 this.floatingSessionId = newId;
                 this.invoke('set_window_session', {

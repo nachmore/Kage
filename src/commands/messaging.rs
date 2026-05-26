@@ -394,6 +394,7 @@ fn handle_permission_notification(
 // --- Tauri Commands ---
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri commands take state via parameters; can't be condensed.
 pub async fn send_message_streaming(
     session_id: String,
     message: String,
@@ -402,10 +403,14 @@ pub async fn send_message_streaming(
     features: State<'_, FeatureServices>,
     ui: State<'_, UiState>,
     window: WebviewWindow,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     info!("Sending message on {}: {}", session_id, message);
     let client = acp.client.clone();
     let config = features.config.clone();
+    let config_for_title = features.config.clone();
+    let session_cache_for_send = features.session_cache.clone();
+    let app_for_send = app.clone();
     let window_clone = window.clone();
     let window_label = window.label().to_string();
     let originators = ui.pending_prompt_originators.clone();
@@ -478,11 +483,17 @@ pub async fn send_message_streaming(
                     }
                 };
 
-                let _ = window.emit(
+                // Broadcast to all windows; any window pinned to the
+                // dead `oldSessionId` adopts `newSessionId`. Per-window
+                // emit was correct in the single-session world but
+                // would leave a peer window holding a dead id when
+                // both windows are pinned to the same session.
+                let _ = app_for_send.emit(
                     "session_reset",
                     serde_json::json!({
                         "reason": "image_unsupported",
                         "reconnected": new_session_id.is_some(),
+                        "oldSessionId": &session_id,
                         "newSessionId": new_session_id,
                     }),
                 );
@@ -498,6 +509,22 @@ pub async fn send_message_streaming(
         let _ = window_clone.emit(
             "message_complete",
             serde_json::json!({ "sessionId": &active_session_id }),
+        );
+
+        // Refresh the window title now that there's a user message
+        // available — fresh sessions get their first real title here.
+        // Invalidate the session cache first so the JSONL re-extract
+        // sees the new content rather than the cached "New Chat".
+        {
+            let mut cache = session_cache_for_send.lock_or_recover();
+            *cache = None;
+        }
+        crate::commands::sessions::update_window_title(
+            &app_for_send,
+            &config_for_title,
+            &session_cache_for_send,
+            &window_label,
+            &active_session_id,
         );
 
         // Clear the originator now that the prompt is finished.

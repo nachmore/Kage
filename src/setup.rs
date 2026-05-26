@@ -448,6 +448,7 @@ pub fn maybe_spawn_default_session(
     let acp_client = acp.client.clone();
     let window_sessions = ui.window_sessions.clone();
     let config_arc = features.config.clone();
+    let session_cache_arc = features.session_cache.clone();
     let models_arc = acp.available_models.clone();
     let app_handle = app.handle().clone();
 
@@ -472,6 +473,20 @@ pub fn maybe_spawn_default_session(
                         ws.insert("main".to_string(), id.clone());
                         ws.insert("floating".to_string(), id.clone());
                     }
+                    crate::commands::sessions::update_window_title(
+                        &app_handle,
+                        &config_arc,
+                        &session_cache_arc,
+                        "main",
+                        &id,
+                    );
+                    crate::commands::sessions::update_window_title(
+                        &app_handle,
+                        &config_arc,
+                        &session_cache_arc,
+                        "floating",
+                        &id,
+                    );
                     // Source: was this a post-update relaunch, or a
                     // user picking up where they left off? Reading
                     // last_updated_version under a brief lock here
@@ -551,6 +566,20 @@ pub fn maybe_spawn_default_session(
             ws.insert("main".to_string(), session_id.clone());
             ws.insert("floating".to_string(), session_id.clone());
         }
+        crate::commands::sessions::update_window_title(
+            &app_handle,
+            &config_arc,
+            &session_cache_arc,
+            "main",
+            &session_id,
+        );
+        crate::commands::sessions::update_window_title(
+            &app_handle,
+            &config_arc,
+            &session_cache_arc,
+            "floating",
+            &session_id,
+        );
 
         apply_default_model_if_any(&acp_client, &config_arc, &session_id);
         send_startup_steering(&acp_client, &config_arc, &session_id);

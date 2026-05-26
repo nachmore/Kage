@@ -775,7 +775,12 @@ export class ChatApp {
         this.listen('message_error', (event) => this.handleMessageError(event));
         this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => {
+            // session_reset is broadcast to all windows; only adopt the
+            // new id if our pinned session was the one that died.
+            const oldId = event?.payload?.oldSessionId;
             const newId = event?.payload?.newSessionId;
+            const ours = oldId && oldId === this.currentAcpSessionId;
+            if (!ours) return;
             if (newId) {
                 this.activeSessionId = newId;
                 this.currentAcpSessionId = newId;
@@ -789,6 +794,27 @@ export class ChatApp {
 
         // Refresh session list when the backend detects directory changes
         this.listen('sessions_changed', () => this.loadSessions(true));
+
+        // Cross-window session lifecycle. Backend emits this on rename
+        // or delete; we refresh the sidebar always, and react to the
+        // pinned session specifically.
+        this.listen('session_changed', async (event) => {
+            const { id, kind, title } = event.payload || {};
+            if (!id) return;
+            // Re-fetch the session list so renames/deletions show.
+            await this.loadSessions(true);
+            const isOurs = id === this.activeSessionId || id === this.currentAcpSessionId;
+            if (!isOurs) return;
+            if (kind === 'renamed' && title) {
+                this.elements.chatHeaderTitle.textContent = title;
+            } else if (kind === 'deleted') {
+                this.activeSessionId = null;
+                this.currentAcpSessionId = null;
+                this.elements.messagesArea.innerHTML =
+                    '<div class="message-placeholder">This session was deleted from another window.</div>';
+                this.elements.chatHeaderTitle.textContent = 'Kage';
+            }
+        });
 
         // When a message is sent from the floating window, mirror it in the chat
         this.listen('floating_message_sent', (event) => {

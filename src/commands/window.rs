@@ -534,6 +534,21 @@ fn cleanup_chat_window_state(app: &tauri::AppHandle, label: &str) {
     if let Ok(mut originators) = ui.pending_prompt_originators.lock() {
         originators.retain(|_, owner| owner != label);
     }
+    if let Ok(mut last) = ui.last_focused_chat.lock() {
+        if last.as_deref() == Some(label) {
+            *last = None;
+        }
+    }
+    // The Destroyed event fires after webview_windows() has dropped
+    // the entry, so the count we read here is post-close.
+    let remaining = count_open_chat_windows(app);
+    crate::telemetry::track(
+        app,
+        "chat_window_closed",
+        Some(serde_json::json!({
+            "remaining_bucket": chat_window_count_bucket(remaining.max(1)),
+        })),
+    );
     info!(
         "Cleaned up window_sessions for closed chat window: {}",
         label
@@ -597,15 +612,39 @@ pub async fn open_new_chat_window(
     let _ = window.set_focus();
 
     crate::setup::update_activation_policy(&app);
+    let open_count = count_open_chat_windows(&app);
     crate::telemetry::track(
         &app,
         "chat_window_opened",
         Some(serde_json::json!({
             "resumed": resume_session_id.is_some(),
+            "open_count_bucket": chat_window_count_bucket(open_count),
         })),
     );
 
     Ok(label)
+}
+
+/// Bucket the simultaneously-open chat-window count for telemetry.
+/// Raw counts can fingerprint power users (someone opening 17 windows
+/// is identifiable from one event); buckets keep the dashboard useful
+/// without exposing individual behaviour.
+fn chat_window_count_bucket(n: usize) -> &'static str {
+    match n {
+        0 | 1 => "1",
+        2 => "2",
+        3 => "3",
+        4..=5 => "4-5",
+        _ => "6+",
+    }
+}
+
+fn count_open_chat_windows(app: &tauri::AppHandle) -> usize {
+    use tauri::Manager;
+    app.webview_windows()
+        .keys()
+        .filter(|label| label.as_str() == "main" || label.starts_with("chat-"))
+        .count()
 }
 
 /// Close a chat window by its label and clear its session bookkeeping.

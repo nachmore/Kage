@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tauri::State;
+use tauri::{Manager, State};
 
 /// Summary of a session for the sidebar list
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,8 +82,29 @@ fn save_title_cache(cache: &HashMap<String, String>) {
     }
 }
 
-/// Extract a title from the JSONL — use the first user prompt text
-/// Skips steering messages (prefixed with STEERING_MSG_PREFIX)
+/// Strip internal Kage context tags from a user-message string. Mirrors
+/// `ui/js/shared/tool-utils.js::stripKageTags`: removes
+/// `<_kage_ctx ...>` self-closing tags (screen-context decorations) and
+/// `[_KAGE_INLINE]`-style bracket markers (inline-assist instructions).
+/// These are injected by the app for the agent's benefit and must never
+/// surface in user-visible titles.
+fn strip_kage_tags(text: &str) -> String {
+    use std::sync::LazyLock;
+    // <_kage_ctx app="..." title="..."/> and similar self-closing tags.
+    static KAGE_XML: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"<_kage_[^>]*/>\n?").unwrap());
+    // [_KAGE_INLINE] Return ONLY... (consumes through end of line)
+    static KAGE_BRACKET: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\[_KAGE_[A-Z_]*\][^\n]*\n?").unwrap());
+
+    let stripped = KAGE_XML.replace_all(text, "");
+    let stripped = KAGE_BRACKET.replace_all(&stripped, "");
+    stripped.trim().to_string()
+}
+
+/// Extract a title from the JSONL — use the first user prompt text.
+/// Skips steering messages, timestamp injections, and pure-tag prompts
+/// (e.g. inline-assist instruction-only messages).
 fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
     // Read only the first few KB to find the title — JSONL files can be huge
     use std::io::{BufRead, BufReader};
@@ -123,13 +144,20 @@ fn extract_title_from_jsonl(jsonl_path: &std::path::Path) -> String {
                                 if trimmed.starts_with("[Current time:") {
                                     continue;
                                 }
-                                if !trimmed.is_empty() {
-                                    let title: String = trimmed.chars().take(60).collect();
-                                    if title.len() < trimmed.len() {
-                                        return format!("{}...", title);
-                                    }
-                                    return title;
+                                // Strip injected Kage tags before clipping.
+                                // If the message was *only* tags (e.g.
+                                // inline-assist instruction wrappers),
+                                // the post-strip string will be empty —
+                                // skip and try the next prompt.
+                                let stripped = strip_kage_tags(trimmed);
+                                if stripped.is_empty() {
+                                    continue;
                                 }
+                                let title: String = stripped.chars().take(60).collect();
+                                if title.chars().count() < stripped.chars().count() {
+                                    return format!("{}...", title);
+                                }
+                                return title;
                             }
                         }
                     }
@@ -629,7 +657,9 @@ pub async fn reveal_session_file(
 pub async fn delete_session(
     session_id: String,
     features: State<'_, FeatureServices>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    use tauri::Emitter;
     let config = features.config.lock_or_recover().clone();
     let sessions_dir = get_sessions_dir_from_config(&config)?;
 
@@ -662,6 +692,17 @@ pub async fn delete_session(
         let mut cache = features.session_cache.lock_or_recover();
         *cache = None;
     }
+
+    // Tell every window: this session is gone. Windows pinned to it
+    // clear their chat area and show a "no longer exists" notice;
+    // others just refresh their sidebar list.
+    let _ = app.emit(
+        "session_changed",
+        serde_json::json!({
+            "id": session_id,
+            "kind": "deleted",
+        }),
+    );
 
     info!("Deleted session: {}", session_id);
     Ok(())
@@ -745,8 +786,15 @@ pub async fn switch_acp_session(
                 }
             }
             if let Ok(mut ws) = ui.window_sessions.lock() {
-                ws.insert(window_label, loaded_id.clone());
+                ws.insert(window_label.clone(), loaded_id.clone());
             }
+            update_window_title(
+                &app,
+                &features.config,
+                &features.session_cache,
+                &window_label,
+                &loaded_id,
+            );
             Ok(loaded_id)
         }
         None => {
@@ -811,8 +859,15 @@ pub async fn switch_acp_session(
             }
 
             if let Ok(mut ws) = ui.window_sessions.lock() {
-                ws.insert(window_label, new_session_id.clone());
+                ws.insert(window_label.clone(), new_session_id.clone());
             }
+            update_window_title(
+                &app,
+                &features.config,
+                &features.session_cache,
+                &window_label,
+                &new_session_id,
+            );
 
             Ok(new_session_id)
         }
@@ -839,18 +894,93 @@ pub async fn get_window_session(
 /// (boot, switch, new) so the backend's quit-time hook, updater
 /// resume-marker, and permission router can all look up "what session
 /// does window X own?" without guessing.
+///
+/// Also updates the window title to reflect the session's first user
+/// prompt (or "New Chat" when the session is empty). The single
+/// authoritative path for "this window now shows this session" lives
+/// here so frontends never have to coordinate `set_title` manually.
 #[tauri::command]
 pub async fn set_window_session(
     label: String,
     session_id: String,
     ui: State<'_, crate::state::UiState>,
+    features: State<'_, FeatureServices>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
-    let mut map = ui
-        .window_sessions
-        .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
-    map.insert(label, session_id);
+    {
+        let mut map = ui
+            .window_sessions
+            .lock()
+            .map_err(|e| format!("Lock error: {}", e))?;
+        map.insert(label.clone(), session_id.clone());
+    }
+    update_window_title(
+        &app,
+        &features.config,
+        &features.session_cache,
+        &label,
+        &session_id,
+    );
     Ok(())
+}
+
+/// Resolve the session's display title and write it to the window's
+/// title bar. Chat windows (`main`, `chat-<uuid>`) get
+/// `"<title> - Kage"`; floating gets `"Kage — <title>"`. Operates on
+/// the `FeatureServices` Arcs directly so callers in spawn-blocking
+/// closures (which can't hold a State) can invoke it too.
+pub fn update_window_title(
+    app: &tauri::AppHandle,
+    config_arc: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    session_cache_arc: &std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
+    label: &str,
+    session_id: &str,
+) {
+    let Some(window) = app.get_webview_window(label) else {
+        return;
+    };
+    let title = lookup_session_title(config_arc, session_cache_arc, session_id)
+        .unwrap_or_else(|| "New Chat".to_string());
+    let display_title = match label {
+        "floating" => format!("Kage — {}", title),
+        _ => format!("{} - Kage", title),
+    };
+    if let Err(e) = window.set_title(&display_title) {
+        log::warn!("Failed to set title for window {}: {}", label, e);
+    }
+}
+
+/// Look up a session's display title. Cache hit first; on miss falls
+/// back to extracting from the JSONL on disk. Returns None when the
+/// session has no extractable title (fresh, empty, or missing).
+fn lookup_session_title(
+    config_arc: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+    session_cache_arc: &std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
+    session_id: &str,
+) -> Option<String> {
+    if let Ok(cache) = session_cache_arc.lock() {
+        if let Some(ref c) = *cache {
+            if let Some(s) = c.sessions.iter().find(|s| s.session_id == session_id) {
+                if !s.title.is_empty() && s.title != "New Chat" {
+                    return Some(s.title.clone());
+                }
+            }
+        }
+    }
+
+    // Cache miss or default title — extract directly from the file.
+    let config = config_arc.lock_or_recover().clone();
+    let sessions_dir = get_sessions_dir_from_config(&config).ok()?;
+    let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
+    if !jsonl_path.exists() {
+        return None;
+    }
+    let title = extract_title_from_jsonl(&jsonl_path);
+    if title == "New Chat" {
+        None
+    } else {
+        Some(title)
+    }
 }
 
 /// Drop a window's pinned session. Called when a window closes.
@@ -873,7 +1003,10 @@ pub async fn rename_session(
     session_id: String,
     title: String,
     features: State<'_, FeatureServices>,
+    ui: State<'_, crate::state::UiState>,
+    app: tauri::AppHandle,
 ) -> Result<(), AppError> {
+    use tauri::Emitter;
     let title = title.trim().to_string();
     if title.is_empty() {
         return Err("Title cannot be empty".to_string().into());
@@ -882,7 +1015,7 @@ pub async fn rename_session(
     info!("Renaming session {} to: {}", session_id, title);
 
     let mut title_cache = load_title_cache();
-    title_cache.insert(session_id, title);
+    title_cache.insert(session_id.clone(), title.clone());
     save_title_cache(&title_cache);
 
     // Invalidate session list cache
@@ -890,6 +1023,41 @@ pub async fn rename_session(
         let mut session_cache = features.session_cache.lock_or_recover();
         *session_cache = None;
     }
+
+    // Refresh window titles for any window pinned to this session.
+    let labels: Vec<String> = ui
+        .window_sessions
+        .lock()
+        .ok()
+        .map(|m| {
+            m.iter()
+                .filter(|(_, sid)| **sid == session_id)
+                .map(|(label, _)| label.clone())
+                .collect()
+        })
+        .unwrap_or_default();
+    for label in &labels {
+        update_window_title(
+            &app,
+            &features.config,
+            &features.session_cache,
+            label,
+            &session_id,
+        );
+    }
+
+    // Broadcast so all windows can refresh their session list / chat
+    // header. The frontend filters by sessionId — windows not showing
+    // this session ignore the event but cheaply re-render their
+    // sidebar so the renamed entry shows the new title.
+    let _ = app.emit(
+        "session_changed",
+        serde_json::json!({
+            "id": session_id,
+            "kind": "renamed",
+            "title": title,
+        }),
+    );
 
     Ok(())
 }
