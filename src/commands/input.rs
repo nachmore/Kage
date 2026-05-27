@@ -421,12 +421,7 @@ pub async fn execute_shortcut(
         command.current_dir(work_dir);
     }
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
-        command.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
-    }
+    crate::os::configure_breakaway_from_job(&mut command);
 
     command
         .spawn()

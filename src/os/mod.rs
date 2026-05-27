@@ -151,6 +151,23 @@ pub fn configure_no_window(cmd: &mut std::process::Command) -> &mut std::process
     }
 }
 
+/// Spawn this command outside the parent's Job Object on Windows (no-op
+/// elsewhere). Used for the restart helper and `execute_shortcut` so the
+/// child survives the parent process exit / job-close. See
+/// `os::install_kill_on_exit_job` for the matching teardown semantics.
+pub fn configure_breakaway_from_job(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x01000000) // CREATE_BREAKAWAY_FROM_JOB
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd
+    }
+}
+
 /// Set the current thread's name/description so it shows up in debuggers
 /// and in the thread dump diagnostic command. No-op on non-Windows.
 #[allow(unused)]

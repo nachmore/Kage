@@ -108,7 +108,30 @@ pub fn setup_notification_handler(
                             update.get("title").and_then(|v| v.as_str()),
                         ) {
                             if let Ok(mut names) = tool_names.lock() {
+                                let was_new = !names.contains_key(call_id);
                                 names.entry(call_id.to_string()).or_insert_with(|| title.to_string());
+                                // Cap memory: tool call IDs are UUID-ish and we
+                                // never prune on session-end. A long-running
+                                // session can leak megabytes here. Keep the
+                                // 4096 most recent — well above the working set
+                                // for any realistic conversation.
+                                const MAX_TOOL_NAMES: usize = 4096;
+                                if was_new && names.len() > MAX_TOOL_NAMES {
+                                    // HashMap iteration order is not insertion
+                                    // order, so this is "drop arbitrary 25%"
+                                    // rather than strict LRU. Acceptable: a
+                                    // mis-attributed tool name in an audit log
+                                    // is preferable to unbounded growth.
+                                    let drop_n = names.len() - MAX_TOOL_NAMES * 3 / 4;
+                                    let to_drop: Vec<String> = names
+                                        .keys()
+                                        .take(drop_n)
+                                        .cloned()
+                                        .collect();
+                                    for k in to_drop {
+                                        names.remove(&k);
+                                    }
+                                }
                             }
                         }
                         // Forward unconditionally; frontend filters by
@@ -739,20 +762,36 @@ pub async fn dismiss_pending_permission(
     };
 
     if let Some(perm) = pending {
-        if let Err(e) = acp
+        // Only clear our local pending slot if the agent actually accepted
+        // the dismissal. If the send fails (broken pipe, transport error)
+        // the agent still believes a prompt is open — clearing locally would
+        // desynchronize state and stall the next user message on the agent's
+        // "prompt already in progress" guard. Surface the error so the UI
+        // can choose to retry or reconnect.
+        match acp
             .client
             .send_permission_response(&perm.request_id, "reject_once")
         {
-            warn!("Failed to dismiss pending permission: {}", e);
+            Ok(()) => {
+                if let Ok(mut guard) = acp.pending_permission.lock() {
+                    *guard = None;
+                }
+                if let Some(main) = app.get_webview_window("main") {
+                    let _ = main.emit("permission_dismissed", ());
+                }
+                Ok(true)
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to dismiss pending permission, keeping local state: {}",
+                    e
+                );
+                Err(AppError::internal(format!(
+                    "Failed to dismiss permission: {}",
+                    e
+                )))
+            }
         }
-
-        if let Ok(mut guard) = acp.pending_permission.lock() {
-            *guard = None;
-        }
-        if let Some(main) = app.get_webview_window("main") {
-            let _ = main.emit("permission_dismissed", ());
-        }
-        Ok(true)
     } else {
         Ok(false)
     }

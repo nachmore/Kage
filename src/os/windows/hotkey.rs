@@ -329,7 +329,6 @@ pub fn capture_hotkey(timeout_ms: u64) -> Option<CapturedHotkey> {
 /// (`crate::os::platform::hotkey::capture_hotkey_impl`).
 pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
     use std::io::Read;
-    use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
 
     let exe = std::env::current_exe().ok()?;
@@ -338,13 +337,12 @@ pub fn capture_hotkey_impl(timeout_ms: u64) -> Option<CapturedHotkey> {
         exe, timeout_ms
     );
 
-    let mut child = Command::new(&exe)
-        .args(["/capture-hotkey", &timeout_ms.to_string()])
+    let mut cmd = Command::new(&exe);
+    cmd.args(["/capture-hotkey", &timeout_ms.to_string()])
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn()
-        .ok()?;
+        .stderr(Stdio::null());
+    crate::os::configure_no_window(&mut cmd);
+    let mut child = cmd.spawn().ok()?;
 
     let mut output = String::new();
     if let Some(ref mut stdout) = child.stdout {

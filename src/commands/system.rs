@@ -23,11 +23,20 @@ pub fn graceful_shutdown(app: &tauri::AppHandle) {
         let _ = tray.set_visible(false);
     }
 
-    // Kill pocket-tts server if running
+    // Kill pocket-tts server and any in-flight pip install if running.
+    // The Job Object reaps both on Windows when we exit, but macOS/Linux
+    // have no equivalent — without an explicit kill here, a Cmd+Q during
+    // a Pocket TTS install leaves the install running headless.
     if let Some(procs) = app.try_state::<ChildProcesses>() {
         let mut tts_proc = procs.pocket_tts.lock_or_recover();
         if let Some(mut child) = tts_proc.take() {
             info!("Stopping pocket-tts server on shutdown");
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let mut install_proc = procs.pocket_tts_install.lock_or_recover();
+        if let Some(mut child) = install_proc.take() {
+            info!("Cancelling in-flight pocket-tts install on shutdown");
             let _ = child.kill();
             let _ = child.wait();
         }
@@ -116,34 +125,21 @@ async fn shutdown_and_exit_inner(
         acp_client.disconnect();
     }
 
-    // Spawn new instance right before exit (if restarting)
+    // Spawn new instance right before exit (if restarting). On Windows we
+    // pass CREATE_BREAKAWAY_FROM_JOB via `os::configure_breakaway_from_job`
+    // so the new instance isn't tied to the dying parent's Job Object — see
+    // `os::install_kill_on_exit_job`. The helper is a no-op on macOS/Linux,
+    // where parent-exit reaping is handled by init/launchd.
     if let Some((exe, args)) = restart {
         info!("Spawning restart: {:?} {:?}", exe, args);
-        // Use CREATE_BREAKAWAY_FROM_JOB so the child survives our Job Object cleanup
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x01000000;
-            match std::process::Command::new(&exe)
-                .args(&args)
-                .current_dir(std::env::current_dir().unwrap_or_default())
-                .creation_flags(CREATE_BREAKAWAY_FROM_JOB)
-                .spawn()
-            {
-                Ok(child) => info!("Restart process spawned (PID: {})", child.id()),
-                Err(e) => error!("Failed to spawn restart process: {}", e),
-            }
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            match std::process::Command::new(&exe)
-                .args(&args)
-                .current_dir(std::env::current_dir().unwrap_or_default())
-                .spawn()
-            {
-                Ok(child) => info!("Restart process spawned (PID: {})", child.id()),
-                Err(e) => error!("Failed to spawn restart process: {}", e),
-            }
+        let mut restart_cmd = std::process::Command::new(&exe);
+        restart_cmd
+            .args(&args)
+            .current_dir(std::env::current_dir().unwrap_or_default());
+        crate::os::configure_breakaway_from_job(&mut restart_cmd);
+        match restart_cmd.spawn() {
+            Ok(child) => info!("Restart process spawned (PID: {})", child.id()),
+            Err(e) => error!("Failed to spawn restart process: {}", e),
         }
     }
 
@@ -2107,11 +2103,7 @@ fn resolve_binary_path(token: &str) -> Option<String> {
     // CREATE_NO_WINDOW: GUI subsystem processes spawning console
     // children inherit no console — Windows allocates a fresh one for
     // the child unless we suppress it, which flashes a DOS window.
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
+    crate::os::configure_no_window(&mut command);
     let out = command.output().ok()?;
     if !out.status.success() {
         return None;
@@ -2200,11 +2192,7 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
             let where_or_which = if cfg!(windows) { "where" } else { "which" };
             let mut where_cmd = std::process::Command::new(where_or_which);
             where_cmd.arg(bin_name);
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                where_cmd.creation_flags(0x08000000);
-            }
+            crate::os::configure_no_window(&mut where_cmd);
             if let Ok(output) = where_cmd.output() {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -2238,11 +2226,7 @@ fn detect_agents_sync() -> Vec<DetectedAgent> {
                     version_cmd.args(hint.version_args);
                     // CREATE_NO_WINDOW: see comment above on the
                     // where/which call.
-                    #[cfg(target_os = "windows")]
-                    {
-                        use std::os::windows::process::CommandExt;
-                        version_cmd.creation_flags(0x08000000);
-                    }
+                    crate::os::configure_no_window(&mut version_cmd);
                     version_cmd.output().ok().and_then(|o| {
                         if o.status.success() {
                             let v = String::from_utf8_lossy(&o.stdout).trim().to_string();

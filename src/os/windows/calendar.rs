@@ -150,10 +150,7 @@ try {{
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-    }
+    crate::os::configure_no_window(&mut cmd);
 
     debug!(
         "[calendar] Running PowerShell query ({}), time_range: {}",
