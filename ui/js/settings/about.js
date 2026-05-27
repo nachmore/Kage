@@ -1,3 +1,4 @@
+import { errMessage } from '../shared/error-message.js';
 import { formatBytes } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 /**
@@ -746,17 +747,9 @@ export class AboutSettingsModule extends SettingsModule {
     }
 
     _formatError(e) {
-        if (!e) return 'Unknown error';
-        if (typeof e === 'string') return e;
-        if (e instanceof Error) return e.message || String(e);
-        if (typeof e === 'object') {
-            if (typeof e.message === 'string' && e.message) return e.message;
-            try {
-                return JSON.stringify(e);
-            } catch {
-                return String(e);
-            }
-        }
-        return String(e);
+        // Delegate to the shared helper so AppError-shaped errors render
+        // consistently across windows. Wrapping it in a method here is
+        // legacy; future call sites should import errMessage directly.
+        return errMessage(e);
     }
 }

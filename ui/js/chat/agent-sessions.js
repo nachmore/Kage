@@ -1,3 +1,4 @@
+import { errMessage } from '../shared/error-message.js';
 import { renderMarkdown } from '../shared/markdown.js';
 import { mascotHTML } from '../shared/mascot.js';
 
@@ -287,7 +288,7 @@ export class AgentSessionViewer {
             this._startPolling(providerId, locator, updatedMs);
         } catch (e) {
             console.error('[AgentSessions] Failed to load session:', e);
-            area.innerHTML = `<div class="kd-loading">Failed to load: ${esc(String(e))}</div>`;
+            area.innerHTML = `<div class="kd-loading">Failed to load: ${esc(errMessage(e))}</div>`;
         }
     }
 

@@ -18,6 +18,7 @@ import {
 import { sendAppNotification } from '../shared/notify.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { errLabel, errMessage } from '../shared/error-message.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import {
     startTimer,
@@ -203,7 +204,7 @@ export class FloatingApp {
                 await this.windowManager.resizeWindow();
             },
             onPlanFailed: (e) => {
-                this.showError('Automation failed: ' + e);
+                this.showError(errLabel('Automation failed', e));
                 this.isWaitingForResponse = false;
             },
         });
@@ -1787,7 +1788,7 @@ export class FloatingApp {
             } catch (e) {
                 console.error('[floating] recovery session/new also failed:', e);
                 this.floatingSessionId = null;
-                this.sessionBootstrapError = String(e);
+                this.sessionBootstrapError = errMessage(e);
             } finally {
                 this.bootstrappingSession = false;
             }
@@ -2271,7 +2272,7 @@ export class FloatingApp {
             this._clearInput();
         } catch (error) {
             console.error('Failed to execute shortcut:', error);
-            this.showError('Failed to execute shortcut: ' + error);
+            this.showError(errLabel('Failed to execute shortcut', error));
         }
     }
 
@@ -2556,7 +2557,7 @@ export class FloatingApp {
             document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
         } catch (e) {
             document.dispatchEvent(
-                new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
             );
         }
     }
@@ -2817,7 +2818,7 @@ export class FloatingApp {
                     attachments: null,
                 });
             } catch (e) {
-                this.showError('Error: ' + e);
+                this.showError(errLabel('Error', e));
             }
             return;
         }
@@ -2962,7 +2963,7 @@ export class FloatingApp {
             }
         } catch (error) {
             console.error('Error handling input:', error);
-            this.showError('Error: ' + error);
+            this.showError(errLabel('Error', error));
         }
     }
 

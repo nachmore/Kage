@@ -1,6 +1,7 @@
+import { errLabel } from '../shared/error-message.js';
+import { isMac } from '../shared/shortcuts.js';
 import { SettingsModule } from './base.js';
 import { getSystemIcon } from './system.js';
-import { isMac } from '../shared/shortcuts.js';
 /**
  * System Integration Settings Module
  */
@@ -114,7 +115,7 @@ export class IntegrationSettingsModule extends SettingsModule {
                         '❌ Permission denied. Check your OS notification settings.';
                 }
             } catch (e) {
-                statusEl.textContent = '❌ Error: ' + e;
+                statusEl.textContent = '❌ ' + errLabel('Error', e);
             }
         });
     }

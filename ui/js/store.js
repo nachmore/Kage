@@ -12,9 +12,10 @@
  * are easier to follow.
  */
 
-import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
-import { cmdOrCtrlPressed } from './shared/shortcuts.js';
+import { errLabel, errMessage } from './shared/error-message.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
+import { cmdOrCtrlPressed } from './shared/shortcuts.js';
+import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 
 let currentTab = 'extensions';
 let showInstalledOnly = false;
@@ -204,7 +205,7 @@ async function renderBrowse(container, type) {
         html += '</div>';
         container.innerHTML = html;
     } catch (e) {
-        container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">⚠️</div>Could not connect to store.<br>${esc(String(e))}</div>`;
+        container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">⚠️</div>Could not connect to store.<br>${esc(errMessage(e))}</div>`;
     }
 }
 
@@ -406,7 +407,7 @@ async function installFromStore(id) {
             renderTab();
         }
     } catch (e) {
-        alert('Install failed: ' + e);
+        alert(errLabel('Install failed', e));
         renderTab();
     }
 }
@@ -422,7 +423,7 @@ async function updateItem(id) {
         });
         renderTab();
     } catch (e) {
-        alert('Update failed: ' + e);
+        alert(errLabel('Update failed', e));
         renderTab();
     }
 }
@@ -438,7 +439,7 @@ async function reinstallItem(id) {
         });
         renderTab();
     } catch (e) {
-        alert('Reinstall failed: ' + e);
+        alert(errLabel('Reinstall failed', e));
         renderTab();
     }
 }
@@ -452,7 +453,7 @@ async function uninstallItem(id, kind) {
         await refreshInstalled();
         renderTab();
     } catch (e) {
-        alert('Uninstall failed: ' + e);
+        alert(errLabel('Uninstall failed', e));
         renderTab();
     }
 }

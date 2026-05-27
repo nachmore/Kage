@@ -73,6 +73,8 @@ All modules compile under `--test`, including Tauri-dependent ones (`automation`
 5. `AcpClient::new(mode)` — connection mode chosen from config (`stdio`/`pipe`/`tcp`).
 6. `AppState` (`src/state.rs`) is the single shared struct passed via `tauri::Builder::manage`. Most fields are `Arc<Mutex<…>>`. Frontend talks to backend through Tauri commands registered in `tauri::generate_handler!` — every public command must be added there or it won't be callable.
 
+**Every `#[tauri::command]` returns `Result<T, AppError>` (never `Result<T, String>`).** `AppError` (`src/error.rs`) serializes as `{ kind, message }` so the frontend can pattern-match on error categories (`connection_lost`, `rate_limited`, etc.). The `tests/command_error_type_parity_test.rs` integration test enforces this — a new command that returns `String` errors will fail CI. JS callers route errors through `errMessage(e)` / `errLabel(label, e)` from `ui/js/shared/error-message.js`, never `'X: ' + e` (which produces `"X: [object Object]"` for AppError objects).
+
 **Register state on the Builder, not inside `setup()`.** Tauri starts loading window webviews — and the JS inside them — as soon as the Builder constructs them, well before the `setup()` closure runs. Frontend invokes that hit `tauri::State<...>` will fail with "state not managed" until ~5 seconds into startup if state registration is deferred to `setup()`. Construct cheap state up front and `.manage()` it on the Builder; reserve `setup()` for work that genuinely needs `&mut App` / `app.handle()` (notification handler wiring, tray construction, hotkey registration, listener installs). See `src/main.rs::run` for the canonical layout.
 
 ### ACP client (`src/acp_client/`)

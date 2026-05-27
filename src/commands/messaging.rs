@@ -429,7 +429,7 @@ pub async fn send_message_streaming(
     ui: State<'_, UiState>,
     window: WebviewWindow,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Sending message on {}: {}", session_id, message);
     let client = acp.client.clone();
     let config = features.config.clone();
@@ -695,7 +695,7 @@ pub async fn open_chat_with_message(
     acp: State<'_, AcpHandles>,
     ui: State<'_, UiState>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();
     }
@@ -814,11 +814,11 @@ pub async fn has_pending_permission(acp: State<'_, AcpHandles>) -> Result<bool, 
 #[tauri::command]
 pub async fn get_slash_commands(
     acp: State<'_, AcpHandles>,
-) -> Result<Vec<crate::state::SlashCommand>, String> {
+) -> Result<Vec<crate::state::SlashCommand>, AppError> {
     let cmds = acp
         .slash_commands
         .lock()
-        .map_err(|e| format!("Lock: {}", e))?;
+        .map_err(|e| AppError::lock(format!("{}", e)))?;
     Ok(cmds.clone())
 }
 
@@ -830,33 +830,38 @@ pub async fn execute_slash_command(
     acp: State<'_, AcpHandles>,
     window: WebviewWindow,
     app: tauri::AppHandle,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let client = acp.client.clone();
     // Snapshot before the move into spawn_blocking — we need both for
     // telemetry after the call returns.
     let cmd_for_event = command.clone();
     let args_for_event = args.clone();
 
-    let result = async_runtime::spawn_blocking(move || {
+    let result = async_runtime::spawn_blocking(move || -> Result<serde_json::Value, AppError> {
         if !client.is_connected() {
-            return Err("Not connected".to_string());
+            return Err(AppError::connection_lost("Not connected"));
         }
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
-        let response = client.send_request(
-            &client.vendor_method("commands/execute"),
-            serde_json::json!({
-                "sessionId": session_id,
-                "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
-            }),
-        ).map_err(|e| format!("Command failed: {}", e))?;
+        let response = client
+            .send_request(
+                &client.vendor_method("commands/execute"),
+                serde_json::json!({
+                    "sessionId": session_id,
+                    "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
+                }),
+            )
+            .map_err(|e| AppError::internal(format!("Command failed: {}", e)))?;
         if let Some(error) = response.error {
-            return Err(format!("{} (code: {})", error.message, error.code));
+            return Err(AppError::internal(format!(
+                "{} (code: {})",
+                error.message, error.code
+            )));
         }
         Ok(response.result.unwrap_or(serde_json::json!(null)))
     })
     .await
-    .map_err(|e| format!("Task: {}", e))??;
+    .map_err(|e| AppError::internal(format!("Task: {}", e)))??;
 
     // Telemetry — fire AFTER the call so we only count successful
     // command executions, not failed ones (though we don't bother
@@ -897,7 +902,7 @@ pub async fn execute_slash_command(
 }
 
 #[tauri::command]
-pub async fn get_slash_command_options(_command: String) -> Result<serde_json::Value, String> {
+pub async fn get_slash_command_options(_command: String) -> Result<serde_json::Value, AppError> {
     Ok(serde_json::json!({ "options": [] }))
 }
 
@@ -906,9 +911,12 @@ pub async fn send_steering_message(
     session_id: String,
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let steering_msg = {
-        let config = features.config.lock().map_err(|e| format!("Lock: {}", e))?;
+        let config = features
+            .config
+            .lock()
+            .map_err(|e| AppError::lock(format!("{}", e)))?;
         let parts = crate::commands::system::assemble_steering_parts(&config);
         format!(
             "{} {}",
@@ -932,11 +940,11 @@ pub async fn send_steering_message(
 #[tauri::command]
 pub async fn get_available_models(
     acp: State<'_, AcpHandles>,
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<serde_json::Value>, AppError> {
     let models = acp
         .available_models
         .lock()
-        .map_err(|e| format!("Lock error: {}", e))?;
+        .map_err(|e| AppError::lock(format!("{}", e)))?;
     Ok(models
         .iter()
         .map(|m| {
@@ -962,15 +970,15 @@ pub async fn execute_automation_plan(
     acp: State<'_, AcpHandles>,
     features: State<'_, FeatureServices>,
     window: WebviewWindow,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!("Executing automation plan");
 
     // Parse the plan
-    let plan: Vec<serde_json::Value> =
-        serde_json::from_str(&plan_json).map_err(|e| format!("Invalid plan JSON: {}", e))?;
+    let plan: Vec<serde_json::Value> = serde_json::from_str(&plan_json)
+        .map_err(|e| AppError::internal(format!("Invalid plan JSON: {}", e)))?;
 
     if plan.is_empty() {
-        return Err("Empty plan".to_string());
+        return Err(AppError::internal("Empty plan"));
     }
 
     let total_steps = plan.len();
@@ -1179,7 +1187,7 @@ pub async fn extension_tool_response(
     success: bool,
     acp: State<'_, AcpHandles>,
     window: WebviewWindow,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     info!(
         "Extension tool response: ext={}, tool={}, success={}, len={}",
         extension_id,
@@ -1235,7 +1243,7 @@ pub async fn send_extension_tool_steering(
     session_id: String,
     tool_steering: String,
     acp: State<'_, AcpHandles>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if tool_steering.trim().is_empty() {
         return Ok(());
     }
@@ -1291,9 +1299,12 @@ pub async fn check_extension_tool_permission(
     extension_id: String,
     tool_name: String,
     features: State<'_, FeatureServices>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let tool_title = format!("ext:{}/{}", extension_id, tool_name);
-    let mut config = features.config.lock().map_err(|e| format!("Lock: {}", e))?;
+    let mut config = features
+        .config
+        .lock()
+        .map_err(|e| AppError::lock(format!("{}", e)))?;
 
     // Check trust_all first
     if config.tool_permissions.trust_all {
@@ -1366,7 +1377,7 @@ pub async fn send_inline_assist(
     message: String,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let client = acp.client.clone();
 
     async_runtime::spawn_blocking(move || {
@@ -1415,11 +1426,11 @@ pub async fn execute_macro(
     initial_input: String,
     acp: State<'_, AcpHandles>,
     app: tauri::AppHandle,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let client = acp.client.clone();
     let step_count = steps.len();
     let app_for_event = app.clone();
-    let result = async_runtime::spawn_blocking(move || {
+    let result = async_runtime::spawn_blocking(move || -> Result<String, AppError> {
         let mut current_input = initial_input;
 
         for (i, step) in steps.iter().enumerate() {
@@ -1443,15 +1454,26 @@ pub async fn execute_macro(
 
                     if !client.is_connected() {
                         if let Err(e) = client.connect() {
-                            return Err(format!("Step {}: Unable to connect: {}", i + 1, e));
+                            return Err(AppError::connection_lost(format!(
+                                "Step {}: Unable to connect: {}",
+                                i + 1,
+                                e
+                            )));
                         }
                     }
                     if let Err(e) = client.send_chat_streaming(&session_id, &full_prompt, None) {
-                        return Err(format!("Step {} failed: {}", i + 1, e));
+                        return Err(AppError::internal(format!(
+                            "Step {} failed: {}",
+                            i + 1,
+                            e
+                        )));
                     }
                     let result = client.take_session_accumulator(&session_id);
                     if result.trim().is_empty() {
-                        return Err(format!("Step {} returned empty result", i + 1));
+                        return Err(AppError::internal(format!(
+                            "Step {} returned empty result",
+                            i + 1
+                        )));
                     }
                     current_input = result.trim().to_string();
                 }
@@ -1465,7 +1487,12 @@ pub async fn execute_macro(
                                 current_input = re.replace_all(&current_input, replace).to_string();
                             }
                             Err(e) => {
-                                return Err(format!("Step {}: Invalid regex '{}': {}", i + 1, find, e));
+                                return Err(AppError::internal(format!(
+                                    "Step {}: Invalid regex '{}': {}",
+                                    i + 1,
+                                    find,
+                                    e
+                                )));
                             }
                         }
                     }
@@ -1477,7 +1504,11 @@ pub async fn execute_macro(
                 }
 
                 other => {
-                    return Err(format!("Step {}: Unknown step type '{}'", i + 1, other));
+                    return Err(AppError::internal(format!(
+                        "Step {}: Unknown step type '{}'",
+                        i + 1,
+                        other
+                    )));
                 }
             }
 
@@ -1485,7 +1516,7 @@ pub async fn execute_macro(
         }
 
         Ok(current_input)
-    }).await.map_err(|e| format!("Task error: {}", e))?;
+    }).await.map_err(|e| AppError::internal(format!("Task error: {}", e)))?;
 
     // Telemetry — fire on success only. step_count is captured before
     // the move; we don't include macro names because those are user-typed.

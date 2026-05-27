@@ -6,6 +6,7 @@
 //! - Battery-aware throttling
 
 use crate::config::{AutomationPowerConfig, AutomationTrigger, MacroConfig};
+use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::os::power::{get_power_state, PowerState};
 use log::{debug, info};
@@ -291,7 +292,7 @@ pub async fn emit_automation_signal(
     name: String,
     data: Option<serde_json::Value>,
     features: tauri::State<'_, crate::state::FeatureServices>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(ref tx) = *features.automation_signal_tx.lock_or_recover() {
         // Use try_send so a flood of signals from a misbehaving extension drops
         // rather than blocking the Tauri IPC thread or growing memory.
@@ -316,7 +317,7 @@ pub async fn emit_automation_signal(
 
 /// Tauri command: get current power state.
 #[tauri::command]
-pub async fn get_power_status() -> Result<serde_json::Value, String> {
+pub async fn get_power_status() -> Result<serde_json::Value, AppError> {
     let state = get_power_state();
     Ok(serde_json::json!({
         "state": match state {
@@ -330,7 +331,7 @@ pub async fn get_power_status() -> Result<serde_json::Value, String> {
 
 /// Tauri command: list available signals from all loaded extensions.
 #[tauri::command]
-pub async fn list_automation_signals() -> Result<Vec<serde_json::Value>, String> {
+pub async fn list_automation_signals() -> Result<Vec<serde_json::Value>, AppError> {
     // Built-in system signals
     let signals = vec![
         serde_json::json!({ "name": "system:clipboard_change", "description": "Clipboard content changed", "source": "System" }),

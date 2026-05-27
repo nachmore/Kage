@@ -18,6 +18,7 @@ import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
+import { errLabel } from '../shared/error-message.js';
 import { mascotHTML } from '../shared/mascot.js';
 import {
     isOnline,
@@ -937,7 +938,7 @@ export class ChatApp {
                         this.addMessageFromHistory('assistant', msg);
                         this.scrollToBottom();
                     } catch (err) {
-                        this.showError('Command failed: ' + err);
+                        this.showError(errLabel('Command failed', err));
                     }
                 });
                 container.appendChild(btn);
@@ -1689,7 +1690,7 @@ export class ChatApp {
 
             this.renderSessionList();
         } catch (e) {
-            this.showError('Failed to delete session: ' + e);
+            this.showError(errLabel('Failed to delete session', e));
         }
     }
 
@@ -1766,7 +1767,7 @@ export class ChatApp {
                     attachments: null,
                 });
             } catch (e) {
-                this.handleMessageError({ payload: 'Error: ' + e });
+                this.handleMessageError({ payload: errLabel('Error', e) });
             }
             return;
         }
@@ -1832,7 +1833,7 @@ export class ChatApp {
             } catch (e) {
                 console.error('Slash command failed:', e);
                 this.addUserMessage(message);
-                this.addMessageFromHistory('assistant', 'Command failed: ' + e);
+                this.addMessageFromHistory('assistant', errLabel('Command failed', e));
                 this.scrollToBottom();
                 return;
             }
@@ -1860,7 +1861,7 @@ export class ChatApp {
                 this.currentStreamingMessage.remove();
                 this.currentStreamingMessage = null;
             }
-            this.showError('Error: ' + error);
+            this.showError(errLabel('Error', error));
             this.isConnected = false;
             this.updateConnectionStatus();
             this.isWaitingForResponse = false;
@@ -2224,7 +2225,7 @@ export class ChatApp {
                     this.showError('Reconnection failed.');
                 }
             } catch (e) {
-                this.showError('Reconnection failed: ' + e);
+                this.showError(errLabel('Reconnection failed', e));
             }
         });
     }
@@ -2915,7 +2916,7 @@ export class ChatApp {
             });
         } catch (e) {
             console.error('[MODELS] Failed to switch model:', e);
-            this.showError('Failed to switch model: ' + e);
+            this.showError(errLabel('Failed to switch model', e));
         }
     }
 

@@ -4,6 +4,7 @@ import { escapeHtml } from '../shared/tool-utils.js';
 import { registerSettingsActions } from './module-registry.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { errLabel } from '../shared/error-message.js';
 /**
  * Commands & Prompts settings module.
  *
@@ -786,7 +787,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
             statusEl.textContent = 'Script generated. Review and save.';
             document.getElementById('scriptAiUndo').style.display = '';
         } catch (e) {
-            statusEl.textContent = 'Error: ' + e;
+            statusEl.textContent = errLabel('Error', e);
         } finally {
             btn.disabled = false;
             btn.textContent = 'Generate';

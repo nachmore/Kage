@@ -1,5 +1,6 @@
 import { EVT } from './events.js';
 import { WINDOW } from './window-labels.js';
+import { errLabel } from './error-message.js';
 
 /**
  * Shared Script Editor component with syntax highlighting and AI generation.
@@ -183,7 +184,7 @@ export function createScriptEditor(container, opts = {}) {
                 if (aiStatus) aiStatus.textContent = 'Script generated. Review and save.';
                 if (aiUndo) aiUndo.style.display = '';
             } catch (e) {
-                if (aiStatus) aiStatus.textContent = 'Error: ' + e;
+                if (aiStatus) aiStatus.textContent = errLabel('Error', e);
             } finally {
                 if (aiBtn) {
                     aiBtn.disabled = false;

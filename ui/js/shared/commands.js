@@ -4,6 +4,7 @@
 
 import { platformKeyLabel } from './shortcuts.js';
 import { WINDOW } from './window-labels.js';
+import { errLabel } from './error-message.js';
 
 const LOCAL_COMMANDS = [
     {
@@ -68,7 +69,7 @@ const LOCAL_COMMANDS = [
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
                 );
             }
         },
@@ -105,7 +106,7 @@ const LOCAL_COMMANDS = [
                 );
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
                 );
             }
         },
@@ -135,7 +136,7 @@ const LOCAL_COMMANDS = [
                 await invoke('reveal_session_file', { sessionId });
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
                 );
             }
         },
@@ -203,7 +204,7 @@ const LOCAL_COMMANDS = [
             try {
                 info = await invoke('get_app_info');
             } catch (e) {
-                show('Error reading app info: ' + e);
+                show(errLabel('Error reading app info', e));
                 return;
             }
             try {
@@ -370,7 +371,7 @@ export function matchSlashCommands(input) {
                         }
                     } catch (e) {
                         document.dispatchEvent(
-                            new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                            new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
                         );
                     }
                     return;
@@ -391,7 +392,7 @@ export function matchSlashCommands(input) {
                     );
                 } catch (e) {
                     document.dispatchEvent(
-                        new CustomEvent('kage-show-response', { detail: 'Error: ' + e })
+                        new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
                     );
                 }
             },

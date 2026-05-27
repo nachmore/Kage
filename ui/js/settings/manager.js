@@ -3,9 +3,10 @@
  * Coordinates all settings modules and handles save/load operations.
  */
 
-import { SettingsModule } from './base.js';
+import { errLabel } from '../shared/error-message.js';
 import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { renderSchema } from '../shared/settings-renderer.js';
+import { SettingsModule } from './base.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { setSettingsManager, registerSettingsActions } from './module-registry.js';
 
@@ -313,7 +314,7 @@ export class SettingsManager {
                 }
             });
         } catch (error) {
-            this.showStatus('Failed to load settings: ' + error, 'error');
+            this.showStatus(errLabel('Failed to load settings', error), 'error');
             throw error;
         }
     }
