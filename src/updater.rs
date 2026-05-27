@@ -53,35 +53,15 @@ pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// `None` so the app still runs without update infra configured.
 pub const PUBKEY: Option<&str> = option_env!("TAURI_UPDATER_PUBKEY");
 
-/// Valid channel values. Must stay in sync with the keys in
-/// `[package.metadata.update]` and with the dropdown in
-/// `ui/js/settings/updates.js`.
-pub const VALID_CHANNELS: &[&str] = &["stable", "beta", "dev"];
-
-/// Normalise a channel string to a known value. Unknown / empty input
-/// collapses to `"stable"`. Used by `save_config` validation and by
-/// `endpoint_for_channel` so both code paths agree on what counts as
-/// valid.
-pub fn normalize_channel(channel: &str) -> &'static str {
-    let trimmed = channel.trim();
-    for &known in VALID_CHANNELS {
-        if known == trimmed {
-            return known;
-        }
-    }
-    "stable"
-}
-
-/// Resolve a channel string to its endpoint URL. Unknown values collapse
-/// to stable via [`normalize_channel`] — a stale or corrupted config
-/// shouldn't silently trap the user on a dead channel. An empty URL
-/// means the channel isn't configured at compile time; we fall through
-/// to stable in that case too.
-pub fn endpoint_for_channel(channel: &str) -> &'static str {
-    let url = match normalize_channel(channel) {
-        "beta" => ENDPOINT_BETA,
-        "dev" => ENDPOINT_DEV,
-        _ => ENDPOINT_STABLE,
+/// Resolve a channel to its endpoint URL. An empty URL means the channel
+/// isn't configured at compile time; we fall through to stable in that
+/// case so the app still finds *some* manifest rather than failing the
+/// daily check silently.
+pub fn endpoint_for_channel(channel: crate::config::Channel) -> &'static str {
+    let url = match channel {
+        crate::config::Channel::Beta => ENDPOINT_BETA,
+        crate::config::Channel::Dev => ENDPOINT_DEV,
+        crate::config::Channel::Stable => ENDPOINT_STABLE,
     };
     if url.is_empty() {
         ENDPOINT_STABLE
@@ -201,7 +181,10 @@ fn is_any_user_window_visible(app: &tauri::AppHandle) -> bool {
 /// can be on this channel" — same as the no-update case. Surfacing it
 /// as an error confused users (the previous "[object Object]" bug
 /// notwithstanding). The 404 stays in info-level logs for debugging.
-pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Option<Update>> {
+pub async fn plugin_check(
+    app: &tauri::AppHandle,
+    channel: crate::config::Channel,
+) -> Result<Option<Update>> {
     let Some(pubkey) = PUBKEY else {
         warn!("Updater: no public key configured — skipping check");
         return Ok(None);
@@ -209,13 +192,17 @@ pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Optio
 
     let endpoint = endpoint_for_channel(channel);
     if endpoint.is_empty() {
-        warn!("Updater: no endpoint configured for channel '{}'", channel);
+        warn!(
+            "Updater: no endpoint configured for channel '{}'",
+            channel.as_str()
+        );
         return Ok(None);
     }
 
     info!(
         "Checking for updates (channel={}, endpoint={})",
-        channel, endpoint
+        channel.as_str(),
+        endpoint
     );
 
     let endpoint_url = reqwest::Url::parse(endpoint)
@@ -235,7 +222,8 @@ pub async fn plugin_check(app: &tauri::AppHandle, channel: &str) -> Result<Optio
             // Treat as "no update available" — see fn doc above.
             info!(
                 "No release published on channel '{}' yet (404 at {}); reporting up-to-date",
-                channel, endpoint
+                channel.as_str(),
+                endpoint
             );
             Ok(None)
         }
@@ -502,7 +490,7 @@ fn format_release_date(published_at: &str) -> String {
 /// Anonymous API calls are bound by GitHub's 60/hr per-IP rate limit,
 /// which is plenty for the "open settings → fetch once" path. The
 /// frontend already gates this on the changelog UI being visible.
-pub fn fetch_changelog(channel: &str) -> Result<String> {
+pub fn fetch_changelog(channel: crate::config::Channel) -> Result<String> {
     let repo_url = env!("CARGO_PKG_REPOSITORY");
     let Some((owner, repo)) = parse_github_repo(repo_url) else {
         return Ok(format!(
@@ -552,8 +540,7 @@ pub fn fetch_changelog(channel: &str) -> Result<String> {
         .json()
         .context("Failed to parse GitHub releases JSON")?;
 
-    let normalized = normalize_channel(channel);
-    let include_prereleases = normalized != "stable";
+    let include_prereleases = channel != crate::config::Channel::Stable;
 
     let mut rendered = String::new();
     let mut count = 0;
@@ -646,7 +633,7 @@ pub fn fetch_changelog(channel: &str) -> Result<String> {
     if rendered.is_empty() {
         return Ok(format!(
             "No releases found for the **{}** channel yet.",
-            normalized
+            channel.as_str()
         ));
     }
 
@@ -799,12 +786,7 @@ pub fn start_update_loop(
                             .unwrap_or(true)
                     })
                 };
-                (
-                    auto,
-                    should,
-                    cfg.updates.silent_update,
-                    cfg.updates.channel.clone(),
-                )
+                (auto, should, cfg.updates.silent_update, cfg.updates.channel)
             };
 
             if !auto_check || !should_check {
@@ -815,10 +797,14 @@ pub fn start_update_loop(
 
             first_check = false;
 
-            match plugin_check(&app_handle, &channel).await {
+            match plugin_check(&app_handle, channel).await {
                 Ok(Some(update)) => {
                     let version = update.version.clone();
-                    info!("Update available: {} (channel {})", version, channel);
+                    info!(
+                        "Update available: {} (channel {})",
+                        version,
+                        channel.as_str()
+                    );
 
                     if let Ok(mut v) = updater_state.available_version.lock() {
                         *v = Some(version.clone());
@@ -874,7 +860,7 @@ pub fn start_update_loop(
                         "update_check_failed",
                         Some(serde_json::json!({
                             "reason": reason,
-                            "channel": channel,
+                            "channel": channel.as_str(),
                         })),
                     );
                 }

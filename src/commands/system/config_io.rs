@@ -41,12 +41,10 @@ pub async fn save_config(
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         *state_config = config;
-        // Normalize the update channel — unknown values collapse to
-        // "stable". This guards against a frontend bug, a stale config
-        // migration, or an end-user hand-editing config.json to a
-        // channel we don't understand.
-        state_config.updates.channel =
-            crate::updater::normalize_channel(&state_config.updates.channel).to_string();
+        // The update channel is a typed enum with `#[serde(other)]` →
+        // Stable, so an unknown wire value (stale config, hand-edit,
+        // future variant) collapses to Stable at deserialise time. No
+        // explicit normalisation needed here.
         state_config.save().map_err(|e| {
             error!("Failed to save config: {}", e);
             format!("Failed to save configuration: {}", e)
@@ -174,14 +172,16 @@ pub async fn get_shortcut_history(trigger: String) -> Result<Vec<serde_json::Val
 #[tauri::command]
 pub async fn update_tool_policy(
     tool_title: String,
-    policy: String,
-    grant_type: Option<String>,
+    policy: crate::config::PolicyKind,
+    grant_type: Option<crate::config::GrantType>,
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
-    let gt = grant_type.unwrap_or_else(|| "once".to_string());
+    let gt = grant_type.unwrap_or_default();
     info!(
         "Updating tool policy: {} -> {} (grant: {})",
-        tool_title, policy, gt
+        tool_title,
+        policy.as_str(),
+        gt.as_str()
     );
     let mut config = features.config.lock_or_recover();
     let timestamp = chrono::Utc::now().to_rfc3339();
@@ -195,7 +195,7 @@ pub async fn update_tool_policy(
         .tools
         .iter()
         .find(|t| t.title == tool_title)
-        .map(|t| (t.policy.clone(), t.grant_type.clone()));
+        .map(|t| (t.policy, t.grant_type));
 
     if let Some(tool) = config
         .tool_permissions
@@ -203,8 +203,8 @@ pub async fn update_tool_policy(
         .iter_mut()
         .find(|t| t.title == tool_title)
     {
-        tool.policy = policy.clone();
-        tool.grant_type = gt.clone();
+        tool.policy = policy;
+        tool.grant_type = gt;
         tool.granted_at = timestamp;
     }
     config
@@ -212,17 +212,19 @@ pub async fn update_tool_policy(
         .map_err(|e| format!("Failed to save config: {}", e))?;
     drop(config);
 
-    // Log the transition. "allow" is a grant; "deny" or "ask" is a
-    // revoke-style change when the prior policy was "allow".
-    let event = match policy.as_str() {
-        "allow" => crate::permission_audit::AuditEvent::Granted {
+    // Log the transition. Allow is a grant; anything else is a
+    // revoke-style change when the prior policy was Allow.
+    let event = match policy {
+        crate::config::PolicyKind::Allow => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title,
             grant_type: gt,
             session_id: None,
             args_preview: None,
         },
         _ => {
-            if let Some((prior_policy, prior_gt)) = prior.filter(|(p, _)| p == "allow") {
+            if let Some((prior_policy, prior_gt)) =
+                prior.filter(|(p, _)| *p == crate::config::PolicyKind::Allow)
+            {
                 crate::permission_audit::AuditEvent::Revoked {
                     tool: tool_title,
                     prior_policy,
@@ -252,7 +254,7 @@ pub async fn remove_tool_permission(
         .tools
         .iter()
         .find(|t| t.title == tool_title)
-        .map(|t| (t.policy.clone(), t.grant_type.clone()));
+        .map(|t| (t.policy, t.grant_type));
 
     config
         .tool_permissions
@@ -365,10 +367,8 @@ pub async fn import_config_bundle(
         let mut state_config = features.config.lock_or_recover();
         let prior = state_config.tool_permissions.terminator_mode;
         *state_config = new_config;
-        // Same channel-string normalisation as save_config so a hand-
-        // edited backup can't trap a user on a dead channel.
-        state_config.updates.channel =
-            crate::updater::normalize_channel(&state_config.updates.channel).to_string();
+        // Channel is a typed enum — unknown values from a hand-edited
+        // backup collapsed to Stable at deserialise time.
         state_config
             .save()
             .map_err(|e| format!("Failed to persist imported config: {}", e))?;

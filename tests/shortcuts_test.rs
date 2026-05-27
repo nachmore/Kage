@@ -1,11 +1,11 @@
-use kage::config::{Config, ShortcutConfig};
+use kage::config::{Config, ShortcutActionKind, ShortcutConfig};
 
 #[test]
 fn test_shortcut_config_serialization() {
     let shortcut = ShortcutConfig {
         name: "Test Shortcut".to_string(),
         shortcut: "test".to_string(),
-        action_type: "run_program".to_string(),
+        action_type: ShortcutActionKind::RunProgram,
         icon: None,
         path: Some("/usr/bin/test".to_string()),
         url: None,
@@ -31,7 +31,7 @@ fn test_shortcut_config_optional_fields() {
     let shortcut = ShortcutConfig {
         name: "Simple Shortcut".to_string(),
         shortcut: "simple".to_string(),
-        action_type: "run_program".to_string(),
+        action_type: ShortcutActionKind::RunProgram,
         icon: None,
         path: Some("/usr/bin/simple".to_string()),
         url: None,
@@ -57,7 +57,7 @@ fn test_config_with_shortcuts() {
     config.shortcuts.push(ShortcutConfig {
         name: "VSCode".to_string(),
         shortcut: "code".to_string(),
-        action_type: "run_program".to_string(),
+        action_type: ShortcutActionKind::RunProgram,
         icon: None,
         path: Some("C:\\Program Files\\VSCode\\code.exe".to_string()),
         url: None,

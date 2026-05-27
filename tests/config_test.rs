@@ -89,7 +89,7 @@ fn test_config_with_shortcuts_roundtrip() {
     config.shortcuts.push(kage::config::ShortcutConfig {
         name: "VSCode".to_string(),
         shortcut: "code".to_string(),
-        action_type: "run_program".to_string(),
+        action_type: kage::config::ShortcutActionKind::RunProgram,
         icon: None,
         path: Some("C:\\Program Files\\VSCode\\code.exe".to_string()),
         url: None,

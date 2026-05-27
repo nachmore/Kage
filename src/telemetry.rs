@@ -182,15 +182,12 @@ pub fn record_startup_events(app: &AppHandle, config: &Arc<std::sync::Mutex<Conf
     if event_to_fire == "app_upgraded" {
         let (was_via_updater, channel) = {
             let cfg = config.lock_or_recover();
-            (
-                crate::updater::was_just_updated(&cfg),
-                cfg.updates.channel.clone(),
-            )
+            (crate::updater::was_just_updated(&cfg), cfg.updates.channel)
         };
         if was_via_updater {
             let mut props = json!({
                 "to_version": new_version,
-                "channel": channel,
+                "channel": channel.as_str(),
             });
             if let Some(prev) = new_date {
                 props["from_version"] = json!(prev);

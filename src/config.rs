@@ -102,26 +102,76 @@ pub struct ToolPermissionsConfig {
     pub terminator_mode: bool,
 }
 
-/// Per-tool permission policy: "ask", "allow_once", "allow_24h", "allow_always", "deny"
+/// Per-tool permission policy. The frontend's UI exposes three states —
+/// Always Ask, Allow, Deny — combined with a separate `grant_type` for
+/// the duration of an Allow grant.
+///
+/// `#[serde(other)]` on `Ask` means an unknown wire value (e.g. a future
+/// variant or a hand-edited config) collapses to "Ask" rather than
+/// failing config load. Forward-compat without back-compat shims.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyKind {
+    Allow,
+    Deny,
+    /// Default. Listed last so `#[serde(other)]` can land on it — that
+    /// makes any unknown wire value (future variant, hand-edited
+    /// config) collapse to "ask" and re-prompt the user, which is the
+    /// safe-by-default behaviour.
+    #[default]
+    #[serde(other)]
+    Ask,
+}
+
+impl PolicyKind {
+    /// Wire-format string. Stable across releases.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::Allow => "allow",
+            Self::Deny => "deny",
+        }
+    }
+}
+
+/// Duration of an Allow grant. `Hours24` serialises as `"24h"` because
+/// that's the wire format the JS UI emits — `#[serde(rename)]` handles
+/// the digit prefix that snake_case can't reach.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GrantType {
+    /// One-shot grant — consumed after the next tool call.
+    #[default]
+    Once,
+    /// Sliding 24-hour grant from `granted_at`.
+    #[serde(rename = "24h")]
+    Hours24,
+    /// Persistent grant; re-prompts after 30 days of inactivity (see
+    /// `effective_policy`'s staleness check).
+    Always,
+}
+
+impl GrantType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Once => "once",
+            Self::Hours24 => "24h",
+            Self::Always => "always",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPolicy {
     pub title: String,
-    #[serde(default = "default_policy")]
-    pub policy: String,
+    #[serde(default)]
+    pub policy: PolicyKind,
     #[serde(default)]
     pub last_seen: String, // ISO 8601 — last time this tool was requested
     #[serde(default)]
     pub granted_at: String, // ISO 8601 — when the current grant was issued
-    #[serde(default = "default_grant_type")]
-    pub grant_type: String, // "once", "24h", "always"
-}
-
-fn default_policy() -> String {
-    "ask".to_string()
-}
-
-fn default_grant_type() -> String {
-    "once".to_string()
+    #[serde(default)]
+    pub grant_type: GrantType,
 }
 
 fn default_config_version() -> u32 {
@@ -148,44 +198,41 @@ pub struct ExtensionGrant {
 impl ToolPolicy {
     /// Check if this tool's grant is still valid.
     /// Returns the effective policy considering expiry and staleness.
-    pub fn effective_policy(&self) -> &str {
-        if self.policy == "deny" {
-            return "deny";
-        }
-        if self.policy != "allow" {
-            return "ask";
-        }
-        // Policy is "allow" — check grant conditions
-        match self.grant_type.as_str() {
-            "always" => {
-                // Check 30-day staleness. If the stored timestamp is in the
-                // future (clock skew), treat the grant as suspicious and
-                // re-prompt rather than silently honouring it forever.
-                if let Ok(last) = chrono::DateTime::parse_from_rfc3339(&self.last_seen) {
-                    let delta = chrono::Utc::now() - last.with_timezone(&chrono::Utc);
-                    if delta < chrono::Duration::zero() || delta.num_days() > 30 {
-                        return "ask";
+    pub fn effective_policy(&self) -> PolicyKind {
+        match self.policy {
+            PolicyKind::Deny => PolicyKind::Deny,
+            PolicyKind::Ask => PolicyKind::Ask,
+            PolicyKind::Allow => match self.grant_type {
+                GrantType::Always => {
+                    // Check 30-day staleness. If the stored timestamp is in the
+                    // future (clock skew), treat the grant as suspicious and
+                    // re-prompt rather than silently honouring it forever.
+                    if let Ok(last) = chrono::DateTime::parse_from_rfc3339(&self.last_seen) {
+                        let delta = chrono::Utc::now() - last.with_timezone(&chrono::Utc);
+                        if delta < chrono::Duration::zero() || delta.num_days() > 30 {
+                            return PolicyKind::Ask;
+                        }
                     }
+                    PolicyKind::Allow
                 }
-                "allow"
-            }
-            "24h" => {
-                // Check if granted_at is within 24 hours AND not in the future.
-                // A negative delta would previously satisfy `hours < 24` and
-                // keep the permission indefinitely-granted whenever the clock
-                // was ever set forward and then corrected back.
-                if let Ok(granted) = chrono::DateTime::parse_from_rfc3339(&self.granted_at) {
-                    let delta = chrono::Utc::now() - granted.with_timezone(&chrono::Utc);
-                    if delta >= chrono::Duration::zero() && delta.num_hours() < 24 {
-                        return "allow";
+                GrantType::Hours24 => {
+                    // Check if granted_at is within 24 hours AND not in the future.
+                    // A negative delta would previously satisfy `hours < 24` and
+                    // keep the permission indefinitely-granted whenever the clock
+                    // was ever set forward and then corrected back.
+                    if let Ok(granted) = chrono::DateTime::parse_from_rfc3339(&self.granted_at) {
+                        let delta = chrono::Utc::now() - granted.with_timezone(&chrono::Utc);
+                        if delta >= chrono::Duration::zero() && delta.num_hours() < 24 {
+                            return PolicyKind::Allow;
+                        }
                     }
+                    PolicyKind::Ask // expired or future-dated
                 }
-                "ask" // expired or future-dated
-            }
-            _ => {
-                // "once" — already consumed, back to ask
-                "ask"
-            }
+                GrantType::Once => {
+                    // "once" — already consumed, back to ask.
+                    PolicyKind::Ask
+                }
+            },
         }
     }
 }
@@ -198,7 +245,44 @@ pub struct StoreSource {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Update channel. Resolved to a concrete endpoint URL by
+/// `updater::endpoint_for_channel`. The `#[serde(other)]` fallback on
+/// `Stable` means a stale / corrupted config or future-version variant
+/// can't silently trap the user on a dead channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Channel {
+    Beta,
+    Dev,
+    /// Default. Listed last so `#[serde(other)]` lands here — unknown
+    /// wire values fall back to Stable rather than failing config load.
+    #[serde(other)]
+    Stable,
+}
+
+impl Default for Channel {
+    fn default() -> Self {
+        default_update_channel()
+    }
+}
+
+impl Channel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Beta => "beta",
+            Self::Dev => "dev",
+        }
+    }
+
+    /// Every defined channel, in display order. Surfaced to the
+    /// settings UI so the dropdown is built from a single source.
+    pub fn all() -> &'static [Channel] {
+        &[Channel::Stable, Channel::Beta, Channel::Dev]
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateConfig {
     /// Automatically check for updates once per day
     #[serde(default)]
@@ -212,38 +296,22 @@ pub struct UpdateConfig {
     /// Version that was last installed via auto-update (to detect fresh updates)
     #[serde(default)]
     pub last_updated_version: Option<String>,
-    /// Which release channel this install tracks. One of `stable`, `beta`,
-    /// `dev`. Resolved to a concrete endpoint URL by
-    /// `updater::endpoint_for_channel`. Unknown values fall back to
-    /// stable so a stale / corrupted config can't silently trap the
-    /// user on a dead channel.
-    #[serde(default = "default_update_channel")]
-    pub channel: String,
+    /// Which release channel this install tracks.
+    #[serde(default)]
+    pub channel: Channel,
 }
 
-fn default_update_channel() -> String {
+fn default_update_channel() -> Channel {
     // Dev builds embed "+dev." in the version (e.g. 0.9.202511171430+dev.abc1234),
     // beta builds embed "+beta.". Default new installs to the channel that
     // matches their build so the updater hits an endpoint that actually exists.
     let version = env!("CARGO_PKG_VERSION");
     if version.contains("+dev.") {
-        "dev".to_string()
+        Channel::Dev
     } else if version.contains("+beta.") {
-        "beta".to_string()
+        Channel::Beta
     } else {
-        "stable".to_string()
-    }
-}
-
-impl Default for UpdateConfig {
-    fn default() -> Self {
-        Self {
-            auto_check: false,
-            silent_update: false,
-            last_check_time: None,
-            last_updated_version: None,
-            channel: default_update_channel(),
-        }
+        Channel::Stable
     }
 }
 
@@ -702,11 +770,30 @@ fn default_low_battery_multiplier() -> f32 {
     4.0
 }
 
+/// What a macro step does. Exec'd by `execute_macro` (which works on
+/// raw JSON for legacy reasons) and surfaced in the settings UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MacroStepKind {
+    /// Run the prompt template through the agent, replacing `{input}`
+    /// with the previous step's output. The default for new steps.
+    #[default]
+    AiPrompt,
+    FindReplace,
+    Transform,
+    Condition,
+    Script,
+    /// Forward-compat: a future variant in the config maps to this so
+    /// load doesn't fail. The settings UI shows a warning chip and the
+    /// runtime treats unknown steps as no-ops.
+    #[serde(other)]
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MacroStep {
-    /// Step type: "ai_prompt", "find_replace", "transform", "condition", "script"
-    #[serde(default = "default_step_type")]
-    pub step_type: String,
+    #[serde(default)]
+    pub step_type: MacroStepKind,
     /// Prompt template for ai_prompt — {input} is replaced with the previous step's output
     #[serde(default)]
     pub prompt: String,
@@ -727,10 +814,6 @@ pub struct MacroStep {
     pub script: String,
 }
 
-fn default_step_type() -> String {
-    "ai_prompt".to_string()
-}
-
 fn default_macro_icon() -> String {
     "🔄".to_string()
 }
@@ -738,12 +821,28 @@ fn default_macro_output() -> String {
     "clipboard".to_string()
 }
 
+/// What kind of action a user-defined shortcut performs.
+/// Surfaced in Settings → Shortcuts; the frontend dispatches on this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ShortcutActionKind {
+    #[default]
+    RunProgram,
+    OpenUrl,
+    Prompt,
+    Text,
+    Script,
+    /// Forward-compat fallback for a future variant.
+    #[serde(other)]
+    Unknown,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShortcutConfig {
     pub name: String,
     pub shortcut: String,
-    #[serde(default = "default_action_type")]
-    pub action_type: String, // "run_program", "open_url", "prompt", "text", "script"
+    #[serde(default)]
+    pub action_type: ShortcutActionKind,
     #[serde(default)]
     pub icon: Option<String>, // Emoji or base64 data URI (png/jpg)
     #[serde(default)]
@@ -760,10 +859,6 @@ pub struct ShortcutConfig {
     pub script: Option<String>, // For script action type — JS function body
     #[serde(default)]
     pub script_action: Option<String>, // What to do with script result: "run_program", "open_url", "prompt", "text"
-}
-
-fn default_action_type() -> String {
-    "run_program".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1166,5 +1261,129 @@ impl Config {
     pub fn get_auto_steering_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir().context("Failed to get config directory")?;
         Ok(config_dir.join("kage").join("auto-steering.md"))
+    }
+}
+
+#[cfg(test)]
+mod enum_tests {
+    //! Wire-format guarantees for the typed config enums. The values
+    //! here are the contract with both saved configs on disk and the
+    //! frontend — drift on either side silently breaks tool-permission
+    //! display, update channel routing, etc.
+
+    use super::*;
+
+    #[test]
+    fn policy_kind_serialises_as_snake_case() {
+        // Wire format: "ask" | "allow" | "deny". Anything else and the
+        // settings UI's `tool.policy === 'allow'` checks miss.
+        assert_eq!(serde_json::to_string(&PolicyKind::Ask).unwrap(), "\"ask\"");
+        assert_eq!(
+            serde_json::to_string(&PolicyKind::Allow).unwrap(),
+            "\"allow\""
+        );
+        assert_eq!(
+            serde_json::to_string(&PolicyKind::Deny).unwrap(),
+            "\"deny\""
+        );
+    }
+
+    #[test]
+    fn policy_kind_unknown_falls_back_to_ask() {
+        // Forward-compat: a value the current build doesn't recognise
+        // (a future variant, hand-edited config) collapses to Ask. That's
+        // the safe default — we re-prompt the user rather than silently
+        // honouring something we don't understand.
+        let p: PolicyKind = serde_json::from_str("\"some_future_variant\"").unwrap();
+        assert_eq!(p, PolicyKind::Ask);
+    }
+
+    #[test]
+    fn grant_type_serialises_24h_correctly() {
+        // The "24h" wire value can't come from snake_case alone — the
+        // digit prefix needs an explicit serde rename. If this regresses,
+        // settings → "Allow 24h" silently shows the wrong selection.
+        assert_eq!(serde_json::to_string(&GrantType::Once).unwrap(), "\"once\"");
+        assert_eq!(
+            serde_json::to_string(&GrantType::Hours24).unwrap(),
+            "\"24h\""
+        );
+        assert_eq!(
+            serde_json::to_string(&GrantType::Always).unwrap(),
+            "\"always\""
+        );
+    }
+
+    #[test]
+    fn grant_type_round_trips() {
+        for &gt in &[GrantType::Once, GrantType::Hours24, GrantType::Always] {
+            let s = serde_json::to_string(&gt).unwrap();
+            let back: GrantType = serde_json::from_str(&s).unwrap();
+            assert_eq!(back, gt);
+        }
+    }
+
+    #[test]
+    fn channel_unknown_falls_back_to_stable() {
+        // A user editing config.json or upgrading from a build with a
+        // since-removed channel must not get stuck. Matches the old
+        // `normalize_channel` behaviour.
+        let c: Channel = serde_json::from_str("\"experimental\"").unwrap();
+        assert_eq!(c, Channel::Stable);
+    }
+
+    #[test]
+    fn channel_known_values_round_trip() {
+        for &c in &[Channel::Stable, Channel::Beta, Channel::Dev] {
+            let s = serde_json::to_string(&c).unwrap();
+            let back: Channel = serde_json::from_str(&s).unwrap();
+            assert_eq!(back, c);
+        }
+    }
+
+    #[test]
+    fn channel_as_str_matches_wire_format() {
+        // The integrations command exposes Channel::as_str() to JS via
+        // get_app_info's `update_channels` array. The dropdown's value
+        // attribute must equal the JSON serialisation.
+        for &c in Channel::all() {
+            let json = serde_json::to_string(&c).unwrap();
+            // strip surrounding quotes from JSON string
+            let stripped = json.trim_matches('"');
+            assert_eq!(stripped, c.as_str(), "{:?}", c);
+        }
+    }
+
+    #[test]
+    fn macro_step_kind_unknown_falls_back_to_unknown() {
+        // Future variants in saved configs must not block load. The
+        // `Unknown` variant is the dedicated catch-all so the settings
+        // UI can show a "this step type isn't supported in this build"
+        // chip rather than silently dropping the step.
+        let k: MacroStepKind = serde_json::from_str("\"future_step\"").unwrap();
+        assert_eq!(k, MacroStepKind::Unknown);
+        // Known variants still parse:
+        let k: MacroStepKind = serde_json::from_str("\"ai_prompt\"").unwrap();
+        assert_eq!(k, MacroStepKind::AiPrompt);
+        let k: MacroStepKind = serde_json::from_str("\"find_replace\"").unwrap();
+        assert_eq!(k, MacroStepKind::FindReplace);
+    }
+
+    #[test]
+    fn shortcut_action_kind_unknown_falls_back_to_unknown() {
+        let k: ShortcutActionKind = serde_json::from_str("\"future_action\"").unwrap();
+        assert_eq!(k, ShortcutActionKind::Unknown);
+        let k: ShortcutActionKind = serde_json::from_str("\"run_program\"").unwrap();
+        assert_eq!(k, ShortcutActionKind::RunProgram);
+    }
+
+    #[test]
+    fn tool_policy_loads_with_defaults_for_missing_fields() {
+        // Old configs (or partial JSON from a buggy save) must round-trip:
+        // missing `policy` / `grant_type` get the type's Default impl.
+        let json = r#"{"title":"shell"}"#;
+        let p: ToolPolicy = serde_json::from_str(json).unwrap();
+        assert_eq!(p.policy, PolicyKind::Ask);
+        assert_eq!(p.grant_type, GrantType::Once);
     }
 }

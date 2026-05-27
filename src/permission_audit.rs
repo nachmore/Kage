@@ -24,10 +24,10 @@ use std::sync::{Mutex, OnceLock};
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum AuditEvent {
     /// User approved a tool request. `grant_type` is the scope they
-    /// picked at the prompt ("once", "24h", "always").
+    /// picked at the prompt.
     Granted {
         tool: String,
-        grant_type: String,
+        grant_type: crate::config::GrantType,
         /// Optional: the session id the request belonged to, if known.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session_id: Option<String>,
@@ -49,14 +49,14 @@ pub enum AuditEvent {
     Revoked {
         tool: String,
         /// What the policy was before the revoke happened.
-        prior_policy: String,
+        prior_policy: crate::config::PolicyKind,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        prior_grant_type: Option<String>,
+        prior_grant_type: Option<crate::config::GrantType>,
     },
     /// A grant expired on its own (24h or 30-day staleness).
     Expired {
         tool: String,
-        prior_grant_type: String,
+        prior_grant_type: crate::config::GrantType,
     },
     /// User turned terminator mode on or off. We track this because
     /// during terminator mode every request is auto-approved and
@@ -72,19 +72,19 @@ impl AuditEvent {
             AuditEvent::Granted {
                 tool, grant_type, ..
             } => {
-                format!("Granted '{}' ({})", tool, grant_type)
+                format!("Granted '{}' ({})", tool, grant_type.as_str())
             }
             AuditEvent::Denied { tool, .. } => format!("Denied '{}'", tool),
             AuditEvent::Revoked {
                 tool, prior_policy, ..
             } => {
-                format!("Revoked '{}' (was {})", tool, prior_policy)
+                format!("Revoked '{}' (was {})", tool, prior_policy.as_str())
             }
             AuditEvent::Expired {
                 tool,
                 prior_grant_type,
             } => {
-                format!("Expired '{}' ({})", tool, prior_grant_type)
+                format!("Expired '{}' ({})", tool, prior_grant_type.as_str())
             }
             AuditEvent::TerminatorModeChanged { enabled } => {
                 if *enabled {
@@ -461,7 +461,7 @@ mod tests {
             "2026-04-28T12:00:00.000Z",
             AuditEvent::Granted {
                 tool: "shell_exec".to_string(),
-                grant_type: "24h".to_string(),
+                grant_type: crate::config::GrantType::Hours24,
                 session_id: Some("s-1".to_string()),
                 args_preview: Some("git status".to_string()),
             },
@@ -483,7 +483,7 @@ mod tests {
                     format!("2026-04-28T12:00:0{}.000Z", i),
                     AuditEvent::Granted {
                         tool: format!("tool{}", i),
-                        grant_type: "once".to_string(),
+                        grant_type: crate::config::GrantType::Once,
                         session_id: None,
                         args_preview: None,
                     },
@@ -536,7 +536,7 @@ mod tests {
             "2026-04-28T12:00:01.000Z",
             AuditEvent::Expired {
                 tool: "x".into(),
-                prior_grant_type: "always".into(),
+                prior_grant_type: crate::config::GrantType::Always,
             },
         ))
         .unwrap();
@@ -566,8 +566,8 @@ mod tests {
             &path,
             &AuditEntry::now(AuditEvent::Revoked {
                 tool: "x".into(),
-                prior_policy: "allow".into(),
-                prior_grant_type: Some("24h".into()),
+                prior_policy: crate::config::PolicyKind::Allow,
+                prior_grant_type: Some(crate::config::GrantType::Hours24),
             }),
         );
         assert_eq!(read_recent(&path, 10).len(), 1);
@@ -589,7 +589,7 @@ mod tests {
         let events = [
             AuditEvent::Granted {
                 tool: "a".into(),
-                grant_type: "once".into(),
+                grant_type: crate::config::GrantType::Once,
                 session_id: None,
                 args_preview: None,
             },
@@ -599,12 +599,12 @@ mod tests {
             },
             AuditEvent::Revoked {
                 tool: "c".into(),
-                prior_policy: "allow".into(),
-                prior_grant_type: Some("always".into()),
+                prior_policy: crate::config::PolicyKind::Allow,
+                prior_grant_type: Some(crate::config::GrantType::Always),
             },
             AuditEvent::Expired {
                 tool: "d".into(),
-                prior_grant_type: "24h".into(),
+                prior_grant_type: crate::config::GrantType::Hours24,
             },
             AuditEvent::TerminatorModeChanged { enabled: true },
         ];
@@ -627,7 +627,7 @@ mod tests {
         assert_eq!(
             AuditEvent::Granted {
                 tool: "shell_exec".into(),
-                grant_type: "always".into(),
+                grant_type: crate::config::GrantType::Always,
                 session_id: None,
                 args_preview: None
             }
@@ -686,7 +686,7 @@ mod tests {
                     ),
                     AuditEvent::Granted {
                         tool: format!("tool_{:04}_{}", i, "x".repeat(i % 50)),
-                        grant_type: "once".into(),
+                        grant_type: crate::config::GrantType::Once,
                         session_id: None,
                         args_preview: None,
                     },
@@ -856,7 +856,7 @@ mod tests {
             "2026-04-28T12:00:00.000Z",
             AuditEvent::Granted {
                 tool: "x".into(),
-                grant_type: "once".into(),
+                grant_type: crate::config::GrantType::Once,
                 session_id: None,
                 args_preview: None,
             },

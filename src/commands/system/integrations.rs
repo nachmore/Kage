@@ -33,9 +33,11 @@ pub async fn get_app_info() -> Result<serde_json::Value, AppError> {
         },
         // Update channel allow-list — surfaced so the Settings UI can
         // render the dropdown from a single source of truth (Rust)
-        // rather than maintaining a parallel hardcoded list. See
-        // updater::VALID_CHANNELS.
-        "update_channels": crate::updater::VALID_CHANNELS,
+        // rather than maintaining a parallel hardcoded list.
+        "update_channels": crate::config::Channel::all()
+            .iter()
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>(),
     }))
 }
 

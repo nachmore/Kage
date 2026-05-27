@@ -323,10 +323,10 @@ fn handle_permission_notification(
             .tools
             .push(crate::config::ToolPolicy {
                 title: tool_title.to_string(),
-                policy: "ask".to_string(),
+                policy: crate::config::PolicyKind::Ask,
                 last_seen: timestamp,
                 granted_at: String::new(),
-                grant_type: "once".to_string(),
+                grant_type: crate::config::GrantType::Once,
             });
         // New tool discovered — save immediately
         if let Err(e) = config_guard.save() {
@@ -338,15 +338,15 @@ fn handle_permission_notification(
     let policy = if config_guard.tool_permissions.terminator_mode
         || config_guard.tool_permissions.trust_all
     {
-        "allow".to_string()
+        crate::config::PolicyKind::Allow
     } else {
         config_guard
             .tool_permissions
             .tools
             .iter()
             .find(|t| t.title == tool_title)
-            .map(|t| t.effective_policy().to_string())
-            .unwrap_or_else(|| "ask".to_string())
+            .map(|t| t.effective_policy())
+            .unwrap_or(crate::config::PolicyKind::Ask)
     };
     drop(config_guard);
 
@@ -358,10 +358,10 @@ fn handle_permission_notification(
         }
     };
 
-    match policy.as_str() {
-        "allow" => send_response("allow_once"),
-        "deny" => send_response("reject_once"),
-        _ => {
+    match policy {
+        crate::config::PolicyKind::Allow => send_response("allow_once"),
+        crate::config::PolicyKind::Deny => send_response("reject_once"),
+        crate::config::PolicyKind::Ask => {
             if let Ok(mut pending) = pending_perm.lock() {
                 *pending = Some(crate::state::PendingPermission {
                     request_id: notification
@@ -609,7 +609,7 @@ pub async fn send_permission_response(
             .iter_mut()
             .find(|t| t.title == tool_title)
         {
-            tool.policy = "allow".to_string();
+            tool.policy = crate::config::PolicyKind::Allow;
         }
         config
             .save()
@@ -624,19 +624,19 @@ pub async fn send_permission_response(
     let audit_event = match option_id.as_str() {
         "allow_once" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
-            grant_type: "once".to_string(),
+            grant_type: crate::config::GrantType::Once,
             session_id,
             args_preview: None,
         },
         "allow_24h" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
-            grant_type: "24h".to_string(),
+            grant_type: crate::config::GrantType::Hours24,
             session_id,
             args_preview: None,
         },
         "allow_always" => crate::permission_audit::AuditEvent::Granted {
             tool: tool_title.clone(),
-            grant_type: "always".to_string(),
+            grant_type: crate::config::GrantType::Always,
             session_id,
             args_preview: None,
         },
@@ -1321,14 +1321,14 @@ pub async fn check_extension_tool_permission(
                 .tools
                 .push(crate::config::ToolPolicy {
                     title: tool_title,
-                    policy: "allow".to_string(),
+                    policy: crate::config::PolicyKind::Allow,
                     last_seen: timestamp.clone(),
                     granted_at: timestamp.clone(),
-                    grant_type: "always".to_string(),
+                    grant_type: crate::config::GrantType::Always,
                 });
             let _ = config.save();
         }
-        return Ok("allow".to_string());
+        return Ok(crate::config::PolicyKind::Allow.as_str().to_string());
     }
 
     let timestamp = chrono::Utc::now().to_rfc3339();
@@ -1340,11 +1340,11 @@ pub async fn check_extension_tool_permission(
 
     if let Some(tool) = existing {
         tool.last_seen = timestamp;
-        let policy = tool.policy.clone();
+        let policy = tool.policy;
         if let Err(e) = config.save() {
             warn!("Failed to save config (tool policy lookup): {}", e);
         }
-        Ok(policy)
+        Ok(policy.as_str().to_string())
     } else {
         // First time seeing this tool — register with "ask" policy
         config
@@ -1352,15 +1352,15 @@ pub async fn check_extension_tool_permission(
             .tools
             .push(crate::config::ToolPolicy {
                 title: tool_title,
-                policy: "ask".to_string(),
+                policy: crate::config::PolicyKind::Ask,
                 last_seen: timestamp,
                 granted_at: String::new(),
-                grant_type: "once".to_string(),
+                grant_type: crate::config::GrantType::Once,
             });
         if let Err(e) = config.save() {
             warn!("Failed to save config (new tool registration): {}", e);
         }
-        Ok("ask".to_string())
+        Ok(crate::config::PolicyKind::Ask.as_str().to_string())
     }
 }
 

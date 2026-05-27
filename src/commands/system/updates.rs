@@ -15,12 +15,9 @@ pub async fn check_for_update(
     app: tauri::AppHandle,
     features: State<'_, FeatureServices>,
 ) -> Result<serde_json::Value, AppError> {
-    let channel = {
-        let cfg = features.config.lock_or_recover();
-        cfg.updates.channel.clone()
-    };
+    let channel = features.config.lock_or_recover().updates.channel;
 
-    let result = crate::updater::plugin_check(&app, &channel)
+    let result = crate::updater::plugin_check(&app, channel)
         .await
         .map_err(|e| format!("Check failed: {}", e))?;
 
@@ -58,12 +55,9 @@ pub async fn fetch_changelog(features: State<'_, FeatureServices>) -> Result<Str
     // releases, beta/dev see prereleases too. Read here rather than
     // baking it into the updater module so the command stays the
     // single channel-aware caller.
-    let channel = {
-        let cfg = features.config.lock_or_recover();
-        cfg.updates.channel.clone()
-    };
+    let channel = features.config.lock_or_recover().updates.channel;
     Ok(
-        tauri::async_runtime::spawn_blocking(move || crate::updater::fetch_changelog(&channel))
+        tauri::async_runtime::spawn_blocking(move || crate::updater::fetch_changelog(channel))
             .await
             .map_err(|e| format!("Task error: {}", e))?
             .map_err(|e| format!("Fetch failed: {}", e))?,
@@ -74,13 +68,10 @@ pub async fn fetch_changelog(features: State<'_, FeatureServices>) -> Result<Str
 pub async fn get_update_urls(
     features: State<'_, FeatureServices>,
 ) -> Result<serde_json::Value, AppError> {
-    let channel = {
-        let cfg = features.config.lock_or_recover();
-        cfg.updates.channel.clone()
-    };
+    let channel = features.config.lock_or_recover().updates.channel;
     Ok(serde_json::json!({
-        "channel": channel,
-        "endpoint": crate::updater::endpoint_for_channel(&channel),
+        "channel": channel.as_str(),
+        "endpoint": crate::updater::endpoint_for_channel(channel),
         "changelog_url": crate::updater::CHANGELOG_URL,
     }))
 }
@@ -102,11 +93,8 @@ pub async fn download_and_install_update(
     let update = if let Some(u) = update {
         u
     } else {
-        let channel = {
-            let cfg = features.config.lock_or_recover();
-            cfg.updates.channel.clone()
-        };
-        crate::updater::plugin_check(&app, &channel)
+        let channel = features.config.lock_or_recover().updates.channel;
+        crate::updater::plugin_check(&app, channel)
             .await
             .map_err(|e| format!("Check failed: {}", e))?
             .ok_or_else(|| AppError::from("No update available"))?
