@@ -6,6 +6,26 @@ import { SettingsModule } from './base.js';
 export class NotificationsSettingsModule extends SettingsModule {
     constructor() {
         super('notifications', 'Notifications', '🔔');
+        this.bindFields([
+            {
+                id: 'notificationsEnabled',
+                path: 'notifications.enabled',
+                kind: 'checkbox',
+                default: false,
+            },
+            {
+                id: 'notificationSound',
+                path: 'notifications.sound',
+                kind: 'value',
+                default: 'default',
+            },
+            {
+                id: 'notificationDuration',
+                path: 'notifications.duration',
+                kind: 'int',
+                default: 5,
+            },
+        ]);
     }
 
     render() {
@@ -40,23 +60,11 @@ export class NotificationsSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        if (config.notifications) {
-            const enabled = document.getElementById('notificationsEnabled');
-            const sound = document.getElementById('notificationSound');
-            const duration = document.getElementById('notificationDuration');
-
-            if (enabled) enabled.checked = config.notifications.enabled;
-            if (sound) sound.value = config.notifications.sound;
-            if (duration) duration.value = config.notifications.duration;
-        }
+        this.loadFields(config);
     }
 
     save(config) {
-        config.notifications = {
-            enabled: document.getElementById('notificationsEnabled').checked,
-            sound: document.getElementById('notificationSound').value,
-            duration: parseInt(document.getElementById('notificationDuration').value, 10),
-        };
+        this.saveFields(config);
     }
 
     validate() {

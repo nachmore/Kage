@@ -8,6 +8,26 @@ import { getSystemIcon } from './system.js';
 export class IntegrationSettingsModule extends SettingsModule {
     constructor() {
         super('integration', 'System Integration', getSystemIcon());
+        this.bindFields([
+            {
+                id: 'captureSelection',
+                path: 'system.capture_selection',
+                kind: 'checkbox',
+                default: true,
+            },
+            {
+                id: 'showNotifications',
+                path: 'system.show_notifications',
+                kind: 'checkbox',
+                default: true,
+            },
+            {
+                id: 'screenContext',
+                path: 'system.screen_context',
+                kind: 'checkbox',
+                default: true,
+            },
+        ]);
     }
 
     render() {
@@ -121,8 +141,10 @@ export class IntegrationSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const captureSel = document.getElementById('captureSelection');
-        if (captureSel) captureSel.checked = config.system?.capture_selection !== false;
+        this.loadFields(config);
+        // Blocklist is a list serialised through a textarea (one per line);
+        // can't go through the bind DSL (kind: 'value' would render the
+        // array as "[object Array]"). Hand-coded.
         const blocklist = document.getElementById('captureSelectionBlocklist');
         if (blocklist) {
             const list = Array.isArray(config.system?.capture_selection_blocklist)
@@ -130,23 +152,15 @@ export class IntegrationSettingsModule extends SettingsModule {
                 : [];
             blocklist.value = list.join('\n');
         }
-        const showNotif = document.getElementById('showNotifications');
-        if (showNotif) showNotif.checked = config.system?.show_notifications !== false;
-        const screenCtx = document.getElementById('screenContext');
-        if (screenCtx) screenCtx.checked = config.system?.screen_context !== false;
     }
 
     save(config) {
+        this.saveFields(config);
         config.system = config.system || {};
-        config.system.capture_selection =
-            document.getElementById('captureSelection')?.checked ?? true;
         const blocklistText = document.getElementById('captureSelectionBlocklist')?.value ?? '';
         config.system.capture_selection_blocklist = blocklistText
             .split('\n')
             .map((s) => s.trim())
             .filter((s) => s.length > 0);
-        config.system.show_notifications =
-            document.getElementById('showNotifications')?.checked ?? true;
-        config.system.screen_context = document.getElementById('screenContext')?.checked ?? true;
     }
 }

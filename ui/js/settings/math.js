@@ -6,6 +6,17 @@ import { SettingsModule } from './base.js';
 export class MathSettingsModule extends SettingsModule {
     constructor() {
         super('math', 'Math', '🧮');
+        this.bindFields([
+            { id: 'mathEnabled', path: 'math.enabled', kind: 'checkbox', default: true },
+            { id: 'mathPrecision', path: 'math.precision', kind: 'int', default: 0 },
+            { id: 'mathAutoCopy', path: 'math.auto_copy', kind: 'checkbox', default: true },
+            {
+                id: 'mathThousandsSeparator',
+                path: 'math.thousands_separator',
+                kind: 'checkbox',
+                default: false,
+            },
+        ]);
     }
 
     render() {
@@ -43,26 +54,11 @@ export class MathSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const math = config.math || {};
-        const enabled = document.getElementById('mathEnabled');
-        const precision = document.getElementById('mathPrecision');
-        const autoCopy = document.getElementById('mathAutoCopy');
-        const thousands = document.getElementById('mathThousandsSeparator');
-
-        if (enabled) enabled.checked = math.enabled !== false; // default true
-        if (precision) precision.value = math.precision ?? 0;
-        if (autoCopy) autoCopy.checked = math.auto_copy !== false; // default true
-        if (thousands) thousands.checked = math.thousands_separator === true;
+        this.loadFields(config);
     }
 
     save(config) {
-        config.math = {
-            enabled: document.getElementById('mathEnabled')?.checked ?? true,
-            precision: parseInt(document.getElementById('mathPrecision')?.value ?? '0', 10),
-            auto_copy: document.getElementById('mathAutoCopy')?.checked ?? true,
-            thousands_separator:
-                document.getElementById('mathThousandsSeparator')?.checked ?? false,
-        };
+        this.saveFields(config);
     }
 
     validate() {

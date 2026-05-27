@@ -5,6 +5,20 @@ import { SettingsModule } from './base.js';
 export class ColorPickerSettingsModule extends SettingsModule {
     constructor() {
         super('colorpicker', 'Color Picker', '🎨');
+        this.bindFields([
+            {
+                id: 'colorPickerEnabled',
+                path: 'color_picker.enabled',
+                kind: 'checkbox',
+                default: true,
+            },
+            {
+                id: 'colorCopyFormat',
+                path: 'color_picker.copy_format',
+                kind: 'value',
+                default: 'all',
+            },
+        ]);
     }
 
     render() {
@@ -36,18 +50,10 @@ export class ColorPickerSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const cp = config.color_picker || { enabled: true, copy_format: 'all' };
-        const enabled = document.getElementById('colorPickerEnabled');
-        const format = document.getElementById('colorCopyFormat');
-        if (enabled) enabled.checked = cp.enabled !== false;
-        if (format) format.value = cp.copy_format || 'all';
+        this.loadFields(config);
     }
 
     save(config) {
-        config.color_picker = config.color_picker || {};
-        config.color_picker.enabled =
-            document.getElementById('colorPickerEnabled')?.checked ?? true;
-        config.color_picker.copy_format =
-            document.getElementById('colorCopyFormat')?.value || 'all';
+        this.saveFields(config);
     }
 }

@@ -5,6 +5,19 @@ import { SettingsModule } from './base.js';
 export class DevToolsSettingsModule extends SettingsModule {
     constructor() {
         super('devtools', 'Developer Tools', '🛠️');
+        this.bindFields([
+            { id: 'devToolsEnabled', path: 'dev_tools.enabled', kind: 'checkbox', default: true },
+            { id: 'devToolUuid', path: 'dev_tools.uuid', kind: 'checkbox', default: true },
+            { id: 'devToolBase64', path: 'dev_tools.base64', kind: 'checkbox', default: true },
+            { id: 'devToolHash', path: 'dev_tools.hash', kind: 'checkbox', default: true },
+            { id: 'devToolEpoch', path: 'dev_tools.epoch', kind: 'checkbox', default: true },
+            {
+                id: 'devToolJson',
+                path: 'dev_tools.json_format',
+                kind: 'checkbox',
+                default: true,
+            },
+        ]);
     }
 
     render() {
@@ -63,27 +76,10 @@ export class DevToolsSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const dt = config.dev_tools || {};
-        const setChecked = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.checked = val !== false;
-        };
-        setChecked('devToolsEnabled', dt.enabled);
-        setChecked('devToolUuid', dt.uuid);
-        setChecked('devToolBase64', dt.base64);
-        setChecked('devToolHash', dt.hash);
-        setChecked('devToolEpoch', dt.epoch);
-        setChecked('devToolJson', dt.json_format);
+        this.loadFields(config);
     }
 
     save(config) {
-        config.dev_tools = {
-            enabled: document.getElementById('devToolsEnabled')?.checked ?? true,
-            uuid: document.getElementById('devToolUuid')?.checked ?? true,
-            base64: document.getElementById('devToolBase64')?.checked ?? true,
-            hash: document.getElementById('devToolHash')?.checked ?? true,
-            epoch: document.getElementById('devToolEpoch')?.checked ?? true,
-            json_format: document.getElementById('devToolJson')?.checked ?? true,
-        };
+        this.saveFields(config);
     }
 }

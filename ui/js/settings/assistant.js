@@ -32,6 +32,35 @@ export class AssistantSettingsModule extends SettingsModule {
         // Set of action handlers we register on first initialize().
         // Idempotent so a re-render doesn't double-register.
         this._actionsRegistered = false;
+        // Mechanical fields handled by the bind DSL. Custom logic
+        // (context-rules snapshot, custom-actions list, post-load
+        // view reset) stays in load()/save().
+        this.bindFields([
+            {
+                id: 'autoSteeringEnabled',
+                path: 'acp.agent.auto_steering_enabled',
+                kind: 'checkbox',
+                default: false,
+            },
+            {
+                id: 'quickActionsEnabled',
+                path: 'quick_actions.enabled',
+                kind: 'checkbox',
+                default: true,
+            },
+            {
+                id: 'showResponseActions',
+                path: 'ui.show_response_actions',
+                kind: 'checkbox',
+                default: true,
+            },
+            {
+                id: 'translateLanguage',
+                path: 'quick_actions.translate_language',
+                kind: 'value',
+                default: '',
+            },
+        ]);
     }
 
     render() {
@@ -150,9 +179,7 @@ export class AssistantSettingsModule extends SettingsModule {
     }
 
     load(config) {
-        const agentCfg = config.acp?.agent || {};
-        const autoSteering = document.getElementById('autoSteeringEnabled');
-        if (autoSteering) autoSteering.checked = agentCfg.auto_steering_enabled || false;
+        this.loadFields(config);
 
         // App Modes — keep a snapshot for the editor + populate the
         // summary chip on the main view ("3 active rules" / "None").
@@ -163,15 +190,8 @@ export class AssistantSettingsModule extends SettingsModule {
             : [];
         this._renderAppModesSummary();
 
-        // Quick actions
-        const qaEnabled = document.getElementById('quickActionsEnabled');
-        const qa = config.quick_actions || { enabled: true, custom_actions: [] };
-        if (qaEnabled) qaEnabled.checked = qa.enabled !== false;
-        const showResponseActions = document.getElementById('showResponseActions');
-        if (showResponseActions)
-            showResponseActions.checked = config.ui?.show_response_actions !== false;
-        const translateLang = document.getElementById('translateLanguage');
-        if (translateLang) translateLang.value = qa.translate_language || '';
+        // Custom actions — list shape, can't go through bindFields.
+        const qa = config.quick_actions || {};
         this._renderCustomActions(qa.custom_actions || []);
 
         // Switching to this section while either editor sub-view is open
@@ -181,26 +201,23 @@ export class AssistantSettingsModule extends SettingsModule {
     }
 
     save(config) {
-        if (!config.acp) config.acp = {};
-        if (!config.acp.agent) config.acp.agent = {};
-        config.acp.agent.auto_steering_enabled =
-            document.getElementById('autoSteeringEnabled').checked;
+        this.saveFields(config);
         // user_steering_path is owned by write_steering_lines now — first
         // non-empty save pins the resolved default into config. We never
         // overwrite it from the UI here, so a hand-edited config.json
         // pointing at a custom path keeps working.
 
-        // Quick actions
+        // The bind DSL writes translateLanguage as the trimmed value;
+        // the previous code coerced empty strings to `null` so the
+        // backend's "no translation language set" sentinel still works.
+        // Reapply that one transform.
         config.quick_actions = config.quick_actions || {};
-        config.quick_actions.enabled =
-            document.getElementById('quickActionsEnabled')?.checked ?? true;
+        const lang = config.quick_actions.translate_language;
         config.quick_actions.translate_language =
-            document.getElementById('translateLanguage')?.value?.trim() || null;
+            typeof lang === 'string' && lang.trim() ? lang.trim() : null;
+
+        // Custom actions — list shape, populated from a dynamic UI.
         config.quick_actions.custom_actions = this._collectCustomActions();
-        // Response actions (stored in ui config)
-        config.ui = config.ui || {};
-        config.ui.show_response_actions =
-            document.getElementById('showResponseActions')?.checked ?? true;
     }
 
     initialize() {
