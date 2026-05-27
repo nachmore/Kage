@@ -194,7 +194,7 @@ const LOCAL_COMMANDS = [
         name: 'version',
         description: 'Show version, channel, and check for updates',
         icon: 'ℹ️',
-        execute: async (invoke) => {
+        execute: async (invoke, appWindow) => {
             const show = (text) =>
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             let info = {};
@@ -218,11 +218,17 @@ const LOCAL_COMMANDS = [
             try {
                 const result = await invoke('check_for_update');
                 if (result?.available_version) {
-                    show(
-                        header +
-                            `⬆ **Update available: v${result.available_version}**\n\n` +
-                            'Open Settings → Updates to install, or run `>settings`.'
-                    );
+                    // `check_for_update` already emits `update_available`
+                    // server-side, which the floating window listens for
+                    // and raises its install banner. Tailor the response
+                    // text to the calling window: floating gets a
+                    // "click the banner above" hint; chat (no banner
+                    // listener) gets a direct settings link.
+                    const inFloating = appWindow?.label === 'floating';
+                    const cta = inFloating
+                        ? 'Click the banner above to install, or open [Settings → Updates](kage:settings/updates) for more info.'
+                        : 'Open [Settings → Updates](kage:settings/updates) to install.';
+                    show(header + `⬆ **Update available: v${result.available_version}**\n\n` + cta);
                 } else {
                     show(
                         header +
