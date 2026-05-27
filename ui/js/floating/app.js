@@ -538,7 +538,19 @@ export class FloatingApp {
 
         setTimeout(() => this.elements.input.focus(), 100);
 
-        this.checkForUpdateBanner();
+        // The update banner check is wired into the first
+        // `tauri://focus` (below), not run here at init time. Pre-fix
+        // we ran it from init() and cleared the persisted flag in the
+        // same call, but the floating webview boots while the window
+        // is still hidden in the idle-install path — the banner DOM
+        // got rendered into a hidden window, the flag got cleared,
+        // and by the time the user actually summoned the window any
+        // intermediate dismissBanner / resetUI had wiped the banner.
+        // The first-focus latch shows the banner the moment the user
+        // actually has the window in front of them, regardless of
+        // whether that's the post-install auto-show or a manual
+        // summon minutes later.
+        //
         // The crash banner runs after the update banner so a fresh
         // post-update launch doesn't replace the celebration banner
         // with a stale crash report from a previous session. Update
@@ -1025,6 +1037,18 @@ export class FloatingApp {
         this.appWindow.listen('tauri://focus', async () => {
             this._windowFocused = true;
             document.documentElement.classList.remove('animations-paused');
+            // First focus this process — show the post-update banner
+            // if last_updated_version is still set. Running it here
+            // (instead of from init()) means the banner waits until
+            // the user can actually see the window: interactive
+            // installs trigger this immediately via setup's auto-show,
+            // idle installs trigger it the first time the user summons
+            // the floating window manually. Either way the user
+            // actually sees it.
+            if (!this._updateBannerChecked) {
+                this._updateBannerChecked = true;
+                this.checkForUpdateBanner();
+            }
             // Resume work that was paused on hide. Mascot animation
             // intervals were ticking against an invisible window — a
             // small but constant CPU drag on every hidden minute.
