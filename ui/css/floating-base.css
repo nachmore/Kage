@@ -67,6 +67,13 @@ body {
     transition: background 0.2s;
     user-select: none;
 }
+/* Add breathing room between the banner and any response text below
+ * it. When the banner is the only occupant (.banner-only on
+ * content-area) the existing layout already provides the right
+ * spacing, so suppress the extra margin in that case. */
+.content-area:not(.banner-only) .floating-banner {
+    margin-bottom: 8px;
+}
 .floating-banner:hover {
     background: linear-gradient(135deg, var(--kage-border) 0%, var(--kage-bg-elevated) 100%);
 }
