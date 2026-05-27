@@ -94,10 +94,9 @@ stay independently testable and easy to grep.
 ## Things that aren't in `os/` and shouldn't be
 
 - **Tauri-typed code** (windows, app handles, IPC commands) lives in
-  `commands/` and `setup/`. Those modules are gated `#[cfg(not(test))]`
-  in `lib.rs` because Tauri's type system doesn't compile under `--test`.
-  When pure logic gets entangled there, lift it into a sibling module
-  (the `chunk_batcher.rs` precedent) so it remains testable.
+  `commands/` and `setup/`. When pure logic gets entangled there, lift it
+  into a sibling module (the `chunk_batcher.rs` precedent) so it can be
+  tested without standing up a Tauri AppHandle.
 - **The MCP binary** (`src/bin/computer_control_mcp.rs`) reaches into
   `os/` directly because it's a separate binary, not "application code"
   in the kage sense. The same dispatch contract applies — it consumes

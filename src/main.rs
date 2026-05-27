@@ -21,6 +21,7 @@ mod context_rules;
 mod crash_recovery;
 mod error;
 mod extensions;
+mod hotkey_norm;
 mod link_metadata_cache;
 mod lock_ext;
 mod logger;

@@ -16,8 +16,8 @@
 //! IPC crossings.
 //!
 //! This module owns the pure drain-and-emit step — extracted from the
-//! flush thread so it's reachable from tests (`commands/*` is gated under
-//! `#[cfg(not(test))]` because of `tauri::command` macros).
+//! flush thread so the locking discipline is verifiable without spinning
+//! up a Tauri AppHandle.
 
 use std::collections::HashMap;
 use std::sync::Mutex;

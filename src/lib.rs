@@ -17,6 +17,7 @@ pub mod context_rules;
 pub mod crash_recovery;
 pub mod error;
 pub mod extensions;
+pub mod hotkey_norm;
 pub mod link_metadata_cache;
 pub mod lock_ext;
 pub mod logger;
@@ -31,19 +32,11 @@ pub mod session_titler;
 pub mod startup;
 pub mod steering_io;
 
-// Tauri-dependent modules — excluded from test compilation because
-// Tauri's type system doesn't support --test mode.
-#[cfg(not(test))]
+// Tauri-dependent modules
 pub mod automation;
-#[cfg(not(test))]
 pub mod commands;
-#[cfg(not(test))]
 pub mod setup;
-#[cfg(not(test))]
 pub mod state;
-#[cfg(not(test))]
 pub mod telemetry;
-#[cfg(not(test))]
 pub mod tray;
-#[cfg(not(test))]
 pub mod updater;

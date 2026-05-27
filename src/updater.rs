@@ -1000,12 +1000,9 @@ pub fn clear_update_flag(config: &mut Config) {
 
 #[cfg(test)]
 mod tests {
-    // NOTE: This module is currently unreachable because src/lib.rs
-    // gates the updater module on `#[cfg(not(test))]`. Kept here so
-    // that if the gating is ever relaxed (e.g. via a test-friendly
-    // mock plugin) the parser invariants are already documented as
-    // executable specs. Keep the test fns small and pure-logic so
-    // they never need the runtime to compile.
+    // Pure-logic tests only — anything that touches the plugin's
+    // Update / UpdaterBuilder types needs a real Tauri runtime, so
+    // those paths are exercised by the integration tests instead.
     use super::*;
 
     #[test]

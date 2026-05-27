@@ -782,10 +782,10 @@ async fn store_install_inner(
 //   <config_dir>/kage/extension-data/<extension_id>/<key>.json
 //
 // The path-resolution and migration logic lives in src/extensions.rs so it
-// can be unit-tested directly (this module is gated under #[cfg(not(test))]
-// because of the tauri::command macros). The host JS bridge force-injects
-// extension_id from its own record before forwarding storage commands here,
-// so a sandboxed caller can't spoof a different extension's identity.
+// can be unit-tested without standing up a Tauri AppHandle. The host JS
+// bridge force-injects extension_id from its own record before forwarding
+// storage commands here, so a sandboxed caller can't spoof a different
+// extension's identity.
 
 /// Returns the root extension-data directory, creating it if needed.
 fn extension_data_root() -> Result<std::path::PathBuf, String> {

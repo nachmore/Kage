@@ -60,7 +60,7 @@ cargo fmt
 cargo clippy
 ```
 
-Tauri-dependent modules (`automation`, `commands`, `setup`, `single_instance`, `state`, `tray`, `updater`) are gated `#[cfg(not(test))]` in `lib.rs` — Tauri's type system doesn't compile under `--test`. Tests cover the pure modules only.
+All modules compile under `--test`, including Tauri-dependent ones (`automation`, `commands`, `setup`, `state`, `tray`, `updater`). Inline tests in those modules should stay pure-logic — anything that needs a real `AppHandle`, `WebviewWindow`, or live updater plugin belongs in `tests/` so it can stand up the runtime.
 
 ## Architecture
 
