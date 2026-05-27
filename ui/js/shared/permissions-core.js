@@ -17,6 +17,7 @@
  */
 
 import { getToolEmoji, escapeHtml } from './tool-utils.js';
+import { EVT } from './events.js';
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
@@ -263,7 +264,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     }
 
     function wireDismissalListener() {
-        appWindow.listen('permission_dismissed', () => {
+        appWindow.listen(EVT.PERMISSION_DISMISSED, () => {
             console.log('Permission dismissed externally');
             _permissionQueue = [];
             hidePermissionModal();

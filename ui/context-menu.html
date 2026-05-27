@@ -48,6 +48,7 @@
     </div>
     <script type="module">
         import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
+        import { EVT } from './js/shared/events.js';
 
         (async function() {
             const { invoke } = window.__TAURI__.core;
@@ -83,7 +84,7 @@
             async function emitAndHide(action) {
                 if (actionTaken) return;
                 actionTaken = true;
-                await emit('context-menu-action', action);
+                await emit(EVT.CONTEXT_MENU_ACTION, action);
                 await appWindow.hide();
             }
 

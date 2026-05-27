@@ -19,6 +19,7 @@
 
 import { createPermissionHandler } from '../shared/permissions-core.js';
 import { waitForTauri } from '../shared/tauri-init.js';
+import { WINDOW } from '../shared/window-labels.js';
 
 waitForTauri(({ invoke, appWindow }) => {
     const handler = createPermissionHandler(invoke, appWindow, {
@@ -85,7 +86,7 @@ waitForTauri(({ invoke, appWindow }) => {
             let floatingSessionId = null;
             try {
                 floatingSessionId = await invokeFn('get_window_session', {
-                    label: 'floating',
+                    label: WINDOW.FLOATING,
                 });
             } catch (e) {
                 console.warn('[Permissions] Failed to get floating session ID:', e);
@@ -100,7 +101,7 @@ waitForTauri(({ invoke, appWindow }) => {
                 isVisible = await win.isVisible();
             } catch {}
 
-            if (source !== 'floating' && !isVisible) {
+            if (source !== WINDOW.FLOATING && !isVisible) {
                 console.log('Ignoring permission request — originated from chat, floating hidden');
                 return { handle: false };
             }
@@ -131,7 +132,7 @@ waitForTauri(({ invoke, appWindow }) => {
             const eventSource = event.payload.source || 'floating';
 
             // Force-show the floating window if the request originated from it
-            if (!currentlyVisible && eventSource === 'floating') {
+            if (!currentlyVisible && eventSource === WINDOW.FLOATING) {
                 const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
                 const toolName = event.payload.toolName || '';
                 const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;

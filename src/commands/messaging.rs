@@ -1,6 +1,8 @@
 use crate::error::AppError;
+use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
+use crate::window_labels;
 use log::{error, info, warn};
 use tauri::{async_runtime, Emitter, Manager, State, WebviewWindow};
 
@@ -136,7 +138,7 @@ pub fn setup_notification_handler(
                         }
                         // Forward unconditionally; frontend filters by
                         // sessionId in the payload.
-                        let _ = app_handle.emit("tool_call_update", &notification);
+                        let _ = app_handle.emit(events::TOOL_CALL_UPDATE, &notification);
                         return;
                     }
                 }
@@ -192,7 +194,7 @@ pub fn setup_notification_handler(
                             _ => {}
                         }
                     }
-                    let _ = app_handle.emit("compaction_status", &notification);
+                    let _ = app_handle.emit(events::COMPACTION_STATUS, &notification);
                 }
                 "error/rate_limit" => {
                     let message = notification.get("params")
@@ -200,13 +202,13 @@ pub fn setup_notification_handler(
                         .and_then(|m| m.as_str())
                         .unwrap_or("Rate limit exceeded. Please wait a moment before trying again.");
                     warn!("Rate limit hit: {}", message);
-                    let _ = app_handle.emit("message_error", message);
+                    let _ = app_handle.emit(events::MESSAGE_ERROR, message);
                 }
                 _ => {
                     // Unknown vendor extension — forward to the frontend
                     // as a generic tool_call_update, mirroring previous
                     // behaviour.
-                    let _ = app_handle.emit("tool_call_update", &notification);
+                    let _ = app_handle.emit(events::TOOL_CALL_UPDATE, &notification);
                 }
             }
             return;
@@ -250,7 +252,7 @@ fn spawn_chunk_flush_thread(
                             "sessionId": session_id,
                         });
                         app_handle
-                            .emit("message_chunk", payload)
+                            .emit(events::MESSAGE_CHUNK, payload)
                             .map_err(|e| format!("{}", e))
                     });
                 if !alive {
@@ -391,7 +393,7 @@ fn handle_permission_notification(
                         .ok()
                         .and_then(|m| m.get(sid).cloned())
                 })
-                .unwrap_or_else(|| "floating".to_string());
+                .unwrap_or_else(|| window_labels::FLOATING.to_string());
 
             let payload = serde_json::json!({
                 "notification": notification,
@@ -404,8 +406,8 @@ fn handle_permission_notification(
             let _ = app_handle.emit("permission_request", &payload);
 
             // If originated from floating and it's hidden, show it (case 3: background permission)
-            if source == "floating" {
-                if let Some(floating) = app_handle.get_webview_window("floating") {
+            if source == window_labels::FLOATING {
+                if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
                     let _ = floating.show();
                     let _ = floating.set_focus();
                 }
@@ -451,7 +453,7 @@ pub async fn send_message_streaming(
 
         if !client.is_connected() {
             if let Err(e) = client.connect() {
-                let _ = window.emit("message_error", format!("Unable to connect: {}", e));
+                let _ = window.emit(events::MESSAGE_ERROR, format!("Unable to connect: {}", e));
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
@@ -521,7 +523,10 @@ pub async fn send_message_streaming(
                     }),
                 );
             } else {
-                let _ = window.emit("message_error", format!("Failed to send: {}", error_str));
+                let _ = window.emit(
+                    events::MESSAGE_ERROR,
+                    format!("Failed to send: {}", error_str),
+                );
             }
             if let Ok(mut m) = originators.lock() {
                 m.remove(&session_id);
@@ -530,7 +535,7 @@ pub async fn send_message_streaming(
         }
 
         let _ = window_clone.emit(
-            "message_complete",
+            events::MESSAGE_COMPLETE,
             serde_json::json!({ "sessionId": &active_session_id }),
         );
 
@@ -647,7 +652,7 @@ pub async fn send_permission_response(
     }
 
     // Broadcast dismissal to all windows so they close their permission modals
-    let _ = app.emit("permission_dismissed", ());
+    let _ = app.emit(events::PERMISSION_DISMISSED, ());
 
     Ok(())
 }
@@ -691,15 +696,15 @@ pub async fn open_chat_with_message(
     ui: State<'_, UiState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();
     }
     // Tag the in-flight prompt so permission notifications route to
     // the main chat window, not the (now hidden) floating one.
     if let Ok(mut m) = ui.pending_prompt_originators.lock() {
-        m.insert(session_id.clone(), "main".to_string());
+        m.insert(session_id.clone(), window_labels::MAIN.to_string());
     }
-    if let Some(main) = app.get_webview_window("main") {
+    if let Some(main) = app.get_webview_window(window_labels::MAIN) {
         // Center on the active monitor
         crate::commands::window::center_window_on_active_monitor(&main);
         let _ = main.show();
@@ -713,7 +718,7 @@ pub async fn open_chat_with_message(
         async_runtime::spawn_blocking(move || {
             if !client.is_connected() {
                 if let Err(e) = client.connect() {
-                    let _ = window.emit("message_error", format!("Unable to connect: {}", e));
+                    let _ = window.emit(events::MESSAGE_ERROR, format!("Unable to connect: {}", e));
                     if let Ok(mut m) = originators.lock() {
                         m.remove(&session_id);
                     }
@@ -727,14 +732,14 @@ pub async fn open_chat_with_message(
                 Err(_) => session_id.clone(),
             };
             if let Err(e) = result {
-                let _ = window.emit("message_error", format!("Failed to send: {}", e));
+                let _ = window.emit(events::MESSAGE_ERROR, format!("Failed to send: {}", e));
                 if let Ok(mut m) = originators.lock() {
                     m.remove(&session_id);
                 }
                 return;
             }
             let _ = window.emit(
-                "message_complete",
+                events::MESSAGE_COMPLETE,
                 serde_json::json!({ "sessionId": &active_session_id }),
             );
             if let Ok(mut m) = originators.lock() {
@@ -776,8 +781,8 @@ pub async fn dismiss_pending_permission(
                 if let Ok(mut guard) = acp.pending_permission.lock() {
                     *guard = None;
                 }
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.emit("permission_dismissed", ());
+                if let Some(main) = app.get_webview_window(window_labels::MAIN) {
+                    let _ = main.emit(events::PERMISSION_DISMISSED, ());
                 }
                 Ok(true)
             }
@@ -1070,7 +1075,7 @@ pub async fn execute_automation_plan(
                     let success = !agent_reported_failure;
 
                     let _ = window.emit(
-                        "automation_step_complete",
+                        events::AUTOMATION_STEP_COMPLETE,
                         serde_json::json!({
                             "step": step_num,
                             "totalSteps": total_steps,
@@ -1092,7 +1097,7 @@ pub async fn execute_automation_plan(
                                 .and_then(|t| t.as_str())
                                 .unwrap_or("Unknown task");
                             let _ = window.emit(
-                                "automation_step_complete",
+                                events::AUTOMATION_STEP_COMPLETE,
                                 serde_json::json!({
                                     "step": j + 1,
                                     "totalSteps": total_steps,
@@ -1111,7 +1116,7 @@ pub async fn execute_automation_plan(
                     warn!("Step {}/{} failed: {}", step_num, total_steps, error_msg);
 
                     let _ = window.emit(
-                        "automation_step_complete",
+                        events::AUTOMATION_STEP_COMPLETE,
                         serde_json::json!({
                             "step": step_num,
                             "totalSteps": total_steps,
@@ -1132,7 +1137,7 @@ pub async fn execute_automation_plan(
                             .and_then(|t| t.as_str())
                             .unwrap_or("Unknown task");
                         let _ = window.emit(
-                            "automation_step_complete",
+                            events::AUTOMATION_STEP_COMPLETE,
                             serde_json::json!({
                                 "step": j + 1,
                                 "totalSteps": total_steps,
@@ -1156,7 +1161,7 @@ pub async fn execute_automation_plan(
             }),
         );
 
-        let _ = window.emit("message_complete", ());
+        let _ = window.emit(events::MESSAGE_COMPLETE, ());
     });
 
     Ok(())
@@ -1187,7 +1192,7 @@ pub async fn extension_tool_response(
 
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
-            let _ = window.emit("message_error", "Not connected to agent".to_string());
+            let _ = window.emit(events::MESSAGE_ERROR, "Not connected to agent".to_string());
             return;
         }
 
@@ -1207,14 +1212,14 @@ pub async fn extension_tool_response(
         // Send as a follow-up user message so the agent continues
         if let Err(e) = client.send_chat_streaming(&session_id, &content, None) {
             let _ = window.emit(
-                "message_error",
+                events::MESSAGE_ERROR,
                 format!("Failed to send tool result: {}", e),
             );
         }
 
         // Emit message_complete so the frontend knows the follow-up response is done
         let _ = window.emit(
-            "message_complete",
+            events::MESSAGE_COMPLETE,
             serde_json::json!({ "sessionId": &session_id }),
         );
     });
@@ -1367,7 +1372,10 @@ pub async fn send_inline_assist(
     async_runtime::spawn_blocking(move || {
         if !client.is_connected() {
             if let Err(e) = client.connect() {
-                let _ = app.emit("inline_assist_error", format!("Unable to connect: {}", e));
+                let _ = app.emit(
+                    events::INLINE_ASSIST_ERROR,
+                    format!("Unable to connect: {}", e),
+                );
                 return;
             }
         }
@@ -1375,13 +1383,13 @@ pub async fn send_inline_assist(
         // send_chat_streaming resets its own session bucket; once it
         // returns, the response is available in that bucket.
         if let Err(e) = client.send_chat_streaming(&session_id, &message, None) {
-            let _ = app.emit("inline_assist_error", format!("Failed: {}", e));
+            let _ = app.emit(events::INLINE_ASSIST_ERROR, format!("Failed: {}", e));
             return;
         }
 
         let result = client.take_session_accumulator(&session_id);
         if result.trim().is_empty() {
-            let _ = app.emit("inline_assist_error", "Empty response");
+            let _ = app.emit(events::INLINE_ASSIST_ERROR, "Empty response");
         } else {
             let _ = app.emit("inline_assist_chunk", &result);
             let _ = app.emit("inline_assist_complete", ());

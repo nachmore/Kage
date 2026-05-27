@@ -203,7 +203,7 @@ pub async fn write_steering_lines(
         // Drop the lock before emitting so listeners that re-read
         // config don't deadlock.
         drop(config);
-        let _ = app.emit("config_updated", ());
+        let _ = app.emit(crate::events::CONFIG_UPDATED, ());
     }
 
     Ok(serde_json::json!({

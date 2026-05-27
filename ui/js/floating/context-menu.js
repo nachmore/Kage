@@ -12,6 +12,7 @@
  */
 
 import { waitForTauri } from '../shared/tauri-init.js';
+import { EVT } from '../shared/events.js';
 
 waitForTauri(({ invoke, appWindow, listen }) => {
     initContextMenu(invoke, appWindow, listen);
@@ -40,7 +41,7 @@ function initContextMenu(invoke, appWindow, listen) {
     });
 
     // Listen for actions from the context menu popup (global event)
-    listen('context-menu-action', async (event) => {
+    listen(EVT.CONTEXT_MENU_ACTION, async (event) => {
         window._contextMenuOpen = false;
         const action = event.payload;
 

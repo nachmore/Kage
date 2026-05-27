@@ -49,6 +49,8 @@ import {
     automationPlanToTasks,
 } from './streaming-utils.js';
 
+import { EVT } from './events.js';
+
 export class AutomationPlanController {
     constructor(host) {
         this.host = host;
@@ -178,12 +180,15 @@ export class AutomationPlanController {
             this._renderTasks();
         });
 
-        const stepCompleteUnlisten = await this.host.listen('automation_step_complete', (event) => {
-            const { step, success, result, stopped } = event.payload;
-            this.statuses[step] = stopped ? 'stopped' : success ? 'done' : 'failed';
-            if (result) this.results[step] = result;
-            this._renderTasks();
-        });
+        const stepCompleteUnlisten = await this.host.listen(
+            EVT.AUTOMATION_STEP_COMPLETE,
+            (event) => {
+                const { step, success, result, stopped } = event.payload;
+                this.statuses[step] = stopped ? 'stopped' : success ? 'done' : 'failed';
+                if (result) this.results[step] = result;
+                this._renderTasks();
+            }
+        );
 
         const cleanup = () => {
             stepStartUnlisten();

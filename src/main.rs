@@ -20,6 +20,7 @@ mod config_migrations;
 mod context_rules;
 mod crash_recovery;
 mod error;
+mod events;
 mod extensions;
 mod hotkey_norm;
 mod link_metadata_cache;
@@ -39,6 +40,7 @@ mod steering_io;
 mod telemetry;
 mod tray;
 mod updater;
+mod window_labels;
 
 use acp_client::AcpClient;
 use app_launcher::AppLauncher;
@@ -308,7 +310,7 @@ async fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             use tauri::Emitter;
             info!("Second instance signaled via single-instance plugin");
-            let _ = app.emit("show-sessions", ());
+            let _ = app.emit(events::SHOW_SESSIONS, ());
         }));
 
     // Aptabase plugin — only registered when a compile-time key was
@@ -367,7 +369,7 @@ async fn run() {
             // see when something hides/destroys/focuses it externally.
             // Other windows are too noisy (chat repaints, etc.) so we
             // gate on label.
-            if window.label() == "floating" {
+            if window.label() == window_labels::FLOATING {
                 match event {
                     tauri::WindowEvent::CloseRequested { .. } => {
                         log::info!("[floating-event] CloseRequested");
@@ -439,7 +441,7 @@ async fn run() {
                         setup::update_activation_policy(_app);
                     }
                     "macos-show-all" => {
-                        if let Some(w) = _app.get_webview_window("floating") {
+                        if let Some(w) = _app.get_webview_window(window_labels::FLOATING) {
                             let _ = w.show();
                         }
                     }

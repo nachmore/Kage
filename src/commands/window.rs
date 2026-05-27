@@ -1,6 +1,8 @@
 use crate::error::AppError;
+use crate::events;
 use crate::lock_ext::LockExt;
 use crate::os;
+use crate::window_labels::{self, is_chat_label, is_session_host_label};
 use log::{error, info, warn};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
@@ -388,7 +390,7 @@ pub fn center_floating_on_active_monitor(window: &WebviewWindow) {
 pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppError> {
     info!("Testing floating window visibility");
 
-    if let Some(window) = app.get_webview_window("floating") {
+    if let Some(window) = app.get_webview_window(window_labels::FLOATING) {
         let is_visible = window.is_visible().unwrap_or(false);
 
         if is_visible {
@@ -436,11 +438,11 @@ pub fn center_window_on_active_monitor(window: &WebviewWindow) {
 pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
     info!("Opening chat window");
 
-    if let Some(floating_window) = app.get_webview_window("floating") {
+    if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating_window.hide();
     }
 
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(window_labels::MAIN) {
         let features: tauri::State<'_, crate::state::FeatureServices> = app.state();
         let config = features.config.lock_or_recover();
         let saved_w = config.ui.chat_window_width;
@@ -513,7 +515,7 @@ pub async fn open_chat_window(app: tauri::AppHandle) -> Result<(), AppError> {
 /// single-instance handler and "show chat" affordances to decide which
 /// window to surface when the user has multiple open.
 pub fn mark_focused_chat(app: &tauri::AppHandle, label: &str) {
-    if !(label == "main" || label.starts_with("chat-")) {
+    if !is_session_host_label(label) {
         return;
     }
     if let Some(ui) = app.try_state::<crate::state::UiState>() {
@@ -638,7 +640,7 @@ fn run_chat_shutdown_check(app: &tauri::AppHandle, my_generation: u64) {
         .window_sessions
         .lock()
         .ok()
-        .map(|m| m.get("floating").is_some())
+        .map(|m| m.get(window_labels::FLOATING).is_some())
         .unwrap_or(false);
     if floating_has_session {
         return;
@@ -673,7 +675,7 @@ pub async fn open_new_chat_window(
 ) -> Result<String, AppError> {
     use tauri::WebviewWindowBuilder;
 
-    let label = format!("chat-{}", uuid::Uuid::new_v4().simple());
+    let label = window_labels::chat_label(&uuid::Uuid::new_v4().simple().to_string());
     info!("Opening new chat window: {}", label);
 
     let url = if let Some(ref sid) = resume_session_id {
@@ -748,7 +750,7 @@ fn count_open_chat_windows(app: &tauri::AppHandle) -> usize {
     use tauri::Manager;
     app.webview_windows()
         .keys()
-        .filter(|label| label.as_str() == "main" || label.starts_with("chat-"))
+        .filter(|label| is_session_host_label(label.as_str()))
         .count()
 }
 
@@ -762,7 +764,7 @@ fn count_visible_chat_windows(app: &tauri::AppHandle) -> usize {
     use tauri::Manager;
     app.webview_windows()
         .iter()
-        .filter(|(label, _)| label.as_str() == "main" || label.starts_with("chat-"))
+        .filter(|(label, _)| is_session_host_label(label.as_str()))
         .filter(|(_, w)| w.is_visible().unwrap_or(true))
         .count()
 }
@@ -776,13 +778,13 @@ pub async fn close_chat_window(
     app: tauri::AppHandle,
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
-    if label == "main" || label == "floating" {
+    if label == window_labels::MAIN || label == window_labels::FLOATING {
         return Err(AppError::internal(format!(
             "{} is a privileged window and can't be closed via close_chat_window",
             label
         )));
     }
-    if !label.starts_with("chat-") {
+    if !is_chat_label(&label) {
         return Err(AppError::internal(format!(
             "Refusing to close non-chat window: {}",
             label
@@ -829,7 +831,7 @@ pub async fn list_chat_windows(
     let mut out: Vec<ChatWindowInfo> = app
         .webview_windows()
         .keys()
-        .filter(|label| label.as_str() == "main" || label.starts_with("chat-"))
+        .filter(|label| is_session_host_label(label.as_str()))
         .map(|label| ChatWindowInfo {
             label: label.to_string(),
             session_id: sessions.get(label.as_str()).cloned(),
@@ -839,10 +841,14 @@ pub async fn list_chat_windows(
     // Stable order: main first, then chat-* by label (insertion-time
     // ordering would be nicer but Tauri's webview_windows() doesn't
     // expose creation order).
-    out.sort_by(|a, b| match (a.label.as_str(), b.label.as_str()) {
-        ("main", _) => std::cmp::Ordering::Less,
-        (_, "main") => std::cmp::Ordering::Greater,
-        (l, r) => l.cmp(r),
+    out.sort_by(|a, b| {
+        let a_is_main = a.label == window_labels::MAIN;
+        let b_is_main = b.label == window_labels::MAIN;
+        match (a_is_main, b_is_main) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.label.cmp(&b.label),
+        }
     });
     Ok(out)
 }
@@ -884,8 +890,8 @@ pub async fn open_settings_window(
     // process + its JS init at every app launch (it calls
     // detect_agents on startup, which used to flash DOS windows for
     // each preset's `where`/`--version` probe).
-    let already_open = app.get_webview_window("settings").is_some();
-    let window = if let Some(w) = app.get_webview_window("settings") {
+    let already_open = app.get_webview_window(window_labels::SETTINGS).is_some();
+    let window = if let Some(w) = app.get_webview_window(window_labels::SETTINGS) {
         w
     } else {
         // Encode section/subsection in the URL so the fresh window's
@@ -926,15 +932,19 @@ pub async fn open_settings_window(
             url.push('=');
             url.push_str(v);
         }
-        WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App(url.into()))
-            .title("Settings - Kage")
-            .inner_size(800.0, 700.0)
-            .min_inner_size(600.0, 450.0)
-            .resizable(true)
-            .center()
-            .visible(false) // shown below after we know it built
-            .build()
-            .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
+        WebviewWindowBuilder::new(
+            &app,
+            window_labels::SETTINGS,
+            tauri::WebviewUrl::App(url.into()),
+        )
+        .title("Settings - Kage")
+        .inner_size(800.0, 700.0)
+        .min_inner_size(600.0, 450.0)
+        .resizable(true)
+        .center()
+        .visible(false) // shown below after we know it built
+        .build()
+        .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
     };
 
     let _ = window.show();
@@ -978,12 +988,12 @@ pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<
     // Build the window on first show. Excluded from tauri.conf.json's
     // initial windows so we don't pay for a WebView2 process at every
     // launch — the menu is opened rarely and via explicit user action.
-    let window = if let Some(w) = app.get_webview_window("context-menu") {
+    let window = if let Some(w) = app.get_webview_window(window_labels::CONTEXT_MENU) {
         w
     } else {
         let w = WebviewWindowBuilder::new(
             &app,
-            "context-menu",
+            window_labels::CONTEXT_MENU,
             tauri::WebviewUrl::App("context-menu.html".into()),
         )
         .title("")
@@ -1076,7 +1086,7 @@ pub async fn apply_chat_window_size(
     width: u32,
     height: u32,
 ) -> Result<(), AppError> {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(window_labels::MAIN) {
         let scale = window.scale_factor().unwrap_or(1.0);
         let phys_width = (width as f64 * scale) as u32;
         let phys_height = (height as f64 * scale) as u32;
@@ -1282,7 +1292,7 @@ pub async fn show_inline_assist_with_context(
     }
 
     // Show the inline assist window at cursor
-    if let Some(window) = app.get_webview_window("inline-assist") {
+    if let Some(window) = app.get_webview_window(window_labels::INLINE_ASSIST) {
         info!(
             "Found inline-assist window, positioning at ({}, {})",
             cursor_pos.0, cursor_pos.1
@@ -1323,7 +1333,7 @@ pub async fn show_inline_assist_with_context(
                 "app": app_name,
                 "title": title,
             });
-            let _ = window_clone.emit("inline-assist-show", &payload);
+            let _ = window_clone.emit(events::INLINE_ASSIST_SHOW, &payload);
         });
     } else {
         warn!("inline-assist window not found — is it defined in tauri.conf.json?");
@@ -1340,7 +1350,7 @@ pub async fn inline_assist_apply(
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
     // Hide the inline assist window FIRST so it doesn't receive the paste
-    if let Some(window) = app.get_webview_window("inline-assist") {
+    if let Some(window) = app.get_webview_window(window_labels::INLINE_ASSIST) {
         let _ = window.hide();
     }
 

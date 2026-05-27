@@ -16,6 +16,8 @@ import {
     extractSuggestedActions,
 } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
+import { EVT } from '../shared/events.js';
+import { WINDOW } from '../shared/window-labels.js';
 import { getActionsForText, renderQuickActionChips } from '../shared/quick-actions.js';
 import {
     startTimer,
@@ -317,7 +319,7 @@ export class FloatingApp {
                             this.invoke,
                             'Kage',
                             preview || 'Response ready',
-                            'floating'
+                            WINDOW.FLOATING
                         );
                     }
                 } catch {
@@ -478,7 +480,7 @@ export class FloatingApp {
         this.setupSpeech();
 
         // Register event listeners (synchronous, no awaits needed)
-        this.listen('config_updated', async () => {
+        this.listen(EVT.CONFIG_UPDATED, async () => {
             console.log('Config updated, reloading...');
             await this.loadShortcuts();
             await this.extensionManager.onConfigUpdate();
@@ -490,7 +492,7 @@ export class FloatingApp {
             this.updateDatetimeVisibility();
         });
 
-        this.listen('extensions_changed', async () => {
+        this.listen(EVT.EXTENSIONS_CHANGED, async () => {
             console.log('Extensions changed, reloading...');
             await this.extensionManager.reload();
         });
@@ -500,7 +502,7 @@ export class FloatingApp {
             await loadSlashCommands(this.invoke);
         });
 
-        this.listen('clipboard_history_mode', async () => {
+        this.listen(EVT.CLIPBOARD_HISTORY_MODE, async () => {
             console.log('Clipboard history mode activated via hotkey');
             // Clear any stale content
             this.elements.responseText.textContent = '';
@@ -514,7 +516,7 @@ export class FloatingApp {
             this._enterClipboardMode();
         });
 
-        this.listen('voice_mode', () => {
+        this.listen(EVT.VOICE_MODE, () => {
             console.log('Voice mode activated via hotkey');
             trackEvent('voice_input_used', { trigger: 'hotkey' });
             this.elements.responseText.textContent = '';
@@ -542,12 +544,12 @@ export class FloatingApp {
         // takes priority for that one-launch window.
         this.checkForCrashBanner();
 
-        this.listen('show_floating_banner', (event) => {
+        this.listen(EVT.SHOW_FLOATING_BANNER, (event) => {
             const { icon, text, action_label, action_type, action_data } = event.payload;
             this.showBanner(icon, text, action_label, action_type, action_data);
         });
 
-        this.listen('update_available', (event) => {
+        this.listen(EVT.UPDATE_AVAILABLE, (event) => {
             const version = event.payload;
             this.showBanner(
                 '⬆️',
@@ -813,8 +815,8 @@ export class FloatingApp {
     }
 
     setupStreamingListeners() {
-        this.listen('message_chunk', (event) => this.handleMessageChunk(event));
-        this.listen('message_complete', (event) => {
+        this.listen(EVT.MESSAGE_CHUNK, (event) => this.handleMessageChunk(event));
+        this.listen(EVT.MESSAGE_COMPLETE, (event) => {
             // Recovery may have moved us to a fresh session; pick up
             // the new id so subsequent sends/cancels target it.
             const newId = event?.payload?.sessionId;
@@ -822,14 +824,14 @@ export class FloatingApp {
                 console.log('[floating] adopting recovery session id:', newId);
                 this.floatingSessionId = newId;
                 this.invoke('set_window_session', {
-                    label: 'floating',
+                    label: WINDOW.FLOATING,
                     sessionId: newId,
                 }).catch(() => {});
             }
             this.handleMessageComplete();
         });
-        this.listen('message_error', (event) => this.handleMessageError(event));
-        this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+        this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
+        this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => {
             // session_reset is broadcast to all windows; only adopt the
             // new id if our pinned session was the one that died.
@@ -840,7 +842,7 @@ export class FloatingApp {
             if (newId) {
                 this.floatingSessionId = newId;
                 this.invoke('set_window_session', {
-                    label: 'floating',
+                    label: WINDOW.FLOATING,
                     sessionId: newId,
                 }).catch(() => {});
             }
@@ -849,7 +851,7 @@ export class FloatingApp {
         this.toolSources = [];
 
         // Track compaction state — queue outgoing messages while compacting
-        this.listen('compaction_status', (event) => {
+        this.listen(EVT.COMPACTION_STATUS, (event) => {
             const status = event.payload?.params?.status?.type;
             if (status === 'started') {
                 this._compacting = true;
@@ -1718,13 +1720,13 @@ export class FloatingApp {
         });
         const unlistenPinned = await this.listen('session_pinned', (event) => {
             const { label, sessionId } = event?.payload || {};
-            if (label === 'floating' && sessionId) {
+            if (label === WINDOW.FLOATING && sessionId) {
                 resolveAdopted(sessionId);
             }
         });
         const unlistenFailed = await this.listen('session_pin_failed', (event) => {
             const { label, reason } = event?.payload || {};
-            if (label === 'floating') {
+            if (label === WINDOW.FLOATING) {
                 resolveFailed(reason || 'unknown');
             }
         });
@@ -1732,7 +1734,7 @@ export class FloatingApp {
         try {
             // Setup may have already pinned us before our init ran.
             const existing = await this.invoke('get_window_session', {
-                label: 'floating',
+                label: WINDOW.FLOATING,
             }).catch(() => null);
             if (existing) {
                 this.floatingSessionId = existing;
@@ -1920,7 +1922,7 @@ export class FloatingApp {
                     this.invoke,
                     'Timer Complete',
                     '⏱️ Your timer has finished!',
-                    'floating'
+                    WINDOW.FLOATING
                 );
             } catch {}
         }

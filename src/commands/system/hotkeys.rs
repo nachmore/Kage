@@ -6,9 +6,11 @@
 //! drives the OS-level capture (Windows uses a low-level keyboard hook).
 
 use crate::error::AppError;
+use crate::events;
 use crate::hotkey_norm::normalize_hotkey;
 use crate::lock_ext::LockExt;
 use crate::state::FeatureServices;
+use crate::window_labels;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager};
 
@@ -33,7 +35,7 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     drop(config);
 
     // --- Main hotkey: toggle floating window (unique behavior) ---
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         match app
             .global_shortcut()
             .on_shortcut(main_hk.as_str(), move |_app, _shortcut, event| {
@@ -107,14 +109,14 @@ pub fn register_all_hotkeys(app: &tauri::AppHandle) {
     // To add a new hotkey of this type: add a config getter and an entry here.
     let event_hotkeys: Vec<(&str, Option<String>, &str, u64)> = vec![
         // (name,        hotkey_string, event_name,              delay_ms)
-        ("clipboard", cb_hk, "clipboard_history_mode", 150),
-        ("voice", voice_hk, "voice_mode", 200),
+        ("clipboard", cb_hk, events::CLIPBOARD_HISTORY_MODE, 150),
+        ("voice", voice_hk, events::VOICE_MODE, 200),
     ];
 
     for (name, hk_opt, event_name, delay_ms) in event_hotkeys {
         match hk_opt {
             Some(ref hk) => {
-                if let Some(floating) = app.get_webview_window("floating") {
+                if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
                     let app_handle = app.clone();
                     let evt = event_name.to_string();
                     let label = name.to_string();

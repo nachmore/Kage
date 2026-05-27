@@ -2,6 +2,8 @@ import { SettingsModule } from './base.js';
 import { summarizeNamedPlaceholders } from '../shared/shortcuts.js';
 import { escapeHtml } from '../shared/tool-utils.js';
 import { registerSettingsActions } from './module-registry.js';
+import { EVT } from '../shared/events.js';
+import { WINDOW } from '../shared/window-labels.js';
 /**
  * Commands & Prompts settings module.
  *
@@ -739,7 +741,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
 
             // Collect streamed response
             let response = '';
-            const unlisten = await listen('message_chunk', (event) => {
+            const unlisten = await listen(EVT.MESSAGE_CHUNK, (event) => {
                 const delta =
                     event.payload && typeof event.payload === 'object'
                         ? event.payload.text || ''
@@ -749,13 +751,13 @@ export class ShortcutsSettingsModule extends SettingsModule {
             });
 
             const completionPromise = new Promise((resolve) => {
-                const unlistenComplete = listen('message_complete', () => {
+                const unlistenComplete = listen(EVT.MESSAGE_COMPLETE, () => {
                     unlistenComplete.then((fn) => fn());
                     resolve();
                 });
             });
 
-            const sessionId = await invoke('get_window_session', { label: 'main' }).catch(
+            const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN }).catch(
                 () => null
             );
             await invoke('send_message_streaming', {

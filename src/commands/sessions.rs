@@ -1118,9 +1118,10 @@ pub fn update_window_title(
     };
     let title = lookup_session_title(config_arc, session_cache_arc, session_id)
         .unwrap_or_else(|| "New Chat".to_string());
-    let display_title = match label {
-        "floating" => format!("Kage — {}", title),
-        _ => format!("{} - Kage", title),
+    let display_title = if label == crate::window_labels::FLOATING {
+        format!("Kage — {}", title)
+    } else {
+        format!("{} - Kage", title)
     };
     if let Err(e) = window.set_title(&display_title) {
         log::warn!("Failed to set title for window {}: {}", label, e);

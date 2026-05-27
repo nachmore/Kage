@@ -1,6 +1,7 @@
 use crate::error::AppError;
 use crate::os;
 use crate::state::FeatureServices;
+use crate::window_labels;
 use log::{error, info};
 use tauri::{Manager, State};
 
@@ -328,7 +329,7 @@ pub async fn launch_app_by_name(
             format!("Failed to launch {}: {}", app_name, e)
         })?;
 
-        if let Some(floating_window) = app.get_webview_window("floating") {
+        if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
             let _ = floating_window.hide();
         }
 
@@ -350,7 +351,7 @@ pub async fn open_url(url: String, app: tauri::AppHandle) -> Result<(), AppError
 
     os::open_url(&full_url).map_err(|e| format!("Failed to open URL: {}", e))?;
 
-    if let Some(floating_window) = app.get_webview_window("floating") {
+    if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating_window.hide();
     }
 
@@ -378,7 +379,7 @@ pub async fn open_path(path: String, app: tauri::AppHandle) -> Result<(), AppErr
 
     os::open_path(&expanded_path).map_err(|e| format!("Failed to open path: {}", e))?;
 
-    if let Some(floating_window) = app.get_webview_window("floating") {
+    if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating_window.hide();
     }
 
@@ -455,7 +456,7 @@ pub async fn execute_system_command(
     );
 
     // Hide the floating window first
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();
     }
 

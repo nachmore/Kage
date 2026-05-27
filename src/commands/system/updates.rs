@@ -4,8 +4,10 @@
 //! `updater` module's scheduling layer. See `docs/RELEASE.md`.
 
 use crate::error::AppError;
+use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
+use crate::window_labels;
 use tauri::{Emitter, State};
 
 #[tauri::command]
@@ -41,7 +43,7 @@ pub async fn check_for_update(
 
     // Emit event so the floating window can show a banner too.
     if let Some(ref version) = available {
-        let _ = app.emit("update_available", version);
+        let _ = app.emit(events::UPDATE_AVAILABLE, version);
     }
 
     Ok(serde_json::json!({
@@ -125,9 +127,9 @@ pub async fn download_and_install_update(
     // Prefer floating's session (post-update banner shows the floating
     // window first); fall back to main's session if floating has none.
     let session_id = ui.window_sessions.lock().ok().and_then(|m| {
-        m.get("floating")
+        m.get(window_labels::FLOATING)
             .cloned()
-            .or_else(|| m.get("main").cloned())
+            .or_else(|| m.get(window_labels::MAIN).cloned())
     });
     crate::updater::persist_resume_marker(session_id.as_deref());
     // Tag this install as user-initiated so the post-install launch

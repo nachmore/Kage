@@ -3,6 +3,7 @@
  */
 
 import { platformKeyLabel } from './shortcuts.js';
+import { WINDOW } from './window-labels.js';
 
 const LOCAL_COMMANDS = [
     {
@@ -62,7 +63,7 @@ const LOCAL_COMMANDS = [
         icon: '🔑',
         execute: async (invoke) => {
             try {
-                const id = await invoke('get_window_session', { label: 'main' });
+                const id = await invoke('get_window_session', { label: WINDOW.MAIN });
                 const text = id || 'No active session';
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
@@ -87,7 +88,7 @@ const LOCAL_COMMANDS = [
                 return;
             }
             try {
-                const sessionId = await invoke('get_window_session', { label: 'main' });
+                const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN });
                 if (!sessionId) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', {
@@ -124,7 +125,7 @@ const LOCAL_COMMANDS = [
         icon: '📂',
         execute: async (invoke) => {
             try {
-                const sessionId = await invoke('get_window_session', { label: 'main' });
+                const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN });
                 if (!sessionId) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', { detail: 'No active session' })
@@ -224,7 +225,7 @@ const LOCAL_COMMANDS = [
                     // text to the calling window: floating gets a
                     // "click the banner above" hint; chat (no banner
                     // listener) gets a direct settings link.
-                    const inFloating = appWindow?.label === 'floating';
+                    const inFloating = appWindow?.label === WINDOW.FLOATING;
                     const cta = inFloating
                         ? 'Click the banner above to install, or open [Settings → Updates](kage:settings/updates) for more info.'
                         : 'Open [Settings → Updates](kage:settings/updates) to install.';
@@ -323,7 +324,7 @@ export function matchSlashCommands(input) {
                 const cmdName = cmd.name.startsWith('/') ? cmd.name.substring(1) : cmd.name;
                 // Slash commands need a session id; the calling window
                 // tells us its label so we can look up its pinned session.
-                const winLabel = _appWindow?.label || 'floating';
+                const winLabel = _appWindow?.label || WINDOW.FLOATING;
                 const sessionId = await invoke('get_window_session', { label: winLabel }).catch(
                     () => null
                 );

@@ -6,6 +6,8 @@
 import { classifyText, getActionsForText } from './shared/quick-actions.js';
 import { createMascot } from './shared/mascot.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
+import { EVT } from './shared/events.js';
+import { WINDOW } from './shared/window-labels.js';
 
 console.log(
     '[inline-assist] Module loaded, classifyText:',
@@ -47,7 +49,7 @@ console.log(
         try {
             // Open chat with the selected text as context. Use main's
             // session — this opens in the chat window.
-            const sessionId = await invoke('get_window_session', { label: 'main' }).catch(
+            const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN }).catch(
                 () => null
             );
             const message = selectedText.trim()
@@ -61,7 +63,7 @@ console.log(
     });
 
     // --- Listen for show event from backend ---
-    await listen('inline-assist-show', async (event) => {
+    await listen(EVT.INLINE_ASSIST_SHOW, async (event) => {
         console.log('[inline-assist] Received show event:', event.payload);
         const { selection, app, title } = event.payload || {};
         selectedText = selection || '';
@@ -112,7 +114,7 @@ console.log(
         await appWindow.hide();
     });
 
-    await listen('inline_assist_error', async (event) => {
+    await listen(EVT.INLINE_ASSIST_ERROR, async (event) => {
         isProcessing = false;
         iconBubble.classList.remove('thinking');
         // Show error briefly then hide
@@ -229,7 +231,7 @@ console.log(
             await appWindow.hide();
             try {
                 const sessionId = await invoke('get_window_session', {
-                    label: 'main',
+                    label: WINDOW.MAIN,
                 }).catch(() => null);
                 await invoke('open_chat_with_message', { sessionId, message: prompt });
             } catch (e) {
@@ -254,7 +256,7 @@ console.log(
             // Inline-assist runs on the floating session — that's the
             // hotkey-driven path that triggered this overlay.
             const sessionId = await invoke('get_window_session', {
-                label: 'floating',
+                label: WINDOW.FLOATING,
             }).catch(() => null);
             await invoke('send_inline_assist', { sessionId, message: prompt });
         } catch (e) {
@@ -285,7 +287,7 @@ console.log(
             await appWindow.hide();
             try {
                 const sessionId = await invoke('get_window_session', {
-                    label: 'main',
+                    label: WINDOW.MAIN,
                 }).catch(() => null);
                 await invoke('open_chat_with_message', { sessionId, message: prompt });
             } catch (e) {
@@ -311,7 +313,7 @@ console.log(
                 transform: s.transform || '',
                 script: s.script || '',
             }));
-            const sessionId = await invoke('get_window_session', { label: 'floating' }).catch(
+            const sessionId = await invoke('get_window_session', { label: WINDOW.FLOATING }).catch(
                 () => null
             );
             const result = await invoke('execute_macro', {

@@ -16,6 +16,7 @@ pub mod config_migrations;
 pub mod context_rules;
 pub mod crash_recovery;
 pub mod error;
+pub mod events;
 pub mod extensions;
 pub mod hotkey_norm;
 pub mod link_metadata_cache;
@@ -31,6 +32,7 @@ pub mod process_manager;
 pub mod session_titler;
 pub mod startup;
 pub mod steering_io;
+pub mod window_labels;
 
 // Tauri-dependent modules
 pub mod automation;

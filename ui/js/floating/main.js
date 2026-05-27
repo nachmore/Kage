@@ -13,6 +13,8 @@ import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
+import { EVT } from '../shared/events.js';
+import { WINDOW } from '../shared/window-labels.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -28,7 +30,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         const cfg = await getConfig(invoke);
         verboseLogs = !!cfg?.system?.verbose_frontend_logging;
     } catch {}
-    interceptConsole('floating', { verbose: verboseLogs });
+    interceptConsole(WINDOW.FLOATING, { verbose: verboseLogs });
     initMarkdown();
     initThemeListener();
     initLinkHandler(invoke);
@@ -36,7 +38,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     _ts('Theme + markdown initialized');
 
     // Re-apply theme and opacity when config changes
-    listen('config_updated', async () => {
+    listen(EVT.CONFIG_UPDATED, async () => {
         await loadAndApplyTheme(invoke);
 
         // Pick up changes to the verbose-logging toggle live so the user

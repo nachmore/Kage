@@ -1,3 +1,6 @@
+import { EVT } from './events.js';
+import { WINDOW } from './window-labels.js';
+
 /**
  * Shared Script Editor component with syntax highlighting and AI generation.
  * Used by Quick Commands (shortcuts) and Automations (macros).
@@ -139,7 +142,7 @@ export function createScriptEditor(container, opts = {}) {
                 if (!invoke || !listen) throw new Error('Tauri not available');
 
                 let response = '';
-                const unlisten = await listen('message_chunk', (event) => {
+                const unlisten = await listen(EVT.MESSAGE_CHUNK, (event) => {
                     const delta =
                         event.payload && typeof event.payload === 'object'
                             ? event.payload.text || ''
@@ -148,13 +151,13 @@ export function createScriptEditor(container, opts = {}) {
                     if (aiStatus) aiStatus.textContent = 'Receiving...';
                 });
                 const completionPromise = new Promise((resolve) => {
-                    listen('message_complete', () => resolve()).then((fn) => {
+                    listen(EVT.MESSAGE_COMPLETE, () => resolve()).then((fn) => {
                         // Store unlisten for cleanup
                         completionPromise._unlisten = fn;
                     });
                 });
                 const sessionId = await invoke('get_window_session', {
-                    label: 'main',
+                    label: WINDOW.MAIN,
                 }).catch(() => null);
                 await invoke('send_message_streaming', {
                     sessionId,

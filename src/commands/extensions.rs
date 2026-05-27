@@ -1,9 +1,11 @@
 //! Tauri commands for extension, theme, and store management.
 
 use crate::error::AppError;
+use crate::events;
 use crate::extensions;
 use crate::lock_ext::LockExt;
 use crate::state::{FeatureServices, UiState};
+use crate::window_labels;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
 
@@ -77,7 +79,7 @@ pub async fn save_extension_config(
         .save()
         .map_err(|e| format!("Failed to save config: {}", e))?;
     info!("Saved extension config for '{}'", id);
-    if let Err(e) = app.emit("config_updated", ()) {
+    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
         error!("Failed to emit config_updated: {}", e);
     }
     Ok(())
@@ -109,7 +111,7 @@ pub async fn set_extension_enabled(
             "enabled": enabled,
         })),
     );
-    if let Err(e) = app.emit("config_updated", ()) {
+    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
         error!("Failed to emit config_updated: {}", e);
     }
     Ok(())
@@ -258,7 +260,7 @@ pub async fn uninstall_extension(
         Some(serde_json::json!({ "extension_id": id, "kind": kind })),
     );
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
+    if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
         error!("Failed to emit extensions_changed: {}", e);
     }
     Ok(())
@@ -280,7 +282,7 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         tab.as_deref().map(|t| serde_json::json!({ "tab": t })),
     );
 
-    if let Some(w) = app.get_webview_window("store") {
+    if let Some(w) = app.get_webview_window(window_labels::STORE) {
         let _ = w.show();
         let _ = w.set_focus();
         // Navigate to requested tab — use eval_script for reliability since
@@ -304,14 +306,18 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         None => "store.html".to_string(),
     };
 
-    let w = WebviewWindowBuilder::new(&app, "store", tauri::WebviewUrl::App(url_str.into()))
-        .title("Extension Store")
-        .inner_size(900.0, 640.0)
-        .min_inner_size(600.0, 400.0)
-        .center()
-        .visible(true)
-        .build()
-        .map_err(|e| format!("Failed to open store window: {}", e))?;
+    let w = WebviewWindowBuilder::new(
+        &app,
+        window_labels::STORE,
+        tauri::WebviewUrl::App(url_str.into()),
+    )
+    .title("Extension Store")
+    .inner_size(900.0, 640.0)
+    .min_inner_size(600.0, 400.0)
+    .center()
+    .visible(true)
+    .build()
+    .map_err(|e| format!("Failed to open store window: {}", e))?;
 
     let _ = w.set_background_color(Some(tauri::window::Color(30, 30, 30, 255)));
     crate::setup::update_activation_policy(&app);
@@ -599,7 +605,7 @@ pub async fn commit_extension_install(
         Some(serde_json::json!({ "extension_id": extension_id })),
     );
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
+    if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
         error!("Failed to emit extensions_changed: {}", e);
     }
     Ok(())
@@ -767,7 +773,7 @@ async fn store_install_inner(
     drop(config);
 
     if emit_changed {
-        if let Err(e) = app.emit("extensions_changed", ()) {
+        if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
             error!("Failed to emit extensions_changed: {}", e);
         }
     }
@@ -1062,7 +1068,7 @@ fn toggle_enabled_direct(
             "source": "welcome_batch",
         })),
     );
-    if let Err(e) = app.emit("config_updated", ()) {
+    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
         error!("Failed to emit config_updated: {}", e);
     }
     Ok(())
@@ -1127,7 +1133,7 @@ fn install_and_commit_direct(
         })),
     );
 
-    if let Err(e) = app.emit("extensions_changed", ()) {
+    if let Err(e) = app.emit(events::EXTENSIONS_CHANGED, ()) {
         error!("Failed to emit extensions_changed: {}", e);
     }
 

@@ -67,7 +67,7 @@ pub async fn save_config(
 
     info!("Configuration saved successfully");
 
-    if let Err(e) = app.emit("config_updated", ()) {
+    if let Err(e) = app.emit(crate::events::CONFIG_UPDATED, ()) {
         error!("Failed to emit config_updated event: {}", e);
     }
 
@@ -395,7 +395,7 @@ pub async fn import_config_bundle(
     };
     crate::os::set_startup_enabled(auto_start);
 
-    let _ = app.emit("config_updated", ());
+    let _ = app.emit(crate::events::CONFIG_UPDATED, ());
     Ok(summary)
 }
 

@@ -15,6 +15,7 @@ import { waitForTauri } from '../shared/tauri-init.js';
 import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.js';
 import { getConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
+import { EVT } from '../shared/events.js';
 
 let app = null;
 
@@ -95,7 +96,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     await refreshSidebarMascot();
 
     // Re-apply theme when config changes
-    listen('config_updated', async () => {
+    listen(EVT.CONFIG_UPDATED, async () => {
         loadAndApplyTheme(invoke);
         if (app?.speech) app.speech.updateVisibility();
         if (app?.extensionManager) {
@@ -126,7 +127,7 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
     });
 
     // Listen for extension install/uninstall
-    listen('extensions_changed', async () => {
+    listen(EVT.EXTENSIONS_CHANGED, async () => {
         if (app?.extensionManager) {
             await app.extensionManager.reload();
             app.renderExtensionToolbarButtons();

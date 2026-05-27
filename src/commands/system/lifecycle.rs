@@ -9,6 +9,7 @@
 use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, ChildProcesses, FeatureServices};
+use crate::window_labels;
 use log::{error, info, warn};
 use tauri::{Emitter, Manager, State};
 
@@ -16,7 +17,12 @@ use tauri::{Emitter, Manager, State};
 /// Called from tray quit, quit_app, and restart_app to avoid duplicated cleanup.
 pub fn graceful_shutdown(app: &tauri::AppHandle) {
     // Hide all windows and tray for instant visual feedback
-    for label in &["floating", "main", "settings", "context-menu"] {
+    for label in &[
+        window_labels::FLOATING,
+        window_labels::MAIN,
+        window_labels::SETTINGS,
+        window_labels::CONTEXT_MENU,
+    ] {
         if let Some(window) = app.get_webview_window(label) {
             let _ = window.hide();
         }
@@ -84,7 +90,7 @@ async fn shutdown_and_exit_inner(
             ui.window_sessions
                 .lock()
                 .ok()
-                .and_then(|m| m.get("main").cloned())
+                .and_then(|m| m.get(window_labels::MAIN).cloned())
         });
 
         // Snapshot whether auto-steering will actually run before we pay any
@@ -209,7 +215,7 @@ pub async fn quit_app(app: tauri::AppHandle) -> Result<(), AppError> {
 #[tauri::command]
 pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
     #[cfg(debug_assertions)]
-    if let Some(window) = app.get_webview_window("floating") {
+    if let Some(window) = app.get_webview_window(window_labels::FLOATING) {
         let window: tauri::WebviewWindow = window;
         window.open_devtools();
     }
@@ -224,7 +230,7 @@ pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), AppError> {
 pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
     // If window exists and is valid, just focus it
-    if let Some(w) = app.get_webview_window("welcome") {
+    if let Some(w) = app.get_webview_window(window_labels::WELCOME) {
         let _ = w.show();
         let _ = w.set_focus();
         crate::setup::update_activation_policy(&app);
@@ -233,7 +239,7 @@ pub async fn open_welcome_window(app: tauri::AppHandle) -> Result<(), AppError> 
     // Create fresh window (previous one was closed/destroyed)
     let w = WebviewWindowBuilder::new(
         &app,
-        "welcome",
+        window_labels::WELCOME,
         tauri::WebviewUrl::App("welcome.html".into()),
     )
     .title("Welcome to Kage")
@@ -346,13 +352,13 @@ pub fn show_welcome_banner(app: &tauri::AppHandle) {
         keycaps
     );
 
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         crate::commands::window::center_floating_on_active_monitor(&floating);
         let _ = floating.show();
         let _ = floating.set_focus();
     }
     let _ = app.emit(
-        "show_floating_banner",
+        crate::events::SHOW_FLOATING_BANNER,
         serde_json::json!({
             "icon": "👋",
             "text": text,
@@ -376,12 +382,12 @@ pub fn simulate_update_complete(app: &tauri::AppHandle) {
 
 /// Show the floating window with an update celebration banner.
 pub fn show_update_banner(app: &tauri::AppHandle) {
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.show();
         let _ = floating.set_focus();
     }
     let _ = app.emit(
-        "show_floating_banner",
+        crate::events::SHOW_FLOATING_BANNER,
         serde_json::json!({
             "icon": "🎉",
             "text": "Kage has been updated!",

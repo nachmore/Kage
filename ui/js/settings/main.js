@@ -26,6 +26,7 @@ import {
 import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/theme.js';
 import { cmdOrCtrlPressed } from '../shared/shortcuts.js';
 import { isMacOS } from '../shared/mac-permissions.js';
+import { EVT } from '../shared/events.js';
 
 // First-party settings modules (registration order matches the sidebar
 // in settings.html — see the comments in that file for the contract).
@@ -339,7 +340,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Listen for extension install/uninstall — hot-load new settings modules
     const { listen } = window.__TAURI__.event;
-    listen('extensions_changed', async () => {
+    listen(EVT.EXTENSIONS_CHANGED, async () => {
         console.log('[Settings] extensions_changed — checking for new modules');
         try {
             const userExts = await invoke('list_extensions');

@@ -161,7 +161,11 @@ impl UpdaterState {
 /// Excludes transient windows (context-menu, inline-assist) and
 /// install-flow windows (welcome, store) — those either pop up and
 /// disappear quickly or are explicitly out-of-band of regular use.
-const USER_WINDOW_LABELS: &[&str] = &["floating", "main", "settings"];
+const USER_WINDOW_LABELS: &[&str] = &[
+    crate::window_labels::FLOATING,
+    crate::window_labels::MAIN,
+    crate::window_labels::SETTINGS,
+];
 
 /// True if any of the user-facing windows is currently shown. Used by
 /// the idle loop to refresh `last_user_activity` while UI is up
@@ -825,7 +829,7 @@ pub fn start_update_loop(
                     updater_state.update_ready.store(true, Ordering::SeqCst);
 
                     // Notify the UI so the banner can light up.
-                    let _ = app_handle.emit("update_available", &version);
+                    let _ = app_handle.emit(crate::events::UPDATE_AVAILABLE, &version);
 
                     if let Ok(mut cfg) = config.try_lock() {
                         cfg.updates.last_check_time = Some(chrono::Utc::now().to_rfc3339());
@@ -954,9 +958,9 @@ pub fn start_update_loop(
             // (post-update banner shows the floating window first);
             // fall back to main's session.
             let session_id = window_sessions_for_idle.lock().ok().and_then(|m| {
-                m.get("floating")
+                m.get(crate::window_labels::FLOATING)
                     .cloned()
-                    .or_else(|| m.get("main").cloned())
+                    .or_else(|| m.get(crate::window_labels::MAIN).cloned())
             });
             persist_resume_marker(session_id.as_deref());
             persist_install_source(InstallSource::Idle);

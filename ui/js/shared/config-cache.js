@@ -28,6 +28,8 @@
  * config_updated arrives. That's fine — windows don't share state in JS.
  */
 
+import { EVT } from './events.js';
+
 let _cachedPromise = null;
 let _listenerInstalled = false;
 
@@ -46,7 +48,7 @@ function _ensureInvalidationListener() {
         return;
     }
     _listenerInstalled = true;
-    listen('config_updated', () => {
+    listen(EVT.CONFIG_UPDATED, () => {
         _cachedPromise = null;
     }).catch(() => {
         // listen() rejected — drop the flag so a later getConfig retries.

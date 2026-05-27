@@ -8,6 +8,7 @@ use crate::error::AppError;
 use crate::lock_ext::LockExt;
 use crate::os;
 use crate::state::FeatureServices;
+use crate::window_labels;
 use log::info;
 use tauri::{Manager, State};
 
@@ -434,7 +435,7 @@ pub async fn get_process_name(pid: u32) -> Result<String, AppError> {
 #[tauri::command]
 pub async fn focus_open_window(handle: u64, app: tauri::AppHandle) -> Result<(), AppError> {
     // Hide the floating window before focusing the target
-    if let Some(floating) = app.get_webview_window("floating") {
+    if let Some(floating) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating.hide();
     }
     Ok(crate::os::focus_window(handle)?)

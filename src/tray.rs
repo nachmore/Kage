@@ -1,3 +1,5 @@
+use crate::events;
+use crate::window_labels;
 use log::info;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -75,7 +77,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             info!("System tray menu item clicked: {}", event.id().as_ref());
             match event.id().as_ref() {
                 "show" => {
-                    if let Some(window) = app_handle_inner.get_webview_window("main") {
+                    if let Some(window) = app_handle_inner.get_webview_window(window_labels::MAIN) {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
@@ -107,27 +109,33 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 "inspect" => {
                     info!("Opening chat inspector");
                     #[cfg(debug_assertions)]
-                    if let Some(window) = app_handle_inner.get_webview_window("main") {
+                    if let Some(window) = app_handle_inner.get_webview_window(window_labels::MAIN) {
                         window.open_devtools();
                     }
                 }
                 "inspect-floating" => {
                     info!("Opening floating inspector");
                     #[cfg(debug_assertions)]
-                    if let Some(window) = app_handle_inner.get_webview_window("floating") {
+                    if let Some(window) =
+                        app_handle_inner.get_webview_window(window_labels::FLOATING)
+                    {
                         let _ = window.show();
                         window.open_devtools();
                     }
                 }
                 "reload" => {
                     info!("Reloading UX");
-                    if let Some(window) = app_handle_inner.get_webview_window("main") {
+                    if let Some(window) = app_handle_inner.get_webview_window(window_labels::MAIN) {
                         let _ = window.eval("window.location.reload()");
                     }
-                    if let Some(window) = app_handle_inner.get_webview_window("floating") {
+                    if let Some(window) =
+                        app_handle_inner.get_webview_window(window_labels::FLOATING)
+                    {
                         let _ = window.eval("window.location.reload()");
                     }
-                    if let Some(window) = app_handle_inner.get_webview_window("settings") {
+                    if let Some(window) =
+                        app_handle_inner.get_webview_window(window_labels::SETTINGS)
+                    {
                         let _ = window.eval("window.location.reload()");
                     }
                 }
@@ -149,11 +157,13 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
                 "test-update-available" => {
                     use tauri::Emitter;
                     info!("Testing update available banner");
-                    if let Some(floating) = app_handle_inner.get_webview_window("floating") {
+                    if let Some(floating) =
+                        app_handle_inner.get_webview_window(window_labels::FLOATING)
+                    {
                         let _ = floating.show();
                         let _ = floating.set_focus();
                     }
-                    let _ = app_handle_inner.emit("update_available", "99.0.0");
+                    let _ = app_handle_inner.emit(events::UPDATE_AVAILABLE, "99.0.0");
                 }
                 "dump-threads" => {
                     info!("Dumping thread info...");
@@ -184,7 +194,7 @@ pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn st
             } = event
             {
                 info!("System tray left clicked");
-                if let Some(window) = app_handle.get_webview_window("main") {
+                if let Some(window) = app_handle.get_webview_window(window_labels::MAIN) {
                     let _ = window.show();
                     let _ = window.set_focus();
                 }

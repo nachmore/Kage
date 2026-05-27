@@ -10,8 +10,10 @@
 //! each concern, verified by building the binary and exercising it
 //! manually.
 
+use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, ChildProcesses, FeatureServices, UiState};
+use crate::window_labels::{self, is_session_host_label};
 use log::{error, info, warn};
 use std::sync::Arc;
 use tauri::{App, AppHandle, Listener, Manager};
@@ -21,7 +23,7 @@ use tauri::{App, AppHandle, Listener, Manager};
 /// are logged but not fatal — if e.g. the floating window failed to
 /// register we want to know about it, not crash setup.
 pub fn configure_transparent_windows(app: &App) {
-    if let Some(floating_window) = app.get_webview_window("floating") {
+    if let Some(floating_window) = app.get_webview_window(window_labels::FLOATING) {
         let _ = floating_window.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
         #[cfg(target_os = "windows")]
         let _ = floating_window.set_shadow(false);
@@ -29,13 +31,13 @@ pub fn configure_transparent_windows(app: &App) {
         error!("Floating window not found during setup — UI will be limited");
     }
 
-    if let Some(ctx_menu) = app.get_webview_window("context-menu") {
+    if let Some(ctx_menu) = app.get_webview_window(window_labels::CONTEXT_MENU) {
         let _ = ctx_menu.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
         #[cfg(target_os = "windows")]
         let _ = ctx_menu.set_shadow(false);
     }
 
-    if let Some(ia_win) = app.get_webview_window("inline-assist") {
+    if let Some(ia_win) = app.get_webview_window(window_labels::INLINE_ASSIST) {
         let _ = ia_win.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
         #[cfg(target_os = "windows")]
         let _ = ia_win.set_shadow(false);
@@ -59,7 +61,7 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
         let ia = initial_config.get_inline_assist_hotkey_string();
         Arc::new(std::sync::Mutex::new((main, cb, ia)))
     };
-    app.listen("config_updated", move |_| {
+    app.listen(events::CONFIG_UPDATED, move |_| {
         // Read the new hotkey strings out under a brief lock, then drop the
         // guard before doing anything else. Using lock() (via lock_or_recover)
         // instead of try_lock means we wait briefly under contention rather
@@ -98,19 +100,19 @@ pub fn install_hotkey_hot_reload(app: &App, initial_config: &crate::config::Conf
 /// ever uses the floating widget.
 pub fn install_show_sessions_listener(app: &App) {
     let app_handle = app.handle().clone();
-    app.listen("show-sessions", move |_| {
+    app.listen(events::SHOW_SESSIONS, move |_| {
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             let target_label = handle
                 .try_state::<UiState>()
                 .and_then(|ui| ui.last_focused_chat.lock().ok().and_then(|s| s.clone()))
                 .filter(|label| handle.get_webview_window(label).is_some())
-                .unwrap_or_else(|| "main".to_string());
+                .unwrap_or_else(|| window_labels::MAIN.to_string());
             info!(
-                "show-sessions event received, surfacing window: {}",
+                "show_sessions event received, surfacing window: {}",
                 target_label
             );
-            if target_label == "main" {
+            if target_label == window_labels::MAIN {
                 if let Err(e) = crate::commands::window::open_chat_window(handle.clone()).await {
                     log::error!("Failed to open chat window from IPC signal: {}", e);
                 }
@@ -128,11 +130,11 @@ pub fn install_show_sessions_listener(app: &App) {
 /// chat-* peer having to coordinate with main. `chat-<uuid>` peers
 /// install their own listener in `open_new_chat_window`.
 pub fn install_main_focus_tracker(app: &App) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_webview_window(window_labels::MAIN) {
         let app_handle = app.handle().clone();
         window.on_window_event(move |event| {
             if matches!(event, tauri::WindowEvent::Focused(true)) {
-                crate::commands::window::mark_focused_chat(&app_handle, "main");
+                crate::commands::window::mark_focused_chat(&app_handle, window_labels::MAIN);
             }
         });
     }
@@ -308,7 +310,7 @@ pub fn handle_window_close(window: &tauri::Window, api: &tauri::CloseRequestApi)
     // decision. Schedule the check; if the user reopens within the
     // grace window (e.g. by clicking the tray) we cancel.
     let label = window.label();
-    if label == "main" || label.starts_with("chat-") {
+    if is_session_host_label(label) {
         crate::commands::window::schedule_chat_shutdown_check_public(window.app_handle());
     }
 
@@ -363,7 +365,12 @@ pub fn update_activation_policy_excluding(app_handle: &AppHandle, exclude: Optio
     use tauri::ActivationPolicy;
 
     // Windows that count as "real" for Cmd+Tab purposes
-    let real_windows = ["main", "settings", "store", "welcome"];
+    let real_windows = [
+        window_labels::MAIN,
+        window_labels::SETTINGS,
+        window_labels::STORE,
+        window_labels::WELCOME,
+    ];
 
     let any_visible = real_windows.iter().any(|label| {
         if exclude == Some(*label) {
@@ -457,7 +464,7 @@ pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
     if source != InstallSource::Interactive {
         return;
     }
-    if let Some(floating) = app_handle.get_webview_window("floating") {
+    if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
         crate::commands::window::center_floating_on_active_monitor(&floating);
         let _ = floating.show();
         let _ = floating.set_focus();
@@ -512,7 +519,11 @@ pub fn maybe_spawn_default_session(
         info!("Connecting ACP client on launch...");
         if let Err(e) = acp_client.connect() {
             error!("Failed to connect on launch: {}", e);
-            emit_session_pin_failed(&app_handle, "floating", &format!("connect failed: {}", e));
+            emit_session_pin_failed(
+                &app_handle,
+                window_labels::FLOATING,
+                &format!("connect failed: {}", e),
+            );
             return;
         }
 
@@ -585,7 +596,7 @@ pub fn maybe_spawn_default_session(
                             error!("Fallback session creation also failed: {}", e);
                             emit_session_pin_failed(
                                 &app_handle,
-                                "floating",
+                                window_labels::FLOATING,
                                 &format!("fallback session/new failed: {}", e),
                             );
                             return;
@@ -610,7 +621,7 @@ pub fn maybe_spawn_default_session(
                     error!("Failed to create default session on launch: {}", e);
                     emit_session_pin_failed(
                         &app_handle,
-                        "floating",
+                        window_labels::FLOATING,
                         &format!("session/new failed: {}", e),
                     );
                     return;
@@ -662,13 +673,13 @@ fn pin_session_to_floating(
 ) {
     use tauri::Emitter;
     if let Ok(mut ws) = window_sessions.lock() {
-        ws.insert("floating".to_string(), session_id.to_string());
+        ws.insert(window_labels::FLOATING.to_string(), session_id.to_string());
     }
     crate::commands::sessions::update_window_title(
         app,
         config_arc,
         session_cache_arc,
-        "floating",
+        window_labels::FLOATING,
         session_id,
     );
     // Broadcast so the floating webview can adopt this id without
@@ -679,7 +690,7 @@ fn pin_session_to_floating(
     let _ = app.emit(
         "session_pinned",
         serde_json::json!({
-            "label": "floating",
+            "label": window_labels::FLOATING,
             "sessionId": session_id,
         }),
     );

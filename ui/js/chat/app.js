@@ -16,6 +16,8 @@ import {
 import { loadSlashCommands, executeCommand } from '../shared/commands.js';
 import { buildChatMarkdown, defaultExportFilename } from '../shared/chat-export.js';
 import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
+import { EVT } from '../shared/events.js';
+import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { mascotHTML } from '../shared/mascot.js';
 import {
     isOnline,
@@ -92,7 +94,7 @@ export class ChatApp {
         // are peers spawned via open_new_chat_window. Used everywhere
         // we need to read/write per-window state (session bookkeeping,
         // permission routing).
-        this.windowLabel = appWindow?.label || 'main';
+        this.windowLabel = appWindow?.label || WINDOW.MAIN;
 
         this.messages = [];
         this.currentStreamingMessage = null;
@@ -318,7 +320,7 @@ export class ChatApp {
                             app.invoke,
                             'Kage',
                             preview || 'Response ready',
-                            'main'
+                            WINDOW.MAIN
                         );
                     }
                 } catch {
@@ -783,8 +785,8 @@ export class ChatApp {
             this._windowFocused = false;
         });
 
-        this.listen('message_chunk', (event) => this.handleMessageChunk(event));
-        this.listen('message_complete', (event) => {
+        this.listen(EVT.MESSAGE_CHUNK, (event) => this.handleMessageChunk(event));
+        this.listen(EVT.MESSAGE_COMPLETE, (event) => {
             // Recovery may have moved us to a fresh session; pick up
             // the new id so subsequent sends/cancels target it.
             const newId = event?.payload?.sessionId;
@@ -799,8 +801,8 @@ export class ChatApp {
             }
             this.handleMessageComplete();
         });
-        this.listen('message_error', (event) => this.handleMessageError(event));
-        this.listen('tool_call_update', (event) => this.handleToolCallUpdate(event));
+        this.listen(EVT.MESSAGE_ERROR, (event) => this.handleMessageError(event));
+        this.listen(EVT.TOOL_CALL_UPDATE, (event) => this.handleToolCallUpdate(event));
         this.listen('session_reset', (event) => {
             // session_reset is broadcast to all windows; only adopt the
             // new id if our pinned session was the one that died.
@@ -879,7 +881,7 @@ export class ChatApp {
         });
 
         // Compaction status from ACP notifications (works for both auto and manual /compact)
-        this.listen('compaction_status', (event) => {
+        this.listen(EVT.COMPACTION_STATUS, (event) => {
             const status = event.payload?.params?.status?.type;
             if (status === 'started') {
                 this.showCompactingNotice();
@@ -950,7 +952,7 @@ export class ChatApp {
     async loadFloatingSessionId() {
         try {
             this.floatingSessionId = await this.invoke('get_window_session', {
-                label: 'floating',
+                label: WINDOW.FLOATING,
             });
         } catch (e) {
             console.error('Failed to get floating session ID:', e);
@@ -991,7 +993,7 @@ export class ChatApp {
     async _bootstrapChatPeerSession() {
         if (this.currentAcpSessionId) return; // already bootstrapped
 
-        const isPeer = this.windowLabel.startsWith('chat-');
+        const isPeer = isChatLabel(this.windowLabel);
         if (isPeer) {
             const params = new URLSearchParams(window.location.search);
             const resumeId = params.get('resumeSessionId');
@@ -1012,7 +1014,7 @@ export class ChatApp {
         // ongoing conversation. switch_acp_session sends session/load
         // and pins to this window's label (`main`).
         const floatingId = await this.invoke('get_window_session', {
-            label: 'floating',
+            label: WINDOW.FLOATING,
         }).catch(() => null);
         if (!floatingId) {
             console.log('[CHAT] main bootstrap: no floating session yet, leaving empty');
