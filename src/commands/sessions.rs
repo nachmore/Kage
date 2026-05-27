@@ -427,10 +427,21 @@ pub struct SessionCache {
 /// Start a background file watcher on the sessions directory.
 /// When files change, invalidates the session cache and emits a Tauri event
 /// so the frontend can refresh the session list.
+/// Handle returned from `start_session_watcher`. Dropping the handle
+/// signals the watcher thread to exit (which drops the inner `Watcher`
+/// and unsubscribes from FSEvents/inotify/ReadDirectoryChangesW). Held
+/// in a process-wide static so the Tauri `RunEvent::Exit` hook can
+/// drop it during clean shutdown.
+pub struct SessionWatcherHandle {
+    /// Closing this channel wakes the thread out of its `recv()` and
+    /// makes it exit. The receiver lives on the watcher thread.
+    _shutdown_tx: std::sync::mpsc::Sender<()>,
+}
+
 pub fn start_session_watcher(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     app_handle: tauri::AppHandle,
-) {
+) -> Option<SessionWatcherHandle> {
     use notify::{Event, EventKind, RecursiveMode, Watcher};
     use tauri::Emitter;
 
@@ -438,7 +449,7 @@ pub fn start_session_watcher(
         Some(dir) => dir,
         None => {
             log::warn!("Cannot start session watcher: no home directory");
-            return;
+            return None;
         }
     };
 
@@ -446,6 +457,8 @@ pub fn start_session_watcher(
         // Create the directory so the watcher has something to watch
         let _ = fs::create_dir_all(&sessions_dir);
     }
+
+    let (shutdown_tx, shutdown_rx) = std::sync::mpsc::channel::<()>();
 
     std::thread::Builder::new()
         .name("session-watcher".into())
@@ -520,12 +533,25 @@ pub fn start_session_watcher(
 
             log::info!("Session watcher started on {:?}", sessions_dir);
 
-            // Keep the thread alive — the watcher is dropped when this thread exits
-            loop {
-                std::thread::sleep(std::time::Duration::from_secs(3600));
+            // Block until the shutdown sender is dropped. Any send is
+            // ignored; we only care about the channel disconnecting.
+            // When the function returns, `watcher` drops and the
+            // platform-specific FS subscription is unregistered cleanly
+            // (Core Foundation run loop on macOS, inotify fd on Linux,
+            // ReadDirectoryChangesW handle on Windows). Pre-fix the
+            // thread sat in `sleep(3600)` forever, so the watcher was
+            // only ever cleaned up by process death.
+            match shutdown_rx.recv() {
+                Ok(()) | Err(_) => {
+                    log::info!("Session watcher shutting down");
+                }
             }
         })
         .expect("Failed to spawn session-watcher thread");
+
+    Some(SessionWatcherHandle {
+        _shutdown_tx: shutdown_tx,
+    })
 }
 
 #[tauri::command]

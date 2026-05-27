@@ -314,6 +314,18 @@ async fn run() {
     // need it (hotkey hot-reload installer, autostart pocket TTS, etc.).
     let config_for_setup = config.clone();
 
+    // Holder for the session-watcher's shutdown handle. Populated in
+    // `setup()` once the AppHandle is available; dropped in the
+    // RunEvent::Exit branch below to give the watcher's background
+    // thread a clean shutdown signal (which in turn drops the FS
+    // notification subscription cleanly). Pre-fix the watcher thread
+    // sat in `loop { sleep(3600s) }` and was only ever cleaned up by
+    // process death.
+    let session_watcher_handle: Arc<
+        std::sync::Mutex<Option<commands::sessions::SessionWatcherHandle>>,
+    > = Arc::new(std::sync::Mutex::new(None));
+    let session_watcher_handle_for_setup = session_watcher_handle.clone();
+
     let mut builder = tauri::Builder::default()
         // Single-instance enforcement. Must be the FIRST plugin registered
         // (per the plugin's docs) so the second-process exit happens before
@@ -574,8 +586,14 @@ async fn run() {
             // Auto-start Pocket TTS server if configured
             setup::maybe_autostart_pocket_tts(app, &config_for_setup);
 
-            // Watch the sessions directory for external changes (e.g., the agent backend creating sessions)
-            setup::start_session_watcher(app);
+            // Watch the sessions directory for external changes (e.g., the agent backend creating sessions).
+            // The returned handle owns the shutdown signal — stash it in the
+            // process-wide holder so RunEvent::Exit can drop it cleanly.
+            if let Some(h) = setup::start_session_watcher(app) {
+                if let Ok(mut slot) = session_watcher_handle_for_setup.lock() {
+                    *slot = Some(h);
+                }
+            }
 
             // Self-heal computer-control MCP registration: keep the
             // path in mcp.json in sync with the current install, and
@@ -805,9 +823,14 @@ async fn run() {
 
     // Drive the Tauri event loop, flushing telemetry on exit so the
     // final app_exited event actually reaches the server before the
-    // process dies.
-    app.run(|handler, event| {
+    // process dies. Drop the session-watcher handle on Exit so the
+    // background thread sees its shutdown channel disconnect, drops
+    // the platform FS subscription, and exits cleanly.
+    app.run(move |handler, event| {
         if let tauri::RunEvent::Exit = event {
+            if let Ok(mut slot) = session_watcher_handle.lock() {
+                slot.take();
+            }
             telemetry::record_shutdown(handler);
         }
     });
