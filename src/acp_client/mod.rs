@@ -204,6 +204,18 @@ impl AcpClient {
         // session/new straight at a fresh kiro-cli that hadn't seen
         // the protocol handshake and it'd reject the request.
         *self.initialized.lock_or_recover() = false;
+        // Reset the compaction-in-flight flag and wake any thread
+        // currently inside `wait_for_compaction`. If the agent died
+        // mid-compaction the "completed" notification was lost; without
+        // this every subsequent `send_chat_streaming` would block in
+        // the wait_timeout_while for the full 60s before giving up.
+        let (lock, cvar) = &*self.compacting;
+        let mut is_compacting = lock.lock_or_recover();
+        if *is_compacting {
+            log::info!("Disconnect: clearing in-flight compaction gate");
+            *is_compacting = false;
+            cvar.notify_all();
+        }
     }
 
     /// Send a JSON-RPC request and wait for its matching response. The
@@ -284,28 +296,52 @@ impl AcpClient {
 
     /// Block the current thread until compaction is finished (with a timeout).
     /// Returns true if we waited, false if compaction wasn't active.
+    ///
+    /// Wakes early if the transport disconnects mid-wait. The reader
+    /// thread doesn't know about the compaction Condvar, so we
+    /// poll-with-timeout in 500ms slices and re-check `is_connected()`
+    /// each time. Without this, an agent that died mid-compaction
+    /// would gate every subsequent send for the full 60s before the
+    /// timeout fired (the "completed" notification was lost with the
+    /// reader thread). Disconnect-then-reconnect sessions used to feel
+    /// permanently broken.
     pub fn wait_for_compaction(&self) -> bool {
         let (lock, cvar) = &*self.compacting;
-        let compacting = lock.lock_or_recover();
+        let mut compacting = lock.lock_or_recover();
         if !*compacting {
             return false;
         }
         info!("Waiting for compaction to finish before sending prompt...");
-        // Wait up to 60 seconds for compaction to complete
-        let timeout = std::time::Duration::from_secs(60);
-        let result = match cvar.wait_timeout_while(compacting, timeout, |c| *c) {
-            Ok(r) => r,
-            Err(poisoned) => {
-                log::warn!("Compaction condvar poisoned — recovering");
-                poisoned.into_inner()
+        let total_timeout = std::time::Duration::from_secs(60);
+        let slice = std::time::Duration::from_millis(500);
+        let start = std::time::Instant::now();
+        loop {
+            if !*compacting {
+                info!("Compaction finished, proceeding with prompt");
+                return true;
             }
-        };
-        if result.1.timed_out() {
-            log::warn!("Compaction wait timed out after 60s — sending anyway");
-        } else {
-            info!("Compaction finished, proceeding with prompt");
+            if !self.transport.is_connected() {
+                log::warn!("Compaction wait aborted — transport disconnected");
+                // Clear the gate so a future reconnect doesn't inherit
+                // a stale "is_compacting=true" if the disconnect path
+                // didn't already clear it.
+                *compacting = false;
+                cvar.notify_all();
+                return true;
+            }
+            let elapsed = start.elapsed();
+            if elapsed >= total_timeout {
+                log::warn!("Compaction wait timed out after 60s — sending anyway");
+                return true;
+            }
+            let remaining = total_timeout - elapsed;
+            let this_slice = remaining.min(slice);
+            let (g, _) = match cvar.wait_timeout(compacting, this_slice) {
+                Ok(r) => r,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            compacting = g;
         }
-        true
     }
 }
 

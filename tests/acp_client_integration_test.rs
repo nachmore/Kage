@@ -451,3 +451,116 @@ fn cancel_session_targets_only_the_named_session() {
     assert_eq!(seen[0]["method"], "session/cancel");
     assert_eq!(seen[0]["params"]["sessionId"], "sess-A");
 }
+
+// --- Compaction gate ----------------------------------------------------
+//
+// `wait_for_compaction` blocks outgoing prompts while the agent is
+// compacting context. Two failure modes used to make sends hang for the
+// full 60s timeout:
+//   1. Agent disconnects mid-compaction — the "completed" notification
+//      that would clear `is_compacting` never arrives.
+//   2. Reader thread dies (EOF on stream) — same outcome.
+// Both got every subsequent send_chat_streaming gated for 60s.
+
+#[test]
+fn wait_for_compaction_returns_immediately_when_not_compacting() {
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let start = std::time::Instant::now();
+    let waited = client.wait_for_compaction();
+    let elapsed = start.elapsed();
+
+    assert!(
+        !waited,
+        "wait_for_compaction must return false when no compaction is active"
+    );
+    // Should be near-instant — the function reads the bool, sees false,
+    // returns. Anything over a few ms means we accidentally entered the
+    // wait loop.
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "expected fast path, got {:?}",
+        elapsed
+    );
+}
+
+#[test]
+fn disconnect_clears_in_flight_compaction_gate() {
+    // Force the gate on by toggling the bool directly (mimicking what
+    // the compaction/status="started" notification handler does), then
+    // disconnect, then verify wait_for_compaction returns instantly.
+    // Pre-fix this used to gate for the full 60s.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    // Mark compaction in flight.
+    {
+        let (lock, _cvar) = &*client.compacting;
+        let mut g = lock.lock().expect("compaction lock");
+        *g = true;
+    }
+
+    // disconnect() must clear the gate and notify any waiter.
+    client.disconnect();
+
+    let start = std::time::Instant::now();
+    let waited = client.wait_for_compaction();
+    let elapsed = start.elapsed();
+    assert!(
+        !waited,
+        "after disconnect, wait_for_compaction must see is_compacting=false (false return)"
+    );
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "wait must return instantly after disconnect cleared the gate, got {:?}",
+        elapsed
+    );
+}
+
+#[test]
+fn wait_for_compaction_aborts_when_transport_disconnects_mid_wait() {
+    // Reproduce the original bug: agent dies mid-compaction without the
+    // "completed" notification ever arriving. wait_for_compaction polls
+    // is_connected() and bails when it sees the disconnect, instead of
+    // sleeping for the full 60s.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    // Mark compaction in flight WITHOUT going through disconnect (so
+    // the gate is still set when we call wait_for_compaction).
+    {
+        let (lock, _cvar) = &*client.compacting;
+        let mut g = lock.lock().expect("compaction lock");
+        *g = true;
+    }
+
+    // Drop the mock server 200ms in. That closes the TCP connection,
+    // the reader thread reads Ok(0) (EOF), and flips `connected=false`.
+    // wait_for_compaction's polling loop should detect that and return.
+    let client_arc = Arc::new(client);
+    let waiter = client_arc.clone();
+    let handle = std::thread::spawn(move || {
+        let start = std::time::Instant::now();
+        let waited = waiter.wait_for_compaction();
+        (waited, start.elapsed())
+    });
+    std::thread::sleep(Duration::from_millis(200));
+    drop(server); // EOFs the connection — reader sets connected=false
+
+    let (waited, elapsed) = handle.join().expect("waiter thread");
+    assert!(
+        waited,
+        "wait_for_compaction returns true when it actually waited"
+    );
+    // Polling slice is 500ms; worst case is ~700ms (200ms our sleep +
+    // 500ms next poll). Definitely not 60s. Slack for slow CI.
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "wait must detect transport disconnect, got {:?}",
+        elapsed
+    );
+}
