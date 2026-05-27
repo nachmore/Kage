@@ -51,11 +51,24 @@ use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
-/// In debug builds on Windows, attach to the parent console (if any) so that
-/// logs appear when launched from a terminal. If launched from Explorer/GUI,
-/// AttachConsole fails silently and no console is shown.
-#[cfg(all(windows, debug_assertions))]
+/// On Windows, attach to the parent console (if any) so that logs
+/// appear when launched from a terminal. If launched from
+/// Explorer/GUI/tray, AttachConsole fails silently and no console is
+/// shown.
+///
+/// Audience matches `logger::init_logger`'s trace gate: `cargo run`
+/// debug builds, locally-built dev installers
+/// (`KAGE_LOCAL_DEV_BUILD` set by `build_dev_installer.*`), and CI's
+/// nightly channel (version contains `+dev.`). Stable/beta release
+/// binaries skip the attach so they stay clean.
+#[cfg(windows)]
 fn attach_parent_console() {
+    let allowed = cfg!(debug_assertions)
+        || option_env!("KAGE_LOCAL_DEV_BUILD").is_some()
+        || env!("CARGO_PKG_VERSION").contains("+dev.");
+    if !allowed {
+        return;
+    }
     extern "system" {
         fn AttachConsole(process_id: u32) -> i32;
     }
@@ -110,7 +123,7 @@ fn main() {
 /// subcommand can return before we spin up Tokio. See `fn main` for the
 /// rationale.
 async fn run() {
-    #[cfg(all(windows, debug_assertions))]
+    #[cfg(windows)]
     attach_parent_console();
 
     // Install the panic hook as early as possible so any panic during startup
