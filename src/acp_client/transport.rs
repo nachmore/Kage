@@ -233,6 +233,14 @@ impl AcpTransport {
                     Ok(0) => {
                         warn!("Reader: stream closed (EOF)");
                         *connected.lock_or_recover() = false;
+                        // Drop every pending inbox sender. Each blocked
+                        // send_request caller wakes with a Disconnected
+                        // error within milliseconds rather than waiting
+                        // for the per-request 60s timeout. Pre-fix, the
+                        // reader silently flipped connected=false and
+                        // every in-flight request continued blocking
+                        // until the timer fired.
+                        pending.lock_or_recover().clear();
                         break;
                     }
                     Ok(_) => {}
@@ -244,6 +252,8 @@ impl AcpTransport {
                         }
                         error!("Reader: error: {}", e);
                         *connected.lock_or_recover() = false;
+                        // Same wakeup as the EOF branch above.
+                        pending.lock_or_recover().clear();
                         break;
                     }
                 }
@@ -436,6 +446,11 @@ impl AcpTransport {
         *self.connected.lock_or_recover() = false;
         *self.pipe_stdin.lock_or_recover() = None;
         *self.tcp_writer.lock_or_recover() = None;
+        // Drop every pending inbox sender so blocked send_request
+        // callers wake immediately with a Disconnected error rather
+        // than timing out 60s later. Same semantics as the reader
+        // thread's EOF cleanup.
+        self.pending.lock_or_recover().clear();
         let mut pm = self.process_manager.lock_or_recover();
         pm.terminate();
     }

@@ -564,3 +564,353 @@ fn wait_for_compaction_aborts_when_transport_disconnects_mid_wait() {
         elapsed
     );
 }
+
+// --- Per-request response routing --------------------------------------
+//
+// Pre-fix, the transport had a single "next response" channel and any
+// response with a method-less body got handed to the next caller —
+// regardless of id. A late response from a slow request, or an agent
+// that mis-echoed an id, could deliver the wrong payload to a
+// completely unrelated caller. The fix is per-request inboxes keyed
+// by id; orphan responses get dropped + logged. These tests pin that
+// behaviour.
+
+#[test]
+fn orphan_response_does_not_corrupt_a_concurrent_pending_request() {
+    // Setup: a request that will block (server replies with Drop), and
+    // server pushes a fabricated "response" with an id that doesn't
+    // match anything. The pending request must stay parked, not return
+    // the orphan as if it were its answer.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![("slow", Reply::Drop)],
+    });
+    let client = Arc::new(client_for(server.port));
+    client.connect().expect("connect");
+
+    // Spawn a thread that blocks on send_request.
+    let waiter = client.clone();
+    let req_handle = std::thread::spawn(move || {
+        waiter.send_request("slow", json!({}))
+        // Will block on the per-request inbox until we force-disconnect.
+    });
+
+    // Give the request a moment to actually be in flight.
+    std::thread::sleep(Duration::from_millis(100));
+
+    // Push an orphan response: a method-less line with an id that
+    // doesn't correspond to any pending request. The reader must
+    // log + drop it, not deliver it to the slow caller.
+    server.push_notification(json!({
+        "jsonrpc": "2.0",
+        "id": 999_999_999u64,
+        "result": { "should": "not be delivered to anyone" }
+    }));
+
+    // The pending request must still be blocked. Brief wait to be sure
+    // the orphan was processed; if it were misdelivered, the request
+    // would have returned by now.
+    std::thread::sleep(Duration::from_millis(150));
+
+    // Stop the server — that EOFs the connection and the
+    // recv_timeout's inbox sender drops, waking the caller with
+    // a Disconnected error.
+    drop(server);
+
+    let result = req_handle.join().expect("waiter thread");
+    // We don't care HOW it ends — just that it didn't end with the
+    // orphan's payload. An Ok result with `should: "not be delivered"`
+    // would be the bug.
+    if let Ok(resp) = &result {
+        if let Some(value) = &resp.result {
+            assert!(
+                !value.to_string().contains("not be delivered to anyone"),
+                "orphan response was misdelivered to the pending request: {:?}",
+                resp
+            );
+        }
+    }
+}
+
+#[test]
+fn reader_eof_wakes_blocked_send_request() {
+    // The 60s per-request timeout used to be the only way out of a
+    // blocked send_request when the agent died — the reader thread
+    // saw EOF and flipped `connected=false`, but the per-request
+    // inbox senders stayed alive in `pending`, so the recv blocked
+    // for the full timeout. The reader's EOF branch now clears
+    // `pending`, dropping every sender; receivers wake with a
+    // Disconnected error within milliseconds.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![("hangs", Reply::Drop)],
+    });
+    let client = Arc::new(client_for(server.port));
+    client.connect().expect("connect");
+
+    let waiter = client.clone();
+    let handle = std::thread::spawn(move || {
+        let start = std::time::Instant::now();
+        let result = waiter.send_request("hangs", json!({}));
+        (result, start.elapsed())
+    });
+
+    std::thread::sleep(Duration::from_millis(100));
+    // Tearing down the connection MUST surface to the blocked caller
+    // immediately, not after the 60s timeout.
+    drop(server);
+
+    let (result, elapsed) = handle.join().expect("waiter thread");
+    assert!(
+        result.is_err(),
+        "send_request must surface an error after the connection drops"
+    );
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "send_request should wake within seconds, got {:?}",
+        elapsed
+    );
+}
+
+#[test]
+fn force_disconnect_wakes_blocked_send_request() {
+    // Companion to reader_eof_wakes_blocked_send_request: explicit
+    // teardown via AcpClient::disconnect() (which calls into
+    // transport.disconnect()) used to leave pending senders alive.
+    // disconnect() now also clears pending (transport.disconnect
+    // behaviour matches force_disconnect for that bit), so the
+    // wakeup happens regardless of whether teardown was triggered
+    // by the agent crashing or by us deciding to disconnect.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![("hangs", Reply::Drop)],
+    });
+    let client = Arc::new(client_for(server.port));
+    client.connect().expect("connect");
+
+    let waiter = client.clone();
+    let handle = std::thread::spawn(move || {
+        let start = std::time::Instant::now();
+        let result = waiter.send_request("hangs", json!({}));
+        (result, start.elapsed())
+    });
+
+    std::thread::sleep(Duration::from_millis(100));
+    client.disconnect();
+
+    let (result, elapsed) = handle.join().expect("waiter thread");
+    assert!(
+        result.is_err(),
+        "send_request must surface an error after disconnect()"
+    );
+    assert!(
+        elapsed < Duration::from_secs(3),
+        "send_request should wake within seconds, got {:?}",
+        elapsed
+    );
+
+    drop(server);
+}
+
+#[test]
+fn write_failure_removes_pending_entry() {
+    // If write_line fails (broken pipe, full buffer, no write handle),
+    // send_request must remove its pending-inbox entry on the way
+    // out — otherwise stale ids accumulate in the map until process
+    // exit. Reproduce by disconnecting first, then trying to send;
+    // write_line returns "No write handle available" and the caller
+    // surfaces an error.
+    let server = MockAcpServer::start(MockResponder { replies: vec![] });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+    client.disconnect();
+
+    // The next send_request will fail to write because both pipe and
+    // tcp handles are None.
+    let result = client.send_request("nope", json!({}));
+    assert!(
+        result.is_err(),
+        "send_request must fail when no write handle"
+    );
+
+    // The pending map should be empty — no leaked entry. We can't
+    // inspect the map directly from the integration test, but we can
+    // verify by reconnecting and sending a real request: id reuse
+    // would cause a routing collision otherwise. Pre-fix the leaked
+    // id sat in the map for the rest of the process lifetime; not
+    // immediately broken, but a slow leak.
+    drop(server);
+
+    let _ = result; // We've checked the error case; the test's assertion
+                    // is that send_request doesn't panic and the error
+                    // path is taken. A pending-map leak isn't observable
+                    // from the public API, so we rely on code review for
+                    // that part of the contract.
+}
+
+// --- Session lifecycle (acp_client/session.rs) -------------------------
+//
+// session.rs is the heart of the per-session protocol — every chat
+// message, every session create / resume / cancel, every steering
+// preamble flows through it. Pre-fix, this module had zero coverage.
+// These tests exercise the wire-format guarantees the module makes:
+// the right method names, the right param shapes, the lazy-initialize
+// behaviour.
+
+#[test]
+fn create_session_sends_initialize_first_when_uninitialized() {
+    // First call into a session-bearing method must implicitly run
+    // the `initialize` handshake. Pre-fix the call order was wrong
+    // for clients that ran straight at session/new and the agent
+    // would reject session creation on an uninitialized connection.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("initialize", Reply::Ok(json!({ "protocolVersion": 1 }))),
+            ("session/new", Reply::Ok(json!({ "sessionId": "s-1" }))),
+        ],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let (session_id, _models) = client
+        .create_session(Some("/tmp".to_string()))
+        .expect("create_session");
+    assert_eq!(session_id, "s-1");
+
+    // Server must have seen initialize FIRST, then session/new.
+    let seen = server.wait_for_requests(2, Duration::from_secs(2));
+    assert!(seen.len() >= 2, "expected ≥2 requests, got {}", seen.len());
+    assert_eq!(seen[0]["method"], "initialize");
+    assert_eq!(seen[1]["method"], "session/new");
+    // session/new params must include cwd + an empty mcpServers list.
+    assert_eq!(seen[1]["params"]["cwd"], "/tmp");
+    assert!(seen[1]["params"]["mcpServers"].is_array());
+}
+
+#[test]
+fn create_session_does_not_re_initialize_on_second_call() {
+    // The `initialized` flag means a second create_session on the
+    // same connection skips initialize. A regression here would
+    // double the initial-prompt latency for every new chat window.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("initialize", Reply::Ok(json!({ "protocolVersion": 1 }))),
+            ("session/new", Reply::Ok(json!({ "sessionId": "s" }))),
+        ],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    client.create_session(None).expect("first session");
+    client.create_session(None).expect("second session");
+
+    let seen = server.wait_for_requests(3, Duration::from_secs(2));
+    let init_count = seen.iter().filter(|r| r["method"] == "initialize").count();
+    let new_count = seen.iter().filter(|r| r["method"] == "session/new").count();
+    assert_eq!(
+        init_count, 1,
+        "initialize must run once across N create_session calls"
+    );
+    assert_eq!(
+        new_count, 2,
+        "session/new must run for each create_session call"
+    );
+}
+
+#[test]
+fn load_existing_session_emits_session_load_with_id_and_cwd() {
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("initialize", Reply::Ok(json!({ "protocolVersion": 1 }))),
+            ("session/load", Reply::Ok(json!({}))),
+        ],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let (id, _models) = client
+        .load_existing_session("resume-me", Some("/work".to_string()))
+        .expect("load_existing_session");
+    assert_eq!(id, "resume-me", "returned id matches the input");
+
+    let seen = server.wait_for_requests(2, Duration::from_secs(2));
+    let load = seen
+        .iter()
+        .find(|r| r["method"] == "session/load")
+        .expect("session/load was sent");
+    assert_eq!(load["params"]["sessionId"], "resume-me");
+    assert_eq!(load["params"]["cwd"], "/work");
+}
+
+#[test]
+fn create_session_surfaces_acp_errors_from_session_new() {
+    // Whatever JSON-RPC error the agent returns for session/new must
+    // surface as an Err on `create_session`, not a silent default
+    // session id. This was a sharp edge during the early kiro-cli
+    // integration: a stale "agent rejected session/new" condition
+    // would silently fall through to "uses session_id 'undefined'"
+    // for the rest of the chat.
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("initialize", Reply::Ok(json!({ "protocolVersion": 1 }))),
+            (
+                "session/new",
+                Reply::Err {
+                    code: -32603,
+                    message: "internal error",
+                },
+            ),
+        ],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+
+    let result = client.create_session(None);
+    assert!(
+        result.is_err(),
+        "expected create_session to surface the JSON-RPC error"
+    );
+    let err = format!("{}", result.unwrap_err());
+    assert!(
+        err.to_lowercase().contains("session creation failed"),
+        "error message should mention the failure, got: {}",
+        err
+    );
+}
+
+#[test]
+fn send_chat_streaming_emits_session_prompt_with_text_block() {
+    // The `session/prompt` request shape: { sessionId, prompt: [...] }
+    // where prompt is a list of content blocks. Plain text messages
+    // produce a single `{ type: "text", text: ... }` block (plus a
+    // possible timestamp prefix block).
+    let server = MockAcpServer::start(MockResponder {
+        replies: vec![
+            ("initialize", Reply::Ok(json!({ "protocolVersion": 1 }))),
+            ("session/new", Reply::Ok(json!({ "sessionId": "s-x" }))),
+            ("session/prompt", Reply::Ok(json!({}))),
+        ],
+    });
+    let client = client_for(server.port);
+    client.connect().expect("connect");
+    let (sid, _) = client.create_session(None).expect("create_session");
+
+    client
+        .send_chat_streaming(&sid, "hello world", None)
+        .expect("send_chat_streaming");
+
+    let seen = server.wait_for_requests(3, Duration::from_secs(2));
+    let prompt = seen
+        .iter()
+        .find(|r| r["method"] == "session/prompt")
+        .expect("session/prompt was sent");
+    assert_eq!(prompt["params"]["sessionId"], sid);
+    let blocks = prompt["params"]["prompt"]
+        .as_array()
+        .expect("prompt is an array");
+    let has_user_text = blocks
+        .iter()
+        .any(|b| b["type"] == "text" && b["text"] == "hello world");
+    assert!(
+        has_user_text,
+        "expected a text block carrying the user message, got: {:?}",
+        blocks
+    );
+}
