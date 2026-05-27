@@ -448,6 +448,11 @@ jobs:
           # Explicit so future maintainers don't wonder why a force-tag
           # works without a PAT.
           persist-credentials: true
+          # Full history so the release-notes step can run
+          # `git log <prev>..<this>` for rolling channels. fetch-depth:1
+          # would only carry the build SHA itself, leaving the body
+          # generator with nothing to diff against.
+          fetch-depth: 0
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
@@ -583,6 +588,72 @@ jobs:
           git tag -f "$TAG" "$BUILD_SHA"
           git push -f origin "$TAG"
 
+      # Build a per-channel changelog body for rolling channels
+      # (dev / beta). Stable releases get GitHub's auto-generated
+      # "What's Changed" via `generate_release_notes: true` further
+      # below, since each tagged stable release picks up the right
+      # diff path automatically.
+      #
+      # For rolling channels the rotate step above just retagged
+      # `<channel>-latest` as `<channel>-1`, so `<channel>-1` now
+      # points at the previous build's SHA. Diffing
+      # `<channel>-1`..BUILD_SHA gives exactly the commits in this
+      # build but not the previous one — what users actually want when
+      # they read "What's new in this nightly?".
+      #
+      # Fallback: when there's no previous tag (first build on a new
+      # channel) or the diff comes back empty (force-pushed away,
+      # same SHA, etc.), we leave `body_file` unset and the upsert
+      # step below falls back to GitHub's auto-generated notes.
+      - name: Generate rolling-channel changelog
+        id: changelog
+        if: needs.plan.outputs.channel != 'stable'
+        env:
+          CH: ${{ needs.plan.outputs.channel }}
+          BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREV_SHA=$(gh api "repos/${REPO}/git/refs/tags/${CH}-1" \
+            --jq '.object.sha' 2>/dev/null || true)
+          if [[ -z "$PREV_SHA" ]]; then
+            echo "No ${CH}-1 tag; falling back to generated notes" >&2
+            exit 0
+          fi
+          # Make sure the previous tag's commit is in the local clone.
+          # fetch-depth:0 above pulls the full main history, but a
+          # build that landed off a feature branch we don't track
+          # could be missing — fetch the SHA explicitly so `git log`
+          # never silently returns empty for the wrong reason.
+          if ! git cat-file -e "$PREV_SHA" 2>/dev/null; then
+            git fetch --no-tags origin "$PREV_SHA" || {
+              echo "Couldn't fetch previous SHA $PREV_SHA; falling back" >&2
+              exit 0
+            }
+          fi
+          BODY_FILE="$RUNNER_TEMP/release-body.md"
+          {
+            echo "## What's Changed"
+            echo
+            git log --pretty=format:'- %s ([%h](https://github.com/'"${REPO}"'/commit/%H))' \
+              "${PREV_SHA}..${BUILD_SHA}"
+            echo
+            echo
+            echo "**Full Changelog**: https://github.com/${REPO}/compare/${PREV_SHA}...${BUILD_SHA}"
+          } > "$BODY_FILE"
+          # An empty `git log` would leave the body as just the header
+          # and the compare link, which isn't useful. Detect that and
+          # fall through to generated notes instead.
+          if ! grep -q '^- ' "$BODY_FILE"; then
+            echo "Empty diff between ${CH}-1 and ${BUILD_SHA}; falling back" >&2
+            exit 0
+          fi
+          echo "body_file=$BODY_FILE" >> "$GITHUB_OUTPUT"
+          echo "--- generated body ---"
+          cat "$BODY_FILE"
+
       - name: Collect assets
         run: |
           mkdir -p release
@@ -628,12 +699,20 @@ jobs:
           tag_name: ${{ needs.plan.outputs.release_tag }}
           name: ${{ steps.name.outputs.release_name }}
           prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
-          # Have GitHub auto-generate "What's Changed" release notes
-          # from the commits since the last release on the same tag
-          # path. Without this the release body is empty, and the
-          # in-app changelog viewer (fetch_changelog) would show
-          # "No release notes." for every dev/beta build even though
-          # the GitHub web UI shows commit messages on the page.
+          # When the changelog step produced a body file (rolling
+          # channels with a previous build), prepend it to GitHub's
+          # auto-generated notes so readers see the focused
+          # "<prev>..<this>" diff at the top. Stable releases (and
+          # rolling first-builds where there's no previous tag) leave
+          # body_path empty and fall through to GitHub's notes alone.
+          body_path: ${{ steps.changelog.outputs.body_file }}
+          # Have GitHub auto-generate "What's Changed" release notes.
+          # Without this the in-app changelog viewer
+          # (fetch_changelog) would show "No release notes." for
+          # stable builds. When body_path is also set (rolling
+          # channels with a previous build) the action prepends our
+          # diff to the generated notes per softprops/action-gh-release
+          # docs.
           generate_release_notes: true
           # softprops/action-gh-release replaces existing assets when a
           # release for the same tag already exists, so the rolling
