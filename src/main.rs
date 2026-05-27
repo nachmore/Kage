@@ -846,28 +846,6 @@ async fn run() {
         telemetry::record_startup_events(app.handle(), &features.config);
     }
 
-    // Diagnostic flush — fires once 2s after startup to force the
-    // aptabase dispatcher to drain any queued startup events without
-    // waiting on the 60s polling interval. With the trace-level
-    // allowlist in `logger.rs`, the plugin will emit either
-    // `sent N tracking events` (success) or `failed to track_event`
-    // (network/HTTP failure) in app.jsonl, giving us a definitive
-    // signal on whether the dispatcher is reaching aptabase at all.
-    //
-    // Run on a fresh OS thread (not the tokio runtime) so the
-    // plugin's internal `futures::executor::block_on` inside
-    // flush_events_blocking doesn't nest under our runtime and panic.
-    {
-        use tauri_plugin_aptabase::EventTracker;
-        let app_handle = app.handle().clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-            log::info!("Telemetry: forcing diagnostic flush 2s after startup");
-            app_handle.flush_events_blocking();
-            log::info!("Telemetry: diagnostic flush returned");
-        });
-    }
-
     // Drive the Tauri event loop, flushing telemetry on exit so the
     // final app_exited event actually reaches the server before the
     // process dies. Drop the session-watcher handle on Exit so the
