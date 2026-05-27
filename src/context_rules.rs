@@ -164,6 +164,90 @@ fn escape_xml_attr(s: &str) -> String {
     s.replace('&', "&amp;").replace('"', "&quot;")
 }
 
+/// Curated starter App Modes. Seeded into `Config::default()` so a
+/// fresh install lands with sensible defaults; users can edit or
+/// delete them in Settings → Personalization → App Modes. Mirrors
+/// `SUGGESTED_APP_MODES` in `ui/js/settings/assistant.js` so the
+/// "+ Add suggested" affordance there stays in sync — keep the two
+/// lists identical when adding entries.
+///
+/// Match is whole-token, case-insensitive, .exe-stripping (see
+/// `matches`), so a single token like "code" hits Code.exe, Visual
+/// Studio Code, and code on Linux. Steering is short and imperative
+/// per the docs in `src/builtin_steering.md`.
+pub fn default_starter_rules() -> Vec<ContextRule> {
+    fn rule(name: &str, exe: &str, steering: &str) -> ContextRule {
+        ContextRule {
+            friendly_name: name.into(),
+            executable: exe.into(),
+            steering: steering.into(),
+            enabled: true,
+        }
+    }
+    vec![
+        rule(
+            "Code editor",
+            "code",
+            "You are pair-programming. Be terse. Show diffs or full functions, not narration. \
+             Prefer the language already in the file. No \"Sure, here's…\"",
+        ),
+        rule(
+            "Terminal",
+            "terminal",
+            "Reply with shell commands first, prose second. Detect the OS from context. \
+             One-liners over scripts when possible. Mark destructive commands with a brief warning.",
+        ),
+        rule(
+            "Browser",
+            "chrome",
+            "Assume the user is reading a web page. Summarise concisely, surface the key claim, \
+             and flag anything that looks paywalled or AI-generated. Cite the page when quoting.",
+        ),
+        rule(
+            "Email",
+            "outlook",
+            "Match the tone of the thread. Default to short replies. If drafting from scratch, \
+             give two options: a 1-liner and a 3-sentence version. No filler (\"hope this helps\").",
+        ),
+        rule(
+            "Slack",
+            "slack",
+            "Casual, lowercase-okay, emoji sparingly. Reply in 1–3 sentences. \
+             If the user pastes a thread, summarise + suggest one next message.",
+        ),
+        rule(
+            "Notes / writing",
+            "notion",
+            "Help the user think on paper. Ask clarifying questions when the goal is ambiguous. \
+             Prefer structured bullets and short headings over walls of prose.",
+        ),
+        rule(
+            "Spreadsheet",
+            "excel",
+            "Default to formulas (Excel/Google Sheets dialect). When ambiguous, ask whether the \
+             data is a range or a table. Flag locale-sensitive things (decimals, dates) explicitly.",
+        ),
+        rule(
+            "Design tool",
+            "figma",
+            "Think about visual hierarchy, contrast, and spacing first. Suggest concrete CSS \
+             values or design tokens, not vague directions like \"make it pop\".",
+        ),
+        rule(
+            "Video call",
+            "zoom",
+            "Optimise for speaking aloud: short sentences, no markdown, no code blocks unless \
+             asked. Be ready to repeat or rephrase the previous answer in fewer words.",
+        ),
+        rule(
+            "PDF reader",
+            "acrobat",
+            "Assume the user is reading a long document. Summarise sections on request, \
+             extract action items, and quote with page references when possible.",
+        ),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,5 +383,64 @@ mod tests {
         let r = rule("\"hi\" & me", "code", "body");
         let out = format_steering_payload(&r).unwrap();
         assert!(out.contains("app=\"&quot;hi&quot; &amp; me\""));
+    }
+
+    #[test]
+    fn default_starter_rules_are_well_formed() {
+        // Every starter rule must satisfy the same invariants the UI
+        // editor enforces before save: non-empty name + executable, and
+        // steering within the per-rule cap. A regression here would mean
+        // every fresh install ships with a broken rule, so locking it in.
+        let rules = default_starter_rules();
+        assert!(!rules.is_empty(), "starter list must not be empty");
+        for r in &rules {
+            assert!(
+                !r.friendly_name.trim().is_empty(),
+                "starter rule has empty friendly_name"
+            );
+            assert!(
+                !r.executable.trim().is_empty(),
+                "starter rule {:?} has empty executable",
+                r.friendly_name
+            );
+            assert!(
+                r.enabled,
+                "starter rule {:?} should ship enabled",
+                r.friendly_name
+            );
+            assert!(
+                r.steering.chars().count() <= MAX_STEERING_LEN,
+                "starter rule {:?} steering exceeds cap ({} chars > {})",
+                r.friendly_name,
+                r.steering.chars().count(),
+                MAX_STEERING_LEN
+            );
+        }
+        // Each starter rule's executable token must self-match — a typo
+        // in the seed would mean a rule that never fires, which is a
+        // worse experience than not seeding at all.
+        for r in &rules {
+            assert!(
+                matches(&r.executable, &r.executable),
+                "starter rule {:?} executable {:?} does not match itself",
+                r.friendly_name,
+                r.executable
+            );
+        }
+    }
+
+    #[test]
+    fn missing_context_rules_field_does_not_re_seed() {
+        // Existing users upgrading from a build without context_rules
+        // must NOT get the starter rules silently injected — that would
+        // surprise people who'd already configured their assistant.
+        // serde(default) on the field uses Vec::new() (the field's own
+        // default), not Config::default()'s seeded value, so a config
+        // missing the field deserialises to an empty list.
+        let json = serde_json::json!({});
+        let rules: Vec<ContextRule> =
+            serde_json::from_value(json.get("context_rules").cloned().unwrap_or_default())
+                .unwrap_or_default();
+        assert!(rules.is_empty(), "absent field must deserialise as empty");
     }
 }

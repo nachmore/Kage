@@ -79,6 +79,14 @@ pub struct Config {
     /// matches a rule's `executable` at summon time, the rule's
     /// `steering` is appended to the outgoing prompt as a small
     /// `<_kage_app_steering>` tag. See `src/context_rules.rs`.
+    ///
+    /// Fresh installs are seeded with `default_context_rules()` (a
+    /// curated starter set). Existing users upgrading from a build
+    /// that didn't have this field stay empty — `#[serde(default)]`
+    /// fills the missing field with `Vec::new()`, NOT with the
+    /// struct's default, so the seeding only fires on first install.
+    /// Users who delete every rule in the UI persist `[]` to disk and
+    /// also stay empty across launches and reinstalls.
     #[serde(default)]
     pub context_rules: Vec<crate::context_rules::ContextRule>,
 }
@@ -957,7 +965,7 @@ impl Default for Config {
             macros: vec![],
             automation_power: AutomationPowerConfig::default(),
             telemetry: TelemetryConfig::default(),
-            context_rules: Vec::new(),
+            context_rules: crate::context_rules::default_starter_rules(),
         }
     }
 }
