@@ -300,55 +300,83 @@ fn handle_permission_notification(
     };
 
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let mut config_guard = config.lock_or_recover();
 
-    let existing = config_guard
-        .tool_permissions
-        .tools
-        .iter_mut()
-        .find(|t| t.title == tool_title);
-    if let Some(tool) = existing {
-        // Update last_seen in memory — throttle disk writes to at most once per 60s
-        tool.last_seen = timestamp;
-        let mut last_save = last_config_save.lock_or_recover();
-        if last_save.elapsed() >= std::time::Duration::from_secs(60) {
-            if let Err(e) = config_guard.save() {
-                warn!("Failed to save config (periodic): {}", e);
+    // Hold the lock just long enough to mutate the in-memory config and
+    // decide whether a disk save is due. The actual save is dispatched
+    // off-thread (see below) so the ACP reader thread that's invoking
+    // this notification handler is never blocked on disk I/O — pre-fix
+    // a slow disk could stall ACP message parsing for tens of ms,
+    // long enough for in-flight prompts to time out.
+    let (policy, save_snapshot) = {
+        let mut config_guard = config.lock_or_recover();
+        let existing = config_guard
+            .tool_permissions
+            .tools
+            .iter_mut()
+            .find(|t| t.title == tool_title);
+        let needs_save: bool;
+        if let Some(tool) = existing {
+            // Update last_seen in memory — throttle disk writes to at most once per 60s
+            tool.last_seen = timestamp;
+            let mut last_save = last_config_save.lock_or_recover();
+            needs_save = last_save.elapsed() >= std::time::Duration::from_secs(60);
+            if needs_save {
+                *last_save = std::time::Instant::now();
             }
-            *last_save = std::time::Instant::now();
+        } else {
+            config_guard
+                .tool_permissions
+                .tools
+                .push(crate::config::ToolPolicy {
+                    title: tool_title.to_string(),
+                    policy: crate::config::PolicyKind::Ask,
+                    last_seen: timestamp,
+                    granted_at: String::new(),
+                    grant_type: crate::config::GrantType::Once,
+                });
+            // New tool discovered — save immediately
+            needs_save = true;
+            *last_config_save.lock_or_recover() = std::time::Instant::now();
         }
-    } else {
-        config_guard
-            .tool_permissions
-            .tools
-            .push(crate::config::ToolPolicy {
-                title: tool_title.to_string(),
-                policy: crate::config::PolicyKind::Ask,
-                last_seen: timestamp,
-                granted_at: String::new(),
-                grant_type: crate::config::GrantType::Once,
-            });
-        // New tool discovered — save immediately
-        if let Err(e) = config_guard.save() {
-            warn!("Failed to save config (new tool): {}", e);
-        }
-        *last_config_save.lock_or_recover() = std::time::Instant::now();
-    }
 
-    let policy = if config_guard.tool_permissions.terminator_mode
-        || config_guard.tool_permissions.trust_all
-    {
-        crate::config::PolicyKind::Allow
-    } else {
-        config_guard
-            .tool_permissions
-            .tools
-            .iter()
-            .find(|t| t.title == tool_title)
-            .map(|t| t.effective_policy())
-            .unwrap_or(crate::config::PolicyKind::Ask)
+        let p = if config_guard.tool_permissions.terminator_mode
+            || config_guard.tool_permissions.trust_all
+        {
+            crate::config::PolicyKind::Allow
+        } else {
+            config_guard
+                .tool_permissions
+                .tools
+                .iter()
+                .find(|t| t.title == tool_title)
+                .map(|t| t.effective_policy())
+                .unwrap_or(crate::config::PolicyKind::Ask)
+        };
+        // Snapshot the config for an off-thread save if one is due.
+        // The clone happens inside the lock so the snapshot is
+        // consistent — but the Mutex is released as the guard drops
+        // at end-of-block, BEFORE the save runs.
+        let snap = if needs_save {
+            Some(config_guard.clone())
+        } else {
+            None
+        };
+        (p, snap)
     };
-    drop(config_guard);
+
+    // Disk save on a worker thread — never blocks the ACP reader.
+    // `Config::save_to_atomic` does write+rename atomic replace, so
+    // even concurrent saves leave the file in either old or new
+    // state (never half-written). We don't await the result; a save
+    // failure here is logged and the config will save again on the
+    // next mutation that crosses the 60s throttle.
+    if let Some(snap) = save_snapshot {
+        tauri::async_runtime::spawn_blocking(move || {
+            if let Err(e) = snap.save() {
+                warn!("Failed to save config (async): {}", e);
+            }
+        });
+    }
 
     let send_response = |option_id: &str| {
         if let Some(request_id) = notification.get("id") {
