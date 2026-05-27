@@ -50,10 +50,11 @@ body {
 
 /* Sidebar */
 .settings-sidebar {
-    width: 180px;
+    width: 210px;
     background: var(--kage-bg-elevated);
     border-right: 1px solid var(--kage-border-subtle);
     overflow-y: auto;
+    overflow-x: hidden;
     flex-shrink: 0;
 }
 .sidebar-section {
