@@ -539,11 +539,21 @@
             const container = document.getElementById('wAgentAutoDetect');
             if (!api || !container) return;
             const agents = await api.renderDetected(container, {
+                // "Use this agent" — lock in the selection and advance
+                // to the next wizard step. Step 1's nextBtn handler
+                // reads `pendingConnection` to save the config, so
+                // setting it + clicking Next is equivalent.
                 onSelect: (agent) => {
                     pendingConnection = api.connectionFromDetected(agent);
-                    // Pre-populate the manual editor with the chosen
-                    // agent's spawn command so the user can tweak it
-                    // before continuing.
+                    if (currentStep === 1 && currentStep < totalSteps - 1) {
+                        nextBtn.click();
+                    }
+                },
+                // "✏️" — let the user tweak the spawn command (or
+                // sessions directory, etc.) before locking in. Same as
+                // the previous default for "Use this agent".
+                onEdit: (agent) => {
+                    pendingConnection = api.connectionFromDetected(agent);
                     showManualConfig(pendingConnection);
                 },
                 onManual: () => showManualConfig(),

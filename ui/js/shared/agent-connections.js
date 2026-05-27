@@ -134,7 +134,15 @@ function getInvoke() {
  * @param {HTMLElement} container
  * @param {object} opts
  * @param {(agent: object) => void} [opts.onSelect] — called when the
- *   user clicks an "Use this" button on a detected agent card.
+ *   user clicks "Use this agent" on a detected agent card. Caller is
+ *   expected to lock in the selection (stash the connection + advance
+ *   the wizard to the next step). Pre-fix this also opened the manual
+ *   editor and scrolled to it; that "edit before continuing" behaviour
+ *   is now its own affordance via `onEdit` and the pencil icon.
+ * @param {(agent: object) => void} [opts.onEdit] — optional. When
+ *   provided, each detected card gets a small pencil icon next to
+ *   "Use this agent" that opens the manual editor pre-populated with
+ *   the agent's fields. If omitted, no pencil is rendered.
  * @param {() => void} [opts.onManual] — called when the user picks
  *   the manual-config link.
  * @param {string} [opts.searchingHtml] — override the searching state.
@@ -167,13 +175,20 @@ export async function renderDetected(container, opts) {
         return [];
     }
 
-    // Render one card per detected agent. The "Use this" button is
-    // wired below by walking the list (cheaper + safer than parsing
-    // a data-attribute map back out of the DOM).
+    // Render one card per detected agent. The "Use this" + pencil
+    // buttons are wired below by walking the list (cheaper + safer than
+    // parsing a data-attribute map back out of the DOM).
+    const showEdit = !!opts.onEdit;
     const cards = agents
         .map((a, i) => {
             const versionHtml = a.version
                 ? `<div class="agent-detected-version">${escapeHtml(a.version)}</div>`
+                : '';
+            // Pencil sits next to "Use this agent". The two-button row
+            // makes the "lock in vs. edit first" choice explicit; the
+            // single-button original silently did both at once.
+            const editHtml = showEdit
+                ? `<button class="agent-edit-btn" data-idx="${i}" title="Edit before using" aria-label="Edit before using">✏️</button>`
                 : '';
             return `
                 <div class="agent-detected">
@@ -182,7 +197,10 @@ export async function renderDetected(container, opts) {
                     <div class="agent-detected-name">${escapeHtml(a.name)}</div>
                     <div class="agent-detected-path">${escapeHtml(a.path)}</div>
                     ${versionHtml}
-                    <button class="agent-use-btn" data-idx="${i}">Use this agent</button>
+                    <div class="agent-detected-actions">
+                        <button class="agent-use-btn" data-idx="${i}">Use this agent</button>
+                        ${editHtml}
+                    </div>
                 </div>`;
         })
         .join('');
@@ -199,6 +217,16 @@ export async function renderDetected(container, opts) {
                 const idx = parseInt(btn.getAttribute('data-idx'), 10);
                 if (!Number.isNaN(idx) && agents[idx]) {
                     opts.onSelect(agents[idx]);
+                }
+            });
+        });
+    }
+    if (opts.onEdit) {
+        container.querySelectorAll('.agent-edit-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-idx'), 10);
+                if (!Number.isNaN(idx) && agents[idx]) {
+                    opts.onEdit(agents[idx]);
                 }
             });
         });

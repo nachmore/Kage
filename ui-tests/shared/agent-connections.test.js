@@ -28,6 +28,7 @@ import {
     listPresets,
     readEditForm,
     pickAgentType,
+    renderDetected,
     renderEditForm,
     uuidLite,
     validateMode,
@@ -275,5 +276,129 @@ describe('pickAgentType', () => {
         // Dispatch a click whose target is the overlay itself, not a child.
         overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await expect(promise).resolves.toBeNull();
+    });
+});
+
+// --- renderDetected --------------------------------------------------------
+// Two-button row: "Use this agent" (lock in + caller advances the wizard)
+// and an optional pencil ✏️ (open the manual editor pre-populated). Pre-fix
+// "Use this agent" silently did both — populating the form AND showing the
+// editor — which surprised users in the welcome flow.
+
+function stubInvoke(detectAgentsResult) {
+    window.__TAURI__ = {
+        core: {
+            invoke: (name) => {
+                if (name === 'detect_agents') {
+                    return Promise.resolve(detectAgentsResult);
+                }
+                return Promise.resolve(undefined);
+            },
+        },
+    };
+}
+
+const SAMPLE_AGENT = Object.freeze({
+    name: 'Kiro',
+    preset_id: 'kiro',
+    path: '/usr/local/bin/kiro',
+    spawn_command: '/usr/local/bin/kiro acp',
+    version: '0.5.1',
+});
+
+describe('renderDetected', () => {
+    it('renders one card per detected agent with the Use button', async () => {
+        stubInvoke([SAMPLE_AGENT, { ...SAMPLE_AGENT, name: 'Claude Code' }]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        const agents = await renderDetected(container, { onSelect: () => {} });
+        expect(agents.length).toBe(2);
+        const useButtons = container.querySelectorAll('.agent-use-btn');
+        expect(useButtons.length).toBe(2);
+        expect(container.textContent).toContain('Kiro');
+        expect(container.textContent).toContain('Claude Code');
+    });
+
+    it('omits the pencil button when onEdit is not supplied', async () => {
+        // The pencil is opt-in. The settings page may want detect cards
+        // without an "edit before continuing" flow, so the helper must
+        // not assume both callbacks are always wanted.
+        stubInvoke([SAMPLE_AGENT]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        await renderDetected(container, { onSelect: () => {} });
+        expect(container.querySelector('.agent-edit-btn')).toBeNull();
+    });
+
+    it('renders the pencil button per card when onEdit is supplied', async () => {
+        stubInvoke([SAMPLE_AGENT, { ...SAMPLE_AGENT, name: 'Codex' }]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        await renderDetected(container, { onSelect: () => {}, onEdit: () => {} });
+        expect(container.querySelectorAll('.agent-edit-btn').length).toBe(2);
+    });
+
+    it('"Use this agent" calls onSelect (NOT onEdit) and passes the agent through', async () => {
+        // The bug: pre-fix the welcome flow's onSelect ALSO opened the
+        // manual editor and scrolled to it. The shared helper now
+        // separates the two paths; the caller is expected to lock in
+        // the selection and advance the wizard.
+        stubInvoke([SAMPLE_AGENT]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const onSelect = vi.fn();
+        const onEdit = vi.fn();
+
+        await renderDetected(container, { onSelect, onEdit });
+        container.querySelector('.agent-use-btn').click();
+
+        expect(onSelect).toHaveBeenCalledTimes(1);
+        expect(onSelect).toHaveBeenCalledWith(SAMPLE_AGENT);
+        expect(onEdit).not.toHaveBeenCalled();
+    });
+
+    it('the pencil button calls onEdit (NOT onSelect)', async () => {
+        stubInvoke([SAMPLE_AGENT]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const onSelect = vi.fn();
+        const onEdit = vi.fn();
+
+        await renderDetected(container, { onSelect, onEdit });
+        container.querySelector('.agent-edit-btn').click();
+
+        expect(onEdit).toHaveBeenCalledTimes(1);
+        expect(onEdit).toHaveBeenCalledWith(SAMPLE_AGENT);
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('clicking the second card invokes the callback with that agent (not the first)', async () => {
+        // Walking the agents list by data-idx — a regression here would
+        // pin every "Use this agent" click to the first card.
+        const second = { ...SAMPLE_AGENT, name: 'Second', spawn_command: '/bin/second' };
+        stubInvoke([SAMPLE_AGENT, second]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const onSelect = vi.fn();
+
+        await renderDetected(container, { onSelect });
+        const buttons = container.querySelectorAll('.agent-use-btn');
+        buttons[1].click();
+
+        expect(onSelect).toHaveBeenCalledWith(second);
+    });
+
+    it('falls back to a friendly empty-state when no agents are detected', async () => {
+        stubInvoke([]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        const agents = await renderDetected(container, { onSelect: () => {} });
+        expect(agents).toEqual([]);
+        expect(container.querySelector('.agent-not-found')).not.toBeNull();
+        expect(container.querySelector('.agent-use-btn')).toBeNull();
     });
 });

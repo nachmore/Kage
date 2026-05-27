@@ -1882,6 +1882,15 @@ body.light-theme .agent-detected {
     font-size: 11px;
     color: var(--kage-text-secondary, #938f9b);
 }
+/* Action row: "Use this agent" + optional pencil. Centered under the
+   card; pencil sits to the right with a subtle outline so it reads as
+   a secondary action, not a duplicate of the primary button. */
+.agent-detected-actions {
+    margin-top: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
 .agent-use-btn,
 .agent-manual-link {
     margin-top: 10px;
@@ -1893,9 +1902,34 @@ body.light-theme .agent-detected {
     border-radius: 6px;
     cursor: pointer;
 }
+/* Inside .agent-detected-actions the row owns the top margin — drop
+   the per-button one so the icon and text align cleanly. */
+.agent-detected-actions .agent-use-btn {
+    margin-top: 0;
+}
 .agent-use-btn:hover,
 .agent-manual-link:hover {
     background: var(--kage-accent-hover);
+}
+.agent-edit-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    line-height: 1;
+    background: transparent;
+    color: var(--kage-text-secondary, #938f9b);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+}
+body.light-theme .agent-edit-btn {
+    border-color: rgba(0, 0, 0, 0.15);
+}
+.agent-edit-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--kage-text-primary, #f0eef5);
+}
+body.light-theme .agent-edit-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
 }
 .agent-manual-link {
     background: none;
