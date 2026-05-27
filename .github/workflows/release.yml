@@ -109,6 +109,19 @@ jobs:
       - id: pick
         shell: bash
         run: |
+          # User-facing channel labels. Internal IDs stay
+          # stable/beta/dev (endpoint routing, VALID_CHANNELS, saved
+          # config values all key off these), but the GitHub release
+          # NAME maps to the consumer-friendly labels we ship in
+          # Settings → Updates: Stable / Preview / Nightly.
+          channel_label() {
+            case "$1" in
+              stable) echo "Stable" ;;
+              beta) echo "Preview" ;;
+              dev) echo "Nightly" ;;
+              *) echo "$1" ;;
+            esac
+          }
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "release_tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
@@ -118,9 +131,10 @@ jobs:
           else
             # workflow_dispatch (manual or via auto-dev-release.yml)
             CH="${{ github.event.inputs.channel }}"
+            LABEL="$(channel_label "$CH")"
             echo "channel=$CH" >> "$GITHUB_OUTPUT"
             echo "release_tag=${CH}-latest" >> "$GITHUB_OUTPUT"
-            echo "release_name=Kage ${CH} (latest)" >> "$GITHUB_OUTPUT"
+            echo "release_name=Kage ${LABEL} (latest)" >> "$GITHUB_OUTPUT"
             if [[ "$CH" == "stable" ]]; then
               echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
             else
@@ -591,10 +605,21 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         shell: bash
         run: |
+          # Same label mapping as in the plan job; stable releases use
+          # the tag name verbatim, others get the consumer label.
+          channel_label() {
+            case "$1" in
+              stable) echo "Stable" ;;
+              beta) echo "Preview" ;;
+              dev) echo "Nightly" ;;
+              *) echo "$1" ;;
+            esac
+          }
           if [[ "$CHANNEL" == "stable" ]]; then
             echo "release_name=$BASE_NAME" >> "$GITHUB_OUTPUT"
           else
-            echo "release_name=Kage $CHANNEL ($VERSION)" >> "$GITHUB_OUTPUT"
+            LABEL="$(channel_label "$CHANNEL")"
+            echo "release_name=Kage $LABEL ($VERSION)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upsert GitHub Release
