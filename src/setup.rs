@@ -247,6 +247,54 @@ pub fn spawn_app_registry_scan(app: &App) {
     });
 }
 
+/// Self-heal the computer-control MCP registration on every launch.
+///
+/// Why this exists: `mcp_registration::ensure_registered()` only ran on
+/// first-run opt-in or explicit toggle. After an update, three things
+/// can drift the entry out of sync silently:
+///   1. The exe install path changed (per-user reinstall, manual move).
+///   2. The agent backend changed (e.g. user switched from Kiro to
+///      Claude Code) so we'd want to write to a different mcp.json.
+///   3. The bundle stopped shipping the MCP binary (build regression).
+///
+/// In all three cases the toggle in Settings says "on" but the agent
+/// doesn't actually spawn the server, and there's no surface telling
+/// the user why. This re-runs the registration on every launch so the
+/// path stays fresh, and emits a loud log line if the binary isn't
+/// where we expect it.
+///
+/// Cheap: a no-op when the existing entry already matches the current
+/// path, which is the common case.
+pub fn refresh_mcp_registration_if_enabled() {
+    if !crate::mcp_registration::is_registered() {
+        // User never opted in (or explicitly toggled off). Nothing to
+        // refresh; leave their mcp.json alone.
+        return;
+    }
+
+    match crate::mcp_registration::get_mcp_binary_path() {
+        Some(path) => {
+            info!(
+                "computer-control MCP binary at {} — refreshing registration",
+                path.display()
+            );
+            crate::mcp_registration::ensure_registered();
+        }
+        None => {
+            // Toggle says on but we can't find the binary next to the
+            // exe. Most likely a botched install/update; surface it
+            // loudly so the user can see why the agent isn't getting
+            // computer-control tools.
+            warn!(
+                "computer-control MCP is enabled in mcp.json but \
+                 kage-computer-control-mcp binary is missing next to the \
+                 main exe. The agent will fail to spawn it. Try toggling \
+                 the switch in Settings → MCP Servers, or reinstall."
+            );
+        }
+    }
+}
+
 /// Window close-requested handler: hide rather than close, so the app
 /// persists in the tray. Logs (rather than panics) if hide fails.
 /// On macOS, also hides the app to return focus to the previous application.

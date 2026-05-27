@@ -549,6 +549,11 @@ async fn run() {
             // Watch the sessions directory for external changes (e.g., the agent backend creating sessions)
             setup::start_session_watcher(app);
 
+            // Self-heal computer-control MCP registration: keep the
+            // path in mcp.json in sync with the current install, and
+            // log loudly if the sidecar binary is missing entirely.
+            setup::refresh_mcp_registration_if_enabled();
+
             // Background app registry scan (deferred from startup for speed)
             // and periodic refresh every hour so the list stays current.
             setup::spawn_app_registry_scan(app);
