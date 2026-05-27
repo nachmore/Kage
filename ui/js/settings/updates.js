@@ -59,7 +59,7 @@ export class UpdatesSettingsModule extends SettingsModule {
 
                 ${this.createControlRow(
                     'Update Channel',
-                    "Which release stream this install follows. <strong>Stable</strong> is the recommended default (curated v-tagged releases). <strong>Preview</strong> is for trying what's coming next. <strong>Nightly</strong> tracks every commit — expect rough edges.",
+                    "Which release stream this install follows. <strong>Stable</strong> is the standard release for everyone. <strong>Preview</strong> is for trying what's coming next. <strong>Nightly</strong> tracks every commit — expect rough edges.",
                     `<select class="setting-input" id="updateChannel">
                         <option value="stable">Stable (recommended)</option>
                         <option value="beta">Preview</option>
