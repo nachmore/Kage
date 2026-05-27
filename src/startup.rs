@@ -175,12 +175,28 @@ pub fn wait_for_webview_release<F: FnMut(std::time::Duration)>(
     WebviewWaitResult::TimedOut { waited_ms }
 }
 
-/// Resolve the full path to the WebView2 user data directory. Factored
-/// out so tests and the startup path share a single source of truth.
+/// Resolve the full path to the WebView2 user data directory.
+///
+/// Tauri 2 keys the WebView2 UDF off the bundle identifier from
+/// `tauri.conf.json` (`com.kage.launcher`), not the productName.
+/// Pre-fix this returned `%LOCALAPPDATA%\kage\EBWebView` — a folder
+/// that doesn't even exist in real installs — so the orphan-cleanup
+/// path silently matched no processes when the user-data-dir was
+/// actually under `%LOCALAPPDATA%\com.kage.launcher\EBWebView`.
+///
+/// Hardcoding the identifier here matches the value baked into
+/// `tauri.conf.json`. If that identifier ever changes, this string
+/// must change in lockstep — there's a sanity test below pulling the
+/// identifier out of `tauri.conf.json` to flag drift at build time.
+///
 /// Returns None when `dirs::data_local_dir()` itself fails, which is
 /// extremely rare on real systems but worth handling defensively.
 pub fn webview_user_data_dir() -> Option<PathBuf> {
-    Some(dirs::data_local_dir()?.join("kage").join("EBWebView"))
+    Some(
+        dirs::data_local_dir()?
+            .join("com.kage.launcher")
+            .join("EBWebView"),
+    )
 }
 
 // Note: the Windows-specific match logic for orphan WebView2 children
@@ -332,5 +348,38 @@ pub fn wait_for_previous_instance_if_restart(is_restart: bool) {
                 waited_ms
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Verify our hardcoded bundle identifier in `webview_user_data_dir`
+    /// agrees with the value Tauri uses to derive the WebView2 UDF
+    /// path. Tauri 2 keys the UDF off `tauri.conf.json::identifier`,
+    /// so if a future maintainer renames it without updating the
+    /// constant, the orphan-cleanup path runs against a stale folder
+    /// and silently does nothing — exactly the bug we just fixed.
+    #[test]
+    fn webview_user_data_dir_matches_tauri_conf_identifier() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("read tauri.conf.json at {:?}: {}", path, e));
+        let conf: serde_json::Value = serde_json::from_str(&text).expect("parse tauri.conf.json");
+        let identifier = conf
+            .get("identifier")
+            .and_then(|v| v.as_str())
+            .expect("tauri.conf.json::identifier missing or not a string");
+        let resolved = super::webview_user_data_dir().expect("data_local_dir resolves in test env");
+        let parent = resolved
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .expect("webview_user_data_dir parent has a UTF-8 file name");
+        assert_eq!(
+            parent, identifier,
+            "webview_user_data_dir() must use the bundle identifier from tauri.conf.json — \
+             got {:?}, expected {:?}",
+            parent, identifier
+        );
     }
 }

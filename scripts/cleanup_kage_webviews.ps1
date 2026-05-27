@@ -4,7 +4,9 @@
 
 .DESCRIPTION
     Kage's webview runs in msedgewebview2.exe child processes that
-    point at %LOCALAPPDATA%\kage\EBWebView as their user-data-dir.
+    point at %LOCALAPPDATA%\com.kage.launcher\EBWebView as their
+    user-data-dir (Tauri 2 derives the path from the bundle identifier
+    in tauri.conf.json, not the productName).
     WebView2 enforces single-writer semantics on that folder, so if a
     previous kage.exe was force-killed and its children outlived it,
     the next launch fails to render: the floating window never
@@ -27,8 +29,8 @@
 
 .PARAMETER UserDataDir
     Override the user-data-dir to match against. Default:
-    %LOCALAPPDATA%\kage\EBWebView. Useful if you run a portable build
-    or have a custom Tauri user-data-dir override.
+    %LOCALAPPDATA%\com.kage.launcher\EBWebView. Useful if you run a
+    portable build or have a custom Tauri user-data-dir override.
 
 .EXAMPLE
     .\scripts\cleanup_kage_webviews.ps1
@@ -50,7 +52,7 @@
 [CmdletBinding()]
 param(
     [switch]$DryRun,
-    [string]$UserDataDir = (Join-Path $env:LOCALAPPDATA 'kage\EBWebView')
+    [string]$UserDataDir = (Join-Path $env:LOCALAPPDATA 'com.kage.launcher\EBWebView')
 )
 
 $ErrorActionPreference = 'Stop'
