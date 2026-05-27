@@ -16,8 +16,10 @@ cargo tauri dev -- /dev /debug   # both
 # Fast dev release build (USE THESE for hand-off-the-binary iteration):
 pwsh scripts/build_dev_installer.ps1            # Windows: full installer, ~3 min
 pwsh scripts/build_dev_installer.ps1 -NoBundle  # Windows: just kage.exe, no NSIS step
+pwsh scripts/build_dev_installer.ps1 -Replace   # Build, kill running kage, swap installed exe
 bash scripts/build_dev_installer.sh             # macOS/Linux equivalent
 bash scripts/build_dev_installer.sh --no-bundle
+bash scripts/build_dev_installer.sh --replace   # macOS/Linux: same hot-swap flow
 
 # Ship-quality build (slow — full LTO, single codegen unit):
 cargo tauri build                # ~13 min on Windows; CI uses this for releases
