@@ -23,7 +23,12 @@ use serde_json::{json, Value};
 /// The highest config schema version this build understands. Bump when
 /// you add a migration; add the migration function to `migrate_one_step`
 /// below.
-pub const CURRENT_VERSION: u32 = 4;
+///
+/// Pre-launch baseline: we're at v1. Concrete migrations between
+/// versions don't exist yet because there are no users with prior
+/// schemas to migrate. The framework + tests stay so adding a real
+/// migration later is mechanical.
+pub const CURRENT_VERSION: u32 = 1;
 
 /// The lowest version we can still migrate from. If a config on disk is
 /// older than this we treat it as corrupt and reset (after backing up).
@@ -76,6 +81,16 @@ pub fn migrate(mut value: Value) -> Result<Value> {
         }
     }
 
+    // Ensure the on-disk shape is self-describing even when no
+    // migrations ran (e.g. a v1 install whose config was written before
+    // the framework existed and so has no `version` field). Only stamp
+    // when the value is an object so non-object roots still pass
+    // through untouched for the corrupt-backup path to handle.
+    if let Value::Object(ref mut map) = value {
+        map.entry("version".to_string())
+            .or_insert(json!(CURRENT_VERSION));
+    }
+
     Ok(value)
 }
 
@@ -91,90 +106,13 @@ fn read_version(value: &Value) -> u32 {
 
 /// Dispatch a single migration step. Add a new arm here when you add
 /// a new migration function.
-fn migrate_one_step(from: u32, value: Value) -> Result<Value> {
-    match from {
-        1 => migrate_1_to_2(value),
-        2 => migrate_2_to_3(value),
-        3 => migrate_3_to_4(value),
-        other => bail!("no migration registered from version {}", other),
-    }
-}
-
-/// v1 → v2: the no-op bootstrap migration. We introduce the migration
-/// framework at schema version 2; everything that shipped before this
-/// is considered v1. Since v2 is a superset of v1 (all added fields
-/// have serde defaults), no field-level work is needed here.
 ///
-/// Future migrations that rename or reshape fields will be more
-/// interesting. This function exists so there's always at least one
-/// migration in the chain, which exercises the code path.
-fn migrate_1_to_2(value: Value) -> Result<Value> {
-    Ok(value)
-}
-
-/// v2 → v3: telemetry rollout. Existing users (those already past the
-/// welcome flow under the old build) never saw the privacy disclosure
-/// page, so we can't treat their default `enabled=true` as consent —
-/// that would be a silent opt-in. For already-completed first-run
-/// configs that have NOT recorded a consent decision yet, force
-/// telemetry off; the user can turn it on from Settings → Privacy
-/// after reading the disclosure there.
-///
-/// **Idempotency note:** this migration must not strip consent from
-/// users who *did* see the disclosure. We gate the force-disable on
-/// `consent_version == 0` (the schema default; means "the user has
-/// never confirmed a consent decision"). A user who completed the
-/// welcome flow under any post-rollout build has `consent_version >=
-/// 1` and we leave their choice alone — even if their config somehow
-/// regresses through this migration again. This was an actual bug:
-/// a JS-side `config.version = 1` overwrite forced this migration to
-/// re-run on every Settings save and silently flipped telemetry off
-/// on each save.
-fn migrate_2_to_3(mut value: Value) -> Result<Value> {
-    if let Value::Object(ref mut map) = value {
-        let already_completed = map
-            .get("first_run_completed")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        if !already_completed {
-            return Ok(value);
-        }
-        let telemetry = map
-            .entry("telemetry".to_string())
-            .or_insert_with(|| json!({}));
-        if let Value::Object(tmap) = telemetry {
-            // Only force-disable if the user has never explicitly
-            // accepted a privacy policy. A non-zero consent_version
-            // means they saw the welcome step (or the Settings →
-            // Privacy page) and made a choice; honour it.
-            let consent_version = tmap
-                .get("consent_version")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0);
-            if consent_version == 0 {
-                tmap.insert("enabled".to_string(), json!(false));
-            }
-        }
-    }
-    Ok(value)
-}
-
-/// v3 → v4: add `updates.channel` defaulting to "stable". Existing users
-/// who opted into auto-updates did so under the single-track assumption;
-/// they keep getting the stable channel unless they explicitly opt into
-/// beta/dev in Settings → Updates. Fresh installs get stable by the
-/// config default, which matches this migration exactly.
-fn migrate_3_to_4(mut value: Value) -> Result<Value> {
-    if let Value::Object(ref mut map) = value {
-        let updates = map
-            .entry("updates".to_string())
-            .or_insert_with(|| json!({}));
-        if let Value::Object(umap) = updates {
-            umap.entry("channel".to_string())
-                .or_insert_with(|| json!("stable"));
-        }
-    }
-    Ok(value)
+/// Currently empty: there are no shipped users with prior schemas to
+/// migrate from, so concrete migrations don't exist yet. The chain
+/// runner above will only call this when `CURRENT_VERSION` is bumped
+/// past 1, at which point the new arm goes here.
+fn migrate_one_step(from: u32, _value: Value) -> Result<Value> {
+    bail!("no migration registered from version {}", from)
 }
 
 #[cfg(test)]
@@ -204,17 +142,6 @@ mod tests {
     }
 
     #[test]
-    fn v1_is_migrated_up_to_current() {
-        let v = json!({ "version": 1, "debug_mode": true });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("version").and_then(|n| n.as_u64()),
-            Some(CURRENT_VERSION as u64)
-        );
-        assert_eq!(out.get("debug_mode"), Some(&json!(true)));
-    }
-
-    #[test]
     fn future_version_errors_out() {
         let v = json!({ "version": CURRENT_VERSION + 1 });
         let err = migrate(v).unwrap_err();
@@ -223,9 +150,8 @@ mod tests {
 
     #[test]
     fn version_below_minimum_errors_out() {
-        // This test only meaningfully fires when MIN_SUPPORTED_VERSION > 1
-        // in the future. Today it's 1, so version 0 is the test input.
-        if MIN_SUPPORTED_VERSION == 0 {
+        // Only meaningful when MIN_SUPPORTED_VERSION > 1.
+        if MIN_SUPPORTED_VERSION <= 1 {
             return;
         }
         let v = json!({ "version": MIN_SUPPORTED_VERSION - 1 });
@@ -234,121 +160,29 @@ mod tests {
     }
 
     #[test]
-    fn non_object_root_preserves_version_update() {
+    fn non_object_root_passes_through_unchanged() {
         // If someone hands us a non-object, we can't add a version
-        // field but also shouldn't panic. The current impl only
-        // inserts into objects, so non-objects are returned as-is
-        // (other than the error that the chain would produce if a
-        // step needed to mutate). For v1→v2 no-op, this is fine.
+        // field but also shouldn't panic. With no migrations to run
+        // (CURRENT_VERSION == stored), the chain runner short-circuits
+        // and returns the input as-is. The outer load path will refuse
+        // to deserialize this as Config and the corrupt-backup path
+        // takes over.
         let v = json!([1, 2, 3]);
-        // v1 no-op → should succeed, but we'll be left with no version
-        // field. That's acceptable: the outer load path will then
-        // refuse to deserialize this as Config anyway, and the corrupt
-        // backup path kicks in.
         let out = migrate(v.clone()).unwrap();
         assert_eq!(out, v);
     }
 
+    /// When the next migration is added: bump CURRENT_VERSION, write
+    /// the migration function, register it in `migrate_one_step`, and
+    /// add a test here that verifies before/after JSON shape. This
+    /// stub reminds future-us that it's wired up:
     #[test]
-    fn v2_to_v3_disables_telemetry_for_existing_users_who_never_consented() {
-        // Pre-rollout user: completed first run before the privacy
-        // disclosure existed (consent_version absent → defaults to 0).
-        // Force-disable so they aren't silently opted in.
-        let v = json!({
-            "version": 2,
-            "first_run_completed": true,
-            "telemetry": { "enabled": true },
-        });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("telemetry").and_then(|t| t.get("enabled")),
-            Some(&json!(false)),
-            "pre-rollout completed-first-run users must not auto-opt-in silently"
-        );
-    }
-
-    #[test]
-    fn v2_to_v3_preserves_explicit_consent() {
-        // Post-rollout user: completed welcome flow AND has a
-        // consent_version stamp. The force-disable from the rollout
-        // migration must not strip their explicit yes — this was the
-        // bug behind "every install kills telemetry": a JS-side
-        // `config.version = 1` overwrite caused this migration to
-        // re-run on every Settings save.
-        let v = json!({
-            "version": 2,
-            "first_run_completed": true,
-            "telemetry": { "enabled": true, "consent_version": 1 },
-        });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("telemetry").and_then(|t| t.get("enabled")),
-            Some(&json!(true)),
-            "consented users keep their opt-in across migration replays"
-        );
-    }
-
-    #[test]
-    fn v2_to_v3_preserves_explicit_opt_out() {
-        // Same as above but the explicit choice was OFF — must not
-        // flip back on, which would also be a regression.
-        let v = json!({
-            "version": 2,
-            "first_run_completed": true,
-            "telemetry": { "enabled": false, "consent_version": 1 },
-        });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("telemetry").and_then(|t| t.get("enabled")),
-            Some(&json!(false))
-        );
-    }
-
-    #[test]
-    fn v3_to_v4_adds_channel_default_stable() {
-        let v = json!({
-            "version": 3,
-            "updates": { "auto_check": true },
-        });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("updates").and_then(|u| u.get("channel")),
-            Some(&json!("stable"))
-        );
-    }
-
-    #[test]
-    fn v3_to_v4_preserves_existing_channel() {
-        let v = json!({
-            "version": 3,
-            "updates": { "channel": "beta" },
-        });
-        let out = migrate(v).unwrap();
-        assert_eq!(
-            out.get("updates").and_then(|u| u.get("channel")),
-            Some(&json!("beta"))
-        );
-    }
-
-    #[test]
-    fn v2_to_v3_leaves_fresh_installs_alone() {
-        // A config that hasn't completed first run yet will hit the
-        // welcome screen's privacy step on next launch — that's where
-        // consent gets captured. Don't pre-disable on these.
-        let v = json!({
-            "version": 2,
-            "first_run_completed": false,
-        });
-        let out = migrate(v).unwrap();
-        // Either absent (default=true at deserialize time) or not set
-        // to false is acceptable. Explicitly false would be a bug.
-        let telemetry_enabled = out
-            .get("telemetry")
-            .and_then(|t| t.get("enabled"))
-            .and_then(|v| v.as_bool());
-        assert!(
-            telemetry_enabled != Some(false),
-            "first-run-in-progress configs should not have telemetry forced off"
-        );
+    fn migrate_one_step_rejects_unknown_versions() {
+        // Sanity check: even with no migrations registered, the
+        // dispatcher must reject unknown versions cleanly rather than
+        // panicking. This is the failure mode if CURRENT_VERSION gets
+        // bumped without adding a corresponding match arm.
+        let err = migrate_one_step(1, json!({})).unwrap_err();
+        assert!(format!("{}", err).contains("no migration registered"));
     }
 }
