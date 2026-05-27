@@ -166,15 +166,123 @@ impl Drop for ProcessManager {
     }
 }
 
-/// Install signal handlers for graceful shutdown
+// --- Cross-platform signal-handler child-cleanup registry ---------------
+//
+// On Windows, the Job Object reaps every child we spawn when the parent
+// exits — even on hard crash. macOS / Linux have no equivalent. The
+// `graceful_shutdown` path covers tray-quit / `quit_app` / `restart_app`
+// because it can reach the AppHandle and walk `ChildProcesses` directly,
+// but signal-driven exits (SIGTERM, SIGINT, SIGQUIT, the Cmd+Shift+Q
+// hotkey wired to terminate(), etc.) install at startup before Tauri
+// builds, so they only saw the agent backend's `ProcessManager`. Anything
+// stored in `ChildProcesses` (pocket-tts server + its in-flight pip
+// install) was leaking on macOS / Linux when the user closed the app
+// via SIGTERM.
+//
+// This registry lets each child-spawning site register a "kill me"
+// closure once. The signal handler walks the list in registration
+// order. The registry is static so signal handlers (installed before
+// Tauri builds) can reach it without threading the AppHandle through.
+
+type Killer = Box<dyn Fn() + Send + Sync + 'static>;
+
+static CHILD_KILLERS: std::sync::LazyLock<Mutex<Vec<Killer>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// Register a closure that the signal handler will run on shutdown.
+/// Call from the spawn site (e.g. pocket-tts launch) once the
+/// child handle is available.
+pub fn register_child_killer(kill: impl Fn() + Send + Sync + 'static) {
+    if let Ok(mut killers) = CHILD_KILLERS.lock() {
+        killers.push(Box::new(kill));
+    }
+}
+
+/// Run every registered killer. Used by the signal handler.
+fn run_all_killers() {
+    let killers = match CHILD_KILLERS.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    for kill in killers.iter() {
+        // Each killer is best-effort. We don't unwind the registry on
+        // failure — a stuck child shouldn't block the rest from being
+        // cleaned up.
+        kill();
+    }
+}
+
+/// Install signal handlers for graceful shutdown.
+///
+/// The cleanup closure terminates the agent backend AND walks the
+/// child-killer registry, so any subsystem that registered via
+/// `register_child_killer` gets a chance to clean up before we exit.
 pub fn install_signal_handlers(process_manager: Arc<Mutex<ProcessManager>>) {
     let cleanup = move || {
+        // Agent backend first — it's the heaviest child and the one
+        // most likely to be holding network sockets.
         if let Ok(mut pm) = process_manager.lock() {
             pm.terminate();
         }
+        // Then everything that registered itself (pocket-tts server +
+        // any in-flight install on macOS / Linux). On Windows this is
+        // redundant with the Job Object but harmless — the kills will
+        // all return "process not found" once the OS has reaped them.
+        run_all_killers();
     };
 
     if let Err(e) = os::process::install_signal_handlers(cleanup) {
         warn!("Failed to install signal handlers: {}", e);
+    }
+}
+
+#[cfg(test)]
+mod child_killer_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    /// A callback registered via `register_child_killer` actually fires
+    /// when `run_all_killers()` runs. Without this guarantee the
+    /// macOS / Linux SIGTERM path silently leaves orphan children
+    /// behind — the bug this whole subsystem exists to fix.
+    #[test]
+    fn registered_killer_runs_on_invocation() {
+        // The CHILD_KILLERS static is process-scoped and other tests
+        // may register their own killers, so we don't assert the list
+        // length — only that ours fires.
+        let fired = Arc::new(AtomicBool::new(false));
+        let f = fired.clone();
+        register_child_killer(move || {
+            f.store(true, Ordering::SeqCst);
+        });
+        run_all_killers();
+        assert!(fired.load(Ordering::SeqCst));
+    }
+
+    /// Killers fire in registration order. The signal handler invokes
+    /// them as a single sweep; if the order silently changed, a child
+    /// that depends on a sibling being killed first (e.g. install
+    /// before server) would race.
+    #[test]
+    fn killers_run_in_registration_order() {
+        let order = Arc::new(Mutex::new(Vec::<u32>::new()));
+        for i in 100..103 {
+            let o = order.clone();
+            register_child_killer(move || {
+                if let Ok(mut v) = o.lock() {
+                    v.push(i);
+                }
+            });
+        }
+        run_all_killers();
+        let after = order.lock_or_recover();
+        // Find our window in the global order — the static is shared
+        // with other tests, so we look for our marker values.
+        let our_slice: Vec<u32> = after
+            .iter()
+            .copied()
+            .filter(|n| (100..103).contains(n))
+            .collect();
+        assert_eq!(our_slice, vec![100, 101, 102]);
     }
 }

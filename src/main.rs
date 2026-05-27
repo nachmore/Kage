@@ -273,6 +273,31 @@ async fn run() {
         pocket_tts: Arc::new(std::sync::Mutex::new(None)),
         pocket_tts_install: Arc::new(std::sync::Mutex::new(None)),
     };
+    // Register a signal-handler hook that kills the pocket-tts server
+    // and any in-flight pip install. Windows already reaps these via
+    // the parent Job Object, but macOS / Linux signal-driven exits
+    // (SIGTERM, SIGINT) used to leak them — graceful_shutdown only
+    // ran on tray-quit / quit_app paths, not signal paths. This
+    // closes the gap for non-Windows platforms; on Windows it's
+    // redundant-but-harmless.
+    {
+        let tts = child_processes.pocket_tts.clone();
+        let install = child_processes.pocket_tts_install.clone();
+        process_manager::register_child_killer(move || {
+            if let Ok(mut slot) = tts.lock() {
+                if let Some(mut child) = slot.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+            if let Ok(mut slot) = install.lock() {
+                if let Some(mut child) = slot.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+        });
+    }
     let feature_services = state::FeatureServices {
         config: config_arc,
         app_launcher: Arc::new(Mutex::new(app_launcher)),
