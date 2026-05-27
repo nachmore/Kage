@@ -913,11 +913,17 @@ pub async fn send_steering_message(
     features: State<'_, FeatureServices>,
 ) -> Result<bool, AppError> {
     let steering_msg = {
-        let config = features
-            .config
-            .lock()
-            .map_err(|e| AppError::lock(format!("{}", e)))?;
-        let parts = crate::commands::system::assemble_steering_parts(&config);
+        // Snapshot fields under the lock, drop the guard, then do disk
+        // reads. Holding the global config Mutex across blocking I/O
+        // would block every concurrent config reader for the duration.
+        let inputs = {
+            let config = features
+                .config
+                .lock()
+                .map_err(|e| AppError::lock(format!("{}", e)))?;
+            crate::commands::system::SteeringInputs::from_config(&config)
+        };
+        let parts = crate::commands::system::assemble_steering_parts(&inputs);
         format!(
             "{} {}",
             crate::commands::system::STEERING_MSG_PREFIX,

@@ -39,11 +39,18 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     open_url: 'shell',
     open_path: 'shell',
     launch_app_by_name: 'shell',
-    fetch_favicon: 'shell',
-    fetch_link_metadata: 'shell',
-    // The cache management commands are settings-only — extensions
-    // shouldn't be able to wipe a shared cache or read its size out
-    // of band. The fetch path itself stays gated on `shell`.
+
+    // --- network: outbound HTTP from the Rust runtime (CORS-bypassing) -----
+    // These commands fire HTTP GETs from the Rust process, NOT the
+    // sandboxed webview. They bypass CORS, send no `Origin` header
+    // tied to the extension, and can reach sites that would refuse a
+    // browser fetch (intranet endpoints, sites that block embedding,
+    // etc.). Fundamentally different from `shell` (hand a URL to the
+    // OS to open in the user's browser), so it gets its own capability.
+    fetch_favicon: 'network',
+    fetch_link_metadata: 'network',
+    // Cache management commands stay settings-only — extensions shouldn't
+    // wipe a shared cache or probe its size out of band.
     link_metadata_clear_cache: null,
     link_metadata_cache_stats: null,
 
@@ -300,6 +307,12 @@ export const CAPABILITIES = Object.freeze({
         icon: '🌐',
         label: 'Shell',
         description: 'Open URLs, file paths, and launch other apps on your behalf.',
+    },
+    network: {
+        icon: '📡',
+        label: 'Network access',
+        description:
+            'Fetch URLs from outside your browser sandbox (e.g. link previews, favicons). Can reach sites your browser would refuse, including internal/intranet pages and sites that block cross-origin requests.',
     },
     filesystem: { icon: '📂', label: 'Filesystem', description: 'Scan folders and search files.' },
     window: {

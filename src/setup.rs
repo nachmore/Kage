@@ -744,9 +744,10 @@ fn send_startup_steering(
     session_id: &str,
 ) {
     let steering_msg = {
-        let cfg = config_arc.lock_or_recover();
+        let inputs =
+            crate::commands::system::SteeringInputs::from_config(&config_arc.lock_or_recover());
         crate::commands::system::format_steering_message(
-            &crate::commands::system::assemble_steering_parts(&cfg),
+            &crate::commands::system::assemble_steering_parts(&inputs),
         )
     };
     info!("Sending steering message ({} chars)", steering_msg.len());

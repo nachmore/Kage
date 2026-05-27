@@ -55,6 +55,20 @@ fn get_sessions_dir_from_config(config: &crate::config::Config) -> Result<PathBu
         .ok_or_else(|| "Failed to get home directory".to_string())
 }
 
+/// Lock the config, resolve the sessions dir, drop the lock. The previous
+/// pattern was `let config = features.config.lock_or_recover().clone();`
+/// followed by `get_sessions_dir_from_config(&config)`, which deep-cloned
+/// every nested HashMap (extension grants, extension states, tool
+/// permissions list, …) just to read the active connection's directory.
+/// Most session commands run on a hot path (load, list, switch, delete)
+/// where that overhead adds up.
+fn resolve_sessions_dir_locked(
+    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
+) -> Result<PathBuf, String> {
+    let guard = config.lock_or_recover();
+    get_sessions_dir_from_config(&guard)
+}
+
 /// Fallback for callers without config access — probes common paths
 fn get_sessions_dir() -> Result<PathBuf, String> {
     crate::agent_presets::default_sessions_dir()
@@ -539,8 +553,8 @@ pub async fn list_sessions(
     }
 
     // Scan and cache
-    let config = features.config.lock_or_recover().clone();
-    let all_sessions = scan_sessions_with_config(&config)?;
+    let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
+    let all_sessions = scan_sessions_in_dir(&sessions_dir)?;
     let total = all_sessions.len();
 
     // Store in cache
@@ -572,14 +586,6 @@ fn paginate(
         Some(limit) => iter.take(limit).cloned().collect(),
         None => iter.cloned().collect(),
     }
-}
-
-/// Scan the sessions directory using auto-detected path.
-fn scan_sessions_with_config(
-    config: &crate::config::Config,
-) -> Result<Vec<SessionSummary>, String> {
-    let sessions_dir = get_sessions_dir_from_config(config)?;
-    scan_sessions_in_dir(&sessions_dir)
 }
 
 fn scan_sessions_in_dir(sessions_dir: &PathBuf) -> Result<Vec<SessionSummary>, String> {
@@ -710,8 +716,7 @@ pub async fn load_session(
     session_id: String,
     features: State<'_, FeatureServices>,
 ) -> Result<SessionData, AppError> {
-    let config = features.config.lock_or_recover().clone();
-    let sessions_dir = get_sessions_dir_from_config(&config)?;
+    let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
 
@@ -802,8 +807,7 @@ pub async fn load_session(
 pub async fn get_sessions_directory(
     features: State<'_, FeatureServices>,
 ) -> Result<String, AppError> {
-    let config = features.config.lock_or_recover().clone();
-    let dir = get_sessions_dir_from_config(&config)?;
+    let dir = resolve_sessions_dir_locked(&features.config)?;
     Ok(dir.to_string_lossy().to_string())
 }
 
@@ -813,8 +817,7 @@ pub async fn reveal_session_file(
     session_id: String,
     features: State<'_, FeatureServices>,
 ) -> Result<(), AppError> {
-    let config = features.config.lock_or_recover().clone();
-    let sessions_dir = get_sessions_dir_from_config(&config)?;
+    let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
     let json_path = sessions_dir.join(format!("{}.json", session_id));
 
     if !json_path.exists() {
@@ -837,8 +840,7 @@ pub async fn delete_session(
     app: tauri::AppHandle,
 ) -> Result<(), AppError> {
     use tauri::Emitter;
-    let config = features.config.lock_or_recover().clone();
-    let sessions_dir = get_sessions_dir_from_config(&config)?;
+    let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
 
     for ext in &["json", "jsonl", "lock"] {
         let path = sessions_dir.join(format!("{}.{}", session_id, ext));
@@ -920,8 +922,7 @@ pub async fn switch_acp_session(
 
             // Read the cwd from the session's .json metadata file
             let cwd = {
-                let config = features.config.lock_or_recover().clone();
-                let sessions_dir = get_sessions_dir_from_config(&config)?;
+                let sessions_dir = resolve_sessions_dir_locked(&features.config)?;
                 let json_path = sessions_dir.join(format!("{}.json", id));
                 if json_path.exists() {
                     fs::read_to_string(&json_path)
@@ -999,9 +1000,17 @@ pub async fn switch_acp_session(
                 }
             }
 
-            // Apply default model if configured
-            let cfg = features.config.lock_or_recover();
-            if let Some(ref default_model) = cfg.acp.agent.default_model {
+            // Apply default model if configured. Snapshot the relevant
+            // fields under one lock and drop before the agent calls and
+            // the steering disk reads.
+            let (default_model, steering_inputs) = {
+                let cfg = features.config.lock_or_recover();
+                (
+                    cfg.acp.agent.default_model.clone(),
+                    crate::commands::system::SteeringInputs::from_config(&cfg),
+                )
+            };
+            if let Some(ref default_model) = default_model {
                 if !default_model.is_empty() {
                     info!("Applying default model to new session: {}", default_model);
                     let result = client_guard.send_request(
@@ -1018,9 +1027,9 @@ pub async fn switch_acp_session(
                 }
             }
 
-            // Send steering documents to the new session
+            // Send steering documents to the new session.
             {
-                let parts = crate::commands::system::assemble_steering_parts(&cfg);
+                let parts = crate::commands::system::assemble_steering_parts(&steering_inputs);
                 let steering_msg = format!(
                     "{} {}",
                     crate::commands::system::STEERING_MSG_PREFIX,
@@ -1148,8 +1157,7 @@ fn lookup_session_title(
     }
 
     // Cache miss or default title — extract directly from the file.
-    let config = config_arc.lock_or_recover().clone();
-    let sessions_dir = get_sessions_dir_from_config(&config).ok()?;
+    let sessions_dir = resolve_sessions_dir_locked(config_arc).ok()?;
     let jsonl_path = sessions_dir.join(format!("{}.jsonl", session_id));
     if !jsonl_path.exists() {
         return None;
@@ -1280,14 +1288,17 @@ pub fn maybe_generate_ai_title(
     session_cache: std::sync::Arc<std::sync::Mutex<Option<SessionCache>>>,
     session_id: String,
 ) {
-    // Synchronous gate: figure out which stage we're in, or skip.
-    let is_prelim_upgrade = {
-        let cache = load_title_cache();
-        match cache.get(&session_id).map(|e| e.source) {
-            Some(TitleSource::Manual) | Some(TitleSource::Ai) => return,
-            Some(TitleSource::AiPrelim) => true,
-            Some(TitleSource::Extracted) | None => false,
-        }
+    // Single disk read up front: snapshot the cache once and decide
+    // both the gate (skip / first-pass / prelim-upgrade) and what to
+    // write at the end. The previous pass loaded the title cache up to
+    // three times per call (gate check + lock-prelim branch + final
+    // persist), each one a fresh `read_to_string + serde_json::from_str`
+    // round-trip on `~/.kiro/sessions/.title-cache.json`.
+    let mut cache = load_title_cache();
+    let is_prelim_upgrade = match cache.get(&session_id).map(|e| e.source) {
+        Some(TitleSource::Manual) | Some(TitleSource::Ai) => return,
+        Some(TitleSource::AiPrelim) => true,
+        Some(TitleSource::Extracted) | None => false,
     };
 
     tauri::async_runtime::spawn_blocking(move || {
@@ -1319,7 +1330,6 @@ pub fn maybe_generate_ai_title(
                     "AI title regeneration produced no usable title for {} — locking prelim as final",
                     &session_id[..session_id.len().min(12)]
                 );
-                let mut cache = load_title_cache();
                 if let Some(entry) = cache.get_mut(&session_id) {
                     entry.source = TitleSource::Ai;
                     save_title_cache(&cache);
@@ -1338,7 +1348,6 @@ pub fn maybe_generate_ai_title(
         };
 
         // Persist + broadcast.
-        let mut cache = load_title_cache();
         cache.insert(
             session_id.clone(),
             TitleEntry {

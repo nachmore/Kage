@@ -15,11 +15,34 @@ use tauri::{Emitter, State};
 /// Re-export steering constants from auto_steering (the canonical location).
 pub use crate::auto_steering::{BUILTIN_STEERING, STEERING_MSG_PREFIX};
 
+/// The config fields `assemble_steering_parts` needs. Take this by
+/// value so the caller can extract it under the config lock and drop
+/// the guard before the disk reads happen.
+#[derive(Debug, Clone)]
+pub struct SteeringInputs {
+    pub user_steering_path: Option<String>,
+    pub auto_steering_enabled: bool,
+}
+
+impl SteeringInputs {
+    pub fn from_config(config: &Config) -> Self {
+        let assistant = &config.acp.agent;
+        Self {
+            user_steering_path: assistant.user_steering_path.clone(),
+            auto_steering_enabled: assistant.auto_steering_enabled,
+        }
+    }
+}
+
 /// Assemble the full steering content from builtin + user + auto sources.
 /// Returns the joined parts (without the STEERING_MSG_PREFIX wrapper).
 /// Callers are responsible for adding the prefix and any instructions.
-pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
-    let assistant = &config.acp.agent;
+///
+/// Takes plain inputs so the config lock can be released before this
+/// runs — the user / auto steering files are blocking disk reads, and
+/// holding the global config Mutex across them would block every
+/// concurrent `lock_or_recover()` site for the duration of the read.
+pub fn assemble_steering_parts(inputs: &SteeringInputs) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
 
     // Built-in steering (always first)
@@ -34,7 +57,7 @@ pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
     ));
 
     // User-written steering doc
-    if let Some(ref path) = assistant.user_steering_path {
+    if let Some(ref path) = inputs.user_steering_path {
         if !path.is_empty() {
             match fs::read_to_string(path) {
                 Ok(content) if !content.trim().is_empty() => {
@@ -48,7 +71,7 @@ pub fn assemble_steering_parts(config: &Config) -> Vec<String> {
     }
 
     // Auto-generated steering doc
-    if assistant.auto_steering_enabled {
+    if inputs.auto_steering_enabled {
         match Config::get_auto_steering_path() {
             Ok(auto_path) => {
                 if auto_path.exists() {
@@ -84,8 +107,10 @@ pub fn format_steering_message(parts: &[String]) -> String {
 pub async fn get_steering_content(
     features: State<'_, FeatureServices>,
 ) -> Result<Option<String>, AppError> {
-    let config = features.config.lock_or_recover();
-    let parts = assemble_steering_parts(&config);
+    // Snapshot the relevant fields under the lock; release before
+    // reading user / auto steering files from disk.
+    let inputs = SteeringInputs::from_config(&features.config.lock_or_recover());
+    let parts = assemble_steering_parts(&inputs);
     Ok(Some(format_steering_message(&parts)))
 }
 

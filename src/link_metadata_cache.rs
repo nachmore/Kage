@@ -41,6 +41,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 const CACHE_FILE: &str = "link-metadata.json";
 const FORMAT_VERSION: u32 = 1;
@@ -106,6 +108,94 @@ fn save_file(file: &CacheFile) -> Result<()> {
     Ok(())
 }
 
+/// In-memory cache. Lazy-loaded from disk on first access; mutations
+/// route through `store_in_memory` and are flushed asynchronously by a
+/// debounced background thread.
+///
+/// The previous design re-read and re-parsed the entire JSON file on
+/// every lookup AND every store, which was meaningful overhead for
+/// chats with dozens of fetched links — each `fetch_link_metadata` call
+/// was paying the deserialise cost twice (once on the lookup probe,
+/// once before the store). The in-memory copy collapses both paths to
+/// a `BTreeMap::get` / `BTreeMap::insert` under a brief lock.
+struct InMemoryCache {
+    file: CacheFile,
+    /// True after the first successful disk load. Initialized lazily
+    /// rather than at module init so the file is only opened when a
+    /// link-preview is actually requested.
+    loaded: bool,
+    /// Set when the in-memory state has changes the flush thread
+    /// hasn't written yet. Drives the debounced-flush loop.
+    dirty: bool,
+    /// Wallclock of the last mutation. The flush thread waits 500ms
+    /// past this before writing — coalesces the bursts that happen
+    /// when a chat lands with many links at once.
+    last_dirty_at: Option<Instant>,
+}
+
+impl InMemoryCache {
+    fn lazy_load(&mut self) {
+        if !self.loaded {
+            self.file = load_file();
+            self.loaded = true;
+        }
+    }
+}
+
+static CACHE: LazyLock<Mutex<InMemoryCache>> = LazyLock::new(|| {
+    let cache = Mutex::new(InMemoryCache {
+        file: CacheFile::default(),
+        loaded: false,
+        dirty: false,
+        last_dirty_at: None,
+    });
+    spawn_flush_thread();
+    cache
+});
+
+/// Debounce window. Bursts of `store` calls within this many ms after
+/// the last mutation are coalesced into a single disk write.
+const FLUSH_DEBOUNCE: Duration = Duration::from_millis(500);
+
+fn spawn_flush_thread() {
+    std::thread::Builder::new()
+        .name("link-metadata-cache-flush".to_string())
+        .spawn(|| loop {
+            std::thread::sleep(Duration::from_millis(250));
+            let snapshot: Option<CacheFile> = {
+                let mut cache = match CACHE.lock() {
+                    Ok(g) => g,
+                    Err(p) => p.into_inner(),
+                };
+                let due = cache
+                    .last_dirty_at
+                    .is_some_and(|t| t.elapsed() >= FLUSH_DEBOUNCE);
+                if cache.dirty && due {
+                    cache.dirty = false;
+                    cache.last_dirty_at = None;
+                    Some(cache.file.clone())
+                } else {
+                    None
+                }
+            };
+            if let Some(file) = snapshot {
+                if let Err(e) = save_file(&file) {
+                    log::warn!("link_metadata_cache: flush failed: {}", e);
+                }
+            }
+        })
+        .expect("spawn link-metadata-cache flush thread");
+}
+
+fn with_cache<R>(f: impl FnOnce(&mut InMemoryCache) -> R) -> R {
+    let mut cache = match CACHE.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    cache.lazy_load();
+    f(&mut cache)
+}
+
 /// True when an entry is still within its TTL relative to `now`. Pure
 /// so tests can pin the clock.
 pub fn is_fresh(
@@ -135,31 +225,41 @@ pub fn is_fresh(
 /// Returns `None` if the cache had nothing for this URL or the entry
 /// expired.
 pub fn lookup(url: &str) -> Option<Option<serde_json::Value>> {
-    let file = load_file();
-    let entry = file.entries.get(url)?;
     let now = chrono::Utc::now().timestamp();
-    if is_fresh(&entry.meta, entry.fetched_at.as_deref(), now) {
-        Some(entry.meta.clone())
-    } else {
-        None
-    }
+    with_cache(|c| {
+        let entry = c.file.entries.get(url)?;
+        if is_fresh(&entry.meta, entry.fetched_at.as_deref(), now) {
+            Some(entry.meta.clone())
+        } else {
+            None
+        }
+    })
 }
 
 /// Persist the result of a live fetch. Caller passes through whatever
 /// `fetch_link_metadata` produced — including `None` for failed
 /// fetches; the negative-cache TTL handles transient errors.
+///
+/// The Result return is kept for API stability but the in-memory write
+/// can't fail; the actual disk flush happens in the background. Errors
+/// from the flush are logged, not surfaced to callers — by the time a
+/// flush fails, the original `store` caller has long since moved on.
 pub fn store(url: &str, meta: Option<serde_json::Value>) -> Result<()> {
-    let mut file = load_file();
-    file.version = FORMAT_VERSION;
-    file.entries.insert(
-        url.to_string(),
-        CacheEntry {
-            meta,
-            fetched_at: Some(chrono::Utc::now().to_rfc3339()),
-        },
-    );
-    evict_to_capacity(&mut file);
-    save_file(&file)
+    let now_str = chrono::Utc::now().to_rfc3339();
+    with_cache(|c| {
+        c.file.version = FORMAT_VERSION;
+        c.file.entries.insert(
+            url.to_string(),
+            CacheEntry {
+                meta,
+                fetched_at: Some(now_str),
+            },
+        );
+        evict_to_capacity(&mut c.file);
+        c.dirty = true;
+        c.last_dirty_at = Some(Instant::now());
+    });
+    Ok(())
 }
 
 /// Evict the oldest entries (by `fetched_at`) until we're under the
@@ -194,12 +294,20 @@ fn evict_to_capacity(file: &mut CacheFile) {
 }
 
 /// Wipe every entry. Surfaced via the `link_metadata_clear_cache`
-/// Tauri command for the Settings → Link Preview reset button.
+/// Tauri command for the Settings → Link Preview reset button. Flushes
+/// synchronously so the user sees the cache size drop immediately when
+/// the settings page re-fetches stats.
 pub fn clear() -> Result<()> {
-    save_file(&CacheFile {
-        version: FORMAT_VERSION,
-        entries: BTreeMap::new(),
-    })
+    let snapshot = with_cache(|c| {
+        c.file = CacheFile {
+            version: FORMAT_VERSION,
+            entries: BTreeMap::new(),
+        };
+        c.dirty = false;
+        c.last_dirty_at = None;
+        c.file.clone()
+    });
+    save_file(&snapshot)
 }
 
 /// Total entries on disk + the file size in bytes. Returned by the
@@ -212,15 +320,12 @@ pub struct CacheStats {
 }
 
 pub fn stats() -> CacheStats {
-    let file = load_file();
+    let entries = with_cache(|c| c.file.entries.len());
     let bytes = cache_path()
         .and_then(|p| std::fs::metadata(&p).ok())
         .map(|m| m.len())
         .unwrap_or(0);
-    CacheStats {
-        entries: file.entries.len(),
-        bytes,
-    }
+    CacheStats { entries, bytes }
 }
 
 #[cfg(test)]
