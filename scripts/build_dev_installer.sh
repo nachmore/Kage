@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 #
-# Build a Kage installer with relaxed release-profile settings for faster
-# dev iteration. macOS / Linux equivalent of build_dev_installer.ps1.
+# Build a Kage installer fast for dev iteration.
+# macOS / Linux equivalent of build_dev_installer.ps1.
 #
-# `cargo tauri build` defaults to the project's `[profile.release]` config,
-# which sets `lto = true` + `codegen-units = 1`. That's right for ship
-# builds but very slow to iterate on. This wrapper overrides those via
-# CARGO_PROFILE_RELEASE_* env vars (which Cargo honors per-invocation) so
-# the env-var overrides flow into both the kage-computer-control-mcp build
-# done by scripts/build_mcp.py and the main `kage` build Tauri kicks off.
+# Default: `cargo tauri build --debug` (debug profile). Smallest
+# compile time, unoptimised runtime, and dependencies that key on
+# `cfg(debug_assertions)` (notably tauri-plugin-aptabase) tag every
+# event `isDebug=true` so Aptabase routes them to the Debug bucket
+# and your prod dashboard stays clean.
 #
-# Cargo.toml stays untouched, so CI and teammates running plain
-# `cargo tauri build` still get the optimized config.
+# Pass --release for a release-profile build with relaxed LTO/
+# codegen-units. Slower compile, faster runtime, and Aptabase events
+# tagged `isDebug=false` (production). Use this when you specifically
+# need to verify perf or repro a bug that only shows up under
+# optimisation.
+#
+# Profile env vars are exported per-invocation only; Cargo.toml stays
+# untouched, so CI and teammates running plain `cargo tauri build`
+# still get the optimized config.
 #
 # Usage:
-#   ./scripts/build_dev_installer.sh                # fast iteration build
+#   ./scripts/build_dev_installer.sh                # debug profile (default)
 #   ./scripts/build_dev_installer.sh --no-bundle    # skip DMG/.app bundling
-#   ./scripts/build_dev_installer.sh --release      # use full Cargo.toml profile
+#   ./scripts/build_dev_installer.sh --release      # release profile
 #   ./scripts/build_dev_installer.sh --replace      # kill running kage and
 #                                                   # swap the installed exe
 #                                                   # (implies --no-bundle)
@@ -38,14 +44,16 @@ for arg in "$@"; do
     esac
 done
 
-if [[ "$release_profile" -eq 0 ]]; then
+if [[ "$release_profile" -eq 1 ]]; then
     echo "[build_dev_installer] Using fast release profile (lto=false, codegen-units=16)"
     export CARGO_PROFILE_RELEASE_LTO=false
     export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+    profile_dir=release
 else
-    echo "[build_dev_installer] Using full release profile (Cargo.toml defaults)"
+    echo "[build_dev_installer] Using debug profile (fast compile; Aptabase classifies as Debug)"
     unset CARGO_PROFILE_RELEASE_LTO || true
     unset CARGO_PROFILE_RELEASE_CODEGEN_UNITS || true
+    profile_dir=debug
 fi
 
 # Tag the binary as a local dev build so init_logger() opts it in
@@ -60,6 +68,9 @@ export KAGE_LOCAL_DEV_BUILD=1
 export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 
 cargo_args=(tauri build)
+if [[ "$release_profile" -eq 0 ]]; then
+    cargo_args+=(--debug)
+fi
 if [[ "$no_bundle" -eq 1 ]]; then
     cargo_args+=(--no-bundle)
 fi
@@ -99,7 +110,7 @@ if [[ "$status" -eq 0 && "$replace" -eq 1 ]]; then
             ;;
     esac
 
-    source_exe="$repo_root/target/release/kage"
+    source_exe="$repo_root/target/$profile_dir/kage"
     if [[ -z "$target_exe" || ! -e "$target_exe" ]]; then
         echo "[build_dev_installer] --replace: no running Kage and no default target — skipping copy"
         exit "$status"

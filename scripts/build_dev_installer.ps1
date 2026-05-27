@@ -1,65 +1,65 @@
 <#
 .SYNOPSIS
-    Build a Kage installer with relaxed release-profile settings for faster
-    dev iteration.
+    Build a Kage installer fast for dev iteration.
 
 .DESCRIPTION
-    `cargo tauri build` defaults to the project's `[profile.release]` config,
-    which in this repo sets `lto = true` + `codegen-units = 1`. That's the
-    right setting for ship builds — smallest binary, fastest at runtime — but
-    it means a clean rebuild on Windows is roughly 12-15 minutes, dominated
-    by single-threaded LLVM ThinLTO link time. When you're iterating on a
-    bug that only repros in the bundled installer (not `cargo tauri dev`),
-    that round-trip becomes the limit.
+    Default: `cargo tauri build --debug` (debug profile). Compile time
+    is the smallest of any path, the binary's runtime is unoptimised
+    but fine for testing, and the resulting binary is auto-classified
+    by `cfg(debug_assertions)`-driven dependencies (notably
+    tauri-plugin-aptabase, which tags every event `isDebug=true` so
+    Aptabase routes them into the Debug bucket and your prod
+    dashboard stays clean).
 
-    This wrapper sets:
+    Pass -Release for a release-profile build with relaxed LTO/
+    codegen-units. That's slower to compile (~3 minutes vs <1 minute)
+    but produces a binary that actually represents what users will
+    experience. Use this when you need to verify perf or repro a
+    bug that only shows up under optimisation. Aptabase events from
+    a -Release build are tagged `isDebug=false` and land in your
+    production bucket — same as a real CI release.
 
-      CARGO_PROFILE_RELEASE_LTO=false
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+    Pass -Release together with the env var
+    `CARGO_PROFILE_RELEASE_LTO=true` (or just remove this script's
+    overrides) to verify a final ship-quality build (~13 minutes on
+    Windows). Plain `cargo tauri build` is the canonical path for
+    that case anyway.
 
-    via env vars (which Cargo honors per-invocation, overriding Cargo.toml)
-    and runs the normal `cargo tauri build`. The env-var overrides flow to
-    both the kage-computer-control-mcp build done by scripts/build_mcp.py
-    and the main `kage` build that Tauri kicks off. Build time on this
-    machine drops from ~13 minutes to ~3 minutes; the resulting binary is
-    a few MB larger and slightly slower at runtime, neither of which
-    matter for iteration.
-
-    The Cargo.toml profile stays untouched, so CI ship builds and any
-    plain `cargo tauri build` from a teammate's machine still get the
-    optimized config.
-
-    Tauri 2's CLI doesn't expose `--profile` so this is the cleanest way
-    to override per-invocation.
+    Profile env vars are exported per-invocation only; Cargo.toml
+    stays untouched, so plain `cargo tauri build` from a teammate's
+    machine still gets the optimised CI config.
 
 .PARAMETER NoBundle
-    Pass through to `cargo tauri build --no-bundle` to skip NSIS bundling
-    entirely. About 30s saved at the end of the build. The unbundled
-    binary lands at target\release\kage.exe and you can run it directly.
+    Pass through to `cargo tauri build --no-bundle` to skip NSIS
+    bundling entirely. About 30s saved at the end of the build. The
+    unbundled binary lands at target\<profile>\kage.exe and you can
+    run it directly.
 
 .PARAMETER Release
-    Use the original full-LTO release profile (i.e. don't override). Useful
-    for verifying a final build after fast iteration.
+    Build with the release profile (relaxed LTO, codegen-units=16)
+    instead of the default debug profile. Slower compile, faster
+    runtime, and Aptabase events tagged isDebug=false (production).
 
 .PARAMETER Replace
-    After a successful build, kill any running kage / kage-computer-control-mcp
-    process and copy the freshly-built target\release\kage.exe over the
-    installed binary at %LOCALAPPDATA%\Kage\kage.exe. Implies -NoBundle (no
-    point producing an installer if you're hot-swapping the .exe). The
-    install dir is auto-detected from the running process; if Kage isn't
-    running we fall back to the standard NSIS install location.
+    After a successful build, kill any running kage / kage-computer-
+    control-mcp process and copy the freshly-built kage.exe over the
+    installed binary at %LOCALAPPDATA%\Kage\kage.exe. Implies
+    -NoBundle (no point producing an installer if you're hot-
+    swapping the .exe). The install dir is auto-detected from the
+    running process; if Kage isn't running we fall back to the
+    standard NSIS install location.
 
 .EXAMPLE
     pwsh scripts/build_dev_installer.ps1
-
-.EXAMPLE
-    pwsh scripts/build_dev_installer.ps1 -NoBundle
-
-.EXAMPLE
-    pwsh scripts/build_dev_installer.ps1 -Release
+    # Default: debug profile, full bundle.
 
 .EXAMPLE
     pwsh scripts/build_dev_installer.ps1 -Replace
+    # Default debug profile, hot-swap the installed exe.
+
+.EXAMPLE
+    pwsh scripts/build_dev_installer.ps1 -Release -NoBundle
+    # Release-profile binary in target\release\kage.exe.
 #>
 
 [CmdletBinding()]
@@ -70,8 +70,8 @@ param(
 )
 
 if ($Replace) {
-    # Replace mode is a hot-swap of target\release\kage.exe over the
-    # installed binary; the NSIS installer step would just be wasted work
+    # Replace mode is a hot-swap of the .exe over the installed
+    # binary; the NSIS installer step would just be wasted work
     # so force --no-bundle for the user.
     $NoBundle = $true
 }
@@ -81,15 +81,17 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
-    if (-not $Release) {
+    if ($Release) {
         Write-Host "[build_dev_installer] Using fast release profile (lto=false, codegen-units=16)" -ForegroundColor Cyan
         $env:CARGO_PROFILE_RELEASE_LTO = 'false'
         $env:CARGO_PROFILE_RELEASE_CODEGEN_UNITS = '16'
+        $profileDir = 'release'
     }
     else {
-        Write-Host "[build_dev_installer] Using full release profile (Cargo.toml defaults)" -ForegroundColor Cyan
+        Write-Host "[build_dev_installer] Using debug profile (fast compile; Aptabase classifies as Debug)" -ForegroundColor Cyan
         Remove-Item Env:\CARGO_PROFILE_RELEASE_LTO -ErrorAction SilentlyContinue
         Remove-Item Env:\CARGO_PROFILE_RELEASE_CODEGEN_UNITS -ErrorAction SilentlyContinue
+        $profileDir = 'debug'
     }
 
     # Tag the binary as a local dev build so init_logger() opts it in
@@ -107,6 +109,9 @@ try {
     }
 
     $args = @('tauri', 'build')
+    if (-not $Release) {
+        $args += '--debug'
+    }
     if ($NoBundle) {
         $args += '--no-bundle'
     }
@@ -124,7 +129,7 @@ try {
         # Glob the installer name — version is read from Cargo.toml
         # (tauri.conf.json no longer pins it) so the filename suffix
         # depends on whatever the current Cargo.toml package.version is.
-        $nsisDir = Join-Path $repoRoot 'target\release\bundle\nsis'
+        $nsisDir = Join-Path $repoRoot ('target\' + $profileDir + '\bundle\nsis')
         $installer = Get-ChildItem -Path $nsisDir -Filter 'Kage_*_x64-setup.exe' -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
@@ -146,7 +151,7 @@ try {
             Join-Path $env:LOCALAPPDATA 'Kage'
         }
         $target = Join-Path $installDir 'kage.exe'
-        $source = Join-Path $repoRoot 'target\release\kage.exe'
+        $source = Join-Path $repoRoot ('target\' + $profileDir + '\kage.exe')
 
         if (-not (Test-Path -LiteralPath $source)) {
             Write-Host "[build_dev_installer] -Replace: source missing at $source — skipping copy" -ForegroundColor Yellow
@@ -163,7 +168,7 @@ try {
         # belt-and-braces for any future swap that touches the MCP binary
         # too. Stop-Process is best-effort; Wait briefly so the OS
         # actually releases the file handle before we Copy-Item.
-        Write-Host "[build_dev_installer] -Replace: stopping running kage processes…" -ForegroundColor Cyan
+        Write-Host "[build_dev_installer] -Replace: stopping running kage processes." -ForegroundColor Cyan
         Get-Process -Name kage,kage-computer-control-mcp -ErrorAction SilentlyContinue |
             Stop-Process -Force -ErrorAction SilentlyContinue
         Start-Sleep -Milliseconds 500

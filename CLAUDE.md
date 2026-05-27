@@ -13,20 +13,22 @@ cargo tauri dev -- /dev          # dev mode (DevTools, tray reload, RUST_BACKTRA
 cargo tauri dev -- /debug        # ACP protocol message logging to stdout
 cargo tauri dev -- /dev /debug   # both
 
-# Fast dev release build (USE THESE for hand-off-the-binary iteration):
-pwsh scripts/build_dev_installer.ps1            # Windows: full installer, ~3 min
+# Fast dev build (USE THESE for hand-off-the-binary iteration):
+pwsh scripts/build_dev_installer.ps1            # Windows: debug profile, full installer
 pwsh scripts/build_dev_installer.ps1 -NoBundle  # Windows: just kage.exe, no NSIS step
 pwsh scripts/build_dev_installer.ps1 -Replace   # Build, kill running kage, swap installed exe
+pwsh scripts/build_dev_installer.ps1 -Release   # Release profile (slower compile, faster runtime)
 bash scripts/build_dev_installer.sh             # macOS/Linux equivalent
 bash scripts/build_dev_installer.sh --no-bundle
 bash scripts/build_dev_installer.sh --replace   # macOS/Linux: same hot-swap flow
+bash scripts/build_dev_installer.sh --release   # Release profile
 
 # Ship-quality build (slow — full LTO, single codegen unit):
 cargo tauri build                # ~13 min on Windows; CI uses this for releases
 cargo build                      # debug binaries only — no installer, no bundling
 ```
 
-**Default for dev iteration: `scripts/build_dev_installer.{ps1,sh}`** — it overrides `CARGO_PROFILE_RELEASE_LTO=false` and `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16` per-invocation, dropping a clean rebuild from ~13 min to ~3 min at the cost of a slightly larger / slightly slower binary that doesn't matter for testing. Add `-NoBundle` / `--no-bundle` to skip the ~30s NSIS bundling and produce just `target/release/kage.exe`. Pass `-Release` / `--release` to the script to verify the final ship-quality config when needed.
+**Default for dev iteration: `scripts/build_dev_installer.{ps1,sh}`** — builds with `cargo tauri build --debug` (debug profile). Smallest compile time, unoptimised runtime that's fine for testing, and `cfg(debug_assertions)`-keying dependencies (notably `tauri-plugin-aptabase`) tag every event `isDebug=true` so Aptabase routes them into the Debug bucket and your prod dashboard stays clean. Pass `-Release` / `--release` to use the relaxed release profile (`CARGO_PROFILE_RELEASE_LTO=false`, `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16`) when you need to verify perf or repro a release-only bug — that path produces production-classified telemetry. Add `-NoBundle` / `--no-bundle` either way to skip NSIS bundling and produce just the `kage.exe` (under `target/debug/` or `target/release/` depending on profile).
 
 `cargo build --release` does **not** produce the installer or embed the frontend; only `cargo tauri build` does. A binary from `cargo build` will fail at runtime with `ERR_CONNECTION_REFUSED` because it still expects the dev server at `localhost:1420`. `cargo check` and `cargo build` are still the right commands for fast type/borrow validation during Rust iteration.
 
