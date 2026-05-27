@@ -2675,6 +2675,22 @@ export class FloatingApp {
                 }
             }
             // When no suggestions or not on first line, let default behavior handle cursor movement
+        } else if (event.key === 'Backspace') {
+            // Empty-input backspace dismisses the App Mode chip (same
+            // effect as clicking it). Lets users back out of a matched
+            // mode without reaching for the mouse. Only fires when the
+            // input is genuinely empty so normal text editing isn't
+            // affected; the click handler in `_refreshAppModeChip` is
+            // still the canonical clear path.
+            if (this.elements.input.value === '' && this._appModeMatch && !event.repeat) {
+                const chip = document.getElementById('appModeChip');
+                if (chip && chip.style.display !== 'none') {
+                    event.preventDefault();
+                    this._appModeMatch = null;
+                    chip.style.display = 'none';
+                    return;
+                }
+            }
         } else if (event.key === 'Escape') {
             if (this._clipboardMode) {
                 event.preventDefault();
