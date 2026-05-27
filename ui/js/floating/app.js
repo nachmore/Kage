@@ -445,6 +445,29 @@ export class FloatingApp {
         const _ts = (label) =>
             console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] init: ${label}`);
 
+        this._setupSyncWiring();
+        _ts('Synchronous setup done');
+
+        await this._bootstrapState();
+        _ts('Parallel IPC done (shortcuts + commands + frecency)');
+
+        this.setupSpeech();
+        this._registerAppEventListeners();
+
+        setTimeout(() => this.elements.input.focus(), 100);
+
+        this._runPostInitChecks();
+
+        // Tell the backend the window is usable for input. Extension
+        // loading below happens in the background and doesn't block.
+        this.invoke('notify_frontend_ready').catch(() => {});
+        _ts('notify_frontend_ready sent');
+        setAppIconInvoke(this.invoke);
+
+        this._initializeExtensionsInBackground(_ts);
+    }
+
+    _setupSyncWiring() {
         this.cacheElements();
         this.setupEventListeners();
         this.setupStreamingListeners();
@@ -467,20 +490,24 @@ export class FloatingApp {
 
         const inputContainer = this.elements.input?.closest('.input-container');
         setupRtlDetection(this.elements.input, inputContainer, this.elements.responseText);
-        _ts('Synchronous setup done');
+    }
 
-        // Load shortcuts and slash commands in parallel (fast IPC calls)
+    async _bootstrapState() {
         await Promise.all([
             this.loadShortcuts(),
             loadSlashCommands(this.invoke),
             loadFrecency(this.invoke),
             this._adoptFloatingSession(),
         ]);
-        _ts('Parallel IPC done (shortcuts + commands + frecency)');
+    }
 
-        this.setupSpeech();
-
-        // Register event listeners (synchronous, no awaits needed)
+    /**
+     * Tauri-event listeners only. `tauri://focus` / `tauri://blur` and
+     * the keyboard handlers live in `setupEventListeners` instead —
+     * those need to be in place before any IPC has a chance to steal
+     * focus.
+     */
+    _registerAppEventListeners() {
         this.listen(EVT.CONFIG_UPDATED, async () => {
             console.log('Config updated, reloading...');
             await this.loadShortcuts();
@@ -536,27 +563,6 @@ export class FloatingApp {
             }
         });
 
-        setTimeout(() => this.elements.input.focus(), 100);
-
-        // The update banner check is wired into the first
-        // `tauri://focus` (below), not run here at init time. Pre-fix
-        // we ran it from init() and cleared the persisted flag in the
-        // same call, but the floating webview boots while the window
-        // is still hidden in the idle-install path — the banner DOM
-        // got rendered into a hidden window, the flag got cleared,
-        // and by the time the user actually summoned the window any
-        // intermediate dismissBanner / resetUI had wiped the banner.
-        // The first-focus latch shows the banner the moment the user
-        // actually has the window in front of them, regardless of
-        // whether that's the post-install auto-show or a manual
-        // summon minutes later.
-        //
-        // The crash banner runs after the update banner so a fresh
-        // post-update launch doesn't replace the celebration banner
-        // with a stale crash report from a previous session. Update
-        // takes priority for that one-launch window.
-        this.checkForCrashBanner();
-
         this.listen(EVT.SHOW_FLOATING_BANNER, (event) => {
             const { icon, text, action_label, action_type, action_data } = event.payload;
             this.showBanner(icon, text, action_label, action_type, action_data);
@@ -572,38 +578,40 @@ export class FloatingApp {
                 ''
             );
         });
+    }
 
-        // Signal frontend ready NOW — the window is fully usable for input.
-        // Extension loading below happens in the background and doesn't block the UI.
-        this.invoke('notify_frontend_ready').catch(() => {});
-        _ts('notify_frontend_ready sent');
-
-        // Check for terminator mode and show a one-time banner
+    /**
+     * The post-update "Kage has been updated!" banner is wired into
+     * the first `tauri://focus` (in `setupEventListeners`), not fired
+     * from here — the idle-install path leaves the floating window
+     * hidden until the user summons it, and we only want the banner
+     * to show up when the user is actually looking at the window.
+     */
+    _runPostInitChecks() {
+        this.checkForCrashBanner();
         this._checkTerminatorMode();
-
-        // Spin up the optional Ollama status widget — no-op when the
-        // active connection isn't Ollama or the widget toggle is off.
         this._refreshOllamaStatusWidget();
 
-        // Enable app-icon rendering in markdown
-        setAppIconInvoke(this.invoke);
-
-        // Register extension widget slots so widgets can mount into
-        // them as the ExtensionManager loads.
         const bottomSlot = document.getElementById('extWidgetSlotBottom');
         const statusSlot = document.getElementById('extWidgetSlotStatus');
         if (bottomSlot) this.extensionManager.setWidgetSlot('floating-bottom', bottomSlot);
         if (statusSlot) this.extensionManager.setWidgetSlot('floating-status', statusSlot);
+    }
 
-        // Load extensions in the background — not needed for basic input/response
+    /**
+     * Deferred so cold-start time-to-paint isn't blocked on extension
+     * loading; basic input/response works without extensions ready.
+     * `_ts` is the optional timing logger threaded through from init().
+     */
+    _initializeExtensionsInBackground(_ts) {
         this.extensionManager
             .initialize()
             .then(() => {
-                _ts('Extensions initialized (background)');
+                _ts?.('Extensions initialized (background)');
                 setExtensionManager(this.extensionManager);
                 this.extensionToolController.sendSteering();
                 if (this._onExtensionsReady) this._onExtensionsReady();
-                _ts('Extension steering sent (background)');
+                _ts?.('Extension steering sent (background)');
             })
             .catch((e) => {
                 console.warn('Background extension init failed:', e);
