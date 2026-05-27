@@ -19,6 +19,33 @@
     background: var(--kage-accent-active);
 }
 
+/* Square icon-only delete button (e.g. App Mode rule remove). Tints
+ * red on hover so destructive intent is unambiguous. Pair with
+ * `.setting-button` — this overrides the accent fill. */
+.setting-button.icon-button-danger {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--kage-border);
+    color: var(--kage-text-muted, #938f9b);
+    transition:
+        background 0.15s,
+        border-color 0.15s,
+        color 0.15s;
+}
+.setting-button.icon-button-danger:hover {
+    background: rgba(220, 38, 38, 0.1);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+.setting-button.icon-button-danger:active {
+    background: rgba(220, 38, 38, 0.18);
+}
+
 /* Text Input */
 .setting-input {
     width: 100%;
