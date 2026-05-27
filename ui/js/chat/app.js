@@ -565,7 +565,24 @@ export class ChatApp {
             this.elements.chatInput.style.height =
                 Math.min(this.elements.chatInput.scrollHeight, 120) + 'px';
             this._tabCycleActive = false;
-            this.updateSuggestions();
+            // Debounce: every keystroke would otherwise trigger a fresh
+            // unifiedSearch (3+ IPC roundtrips: shortcuts, frecency, file
+            // search). Coalesce into one query 100ms after the user
+            // stops typing — matches the floating window's debounce
+            // policy. Empty input clears immediately so the suggestions
+            // panel doesn't linger after the field is cleared.
+            if (this._suggestionsDebounce) {
+                clearTimeout(this._suggestionsDebounce);
+                this._suggestionsDebounce = null;
+            }
+            if (!this.elements.chatInput.value.trim()) {
+                this.updateSuggestions(); // sync clear
+            } else {
+                this._suggestionsDebounce = setTimeout(() => {
+                    this._suggestionsDebounce = null;
+                    this.updateSuggestions();
+                }, 100);
+            }
         });
 
         this.elements.chatInput.addEventListener('keydown', async (e) => {
@@ -1224,9 +1241,15 @@ export class ChatApp {
             existingById.set(el.dataset.sessionId, el);
         });
 
-        // Build the desired ordered list of session_ids + separator positions
+        // Build the desired ordered list of session_ids + separator
+        // positions, plus a session_id → session map so the per-id
+        // lookup below is O(1) instead of O(n) (the previous code
+        // re-scanned `filtered` for every id, making the whole loop
+        // O(n²) — noticeable past ~100 sessions).
         const desiredIds = [];
+        const sessionById = new Map();
         for (const session of filtered) {
+            sessionById.set(session.session_id, session);
             desiredIds.push(session.session_id);
             const isDefault =
                 session.session_id === this.currentAcpSessionId ||
@@ -1237,9 +1260,8 @@ export class ChatApp {
         }
 
         // Remove items no longer in the filtered list
-        const desiredSet = new Set(filtered.map((s) => s.session_id));
         for (const [id, el] of existingById) {
-            if (!desiredSet.has(id)) el.remove();
+            if (!sessionById.has(id)) el.remove();
         }
         // Remove stale empty-state messages and separators (will re-add separator if needed)
         list.querySelectorAll('.session-list-empty, .session-list-separator').forEach((el) =>
@@ -1262,7 +1284,7 @@ export class ChatApp {
                 continue;
             }
 
-            const session = filtered.find((s) => s.session_id === key);
+            const session = sessionById.get(key);
             const isFloating = session.session_id === this.floatingSessionId;
             const isCurrent = session.session_id === this.currentAcpSessionId;
             const isActive = session.session_id === this.activeSessionId;

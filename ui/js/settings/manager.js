@@ -261,8 +261,40 @@ export class SettingsManager {
             }
         });
 
-        // Initialize all modules
-        this.modules.forEach((module) => module.initialize());
+        // Initialize the visible section eagerly; the rest are
+        // initialised lazily on first reveal in `switchSection`.
+        // Several initialise() impls do `await import(...)` of heavy
+        // helpers (mascot for About, mermaid/graphviz for code-block
+        // demos in Appearance, etc.); doing them all up-front made the
+        // settings window's first paint slow even though the user only
+        // looks at one section at a time.
+        this._initialized = new Set();
+        if (this.modules.length > 0) {
+            this._initializeModule(this.modules[0]);
+        }
+    }
+
+    /**
+     * Run a module's initialize() the first time it's needed; no-op on
+     * subsequent calls. Tolerates async initialize() implementations —
+     * the returned promise is awaitable but most callers fire-and-forget.
+     */
+    _initializeModule(module) {
+        if (this._initialized.has(module.id)) return;
+        this._initialized.add(module.id);
+        try {
+            const result = module.initialize();
+            if (result && typeof result.catch === 'function') {
+                result.catch((e) => {
+                    // Don't unset _initialized — a busted initialize will keep
+                    // throwing on every reveal otherwise. Surface the error
+                    // and leave the section in whatever state it reached.
+                    console.error(`Settings module ${module.id} initialize failed:`, e);
+                });
+            }
+        } catch (e) {
+            console.error(`Settings module ${module.id} initialize failed:`, e);
+        }
     }
 
     /**
@@ -286,6 +318,14 @@ export class SettingsManager {
                 section.classList.add('hidden');
             }
         });
+
+        // Lazy initialise: most settings modules only need to wire up
+        // their event listeners + load() once, the first time the user
+        // navigates to them. See render() for the rationale.
+        const targetModule = this.modules.find((m) => m.id === sectionId);
+        if (targetModule) {
+            this._initializeModule(targetModule);
+        }
 
         // Reload config when switching tabs so data is fresh
         this.load();
