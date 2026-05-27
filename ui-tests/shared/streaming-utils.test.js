@@ -11,6 +11,10 @@ import {
   detectExtensionToolCall,
   detectExtensionToolCallIncremental,
   extractSuggestedActions,
+  renderSourceChipsHtml,
+  renderSourceBubblesHtml,
+  renderToolChipsHtml,
+  attachSourceClickHandler,
 } from '../../ui/js/shared/streaming-utils.js';
 
 // --- processToolCallUpdate ---
@@ -380,5 +384,188 @@ describe('extractSuggestedActions', () => {
   it('returns null for array without label field', () => {
     const text = '```suggested_actions\n[{"foo":"bar"}]\n```';
     expect(extractSuggestedActions(text)).toBeNull();
+  });
+});
+
+// --- renderSourceChipsHtml / renderSourceBubblesHtml: XSS hardening ---
+//
+// Source URLs/titles/colors come from agent-streamed search results and
+// markdown links — i.e. attacker-influenceable content. The render output
+// must never interpolate them into a JS context, and HTML attributes must
+// be escaped so an injected `"` can't introduce new attributes.
+//
+// We assert via parsed-DOM, not raw-string regex: HTML-escaped content like
+// `&lt;img onerror=…&gt;` shows up as inert text, but a regex against the
+// raw string would still match "onerror=". The browser is the source of truth.
+
+function parseHtml(html) {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  return root;
+}
+
+/** Collect every attribute name across every element under root. */
+function allAttributeNames(root) {
+  const names = [];
+  for (const el of root.querySelectorAll('*')) {
+    for (const attr of el.attributes) names.push(attr.name);
+  }
+  return names;
+}
+
+describe('renderSourceChipsHtml — no inline JS, attribute injection neutralized', () => {
+  it('does not emit an inline onclick attribute', () => {
+    const html = renderSourceChipsHtml([
+      { url: 'https://example.com', domain: 'example.com', title: 't', initials: 'EX', color: 'red', favicon: 'fav' },
+    ]);
+    const root = parseHtml(html);
+    expect(allAttributeNames(root)).not.toContain('onclick');
+  });
+
+  it('preserves URL with backslash + single-quote in data-url (no breakout)', () => {
+    // Pre-fix code did `url.replace(/'/g, "\\'")` and inlined into a JS
+    // string literal — a backslash before a single-quote could collapse the
+    // escape and break out into an inline-JS context. With data-url + HTML
+    // escaping, both characters become attribute-safe.
+    const malicious = "https://x.com/?q=a\\')+alert(1)+(';";
+    const html = renderSourceChipsHtml([
+      { url: malicious, domain: 'x', title: 't', initials: 'X', color: 'red', favicon: '' },
+    ]);
+    const root = parseHtml(html);
+    const link = root.querySelector('.source-chip');
+    // The URL is preserved verbatim in data-url (round-trips intact).
+    expect(link.getAttribute('data-url')).toBe(malicious);
+    // No event handlers introduced anywhere.
+    const handlerAttrs = allAttributeNames(root).filter((n) => n.startsWith('on'));
+    // Only the safe img onload/onerror from the template.
+    expect(handlerAttrs.sort()).toEqual(['onerror', 'onload']);
+  });
+
+  it('does not introduce new event handlers via title injection', () => {
+    const html = renderSourceChipsHtml([
+      { url: 'https://x', domain: 'x', title: 'a" onerror="alert(1)', initials: 'X', color: 'red', favicon: '' },
+    ]);
+    const root = parseHtml(html);
+    // Title is inert text on the link; no onerror on the link itself.
+    const link = root.querySelector('.source-chip');
+    expect(link.getAttribute('onerror')).toBeNull();
+    expect(link.getAttribute('title')).toContain('alert(1)'); // inert
+  });
+
+  it('does not introduce new event handlers via color injection', () => {
+    const html = renderSourceChipsHtml([
+      { url: 'https://x', domain: 'x', title: 't', initials: 'X', color: 'red";onerror="alert(1)', favicon: '' },
+    ]);
+    const root = parseHtml(html);
+    const initials = root.querySelector('.source-initials');
+    expect(initials.getAttribute('onerror')).toBeNull();
+  });
+
+  it('does not introduce new event handlers via favicon injection', () => {
+    const html = renderSourceChipsHtml([
+      { url: 'https://x', domain: 'x', title: 't', initials: 'X', color: 'red', favicon: '" onerror="alert(1)' },
+    ]);
+    const root = parseHtml(html);
+    // The img has its safe template onload/onerror. No injected onmouseover etc.
+    const handlers = allAttributeNames(root).filter((n) => n.startsWith('on'));
+    expect(handlers.sort()).toEqual(['onerror', 'onload']);
+  });
+});
+
+describe('renderSourceBubblesHtml — same hardening as chips', () => {
+  it('does not emit an inline onclick attribute', () => {
+    const html = renderSourceBubblesHtml(
+      [{ toolCallId: 'a', title: 'tool', kind: 'read' }],
+      [{ url: 'https://x', domain: 'x', title: 't', initials: 'X', color: 'red', favicon: '' }],
+    );
+    const root = parseHtml(html);
+    expect(allAttributeNames(root)).not.toContain('onclick');
+  });
+
+  it('places the URL in a data-url attribute (round-trips intact)', () => {
+    const url = 'https://x.com?a="&b=c';
+    const html = renderSourceBubblesHtml(
+      [],
+      [{ url, domain: 'x', title: 't', initials: 'X', color: 'r', favicon: '' }],
+    );
+    const root = parseHtml(html);
+    const link = root.querySelector('.source-bubble');
+    // The browser unescapes the attribute; the original URL must round-trip.
+    expect(link.getAttribute('data-url')).toBe(url);
+  });
+});
+
+describe('renderToolChipsHtml — defensive escaping', () => {
+  it('treats an injected <img onerror=…> in extension tool title as inert text', () => {
+    // Extension tool titles look like `ext:<name>/<tool>` — the regex split
+    // here would pass an attacker-controlled name straight into the chip
+    // body. Render must escape it.
+    const html = renderToolChipsHtml([
+      { toolCallId: 'a', title: 'ext:<img src=x onerror=alert(1)>/foo', kind: 'read' },
+    ]);
+    const root = parseHtml(html);
+    // No real <img> element should exist (escaping must collapse it to text).
+    expect(root.querySelector('img')).toBeNull();
+    // No event handlers anywhere.
+    expect(allAttributeNames(root).filter((n) => n.startsWith('on'))).toEqual([]);
+  });
+});
+
+describe('attachSourceClickHandler — delegated open_url routing', () => {
+  it('routes clicks on data-url elements through invoke(open_url)', () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <a class="source-chip" data-url="https://example.com"><span class="source-domain">example.com</span></a>
+      </div>
+    `;
+    const container = document.getElementById('container');
+    const invoke = vi.fn(() => Promise.resolve());
+    attachSourceClickHandler(container, invoke);
+
+    container.querySelector('.source-chip').click();
+    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com' });
+  });
+
+  it('routes clicks on inner spans up to the data-url ancestor', () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <a class="source-chip" data-url="https://nested.test"><span class="source-domain">nested</span></a>
+      </div>
+    `;
+    const container = document.getElementById('container');
+    const invoke = vi.fn(() => Promise.resolve());
+    attachSourceClickHandler(container, invoke);
+
+    container.querySelector('.source-domain').click();
+    expect(invoke).toHaveBeenCalledWith('open_url', { url: 'https://nested.test' });
+  });
+
+  it('is idempotent — installing twice does not double-fire', () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <a class="source-chip" data-url="https://once.test"></a>
+      </div>
+    `;
+    const container = document.getElementById('container');
+    const invoke = vi.fn(() => Promise.resolve());
+    attachSourceClickHandler(container, invoke);
+    attachSourceClickHandler(container, invoke);
+
+    container.querySelector('.source-chip').click();
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores clicks outside any data-url element', () => {
+    document.body.innerHTML = `
+      <div id="container">
+        <span class="not-a-link">just text</span>
+      </div>
+    `;
+    const container = document.getElementById('container');
+    const invoke = vi.fn(() => Promise.resolve());
+    attachSourceClickHandler(container, invoke);
+
+    container.querySelector('.not-a-link').click();
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

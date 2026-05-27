@@ -12,6 +12,7 @@ import {
     renderToolChipsHtml,
     renderSourceChipsHtml,
     renderSourceBubblesHtml,
+    attachSourceClickHandler,
     extractSuggestedActions,
 } from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
@@ -3151,6 +3152,7 @@ export class FloatingApp {
         this.elements.contentArea.classList.add('visible');
         sourcesEl.innerHTML =
             renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+        attachSourceClickHandler(sourcesEl, this.invoke);
         this.windowManager.resizeWindow();
     }
 
@@ -3169,6 +3171,7 @@ export class FloatingApp {
 
         compactEl.style.display = 'flex';
         compactEl.innerHTML = renderSourceBubblesHtml(this.toolUsages, this.toolSources);
+        attachSourceClickHandler(compactEl, this.invoke);
         this.windowManager.resizeWindow();
     }
 

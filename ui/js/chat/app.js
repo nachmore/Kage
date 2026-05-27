@@ -24,7 +24,11 @@ import {
     onNetworkChange,
     OFFLINE_MESSAGE,
 } from '../shared/network.js';
-import { renderToolChipsHtml, renderSourceChipsHtml } from '../shared/streaming-utils.js';
+import {
+    renderToolChipsHtml,
+    renderSourceChipsHtml,
+    attachSourceClickHandler,
+} from '../shared/streaming-utils.js';
 import { sendAppNotification } from '../shared/notify.js';
 import { SpeechController } from '../shared/speech.js';
 import { ExtensionManager } from '../shared/extension-manager.js';
@@ -2084,6 +2088,7 @@ export class ChatApp {
         }
         sourcesEl.innerHTML =
             renderToolChipsHtml(this.toolUsages) + renderSourceChipsHtml(this.toolSources);
+        attachSourceClickHandler(sourcesEl, this.invoke);
     }
 
     /**

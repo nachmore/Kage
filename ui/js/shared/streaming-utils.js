@@ -117,6 +117,20 @@ export function addSource(url, title, domainHint, state) {
 import { getToolIcon, escapeHtml } from './tool-utils.js';
 
 /**
+ * Escape a string for use inside an HTML attribute value enclosed in double
+ * quotes. Adds `"` and `'` escaping on top of `escapeHtml` (which only handles
+ * `&<>` because it serializes through `textContent → innerHTML`).
+ *
+ * Required for any attribute whose value comes from agent-streamed content
+ * (URLs, titles, colors, favicon paths from search results / markdown links).
+ */
+export function escapeAttr(text) {
+    return escapeHtml(text == null ? '' : String(text))
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
  * Generate HTML for tool usage chips.
  * @param {Array} toolUsages - [{ toolCallId, title, kind }]
  * @returns {string} HTML string
@@ -148,7 +162,7 @@ export function renderToolChipsHtml(toolUsages) {
             const badge =
                 t.count > 1 ? `<span class="tool-chip-count">\u00d7${t.count}</span>` : '';
             return `
-        <span class="source-chip tool-chip" title="${escapeHtml(tooltip)}${t.count > 1 ? ' (' + t.count + ' calls)' : ''}">
+        <span class="source-chip tool-chip" title="${escapeAttr(tooltip + (t.count > 1 ? ' (' + t.count + ' calls)' : ''))}">
             <span class="tool-chip-icon">${getToolIcon(t.kind)}</span>
             <span class="source-domain">${escapeHtml(displayName)}</span>${badge}
         </span>
@@ -159,6 +173,13 @@ export function renderToolChipsHtml(toolUsages) {
 
 /**
  * Generate HTML for source domain chips (clickable links).
+ *
+ * Source URLs/titles/favicons originate from agent-streamed search results and
+ * markdown links — i.e. attacker-influenceable content. We never interpolate
+ * any of those values into JS contexts (no inline onclick); the URL rides on
+ * a `data-url` attribute (HTML-escaped) and a delegated click handler installed
+ * via `attachSourceClickHandler` reads it back and routes through `open_url`.
+ *
  * @param {Array} toolSources - [{ url, domain, title, initials, color, favicon }]
  * @returns {string} HTML string
  */
@@ -166,10 +187,10 @@ export function renderSourceChipsHtml(toolSources) {
     return toolSources
         .map(
             (s) => `
-        <a class="source-chip" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}">
+        <a class="source-chip" href="#" data-url="${escapeAttr(s.url)}" title="${escapeAttr(s.title)}">
             <span class="source-icon-wrapper">
-                <span class="source-initials" style="background:${s.color}">${s.initials}</span>
-                <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                <span class="source-initials" style="background:${escapeAttr(s.color)}">${escapeHtml(s.initials)}</span>
+                <img class="source-favicon" src="${escapeAttr(s.favicon)}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
             </span>
             <span class="source-domain">${escapeHtml(s.domain)}</span>
         </a>
@@ -195,7 +216,7 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
     const toolBubbles = uniqueTools
         .map(
             (t, i) => `
-        <span class="source-bubble tool-bubble" title="${escapeHtml(t.title)}" style="animation-delay: ${i * 0.08}s">
+        <span class="source-bubble tool-bubble" title="${escapeAttr(t.title)}" style="animation-delay: ${i * 0.08}s">
             <span class="tool-chip-icon" style="font-size: 18px;">${getToolIcon(t.kind)}</span>
         </span>
     `
@@ -206,10 +227,10 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
     const sourceBubbles = toolSources
         .map(
             (s, i) => `
-        <a class="source-bubble" href="#" onclick="event.preventDefault(); window.__TAURI__.core.invoke('open_url', { url: '${s.url.replace(/'/g, "\\'")}' })" title="${escapeHtml(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
+        <a class="source-bubble" href="#" data-url="${escapeAttr(s.url)}" title="${escapeAttr(s.title)}" style="animation-delay: ${(offset + i) * 0.08}s">
             <span class="source-icon-wrapper">
-                <span class="source-initials" style="background:${s.color}">${s.initials}</span>
-                <img class="source-favicon" src="${s.favicon}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
+                <span class="source-initials" style="background:${escapeAttr(s.color)}">${escapeHtml(s.initials)}</span>
+                <img class="source-favicon" src="${escapeAttr(s.favicon)}" alt="" onload="this.previousElementSibling.style.display='none'" onerror="this.style.display='none'">
             </span>
         </a>
     `
@@ -217,6 +238,30 @@ export function renderSourceBubblesHtml(toolUsages, toolSources) {
         .join('');
 
     return toolBubbles + sourceBubbles;
+}
+
+/**
+ * Install a delegated click handler that intercepts source-chip / source-bubble
+ * clicks and routes the `data-url` attribute through `open_url`. Idempotent:
+ * a container already wired is left alone. Pair with `renderSourceChipsHtml` /
+ * `renderSourceBubblesHtml` whose links carry `data-url` instead of an inline
+ * onclick (the inline form was a small XSS sink — agent-controlled URLs were
+ * interpolated into a JS string with brittle quote escaping).
+ *
+ * @param {Element} container - element holding `.source-chip` / `.source-bubble`
+ * @param {Function} invoke - the Tauri `invoke` from `tauri-init.js`
+ */
+export function attachSourceClickHandler(container, invoke) {
+    if (!container || container.__kageSourceClickWired) return;
+    container.__kageSourceClickWired = true;
+    container.addEventListener('click', (event) => {
+        const link = event.target.closest('[data-url]');
+        if (!link || !container.contains(link)) return;
+        const url = link.getAttribute('data-url');
+        if (!url) return;
+        event.preventDefault();
+        invoke('open_url', { url }).catch(() => {});
+    });
 }
 
 /**

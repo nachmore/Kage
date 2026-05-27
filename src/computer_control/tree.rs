@@ -52,6 +52,26 @@ const NOISE_ROLES: &[&str] = &[
 ];
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Truncate `s` so its byte length is `<= max_bytes`, splitting only at a UTF-8
+/// codepoint boundary. Strings ≤ `max_bytes` long are returned untouched; longer
+/// ones are sliced at the largest char boundary `<= keep_bytes`. Used for the
+/// element name/value preview where naive byte slicing can panic on emoji/CJK
+/// at the truncation offset.
+fn truncate_at_char_boundary(s: &str, max_bytes: usize, keep_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = keep_bytes.min(s.len());
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
+// ---------------------------------------------------------------------------
 // UIElement
 // ---------------------------------------------------------------------------
 
@@ -143,23 +163,19 @@ impl UIElement {
         let mut parts = vec![format!("{}[{}]", pad, self.role)];
 
         if !self.name.is_empty() {
-            let n = if self.name.len() <= 80 {
-                &self.name
-            } else {
-                &self.name[..77]
-            };
-            parts.push(format!("\"{}\"", n));
+            parts.push(format!(
+                "\"{}\"",
+                truncate_at_char_boundary(&self.name, 80, 77)
+            ));
         }
 
         parts.push(format!("{{{}}}", self.id));
 
         if !self.value.is_empty() {
-            let v = if self.value.len() <= 80 {
-                &self.value
-            } else {
-                &self.value[..77]
-            };
-            parts.push(format!("value=\"{}\"", v));
+            parts.push(format!(
+                "value=\"{}\"",
+                truncate_at_char_boundary(&self.value, 80, 77)
+            ));
         }
 
         if !self.states.is_empty() {
@@ -186,5 +202,120 @@ impl UIElement {
         }
 
         lines.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn elem_with_name(name: &str) -> UIElement {
+        let mut e = UIElement::new("e1".into(), "button".into());
+        e.name = name.into();
+        e
+    }
+
+    fn elem_with_value(value: &str) -> UIElement {
+        let mut e = UIElement::new("e1".into(), "edit".into());
+        e.value = value.into();
+        e
+    }
+
+    #[test]
+    fn to_text_handles_short_ascii_name() {
+        let e = elem_with_name("Save");
+        let text = e.to_text(0, 5);
+        assert!(text.contains("\"Save\""));
+    }
+
+    #[test]
+    fn to_text_truncates_long_name_at_utf8_boundary() {
+        // Place a 4-byte emoji straddling the 77-byte truncation point.
+        // 75 ASCII + 🦀(4 bytes) → byte 75 starts the emoji; byte 77 is mid-codepoint.
+        // Naive `&s[..77]` panics. Truncation must back up to byte 75.
+        let mut name = "a".repeat(75);
+        name.push_str("🦀🦀");
+        let e = elem_with_name(&name);
+        let text = e.to_text(0, 5);
+        assert!(text.contains("\"aaa")); // contains the prefix
+        assert!(text.is_ascii() || text.chars().all(|c| c.len_utf8() <= 4));
+        // No partial emoji bytes:
+        assert!(std::str::from_utf8(text.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn to_text_truncates_long_value_at_utf8_boundary() {
+        // Mixed CJK/emoji that places multibyte codepoints near boundary.
+        let mut value = "x".repeat(76);
+        value.push_str("中文测试🎉");
+        let e = elem_with_value(&value);
+        let text = e.to_text(0, 5);
+        assert!(text.contains("value=\"xx"));
+        assert!(std::str::from_utf8(text.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn truncate_at_char_boundary_does_not_panic_on_multibyte_at_offset() {
+        // Direct test of the helper for clarity.
+        let s = "a".repeat(78) + "🎉"; // emoji's 4 bytes straddle 78..82, so byte 77 is ASCII
+        let out = truncate_at_char_boundary(&s, 80, 77);
+        assert_eq!(out.len(), 77);
+
+        // Now place the emoji starting at 75 → bytes 75..79 are the emoji.
+        // Byte 77 is mid-emoji. Truncation must back up to byte 75.
+        let s = "a".repeat(75) + "🎉🎉";
+        let out = truncate_at_char_boundary(&s, 80, 77);
+        assert_eq!(out.len(), 75);
+        assert!(out.chars().all(|c| c == 'a'));
+    }
+
+    #[test]
+    fn truncate_short_string_returned_unchanged() {
+        let s = "hello";
+        assert_eq!(truncate_at_char_boundary(s, 80, 77), "hello");
+    }
+
+    #[test]
+    fn is_noise_keeps_named_separator() {
+        let mut e = UIElement::new("e1".into(), "separator".into());
+        e.name = "Visible label".into();
+        assert!(!e.is_noise(), "named separator should not be noise");
+    }
+
+    #[test]
+    fn is_noise_drops_unnamed_separator() {
+        let e = UIElement::new("e1".into(), "separator".into());
+        assert!(e.is_noise());
+    }
+
+    #[test]
+    fn register_resolve_clear_lifecycle() {
+        clear_registry();
+        let id_a = register_element(0xAAAA);
+        let id_b = register_element(0xBBBB);
+        assert_ne!(id_a, id_b);
+        assert_eq!(resolve_element(&id_a).unwrap(), 0xAAAA);
+        assert_eq!(resolve_element(&id_b).unwrap(), 0xBBBB);
+
+        clear_registry();
+        assert!(resolve_element(&id_a).is_err());
+    }
+
+    #[test]
+    fn to_text_flattens_noise_container_preserving_children() {
+        // group with no name → noise container; its named children should
+        // be promoted to the parent indent rather than nested under it.
+        let mut group = UIElement::new("g".into(), "group".into());
+        let mut btn1 = UIElement::new("b1".into(), "button".into());
+        btn1.name = "OK".into();
+        let mut btn2 = UIElement::new("b2".into(), "button".into());
+        btn2.name = "Cancel".into();
+        group.children = vec![btn1, btn2];
+
+        let text = group.to_text(0, 5);
+        // No "[group]" line at indent 0 — group was flattened.
+        assert!(!text.contains("[group]"));
+        assert!(text.contains("\"OK\""));
+        assert!(text.contains("\"Cancel\""));
     }
 }
