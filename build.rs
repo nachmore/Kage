@@ -38,6 +38,21 @@ fn main() {
     println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");
     println!("cargo:rerun-if-changed=.aptabase-key");
     println!("cargo:rerun-if-env-changed=APTABASE_KEY");
+    println!("cargo:rerun-if-env-changed=KAGE_LOCAL_DEV_BUILD");
+
+    // Surface the local-dev-build marker to the binary as a compile-time
+    // env. `option_env!("KAGE_LOCAL_DEV_BUILD")` returns Some(_) only when
+    // build.rs ran with the var set — i.e. when one of our dev-installer
+    // scripts kicked off the build. CI's release.yml leaves it unset, so
+    // beta/stable binaries don't pick up trace-level logging from this
+    // path. See `init_logger` in `src/logger.rs`.
+    if std::env::var("KAGE_LOCAL_DEV_BUILD")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .is_some()
+    {
+        println!("cargo:rustc-env=KAGE_LOCAL_DEV_BUILD=1");
+    }
 
     // Make the Aptabase analytics key available to src/telemetry.rs via
     // `option_env!("APTABASE_KEY")`. Resolution order, highest priority first:

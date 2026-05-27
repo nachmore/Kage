@@ -74,18 +74,16 @@ struct LogShim;
 
 static LOG_SHIM: LogShim = LogShim;
 
-/// Crate-target prefixes whose debug-level records we still want in
+/// Crate-target prefixes whose debug+trace records we still want in
 /// the on-disk log. Most dependencies stay at Info; allowlist entries
-/// here override that to Debug so their diagnostic breadcrumbs are
-/// visible without the user having to flip on `/debug` console
-/// mirroring.
+/// here are admitted at Trace so even success-path breadcrumbs land
+/// without the user having to flip on `/debug` console mirroring.
 ///
-/// Aptabase: every network failure, key-rejection, and config-issue
-/// in the plugin is `debug!()`. Filtering them out at Info means a
-/// telemetry outage was previously invisible — there'd be no log line
-/// to even hint at why the dashboard wasn't receiving events. The
-/// HTTP volume is bounded (one POST per flush interval at most), so
-/// the log noise from allowlisting it is minimal.
+/// Aptabase: the success path is `trace!()` (`flushing tracking
+/// events` / `sent N tracking events`) and the failure path is
+/// `debug!()` (HTTP error / non-2xx status). Filtering at Info hid
+/// both. Volume is bounded (one POST per flush interval at most), so
+/// the log noise from allowlisting is minimal.
 const VERBOSE_TARGET_PREFIXES: &[&str] = &["tauri_plugin_aptabase"];
 
 fn target_is_verbose(target: &str) -> bool {
@@ -96,6 +94,9 @@ fn target_is_verbose(target: &str) -> bool {
 
 impl log::Log for LogShim {
     fn enabled(&self, metadata: &Metadata) -> bool {
+        // Default: Info. Allowlisted targets are admitted up to Trace
+        // so we can diagnose telemetry / network issues from the log
+        // alone without a /debug flag.
         metadata.level() <= Level::Info || target_is_verbose(metadata.target())
     }
 
@@ -152,17 +153,48 @@ impl log::Log for LogShim {
 }
 
 /// Install the global `log` crate adapter. After this returns, every
-/// `log::info!`/`warn!`/`error!`/`debug!` call routes through [`app_log`].
+/// `log::info!`/`warn!`/`error!`/`debug!`/`trace!` call routes through
+/// [`app_log`].
 ///
-/// `set_max_level(Debug)` looks more permissive than `Info`, but the
-/// `LogShim::enabled` predicate still filters everything that isn't
-/// in `VERBOSE_TARGET_PREFIXES`. The bump is needed because
-/// `set_max_level` is the *first* gate `log::*` calls hit — anything
-/// stricter than the highest target we want to admit gets dropped
-/// before the shim's per-target allowlist can rescue it.
+/// `set_max_level` is the first gate `log::*` macros hit — anything
+/// stricter than the level set here gets dropped before the shim's
+/// per-target allowlist (`VERBOSE_TARGET_PREFIXES`) can rescue it.
+///
+/// Per-channel ceiling:
+///   - debug builds, dev/nightly CI releases, and local-dev-script
+///     builds: Trace — admits the aptabase plugin's success-path
+///     `trace!()` lines so life-of-build telemetry can be observed.
+///     Trace logging tends to be noisy, so we scope it tightly to
+///     audiences already opted into bleeding-edge.
+///   - beta / stable CI releases: Debug — admits the aptabase
+///     plugin's failure-path `debug!()` lines (HTTP errors, key
+///     rejection) so a telemetry outage in the field is still
+///     diagnosable from `app.jsonl`, without the trace noise.
+///
+/// Detection (highest-priority first):
+///   - `cfg!(debug_assertions)` — `cargo run` / `cargo tauri dev`.
+///   - `option_env!("KAGE_LOCAL_DEV_BUILD")` — set by
+///     `scripts/build_dev_installer.{ps1,sh}` so locally-built
+///     installers used for hand-off-the-binary iteration also opt
+///     in. CI's release.yml never sets this var, so beta/stable
+///     binaries are not affected.
+///   - `+dev.` in the stamped version — CI's nightly channel.
+///
+/// The `LogShim::enabled` predicate still drops everything that
+/// isn't in the verbose-target allowlist once the level dips below
+/// Info, so this isn't a "now everything logs at Trace" change —
+/// just "we admit Trace records *if a verbose target asks for it*".
 pub fn init_logger() -> Result<()> {
     log::set_logger(&LOG_SHIM).context("Failed to set logger")?;
-    log::set_max_level(LevelFilter::Debug);
+    let is_trace_channel = cfg!(debug_assertions)
+        || option_env!("KAGE_LOCAL_DEV_BUILD").is_some()
+        || env!("CARGO_PKG_VERSION").contains("+dev.");
+    let max = if is_trace_channel {
+        LevelFilter::Trace
+    } else {
+        LevelFilter::Debug
+    };
+    log::set_max_level(max);
     Ok(())
 }
 
