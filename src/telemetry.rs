@@ -131,13 +131,29 @@ pub fn track(app: &AppHandle, event: &str, props: Option<Value>) {
 /// so it can update the config before any other telemetry fires.
 pub fn record_startup_events(app: &AppHandle, config: &Arc<std::sync::Mutex<Config>>) {
     if APTABASE_KEY.is_none() {
+        // Reachable in any local build without `.aptabase-key` and any
+        // CI build whose `APTABASE_KEY` secret was unset. Logging it
+        // means a "telemetry isn't working" report can be diagnosed
+        // from app.jsonl alone without re-checking build config.
+        info!("Telemetry: skipped (no compile-time APTABASE_KEY in build)");
         return;
     }
     // Read + decide under a short-lived lock, then release before tracking
     // so the call doesn't contend with any concurrent config save.
     let (event_to_fire, should_daily, new_version, new_date) = {
         let mut cfg = config.lock_or_recover();
-        if !cfg.telemetry.enabled || cfg.telemetry.install_id.is_none() {
+        if !cfg.telemetry.enabled {
+            info!("Telemetry: skipped (user opted out via Settings → Privacy)");
+            return;
+        }
+        if cfg.telemetry.install_id.is_none() {
+            // The opt-in toggle is on but no ID has been generated yet.
+            // Two known paths reach this: (a) brand-new user before the
+            // welcome step's `set_consent` runs, (b) a hand-edited
+            // config that flipped enabled=true but never went through
+            // `set_consent`. Either way, no events fire until consent
+            // produces an ID.
+            info!("Telemetry: skipped (enabled=true but no install_id — consent not recorded)");
             return;
         }
         let current = env!("CARGO_PKG_VERSION").to_string();

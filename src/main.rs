@@ -370,11 +370,23 @@ async fn run() {
     //
     // See src/telemetry.rs and docs/PRIVACY.md.
     if let Some(key) = telemetry::APTABASE_KEY {
+        // Log enough to diagnose telemetry outages from app.jsonl alone
+        // — region prefix only (key[2..4]) is the part that determines
+        // ingest endpoint routing, and it's already public (it's
+        // visible in outbound HTTP). Full key is gated on /debug.
+        let region = key.split('-').nth(1).unwrap_or("?");
+        log::info!(
+            "Telemetry: aptabase plugin registered (region={}, key_len={})",
+            region,
+            key.len()
+        );
         builder = builder.plugin(
             tauri_plugin_aptabase::Builder::new(key)
                 .with_panic_hook(telemetry::panic_hook())
                 .build(),
         );
+    } else {
+        log::info!("Telemetry: aptabase plugin NOT registered (no compile-time APTABASE_KEY)");
     }
 
     let app = builder

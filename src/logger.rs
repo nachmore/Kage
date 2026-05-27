@@ -74,9 +74,29 @@ struct LogShim;
 
 static LOG_SHIM: LogShim = LogShim;
 
+/// Crate-target prefixes whose debug-level records we still want in
+/// the on-disk log. Most dependencies stay at Info; allowlist entries
+/// here override that to Debug so their diagnostic breadcrumbs are
+/// visible without the user having to flip on `/debug` console
+/// mirroring.
+///
+/// Aptabase: every network failure, key-rejection, and config-issue
+/// in the plugin is `debug!()`. Filtering them out at Info means a
+/// telemetry outage was previously invisible — there'd be no log line
+/// to even hint at why the dashboard wasn't receiving events. The
+/// HTTP volume is bounded (one POST per flush interval at most), so
+/// the log noise from allowlisting it is minimal.
+const VERBOSE_TARGET_PREFIXES: &[&str] = &["tauri_plugin_aptabase"];
+
+fn target_is_verbose(target: &str) -> bool {
+    VERBOSE_TARGET_PREFIXES
+        .iter()
+        .any(|p| target.starts_with(p))
+}
+
 impl log::Log for LogShim {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= Level::Info || target_is_verbose(metadata.target())
     }
 
     fn log(&self, record: &Record) {
@@ -133,9 +153,16 @@ impl log::Log for LogShim {
 
 /// Install the global `log` crate adapter. After this returns, every
 /// `log::info!`/`warn!`/`error!`/`debug!` call routes through [`app_log`].
+///
+/// `set_max_level(Debug)` looks more permissive than `Info`, but the
+/// `LogShim::enabled` predicate still filters everything that isn't
+/// in `VERBOSE_TARGET_PREFIXES`. The bump is needed because
+/// `set_max_level` is the *first* gate `log::*` calls hit — anything
+/// stricter than the highest target we want to admit gets dropped
+/// before the shim's per-target allowlist can rescue it.
 pub fn init_logger() -> Result<()> {
     log::set_logger(&LOG_SHIM).context("Failed to set logger")?;
-    log::set_max_level(LevelFilter::Info);
+    log::set_max_level(LevelFilter::Debug);
     Ok(())
 }
 
