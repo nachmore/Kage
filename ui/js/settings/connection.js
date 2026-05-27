@@ -1,6 +1,6 @@
 import { SettingsModule } from './base.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
-import { formatBytes } from '../shared/tool-utils.js';
+import { escapeAttr, formatBytes } from '../shared/tool-utils.js';
 /**
  * Connection Settings Module
  *
@@ -819,11 +819,6 @@ export class ConnectionSettingsModule extends SettingsModule {
     _populateOllamaModelDropdown(models, selected) {
         const sel = document.getElementById('ollEditModel');
         if (!sel) return;
-        const escapeAttr = (s) =>
-            String(s).replace(
-                /[&<>"']/g,
-                (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
-            );
         const opts = ['<option value="">—</option>'];
         for (const m of models || []) {
             const sizeStr = formatBytes(m.size);

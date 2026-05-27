@@ -5,10 +5,11 @@
 
 import { errLabel } from '../shared/error-message.js';
 import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
-import { renderSchema } from '../shared/settings-renderer.js';
-import { SettingsModule } from './base.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
-import { setSettingsManager, registerSettingsActions } from './module-registry.js';
+import { renderSchema } from '../shared/settings-renderer.js';
+import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
+import { SettingsModule } from './base.js';
+import { registerSettingsActions, setSettingsManager } from './module-registry.js';
 
 // Capability → (icon, description) used to render permission badges on
 // extension settings pages. Keep in sync with ui/js/shared/extension-permissions.js.
@@ -32,13 +33,6 @@ const CAPABILITY_INFO = Object.freeze({
     tts: { icon: '🔈', label: 'TTS', desc: 'Use text-to-speech' },
 });
 
-function escapeHtml(s) {
-    return String(s).replace(
-        /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
-    );
-}
-
 function renderCapabilityBadges(capabilities, legacy) {
     if (!Array.isArray(capabilities) || capabilities.length === 0) {
         return '<div class="ext-capabilities ext-capabilities-none" title="This extension requested no capabilities">🔒 No capabilities</div>';
@@ -50,7 +44,7 @@ function renderCapabilityBadges(capabilities, legacy) {
                 label: cap,
                 desc: 'Unknown capability',
             };
-            return `<span class="ext-capability-pill" title="${escapeHtml(info.desc)}">${info.icon} ${escapeHtml(info.label)}</span>`;
+            return `<span class="ext-capability-pill" title="${escapeAttr(info.desc)}">${info.icon} ${escapeHtml(info.label)}</span>`;
         })
         .join('');
     const legacyBanner = legacy

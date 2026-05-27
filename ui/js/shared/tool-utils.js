@@ -62,13 +62,48 @@ export function getToolEmoji(name) {
 }
 
 /**
- * Escape HTML entities in a string
+ * Escape a string for safe inclusion in HTML body content (between
+ * tags). Handles `&`, `<`, `>` — the three characters that affect HTML
+ * parsing. Browsers render `"` and `'` literally inside body text, so
+ * they pass through unchanged.
+ *
+ * **Do not use for attribute values.** Use `escapeAttr` instead — an
+ * attribute value containing a literal `"` would close the attribute
+ * early and turn the rest into a script-injection surface. The
+ * distinction matters because escaping `"` in body text would emit
+ * `&quot;` which still renders fine, but every emitted entity adds
+ * bytes to the streamed chunk for no user-visible benefit.
+ *
+ * Null and undefined collapse to the empty string so this is safe to
+ * call on optional fields without `?? ''` boilerplate at every site.
  */
-export function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+export function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>]/g, (c) => HTML_ENTITIES[c]);
 }
+
+/**
+ * Escape a string for safe inclusion as an HTML attribute value
+ * enclosed in either kind of quote. Adds `"` and `'` escaping on top
+ * of `escapeHtml` so the value can never break out of its quote
+ * delimiter. Required for any attribute whose value comes from
+ * agent-streamed content, user input, or untrusted JSON (URLs,
+ * titles, colors, favicon paths, tooltips, etc.).
+ *
+ * Null and undefined collapse to the empty string.
+ */
+export function escapeAttr(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, (c) => HTML_ENTITIES[c]);
+}
+
+const HTML_ENTITIES = Object.freeze({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+});
 
 /**
  * Strip internal Kage metadata tags from text for display purposes.

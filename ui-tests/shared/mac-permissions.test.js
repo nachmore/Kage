@@ -81,20 +81,27 @@ describe('renderPermissionCard', () => {
 
     it('escapes HTML in name and why so localized strings cannot break markup', () => {
         // A localizer who sneaks `<script>` into the copy would otherwise
-        // ship live JS into every install via System Settings copy. The
-        // mac-permissions.js source has its own `escapeHtml` for exactly
-        // this — verify it kicks in.
+        // ship live JS into every install via System Settings copy.
+        // Verify both the body fields (name/why) and the attribute
+        // fields (id, buttonId) sanitise their inputs.
         const evil = {
-            id: 'evil',
+            id: 'evil-id',
             icon: 'X',
             name: '<script>alert(1)</script>',
             why: '"><img src=x onerror=alert(2)>',
             url: 'x-apple:foo',
         };
-        const html = renderPermissionCard(evil, 'b');
+        const html = renderPermissionCard(evil, 'btn"id');
+        // Name: `<` is escaped, so the inline script never forms a tag.
         expect(html).not.toContain('<script>alert(1)');
         expect(html).toContain('&lt;script&gt;');
-        expect(html).toContain('&quot;');
+        // Why: `<img>` is also entity-encoded — no element forms, so
+        // onerror never fires. The `"` in body text is harmless and
+        // is left as-is by escapeHtml (only escapeAttr escapes quotes).
+        expect(html).toContain('&lt;img src=x onerror=alert(2)&gt;');
+        // ButtonId lands inside `id="..."` — escapeAttr quote-encodes
+        // the embedded `"` so the attribute can't be closed early.
+        expect(html).toContain('id="btn&quot;id"');
     });
 });
 

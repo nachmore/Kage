@@ -32,13 +32,9 @@
  * paint geometry.
  */
 
-const NS = 'line-editor';
+import { escapeAttr } from './tool-utils.js';
 
-function escapeAttr(s) {
-    return String(s).replace(/[&<>"']/g, (c) => {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-}
+const NS = 'line-editor';
 
 /**
  * Create a line editor inside `container`. Returns a controller object

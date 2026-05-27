@@ -4,6 +4,12 @@
  * the ACP event parsing and source extraction logic.
  */
 
+import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
+
+// `escapeAttr` is re-exported here so existing call sites that import
+// it from this module keep working. Canonical home is `tool-utils.js`.
+export { escapeAttr };
+
 /**
  * Parse a tool_call_update event and track tool usage + sources.
  * @param {Object} event - Tauri event payload
@@ -112,22 +118,6 @@ export function addSource(url, title, domainHint, state) {
     } catch {
         /* invalid URL */
     }
-}
-
-import { getToolIcon, escapeHtml } from './tool-utils.js';
-
-/**
- * Escape a string for use inside an HTML attribute value enclosed in double
- * quotes. Adds `"` and `'` escaping on top of `escapeHtml` (which only handles
- * `&<>` because it serializes through `textContent → innerHTML`).
- *
- * Required for any attribute whose value comes from agent-streamed content
- * (URLs, titles, colors, favicon paths from search results / markdown links).
- */
-export function escapeAttr(text) {
-    return escapeHtml(text == null ? '' : String(text))
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 /**

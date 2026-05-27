@@ -17,7 +17,7 @@ import {
     sanitizeInfoHtml,
     validateSchema,
 } from './settings-schema.js';
-import { formatBytes } from './tool-utils.js';
+import { escapeAttr, escapeHtml, formatBytes } from './tool-utils.js';
 
 /**
  * Rendered settings instance. Produced by renderSchema().
@@ -614,16 +614,8 @@ export class RenderedSettings {
 
 // --- Helpers ---------------------------------------------------------------
 
-function escapeHtml(s) {
-    return String(s).replace(
-        /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
-    );
-}
-
-function escapeAttr(s) {
-    return escapeHtml(s);
-}
+// escapeHtml / escapeAttr come from tool-utils — single canonical
+// source for HTML escaping across the codebase.
 
 /**
  * Escape an id for use inside a CSS id selector. jsdom (and some older

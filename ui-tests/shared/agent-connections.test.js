@@ -5,8 +5,6 @@
  *
  * Coverage focuses on the pieces that are easy to break and hard to
  * notice:
- *   - escapeHtml handles null/undefined and the standard set of unsafe
- *     characters (it's reused across both render paths)
  *   - uuidLite returns the expected `c-...-...` shape (the
  *     manager keys connections by id, so a regression here corrupts
  *     persisted state)
@@ -17,6 +15,9 @@
  *   - readEditForm round-trips the values rendered by renderEditForm
  *   - validateMode + listPresets degrade gracefully when invoke is
  *     missing (the wizard runs without Tauri ready in unit tests)
+ *
+ * escapeHtml / escapeAttr coverage lives in tool-utils.test.js — the
+ * canonical home after consolidation.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -24,7 +25,6 @@ import {
     bindEditForm,
     connectionFromDetected,
     describeIssue,
-    escapeHtml,
     listPresets,
     readEditForm,
     pickAgentType,
@@ -36,21 +36,6 @@ import {
 beforeEach(() => {
     document.body.innerHTML = '';
     delete window.__TAURI__;
-});
-
-describe('escapeHtml', () => {
-    it('escapes the standard unsafe characters', () => {
-        expect(escapeHtml(`<a href="x">'&'</a>`)).toBe(
-            '&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;'
-        );
-    });
-
-    it('renders null/undefined as empty string instead of "undefined"', () => {
-        // The original IIFE version handled this; preserve the contract
-        // so callers can pass optional fields straight through.
-        expect(escapeHtml(null)).toBe('');
-        expect(escapeHtml(undefined)).toBe('');
-    });
 });
 
 describe('uuidLite', () => {

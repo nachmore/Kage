@@ -16,6 +16,8 @@
  *   - `window.__TAURI__.core.invoke`
  */
 
+import { escapeAttr, escapeHtml } from './tool-utils.js';
+
 /**
  * "What kind of agent are you adding?" picker.
  *
@@ -106,14 +108,12 @@ export function pickAgentType() {
     });
 }
 
-export function escapeHtml(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
+// escapeHtml / escapeAttr are imported from ./tool-utils.js — single
+// canonical source. The previous local copy was a quote-escaping
+// regex that matched escapeAttr's behaviour, so call sites were doing
+// attribute-safe escaping under the escapeHtml name. Migrated callers
+// to escapeAttr where the value lands in an HTML attribute and to
+// escapeHtml for body content.
 
 export function uuidLite() {
     // Cheap RFC4122-shaped id; uniqueness within a single config is
@@ -309,7 +309,7 @@ export function renderEditForm(connection, opts) {
     return `
         <div class="${wrap}">
             <div class="${labelClass}">Name</div>
-            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Name" value="${escapeHtml(c.name || '')}" placeholder="My agent">${ctrlClose}
+            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Name" value="${escapeAttr(c.name || '')}" placeholder="My agent">${ctrlClose}
         </div>
 
         <div class="${wrap}">
@@ -325,7 +325,7 @@ export function renderEditForm(connection, opts) {
                 <div class="${labelClass}">Spawn Command</div>
                 ${desc('Full command to start the ACP server, including the path to the binary and any arguments.')}
                 ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SpawnCommand"
-                    value="${escapeHtml(isLocal ? c.mode?.spawn_command || '' : '')}"
+                    value="${escapeAttr(isLocal ? c.mode?.spawn_command || '' : '')}"
                     placeholder="e.g., C:\\path\\to\\agent.exe acp">${ctrlClose}
             </div>
         </div>
@@ -334,7 +334,7 @@ export function renderEditForm(connection, opts) {
             <div class="${wrap}">
                 <div class="${labelClass}">Host</div>
                 ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Host"
-                    value="${escapeHtml(!isLocal ? c.mode?.host || '127.0.0.1' : '127.0.0.1')}">${ctrlClose}
+                    value="${escapeAttr(!isLocal ? c.mode?.host || '127.0.0.1' : '127.0.0.1')}">${ctrlClose}
             </div>
             <div style="display:flex;gap:12px;">
                 <div class="${wrap}" style="flex:1;">
@@ -357,7 +357,7 @@ export function renderEditForm(connection, opts) {
             <div class="${labelClass}">Sessions directory</div>
             ${desc(`Where this agent stores its session files. Leave empty to use the agent's default location.`)}
             ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SessionsDir"
-                value="${escapeHtml(c.sessions_directory || '')}"
+                value="${escapeAttr(c.sessions_directory || '')}"
                 placeholder="Auto-detect">${ctrlClose}
         </div>`
                 : ''

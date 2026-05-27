@@ -19,6 +19,8 @@
  * ES module — import via `import { renderAllInto, isMacOS } from './mac-permissions.js'`.
  */
 
+import { escapeAttr, escapeHtml } from './tool-utils.js';
+
 export function isMacOS() {
     return (navigator.platform || '').startsWith('Mac');
 }
@@ -47,26 +49,19 @@ export const MAC_PERMISSIONS = Object.freeze([
     }),
 ]);
 
-function escapeHtml(s) {
-    return String(s).replace(
-        /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
-    );
-}
-
 /**
  * Render a single permission card. `buttonId` is used so callers can
  * attach a click handler after insertion without a global dispatch.
  */
 export function renderPermissionCard(perm, buttonId) {
     return `
-        <div class="mac-perm-card" data-perm-id="${escapeHtml(perm.id)}">
+        <div class="mac-perm-card" data-perm-id="${escapeAttr(perm.id)}">
             <div class="mac-perm-icon">${escapeHtml(perm.icon)}</div>
             <div class="mac-perm-info">
                 <div class="mac-perm-name">${escapeHtml(perm.name)}</div>
                 <div class="mac-perm-why">${escapeHtml(perm.why)}</div>
             </div>
-            <button type="button" class="mac-perm-btn" id="${escapeHtml(buttonId)}">
+            <button type="button" class="mac-perm-btn" id="${escapeAttr(buttonId)}">
                 Open System Settings
             </button>
         </div>`;
