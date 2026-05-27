@@ -116,7 +116,10 @@ export class AssistantSettingsModule extends SettingsModule {
                         <strong>Steering tip:</strong> short, imperative instructions work best. "Be concise. Prefer code blocks." not "Please consider…". The cap is ${500} characters per rule.
                     </div>
                     <div id="appModesContainer" style="display:flex;flex-direction:column;gap:10px;"></div>
-                    <button class="setting-button" data-action="addAppMode" style="margin-top:10px;">+ Add App Mode</button>
+                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                        <button class="setting-button" data-action="addAppMode">+ Add App Mode</button>
+                        <button class="setting-button" data-action="addSuggestedAppModes" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);" title="Drop in a curated set of starter rules — duplicates skipped.">+ Add suggested</button>
+                    </div>
                     <div style="display:flex;gap:8px;margin-top:14px;">
                         <button class="setting-button" data-action="saveAppModes">Save</button>
                         <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">Cancel</button>
@@ -240,6 +243,7 @@ export class AssistantSettingsModule extends SettingsModule {
             openAppModesEditor: () => this._openAppModesEditor(),
             closeAppModesEditor: () => this._showMainView(),
             addAppMode: () => this._addAppModeRow(),
+            addSuggestedAppModes: () => this._addSuggestedAppModes(),
             saveAppModes: () => this._saveAppModes(),
         });
     }
@@ -506,6 +510,141 @@ export class AssistantSettingsModule extends SettingsModule {
             // Empty container is fine — user can re-add or leave blank.
         });
         container.appendChild(row);
+    }
+
+    /**
+     * Curated starter rules for common apps. Names cover Windows, macOS,
+     * and Linux variants for the same app where they differ — the
+     * matcher is whole-token / case-insensitive / .exe-stripping
+     * (see src/context_rules.rs::matches), so a single token usually
+     * matches across platforms (e.g. "code" hits Code.exe, Visual
+     * Studio Code, and code on Linux). When that doesn't work we list
+     * an OS-specific token; the user can tighten or split as needed.
+     *
+     * Steering is short and imperative per the docs in builtin_steering.md.
+     */
+    static SUGGESTED_APP_MODES = [
+        {
+            friendly_name: 'Code editor',
+            executable: 'code',
+            steering:
+                'You are pair-programming. Be terse. Show diffs or full functions, not narration. Prefer the language already in the file. No "Sure, here\'s…"',
+        },
+        {
+            friendly_name: 'Terminal',
+            executable: 'terminal',
+            steering:
+                'Reply with shell commands first, prose second. Detect the OS from context. One-liners over scripts when possible. Mark destructive commands with a brief warning.',
+        },
+        {
+            friendly_name: 'Browser',
+            executable: 'chrome',
+            steering:
+                'Assume the user is reading a web page. Summarise concisely, surface the key claim, and flag anything that looks paywalled or AI-generated. Cite the page when quoting.',
+        },
+        {
+            friendly_name: 'Email',
+            executable: 'outlook',
+            steering:
+                'Match the tone of the thread. Default to short replies. If drafting from scratch, give two options: a 1-liner and a 3-sentence version. No filler ("hope this helps").',
+        },
+        {
+            friendly_name: 'Slack',
+            executable: 'slack',
+            steering:
+                'Casual, lowercase-okay, emoji sparingly. Reply in 1–3 sentences. If the user pastes a thread, summarise + suggest one next message.',
+        },
+        {
+            friendly_name: 'Notes / writing',
+            executable: 'notion',
+            steering:
+                'Help the user think on paper. Ask clarifying questions when the goal is ambiguous. Prefer structured bullets and short headings over walls of prose.',
+        },
+        {
+            friendly_name: 'Spreadsheet',
+            executable: 'excel',
+            steering:
+                'Default to formulas (Excel/Google Sheets dialect). When ambiguous, ask whether the data is a range or a table. Flag locale-sensitive things (decimals, dates) explicitly.',
+        },
+        {
+            friendly_name: 'Design tool',
+            executable: 'figma',
+            steering:
+                'Think about visual hierarchy, contrast, and spacing first. Suggest concrete CSS values or design tokens, not vague directions like "make it pop".',
+        },
+        {
+            friendly_name: 'Video call',
+            executable: 'zoom',
+            steering:
+                'Optimise for speaking aloud: short sentences, no markdown, no code blocks unless asked. Be ready to repeat or rephrase the previous answer in fewer words.',
+        },
+        {
+            friendly_name: 'PDF reader',
+            executable: 'acrobat',
+            steering:
+                'Assume the user is reading a long document. Summarise sections on request, extract action items, and quote with page references when possible.',
+        },
+    ];
+
+    /**
+     * Drop in any suggested rule whose token isn't already represented
+     * by an existing row's executable field. "Already represented"
+     * means the suggestion's exe token appears in any existing exe
+     * field after normalisation (mirrors the Rust matcher's behaviour).
+     */
+    _addSuggestedAppModes() {
+        const container = document.getElementById('appModesContainer');
+        if (!container) return;
+
+        const norm = (s) =>
+            String(s || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\.exe$/, '');
+
+        // Build a set of exe tokens already present in the editor
+        // (across all rows, not just the saved snapshot — the user
+        // might have just typed something they don't want clobbered).
+        const present = new Set();
+        for (const row of container.querySelectorAll('.am-exe')) {
+            const v = norm(row.value);
+            if (v) present.add(v);
+        }
+        // First open lands a single empty row; if the user clicks
+        // "Add suggested" without touching it, drop it so we don't
+        // leave a dangling blank.
+        const blanks = Array.from(container.querySelectorAll('.app-mode-row')).filter((row) => {
+            const n = row.querySelector('.am-name')?.value?.trim();
+            const e = row.querySelector('.am-exe')?.value?.trim();
+            const s = row.querySelector('.am-steering')?.value?.trim();
+            return !n && !e && !s;
+        });
+        for (const b of blanks) b.remove();
+
+        let added = 0;
+        let skipped = 0;
+        for (const sug of AssistantSettingsModule.SUGGESTED_APP_MODES) {
+            if (present.has(norm(sug.executable))) {
+                skipped += 1;
+                continue;
+            }
+            this._addAppModeRow({ ...sug, enabled: true });
+            present.add(norm(sug.executable));
+            added += 1;
+        }
+
+        if (added === 0) {
+            this._setAppModesStatus(
+                'All suggested apps already have rules — nothing to add.',
+                'success'
+            );
+        } else {
+            const skipNote = skipped > 0 ? ` (skipped ${skipped} already present)` : '';
+            this._setAppModesStatus(
+                `Added ${added} starter rule${added === 1 ? '' : 's'}${skipNote}. Edit and Save when ready.`,
+                'success'
+            );
+        }
     }
 
     _collectAppModes() {
