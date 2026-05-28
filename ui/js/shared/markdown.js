@@ -1,8 +1,8 @@
-// Markdown rendering with code block, mermaid, graphviz, and PlantUML support
+// Markdown rendering with code block, mermaid, and graphviz support.
 
 import { loadPrismLanguage } from './prism-loader.js';
 
-const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
+const DIAGRAM_LANGUAGES = new Set(['mermaid', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
@@ -815,10 +815,6 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
 
     // Don't render incomplete diagrams — show as code block and wait for more content
     if (language === 'mermaid' && !code.trim()) return;
-    if ((language === 'plantuml' || language === 'puml') && !code.includes('@enduml')) {
-        wrapCodeBlock(codeBlock, pre, language);
-        return;
-    }
     if (
         (language === 'dot' || language === 'graphviz' || language === 'neato') &&
         !code.includes('}')
@@ -845,8 +841,6 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
 
     const labels = {
         mermaid: 'Mermaid',
-        plantuml: 'PlantUML',
-        puml: 'PlantUML',
         dot: 'Graphviz',
         graphviz: 'Graphviz',
         neato: 'Graphviz (neato)',
@@ -912,10 +906,8 @@ async function renderDiagram(codeBlock, pre, language, streaming = false) {
 
     if (language === 'mermaid') {
         await renderMermaidInto(diagramDiv, code, streaming);
-    } else if (language === 'dot' || language === 'graphviz' || language === 'neato') {
-        await renderGraphvizInto(diagramDiv, code, language, streaming);
     } else {
-        renderPlantUMLInto(diagramDiv, code);
+        await renderGraphvizInto(diagramDiv, code, language, streaming);
     }
 }
 
@@ -1007,20 +999,6 @@ async function renderGraphvizInto(container, code, language, streaming = false) 
                 '</div>';
         }
     }
-}
-
-function renderPlantUMLInto(container, code) {
-    // PlantUML requires Java — no pure JS renderer exists. Show formatted source.
-    const pre = document.createElement('pre');
-    pre.style.cssText = 'margin:0;padding:16px;background:#272822;overflow-x:auto';
-    const codeEl = document.createElement('code');
-    codeEl.style.cssText =
-        "font-family:'Consolas','Monaco','Courier New',monospace;font-size:13px;line-height:1.5;color:#f8f8f2;white-space:pre";
-    codeEl.textContent = code;
-    pre.appendChild(codeEl);
-    container.style.padding = '0';
-    container.style.background = '#272822';
-    container.appendChild(pre);
 }
 
 // --- HTML preview rendering ---
