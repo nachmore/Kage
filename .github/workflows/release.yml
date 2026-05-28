@@ -680,10 +680,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PREV_SHA=$(gh api "repos/${REPO}/git/refs/tags/${CH}-1" \
-            --jq '.object.sha' 2>/dev/null || true)
+
+          # Source of truth for "what SHA was the previous build":
+          # the `BUILD_SHA.txt` asset attached to the <channel>-1
+          # release. Pre-fix this read the <channel>-1 git tag, but
+          # the rotate path can't update that tag without the
+          # `workflows` permission — so the tag stays stuck on the
+          # very first nightly's SHA forever, and every subsequent
+          # changelog diffs against that ancient base, accumulating
+          # commits indefinitely.
+          #
+          # The asset is written by the publish step of every
+          # rolling release (see `Collect assets` below), so once
+          # one nightly publishes with this code, every subsequent
+          # rotate has a correct previous-SHA source.
+          PREV_SHA=""
+          if PREV_SHA="$(gh release download "${CH}-1" -p BUILD_SHA.txt -O - 2>/dev/null)"; then
+            PREV_SHA="$(echo -n "$PREV_SHA" | tr -d '[:space:]')"
+            echo "PREV_SHA from ${CH}-1 BUILD_SHA.txt asset: $PREV_SHA"
+          fi
+          # Bootstrap fallback: if the asset wasn't there (first
+          # rotate after the fix lands, or release manually edited),
+          # fall back to the git tag. We log so the "first rotate
+          # diffs against an old SHA" can be explained.
           if [[ -z "$PREV_SHA" ]]; then
-            echo "No ${CH}-1 tag; falling back to generated notes" >&2
+            PREV_SHA=$(gh api "repos/${REPO}/git/refs/tags/${CH}-1" \
+              --jq '.object.sha' 2>/dev/null || true)
+            echo "PREV_SHA fallback to ${CH}-1 git tag: ${PREV_SHA:-<missing>}"
+          fi
+          if [[ -z "$PREV_SHA" ]]; then
+            echo "No ${CH}-1 tag or asset; falling back to generated notes" >&2
             exit 0
           fi
           # Make sure the previous tag's commit is in the local clone.
@@ -719,10 +745,20 @@ jobs:
           cat "$BODY_FILE"
 
       - name: Collect assets
+        env:
+          BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
         run: |
           mkdir -p release
           find artefacts -type f \( -name '*.exe' -o -name '*.exe.sig' -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.app.tar.gz.sig' \) -exec cp {} release/ \;
           cp latest.json release/
+          # Stamp the build's commit SHA as a release asset. The
+          # next run's "Generate rolling-channel changelog" reads
+          # this from the <channel>-1 release (the rotated copy of
+          # this one) to determine the diff base. We can't rely on
+          # the <channel>-1 git tag for the same purpose because
+          # updating it would require the `workflows` permission,
+          # which the GITHUB_TOKEN doesn't have.
+          echo -n "$BUILD_SHA" > release/BUILD_SHA.txt
           ls -la release/
 
       # Release name composition:
