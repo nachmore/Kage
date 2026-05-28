@@ -207,6 +207,21 @@
     margin-bottom: 0;
 }
 
+/* CSV / TSV preview: same overrides as markdown so the rendered
+ * <table> sits at the start of a normal block container instead
+ * of being flex-centered with a zoom-in cursor. */
+.diagram-content.csv-table-content {
+    display: block;
+    cursor: auto;
+    text-align: left;
+    padding: 0;
+    overflow-x: auto;
+}
+.diagram-content.csv-table-content table {
+    margin: 0;
+    width: 100%;
+}
+
 .diagram-source {
     display: none;
     overflow-x: auto;

@@ -6,6 +6,7 @@ const DIAGRAM_LANGUAGES = new Set(['mermaid', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
+const CSV_LANGUAGES = new Set(['csv', 'tsv']);
 
 // Escape raw HTML the agent emits inside markdown.
 //
@@ -667,6 +668,10 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             renderMarkdownPreview(codeBlock, pre, streaming);
             return;
         }
+        if (CSV_LANGUAGES.has(language)) {
+            renderCsvTable(codeBlock, pre, language);
+            return;
+        }
         _highlightOrLazy(codeBlock, language);
         wrapCodeBlock(codeBlock, pre, language);
     });
@@ -1146,6 +1151,187 @@ function renderMarkdownPreview(codeBlock, pre, streaming) {
     wrapper.appendChild(previewDiv);
     wrapper.appendChild(sourceDiv);
     pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
+        previewDiv.style.display = showing ? 'none' : '';
+    };
+}
+
+// --- CSV / TSV table renderer ---
+
+/**
+ * Parse a CSV or TSV string into a 2D string array.
+ *
+ * Handles:
+ *   - The standard double-quote escape (`"`) for fields containing
+ *     the delimiter, a newline, or a literal quote (escaped as `""`).
+ *   - CRLF and LF line endings.
+ *   - A trailing newline at end-of-input (very common; would otherwise
+ *     produce a spurious empty row).
+ *
+ * Pure logic, no DOM. Underscore prefix marks it as an
+ * implementation detail callers shouldn't import.
+ */
+export function _parseDelimited(text, delimiter) {
+    const rows = [];
+    let row = [];
+    let field = '';
+    let i = 0;
+    let inQuotes = false;
+    while (i < text.length) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"') {
+                // Escaped quote (`""`) → literal `"`. Anything else
+                // closes the quoted field.
+                if (text[i + 1] === '"') {
+                    field += '"';
+                    i += 2;
+                    continue;
+                }
+                inQuotes = false;
+                i++;
+                continue;
+            }
+            field += ch;
+            i++;
+            continue;
+        }
+        if (ch === '"') {
+            inQuotes = true;
+            i++;
+            continue;
+        }
+        if (ch === delimiter) {
+            row.push(field);
+            field = '';
+            i++;
+            continue;
+        }
+        if (ch === '\r') {
+            // CRLF — fold to LF
+            i++;
+            continue;
+        }
+        if (ch === '\n') {
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = '';
+            i++;
+            continue;
+        }
+        field += ch;
+        i++;
+    }
+    // Final field / row (no trailing newline, or last char was a
+    // closing quote). Skip if it's an empty trailing row from a
+    // file-ending newline.
+    if (field.length > 0 || row.length > 0) {
+        row.push(field);
+        rows.push(row);
+    }
+    return rows;
+}
+
+/**
+ * Render a CSV or TSV fenced block as an HTML table by default with
+ * a "Source" toggle to flip back to the raw delimited text.
+ *
+ * Reuses `makeTablesSortable` so the rendered table picks up the
+ * same click-to-sort affordance as Markdown-native tables.
+ */
+function renderCsvTable(codeBlock, pre, language) {
+    const code = codeBlock.textContent;
+    if (!code.trim()) return;
+
+    const delimiter = language === 'tsv' ? '\t' : ',';
+    let rows;
+    try {
+        rows = _parseDelimited(code, delimiter);
+    } catch {
+        // Defensive — _parseDelimited shouldn't throw, but if a
+        // future edit ever introduces a code path that does, fall
+        // back to a plain code block rather than crashing the
+        // whole render pipeline.
+        wrapCodeBlock(codeBlock, pre, language);
+        return;
+    }
+    if (rows.length === 0) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = language.toUpperCase();
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'diagram-content csv-table-content';
+
+    const table = document.createElement('table');
+    // The first row is treated as a header. CSV/TSV doesn't carry an
+    // explicit "this is a header" marker, but in practice almost every
+    // hand-pasted block uses one — and treating the first row as a
+    // header gives the user the sortable affordance immediately.
+    const [headerRow, ...bodyRows] = rows;
+    if (headerRow) {
+        const thead = document.createElement('thead');
+        const tr = document.createElement('tr');
+        for (const cell of headerRow) {
+            const th = document.createElement('th');
+            th.textContent = cell;
+            tr.appendChild(th);
+        }
+        thead.appendChild(tr);
+        table.appendChild(thead);
+    }
+    if (bodyRows.length > 0) {
+        const tbody = document.createElement('tbody');
+        for (const r of bodyRows) {
+            const tr = document.createElement('tr');
+            for (const cell of r) {
+                const td = document.createElement('td');
+                td.textContent = cell;
+                tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+    }
+    previewDiv.appendChild(table);
+
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(previewDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
+
+    // Inherit the existing table-sort affordance from markdown tables.
+    makeTablesSortable(previewDiv);
 
     toggleBtn.onclick = () => {
         const showing = sourceDiv.classList.toggle('visible');

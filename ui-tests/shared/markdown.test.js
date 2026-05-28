@@ -22,6 +22,7 @@ let parseTaskPlan;
 let createTaskPlanElement;
 let _resetMarkedHardenedFlagForTests;
 let hardenMarkedOnce;
+let _parseDelimited;
 
 beforeAll(async () => {
     globalThis.marked = marked;
@@ -32,6 +33,7 @@ beforeAll(async () => {
     createTaskPlanElement = mod.createTaskPlanElement;
     _resetMarkedHardenedFlagForTests = mod._resetMarkedHardenedFlagForTests;
     hardenMarkedOnce = mod.hardenMarkedOnce;
+    _parseDelimited = mod._parseDelimited;
 
     _resetMarkedHardenedFlagForTests();
     hardenMarkedOnce();
@@ -282,5 +284,77 @@ describe('createTaskPlanElement', () => {
         ]);
         expect(wrapper.querySelector('.taskplan-cancelled')).not.toBeNull();
         expect(wrapper.querySelector('.taskplan-cancelled').textContent).toContain('Cancelled');
+    });
+});
+
+// ---- _parseDelimited (CSV / TSV) --------------------------------------------
+
+describe('_parseDelimited', () => {
+    it('parses a basic comma-separated table', () => {
+        const csv = 'a,b,c\n1,2,3\n4,5,6';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['a', 'b', 'c'],
+            ['1', '2', '3'],
+            ['4', '5', '6'],
+        ]);
+    });
+
+    it('parses TSV with tab delimiter', () => {
+        const tsv = 'a\tb\n1\t2';
+        expect(_parseDelimited(tsv, '\t')).toEqual([
+            ['a', 'b'],
+            ['1', '2'],
+        ]);
+    });
+
+    it('strips a trailing newline without producing an empty final row', () => {
+        // Common case: text files end with a newline. A naive split would
+        // produce a phantom [''] row at the end.
+        const csv = 'a,b\n1,2\n';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['a', 'b'],
+            ['1', '2'],
+        ]);
+    });
+
+    it('honours double-quoted fields containing the delimiter', () => {
+        const csv = 'name,note\nAlice,"hello, world"\nBob,plain';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['name', 'note'],
+            ['Alice', 'hello, world'],
+            ['Bob', 'plain'],
+        ]);
+    });
+
+    it('honours newlines inside quoted fields', () => {
+        const csv = 'a,b\n"line\none","second"\n3,4';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['a', 'b'],
+            ['line\none', 'second'],
+            ['3', '4'],
+        ]);
+    });
+
+    it('decodes escaped double quotes ("") inside a quoted field', () => {
+        // Per RFC 4180, a literal double-quote inside a quoted field is
+        // represented by doubling it.
+        const csv = 'a,b\n"He said ""hi""",2';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['a', 'b'],
+            ['He said "hi"', '2'],
+        ]);
+    });
+
+    it('folds CRLF line endings to LF row breaks', () => {
+        const csv = 'a,b\r\n1,2\r\n3,4';
+        expect(_parseDelimited(csv, ',')).toEqual([
+            ['a', 'b'],
+            ['1', '2'],
+            ['3', '4'],
+        ]);
+    });
+
+    it('returns an empty array for empty input', () => {
+        expect(_parseDelimited('', ',')).toEqual([]);
     });
 });
