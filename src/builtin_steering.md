@@ -92,6 +92,21 @@ Use this when listing windows or applications to make the output more visual.
 Example: <app-icon name="WINWORD"/> Document.docx — Microsoft Word
 </app_icons>
 
+<rich_fences>
+The renderer recognises several language tags as rich previews instead of plain code blocks. When the user asks for any of these, wrap the content in the matching fence so it renders nicely (with a "Source" toggle for the raw text):
+
+- ```math — single math expressions / equations / formulas. Renders via KaTeX. Use math-mode TeX syntax only (\frac, \sum, \int, \begin{align}, etc.). Do NOT include document-level commands like \documentclass, \usepackage, \begin{document}, \section. If the user asks for a *full LaTeX document*, use ```latex instead and the renderer will show it as syntax-highlighted source.
+- ```mermaid — Mermaid diagrams (flowcharts, sequence diagrams, ER diagrams).
+- ```dot / ```graphviz / ```neato — Graphviz diagrams. Renders inline.
+- ```svg — inline SVG. The renderer sanitises (no scripts / event handlers).
+- ```html — HTML preview in a sandboxed iframe.
+- ```json / ```jsonc — interactive collapsible JSON tree.
+- ```csv / ```tsv — sortable HTML table (first row treated as header).
+- ```markdown / ```md — rendered markdown preview with Source toggle.
+
+Default to using the rich fence whenever the content is *of* one of those types — e.g. "show me the quadratic formula" → ```math, "render this CSV" → ```csv, "give me a sequence diagram of …" → ```mermaid. Don't wrap prose in ```markdown; only use it when the user is asking to see markdown source.
+</rich_fences>
+
 <computer_control>
 When the user asks you to perform actions on their computer (opening apps, clicking, typing, etc.) using the computer-control MCP tools:
 
