@@ -9,6 +9,7 @@ const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
 const CSV_LANGUAGES = new Set(['csv', 'tsv']);
 const SVG_LANGUAGES = new Set(['svg']);
+const MATH_LANGUAGES = new Set(['latex', 'tex', 'math']);
 
 // Escape raw HTML the agent emits inside markdown.
 //
@@ -105,8 +106,43 @@ async function ensureMermaid() {
     return mermaidLoadPromise;
 }
 
+// Lazy-load KaTeX (math renderer) the first time a `latex` / `tex` /
+// `math` fence is rendered. KaTeX ships JS + CSS + 60 font files;
+// loading them all eagerly would inflate cold start by ~250KB+ of
+// JS even for users who never see a math block.
+let katexReady = false;
+let katexLoadPromise = null;
+async function ensureKatex() {
+    if (katexReady) return true;
+    if (!katexLoadPromise) {
+        katexLoadPromise = new Promise((resolve) => {
+            // Inject the stylesheet first; KaTeX's rendered output relies
+            // on the CSS for layout (fractions, super/subscripts, etc.).
+            // The CSS file references @font-face URLs relative to itself,
+            // so the dest layout under vendor/lib/katex/ matches upstream.
+            const cssLink = document.createElement('link');
+            cssLink.rel = 'stylesheet';
+            cssLink.href = 'vendor/lib/katex/katex.min.css';
+            document.head.appendChild(cssLink);
+
+            const script = document.createElement('script');
+            script.src = 'vendor/lib/katex/katex.min.js';
+            script.onload = () => {
+                katexReady = !!window.katex;
+                resolve(katexReady);
+            };
+            script.onerror = () => {
+                console.warn('[markdown] failed to load KaTeX');
+                resolve(false);
+            };
+            document.head.appendChild(script);
+        });
+    }
+    return katexLoadPromise;
+}
+
 export function initMarkdown() {
-    // mermaid is now lazy-loaded on first diagram encounter — nothing to do here
+    // mermaid + katex are now lazy-loaded on first encounter — nothing to do here
 }
 
 // Extension manager reference for message formatter hooks
@@ -676,6 +712,10 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
         }
         if (SVG_LANGUAGES.has(language)) {
             renderSvgPreview(codeBlock, pre);
+            return;
+        }
+        if (MATH_LANGUAGES.has(language)) {
+            renderMathPreview(codeBlock, pre);
             return;
         }
         _highlightOrLazy(codeBlock, language);
@@ -1420,6 +1460,102 @@ function renderSvgPreview(codeBlock, pre) {
         toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
         previewDiv.style.display = showing ? 'none' : '';
     };
+}
+
+// --- LaTeX / Math renderer ---
+
+/**
+ * Render a `latex` / `tex` / `math` fenced block as KaTeX-rendered
+ * math by default, with a "Source" toggle for the raw TeX. Same
+ * preview chrome as the other diagram-style renderers.
+ *
+ * KaTeX is loaded lazily on first encounter via `ensureKatex()`;
+ * before it arrives the block shows the source text (effectively
+ * the source view) and `katex.render` runs once the script
+ * resolves. If the load fails (offline / blocked), the source
+ * stays put and an error banner replaces the would-be preview.
+ *
+ * Display-mode is on by default (centered, larger glyphs, common
+ * for fenced blocks). Inline math (`$...$`) is a separate concern
+ * and not handled here.
+ *
+ * Safety: KaTeX's `throwOnError: false` returns its own `parseError`
+ * span instead of leaking arbitrary HTML. `trust: false` (default)
+ * disallows commands like `\href` that could embed external URLs.
+ */
+function renderMathPreview(codeBlock, pre) {
+    const code = codeBlock.textContent;
+    if (!code.trim()) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = 'Math';
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'diagram-content math-preview-content';
+    // Show the raw TeX as a placeholder so the block isn't blank
+    // while KaTeX loads. Once `ensureKatex` resolves, render swaps
+    // it in. If the load fails, the placeholder stays.
+    previewDiv.textContent = code;
+
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(previewDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
+        previewDiv.style.display = showing ? 'none' : '';
+    };
+
+    // Async render — don't block the rest of the markdown pipeline.
+    ensureKatex().then((ok) => {
+        if (!ok || !window.katex) {
+            previewDiv.innerHTML =
+                '<div style="color:#dc2626;padding:12px;">KaTeX failed to load</div>';
+            return;
+        }
+        try {
+            previewDiv.innerHTML = '';
+            window.katex.render(code, previewDiv, {
+                displayMode: true,
+                throwOnError: false,
+                output: 'html',
+                trust: false,
+            });
+        } catch (e) {
+            previewDiv.innerHTML =
+                '<div style="color:#dc2626;padding:12px;">Math error: ' +
+                (e?.message || String(e)) +
+                '</div>';
+        }
+    });
 }
 
 // --- JSON Tree Renderer ---
