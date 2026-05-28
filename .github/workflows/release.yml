@@ -552,6 +552,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Same channel-label mapping as the plan job. Used in the
+          # release title so the consumer-friendly name shows up on the
+          # Releases page (Nightly / Preview), not the internal id.
+          channel_label() {
+            case "$1" in
+              stable) echo "Stable" ;;
+              beta) echo "Preview" ;;
+              dev) echo "Nightly" ;;
+              *) echo "$1" ;;
+            esac
+          }
+          LABEL="$(channel_label "$CH")"
+
           # Wipe historical -N slots. The upper bound is generous; if a
           # past bug ever left e.g. -7 around we still clean it up.
           for n in 1 2 3 4 5 6 7 8 9 10; do
@@ -561,16 +575,48 @@ jobs:
               gh release delete "$tag" --yes --cleanup-tag
             fi
           done
-          # Rotate -latest → -1 by retagging the existing release
-          # object. Assets ride along with the release; only the tag
-          # pointer moves. The release title gets a "(previous)"
-          # suffix so the GitHub Releases page makes the relationship
-          # obvious at a glance.
+
+          # Rotate -latest → -1.
+          #
+          # Pre-fix this used `gh release edit <tag> --tag <new>` and
+          # GitHub silently re-tagged to the default branch HEAD when the
+          # new tag's git ref didn't exist (because we'd just deleted it
+          # via --cleanup-tag above). That made `<channel>-1` and
+          # `<channel>-latest` resolve to the same SHA, which broke the
+          # changelog step's `git log -1..latest` diff with "no commits."
+          #
+          # Now we capture the previous build's SHA explicitly, create
+          # the `<channel>-1` git tag at that SHA via `git tag -f`, and
+          # pass `--target $PREV_SHA` on the release edit so GitHub
+          # locks the release to the right commit instead of silently
+          # walking it forward.
           if gh release view "${CH}-latest" >/dev/null 2>&1; then
-            echo "Rotating ${CH}-latest → ${CH}-1"
+            # Resolve via the git tag, not `targetCommitish` — the
+            # GitHub release's target_commitish field is set to a
+            # branch name ("main") by softprops/action-gh-release,
+            # which would silently rebase the rotated release to
+            # current HEAD instead of pinning it to the previous
+            # build. The git tag IS pinned (we force-pushed it to
+            # BUILD_SHA at the end of the previous run) so it's the
+            # source of truth for "what SHA was the previous build."
+            PREV_SHA="$(gh api "repos/${{ github.repository }}/git/refs/tags/${CH}-latest" --jq '.object.sha')"
+            if [[ -z "$PREV_SHA" ]]; then
+              echo "Could not resolve ${CH}-latest tag SHA; aborting rotate" >&2
+              exit 1
+            fi
+            echo "Rotating ${CH}-latest (at $PREV_SHA) → ${CH}-1"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            # Make sure the SHA is in the local clone before we tag it.
+            if ! git cat-file -e "$PREV_SHA" 2>/dev/null; then
+              git fetch --no-tags origin "$PREV_SHA"
+            fi
+            git tag -f "${CH}-1" "$PREV_SHA"
+            git push -f origin "${CH}-1"
             gh release edit "${CH}-latest" \
               --tag "${CH}-1" \
-              --title "Kage ${CH} (previous)"
+              --target "$PREV_SHA" \
+              --title "Kage ${LABEL} (previous)"
           fi
 
       # For rolling channels (beta / dev) we force-move the alias tag
