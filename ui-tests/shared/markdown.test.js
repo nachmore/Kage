@@ -23,6 +23,7 @@ let createTaskPlanElement;
 let _resetMarkedHardenedFlagForTests;
 let hardenMarkedOnce;
 let _parseDelimited;
+let _isFullTexDocument;
 
 beforeAll(async () => {
     globalThis.marked = marked;
@@ -34,6 +35,7 @@ beforeAll(async () => {
     _resetMarkedHardenedFlagForTests = mod._resetMarkedHardenedFlagForTests;
     hardenMarkedOnce = mod.hardenMarkedOnce;
     _parseDelimited = mod._parseDelimited;
+    _isFullTexDocument = mod._isFullTexDocument;
 
     _resetMarkedHardenedFlagForTests();
     hardenMarkedOnce();
@@ -356,5 +358,45 @@ describe('_parseDelimited', () => {
 
     it('returns an empty array for empty input', () => {
         expect(_parseDelimited('', ',')).toEqual([]);
+    });
+});
+
+// ---- _isFullTexDocument -----------------------------------------------------
+
+describe('_isFullTexDocument', () => {
+    it('flags \\documentclass as a full document', () => {
+        expect(_isFullTexDocument('\\documentclass{article}\n\\begin{document}')).toBe(true);
+    });
+
+    it('flags \\begin{document} alone', () => {
+        expect(_isFullTexDocument('hello\n\\begin{document}\nbody\n\\end{document}')).toBe(true);
+    });
+
+    it('flags \\usepackage / \\maketitle / \\bibliography', () => {
+        expect(_isFullTexDocument('\\usepackage{amsmath}')).toBe(true);
+        expect(_isFullTexDocument('\\maketitle')).toBe(true);
+        expect(_isFullTexDocument('\\bibliography{refs}')).toBe(true);
+    });
+
+    it('does NOT flag a pure math expression', () => {
+        // The math-mode commands KaTeX is good at must NOT be treated
+        // as a document — that would demote them to source-only.
+        expect(_isFullTexDocument('E = mc^2')).toBe(false);
+        expect(_isFullTexDocument('\\frac{a}{b} + \\sum_{i=1}^n x_i')).toBe(false);
+        expect(_isFullTexDocument('\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}')).toBe(
+            false
+        );
+    });
+
+    it('does NOT flag commands that only appear inside math mode', () => {
+        // align is a math environment, not a document scaffold —
+        // KaTeX handles it.
+        expect(_isFullTexDocument('\\begin{align} x &= 1 \\end{align}')).toBe(false);
+    });
+
+    it('handles empty / null input defensively', () => {
+        expect(_isFullTexDocument('')).toBe(false);
+        expect(_isFullTexDocument(null)).toBe(false);
+        expect(_isFullTexDocument(undefined)).toBe(false);
     });
 });

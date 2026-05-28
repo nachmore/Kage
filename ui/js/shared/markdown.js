@@ -715,6 +715,16 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             return;
         }
         if (MATH_LANGUAGES.has(language)) {
+            // KaTeX renders math expressions, not full TeX documents.
+            // If the source contains document-level commands, fall
+            // through to the syntax-highlighted source path — KaTeX
+            // would render every unknown macro in red, drowning the
+            // expression in errors.
+            if (_isFullTexDocument(codeBlock.textContent)) {
+                _highlightOrLazy(codeBlock, language);
+                wrapCodeBlock(codeBlock, pre, language);
+                return;
+            }
             renderMathPreview(codeBlock, pre);
             return;
         }
@@ -1463,6 +1473,34 @@ function renderSvgPreview(codeBlock, pre) {
 }
 
 // --- LaTeX / Math renderer ---
+
+/**
+ * Heuristic: does this look like a full TeX *document* (which our
+ * KaTeX-based renderer can't handle) vs. a math-mode expression
+ * (which it can)? Look for a small set of document-level commands.
+ * Any one of them is enough to flip to source-only rendering.
+ *
+ * Exported with the underscore prefix so tests can pin the contract,
+ * but not intended as a stable external API.
+ */
+export function _isFullTexDocument(source) {
+    if (!source) return false;
+    // Document-level scaffolding KaTeX doesn't (and won't) support.
+    // The list is short on purpose: false positives demote a math
+    // expression to plain source, which is much worse than a false
+    // negative (a full doc rendered as red KaTeX errors). Keep
+    // additions to commands that ONLY appear in document context.
+    const docCommands = [
+        '\\documentclass',
+        '\\usepackage',
+        '\\begin{document}',
+        '\\maketitle',
+        '\\tableofcontents',
+        '\\bibliography',
+        '\\begin{abstract}',
+    ];
+    return docCommands.some((cmd) => source.includes(cmd));
+}
 
 /**
  * Render a `latex` / `tex` / `math` fenced block as KaTeX-rendered
