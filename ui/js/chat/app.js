@@ -805,9 +805,22 @@ export class ChatApp {
 
         this.listen(EVT.MESSAGE_CHUNK, (event) => this.handleMessageChunk(event));
         this.listen(EVT.MESSAGE_COMPLETE, (event) => {
-            // Recovery may have moved us to a fresh session; pick up
-            // the new id so subsequent sends/cancels target it.
+            // Broadcast event — any chat window pinned to ANY session
+            // hears it. Filter by sessionId (the active session, post
+            // any in-flight recovery) OR oldSessionId (the session id
+            // we issued the send against). Either match means this
+            // complete belongs to us; otherwise drop it so two
+            // windows on different sessions don't see each other's
+            // completes.
             const newId = event?.payload?.sessionId;
+            const oldId = event?.payload?.oldSessionId;
+            const ours =
+                (newId && (newId === this.activeSessionId || newId === this.currentAcpSessionId)) ||
+                (oldId && (oldId === this.activeSessionId || oldId === this.currentAcpSessionId));
+            if (!ours) return;
+
+            // Recovery may have moved us to a fresh session id; pick
+            // it up so subsequent sends/cancels target it.
             if (newId && newId !== this.activeSessionId) {
                 console.log('[chat] adopting recovery session id:', newId);
                 this.activeSessionId = newId;

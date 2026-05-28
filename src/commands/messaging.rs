@@ -464,7 +464,6 @@ pub async fn send_message_streaming(
     let config_for_title = features.config.clone();
     let session_cache_for_send = features.session_cache.clone();
     let app_for_send = app.clone();
-    let window_clone = window.clone();
     let window_label = window.label().to_string();
     let originators = ui.pending_prompt_originators.clone();
 
@@ -562,9 +561,24 @@ pub async fn send_message_streaming(
             return;
         }
 
-        let _ = window_clone.emit(
+        // Broadcast — any window pinned to the same session needs to
+        // hear the complete to drop its "thinking" indicator and run
+        // its post-completion actions. Per-window emit was correct
+        // in the single-session world but leaves peer windows hung
+        // when two chat windows share a session.
+        //
+        // Include both `sessionId` (the active session, possibly
+        // post-recovery) and `oldSessionId` (the session the send
+        // was issued against) so peer windows can match either:
+        //  - peers on the active session see sessionId == theirs
+        //  - peers stuck on the pre-recovery session see
+        //    oldSessionId == theirs and adopt the new id
+        let _ = app_for_send.emit(
             events::MESSAGE_COMPLETE,
-            serde_json::json!({ "sessionId": &active_session_id }),
+            serde_json::json!({
+                "sessionId": &active_session_id,
+                "oldSessionId": &session_id,
+            }),
         );
 
         // Refresh the window title now that there's a user message
@@ -766,9 +780,16 @@ pub async fn open_chat_with_message(
                 }
                 return;
             }
-            let _ = window.emit(
+            // Broadcast — peer windows pinned to the same session
+            // need to drop their thinking indicator. See the parallel
+            // emit in send_message_streaming for the same reasoning.
+            let app_for_emit = window.app_handle();
+            let _ = app_for_emit.emit(
                 events::MESSAGE_COMPLETE,
-                serde_json::json!({ "sessionId": &active_session_id }),
+                serde_json::json!({
+                    "sessionId": &active_session_id,
+                    "oldSessionId": &session_id,
+                }),
             );
             if let Ok(mut m) = originators.lock() {
                 m.remove(&active_session_id);
