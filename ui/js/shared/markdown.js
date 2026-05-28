@@ -62,7 +62,9 @@ async function getGraphviz() {
     if (graphvizLoadPromise) return graphvizLoadPromise;
     graphvizLoadPromise = (async () => {
         try {
-            const module = await import('../vendor/lib/graphviz.js');
+            // markdown.js lives in ui/js/shared/, the vendor file is at
+            // ui/vendor/lib/. Two `..` to climb out of js/shared.
+            const module = await import('../../vendor/lib/graphviz.js');
             const inst = await module.Graphviz.load();
             graphvizInstance = inst;
             console.log('[graphviz] WASM loaded; version:', inst.version?.());
