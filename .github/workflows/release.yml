@@ -764,20 +764,20 @@ jobs:
           name: ${{ steps.name.outputs.release_name }}
           prerelease: ${{ needs.plan.outputs.is_prerelease == 'true' }}
           # When the changelog step produced a body file (rolling
-          # channels with a previous build), prepend it to GitHub's
-          # auto-generated notes so readers see the focused
-          # "<prev>..<this>" diff at the top. Stable releases (and
-          # rolling first-builds where there's no previous tag) leave
-          # body_path empty and fall through to GitHub's notes alone.
+          # channels with a previous build), use it as the release
+          # body. Stable releases (and rolling first-builds where
+          # there's no previous tag) leave body_path empty and fall
+          # through to the auto-generated notes below.
           body_path: ${{ steps.changelog.outputs.body_file }}
-          # Have GitHub auto-generate "What's Changed" release notes.
-          # Without this the in-app changelog viewer
-          # (fetch_changelog) would show "No release notes." for
-          # stable builds. When body_path is also set (rolling
-          # channels with a previous build) the action prepends our
-          # diff to the generated notes per softprops/action-gh-release
-          # docs.
-          generate_release_notes: true
+          # Auto-generated GitHub notes are useful for STABLE
+          # releases (they pick up the right v*.*.* diff path
+          # automatically) but redundant for rolling channels —
+          # softprops/action-gh-release appends them after our
+          # body, producing a duplicate "Full Changelog: …" link.
+          # Gate on whether the changelog step produced a body:
+          # if yes, we own the body entirely; if no, fall back to
+          # GitHub's notes so the body isn't empty.
+          generate_release_notes: ${{ steps.changelog.outputs.body_file == '' }}
           # softprops/action-gh-release replaces existing assets when a
           # release for the same tag already exists, so the rolling
           # channels stay at "exactly the latest build" without
