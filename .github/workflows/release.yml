@@ -54,6 +54,24 @@
 
 name: Release
 
+# Disambiguate the channel at runtime so the Actions UI shows
+# "Release (Nightly)" / "Release (Preview)" / "Release (Stable)"
+# instead of three identical "Release" rows. Branches:
+#   - Tag push (refs/tags/v*) → Stable, with the tag as a suffix.
+#   - workflow_dispatch → use the chosen channel input.
+#   - Anything else (manual rerun without input) → bare "Release"
+#     so it never shows up empty.
+run-name: >-
+  Release
+  ${{
+    startsWith(github.ref, 'refs/tags/v')
+      && format('(Stable {0})', github.ref_name)
+    || (github.event.inputs.channel == 'dev' && '(Nightly)')
+    || (github.event.inputs.channel == 'beta' && '(Preview)')
+    || (github.event.inputs.channel == 'stable' && '(Stable)')
+    || ''
+  }}
+
 on:
   push:
     # Semver tags like v1.2.3 or v1.2.3-rc.1 trigger a stable release.
