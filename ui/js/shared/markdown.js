@@ -52,16 +52,28 @@ export function hardenMarkedOnce() {
 hardenMarkedOnce();
 
 let graphvizInstance = null;
+let graphvizLoadPromise = null;
 async function getGraphviz() {
     if (graphvizInstance) return graphvizInstance;
-    try {
-        const module = await import('../vendor/lib/graphviz.js');
-        graphvizInstance = await module.Graphviz.load();
-        return graphvizInstance;
-    } catch (e) {
-        console.error('Failed to load Graphviz WASM:', e);
-        return null;
-    }
+    if (graphvizLoadPromise) return graphvizLoadPromise;
+    graphvizLoadPromise = (async () => {
+        try {
+            const module = await import('../vendor/lib/graphviz.js');
+            const inst = await module.Graphviz.load();
+            graphvizInstance = inst;
+            console.log('[graphviz] WASM loaded; version:', inst.version?.());
+            return inst;
+        } catch (e) {
+            // The vendor package inlines the WASM (locateFile:()=>"")
+            // so a failure here usually means the host blocked WASM
+            // instantiation — log loudly so it's visible in app.jsonl
+            // via the `warn!` layer, not just the renderer's console.
+            console.warn('Failed to load Graphviz WASM:', e?.message || e);
+            graphvizLoadPromise = null;
+            return null;
+        }
+    })();
+    return graphvizLoadPromise;
 }
 
 // Lazy-load mermaid (~3.2MB) only when a mermaid diagram is first encountered
