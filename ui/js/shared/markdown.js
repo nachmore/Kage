@@ -5,6 +5,7 @@ import { loadPrismLanguage } from './prism-loader.js';
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'plantuml', 'puml', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
+const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
 
 // Escape raw HTML the agent emits inside markdown.
 //
@@ -650,6 +651,10 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             renderJsonTree(codeBlock, pre, language);
             return;
         }
+        if (MARKDOWN_LANGUAGES.has(language)) {
+            renderMarkdownPreview(codeBlock, pre, streaming);
+            return;
+        }
         _highlightOrLazy(codeBlock, language);
         wrapCodeBlock(codeBlock, pre, language);
     });
@@ -1064,6 +1069,85 @@ function renderHtmlPreview(codeBlock, pre) {
     // Use 'markup' as the language so the lazy loader fetches prism-markup;
     // Prism aliases 'html' → 'markup' internally so highlight() accepts both.
     _highlightOrLazy(sCode, 'markup');
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(previewDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
+        previewDiv.style.display = showing ? 'none' : '';
+    };
+}
+
+/**
+ * Render a `markdown` / `md` fenced code block as actual rendered
+ * markdown by default, with a "Source" toggle to flip back to the
+ * raw fenced view. Mirrors `renderHtmlPreview`'s chrome (same
+ * wrapper class, same toggle button, same copy button) so the user
+ * sees a consistent affordance across HTML and Markdown previews.
+ *
+ * Safety: `marked.parse` runs through `hardenMarkedOnce`, which
+ * overrides `renderer.html` to escape every raw HTML token. So
+ * the preview node only contains markdown-derived structural
+ * elements — no script/style/iframe leaks even if the agent's
+ * markdown source includes raw HTML.
+ *
+ * Streaming: skip render until the fence is non-empty. Once the
+ * stream finishes, the final non-streaming render re-runs this with
+ * the complete content.
+ */
+function renderMarkdownPreview(codeBlock, pre, streaming) {
+    const code = codeBlock.textContent;
+    if (!code.trim()) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = 'Markdown';
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    // Render the markdown into a plain div. hardenMarkedOnce already
+    // ran from module init; no raw HTML can leak through.
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'diagram-content markdown-preview-content';
+    marked.setOptions({ breaks: true, gfm: true });
+    previewDiv.innerHTML = marked.parse(code);
+
+    // Recurse into the rendered markdown for any nested code blocks
+    // (e.g. a markdown sample that itself contains a ```js fence).
+    // Skip during streaming — the outer fence is still growing and
+    // we'll re-do this on the final pass anyway.
+    if (!streaming) {
+        _processCodeBlocks(previewDiv, false, new Map());
+    }
+
+    // Source view — raw markdown with prism highlight.
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    _highlightOrLazy(sCode, 'markdown');
     sPre.appendChild(sCode);
     sourceDiv.appendChild(sPre);
 

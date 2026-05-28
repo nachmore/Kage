@@ -190,6 +190,23 @@
     /* mermaid overrides handled by mermaid.js */
 }
 
+/* Markdown-as-preview block: the default `.diagram-content` flex
+ * centring + zoom-in cursor make sense for a Mermaid SVG, not for a
+ * rendered prose document. Override to a plain block layout so
+ * headings, paragraphs and lists flow naturally. */
+.diagram-content.markdown-preview-content {
+    display: block;
+    cursor: auto;
+    text-align: left;
+    padding: 16px 20px;
+}
+.diagram-content.markdown-preview-content > :first-child {
+    margin-top: 0;
+}
+.diagram-content.markdown-preview-content > :last-child {
+    margin-bottom: 0;
+}
+
 .diagram-source {
     display: none;
     overflow-x: auto;
