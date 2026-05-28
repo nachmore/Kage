@@ -48,11 +48,27 @@ const COPIES = [
     // tinyld — language detection (ESM browser bundle)
     ['tinyld/dist/tinyld.normal.browser.js', 'tinyld.js'],
 
+    // KaTeX — math rendering (used by the markdown `latex` / `math` fence
+    // renderer). The fonts are referenced by relative URL inside the CSS,
+    // so the dest layout under ui/vendor/lib/katex/ must mirror upstream's.
+    ['katex/dist/katex.min.js', 'katex/katex.min.js'],
+    ['katex/dist/katex.min.css', 'katex/katex.min.css'],
+
     // prism language components
     ...PRISM_LANGUAGES.map(lang => [
         `prismjs/components/prism-${lang}.min.js`,
         `prism-components/prism-${lang}.min.js`
     ]),
+];
+
+/**
+ * Directory-copy manifest: [source dir (relative to node_modules),
+ * dest dir (relative to lib/)]. Recursively copies every file in the
+ * source directory.
+ */
+const DIR_COPIES = [
+    // KaTeX fonts (60 files: woff/woff2/ttf for each font face).
+    ['katex/dist/fonts', 'katex/fonts'],
 ];
 
 function ensureDir(dir) {
@@ -73,6 +89,48 @@ function copyFile(src, dest) {
     ensureDir(path.dirname(destPath));
     fs.copyFileSync(srcPath, destPath);
     return true;
+}
+
+function copyDir(srcRel, destRel) {
+    const srcPath = path.join(NM, srcRel);
+    const destPath = path.join(LIB, destRel);
+
+    if (!fs.existsSync(srcPath)) {
+        console.error(`  ✗ Missing dir: ${srcRel}`);
+        return 0;
+    }
+    ensureDir(destPath);
+
+    let count = 0;
+    for (const entry of fs.readdirSync(srcPath, { withFileTypes: true })) {
+        const childSrc = path.join(srcPath, entry.name);
+        const childDest = path.join(destPath, entry.name);
+        if (entry.isDirectory()) {
+            // Recurse into subdirs by re-using copyDir's contract via a
+            // depth-first walk. The katex fonts dir is flat today, so this
+            // mostly future-proofs the helper for nested layouts.
+            count += copyDirRecursiveAbs(childSrc, childDest);
+        } else if (entry.isFile()) {
+            fs.copyFileSync(childSrc, childDest);
+            count++;
+        }
+    }
+    return count;
+}
+
+function copyDirRecursiveAbs(srcAbs, destAbs) {
+    ensureDir(destAbs);
+    let count = 0;
+    for (const entry of fs.readdirSync(srcAbs, { withFileTypes: true })) {
+        const childSrc = path.join(srcAbs, entry.name);
+        const childDest = path.join(destAbs, entry.name);
+        if (entry.isDirectory()) count += copyDirRecursiveAbs(childSrc, childDest);
+        else if (entry.isFile()) {
+            fs.copyFileSync(childSrc, childDest);
+            count++;
+        }
+    }
+    return count;
 }
 
 /**
@@ -118,6 +176,15 @@ let fail = 0;
 for (const [src, dest] of COPIES) {
     if (copyFile(src, dest)) {
         ok++;
+    } else {
+        fail++;
+    }
+}
+
+for (const [srcDir, destDir] of DIR_COPIES) {
+    const copied = copyDir(srcDir, destDir);
+    if (copied > 0) {
+        ok += copied;
     } else {
         fail++;
     }

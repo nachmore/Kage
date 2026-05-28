@@ -28,12 +28,25 @@ if sys.stderr and hasattr(sys.stderr, "reconfigure"):
 
 def ensure_vendor(repo_root: Path) -> None:
     vendor_tooling = repo_root / "ui-vendor"
-    sentinel = repo_root / "ui" / "vendor" / "lib" / "marked.min.js"
-
-    if sentinel.is_file():
+    lib = repo_root / "ui" / "vendor" / "lib"
+    # Sentinel check: every entry must exist for `lib/` to count as
+    # "ready". Adding a new vendor lib here is the trigger for older
+    # checkouts to re-run `npm install` + setup.js automatically.
+    # Pick one canonical file per lib so this stays a quick existence
+    # check — full coverage is enforced by setup.js itself.
+    sentinels = [
+        lib / "marked.min.js",
+        lib / "mermaid.min.js",
+        lib / "katex" / "katex.min.js",
+    ]
+    if all(p.is_file() for p in sentinels):
         return  # Already populated
 
-    print("[ensure_vendor] ui/vendor/lib/ not found — running npm install...", flush=True)
+    missing = [p.relative_to(repo_root) for p in sentinels if not p.is_file()]
+    print(
+        f"[ensure_vendor] ui/vendor/lib/ missing {missing} — running npm install...",
+        flush=True,
+    )
     result = subprocess.run(
         ["npm", "install"],
         cwd=vendor_tooling,
