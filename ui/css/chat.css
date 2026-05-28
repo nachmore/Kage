@@ -199,35 +199,6 @@ body {
     font-style: italic;
 }
 
-.sidebar-footer {
-    padding: 12px 16px;
-    border-top: 1px solid #e5e7eb;
-    flex-shrink: 0;
-    display: flex;
-    gap: 8px;
-}
-
-.sidebar-footer-btn {
-    flex: 1;
-    padding: 8px;
-    background: #f3f4f6;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 12px;
-    color: #6b7280;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-}
-
-.sidebar-footer-btn:hover {
-    background: #e5e7eb;
-    color: var(--kage-accent);
-}
-
 /* Main Chat Area */
 .chat-main {
     flex: 1;

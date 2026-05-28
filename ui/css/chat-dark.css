@@ -60,20 +60,6 @@ body.dark-theme .session-list-empty {
     color: #938f9b;
 }
 
-body.dark-theme .sidebar-footer {
-    border-top-color: #352f3d;
-}
-
-body.dark-theme .sidebar-footer-btn {
-    background: #28242e;
-    color: #938f9b;
-}
-
-body.dark-theme .sidebar-footer-btn:hover {
-    background: #352f3d;
-    color: var(--kage-accent-light);
-}
-
 body.dark-theme .chat-main {
     background: var(--kage-bg);
 }
