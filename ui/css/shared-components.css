@@ -1938,6 +1938,54 @@ body.light-theme .agent-edit-btn:hover {
 .agent-manual-link:hover {
     background: rgba(160, 120, 230, 0.1);
 }
+.agent-detected-wrapper-needed .agent-detected-status {
+    color: var(--kage-text-secondary, #938f9b);
+}
+.agent-install-wrapper-btn {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+    background: var(--kage-accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.agent-install-wrapper-btn:hover:not(:disabled) {
+    background: var(--kage-accent-hover);
+}
+.agent-install-wrapper-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+}
+.agent-install-status {
+    margin-top: 8px;
+    font-size: 12px;
+}
+.agent-install-status .agent-install-error {
+    color: #ff8a8a;
+    text-align: left;
+}
+.agent-install-status .agent-install-ok {
+    color: #6dd58c;
+}
+.agent-install-status .agent-install-cmd,
+.conn-row-wrapper-needed code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--kage-font-mono, monospace);
+}
+body.light-theme .agent-install-status .agent-install-cmd,
+body.light-theme .conn-row-wrapper-needed code {
+    background: rgba(0, 0, 0, 0.06);
+}
+.conn-row-wrapper-needed .conn-wrapper-hint {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--kage-text-secondary, #938f9b);
+}
 .agent-searching {
     text-align: center;
     padding: 24px 0;

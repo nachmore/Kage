@@ -131,6 +131,15 @@ function getInvoke() {
  * the list of detected agents so callers can decide what to do
  * (pre-fill a form, show a picker, fall through to manual config).
  *
+ * Detected entries can have one of two shapes:
+ *   - Ready-to-use (the default): shows "Use this agent" + optional
+ *     pencil. Clicking selects the agent.
+ *   - Wrapper-needed (`agent.needs_wrapper_npm_package` set): the
+ *     underlying CLI is installed but doesn't speak ACP. Shows an
+ *     "Install ACP wrapper" button instead. On success the panel
+ *     re-runs detection so the now-installed wrapper appears as a
+ *     ready-to-use entry.
+ *
  * @param {HTMLElement} container
  * @param {object} opts
  * @param {(agent: object) => void} [opts.onSelect] — called when the
@@ -181,6 +190,9 @@ export async function renderDetected(container, opts) {
     const showEdit = !!opts.onEdit;
     const cards = agents
         .map((a, i) => {
+            if (a.needs_wrapper_npm_package) {
+                return _renderWrapperNeededCard(a, i);
+            }
             const versionHtml = a.version
                 ? `<div class="agent-detected-version">${escapeHtml(a.version)}</div>`
                 : '';
@@ -231,12 +243,104 @@ export async function renderDetected(container, opts) {
             });
         });
     }
+    // Wrapper-install buttons share the rerun-detection path on success
+    // so the next render shows the now-ready agent.
+    container.querySelectorAll('.agent-install-wrapper-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const idx = parseInt(btn.getAttribute('data-idx'), 10);
+            if (Number.isNaN(idx) || !agents[idx]) return;
+            await _handleInstallWrapper(container, agents[idx], btn, opts);
+        });
+    });
     if (opts.onManual) {
         const manual = document.getElementById('agentDetectShowManual');
         if (manual) manual.addEventListener('click', opts.onManual);
     }
 
     return agents;
+}
+
+function _renderWrapperNeededCard(a, i) {
+    const pkg = a.needs_wrapper_npm_package || '';
+    return `
+        <div class="agent-detected agent-detected-wrapper-needed" data-idx="${i}">
+            <div class="agent-detected-icon">⚙️</div>
+            <div class="agent-detected-status">${escapeHtml(a.name)} found — needs ACP wrapper</div>
+            <div class="agent-detected-name">${escapeHtml(a.name)}</div>
+            <div class="agent-detected-path">${escapeHtml(a.path)}</div>
+            <div class="agent-detected-version">
+                Kage talks to agents over the Agent Communication Protocol.
+                Install <code>${escapeHtml(pkg)}</code> via npm to wrap the
+                <code>${escapeHtml(a.path.split(/[\\/]/).pop() || 'claude')}</code> CLI.
+            </div>
+            <div class="agent-detected-actions">
+                <button class="agent-install-wrapper-btn" data-idx="${i}">Install ACP wrapper</button>
+            </div>
+            <div class="agent-install-status" data-idx="${i}" aria-live="polite"></div>
+        </div>`;
+}
+
+async function _handleInstallWrapper(container, agent, btn, opts) {
+    const invoke = getInvoke();
+    if (!invoke) return;
+    const idx = btn.getAttribute('data-idx');
+    const status = container.querySelector(`.agent-install-status[data-idx="${idx}"]`);
+    const setStatus = (html) => {
+        if (status) status.innerHTML = html;
+    };
+
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Checking npm…';
+    setStatus('');
+
+    let npm;
+    try {
+        npm = await invoke('check_npm_available');
+    } catch (e) {
+        console.warn('check_npm_available failed:', e);
+        npm = { available: false };
+    }
+
+    if (!npm?.available) {
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        const cmd = `npm install -g ${agent.needs_wrapper_npm_package}`;
+        setStatus(`
+            <div class="agent-install-error">
+                npm wasn't found on PATH. Install Node.js from
+                <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>,
+                then re-run detection. Or install manually in a terminal:
+                <pre class="agent-install-cmd">${escapeHtml(cmd)}</pre>
+            </div>`);
+        return;
+    }
+
+    btn.textContent = 'Installing… (can take a minute)';
+    try {
+        await invoke('install_acp_wrapper', {
+            package: agent.needs_wrapper_npm_package,
+        });
+    } catch (e) {
+        console.warn('install_acp_wrapper failed:', e);
+        btn.disabled = false;
+        btn.textContent = originalLabel;
+        const msg = e?.message || (typeof e === 'string' ? e : 'install failed');
+        const cmd = `npm install -g ${agent.needs_wrapper_npm_package}`;
+        setStatus(`
+            <div class="agent-install-error">
+                Install failed: ${escapeHtml(msg)}.
+                Try running it yourself in a terminal:
+                <pre class="agent-install-cmd">${escapeHtml(cmd)}</pre>
+            </div>`);
+        return;
+    }
+
+    setStatus('<div class="agent-install-ok">✅ Wrapper installed. Refreshing…</div>');
+    // Re-run detection: the wrapper binary should now show up as a
+    // ready-to-use entry, and the suppression filter on the backend
+    // hides the now-redundant wrapper-needed entry.
+    await renderDetected(container, opts);
 }
 
 /**

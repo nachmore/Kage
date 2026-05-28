@@ -337,6 +337,29 @@ export class ConnectionSettingsModule extends SettingsModule {
         const versionBadge = d.version
             ? `<span class="conn-version-badge">${escape(d.version.split(/\s+/)[0] || d.version)}</span>`
             : '';
+        // Wrapper-needed entries (bare `claude`) get a different action
+        // — they can't be added as a saved connection until the wrapper
+        // is installed via npm.
+        if (d.needs_wrapper_npm_package) {
+            return `
+                <div class="conn-row conn-row-detected conn-row-wrapper-needed" data-detected-key="${escape(d.path)}">
+                    <div class="conn-row-main">
+                        <div class="conn-row-name">
+                            <span class="conn-row-title">${escape(d.name)}</span>
+                            <span class="conn-preset-badge">needs wrapper</span>
+                        </div>
+                        <div class="conn-row-detail">${escape(detail)}</div>
+                        <div class="conn-row-detail conn-wrapper-hint">
+                            Install <code>${escape(d.needs_wrapper_npm_package)}</code> via npm to use this CLI.
+                        </div>
+                        <div class="agent-install-status" data-detected-key="${escape(d.path)}" aria-live="polite"></div>
+                    </div>
+                    <div class="conn-row-actions">
+                        <button type="button" class="setting-btn-secondary conn-install-wrapper-btn"
+                                data-detected-key="${escape(d.path)}">Install ACP wrapper</button>
+                    </div>
+                </div>`;
+        }
         return `
             <div class="conn-row conn-row-detected" data-detected-key="${escape(d.path)}">
                 <div class="conn-row-main">
@@ -421,6 +444,81 @@ export class ConnectionSettingsModule extends SettingsModule {
                 this._enterEdit(draft, { isNew: true });
             });
         });
+        document.querySelectorAll('.conn-install-wrapper-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const key = btn.getAttribute('data-detected-key');
+                const detected = (this._detected || []).find((d) => d.path === key);
+                if (!detected) return;
+                await this._handleInstallWrapper(detected, btn);
+            });
+        });
+    }
+
+    async _handleInstallWrapper(detected, btn) {
+        const root = document.getElementById('connPageRoot');
+        const status = root?.querySelector(
+            `.agent-install-status[data-detected-key="${CSS.escape(detected.path)}"]`
+        );
+        const setStatus = (html) => {
+            if (status) status.innerHTML = html;
+        };
+        const escape = this._api()?.escapeHtml || ((s) => s);
+
+        const originalLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Checking npm…';
+        setStatus('');
+
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) {
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+            return;
+        }
+
+        let npm;
+        try {
+            npm = await invoke('check_npm_available');
+        } catch (e) {
+            console.warn('check_npm_available failed:', e);
+            npm = { available: false };
+        }
+
+        const cmd = `npm install -g ${detected.needs_wrapper_npm_package}`;
+        if (!npm?.available) {
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+            setStatus(
+                `<div class="agent-install-error">npm wasn't found on PATH. ` +
+                    `Install Node.js from <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a> ` +
+                    `or run <code>${escape(cmd)}</code> in a terminal.</div>`
+            );
+            return;
+        }
+
+        btn.textContent = 'Installing…';
+        try {
+            await invoke('install_acp_wrapper', {
+                package: detected.needs_wrapper_npm_package,
+            });
+        } catch (e) {
+            console.warn('install_acp_wrapper failed:', e);
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+            const msg = e?.message || (typeof e === 'string' ? e : 'install failed');
+            setStatus(
+                `<div class="agent-install-error">Install failed: ${escape(msg)}. ` +
+                    `Try running <code>${escape(cmd)}</code> in a terminal.</div>`
+            );
+            return;
+        }
+
+        setStatus('<div class="agent-install-ok">✅ Wrapper installed. Refreshing…</div>');
+        // Re-detect — the wrapper now shows up as a ready-to-use entry,
+        // and the backend filter hides the wrapper-needed entry.
+        this._detectLoading = true;
+        this._renderRoot();
+        await this._kickDetect();
     }
 
     /**

@@ -162,6 +162,12 @@ pub struct DetectionHint {
     /// Args used to print a version string. Empty means "skip the
     /// version probe".
     pub version_args: &'static [&'static str],
+    /// When set, finding this binary doesn't yield a directly-usable
+    /// agent — it indicates the underlying CLI is installed but needs
+    /// an ACP wrapper from npm before Kage can talk to it. The detector
+    /// will surface a "needs wrapper" entry pointing at this package.
+    /// `None` for hints whose binaries are already ACP servers.
+    pub wrapper_npm_package: Option<&'static str>,
 }
 
 /// Detection hints for all known presets. Keep in sync with
@@ -174,6 +180,7 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             binary_names: &["kiro-cli"],
             acp_args: &["acp"],
             version_args: &["--version"],
+            wrapper_npm_package: None,
         },
         DetectionHint {
             kind: AgentKind::ClaudeCode,
@@ -182,15 +189,38 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             binary_names: &["claude-code-acp", "claude-agent-acp"],
             acp_args: &[],
             version_args: &["--version"],
+            wrapper_npm_package: None,
+        },
+        // Bare Anthropic `claude` CLI — not ACP itself. We surface this
+        // so the UI can offer to install the wrapper that makes it
+        // usable (the binary above). The detector tags hits from this
+        // hint with `wrapper_npm_package` so the UI shows an "Install
+        // wrapper" affordance instead of "Use this agent".
+        DetectionHint {
+            kind: AgentKind::ClaudeCode,
+            binary_names: &["claude"],
+            acp_args: &[],
+            // Skip version probe — `claude --version` would work but we
+            // don't display it for wrapper-needed entries (the message
+            // is "install the wrapper", not "you have v1.2.3").
+            version_args: &[],
+            wrapper_npm_package: Some("@zed-industries/claude-code-acp"),
         },
         DetectionHint {
             kind: AgentKind::Codex,
             binary_names: &["codex-acp"],
             acp_args: &[],
             version_args: &["--version"],
+            wrapper_npm_package: None,
         },
     ]
 }
+
+/// npm package names the [`install_acp_wrapper`] command is allowed to
+/// install globally. Anything outside this list is rejected — the
+/// command is exposed to the frontend, so a strict allowlist keeps the
+/// IPC surface from becoming an arbitrary `npm install` runner.
+pub const ALLOWED_WRAPPER_NPM_PACKAGES: &[&str] = &["@zed-industries/claude-code-acp"];
 
 /// Detect the agent kind from a spawn command string. Looks for known
 /// binary names anywhere in the command (handles `/path/to/codex-acp`

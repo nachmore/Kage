@@ -13,9 +13,18 @@ pub struct DetectedAgent {
     /// Absolute path to the binary that was found.
     pub path: String,
     /// Full spawn command (path + ACP args) ready to drop into config.
+    /// For wrapper-needed entries, this is the spawn command that
+    /// *would* be valid once the wrapper is installed — it points at
+    /// the wrapper binary by name (resolved via PATH at spawn time),
+    /// not at `path` (which is the bare CLI).
     pub spawn_command: String,
     /// Output of `<binary> --version` when it succeeded.
     pub version: Option<String>,
+    /// When set, the detected binary is not ACP-capable on its own and
+    /// requires this npm package as a wrapper before Kage can use it.
+    /// The UI surfaces an "Install wrapper" button instead of "Use
+    /// this agent". `None` for ready-to-use detections.
+    pub needs_wrapper_npm_package: Option<String>,
 }
 
 /// Static metadata for a preset, surfaced to the UI so the settings page
@@ -260,7 +269,15 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                     })
                 };
 
-                let spawn_command = if hint.acp_args.is_empty() {
+                // For wrapper-needed hints (e.g. bare `claude`), the
+                // saved spawn command should target the wrapper binary
+                // — the bare CLI doesn't speak ACP. We use the bare
+                // wrapper name (no absolute path) so it resolves via
+                // PATH after `npm install -g`, which is where the
+                // wrapper lands on every supported OS.
+                let spawn_command = if let Some(_pkg) = hint.wrapper_npm_package {
+                    "claude-code-acp".to_string()
+                } else if hint.acp_args.is_empty() {
                     path_str.clone()
                 } else {
                     format!("{} {}", path_str, hint.acp_args.join(" "))
@@ -272,10 +289,203 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                     path: path_str,
                     spawn_command,
                     version,
+                    needs_wrapper_npm_package: hint.wrapper_npm_package.map(|s| s.to_string()),
                 });
             }
         }
     }
 
+    // Suppress wrapper-needed entries when a ready-to-use detection of
+    // the same preset is already in the list — no point nagging the
+    // user to install a wrapper they already have. We can't decide
+    // this inside the hint loop because the wrapper binary and the
+    // bare CLI are detected from different hints.
+    let ready_preset_ids: std::collections::HashSet<String> = agents
+        .iter()
+        .filter(|a| a.needs_wrapper_npm_package.is_none())
+        .map(|a| a.preset_id.clone())
+        .collect();
+    agents.retain(|a| {
+        a.needs_wrapper_npm_package.is_none() || !ready_preset_ids.contains(&a.preset_id)
+    });
+
     agents
+}
+
+/// Status of `npm` on the user's machine — informs whether the
+/// "Install ACP wrapper" UI can attempt the install or has to fall
+/// back to "install Node.js first".
+#[derive(serde::Serialize, Clone, Default)]
+pub struct NpmStatus {
+    /// True when `npm` resolves on PATH and `npm --version` succeeded.
+    pub available: bool,
+    /// `npm --version` stdout when available.
+    pub version: Option<String>,
+    /// Resolved absolute path to the npm binary (mostly for diagnostics).
+    pub path: Option<String>,
+}
+
+/// Check whether `npm` is available on PATH and probe its version.
+/// Cheap; called from the welcome wizard and Settings → Connection
+/// before showing the wrapper-install button.
+#[tauri::command]
+pub async fn check_npm_available() -> Result<NpmStatus, AppError> {
+    Ok(
+        tauri::async_runtime::spawn_blocking(check_npm_available_sync)
+            .await
+            .map_err(|e| format!("Task error: {}", e))?,
+    )
+}
+
+fn check_npm_available_sync() -> NpmStatus {
+    // On Windows npm is typically `npm.cmd`; on Unix it's `npm`. Try
+    // the canonical name first, then `.cmd` as a fallback so we don't
+    // spuriously report "missing" on systems where only the cmd
+    // shim is on PATH.
+    let candidates: &[&str] = if cfg!(windows) {
+        &["npm.cmd", "npm"]
+    } else {
+        &["npm"]
+    };
+
+    for name in candidates {
+        let resolved = resolve_binary_path(name);
+        if let Some(ref p) = resolved {
+            let mut version_cmd = std::process::Command::new(p);
+            version_cmd.arg("--version");
+            crate::os::configure_no_window(&mut version_cmd);
+            let version = version_cmd.output().ok().and_then(|o| {
+                if o.status.success() {
+                    let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v)
+                    }
+                } else {
+                    None
+                }
+            });
+            return NpmStatus {
+                available: version.is_some(),
+                version,
+                path: resolved,
+            };
+        }
+    }
+    NpmStatus::default()
+}
+
+/// Install one of the allowlisted ACP wrapper packages globally via
+/// `npm install -g`. Blocking — the UI shows a spinner and disables
+/// the button while it runs. Returns the combined stdout/stderr so the
+/// caller can show diagnostics on failure.
+///
+/// The package name is checked against
+/// [`crate::agent_presets::ALLOWED_WRAPPER_NPM_PACKAGES`]. Anything
+/// outside that list is rejected — the IPC surface should not be a
+/// general-purpose `npm install` runner.
+#[tauri::command]
+pub async fn install_acp_wrapper(package: String) -> Result<String, AppError> {
+    if !crate::agent_presets::ALLOWED_WRAPPER_NPM_PACKAGES
+        .iter()
+        .any(|allowed| *allowed == package)
+    {
+        return Err(AppError::from(format!(
+            "package not allowlisted for install: {}",
+            package
+        )));
+    }
+
+    tauri::async_runtime::spawn_blocking(move || install_acp_wrapper_sync(&package))
+        .await
+        .map_err(|e| format!("Task error: {}", e))?
+}
+
+fn install_acp_wrapper_sync(package: &str) -> Result<String, AppError> {
+    let npm_status = check_npm_available_sync();
+    let npm_path = npm_status
+        .path
+        .as_deref()
+        .ok_or_else(|| AppError::from("npm not found on PATH"))?;
+
+    let mut cmd = std::process::Command::new(npm_path);
+    cmd.arg("install").arg("-g").arg(package);
+    crate::os::configure_no_window(&mut cmd);
+
+    let out = cmd
+        .output()
+        .map_err(|e| AppError::from(format!("failed to spawn npm: {}", e)))?;
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let combined = format!("{}{}", stdout, stderr);
+
+    if !out.status.success() {
+        return Err(AppError::from(format!(
+            "npm install failed (exit {}): {}",
+            out.status.code().unwrap_or(-1),
+            combined.trim()
+        )));
+    }
+
+    Ok(combined.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::agent_presets::{detection_hints, AgentKind, ALLOWED_WRAPPER_NPM_PACKAGES};
+
+    #[test]
+    fn detection_hints_include_bare_claude_with_wrapper() {
+        let hints = detection_hints();
+        let bare = hints
+            .iter()
+            .find(|h| h.kind == AgentKind::ClaudeCode && h.binary_names.contains(&"claude"))
+            .expect("bare-claude detection hint missing");
+        assert_eq!(
+            bare.wrapper_npm_package,
+            Some("@zed-industries/claude-code-acp"),
+            "bare-claude hint must point at the Zed wrapper package"
+        );
+    }
+
+    #[test]
+    fn ready_to_use_hints_have_no_wrapper() {
+        for hint in detection_hints() {
+            // Only the bare-claude hint declares a wrapper requirement.
+            // A ready-to-use binary advertising one would mean the UI
+            // shows an "install wrapper" button for an already-working
+            // agent.
+            let is_bare_claude =
+                hint.kind == AgentKind::ClaudeCode && hint.binary_names == ["claude"];
+            if !is_bare_claude {
+                assert!(
+                    hint.wrapper_npm_package.is_none(),
+                    "hint for {:?} ({:?}) should not require a wrapper",
+                    hint.kind,
+                    hint.binary_names
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn wrapper_install_rejects_unallowlisted_package() {
+        // The `install_acp_wrapper` allowlist is the security boundary
+        // for the IPC surface — drift here and we'd be exposing an
+        // arbitrary `npm install -g` runner to the frontend.
+        assert!(
+            ALLOWED_WRAPPER_NPM_PACKAGES.contains(&"@zed-industries/claude-code-acp"),
+            "the Claude wrapper must be in the install allowlist"
+        );
+        assert!(
+            !ALLOWED_WRAPPER_NPM_PACKAGES.contains(&"left-pad"),
+            "allowlist must reject arbitrary packages"
+        );
+        assert!(
+            !ALLOWED_WRAPPER_NPM_PACKAGES.contains(&""),
+            "allowlist must reject empty package names"
+        );
+    }
 }

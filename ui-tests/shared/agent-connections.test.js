@@ -401,4 +401,60 @@ describe('renderDetected', () => {
         expect(container.querySelector('.agent-not-found')).not.toBeNull();
         expect(container.querySelector('.agent-use-btn')).toBeNull();
     });
+
+    // Wrapper-needed entries are how we surface "Claude is installed but
+    // doesn't speak ACP — install the npm wrapper". The bare-claude
+    // detection hint emits these. The card has different chrome (no
+    // "Use this agent" button, an "Install ACP wrapper" button, an
+    // install-status slot) so a regression that re-renders these as
+    // ready-to-use entries would silently let users save a useless
+    // connection.
+    const WRAPPER_NEEDED_AGENT = Object.freeze({
+        name: 'Claude Code',
+        preset_id: 'claude-code',
+        path: 'C:\\Users\\me\\AppData\\Local\\Programs\\claude.exe',
+        spawn_command: 'claude-code-acp',
+        version: null,
+        needs_wrapper_npm_package: '@zed-industries/claude-code-acp',
+    });
+
+    it('renders Install ACP wrapper button (not Use this agent) for wrapper-needed entries', async () => {
+        stubInvoke([WRAPPER_NEEDED_AGENT]);
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        await renderDetected(container, { onSelect: () => {}, onEdit: () => {} });
+
+        expect(container.querySelector('.agent-install-wrapper-btn')).not.toBeNull();
+        expect(container.querySelector('.agent-use-btn')).toBeNull();
+        expect(container.querySelector('.agent-edit-btn')).toBeNull();
+        expect(container.textContent).toContain('@zed-industries/claude-code-acp');
+    });
+
+    it('install button falls back to a manual command when npm is missing', async () => {
+        // No npm → we don't try `install_acp_wrapper`; we tell the user
+        // to install Node.js and surface the exact command.
+        const invoke = vi.fn().mockImplementation((name) => {
+            if (name === 'detect_agents') return Promise.resolve([WRAPPER_NEEDED_AGENT]);
+            if (name === 'check_npm_available') return Promise.resolve({ available: false });
+            return Promise.resolve(undefined);
+        });
+        window.__TAURI__ = { core: { invoke } };
+
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        await renderDetected(container, {});
+
+        const btn = container.querySelector('.agent-install-wrapper-btn');
+        btn.click();
+        // Allow the async chain inside the click handler to settle.
+        await new Promise((r) => setTimeout(r, 0));
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(invoke).toHaveBeenCalledWith('check_npm_available');
+        expect(invoke).not.toHaveBeenCalledWith('install_acp_wrapper', expect.anything());
+        const status = container.querySelector('.agent-install-status');
+        expect(status.textContent).toContain('npm');
+        expect(status.textContent).toContain('install -g @zed-industries/claude-code-acp');
+    });
 });
