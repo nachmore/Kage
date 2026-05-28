@@ -222,6 +222,15 @@
     width: 100%;
 }
 
+/* SVG preview: keep the diagram-style flex centring (SVGs are
+ * graphics, not prose) but cap width so a viewBox-less `<svg>` with
+ * an absurd intrinsic size doesn't blow out the chat bubble. */
+.diagram-content.svg-preview-content > svg {
+    max-width: 100%;
+    max-height: 480px;
+    height: auto;
+}
+
 .diagram-source {
     display: none;
     overflow-x: auto;

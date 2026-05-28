@@ -1,12 +1,14 @@
 // Markdown rendering with code block, mermaid, and graphviz support.
 
 import { loadPrismLanguage } from './prism-loader.js';
+import { sanitizeExtensionHtml } from './extension-html-sanitizer.js';
 
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
 const JSON_LANGUAGES = new Set(['json', 'jsonc']);
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md']);
 const CSV_LANGUAGES = new Set(['csv', 'tsv']);
+const SVG_LANGUAGES = new Set(['svg']);
 
 // Escape raw HTML the agent emits inside markdown.
 //
@@ -672,6 +674,10 @@ function _processCodeBlocks(container, streaming, savedDiagrams) {
             renderCsvTable(codeBlock, pre, language);
             return;
         }
+        if (SVG_LANGUAGES.has(language)) {
+            renderSvgPreview(codeBlock, pre);
+            return;
+        }
         _highlightOrLazy(codeBlock, language);
         wrapCodeBlock(codeBlock, pre, language);
     });
@@ -1332,6 +1338,82 @@ function renderCsvTable(codeBlock, pre, language) {
 
     // Inherit the existing table-sort affordance from markdown tables.
     makeTablesSortable(previewDiv);
+
+    toggleBtn.onclick = () => {
+        const showing = sourceDiv.classList.toggle('visible');
+        toggleBtn.querySelector('span').textContent = showing ? 'Preview' : 'Source';
+        previewDiv.style.display = showing ? 'none' : '';
+    };
+}
+
+// --- SVG inline renderer ---
+
+/**
+ * Render an `svg` fenced block as the actual rendered SVG by
+ * default, with a "Source" toggle for the raw markup.
+ *
+ * Safety: routed through `sanitizeExtensionHtml(html, 'icon')` —
+ * the same sanitizer mode used for extension toolbar icons.
+ * `icon` mode allows only `<svg>` at the top level and the
+ * `SVG_TAGS` set inside (path, circle, rect, polygon, …) with their
+ * geometry/style attributes. `<script>`, foreign HTML, event
+ * handlers, and `<use>` references to anywhere except the in-doc
+ * `<symbol>` are all dropped at the sanitizer boundary, so a
+ * malicious agent can't paint an active payload onto the surface.
+ */
+function renderSvgPreview(codeBlock, pre) {
+    const code = codeBlock.textContent;
+    if (!code.trim()) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'diagram-wrapper';
+
+    const header = document.createElement('div');
+    header.className = 'diagram-header';
+    const label = document.createElement('span');
+    label.className = 'diagram-label';
+    label.textContent = 'SVG';
+
+    const actions = document.createElement('div');
+    actions.className = 'diagram-actions';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'copy-button diagram-toggle';
+    toggleBtn.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg><span>Source</span>';
+    actions.appendChild(toggleBtn);
+    actions.appendChild(createCopyButton(code));
+    header.appendChild(label);
+    header.appendChild(actions);
+
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'diagram-content svg-preview-content';
+    // Sanitize through the existing extension-icon sanitizer. If the
+    // result is empty (e.g. agent emitted an XML preamble that the
+    // sanitizer's parser can't reach into) fall back to a plain text
+    // notice so the user knows the preview was rejected rather than
+    // staring at a silent empty box.
+    const frag = sanitizeExtensionHtml(code, 'icon');
+    if (frag?.childNodes?.length > 0) {
+        previewDiv.appendChild(frag);
+    } else {
+        previewDiv.textContent = '(SVG could not be rendered safely)';
+    }
+
+    const sourceDiv = document.createElement('div');
+    sourceDiv.className = 'diagram-source';
+    const sPre = document.createElement('pre');
+    const sCode = document.createElement('code');
+    sCode.textContent = code;
+    // Markup highlighting — Prism aliases 'svg' through markup.
+    _highlightOrLazy(sCode, 'markup');
+    sPre.appendChild(sCode);
+    sourceDiv.appendChild(sPre);
+
+    pre.parentNode.insertBefore(wrapper, pre);
+    wrapper.appendChild(header);
+    wrapper.appendChild(previewDiv);
+    wrapper.appendChild(sourceDiv);
+    pre.remove();
 
     toggleBtn.onclick = () => {
         const showing = sourceDiv.classList.toggle('visible');
