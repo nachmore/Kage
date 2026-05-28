@@ -584,56 +584,48 @@ jobs:
           }
           LABEL="$(channel_label "$CH")"
 
-          # Wipe historical -N slots. The upper bound is generous; if a
-          # past bug ever left e.g. -7 around we still clean it up.
-          for n in 1 2 3 4 5 6 7 8 9 10; do
+          # Rotate strategy: delete historical -N RELEASE objects but
+          # leave their underlying git tags in place. The default
+          # GITHUB_TOKEN can't push refs that introduce
+          # `.github/workflows/*` changes (no `workflows` scope),
+          # which means we can't recreate a tag once we've deleted
+          # it if the SHA contains workflow changes. So we keep the
+          # tags around forever and just retag the release object
+          # via the Releases API.
+          #
+          # Releases API behaviour: `gh release edit --tag <new>
+          # --target <sha>` retargets the release object AND, when
+          # the new tag doesn't exist yet, creates it server-side
+          # at <sha>. Server-side ref creation through the Releases
+          # API is empirically not blocked by the workflow-scope
+          # check (unlike POST /git/refs and `git push -f`).
+          for n in 2 3 4 5 6 7 8 9 10; do
             tag="${CH}-${n}"
             if gh release view "$tag" >/dev/null 2>&1; then
-              echo "Deleting historical release: $tag"
-              gh release delete "$tag" --yes --cleanup-tag
+              echo "Deleting historical release: $tag (git tag preserved)"
+              gh release delete "$tag" --yes
             fi
           done
 
-          # Rotate -latest → -1.
-          #
-          # Pre-fix this used `gh release edit <tag> --tag <new>` and
-          # GitHub silently re-tagged to the default branch HEAD when the
-          # new tag's git ref didn't exist (because we'd just deleted it
-          # via --cleanup-tag above). That made `<channel>-1` and
-          # `<channel>-latest` resolve to the same SHA, which broke the
-          # changelog step's `git log -1..latest` diff with "no commits."
-          #
-          # Now we capture the previous build's SHA explicitly, create
-          # the `<channel>-1` git tag at that SHA via `git tag -f`, and
-          # pass `--target $PREV_SHA` on the release edit so GitHub
-          # locks the release to the right commit instead of silently
-          # walking it forward.
+          # Drop any stale <channel>-1 release object (preserve its
+          # git tag) so the rotate below has a clean target.
+          if gh release view "${CH}-1" >/dev/null 2>&1; then
+            echo "Deleting existing ${CH}-1 release (preserving git tag)"
+            gh release delete "${CH}-1" --yes
+          fi
+
           if gh release view "${CH}-latest" >/dev/null 2>&1; then
-            # Resolve via the git tag, not `targetCommitish` — the
-            # GitHub release's target_commitish field is set to a
-            # branch name ("main") by softprops/action-gh-release,
-            # which would silently rebase the rotated release to
-            # current HEAD instead of pinning it to the previous
-            # build. The git tag IS pinned (we created it at the end
-            # of the previous run) so it's the source of truth for
-            # "what SHA was the previous build."
+            # Resolve PREV_SHA from the git tag of <channel>-latest.
+            # That tag is the canonical pin (set by last run's
+            # "Move rolling tag"); the release object's
+            # target_commitish is just "main" (a branch name) and
+            # would silently rebase to current HEAD if we used it.
             PREV_SHA="$(gh api "repos/${{ github.repository }}/git/refs/tags/${CH}-latest" --jq '.object.sha')"
             if [[ -z "$PREV_SHA" ]]; then
               echo "Could not resolve ${CH}-latest tag SHA; aborting rotate" >&2
               exit 1
             fi
             echo "Rotating ${CH}-latest (at $PREV_SHA) → ${CH}-1"
-            # Create the new <channel>-1 git tag via the REST API
-            # (POST /git/refs). A `git push -f` would be rejected
-            # because the GITHUB_TOKEN doesn't have `workflows`
-            # permission, and the commit being tagged sometimes
-            # contains workflow file changes — even though that same
-            # commit is already reachable from `main`. The refs API
-            # only updates a pointer (no commit content is being
-            # added) so the workflow-scope check doesn't fire.
-            gh api -X POST "repos/${{ github.repository }}/git/refs" \
-              -f "ref=refs/tags/${CH}-1" \
-              -f "sha=$PREV_SHA"
             gh release edit "${CH}-latest" \
               --tag "${CH}-1" \
               --target "$PREV_SHA" \
@@ -642,33 +634,23 @@ jobs:
 
       # For rolling channels (beta / dev) we force-move the alias tag
       # to the current HEAD so the GitHub Release's "this tag" link
-      # reflects what's actually in the release.
-      #
-      # Done via the REST refs API (PATCH /git/refs/tags/<tag>) rather
-      # than `git push -f` so the GITHUB_TOKEN's missing `workflows`
-      # permission doesn't reject the push when BUILD_SHA contains
-      # changes under .github/workflows/. Same fix shape as the
-      # "Rotate rolling channel releases" step above.
+      # reflects what's actually in the release. `git push -f` here
+      # has been the working path historically — it works because
+      # the tag already exists on the remote, so GitHub treats this
+      # as a ref update (not a ref creation) and skips the
+      # workflow-scope check that would otherwise fire when BUILD_SHA
+      # contains `.github/workflows/*` changes.
       - name: Move rolling tag
         if: needs.plan.outputs.channel != 'stable'
         env:
           TAG: ${{ needs.plan.outputs.release_tag }}
           BUILD_SHA: ${{ needs.plan.outputs.build_sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # PATCH if the tag exists, POST if not. `gh api` returns
-          # nonzero for HTTP 4xx so we can branch on the existence
-          # check.
-          if gh api "repos/${{ github.repository }}/git/refs/tags/${TAG}" >/dev/null 2>&1; then
-            gh api -X PATCH "repos/${{ github.repository }}/git/refs/tags/${TAG}" \
-              -f "sha=$BUILD_SHA" \
-              -F "force=true"
-          else
-            gh api -X POST "repos/${{ github.repository }}/git/refs" \
-              -f "ref=refs/tags/${TAG}" \
-              -f "sha=$BUILD_SHA"
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$TAG" "$BUILD_SHA"
+          git push -f origin "$TAG"
 
       # Build a per-channel changelog body for rolling channels
       # (dev / beta). Stable releases get GitHub's auto-generated
