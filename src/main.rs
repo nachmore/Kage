@@ -393,8 +393,20 @@ async fn run() {
             region,
             key.len()
         );
+        // Pin the flush interval to 60s. The plugin's default keys off
+        // its own `cfg(debug_assertions)` (2s in debug, 60s in release).
+        // For us, a debug-profile build still hits a real network and
+        // a real dashboard, so the 2s default produces a "flushing /
+        // nothing to send" log line every two seconds with zero
+        // diagnostic value — and burns CPU + log space for nothing.
+        // 60s matches what end users see on stable / beta releases.
+        let init_opts = tauri_plugin_aptabase::InitOptions {
+            host: None,
+            flush_interval: Some(std::time::Duration::from_secs(60)),
+        };
         builder = builder.plugin(
             tauri_plugin_aptabase::Builder::new(key)
+                .with_options(init_opts)
                 .with_panic_hook(telemetry::panic_hook())
                 .build(),
         );
