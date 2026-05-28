@@ -212,6 +212,18 @@ fn run_all_killers() {
     }
 }
 
+/// Test-only: drain the registry. Each test that exercises the
+/// killer registry must drain at the start so closures registered by
+/// previously-completed tests can't bleed into this test's
+/// `run_all_killers()` sweep. The closures captured Arcs we no
+/// longer hold, so dropping them is safe.
+#[cfg(test)]
+fn _drain_killers_for_tests() {
+    if let Ok(mut killers) = CHILD_KILLERS.lock() {
+        killers.clear();
+    }
+}
+
 /// Install signal handlers for graceful shutdown.
 ///
 /// The cleanup closure terminates the agent backend AND walks the
@@ -241,15 +253,23 @@ mod child_killer_tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    /// Serialise the two tests in this module. They both touch the
+    /// global `CHILD_KILLERS` static — closures registered by test A
+    /// stay registered after A returns and fire again when test B
+    /// calls `run_all_killers()`, polluting B's observation. The
+    /// assertion in `killers_run_in_registration_order` was failing
+    /// intermittently on macOS for exactly this reason (CI run
+    /// 26566571823).
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
     /// A callback registered via `register_child_killer` actually fires
     /// when `run_all_killers()` runs. Without this guarantee the
     /// macOS / Linux SIGTERM path silently leaves orphan children
     /// behind — the bug this whole subsystem exists to fix.
     #[test]
     fn registered_killer_runs_on_invocation() {
-        // The CHILD_KILLERS static is process-scoped and other tests
-        // may register their own killers, so we don't assert the list
-        // length — only that ours fires.
+        let _guard = TEST_LOCK.lock_or_recover();
+        _drain_killers_for_tests();
         let fired = Arc::new(AtomicBool::new(false));
         let f = fired.clone();
         register_child_killer(move || {
@@ -265,6 +285,8 @@ mod child_killer_tests {
     /// before server) would race.
     #[test]
     fn killers_run_in_registration_order() {
+        let _guard = TEST_LOCK.lock_or_recover();
+        _drain_killers_for_tests();
         let order = Arc::new(Mutex::new(Vec::<u32>::new()));
         for i in 100..103 {
             let o = order.clone();
