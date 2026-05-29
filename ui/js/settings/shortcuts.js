@@ -690,7 +690,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
         const btn = document.getElementById('scriptAiBtn');
         const userPrompt = promptInput?.value.trim();
         if (!userPrompt) {
-            statusEl.textContent = 'Please enter a description.';
+            statusEl.textContent = t('settings.shortcuts.script_ai.empty_prompt');
             return;
         }
 
@@ -735,8 +735,8 @@ export class ShortcutsSettingsModule extends SettingsModule {
         const fullPrompt = parts.join('\n');
 
         btn.disabled = true;
-        btn.textContent = 'Generating...';
-        statusEl.textContent = 'Sending to agent...';
+        btn.textContent = t('settings.shortcuts.script_ai.btn.generating');
+        statusEl.textContent = t('settings.shortcuts.script_ai.status.sending');
 
         // Store current script for undo
         this._previousScript = document.getElementById('shortcutScript')?.value || '';
@@ -754,7 +754,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         ? event.payload.text || ''
                         : String(event.payload || '');
                 response += delta;
-                statusEl.textContent = 'Receiving...';
+                statusEl.textContent = t('settings.shortcuts.script_ai.status.receiving');
             });
 
             const completionPromise = new Promise((resolve) => {
@@ -790,13 +790,13 @@ export class ShortcutsSettingsModule extends SettingsModule {
                 textarea.value = code;
                 this.updateHighlight();
             }
-            statusEl.textContent = 'Script generated. Review and save.';
+            statusEl.textContent = t('settings.shortcuts.script_ai.status.generated');
             document.getElementById('scriptAiUndo').style.display = '';
         } catch (e) {
-            statusEl.textContent = errLabel('Error', e);
+            statusEl.textContent = errLabel(t('settings.shortcuts.script_ai.error.label'), e);
         } finally {
             btn.disabled = false;
-            btn.textContent = 'Generate';
+            btn.textContent = t('settings.shortcuts.script_ai.btn.generate');
         }
     }
 
@@ -808,7 +808,9 @@ export class ShortcutsSettingsModule extends SettingsModule {
             this.updateHighlight();
         }
         document.getElementById('scriptAiUndo').style.display = 'none';
-        document.getElementById('scriptAiStatus').textContent = 'Reverted to previous script.';
+        document.getElementById('scriptAiStatus').textContent = t(
+            'settings.shortcuts.script_ai.status.reverted'
+        );
         this._previousScript = null;
     }
 

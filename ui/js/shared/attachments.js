@@ -3,6 +3,7 @@
  * Supports image paste, file drag-drop, and attachment preview rendering.
  */
 
+import { t } from './i18n.js';
 import { escapeHtml } from './tool-utils.js';
 
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -188,7 +189,7 @@ export function renderAttachmentPreviews(container, attachments, manager) {
         if (att.type === 'image' && att.previewUrl) {
             const img = document.createElement('img');
             img.src = att.previewUrl;
-            img.alt = 'Attached image';
+            img.alt = t('shared.attachments.image.alt');
             img.className = 'attachment-preview-img';
             item.appendChild(img);
         } else {
@@ -205,7 +206,7 @@ export function renderAttachmentPreviews(container, attachments, manager) {
         const removeBtn = document.createElement('button');
         removeBtn.className = 'attachment-remove-btn';
         removeBtn.innerHTML = '×';
-        removeBtn.setAttribute('aria-label', 'Remove attachment');
+        removeBtn.setAttribute('aria-label', t('shared.attachments.remove.aria'));
         removeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             manager.removeAt(index);
@@ -232,7 +233,7 @@ export function attachmentPreviewHtml(attachments) {
     let html = '<div class="message-attachments">';
     for (const att of attachments) {
         if (att.type === 'image' && att.previewUrl) {
-            html += `<img src="${att.previewUrl}" alt="Attached image" class="message-attachment-img">`;
+            html += `<img src="${att.previewUrl}" alt="${t('shared.attachments.image.alt')}" class="message-attachment-img">`;
         } else if (att.type === 'resource_link') {
             html += `<span class="message-attachment-file">📄 ${escapeHtml(att.name || 'file')}</span>`;
         }
@@ -251,7 +252,7 @@ function showLimitToast(_nearElement) {
 
     const toast = document.createElement('div');
     toast.className = 'attachment-limit-toast';
-    toast.textContent = `Limit of ${MAX_ATTACHMENTS} attachments reached`;
+    toast.textContent = t('shared.attachments.limit_toast', { max: MAX_ATTACHMENTS });
     document.body.appendChild(toast);
 
     // Auto-remove after animation

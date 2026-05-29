@@ -3968,6 +3968,124 @@
     "description": "confirm() prompt before uninstalling an extension"
   },
 
+  "settings.assistant.translate.description": {
+    "message": "Default target language for the Translate action. Leave empty to use the system default ({language}).",
+    "description": "Helper text under the Translate-action target language input"
+  },
+  "settings.assistant.app_modes.summary.none": {
+    "message": "None configured.",
+    "description": "Summary line when no app modes are configured"
+  },
+  "settings.assistant.app_modes.summary.active_only": {
+    "message": "{active} active.",
+    "description": "Summary line when all configured app modes are enabled"
+  },
+  "settings.assistant.app_modes.summary.active_disabled": {
+    "message": "{active} active, {disabled} disabled.",
+    "description": "Summary line when only some app modes are enabled"
+  },
+
+  "settings.shortcuts.script_ai.empty_prompt": {
+    "message": "Please enter a description.",
+    "description": "Inline error when the user clicks Generate with an empty prompt"
+  },
+  "settings.shortcuts.script_ai.btn.generating": {
+    "message": "Generating...",
+    "description": "Generate button label while a request is in flight"
+  },
+  "settings.shortcuts.script_ai.btn.generate": {
+    "message": "Generate",
+    "description": "Generate button default label"
+  },
+  "settings.shortcuts.script_ai.status.sending": {
+    "message": "Sending to agent...",
+    "description": "Status while the prompt is being sent"
+  },
+  "settings.shortcuts.script_ai.status.receiving": {
+    "message": "Receiving...",
+    "description": "Status while streaming a response"
+  },
+  "settings.shortcuts.script_ai.status.generated": {
+    "message": "Script generated. Review and save.",
+    "description": "Status after a successful generation"
+  },
+  "settings.shortcuts.script_ai.status.reverted": {
+    "message": "Reverted to previous script.",
+    "description": "Status after the user clicks Undo on a generated script"
+  },
+  "settings.shortcuts.script_ai.error.label": {
+    "message": "Error",
+    "description": "errLabel passed when script generation fails"
+  },
+
+  "shared.attachments.limit_toast": {
+    "message": "Limit of {max} attachments reached",
+    "description": "Toast shown when the user tries to attach more than the max"
+  },
+
+  "settings.assistant.app_modes.add_suggested.title": {
+    "message": "Drop in a curated set of starter rules — duplicates skipped.",
+    "description": "Tooltip on the Add suggested button"
+  },
+  "settings.assistant.app_modes.enable_rule.title": {
+    "message": "Enable this rule",
+    "description": "Tooltip on the per-rule enable checkbox"
+  },
+  "settings.assistant.app_modes.remove.title": {
+    "message": "Remove",
+    "description": "Tooltip / aria-label on the remove-rule button"
+  },
+  "settings.automations.enable_toggle.title": {
+    "message": "Enable/disable",
+    "description": "Tooltip on the per-automation enable checkbox"
+  },
+
+  "shared.markdown.close.title": {
+    "message": "Close",
+    "description": "Tooltip on close buttons inside markdown previews (e.g. lightbox)"
+  },
+  "shared.markdown.sort.title": {
+    "message": "Click to sort",
+    "description": "Tooltip on sortable table column headers"
+  },
+  "shared.streaming.ext_tool.title": {
+    "message": "Extension tool: {label}",
+    "description": "Tooltip on the streaming-source chip showing which extension tool produced output"
+  },
+  "shared.tts.bar.pause": {
+    "message": "Pause/Resume",
+    "description": "Tooltip on the TTS bar pause/resume button"
+  },
+  "shared.tts.bar.stop": {
+    "message": "Stop",
+    "description": "Tooltip on the TTS bar stop button"
+  },
+  "shared.tts.bar.settings": {
+    "message": "Speech settings",
+    "description": "Tooltip on the TTS bar settings button"
+  },
+
+  "chat.send_btn.aria.stop": {
+    "message": "Stop generating",
+    "description": "aria-label on the send button when generation is in flight"
+  },
+  "chat.send_btn.aria.send": {
+    "message": "Send message",
+    "description": "aria-label on the send button when ready to send"
+  },
+  "shared.attachments.remove.aria": {
+    "message": "Remove attachment",
+    "description": "aria-label on the per-attachment remove (×) button"
+  },
+  "shared.attachments.image.alt": {
+    "message": "Attached image",
+    "description": "alt text on attachment thumbnails (preview + sent message)"
+  },
+  "shared.markdown.task_plan.aria": {
+    "message": "Task plan",
+    "description": "aria-label on the task-plan widget container"
+  },
+
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",
     "description": "Tooltip on the hotkey picker's keycap display"

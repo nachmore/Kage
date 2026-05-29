@@ -4,6 +4,7 @@
  * the ACP event parsing and source extraction logic.
  */
 
+import { tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml, getToolIcon } from './tool-utils.js';
 
 // `escapeAttr` is re-exported here so existing call sites that import
@@ -437,7 +438,7 @@ export function renderExtensionToolChipHtml(info) {
     const toolLabel = info.tool ? `${info.extension}/${info.tool}` : info.extension || 'extension';
     const statusIcon = info.status === 'loading' ? '⏳' : info.status === 'error' ? '❌' : '✅';
     return `
-        <span class="source-chip tool-chip ext-tool-chip ext-tool-${info.status || 'loading'}" title="Extension tool: ${escapeHtml(toolLabel)}">
+        <span class="source-chip tool-chip ext-tool-chip ext-tool-${info.status || 'loading'}" title="${tHtml('shared.streaming.ext_tool.title', { label: toolLabel })}">
             <span class="tool-chip-icon">${icon}</span>
             <span class="source-domain">${statusIcon} ${escapeHtml(toolLabel)}</span>
         </span>

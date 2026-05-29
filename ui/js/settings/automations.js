@@ -323,7 +323,7 @@ export class AutomationsSettingsModule extends SettingsModule {
                 <div class="auto-collapsed-summary">${this._esc(summary)}</div>
             </div>
             <span class="auto-trigger-badge">${badge}</span>
-            <input type="checkbox" class="auto-enable-toggle" ${auto.enabled !== false ? 'checked' : ''} title="Enable/disable">
+            <input type="checkbox" class="auto-enable-toggle" ${auto.enabled !== false ? 'checked' : ''} title="${t('settings.automations.enable_toggle.title')}">
         </div>`;
     }
 

@@ -148,7 +148,7 @@ export class AssistantSettingsModule extends SettingsModule {
                     <div id="appModesContainer" style="display:flex;flex-direction:column;gap:10px;"></div>
                     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
                         <button class="setting-button" data-action="addAppMode">+ Add App Mode</button>
-                        <button class="setting-button" data-action="addSuggestedAppModes" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);" title="Drop in a curated set of starter rules — duplicates skipped.">+ Add suggested</button>
+                        <button class="setting-button" data-action="addSuggestedAppModes" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);" title="${t('settings.assistant.app_modes.add_suggested.title')}">+ Add suggested</button>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:14px;">
                         <button class="setting-button" data-action="saveAppModes">Save</button>
@@ -239,7 +239,9 @@ export class AssistantSettingsModule extends SettingsModule {
                     const name = display.of(locale);
                     if (name) langName = name.charAt(0).toUpperCase() + name.slice(1);
                 }
-                translateDesc.textContent = `Default target language for the Translate action. Leave empty to use the system default (${langName}).`;
+                translateDesc.textContent = t('settings.assistant.translate.description', {
+                    language: langName,
+                });
             } catch {}
         }
 
@@ -461,9 +463,16 @@ export class AssistantSettingsModule extends SettingsModule {
         const list = this._appModesSnapshot || [];
         const enabledCount = list.filter((r) => r.enabled !== false).length;
         if (list.length === 0) {
-            summary.textContent = 'None configured.';
+            summary.textContent = t('settings.assistant.app_modes.summary.none');
+        } else if (list.length === enabledCount) {
+            summary.textContent = t('settings.assistant.app_modes.summary.active_only', {
+                active: enabledCount,
+            });
         } else {
-            summary.textContent = `${enabledCount} active${list.length > enabledCount ? `, ${list.length - enabledCount} disabled` : ''}.`;
+            summary.textContent = t('settings.assistant.app_modes.summary.active_disabled', {
+                active: enabledCount,
+                disabled: list.length - enabledCount,
+            });
         }
     }
 
@@ -501,11 +510,11 @@ export class AssistantSettingsModule extends SettingsModule {
             <div style="display:flex;gap:8px;align-items:center;">
                 <input type="text" class="setting-input am-name" placeholder="Friendly name (e.g. VS Code)" value="${nameVal}" style="flex:1;">
                 <input type="text" class="setting-input am-exe" placeholder="Executable (e.g. Code)" value="${exeVal}" style="flex:1;">
-                <label class="kage-checkbox" title="Enable this rule" style="margin-left:4px;">
+                <label class="kage-checkbox" title="${t('settings.assistant.app_modes.enable_rule.title')}" style="margin-left:4px;">
                     <input type="checkbox" class="am-enabled"${enabledChecked}>
                     <span style="font-size:11px;">on</span>
                 </label>
-                <button class="setting-button am-remove icon-button-danger" type="button" title="Remove" aria-label="Remove">
+                <button class="setting-button am-remove icon-button-danger" type="button" title="${t('settings.assistant.app_modes.remove.title')}" aria-label="${t('settings.assistant.app_modes.remove.title')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>

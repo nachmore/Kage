@@ -2178,14 +2178,14 @@ export class ChatApp {
         if (this.isWaitingForResponse) {
             btn.classList.add('stop-mode');
             btn.disabled = false;
-            btn.setAttribute('aria-label', 'Stop generating');
+            btn.setAttribute('aria-label', t('chat.send_btn.aria.stop'));
             btn.title = t('chat.send_btn.stop_title');
             if (sendIcon) sendIcon.style.display = 'none';
             if (stopIcon) stopIcon.style.display = '';
         } else {
             btn.classList.remove('stop-mode');
             btn.disabled = false;
-            btn.setAttribute('aria-label', 'Send message');
+            btn.setAttribute('aria-label', t('chat.send_btn.aria.send'));
             btn.title = t('chat.send_btn.send_title');
             if (sendIcon) sendIcon.style.display = '';
             if (stopIcon) stopIcon.style.display = 'none';

@@ -2,6 +2,7 @@
 
 import { loadPrismLanguage } from './prism-loader.js';
 import { sanitizeExtensionHtml } from './extension-html-sanitizer.js';
+import { t } from './i18n.js';
 
 const DIAGRAM_LANGUAGES = new Set(['mermaid', 'dot', 'graphviz', 'neato']);
 const HTML_LANGUAGES = new Set(['html', 'htm']);
@@ -2093,7 +2094,7 @@ function openDiagramLightbox(svgEl) {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'diagram-lightbox-btn diagram-lightbox-close';
     closeBtn.textContent = '✕';
-    closeBtn.title = 'Close';
+    closeBtn.title = t('shared.markdown.close.title');
     closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeDiagramLightbox();
@@ -2140,7 +2141,7 @@ function makeTablesSortable(container) {
         headers.forEach((th, colIndex) => {
             th.style.cursor = 'pointer';
             th.style.userSelect = 'none';
-            th.title = 'Click to sort';
+            th.title = t('shared.markdown.sort.title');
             th.addEventListener('click', () => {
                 const rows = Array.from(tbody.querySelectorAll('tr'));
                 const currentDir = th.dataset.sortDir || 'none';
@@ -2329,7 +2330,7 @@ export function createTaskPlanElement(tasks) {
     const wrapper = document.createElement('div');
     wrapper.className = 'taskplan';
     wrapper.setAttribute('role', 'list');
-    wrapper.setAttribute('aria-label', 'Task plan');
+    wrapper.setAttribute('aria-label', t('shared.markdown.task_plan.aria'));
 
     const doneCount = tasks.filter((t) => t.status === 'done').length;
     const totalCount = tasks.length;

@@ -6850,5 +6850,173 @@
     "description": "confirm() prompt before uninstalling an extension",
     "_machine_translated": true,
     "_source_hash": "8c9098802c436605"
+  },
+  "settings.assistant.translate.description": {
+    "message": "ترجمہ ایکشن کے لیے ڈیفالٹ ہدف زبان۔ سسٹم ڈیفالٹ ({language}) استعمال کرنے کے لیے خالی چھوڑ دیں۔",
+    "description": "Helper text under the Translate-action target language input",
+    "_machine_translated": true,
+    "_source_hash": "0f9460de25fb2cda"
+  },
+  "settings.assistant.app_modes.summary.none": {
+    "message": "کوئی ترتیب نہیں دیا گیا۔",
+    "description": "Summary line when no app modes are configured",
+    "_machine_translated": true,
+    "_source_hash": "53b7da5cd3d3be76"
+  },
+  "settings.assistant.app_modes.summary.active_only": {
+    "message": "{active} فعال۔",
+    "description": "Summary line when all configured app modes are enabled",
+    "_machine_translated": true,
+    "_source_hash": "9081546635c2735c"
+  },
+  "settings.assistant.app_modes.summary.active_disabled": {
+    "message": "{active} فعال، {disabled} غیر فعال۔",
+    "description": "Summary line when only some app modes are enabled",
+    "_machine_translated": true,
+    "_source_hash": "d86dcce1e37c1479"
+  },
+  "settings.shortcuts.script_ai.empty_prompt": {
+    "message": "براہ کرم تفصیل درج کریں۔",
+    "description": "Inline error when the user clicks Generate with an empty prompt",
+    "_machine_translated": true,
+    "_source_hash": "35cd8219cdf3b283"
+  },
+  "settings.shortcuts.script_ai.btn.generating": {
+    "message": "تیار کیا جا رہا ہے...",
+    "description": "Generate button label while a request is in flight",
+    "_machine_translated": true,
+    "_source_hash": "32e3e1310cc716e5"
+  },
+  "settings.shortcuts.script_ai.btn.generate": {
+    "message": "تیار کریں",
+    "description": "Generate button default label",
+    "_machine_translated": true,
+    "_source_hash": "1f9059e786b87712"
+  },
+  "settings.shortcuts.script_ai.status.sending": {
+    "message": "ایجنٹ کو بھیجا جا رہا ہے...",
+    "description": "Status while the prompt is being sent",
+    "_machine_translated": true,
+    "_source_hash": "f816935d78b0c3a1"
+  },
+  "settings.shortcuts.script_ai.status.receiving": {
+    "message": "وصول ہو رہا ہے...",
+    "description": "Status while streaming a response",
+    "_machine_translated": true,
+    "_source_hash": "63e6668c2084b247"
+  },
+  "settings.shortcuts.script_ai.status.generated": {
+    "message": "اسکرپٹ تیار ہو گیا۔ جائزہ لیں اور محفوظ کریں۔",
+    "description": "Status after a successful generation",
+    "_machine_translated": true,
+    "_source_hash": "a6c511a740619071"
+  },
+  "settings.shortcuts.script_ai.status.reverted": {
+    "message": "پچھلے اسکرپٹ پر واپس لایا گیا۔",
+    "description": "Status after the user clicks Undo on a generated script",
+    "_machine_translated": true,
+    "_source_hash": "e600dfdf736cd338"
+  },
+  "settings.shortcuts.script_ai.error.label": {
+    "message": "خرابی",
+    "description": "errLabel passed when script generation fails",
+    "_machine_translated": true,
+    "_source_hash": "5ce705f69f3b9e91"
+  },
+  "shared.attachments.limit_toast": {
+    "message": "{max} اٹیچمنٹس کی حد تک پہنچ گئے",
+    "description": "Toast shown when the user tries to attach more than the max",
+    "_machine_translated": true,
+    "_source_hash": "38b3376ddbfed0b3"
+  },
+  "settings.assistant.app_modes.add_suggested.title": {
+    "message": "منتخب شدہ ابتدائی قواعد کا ایک سیٹ شامل کریں — ڈپلیکیٹس نظر انداز کیے جائیں گے۔",
+    "description": "Tooltip on the Add suggested button",
+    "_machine_translated": true,
+    "_source_hash": "b62362859137db7e"
+  },
+  "settings.assistant.app_modes.enable_rule.title": {
+    "message": "یہ قاعدہ فعال کریں",
+    "description": "Tooltip on the per-rule enable checkbox",
+    "_machine_translated": true,
+    "_source_hash": "e4779a2a9b41c48f"
+  },
+  "settings.assistant.app_modes.remove.title": {
+    "message": "ہٹائیں",
+    "description": "Tooltip / aria-label on the remove-rule button",
+    "_machine_translated": true,
+    "_source_hash": "c91f47d3baf6f515"
+  },
+  "settings.automations.enable_toggle.title": {
+    "message": "فعال/غیر فعال کریں",
+    "description": "Tooltip on the per-automation enable checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d147e46a2dbdaafa"
+  },
+  "shared.markdown.close.title": {
+    "message": "بند کریں",
+    "description": "Tooltip on close buttons inside markdown previews (e.g. lightbox)",
+    "_machine_translated": true,
+    "_source_hash": "87202ec10e817426"
+  },
+  "shared.markdown.sort.title": {
+    "message": "ترتیب دینے کے لیے کلک کریں",
+    "description": "Tooltip on sortable table column headers",
+    "_machine_translated": true,
+    "_source_hash": "406865c438c16a02"
+  },
+  "shared.streaming.ext_tool.title": {
+    "message": "ایکسٹینشن ٹول: {label}",
+    "description": "Tooltip on the streaming-source chip showing which extension tool produced output",
+    "_machine_translated": true,
+    "_source_hash": "2722dc9bd691b942"
+  },
+  "shared.tts.bar.pause": {
+    "message": "روکیں/جاری رکھیں",
+    "description": "Tooltip on the TTS bar pause/resume button",
+    "_machine_translated": true,
+    "_source_hash": "bed2e0acdc83337f"
+  },
+  "shared.tts.bar.stop": {
+    "message": "بند کریں",
+    "description": "Tooltip on the TTS bar stop button",
+    "_machine_translated": true,
+    "_source_hash": "6e2ee9a87ca500e3"
+  },
+  "shared.tts.bar.settings": {
+    "message": "تقریر کی ترتیبات",
+    "description": "Tooltip on the TTS bar settings button",
+    "_machine_translated": true,
+    "_source_hash": "1fea7947d7d5758b"
+  },
+  "chat.send_btn.aria.stop": {
+    "message": "تیار کرنا روکیں",
+    "description": "aria-label on the send button when generation is in flight",
+    "_machine_translated": true,
+    "_source_hash": "0dfbe5e00b95b8cb"
+  },
+  "chat.send_btn.aria.send": {
+    "message": "پیغام بھیجیں",
+    "description": "aria-label on the send button when ready to send",
+    "_machine_translated": true,
+    "_source_hash": "0a8b0c904e9d8741"
+  },
+  "shared.attachments.remove.aria": {
+    "message": "منسلکہ ہٹائیں",
+    "description": "aria-label on the per-attachment remove (×) button",
+    "_machine_translated": true,
+    "_source_hash": "f641a7794f34ef03"
+  },
+  "shared.attachments.image.alt": {
+    "message": "منسلک تصویر",
+    "description": "alt text on attachment thumbnails (preview + sent message)",
+    "_machine_translated": true,
+    "_source_hash": "84b26c94f9bf34e9"
+  },
+  "shared.markdown.task_plan.aria": {
+    "message": "ٹاسک پلان",
+    "description": "aria-label on the task-plan widget container",
+    "_machine_translated": true,
+    "_source_hash": "3f69b36a93ba629f"
   }
 }

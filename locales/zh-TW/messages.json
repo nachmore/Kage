@@ -6850,5 +6850,173 @@
     "description": "confirm() prompt before uninstalling an extension",
     "_machine_translated": true,
     "_source_hash": "8c9098802c436605"
+  },
+  "settings.assistant.translate.description": {
+    "message": "「翻譯」動作的預設目標語言。留空則使用系統預設值（{language}）。",
+    "description": "Helper text under the Translate-action target language input",
+    "_machine_translated": true,
+    "_source_hash": "0f9460de25fb2cda"
+  },
+  "settings.assistant.app_modes.summary.none": {
+    "message": "尚未設定。",
+    "description": "Summary line when no app modes are configured",
+    "_machine_translated": true,
+    "_source_hash": "53b7da5cd3d3be76"
+  },
+  "settings.assistant.app_modes.summary.active_only": {
+    "message": "{active} 個啟用中。",
+    "description": "Summary line when all configured app modes are enabled",
+    "_machine_translated": true,
+    "_source_hash": "9081546635c2735c"
+  },
+  "settings.assistant.app_modes.summary.active_disabled": {
+    "message": "{active} 個啟用中，{disabled} 個已停用。",
+    "description": "Summary line when only some app modes are enabled",
+    "_machine_translated": true,
+    "_source_hash": "d86dcce1e37c1479"
+  },
+  "settings.shortcuts.script_ai.empty_prompt": {
+    "message": "請輸入描述。",
+    "description": "Inline error when the user clicks Generate with an empty prompt",
+    "_machine_translated": true,
+    "_source_hash": "35cd8219cdf3b283"
+  },
+  "settings.shortcuts.script_ai.btn.generating": {
+    "message": "產生中…",
+    "description": "Generate button label while a request is in flight",
+    "_machine_translated": true,
+    "_source_hash": "32e3e1310cc716e5"
+  },
+  "settings.shortcuts.script_ai.btn.generate": {
+    "message": "產生",
+    "description": "Generate button default label",
+    "_machine_translated": true,
+    "_source_hash": "1f9059e786b87712"
+  },
+  "settings.shortcuts.script_ai.status.sending": {
+    "message": "正在傳送至代理程式…",
+    "description": "Status while the prompt is being sent",
+    "_machine_translated": true,
+    "_source_hash": "f816935d78b0c3a1"
+  },
+  "settings.shortcuts.script_ai.status.receiving": {
+    "message": "接收中…",
+    "description": "Status while streaming a response",
+    "_machine_translated": true,
+    "_source_hash": "63e6668c2084b247"
+  },
+  "settings.shortcuts.script_ai.status.generated": {
+    "message": "指令稿已產生。請檢閱並儲存。",
+    "description": "Status after a successful generation",
+    "_machine_translated": true,
+    "_source_hash": "a6c511a740619071"
+  },
+  "settings.shortcuts.script_ai.status.reverted": {
+    "message": "已還原為先前的指令稿。",
+    "description": "Status after the user clicks Undo on a generated script",
+    "_machine_translated": true,
+    "_source_hash": "e600dfdf736cd338"
+  },
+  "settings.shortcuts.script_ai.error.label": {
+    "message": "錯誤",
+    "description": "errLabel passed when script generation fails",
+    "_machine_translated": true,
+    "_source_hash": "5ce705f69f3b9e91"
+  },
+  "shared.attachments.limit_toast": {
+    "message": "已達附件數量上限 {max} 個",
+    "description": "Toast shown when the user tries to attach more than the max",
+    "_machine_translated": true,
+    "_source_hash": "38b3376ddbfed0b3"
+  },
+  "settings.assistant.app_modes.add_suggested.title": {
+    "message": "加入一組精選的入門規則——重複的會略過。",
+    "description": "Tooltip on the Add suggested button",
+    "_machine_translated": true,
+    "_source_hash": "b62362859137db7e"
+  },
+  "settings.assistant.app_modes.enable_rule.title": {
+    "message": "啟用此規則",
+    "description": "Tooltip on the per-rule enable checkbox",
+    "_machine_translated": true,
+    "_source_hash": "e4779a2a9b41c48f"
+  },
+  "settings.assistant.app_modes.remove.title": {
+    "message": "移除",
+    "description": "Tooltip / aria-label on the remove-rule button",
+    "_machine_translated": true,
+    "_source_hash": "c91f47d3baf6f515"
+  },
+  "settings.automations.enable_toggle.title": {
+    "message": "啟用／停用",
+    "description": "Tooltip on the per-automation enable checkbox",
+    "_machine_translated": true,
+    "_source_hash": "d147e46a2dbdaafa"
+  },
+  "shared.markdown.close.title": {
+    "message": "關閉",
+    "description": "Tooltip on close buttons inside markdown previews (e.g. lightbox)",
+    "_machine_translated": true,
+    "_source_hash": "87202ec10e817426"
+  },
+  "shared.markdown.sort.title": {
+    "message": "點擊以排序",
+    "description": "Tooltip on sortable table column headers",
+    "_machine_translated": true,
+    "_source_hash": "406865c438c16a02"
+  },
+  "shared.streaming.ext_tool.title": {
+    "message": "擴充功能工具：{label}",
+    "description": "Tooltip on the streaming-source chip showing which extension tool produced output",
+    "_machine_translated": true,
+    "_source_hash": "2722dc9bd691b942"
+  },
+  "shared.tts.bar.pause": {
+    "message": "暫停／繼續",
+    "description": "Tooltip on the TTS bar pause/resume button",
+    "_machine_translated": true,
+    "_source_hash": "bed2e0acdc83337f"
+  },
+  "shared.tts.bar.stop": {
+    "message": "停止",
+    "description": "Tooltip on the TTS bar stop button",
+    "_machine_translated": true,
+    "_source_hash": "6e2ee9a87ca500e3"
+  },
+  "shared.tts.bar.settings": {
+    "message": "語音設定",
+    "description": "Tooltip on the TTS bar settings button",
+    "_machine_translated": true,
+    "_source_hash": "1fea7947d7d5758b"
+  },
+  "chat.send_btn.aria.stop": {
+    "message": "停止產生",
+    "description": "aria-label on the send button when generation is in flight",
+    "_machine_translated": true,
+    "_source_hash": "0dfbe5e00b95b8cb"
+  },
+  "chat.send_btn.aria.send": {
+    "message": "傳送訊息",
+    "description": "aria-label on the send button when ready to send",
+    "_machine_translated": true,
+    "_source_hash": "0a8b0c904e9d8741"
+  },
+  "shared.attachments.remove.aria": {
+    "message": "移除附件",
+    "description": "aria-label on the per-attachment remove (×) button",
+    "_machine_translated": true,
+    "_source_hash": "f641a7794f34ef03"
+  },
+  "shared.attachments.image.alt": {
+    "message": "附加的圖片",
+    "description": "alt text on attachment thumbnails (preview + sent message)",
+    "_machine_translated": true,
+    "_source_hash": "84b26c94f9bf34e9"
+  },
+  "shared.markdown.task_plan.aria": {
+    "message": "任務計畫",
+    "description": "aria-label on the task-plan widget container",
+    "_machine_translated": true,
+    "_source_hash": "3f69b36a93ba629f"
   }
 }
