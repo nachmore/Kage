@@ -5,11 +5,6 @@
     "rtl": false,
     "machine_translated": false
   },
-
-  "errors.connection.lost": {
-    "message": "Connection lost: {reason}",
-    "description": "ACP transport dropped while a request was in flight"
-  },
   "errors.connection.not_connected": {
     "message": "Not connected",
     "description": "User attempted an operation that requires an active ACP connection"
@@ -18,37 +13,13 @@
     "message": "Failed to reconnect: {reason}",
     "description": "Reconnect attempt to the agent backend failed"
   },
-  "errors.timeout.generic": {
-    "message": "Timed out waiting for response",
-    "description": "ACP request exceeded the configured timeout"
-  },
-  "errors.session.corrupted": {
-    "message": "Session is corrupted: {reason}",
-    "description": "Session file or in-memory state failed validation"
-  },
-  "errors.session.create_failed": {
-    "message": "Could not create session: {reason}",
-    "description": "Initial session creation against the agent backend failed"
-  },
   "errors.session.load_failed": {
     "message": "Could not load session: {reason}",
     "description": "Resuming a stored session against the agent backend failed"
   },
-  "errors.image.unsupported": {
-    "message": "This model does not support image attachments",
-    "description": "User attached an image to a model whose backend can't accept them"
-  },
   "errors.lock.acquire_failed": {
     "message": "Internal lock could not be acquired",
     "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic"
-  },
-  "errors.serialize.failed": {
-    "message": "Could not serialize data: {reason}",
-    "description": "JSON or other serialization failed at a command boundary"
-  },
-  "errors.rate_limited.generic": {
-    "message": "Rate limit exceeded. Please wait and try again.",
-    "description": "Upstream agent or model API returned a rate-limit error"
   },
   "errors.permission.response_failed": {
     "message": "Could not send permission response: {reason}",
@@ -70,22 +41,6 @@
     "message": "Plan is empty",
     "description": "Agent returned a plan with no steps"
   },
-  "errors.transport.tcp_in_local_mode": {
-    "message": "Cannot use TCP transport in local mode",
-    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested"
-  },
-  "errors.transport.empty_spawn_command": {
-    "message": "Spawn command is empty",
-    "description": "Local connection has no command to launch"
-  },
-  "errors.transport.no_write_handle": {
-    "message": "Connection is not writable",
-    "description": "Attempted to send on a half-closed transport"
-  },
-  "errors.unknown": {
-    "message": "Unknown error",
-    "description": "Fallback when an error has no message at all"
-  },
   "errors.passthrough": {
     "message": "{message}",
     "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim."
@@ -93,10 +48,6 @@
   "errors.config.save_failed": {
     "message": "Could not save settings: {reason}",
     "description": "Settings persistence to disk failed (permission, disk full, etc.)"
-  },
-  "errors.config.load_failed": {
-    "message": "Could not load settings: {reason}",
-    "description": "Reading config.json from disk failed"
   },
   "errors.permission.dismiss_failed": {
     "message": "Could not dismiss permission prompt: {reason}",
@@ -134,10 +85,6 @@
     "message": "Could not access sessions directory: {reason}",
     "description": "Resolving the per-agent sessions directory failed"
   },
-  "errors.session.list_failed": {
-    "message": "Could not list sessions: {reason}",
-    "description": "Reading the per-agent sessions directory failed"
-  },
   "errors.session.read_failed": {
     "message": "Could not read session file: {reason}",
     "description": "Reading a single session file from disk failed"
@@ -146,10 +93,6 @@
     "message": "Could not parse session file: {reason}",
     "description": "Session JSON failed to deserialise into the expected shape"
   },
-  "errors.session.title_failed": {
-    "message": "Could not update session title: {reason}",
-    "description": "Writing a renamed title back to the session file failed"
-  },
   "errors.session.delete_failed": {
     "message": "Could not delete session: {reason}",
     "description": "Removing the session file from disk failed"
@@ -157,10 +100,6 @@
   "errors.session.not_found": {
     "message": "Session not found",
     "description": "Looked-up session id doesn't match any file on disk"
-  },
-  "errors.session.invalid_id": {
-    "message": "Invalid session id: {reason}",
-    "description": "Session id failed validation (path-injection guard)"
   },
   "errors.session.unknown_provider": {
     "message": "Unknown agent session provider: {provider}",
@@ -178,10 +117,6 @@
     "message": "Could not show window: {reason}",
     "description": "Tauri window failed to surface (focus/show/setSize/etc.)"
   },
-  "errors.window.title_failed": {
-    "message": "Could not set window title: {reason}",
-    "description": "Window title update failed"
-  },
   "errors.window.not_found": {
     "message": "Window not found: {label}",
     "description": "No window registered under the given label"
@@ -194,61 +129,13 @@
     "message": "Refusing to close non-chat window: {label}",
     "description": "Caller tried to close-by-label a window that isn't a chat-shaped window"
   },
-  "errors.tool.execute_failed": {
-    "message": "Tool execution failed: {reason}",
-    "description": "Tool invocation against the agent failed"
-  },
-  "errors.tool.cancelled": {
-    "message": "Tool execution cancelled",
-    "description": "User cancelled an in-flight tool call"
-  },
   "errors.fs.read_failed": {
     "message": "Could not read file: {reason}",
     "description": "Filesystem read operation failed"
   },
-  "errors.fs.write_failed": {
-    "message": "Could not write file: {reason}",
-    "description": "Filesystem write operation failed"
-  },
   "errors.fs.path_invalid": {
     "message": "Invalid path: {reason}",
     "description": "Path failed validation (traversal guard, missing component, etc.)"
-  },
-  "errors.preset.unknown": {
-    "message": "Unknown agent preset: {preset}",
-    "description": "Agent preset id doesn't match any known preset"
-  },
-  "errors.preset.locator_failed": {
-    "message": "Could not locate the agent: {reason}",
-    "description": "Preset locator (which/where lookup) failed to find the binary"
-  },
-  "errors.preset.spawn_failed": {
-    "message": "Could not start the agent: {reason}",
-    "description": "Spawning the agent process failed"
-  },
-  "errors.steering.update_failed": {
-    "message": "Could not update steering document: {reason}",
-    "description": "Writing or syncing the auto-steering markdown failed"
-  },
-  "errors.shortcut.invalid": {
-    "message": "Invalid shortcut: {reason}",
-    "description": "Hotkey string failed validation"
-  },
-  "errors.shortcut.register_failed": {
-    "message": "Could not register shortcut {shortcut}: {reason}",
-    "description": "Global hotkey registration failed (already taken, OS denial, etc.)"
-  },
-  "errors.update.check_failed": {
-    "message": "Could not check for updates: {reason}",
-    "description": "Updater plugin call failed"
-  },
-  "errors.update.download_failed": {
-    "message": "Could not download update: {reason}",
-    "description": "Update download or signature verification failed"
-  },
-  "errors.update.install_failed": {
-    "message": "Could not install update: {reason}",
-    "description": "Spawning the platform installer failed"
   },
   "errors.extension.invalid_id": {
     "message": "Invalid extension id: {reason}",
@@ -274,7 +161,6 @@
     "message": "Extension locale file is invalid ({language}): {reason}",
     "description": "Extension's _locales/<lang>/messages.json had a JSON parse error"
   },
-
   "tray.show": {
     "message": "Show",
     "description": "Tray menu — show the floating window"
@@ -291,7 +177,6 @@
     "message": "Quit",
     "description": "Tray menu — exit the application"
   },
-
   "window.title.chat": {
     "message": "Kage Chat",
     "description": "Title bar for chat windows"
@@ -312,7 +197,6 @@
     "message": "Select Folder to Organize",
     "description": "Title for the folder picker dialog opened by the organize-files tool"
   },
-
   "settings.appearance.title": {
     "message": "Appearance",
     "description": "Settings sidebar — Appearance section header"
@@ -353,7 +237,6 @@
     "message": "This language was machine-translated. Please report errors at our GitHub issues page.",
     "description": "Banner shown when the active language was filled in by the seed script"
   },
-
   "settings.save_and_close": {
     "message": "Save & Close",
     "description": "Footer button on the settings window"
@@ -446,7 +329,6 @@
     "message": "About Kage",
     "description": "Sidebar item — version / credits / build info"
   },
-
   "settings.appearance.font_size.label": {
     "message": "Font Size",
     "description": "Settings — font size slider label"
@@ -579,7 +461,6 @@
     "message": "Uninstall theme",
     "description": "Tooltip on the per-theme remove button"
   },
-
   "settings.privacy.title": {
     "message": "Privacy",
     "description": "Privacy settings header"
@@ -628,7 +509,6 @@
     "message": "Full details of what's collected, how it's stored, and how to request deletion. <a href=\"#\" id=\"openPrivacyPolicy\">Read the privacy policy →</a>",
     "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)"
   },
-
   "settings.system.title": {
     "message": "Startup",
     "description": "Settings header — system / startup-related settings"
@@ -641,7 +521,6 @@
     "message": "Launch Kage automatically when you log in.",
     "description": "Helper text for the auto-start toggle"
   },
-
   "settings.updates.title": {
     "message": "Updates",
     "description": "Settings header — auto-update settings"
@@ -746,7 +625,6 @@
     "message": "Failed to load changelog.",
     "description": "Placeholder when the changelog request fails"
   },
-
   "settings.mac_permissions.title": {
     "message": "macOS Permissions",
     "description": "Settings header — macOS-only privacy permissions"
@@ -759,7 +637,6 @@
     "message": "After toggling a permission, you may need to restart Kage for the change to take effect.",
     "description": "Footer note shown beneath the permission cards"
   },
-
   "settings.hotkey.title": {
     "message": "Hotkey & Shortcuts",
     "description": "Settings header — global hotkey + shortcut reference"
@@ -864,7 +741,6 @@
     "message": "All",
     "description": "Shortcut scope label — applies in any context"
   },
-
   "settings.store.title": {
     "message": "Extension Store",
     "description": "Settings header — extension store configuration"
@@ -937,7 +813,6 @@
     "message": "Enable/disable this source",
     "description": "Tooltip on the per-source enabled toggle"
   },
-
   "settings.integration.title": {
     "message": "System Integration",
     "description": "Settings header — system integration toggles"
@@ -1026,7 +901,6 @@
     "message": "not available",
     "description": "Placeholder when a directory can't be resolved on this system"
   },
-
   "floating.expand_chat_title": {
     "message": "Open full chat",
     "description": "Tooltip on the expand-to-chat button"
@@ -1079,7 +953,6 @@
     "message": "No internet — local features still work",
     "description": "Banner shown when network connectivity is lost"
   },
-
   "permission.dialog.title": {
     "message": "Tool Permission Required",
     "description": "Header on the tool permission modal"
@@ -1120,7 +993,6 @@
     "message": "Always allow",
     "description": "Persistent allow option in the allow dropdown"
   },
-
   "inline_assist.window_title": {
     "message": "Inline Assist",
     "description": "Window title for the inline-assist popup"
@@ -1137,7 +1009,6 @@
     "message": "Thinking…",
     "description": "Status bar text while the agent is generating an inline-assist reply"
   },
-
   "settings.model.title": {
     "message": "Model",
     "description": "Settings header — model selection"
@@ -1170,7 +1041,6 @@
     "message": "Off",
     "description": "Slider value display when threshold is 0"
   },
-
   "chat.window_title": {
     "message": "Kage",
     "description": "Window title for the chat window"
@@ -1399,7 +1269,6 @@
     "message": "Export failed: {message}",
     "description": "alert() shown when chat export to markdown fails"
   },
-
   "settings.timer.title": {
     "message": "Timer & Stopwatch",
     "description": "Settings header for timer/stopwatch module"
@@ -1496,7 +1365,6 @@
     "message": "Automatically show the Launcher if it is hidden when the timer completes.",
     "description": "Helper for show-Launcher toggle"
   },
-
   "settings.notifications.title": {
     "message": "Notifications",
     "description": "Settings header for notifications module"
@@ -1545,7 +1413,6 @@
     "message": "Notification duration must be between 1 and 30 seconds",
     "description": "Validation error: notification duration out of range"
   },
-
   "settings.math.title": {
     "message": "Math",
     "description": "Settings header for math calculator module"
@@ -1590,7 +1457,6 @@
     "message": "Math precision must be between 0 and 15",
     "description": "Validation error: math precision out of range"
   },
-
   "settings.devtools.title": {
     "message": "Developer Tools",
     "description": "Settings header for developer-tools module"
@@ -1651,7 +1517,6 @@
     "message": "Paste minified JSON to see it pretty-printed.",
     "description": "Helper for JSON toggle"
   },
-
   "settings.connection.validate.no_active": {
     "message": "No active connection selected.",
     "description": "Validation error when no active connection is configured"
@@ -1836,7 +1701,6 @@
     "message": "(no command)",
     "description": "Detail text shown for a local connection with no spawn command"
   },
-
   "settings.connection.ollama.subtitle.new": {
     "message": "New Ollama agent",
     "description": "Subtitle in the Ollama edit header for a new agent"
@@ -1961,7 +1825,6 @@
     "message": "—",
     "description": "Default option in the empty model dropdown"
   },
-
   "settings.mcp.title": {
     "message": "MCP Servers",
     "description": "Settings header — MCP server management"
@@ -2070,7 +1933,6 @@
     "message": "Name and command are required.",
     "description": "alert() shown when the user tries to save without name or command"
   },
-
   "settings.tool_permissions.title": {
     "message": "Agent Tools",
     "description": "Settings header — agent tool permissions"
@@ -2255,7 +2117,6 @@
     "message": "Remove",
     "description": "Tooltip on the per-tool remove button"
   },
-
   "settings.shortcuts.title": {
     "message": "Commands & Prompts",
     "description": "Settings header — quick commands & saved prompts"
@@ -2608,7 +2469,6 @@
     "message": "Delete this shortcut?",
     "description": "Confirmation dialog before deleting a shortcut"
   },
-
   "settings.about.title": {
     "message": "About Kage",
     "description": "Settings header — about/version page"
@@ -2781,7 +2641,6 @@
     "message": "No log entries matching filters",
     "description": "Empty state when filters exclude every entry"
   },
-
   "settings.speech.title": {
     "message": "Speech",
     "description": "Settings header — speech-input and read-back"
@@ -3032,7 +2891,7 @@
   },
   "settings.speech.pocket.test_btn": {
     "message": "🔊 Test Voice",
-    "description": "Test button"
+    "description": "Default label for the Test Voice button"
   },
   "settings.speech.pocket.test_generating": {
     "message": "⏳ Generating…",
@@ -3046,7 +2905,6 @@
     "message": "TCP port the Pocket TTS HTTP server listens on. Restart the server after changing.",
     "description": "Helper for the port field"
   },
-
   "settings.automations.title": {
     "message": "Automations",
     "description": "Settings header — automations / macro chains"
@@ -3107,7 +2965,6 @@
     "message": "🖱️ Manual",
     "description": "Trigger badge — manual only"
   },
-
   "settings.assistant.learn.label": {
     "message": "Learn my preferences",
     "description": "Toggle: enable auto-steering"
@@ -3144,7 +3001,6 @@
     "message": "Manage App Modes",
     "description": "Button to open the app-modes editor"
   },
-
   "context_menu.cut": {
     "message": "Cut",
     "description": "Context menu — cut selected text"
@@ -3169,7 +3025,6 @@
     "message": "Inspect",
     "description": "Context menu — open devtools (dev mode only)"
   },
-
   "store.window_title": {
     "message": "Extension Store",
     "description": "Title bar of the extension store window"
@@ -3206,64 +3061,18 @@
     "message": "Installed only",
     "description": "Filter button — show only installed extensions"
   },
-
-  "common.ok": {
-    "message": "OK",
-    "description": "Generic acknowledgement button"
-  },
   "common.cancel": {
     "message": "Cancel",
     "description": "Generic cancel button"
-  },
-  "common.save": {
-    "message": "Save",
-    "description": "Generic save button"
-  },
-  "common.delete": {
-    "message": "Delete",
-    "description": "Generic delete button"
-  },
-  "common.confirm": {
-    "message": "Confirm",
-    "description": "Generic confirmation button"
-  },
-  "common.copy": {
-    "message": "Copy",
-    "description": "Generic copy button"
-  },
-  "common.copied_to_clipboard": {
-    "message": "Copied to clipboard",
-    "description": "Toast shown after a copy action"
-  },
-  "common.unknown_error": {
-    "message": "An unknown error occurred",
-    "description": "Generic fallback when no specific error is available"
-  },
-  "common.loading": {
-    "message": "Loading…",
-    "description": "Generic loading indicator label"
-  },
-  "common.next": {
-    "message": "Next",
-    "description": "Generic Next button (wizard navigation, etc.)"
   },
   "common.back": {
     "message": "Back",
     "description": "Generic Back button"
   },
-  "common.finish": {
-    "message": "Finish",
-    "description": "Final-step button on a wizard"
-  },
-  "common.skip": {
-    "message": "Skip",
-    "description": "Generic skip-this-step button"
-  },
   "common.get_started": {
     "message": "Get Started",
     "description": "Welcome-screen primary call-to-action"
   },
-
   "welcome.subtitle": {
     "message": "Your AI-powered desktop companion",
     "description": "Welcome step 1 subtitle"
@@ -3276,7 +3085,6 @@
     "message": "Launching Kage…",
     "description": "Overlay shown after the user clicks Finish, while the app boots"
   },
-
   "welcome.agent.title": {
     "message": "Agent",
     "description": "Step 2 header — agent connection setup"
@@ -3301,7 +3109,6 @@
     "message": "Configure the connection manually. You can change this later from Settings → Agents.",
     "description": "Body shown above the manual connection editor"
   },
-
   "welcome.preferences.title": {
     "message": "Preferences",
     "description": "Step 3 header"
@@ -3346,7 +3153,6 @@
     "message": "Kage will build a profile of your preferences from conversations. You can view and edit this anytime in Settings. This data stays on your machine and is only shared with your chosen agent to improve responses.",
     "description": "Helper text under the personalization toggle"
   },
-
   "welcome.extensions.title": {
     "message": "Extensions",
     "description": "Step 4 header"
@@ -3359,7 +3165,6 @@
     "message": "Loading available extensions…",
     "description": "Placeholder while the store catalog loads"
   },
-
   "welcome.privacy.title": {
     "message": "Help improve Kage",
     "description": "Step 5 header"
@@ -3416,7 +3221,6 @@
     "message": "Read the full <a href=\"#\" id=\"wOpenPrivacyPolicy\">privacy policy</a> for details.",
     "description": "Footer linking to full privacy policy (HTML allowed)"
   },
-
   "welcome.macos.title": {
     "message": "macOS Permissions",
     "description": "macOS-only step header"
@@ -3433,7 +3237,6 @@
     "message": "It is fine to skip this step — you can revisit it any time from <strong>Settings → macOS Permissions</strong>.",
     "description": "Footer note on the macOS permissions step (HTML allowed)"
   },
-
   "shared.agent.picker.aria_label": {
     "message": "Add an agent",
     "description": "ARIA label for the agent-type picker dialog"
@@ -3634,7 +3437,6 @@
     "message": "Auto-detect",
     "description": "Placeholder for the sessions directory input"
   },
-
   "command.settings.description": {
     "message": "Open settings window",
     "description": ">settings command description"
@@ -3759,7 +3561,6 @@
     "message": "Command executed",
     "description": "Default response when a slash command succeeds with no message"
   },
-
   "welcome.extensions.intro_html": {
     "message": "Kage is built to be lean and fast. Extensions add functionality on top — pick the ones you want to start with. Each extension shows what access it needs; you can always install more, or remove grants, later from the <strong>Extension Store</strong>.",
     "description": "Intro paragraph above the extensions picker (HTML allowed)"
@@ -3796,7 +3597,6 @@
     "message": "This extension requests no capabilities",
     "description": "Tooltip on the no-permissions capability badge"
   },
-
   "errors.agents.package_not_allowlisted": {
     "message": "package not allowlisted for install: {package}",
     "description": "Returned when install_acp_wrapper is asked to install a package outside the allowlist"
@@ -3877,34 +3677,114 @@
     "message": "Failed to parse: {message}",
     "description": "alert() shown when the chosen import file fails to JSON-parse"
   },
-
-  "settings.manager.cap.clipboard.label": { "message": "Clipboard", "description": "Capability badge label" },
-  "settings.manager.cap.clipboard.desc": { "message": "Read clipboard contents and history", "description": "Capability badge tooltip" },
-  "settings.manager.cap.filesystem.label": { "message": "Filesystem", "description": "Capability badge label" },
-  "settings.manager.cap.filesystem.desc": { "message": "Scan folders and search files", "description": "Capability badge tooltip" },
-  "settings.manager.cap.window.label": { "message": "Window", "description": "Capability badge label" },
-  "settings.manager.cap.window.desc": { "message": "Resize and reposition Kage windows", "description": "Capability badge tooltip" },
-  "settings.manager.cap.windows.label": { "message": "Open windows", "description": "Capability badge label" },
-  "settings.manager.cap.windows.desc": { "message": "List and focus other apps' windows", "description": "Capability badge tooltip" },
-  "settings.manager.cap.notifications.label": { "message": "Notifications", "description": "Capability badge label" },
-  "settings.manager.cap.notifications.desc": { "message": "Show system notifications", "description": "Capability badge tooltip" },
-  "settings.manager.cap.calendar.label": { "message": "Calendar", "description": "Capability badge label" },
-  "settings.manager.cap.calendar.desc": { "message": "Read calendar events", "description": "Capability badge tooltip" },
-  "settings.manager.cap.session.label": { "message": "Sessions", "description": "Capability badge label" },
-  "settings.manager.cap.session.desc": { "message": "List and read chat sessions", "description": "Capability badge tooltip" },
-  "settings.manager.cap.agent.label": { "message": "Agent", "description": "Capability badge label" },
-  "settings.manager.cap.agent.desc": { "message": "Send messages to the AI agent", "description": "Capability badge tooltip" },
-  "settings.manager.cap.activity.label": { "message": "Activity", "description": "Capability badge label" },
-  "settings.manager.cap.activity.desc": { "message": "Read app usage statistics", "description": "Capability badge tooltip" },
-  "settings.manager.cap.signals.desc": { "message": "Emit signals that can trigger automations", "description": "Capability badge tooltip for the signals capability" },
-  "settings.manager.cap.tts.label": { "message": "TTS", "description": "Capability badge label" },
-  "settings.manager.cap.tts.desc": { "message": "Use text-to-speech", "description": "Capability badge tooltip" },
-  "settings.manager.cap.storage.label": { "message": "Storage", "description": "Capability badge label" },
-  "settings.manager.cap.storage.desc": { "message": "Read/write its own sandboxed data and config", "description": "Capability badge tooltip" },
-  "settings.manager.cap.shell.label": { "message": "Shell", "description": "Capability badge label" },
-  "settings.manager.cap.shell.desc": { "message": "Open URLs, paths, and apps externally", "description": "Capability badge tooltip" },
-  "settings.manager.cap.automation.label": { "message": "Automation", "description": "Capability badge label" },
-  "settings.manager.cap.automation.desc": { "message": "Emit signals that can trigger automations", "description": "Capability badge tooltip" },
+  "settings.manager.cap.clipboard.label": {
+    "message": "Clipboard",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.clipboard.desc": {
+    "message": "Read clipboard contents and history",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.filesystem.label": {
+    "message": "Filesystem",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.filesystem.desc": {
+    "message": "Scan folders and search files",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.window.label": {
+    "message": "Window",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.window.desc": {
+    "message": "Resize and reposition Kage windows",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.windows.label": {
+    "message": "Open windows",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.windows.desc": {
+    "message": "List and focus other apps' windows",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.notifications.label": {
+    "message": "Notifications",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.notifications.desc": {
+    "message": "Show system notifications",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.calendar.label": {
+    "message": "Calendar",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.calendar.desc": {
+    "message": "Read calendar events",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.session.label": {
+    "message": "Sessions",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.session.desc": {
+    "message": "List and read chat sessions",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.agent.label": {
+    "message": "Agent",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.agent.desc": {
+    "message": "Send messages to the AI agent",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.activity.label": {
+    "message": "Activity",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.activity.desc": {
+    "message": "Read app usage statistics",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.signals.desc": {
+    "message": "Emit signals that can trigger automations",
+    "description": "Capability badge tooltip for the signals capability"
+  },
+  "settings.manager.cap.tts.label": {
+    "message": "TTS",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.tts.desc": {
+    "message": "Use text-to-speech",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.storage.label": {
+    "message": "Storage",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.storage.desc": {
+    "message": "Read/write its own sandboxed data and config",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.shell.label": {
+    "message": "Shell",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.shell.desc": {
+    "message": "Open URLs, paths, and apps externally",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.automation.label": {
+    "message": "Automation",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.automation.desc": {
+    "message": "Emit signals that can trigger automations",
+    "description": "Capability badge tooltip"
+  },
   "settings.manager.cap.legacy_warning": {
     "message": "⚠ Extension manifest does not declare 'permissions' — running with default set. Ask the author to specify.",
     "description": "Banner shown when an extension manifest predates the permissions field"
@@ -3917,7 +3797,10 @@
     "message": "[{title}] {error}",
     "description": "Status banner format combining a module title with its validation error"
   },
-  "settings.manager.cap.unknown.desc": { "message": "Unknown capability", "description": "Fallback description for unrecognised capability codes" },
+  "settings.manager.cap.unknown.desc": {
+    "message": "Unknown capability",
+    "description": "Fallback description for unrecognised capability codes"
+  },
   "settings.manager.cap.none": {
     "message": "🔒 No capabilities",
     "description": "Capabilities row label when an extension requests none"
@@ -3970,12 +3853,10 @@
     "message": "Unknown error",
     "description": "Fallback when an error has no message"
   },
-
   "store.uninstall.confirm": {
     "message": "Uninstall \"{id}\"?",
     "description": "confirm() prompt before uninstalling an extension"
   },
-
   "settings.assistant.translate.description": {
     "message": "Default target language for the Translate action. Leave empty to use the system default ({language}).",
     "description": "Helper text under the Translate-action target language input"
@@ -3992,7 +3873,6 @@
     "message": "{active} active, {disabled} disabled.",
     "description": "Summary line when only some app modes are enabled"
   },
-
   "settings.shortcuts.script_ai.empty_prompt": {
     "message": "Please enter a description.",
     "description": "Inline error when the user clicks Generate with an empty prompt"
@@ -4025,12 +3905,10 @@
     "message": "Error",
     "description": "errLabel passed when script generation fails"
   },
-
   "shared.attachments.limit_toast": {
     "message": "Limit of {max} attachments reached",
     "description": "Toast shown when the user tries to attach more than the max"
   },
-
   "settings.assistant.app_modes.add_suggested.title": {
     "message": "Drop in a curated set of starter rules — duplicates skipped.",
     "description": "Tooltip on the Add suggested button"
@@ -4047,7 +3925,6 @@
     "message": "Enable/disable",
     "description": "Tooltip on the per-automation enable checkbox"
   },
-
   "shared.markdown.close.title": {
     "message": "Close",
     "description": "Tooltip on close buttons inside markdown previews (e.g. lightbox)"
@@ -4072,7 +3949,6 @@
     "message": "Speech settings",
     "description": "Tooltip on the TTS bar settings button"
   },
-
   "chat.send_btn.aria.stop": {
     "message": "Stop generating",
     "description": "aria-label on the send button when generation is in flight"
@@ -4125,11 +4001,6 @@
     "message": "Saved!",
     "description": "Save button label briefly after saving succeeds"
   },
-
-  "settings.speech.pocket.test_btn": {
-    "message": "🔊 Test Voice",
-    "description": "Default label for the Test Voice button"
-  },
   "settings.speech.pocket.test.stopped": {
     "message": "Stopped",
     "description": "Status label after the user stops a Test Voice playback"
@@ -4154,7 +4025,6 @@
     "message": "Add",
     "description": "Default Add Voice button label"
   },
-
   "shared.prompt_form.default_title": {
     "message": "Prompt",
     "description": "Fallback title for a Quick-Command prompt form when the shortcut has no name"
@@ -4179,34 +4049,102 @@
     "message": "Cancel",
     "description": "Cancel button on the prompt form"
   },
-
-  "settings.automations.transform.uppercase": { "message": "UPPERCASE", "description": "Transform option: uppercase" },
-  "settings.automations.transform.lowercase": { "message": "lowercase", "description": "Transform option: lowercase" },
-  "settings.automations.transform.trim": { "message": "Trim whitespace", "description": "Transform option" },
-  "settings.automations.transform.sort_lines": { "message": "Sort lines", "description": "Transform option" },
-  "settings.automations.transform.reverse_lines": { "message": "Reverse lines", "description": "Transform option" },
-  "settings.automations.transform.remove_blank_lines": { "message": "Remove blank lines", "description": "Transform option" },
-  "settings.automations.transform.unique_lines": { "message": "Unique lines", "description": "Transform option" },
-  "settings.automations.transform.number_lines": { "message": "Number lines", "description": "Transform option" },
-  "settings.automations.transform.count_words": { "message": "Count words", "description": "Transform option" },
-  "settings.automations.transform.count_lines": { "message": "Count lines", "description": "Transform option" },
-  "settings.automations.transform.count_chars": { "message": "Count characters", "description": "Transform option" },
-  "settings.automations.transform.base64_encode": { "message": "Base64 encode", "description": "Transform option" },
-  "settings.automations.transform.base64_decode": { "message": "Base64 decode", "description": "Transform option" },
-
-  "settings.automations.schedule.hourly": { "message": "🕐 Hourly", "description": "Schedule mode option" },
-  "settings.automations.schedule.daily": { "message": "📅 Daily", "description": "Schedule mode option" },
-  "settings.automations.schedule.monthly": { "message": "🗓️ Monthly", "description": "Schedule mode option" },
-  "settings.automations.schedule.yearly": { "message": "📆 Yearly", "description": "Schedule mode option" },
-
-  "settings.automations.day.mon": { "message": "Mon", "description": "Day of week abbreviation" },
-  "settings.automations.day.tue": { "message": "Tue", "description": "Day of week abbreviation" },
-  "settings.automations.day.wed": { "message": "Wed", "description": "Day of week abbreviation" },
-  "settings.automations.day.thu": { "message": "Thu", "description": "Day of week abbreviation" },
-  "settings.automations.day.fri": { "message": "Fri", "description": "Day of week abbreviation" },
-  "settings.automations.day.sat": { "message": "Sat", "description": "Day of week abbreviation" },
-  "settings.automations.day.sun": { "message": "Sun", "description": "Day of week abbreviation" },
-
+  "settings.automations.transform.uppercase": {
+    "message": "UPPERCASE",
+    "description": "Transform option: uppercase"
+  },
+  "settings.automations.transform.lowercase": {
+    "message": "lowercase",
+    "description": "Transform option: lowercase"
+  },
+  "settings.automations.transform.trim": {
+    "message": "Trim whitespace",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.sort_lines": {
+    "message": "Sort lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.reverse_lines": {
+    "message": "Reverse lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.remove_blank_lines": {
+    "message": "Remove blank lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.unique_lines": {
+    "message": "Unique lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.number_lines": {
+    "message": "Number lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.count_words": {
+    "message": "Count words",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.count_lines": {
+    "message": "Count lines",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.count_chars": {
+    "message": "Count characters",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.base64_encode": {
+    "message": "Base64 encode",
+    "description": "Transform option"
+  },
+  "settings.automations.transform.base64_decode": {
+    "message": "Base64 decode",
+    "description": "Transform option"
+  },
+  "settings.automations.schedule.hourly": {
+    "message": "🕐 Hourly",
+    "description": "Schedule mode option"
+  },
+  "settings.automations.schedule.daily": {
+    "message": "📅 Daily",
+    "description": "Schedule mode option"
+  },
+  "settings.automations.schedule.monthly": {
+    "message": "🗓️ Monthly",
+    "description": "Schedule mode option"
+  },
+  "settings.automations.schedule.yearly": {
+    "message": "📆 Yearly",
+    "description": "Schedule mode option"
+  },
+  "settings.automations.day.mon": {
+    "message": "Mon",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.tue": {
+    "message": "Tue",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.wed": {
+    "message": "Wed",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.thu": {
+    "message": "Thu",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.fri": {
+    "message": "Fri",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.sat": {
+    "message": "Sat",
+    "description": "Day of week abbreviation"
+  },
+  "settings.automations.day.sun": {
+    "message": "Sun",
+    "description": "Day of week abbreviation"
+  },
   "inline_assist.suggestion.summarize": {
     "message": "Summarize page",
     "description": "Inline-assist suggestion: ask the agent to summarize the visible page"
@@ -4215,7 +4153,6 @@
     "message": "Help with this app",
     "description": "Inline-assist suggestion: ask the agent to help with the focused app"
   },
-
   "settings.about.dialog.import.title": {
     "message": "Import backup",
     "description": "Title of the import-backup confirmation dialog"
@@ -4276,7 +4213,6 @@
     "message": "Open dialog cancelled: {message}",
     "description": "Status when the OS open dialog throws"
   },
-
   "settings.assistant.quick_actions.section": {
     "message": "Quick Actions",
     "description": "Section heading: quick actions"
@@ -4469,12 +4405,10 @@
     "message": "Unknown error",
     "description": "Fallback when an error has no message"
   },
-
   "chat.compaction.completed": {
     "message": "Context compacted successfully",
     "description": "Notice shown after a context compaction completes"
   },
-
   "settings.assistant.app_modes.suggest.none_added": {
     "message": "All suggested apps already have rules — nothing to add.",
     "description": "Status when user clicks Add Suggested but everything is already present"
@@ -4507,7 +4441,6 @@
     "message": "Failed to save: {message}",
     "description": "Status when an App Modes save fails"
   },
-
   "settings.automations.script.context_hint": {
     "message": "Return a string.",
     "description": "Hint shown above the script-step JS editor"
@@ -4528,7 +4461,6 @@
     "message": "At least one step is required.",
     "description": "Validation error when an automation has zero steps"
   },
-
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",
     "description": "Tooltip on the hotkey picker's keycap display"
@@ -4561,7 +4493,6 @@
     "message": "Failed to register: {message}",
     "description": "Fallback error when hotkey registration fails for an unrecognised reason"
   },
-
   "ext_perm.empty": {
     "message": "🔒 This extension does not request any capabilities. It cannot access your clipboard, files, calendar, or the AI agent.",
     "description": "Shown when an extension requests no permissions"
@@ -4610,7 +4541,6 @@
     "message": "new",
     "description": "Badge on a newly-requested capability"
   },
-
   "floating.banner.update_available": {
     "message": "Kage v{version} is available!",
     "description": "Banner text shown when an app update is available"
@@ -4895,7 +4825,6 @@
     "message": "{tool}: {title}",
     "description": "Body of the tool permission notification, with tool name and description"
   },
-
   "chat.placeholder.type_message": {
     "message": "Type your message...",
     "description": "Placeholder shown in the chat input"
@@ -4992,7 +4921,6 @@
     "message": "Unknown",
     "description": "Fallback model display name when none is provided"
   },
-
   "shared.permission.unknown_tool": {
     "message": "Unknown Tool",
     "description": "Fallback shown when a permission request has no tool title"

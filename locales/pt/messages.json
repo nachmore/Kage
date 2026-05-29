@@ -5,12 +5,6 @@
     "rtl": false,
     "machine_translated": true
   },
-  "errors.connection.lost": {
-    "message": "Conexão perdida: {reason}",
-    "description": "ACP transport dropped while a request was in flight",
-    "_machine_translated": true,
-    "_source_hash": "f52ccc95c7e68b60"
-  },
   "errors.connection.not_connected": {
     "message": "Não conectado",
     "description": "User attempted an operation that requires an active ACP connection",
@@ -23,53 +17,17 @@
     "_machine_translated": true,
     "_source_hash": "295f21a439e81f65"
   },
-  "errors.timeout.generic": {
-    "message": "Tempo esgotado aguardando resposta",
-    "description": "ACP request exceeded the configured timeout",
-    "_machine_translated": true,
-    "_source_hash": "7a5c6c0dfccfc3d8"
-  },
-  "errors.session.corrupted": {
-    "message": "A sessão está corrompida: {reason}",
-    "description": "Session file or in-memory state failed validation",
-    "_machine_translated": true,
-    "_source_hash": "bea6e5b8369f63f2"
-  },
-  "errors.session.create_failed": {
-    "message": "Não foi possível criar a sessão: {reason}",
-    "description": "Initial session creation against the agent backend failed",
-    "_machine_translated": true,
-    "_source_hash": "33acf68c65c4f736"
-  },
   "errors.session.load_failed": {
     "message": "Não foi possível carregar a sessão: {reason}",
     "description": "Resuming a stored session against the agent backend failed",
     "_machine_translated": true,
     "_source_hash": "f790b193526fc833"
   },
-  "errors.image.unsupported": {
-    "message": "Este modelo não suporta anexos de imagem",
-    "description": "User attached an image to a model whose backend can't accept them",
-    "_machine_translated": true,
-    "_source_hash": "1d4c95dc1c5bc705"
-  },
   "errors.lock.acquire_failed": {
     "message": "Não foi possível adquirir o bloqueio interno",
     "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic",
     "_machine_translated": true,
     "_source_hash": "5a9918e028c64a70"
-  },
-  "errors.serialize.failed": {
-    "message": "Não foi possível serializar os dados: {reason}",
-    "description": "JSON or other serialization failed at a command boundary",
-    "_machine_translated": true,
-    "_source_hash": "8281217df264ca48"
-  },
-  "errors.rate_limited.generic": {
-    "message": "Limite de requisições excedido. Aguarde e tente novamente.",
-    "description": "Upstream agent or model API returned a rate-limit error",
-    "_machine_translated": true,
-    "_source_hash": "fe01dcfb5c9c2b8c"
   },
   "errors.permission.response_failed": {
     "message": "Não foi possível enviar a resposta de permissão: {reason}",
@@ -101,30 +59,6 @@
     "_machine_translated": true,
     "_source_hash": "7ba05bed2163286c"
   },
-  "errors.transport.tcp_in_local_mode": {
-    "message": "Não é possível usar o transporte TCP no modo local",
-    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested",
-    "_machine_translated": true,
-    "_source_hash": "4110a6c3a160e092"
-  },
-  "errors.transport.empty_spawn_command": {
-    "message": "O comando de inicialização está vazio",
-    "description": "Local connection has no command to launch",
-    "_machine_translated": true,
-    "_source_hash": "7dec1ea1d3970f89"
-  },
-  "errors.transport.no_write_handle": {
-    "message": "A conexão não permite escrita",
-    "description": "Attempted to send on a half-closed transport",
-    "_machine_translated": true,
-    "_source_hash": "cf4b1b87eaef7167"
-  },
-  "errors.unknown": {
-    "message": "Erro desconhecido",
-    "description": "Fallback when an error has no message at all",
-    "_machine_translated": true,
-    "_source_hash": "936185c80dd2f5bf"
-  },
   "errors.passthrough": {
     "message": "{message}",
     "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim.",
@@ -136,12 +70,6 @@
     "description": "Settings persistence to disk failed (permission, disk full, etc.)",
     "_machine_translated": true,
     "_source_hash": "3b06cfa49431fc65"
-  },
-  "errors.config.load_failed": {
-    "message": "Não foi possível carregar as configurações: {reason}",
-    "description": "Reading config.json from disk failed",
-    "_machine_translated": true,
-    "_source_hash": "795d13ab985ff3f9"
   },
   "errors.extension.invalid_id": {
     "message": "ID de extensão inválido: {reason}",
@@ -293,59 +221,11 @@
     "_machine_translated": true,
     "_source_hash": "7db437e8e9ea0ff3"
   },
-  "common.ok": {
-    "message": "OK",
-    "description": "Generic acknowledgement button",
-    "_machine_translated": true,
-    "_source_hash": "d064bc76429f1e4b"
-  },
   "common.cancel": {
     "message": "Cancelar",
     "description": "Generic cancel button",
     "_machine_translated": true,
     "_source_hash": "f7ac3b34f9386f35"
-  },
-  "common.save": {
-    "message": "Salvar",
-    "description": "Generic save button",
-    "_machine_translated": true,
-    "_source_hash": "5d77a8c34bce200d"
-  },
-  "common.delete": {
-    "message": "Excluir",
-    "description": "Generic delete button",
-    "_machine_translated": true,
-    "_source_hash": "9083bd75239570d8"
-  },
-  "common.confirm": {
-    "message": "Confirmar",
-    "description": "Generic confirmation button",
-    "_machine_translated": true,
-    "_source_hash": "3799d174b5f7073b"
-  },
-  "common.copy": {
-    "message": "Copiar",
-    "description": "Generic copy button",
-    "_machine_translated": true,
-    "_source_hash": "83a9e1e531450a75"
-  },
-  "common.copied_to_clipboard": {
-    "message": "Copiado para a área de transferência",
-    "description": "Toast shown after a copy action",
-    "_machine_translated": true,
-    "_source_hash": "b632c10267fc6164"
-  },
-  "common.unknown_error": {
-    "message": "Ocorreu um erro desconhecido",
-    "description": "Generic fallback when no specific error is available",
-    "_machine_translated": true,
-    "_source_hash": "d75d4c3d358f4f4a"
-  },
-  "common.loading": {
-    "message": "Carregando…",
-    "description": "Generic loading indicator label",
-    "_machine_translated": true,
-    "_source_hash": "f4206248605fb6be"
   },
   "errors.permission.dismiss_failed": {
     "message": "Não foi possível dispensar o pedido de permissão: {reason}",
@@ -401,12 +281,6 @@
     "_machine_translated": true,
     "_source_hash": "fc880e6aeb3fa360"
   },
-  "errors.session.list_failed": {
-    "message": "Não foi possível listar as sessões: {reason}",
-    "description": "Reading the per-agent sessions directory failed",
-    "_machine_translated": true,
-    "_source_hash": "82aec1ca4d3282f5"
-  },
   "errors.session.read_failed": {
     "message": "Não foi possível ler o ficheiro de sessão: {reason}",
     "description": "Reading a single session file from disk failed",
@@ -419,12 +293,6 @@
     "_machine_translated": true,
     "_source_hash": "25247991cc6076ae"
   },
-  "errors.session.title_failed": {
-    "message": "Não foi possível atualizar o título da sessão: {reason}",
-    "description": "Writing a renamed title back to the session file failed",
-    "_machine_translated": true,
-    "_source_hash": "157636f985139b42"
-  },
   "errors.session.delete_failed": {
     "message": "Não foi possível eliminar a sessão: {reason}",
     "description": "Removing the session file from disk failed",
@@ -436,12 +304,6 @@
     "description": "Looked-up session id doesn't match any file on disk",
     "_machine_translated": true,
     "_source_hash": "5d89339ac7867fe0"
-  },
-  "errors.session.invalid_id": {
-    "message": "ID de sessão inválido: {reason}",
-    "description": "Session id failed validation (path-injection guard)",
-    "_machine_translated": true,
-    "_source_hash": "b5781061e36d9d43"
   },
   "errors.session.unknown_provider": {
     "message": "Fornecedor de sessões de agente desconhecido: {provider}",
@@ -467,12 +329,6 @@
     "_machine_translated": true,
     "_source_hash": "176e91c20ddf3ac4"
   },
-  "errors.window.title_failed": {
-    "message": "Não foi possível definir o título da janela: {reason}",
-    "description": "Window title update failed",
-    "_machine_translated": true,
-    "_source_hash": "0a53b14693d5fb22"
-  },
   "errors.window.not_found": {
     "message": "Janela não encontrada: {label}",
     "description": "No window registered under the given label",
@@ -491,29 +347,11 @@
     "_machine_translated": true,
     "_source_hash": "79691ab3410b4fff"
   },
-  "errors.tool.execute_failed": {
-    "message": "Falha na execução da ferramenta: {reason}",
-    "description": "Tool invocation against the agent failed",
-    "_machine_translated": true,
-    "_source_hash": "91784eacc7c04266"
-  },
-  "errors.tool.cancelled": {
-    "message": "Execução da ferramenta cancelada",
-    "description": "User cancelled an in-flight tool call",
-    "_machine_translated": true,
-    "_source_hash": "f9b199243e5372fb"
-  },
   "errors.fs.read_failed": {
     "message": "Não foi possível ler o ficheiro: {reason}",
     "description": "Filesystem read operation failed",
     "_machine_translated": true,
     "_source_hash": "dee583d20cc98085"
-  },
-  "errors.fs.write_failed": {
-    "message": "Não foi possível escrever o ficheiro: {reason}",
-    "description": "Filesystem write operation failed",
-    "_machine_translated": true,
-    "_source_hash": "a3d00a60fe3f46e0"
   },
   "errors.fs.path_invalid": {
     "message": "Caminho inválido: {reason}",
@@ -521,83 +359,11 @@
     "_machine_translated": true,
     "_source_hash": "3161b7366b7d19b2"
   },
-  "errors.preset.unknown": {
-    "message": "Predefinição de agente desconhecida: {preset}",
-    "description": "Agent preset id doesn't match any known preset",
-    "_machine_translated": true,
-    "_source_hash": "d7ffdbd2326156f6"
-  },
-  "errors.preset.locator_failed": {
-    "message": "Não foi possível localizar o agente: {reason}",
-    "description": "Preset locator (which/where lookup) failed to find the binary",
-    "_machine_translated": true,
-    "_source_hash": "93ea61cbcff4670d"
-  },
-  "errors.preset.spawn_failed": {
-    "message": "Não foi possível iniciar o agente: {reason}",
-    "description": "Spawning the agent process failed",
-    "_machine_translated": true,
-    "_source_hash": "7103dc5cac8dbdff"
-  },
-  "errors.steering.update_failed": {
-    "message": "Não foi possível atualizar o documento de orientação: {reason}",
-    "description": "Writing or syncing the auto-steering markdown failed",
-    "_machine_translated": true,
-    "_source_hash": "0f8cbe979edb4d5a"
-  },
-  "errors.shortcut.invalid": {
-    "message": "Atalho inválido: {reason}",
-    "description": "Hotkey string failed validation",
-    "_machine_translated": true,
-    "_source_hash": "c0ca434aef03a546"
-  },
-  "errors.shortcut.register_failed": {
-    "message": "Não foi possível registar o atalho {shortcut}: {reason}",
-    "description": "Global hotkey registration failed (already taken, OS denial, etc.)",
-    "_machine_translated": true,
-    "_source_hash": "897c939180743b1f"
-  },
-  "errors.update.check_failed": {
-    "message": "Não foi possível procurar atualizações: {reason}",
-    "description": "Updater plugin call failed",
-    "_machine_translated": true,
-    "_source_hash": "d201413b0a2b2aad"
-  },
-  "errors.update.download_failed": {
-    "message": "Não foi possível transferir a atualização: {reason}",
-    "description": "Update download or signature verification failed",
-    "_machine_translated": true,
-    "_source_hash": "a70608aec1a9cd19"
-  },
-  "errors.update.install_failed": {
-    "message": "Não foi possível instalar a atualização: {reason}",
-    "description": "Spawning the platform installer failed",
-    "_machine_translated": true,
-    "_source_hash": "13fde8c85d6a3d56"
-  },
-  "common.next": {
-    "message": "Seguinte",
-    "description": "Generic Next button (wizard navigation, etc.)",
-    "_machine_translated": true,
-    "_source_hash": "d91b7a241c47ca29"
-  },
   "common.back": {
     "message": "Voltar",
     "description": "Generic Back button",
     "_machine_translated": true,
     "_source_hash": "739745f8c06102dd"
-  },
-  "common.finish": {
-    "message": "Concluir",
-    "description": "Final-step button on a wizard",
-    "_machine_translated": true,
-    "_source_hash": "33695be3b79aae96"
-  },
-  "common.skip": {
-    "message": "Ignorar",
-    "description": "Generic skip-this-step button",
-    "_machine_translated": true,
-    "_source_hash": "0cfcc982b509d22f"
   },
   "common.get_started": {
     "message": "Começar",
@@ -7756,5 +7522,17 @@
     "description": "Validation error when an automation has zero steps",
     "_machine_translated": true,
     "_source_hash": "d42a9b7b799ec2f4"
+  },
+  "settings.manager.dialog.restart.now_btn": {
+    "message": "Reiniciar agora",
+    "description": "Button on the post-save restart banner that triggers an immediate restart",
+    "_machine_translated": true,
+    "_source_hash": "898594c20c3bc4dc"
+  },
+  "settings.manager.dialog.restart.later_btn": {
+    "message": "Mais tarde",
+    "description": "Button on the post-save restart banner that dismisses the banner without restarting",
+    "_machine_translated": true,
+    "_source_hash": "6dc710cede77c064"
   }
 }

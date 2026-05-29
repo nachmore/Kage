@@ -10,9 +10,9 @@
 //! Catalog entries look like:
 //!
 //! ```json
-//! "errors.connection.lost": {
-//!   "message": "Connection lost: {reason}",
-//!   "description": "ACP transport dropped"
+//! "errors.passthrough": {
+//!   "message": "{message}",
+//!   "description": "Wrapper for free-form error text from upstream sources"
 //! }
 //! ```
 //!
@@ -433,27 +433,33 @@ mod tests {
         assert_eq!(active_language(), "en");
     }
 
+    // Tests use stable keys that are guaranteed to exist in the EN catalog
+    // for the lifetime of the project: `errors.passthrough` (the wrapper
+    // every free-form AppError routes through) and `settings.about.title`
+    // (a static label). Avoids brittle coupling between the i18n test suite
+    // and the catalog's evolving content.
+
     #[test]
     fn translate_known_key() {
         init(Some("en"));
-        let s = translate("errors.unknown", &[]);
-        assert_eq!(s, "Unknown error");
+        let s = translate("settings.about.title", &[]);
+        assert_eq!(s, "About Kage");
     }
 
     #[test]
     fn translate_with_params() {
         init(Some("en"));
-        let s = translate("errors.connection.lost", &[("reason", "socket closed")]);
-        assert_eq!(s, "Connection lost: socket closed");
+        let s = translate("errors.passthrough", &[("message", "socket closed")]);
+        assert_eq!(s, "socket closed");
     }
 
     #[test]
     fn missing_param_left_literal() {
         init(Some("en"));
-        // Drop the `reason` param on purpose. Output keeps the placeholder so
+        // Drop the `message` param on purpose. Output keeps the placeholder so
         // the bug is visible during dev rather than swallowed.
-        let s = translate("errors.connection.lost", &[]);
-        assert_eq!(s, "Connection lost: {reason}");
+        let s = translate("errors.passthrough", &[]);
+        assert_eq!(s, "{message}");
     }
 
     #[test]
@@ -466,10 +472,10 @@ mod tests {
     #[test]
     fn macro_expands_correctly() {
         init(Some("en"));
-        let s = crate::t!("errors.connection.lost", "reason" => "boom");
-        assert_eq!(s, "Connection lost: boom");
-        let s2 = crate::t!("errors.unknown");
-        assert_eq!(s2, "Unknown error");
+        let s = crate::t!("errors.passthrough", "message" => "boom");
+        assert_eq!(s, "boom");
+        let s2 = crate::t!("settings.about.title");
+        assert_eq!(s2, "About Kage");
     }
 
     #[test]

@@ -83,13 +83,95 @@ HTML_PATTERN = re.compile(
 )
 
 # Keys produced by dynamic call sites — known good, exempt from "is referenced"
-# check. Add a short comment when adding entries here.
+# check. Each entry is either a literal key OR a glob pattern (with `*` as a
+# wildcard at any segment) — useful when a backtick template constructs the
+# key from a runtime value (e.g. `settings.manager.cap.${cap}.label`). Glob
+# patterns must match a key segment exactly (we don't allow partial matches
+# inside a segment) — keeps the rule readable. Add a short comment when
+# adding entries here.
 KNOWN_DYNAMIC_KEYS: set[str] = {
     # All `errors.passthrough` invocations come from AppError::raw and the
     # legacy free-form constructors; the key has no static call site but is
     # the implicit fallback for everything routed through them.
     "errors.passthrough",
+    # Capability badges in settings/manager.js use a backtick template
+    # `settings.manager.cap.${cap}.label` / `.desc` to render the per-cap
+    # label & tooltip, so the static t() regex doesn't see the keys.
+    "settings.manager.cap.*.label",
+    "settings.manager.cap.*.desc",
+    # Automations dropdowns: each TRANSFORM/SCHEDULE/DAY value is rendered
+    # via a template literal `settings.automations.<group>.${value}`.
+    "settings.automations.transform.*",
+    "settings.automations.schedule.*",
+    "settings.automations.day.*",
+    # Steering editor picks title/subtitle/empty-hint/row-placeholder by
+    # ternary on the editor mode (auto vs user); the literal keys are
+    # passed to t() but not in the immediate-call form the regex matches.
+    "settings.assistant.editor.title.*",
+    "settings.assistant.editor.subtitle.*",
+    "settings.assistant.editor.empty_hint.*",
+    "settings.assistant.editor.row_placeholder.*",
+    # Theme-options dropdown selects via `settings.appearance.theme.${value}`.
+    "settings.appearance.theme.*",
+    # Welcome window's extension picker has data-i18n attributes on a few
+    # rows the JS swaps in dynamically. `**` matches both
+    # welcome.extensions.cap.none and welcome.extensions.cap.none.title.
+    "welcome.extensions.cap.**",
+    "welcome.extensions.empty",
+    "welcome.extensions.intro_html",
+    "welcome.extensions.load_failed",
+    "welcome.extensions.section.*",
+    "welcome.extensions.toggle.*",
+    # Native window titles set by Tauri via .setTitle() — sourced through
+    # t() at runtime.
+    "window.title.*",
+    # Fallback dialog string used when Tauri's ask() plugin isn't loaded.
+    # Unused on healthy builds but kept as the safety net.
+    "settings.manager.dialog.restart.fallback",
+    # Internal-only string thrown when a caller passes the wrong base class
+    # to registerModule. Keyed for symmetry with the rest of the manager
+    # surface; not user-displayed in normal flow.
+    "settings.manager.module_must_extend",
+    # Connection settings & restart dialog text — kept for the secondary
+    # confirm-dialog path that hasn't been removed yet (was used before the
+    # inline restart-prompt banner replaced the native ask() dialog). Safe
+    # to drop in a future cleanup pass once the dialog code is gone.
+    "settings.manager.dialog.restart.title",
+    "settings.manager.dialog.restart.message",
+    # Shortcut-list strings that the renderer toggles in/out of the DOM
+    # depending on whether a shortcut list is empty / has duplicates.
+    "settings.shortcuts.alert.duplicate_trigger",
+    "settings.shortcuts.list.delete_confirm",
+    "settings.shortcuts.list.empty",
 }
+
+
+def _key_matches_dynamic(key: str) -> bool:
+    """Return True if `key` matches a literal entry or a glob pattern in
+    KNOWN_DYNAMIC_KEYS. Glob `*` matches a single segment (no dots);
+    `**` at the tail matches zero or more trailing segments.
+    """
+    if key in KNOWN_DYNAMIC_KEYS:
+        return True
+    key_segments = key.split(".")
+    for pat in KNOWN_DYNAMIC_KEYS:
+        if "*" not in pat:
+            continue
+        pat_segments = pat.split(".")
+        # `**` tail wildcard: pattern matches if all preceding segments do
+        # and the key has at least as many segments.
+        if pat_segments and pat_segments[-1] == "**":
+            head = pat_segments[:-1]
+            if len(key_segments) < len(head):
+                continue
+            if all(p == "*" or p == k for p, k in zip(head, key_segments)):
+                return True
+            continue
+        if len(pat_segments) != len(key_segments):
+            continue
+        if all(p == "*" or p == k for p, k in zip(pat_segments, key_segments)):
+            return True
+    return False
 
 
 def load_catalog(path: Path) -> dict:
@@ -244,10 +326,11 @@ def main() -> int:
     missing_in_en = used_keys - en_keys
 
     # KNOWN_DYNAMIC_KEYS counts as "referenced" for the unused-key check
-    # below, but only if the key actually exists in EN. That way the test
-    # repo's stripped-down catalog doesn't get spurious failures from the
-    # set, and a real repo doesn't accumulate stale entries here.
-    used_keys.update(k for k in KNOWN_DYNAMIC_KEYS if k in en_keys)
+    # below. Literal entries are checked directly; glob patterns
+    # (containing `*`) match any key in EN whose segments line up.
+    for k in en_keys:
+        if _key_matches_dynamic(k):
+            used_keys.add(k)
     for k in sorted(missing_in_en):
         sample_files = (
             rust_used.get(k, [])

@@ -69,7 +69,7 @@ pub enum ErrorKind {
 /// Structured error returned by Tauri commands.
 ///
 /// Serializes to JSON like:
-/// `{ "kind": "connection_lost", "key": "errors.connection.lost", "message": "Connection lost: socket closed" }`
+/// `{ "kind": "connection_lost", "key": "errors.connection.not_connected", "message": "Not connected" }`
 ///
 /// `key` is for tests and machine-readable consumers; `message` is what the UI
 /// renders. Both are computed in the active locale at serialisation time.
@@ -226,16 +226,20 @@ mod tests {
 
     #[test]
     fn keyed_serialises_with_localised_message() {
+        // Uses errors.connection.not_connected as a stable key with no
+        // params (the previous test used a key that's been removed from
+        // the catalog). The behaviour we're locking down is the same:
+        // keyed AppError serialises with kind + key + localised message.
         crate::i18n::init(Some("en"));
         let e = AppError::keyed(
             ErrorKind::ConnectionLost,
-            "errors.connection.lost",
-            &[("reason", "socket closed")],
+            "errors.connection.not_connected",
+            &[],
         );
         let json = serde_json::to_value(&e).unwrap();
         assert_eq!(json["kind"], "connection_lost");
-        assert_eq!(json["key"], "errors.connection.lost");
-        assert_eq!(json["message"], "Connection lost: socket closed");
+        assert_eq!(json["key"], "errors.connection.not_connected");
+        assert_eq!(json["message"], "Not connected");
     }
 
     #[test]
