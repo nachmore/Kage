@@ -574,5 +574,863 @@
     "description": "Spawning the platform installer failed",
     "_machine_translated": true,
     "_source_hash": "13fde8c85d6a3d56"
+  },
+  "common.next": {
+    "message": "পরবর্তী",
+    "description": "Generic Next button (wizard navigation, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "d91b7a241c47ca29"
+  },
+  "common.back": {
+    "message": "পেছনে",
+    "description": "Generic Back button",
+    "_machine_translated": true,
+    "_source_hash": "739745f8c06102dd"
+  },
+  "common.finish": {
+    "message": "সমাপ্ত",
+    "description": "Final-step button on a wizard",
+    "_machine_translated": true,
+    "_source_hash": "33695be3b79aae96"
+  },
+  "common.skip": {
+    "message": "এড়িয়ে যান",
+    "description": "Generic skip-this-step button",
+    "_machine_translated": true,
+    "_source_hash": "0cfcc982b509d22f"
+  },
+  "common.get_started": {
+    "message": "শুরু করুন",
+    "description": "Welcome-screen primary call-to-action",
+    "_machine_translated": true,
+    "_source_hash": "9db04e69383fe503"
+  },
+  "welcome.subtitle": {
+    "message": "আপনার AI-চালিত ডেস্কটপ সঙ্গী",
+    "description": "Welcome step 1 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "15d70e6c05bf41f8"
+  },
+  "welcome.blurb": {
+    "message": "চলুন আপনাকে সেট আপ করি। আমরা কনফিগার করব Kage কীভাবে আপনার AI ব্যাকএন্ডের সাথে সংযুক্ত হবে, আপনার গ্লোবাল হটকি সেট করব, এবং কয়েকটি পছন্দ বেছে নেব। এতে মাত্র এক মিনিট লাগবে।",
+    "description": "Welcome step 1 introduction body",
+    "_machine_translated": true,
+    "_source_hash": "7c12ea31355f244f"
+  },
+  "welcome.launching": {
+    "message": "Kage চালু হচ্ছে…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots",
+    "_machine_translated": true,
+    "_source_hash": "e1870ce191ea38a3"
+  },
+  "welcome.agent.title": {
+    "message": "এজেন্ট",
+    "description": "Step 2 header — agent connection setup",
+    "_machine_translated": true,
+    "_source_hash": "e75b2608c091f525"
+  },
+  "welcome.agent.subtitle": {
+    "message": "Kage-কে বলুন কীভাবে আপনার AI ব্যাকএন্ডে পৌঁছাবে",
+    "description": "Step 2 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "c1166ea96bc41195"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 এজেন্ট খোঁজা হচ্ছে…",
+    "description": "Placeholder while auto-detection scans for installed AI agents",
+    "_machine_translated": true,
+    "_source_hash": "f3509c3dc56c712e"
+  },
+  "welcome.agent.pick_different": {
+    "message": "অথবা ভিন্ন এজেন্ট ধরন বেছে নিন…",
+    "description": "Link/button revealing the manual agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "f7a9cd09aac64b7e"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 Ollama সেটআপ প্রথম রানের পরে হয়। এই উইজার্ড শেষ করুন, তারপর আপনার লোকাল মডেল যুক্ত করতে <strong>Settings → Agents → + Add agent → Ollama</strong> খুলুন। আমরা একটি প্লেসহোল্ডার সংরক্ষণ করেছি যাতে বাকি সেটআপ কাজ চালিয়ে যেতে পারে।",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "aa1a057cacf982db"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "ম্যানুয়ালি সংযোগ কনফিগার করুন। আপনি পরে Settings → Agents থেকে এটি পরিবর্তন করতে পারবেন।",
+    "description": "Body shown above the manual connection editor",
+    "_machine_translated": true,
+    "_source_hash": "4a4dd6900dac4281"
+  },
+  "welcome.preferences.title": {
+    "message": "পছন্দসমূহ",
+    "description": "Step 3 header",
+    "_machine_translated": true,
+    "_source_hash": "7fbe3a23acbfba67"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "Kage আপনার জন্য কীভাবে কাজ করবে তা কাস্টমাইজ করুন",
+    "description": "Step 3 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "379494d0f3deffba"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "গ্লোবাল হটকি",
+    "description": "Section label for the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "bedb36831cd220b7"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "Kage ডাকতে যেকোনো জায়গায় এই শর্টকাটটি চাপুন",
+    "description": "Helper text under the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "47e610b5a150e675"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "সেটিংস",
+    "description": "Section label for the launch / auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "6c9ba40fe5c54351"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "আপনার কম্পিউটার চালু হলে Kage চালু করুন",
+    "description": "Toggle: enable autostart",
+    "_machine_translated": true,
+    "_source_hash": "c01a3a42092990dd"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "Kage স্বয়ংক্রিয়ভাবে আপডেট রাখুন",
+    "description": "Toggle: enable auto-updates",
+    "_machine_translated": true,
+    "_source_hash": "71f0ad9ba6c331fa"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "সক্ষমতা",
+    "description": "Section label for opt-in capability toggles",
+    "_machine_translated": true,
+    "_source_hash": "a4ff700ad0a7a7d9"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "কম্পিউটার নিয়ন্ত্রণ সক্ষম করুন (UI অটোমেশন, অ্যাপ চালু করা)",
+    "description": "Toggle: enable computer-control capabilities",
+    "_machine_translated": true,
+    "_source_hash": "b4732926aa40d6b7"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "সময়ের সাথে আমার পছন্দগুলি শিখুন",
+    "description": "Toggle: enable per-user steering / personalization",
+    "_machine_translated": true,
+    "_source_hash": "d30ca505baeeadb0"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "Kage কথোপকথন থেকে আপনার পছন্দের একটি প্রোফাইল তৈরি করবে। আপনি যেকোনো সময় সেটিংসে এটি দেখতে এবং সম্পাদনা করতে পারবেন। এই ডেটা আপনার মেশিনে থাকে এবং প্রতিক্রিয়া উন্নত করতে শুধুমাত্র আপনার নির্বাচিত এজেন্টের সাথে শেয়ার করা হয়।",
+    "description": "Helper text under the personalization toggle",
+    "_machine_translated": true,
+    "_source_hash": "16d2c9b78093eefc"
+  },
+  "welcome.extensions.title": {
+    "message": "এক্সটেনশন",
+    "description": "Step 4 header",
+    "_machine_translated": true,
+    "_source_hash": "80bae7ca6d207c17"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "কোন এক্সটেনশনগুলো ইনস্টল করবেন তা বেছে নিন",
+    "description": "Step 4 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "bac904d3e47ee75f"
+  },
+  "welcome.extensions.loading": {
+    "message": "উপলব্ধ এক্সটেনশন লোড হচ্ছে…",
+    "description": "Placeholder while the store catalog loads",
+    "_machine_translated": true,
+    "_source_hash": "615e0a7299250b19"
+  },
+  "welcome.privacy.title": {
+    "message": "Kage উন্নত করতে সাহায্য করুন",
+    "description": "Step 5 header",
+    "_machine_translated": true,
+    "_source_hash": "2e1204cb4101c3de"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "বেনামী ব্যবহারের ডেটা শেয়ার করুন যাতে আমরা জানতে পারি কী ঠিক করতে হবে এবং পরবর্তীতে কী তৈরি করতে হবে",
+    "description": "Step 5 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "8dfbef3a2f798fba"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "Kage গোপনীয়তা-সচেতন ব্যবহারকারীদের জন্য তৈরি। আপনি যদি কিছুই শেয়ার করতে না চান, টগলটি বন্ধ করে দিন — বাকি সবকিছু এখনও কাজ করবে। আপনি যেকোনো সময় <strong>Settings → Privacy</strong>-এ এটি পরিবর্তন করতে পারবেন।",
+    "description": "Body intro on the privacy step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "ac4463c80e4b16b6"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "বেনামী ব্যবহারের ডেটা পাঠান",
+    "description": "Toggle: opt into telemetry",
+    "_machine_translated": true,
+    "_source_hash": "986d6eb8fba989a2"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "কোন বৈশিষ্ট্যগুলো গুরুত্বপূর্ণ তা বুঝতে এবং দ্রুত বাগ ধরতে সাহায্য করে। ডেটা EU-তে <a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a>-এর মাধ্যমে সংরক্ষিত হয়, যা একটি গোপনীয়তা-প্রথম অ্যানালিটিক্স পরিষেবা।",
+    "description": "Helper text under the telemetry toggle (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "bdc55640100063e9"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "আমরা যা সংগ্রহ করি",
+    "description": "Section label listing telemetry data points we DO collect",
+    "_machine_translated": true,
+    "_source_hash": "2ff070bf82224597"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "একটি র‍্যান্ডম ইনস্টল ID (আপনার বা আপনার অ্যাকাউন্টের সাথে লিঙ্কড নয়)",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "96e58d79f1f6d27e"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "অ্যাপ সংস্করণ, OS এবং সংস্করণ, ভাষা, দেশ",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "0ccc0e529948fe8a"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "উচ্চ-স্তরের বৈশিষ্ট্য ব্যবহার — কোন বৈশিষ্ট্যগুলো ব্যবহৃত হয় এবং কত ঘন ঘন",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "f87859869bbfba1a"
+  },
+  "welcome.privacy.never.label": {
+    "message": "আমরা যা কখনও সংগ্রহ করি না",
+    "description": "Section label listing data points we do NOT collect",
+    "_machine_translated": true,
+    "_source_hash": "eec584e045210762"
+  },
+  "welcome.privacy.never.content": {
+    "message": "আপনার বার্তা, প্রম্পট, বা AI প্রতিক্রিয়া",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "a3f45778167650be"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "ফাইলের নাম, পাথ, বা ক্লিপবোর্ডের বিষয়বস্তু",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "319d9b53cd1c0fdd"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "আপনার নাম, ইমেল, বা IP ঠিকানা (ইনজেস্টে অপসারণ করা হয়)",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "01f01349ea33a4f1"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "বিস্তারিত জানতে সম্পূর্ণ <a href=\"#\" id=\"wOpenPrivacyPolicy\">গোপনীয়তা নীতি</a> পড়ুন।",
+    "description": "Footer linking to full privacy policy (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5e3c456098cfd90b"
+  },
+  "welcome.macos.title": {
+    "message": "macOS অনুমতি",
+    "description": "macOS-only step header",
+    "_machine_translated": true,
+    "_source_hash": "067ffb2fdbc5c6d5"
+  },
+  "welcome.macos.subtitle": {
+    "message": "Kage যাতে তার কাজ করতে পারে সেজন্য কিছু গোপনীয়তা অনুমতি দিন",
+    "description": "macOS-only step subtitle",
+    "_machine_translated": true,
+    "_source_hash": "acfe6b7734bbf488"
+  },
+  "welcome.macos.intro": {
+    "message": "Kage-এর প্রথমবার প্রয়োজন হলে macOS প্রতিটি অনুমতির জন্য প্রম্পট করে, তবে আপনি এখনই সেগুলো দিয়ে সেই প্রম্পটগুলো এড়িয়ে যেতে পারেন। System Settings-এ সঠিক প্যানেল খুলতে এবং Kage সক্ষম করতে প্রতিটি বোতামে ক্লিক করুন।",
+    "description": "Body intro on the macOS permissions step",
+    "_machine_translated": true,
+    "_source_hash": "eec75cbf54a21e8b"
+  },
+  "welcome.macos.note_html": {
+    "message": "এই ধাপটি এড়িয়ে যাওয়া ঠিক আছে — আপনি যেকোনো সময় <strong>Settings → macOS Permissions</strong> থেকে এটি আবার দেখতে পারবেন।",
+    "description": "Footer note on the macOS permissions step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "47bee7e73adaab00"
+  },
+  "settings.save_and_close": {
+    "message": "সংরক্ষণ ও বন্ধ করুন",
+    "description": "Footer button on the settings window",
+    "_machine_translated": true,
+    "_source_hash": "5e9e4a32b4b6309e"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "ব্যবহারকারীর অভিজ্ঞতা",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "59407becc0a07782"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "99549c6c2e366ad9"
+  },
+  "settings.sidebar.automation": {
+    "message": "অটোমেশন",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "b834795a7ff1ec97"
+  },
+  "settings.sidebar.extensions": {
+    "message": "এক্সটেনশন",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "cf4069e44f670db1"
+  },
+  "settings.sidebar.about_group": {
+    "message": "সম্পর্কিত",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "78077eddf55c4331"
+  },
+  "settings.sidebar.appearance": {
+    "message": "চেহারা",
+    "description": "Sidebar item — appearance / theme / language",
+    "_machine_translated": true,
+    "_source_hash": "1d1dccc74224c031"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "হটকি ও শর্টকাট",
+    "description": "Sidebar item — global hotkey + window shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "64f81d3adf39f3cc"
+  },
+  "settings.sidebar.startup": {
+    "message": "স্টার্টআপ",
+    "description": "Sidebar item — startup / autostart settings",
+    "_machine_translated": true,
+    "_source_hash": "3508e311ca9b4d30"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "macOS অনুমতি",
+    "description": "Sidebar item — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "ae8946cd92e5173e"
+  },
+  "settings.sidebar.speech": {
+    "message": "স্পিচ",
+    "description": "Sidebar item — TTS / speech-to-text settings",
+    "_machine_translated": true,
+    "_source_hash": "86a42bb1273525f1"
+  },
+  "settings.sidebar.personalization": {
+    "message": "ব্যক্তিগতকরণ",
+    "description": "Sidebar item — auto-steering / preference learning",
+    "_machine_translated": true,
+    "_source_hash": "6798e60eff852d3e"
+  },
+  "settings.sidebar.agents": {
+    "message": "এজেন্ট",
+    "description": "Sidebar item — agent connection management",
+    "_machine_translated": true,
+    "_source_hash": "8657b15bb5f0483f"
+  },
+  "settings.sidebar.model": {
+    "message": "মডেল",
+    "description": "Sidebar item — model selection settings",
+    "_machine_translated": true,
+    "_source_hash": "2b3d3786a3ec21f1"
+  },
+  "settings.sidebar.mcp": {
+    "message": "MCP সার্ভার",
+    "description": "Sidebar item — Model Context Protocol server config",
+    "_machine_translated": true,
+    "_source_hash": "0fef1a6c110dac59"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "এজেন্ট অনুমতি",
+    "description": "Sidebar item — per-tool grant policies",
+    "_machine_translated": true,
+    "_source_hash": "568e8e6a02befe4e"
+  },
+  "settings.sidebar.integration": {
+    "message": "সিস্টেম ইন্টিগ্রেশন",
+    "description": "Sidebar item — system-level integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "c58679f8323891cc"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "কমান্ড ও প্রম্পট",
+    "description": "Sidebar item — user-defined commands & prompts",
+    "_machine_translated": true,
+    "_source_hash": "581aef4520411fb6"
+  },
+  "settings.sidebar.macros": {
+    "message": "অটোমেশন",
+    "description": "Sidebar item — automations / macro playback",
+    "_machine_translated": true,
+    "_source_hash": "72171ae0b090b37c"
+  },
+  "settings.sidebar.store": {
+    "message": "এক্সটেনশন স্টোর",
+    "description": "Sidebar item — extension store",
+    "_machine_translated": true,
+    "_source_hash": "26bb2a98c5c70165"
+  },
+  "settings.sidebar.privacy": {
+    "message": "গোপনীয়তা",
+    "description": "Sidebar item — privacy / telemetry settings",
+    "_machine_translated": true,
+    "_source_hash": "fbc089d375996aab"
+  },
+  "settings.sidebar.updates": {
+    "message": "আপডেট",
+    "description": "Sidebar item — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "5dccf5f6bf7f547b"
+  },
+  "settings.sidebar.about": {
+    "message": "Kage সম্পর্কে",
+    "description": "Sidebar item — version / credits / build info",
+    "_machine_translated": true,
+    "_source_hash": "faa7f9e9a2ff4b9a"
+  },
+  "settings.appearance.font_size.label": {
+    "message": "ফন্টের আকার",
+    "description": "Settings — font size slider label",
+    "_machine_translated": true,
+    "_source_hash": "f3c1f1031a89a8f8"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "লঞ্চার ও সেশন ম্যানেজারের জন্য বেস ফন্টের আকার (পিক্সেলে)।",
+    "description": "Helper text for font size slider",
+    "_machine_translated": true,
+    "_source_hash": "a5b0cde46d4dd5f5"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "লঞ্চার",
+    "description": "Subsection header for launcher-related settings",
+    "_machine_translated": true,
+    "_source_hash": "9db4e62252b4a81c"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "অপাসিটি",
+    "description": "Launcher opacity slider label",
+    "_machine_translated": true,
+    "_source_hash": "60c91f9e83e8f136"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "স্বচ্ছতা সমন্বয় করুন (০.৩ = অত্যন্ত স্বচ্ছ, ১.০ = সম্পূর্ণ অস্বচ্ছ)।",
+    "description": "Helper text for opacity slider",
+    "_machine_translated": true,
+    "_source_hash": "59602da053fab141"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "শুরুর অবস্থান",
+    "description": "Where the launcher appears on activation",
+    "_machine_translated": true,
+    "_source_hash": "254ef8fd2cc4f5e7"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "সক্রিয় হলে লঞ্চার যেখানে আবির্ভূত হয়।",
+    "description": "Helper text for start position dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d7bdfe37714b1283"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "সক্রিয় মনিটরের কেন্দ্রে",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "679f600e3b3f67a2"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "মাউস কার্সারের পাশে",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "533ebe00d58a36d4"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "শেষ অবস্থান মনে রাখুন",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "bd9c73076677d435"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "আকার মনে রাখুন",
+    "description": "Toggle: restore launcher to last manually resized dimensions",
+    "_machine_translated": true,
+    "_source_hash": "04eaff00c837f240"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "পুনরায় খোলার সময় লঞ্চারকে শেষ ম্যানুয়ালি পরিবর্তিত আকারে পুনরুদ্ধার করুন।",
+    "description": "Helper text for remember-size toggle",
+    "_machine_translated": true,
+    "_source_hash": "b280dae2de88e1c7"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "শেষ উত্তর সংরক্ষণ করুন",
+    "description": "Toggle: keep last AI response visible on launcher reshow",
+    "_machine_translated": true,
+    "_source_hash": "dfa8615284a90ae0"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "লঞ্চার পুনরায় দেখানো হলে শেষ AI উত্তর দৃশ্যমান রাখুন।",
+    "description": "Helper text for preserve-last-response toggle",
+    "_machine_translated": true,
+    "_source_hash": "e525baf4ba0c2eb1"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "টুলবার দেখান",
+    "description": "Toggle: show attachment toolbar",
+    "_machine_translated": true,
+    "_source_hash": "f006d91f37caee23"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "ইনপুটের নিচে ফাইল/ছবি সংযুক্তির টুলবার দেখান।",
+    "description": "Helper text for show-toolbar toggle",
+    "_machine_translated": true,
+    "_source_hash": "66efadfb3f4a7baa"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "সময় দেখান",
+    "description": "Toggle: show current time in launcher",
+    "_machine_translated": true,
+    "_source_hash": "bbeb1c0730f63b26"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "ইনপুট এলাকায় বর্তমান সময় প্রদর্শন করুন।",
+    "description": "Helper text for show-time toggle",
+    "_machine_translated": true,
+    "_source_hash": "b3b1ea1ef3e5c43a"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "সময়ের ফরম্যাট",
+    "description": "Time format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1f8e8798340d0896"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "তারিখ দেখান",
+    "description": "Toggle: show current date in launcher",
+    "_machine_translated": true,
+    "_source_hash": "515eaf6f865fa3c6"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "ইনপুট এলাকায় বর্তমান তারিখ প্রদর্শন করুন।",
+    "description": "Helper text for show-date toggle",
+    "_machine_translated": true,
+    "_source_hash": "5a8c8316df6917dd"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "তারিখের ফরম্যাট",
+    "description": "Date format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "ad5e12fc4bd48cdb"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "সেশন ম্যানেজার",
+    "description": "Subsection header for session manager settings",
+    "_machine_translated": true,
+    "_source_hash": "3c1588a00125a796"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "উইন্ডোর আকার ও অবস্থান মনে রাখুন",
+    "description": "Toggle: persist session manager geometry",
+    "_machine_translated": true,
+    "_source_hash": "1e949b704c4a0c12"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "পুনরায় খোলার সময় সেশন ম্যানেজারকে তার শেষ আকার ও অবস্থানে পুনরুদ্ধার করুন।",
+    "description": "Helper text for remember-chat-geometry toggle",
+    "_machine_translated": true,
+    "_source_hash": "02a5cbe87cacc5e0"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ স্টোরে থিম ব্রাউজ করুন…",
+    "description": "Button opening the extension store filtered to themes",
+    "_machine_translated": true,
+    "_source_hash": "2764102a95441bbd"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage (স্বয়ংক্রিয় লাইট / ডার্ক)",
+    "description": "Built-in theme display name (follows OS theme)",
+    "_machine_translated": true,
+    "_source_hash": "b8016eb83700c7f4"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "আপনার OS থিম অনুসরণ করে",
+    "description": "Built-in system-theme description",
+    "_machine_translated": true,
+    "_source_hash": "61b5b6431dc1b97d"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage লাইট",
+    "description": "Built-in light theme display name",
+    "_machine_translated": true,
+    "_source_hash": "6d1e8e8011d65b6f"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage ডার্ক",
+    "description": "Built-in dark theme display name",
+    "_machine_translated": true,
+    "_source_hash": "9a825894c3d15536"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "এই থিম ব্যবহার করুন",
+    "description": "Tooltip on the per-theme apply button",
+    "_machine_translated": true,
+    "_source_hash": "86e6959bd6b533a7"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "সক্রিয় থিম",
+    "description": "Tooltip on the active-theme indicator (checkmark)",
+    "_machine_translated": true,
+    "_source_hash": "2bd707a4d5755a36"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "থিম আনইনস্টল করুন",
+    "description": "Tooltip on the per-theme remove button",
+    "_machine_translated": true,
+    "_source_hash": "78cabaa8388140ef"
+  },
+  "settings.privacy.title": {
+    "message": "গোপনীয়তা",
+    "description": "Privacy settings header",
+    "_machine_translated": true,
+    "_source_hash": "f56604388bcb691c"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>গোপনীয়তা নীতি আপডেট হয়েছে</strong> — অনুগ্রহ করে নিচের নতুন ঘোষণাটি পর্যালোচনা করুন। আপনি একটি সিদ্ধান্ত না নেওয়া পর্যন্ত এই ইনস্টলে টেলিমেট্রি স্থগিত রাখা হয়েছে।",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a921294f1f31b59d"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ এই বিল্ডটি অ্যানালিটিক্স কী ছাড়াই কম্পাইল করা হয়েছে, তাই টগলের অবস্থা যাই হোক না কেন কোনো ডেটা পাঠানো হয় না। নিচের নিয়ন্ত্রণগুলি শুধুমাত্র উদাহরণস্বরূপ দৃশ্যমান।",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time",
+    "_machine_translated": true,
+    "_source_hash": "3c4e6d4ce0494f53"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "বেনামী ব্যবহারের ডেটা পাঠান",
+    "description": "Telemetry opt-in toggle label (settings)",
+    "_machine_translated": true,
+    "_source_hash": "46c207f834e11c98"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "কোন ফিচারগুলি গুরুত্বপূর্ণ তা বুঝতে এবং বাগ আগেভাগে ধরতে আমাদের সাহায্য করে। ডেটা Aptabase-এর মাধ্যমে EU-তে সংরক্ষিত হয়, যা একটি গোপনীয়তা-প্রথম অ্যানালিটিক্স পরিষেবা।",
+    "description": "Helper text under the telemetry toggle (settings)",
+    "_machine_translated": true,
+    "_source_hash": "8752ab612bc01eea"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "বেনামী ইনস্টল ID",
+    "description": "Label for the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "fbf70289ce536d33"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "আমরা শুধুমাত্র এই শনাক্তকারীটি ব্যবহার করি। এটি আপনার নাম, ইমেল বা ডিভাইসের সাথে সংযুক্ত নয়। আপনি যেকোনো সময় এটি রিসেট করতে পারেন — এই ইনস্টলের অতীত ইভেন্টগুলি অসংযুক্ত হয়ে যাবে।",
+    "description": "Helper text under the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "99359140a83cb4d2"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "(এখনও বরাদ্দ করা হয়নি — তৈরি করতে অপ্ট ইন করুন)",
+    "description": "Placeholder shown when no install ID exists yet",
+    "_machine_translated": true,
+    "_source_hash": "2bc4fc0ec0f628ca"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "রিসেট",
+    "description": "Button: regenerate a fresh install ID",
+    "_machine_translated": true,
+    "_source_hash": "101cdbb94e9c32cf"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "একটি নতুন বেনামী ইনস্টল ID তৈরি করবেন?\n\nএই ইনস্টল থেকে অতীতের অ্যানালিটিক্স ইভেন্টগুলি ভবিষ্যতের ইভেন্টগুলির সাথে আর সংযোগযোগ্য হবে না। এটি অতীতের ইভেন্টগুলি মুছে ফেলে না — শুধু সেগুলিকে বিচ্ছিন্ন করে দেয়।",
+    "description": "Confirmation dialog text shown before resetting the install ID",
+    "_machine_translated": true,
+    "_source_hash": "796c14a897e256e4"
+  },
+  "settings.privacy.policy.label": {
+    "message": "গোপনীয়তা নীতি",
+    "description": "Section label for the privacy policy link",
+    "_machine_translated": true,
+    "_source_hash": "3925dd66bad96e13"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "কী সংগ্রহ করা হয়, কীভাবে সংরক্ষিত হয় এবং কীভাবে মুছে ফেলার অনুরোধ করা যায় তার সম্পূর্ণ বিবরণ। <a href=\"#\" id=\"openPrivacyPolicy\">গোপনীয়তা নীতি পড়ুন →</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "1412329cc119cccd"
+  },
+  "settings.system.title": {
+    "message": "স্টার্টআপ",
+    "description": "Settings header — system / startup-related settings",
+    "_machine_translated": true,
+    "_source_hash": "77ffaf219d8b35a9"
+  },
+  "settings.system.auto_start.label": {
+    "message": "সিস্টেম স্টার্টআপে স্বয়ংক্রিয়ভাবে চালু হোক",
+    "description": "Toggle: launch Kage when the user logs in",
+    "_machine_translated": true,
+    "_source_hash": "685b0a95ed44698f"
+  },
+  "settings.system.auto_start.description": {
+    "message": "আপনি লগ ইন করলে Kage স্বয়ংক্রিয়ভাবে চালু হবে।",
+    "description": "Helper text for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "11b28c1f1b47908f"
+  },
+  "settings.updates.title": {
+    "message": "আপডেট",
+    "description": "Settings header — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "a40c53155418ce1b"
+  },
+  "settings.updates.checking": {
+    "message": "আপডেট পরীক্ষা করা হচ্ছে",
+    "description": "Status while the updater plugin polls for the latest version",
+    "_machine_translated": true,
+    "_source_hash": "4124db834dc384e4"
+  },
+  "settings.updates.checking_progress": {
+    "message": "আপডেট পরীক্ষা করা হচ্ছে…",
+    "description": "Spinner label while the updater check is in flight",
+    "_machine_translated": true,
+    "_source_hash": "5bf0a54d35bb0f52"
+  },
+  "settings.updates.version_label": {
+    "message": "সংস্করণ {version}",
+    "description": "Current version display in the update status card",
+    "_machine_translated": true,
+    "_source_hash": "19dfa52d548625fc"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage আপ টু ডেট আছে",
+    "description": "Status when the running version equals the latest",
+    "_machine_translated": true,
+    "_source_hash": "622dc3ded7e0e7c9"
+  },
+  "settings.updates.update_available_title": {
+    "message": "আপডেট উপলব্ধ — v{version}",
+    "description": "Status when a newer version is available",
+    "_machine_translated": true,
+    "_source_hash": "92485742299d8fc7"
+  },
+  "settings.updates.current_version_label": {
+    "message": "বর্তমান সংস্করণ: {version}",
+    "description": "Detail line shown beneath the update-available status",
+    "_machine_translated": true,
+    "_source_hash": "a73271d9ee4b12c6"
+  },
+  "settings.updates.check_failed": {
+    "message": "আপডেট পরীক্ষা ব্যর্থ হয়েছে",
+    "description": "Status when the updater plugin returned an error",
+    "_machine_translated": true,
+    "_source_hash": "35e2ac0aedb8ff03"
+  },
+  "settings.updates.installing": {
+    "message": "ডাউনলোড এবং ইনস্টল করা হচ্ছে…",
+    "description": "Status while the update installer is running",
+    "_machine_translated": true,
+    "_source_hash": "c43508f23c5aab72"
+  },
+  "settings.updates.action.install_now": {
+    "message": "এখনই ইনস্টল করুন",
+    "description": "Button on the update-available status card",
+    "_machine_translated": true,
+    "_source_hash": "0245fb64db874ead"
+  },
+  "settings.updates.action.recheck": {
+    "message": "আবার পরীক্ষা করুন",
+    "description": "Button on the up-to-date status card",
+    "_machine_translated": true,
+    "_source_hash": "1dc1a68e0be35d10"
+  },
+  "settings.updates.action.retry": {
+    "message": "পুনরায় চেষ্টা করুন",
+    "description": "Button on the failed-check status card",
+    "_machine_translated": true,
+    "_source_hash": "165b3326eed1cba9"
+  },
+  "settings.updates.preferences.label": {
+    "message": "পছন্দসমূহ",
+    "description": "Subsection header for the auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "ba6d7b2633fca623"
+  },
+  "settings.updates.channel.label": {
+    "message": "আপডেট চ্যানেল",
+    "description": "Channel selector label",
+    "_machine_translated": true,
+    "_source_hash": "b56944ad2ed8c746"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "এই ইনস্টলটি কোন রিলিজ স্ট্রিম অনুসরণ করে। <strong>স্টেবল</strong> সবার জন্য মানসম্মত রিলিজ। <strong>প্রিভিউ</strong> পরবর্তীতে যা আসছে তা পরখ করার জন্য। <strong>নাইটলি</strong> প্রতিটি কমিট অনুসরণ করে — কিছু ত্রুটি থাকতে পারে।",
+    "description": "Helper text under the channel selector (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b9202b73aa174a43"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "স্টেবল (সুপারিশকৃত)",
+    "description": "Channel dropdown option for the stable release stream",
+    "_machine_translated": true,
+    "_source_hash": "4286972740ba01e1"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "প্রিভিউ",
+    "description": "Channel dropdown option for the beta / preview stream",
+    "_machine_translated": true,
+    "_source_hash": "875e21922f772146"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "নাইটলি (একদম সর্বশেষ)",
+    "description": "Channel dropdown option for the per-commit dev stream",
+    "_machine_translated": true,
+    "_source_hash": "1d482fd83df5e2a9"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "স্বয়ংক্রিয়ভাবে আপডেট পরীক্ষা করুন",
+    "description": "Toggle: periodic update polling",
+    "_machine_translated": true,
+    "_source_hash": "a54024fd8c6b52f5"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "পর্যায়ক্রমে আপডেটের জন্য পরীক্ষা করুন।",
+    "description": "Helper text for the auto-check toggle",
+    "_machine_translated": true,
+    "_source_hash": "04989a0d4bdad9f8"
+  },
+  "settings.updates.silent.label": {
+    "message": "নীরব আপডেট",
+    "description": "Toggle: install updates automatically when idle",
+    "_machine_translated": true,
+    "_source_hash": "b97b0ff177898bce"
+  },
+  "settings.updates.silent.description": {
+    "message": "নিষ্ক্রিয় থাকাকালীন (৫ মিনিট লঞ্চারে কোনো কার্যকলাপ না হলে) স্বয়ংক্রিয়ভাবে আপডেট ডাউনলোড ও ইনস্টল করুন।",
+    "description": "Helper text for the silent-updates toggle",
+    "_machine_translated": true,
+    "_source_hash": "f8784c8092735e23"
+  },
+  "settings.updates.changelog.label": {
+    "message": "চেঞ্জলগ",
+    "description": "Subsection header for the changelog block",
+    "_machine_translated": true,
+    "_source_hash": "e166a569f95810f0"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "রিলিজ নোট এবং সংস্করণ ইতিহাস। <a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">GitHub-এ সমস্ত রিলিজ ব্রাউজ করুন →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "fe09e017988f8e74"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "চেঞ্জলগ লোড হচ্ছে…",
+    "description": "Placeholder while the changelog markdown loads",
+    "_machine_translated": true,
+    "_source_hash": "a7bb227353d0ce61"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "চেঞ্জলগ লোড করা যায়নি।",
+    "description": "Placeholder when the changelog request fails",
+    "_machine_translated": true,
+    "_source_hash": "398cd16e63a3c677"
   }
 }

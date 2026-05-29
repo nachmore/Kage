@@ -1,4 +1,5 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * Privacy & Analytics settings module.
  *
@@ -6,11 +7,12 @@ import { SettingsModule } from './base.js';
  * a reset button for the anonymous install ID. Matches the welcome-screen
  * disclosure word-for-word on the "what we collect" / "what we never
  * collect" lists — discrepancies between the two is what trips up trust
- * audits.
+ * audits. The shared `welcome.privacy.collect.*` / `welcome.privacy.never.*`
+ * keys are reused here so the two surfaces can never drift.
  */
 export class PrivacySettingsModule extends SettingsModule {
     constructor() {
-        super('privacy', 'Privacy', '🛡️');
+        super('privacy', t('settings.privacy.title'), '🛡️');
         this._info = null;
     }
 
@@ -21,56 +23,53 @@ export class PrivacySettingsModule extends SettingsModule {
 
                 <div id="telemetryStaleBanner" class="setting-row" style="display:none;">
                     <div style="background:rgba(200,150,0,0.1);border:1px solid rgba(200,150,0,0.35);border-radius:8px;padding:12px;font-size:12px;color:#e0b040;">
-                        <strong>Privacy policy updated</strong> — please review the new disclosure below. Telemetry is paused on this install until you make a choice.
+                        ${t('settings.privacy.stale_consent_html')}
                     </div>
                 </div>
 
                 <div id="telemetryTransportWarning" class="setting-row" style="display:none;">
                     <div style="background:rgba(200,120,0,0.08);border:1px solid rgba(200,120,0,0.3);border-radius:8px;padding:12px;font-size:12px;color:#c89000;">
-                        ⚠ This build was compiled without an analytics key, so no data is sent regardless of the toggle. The controls below are visible for illustration only.
+                        ${t('settings.privacy.no_transport_warning')}
                     </div>
                 </div>
 
                 ${this.createCheckboxRow(
-                    'Send anonymous usage data',
-                    'Helps us understand which features matter and catch bugs early. Data is stored in the EU via Aptabase, a privacy-first analytics service.',
+                    t('settings.privacy.toggle.label'),
+                    t('settings.privacy.toggle.description'),
                     'telemetryEnabled',
                     true
                 )}
 
                 <div class="setting-row">
-                    <div class="setting-label">What we collect</div>
+                    <div class="setting-label">${t('welcome.privacy.collect.label')}</div>
                     <ul style="font-size:12px;color:var(--kage-text-muted);line-height:1.8;padding-left:20px;margin:0;">
-                        <li>A random install ID (not linked to you or your account)</li>
-                        <li>App version, OS and version, language, country</li>
-                        <li>High-level feature usage — which features are used and how often</li>
+                        <li>${t('welcome.privacy.collect.install_id')}</li>
+                        <li>${t('welcome.privacy.collect.app_meta')}</li>
+                        <li>${t('welcome.privacy.collect.feature_usage')}</li>
                     </ul>
                 </div>
 
                 <div class="setting-row">
-                    <div class="setting-label">What we never collect</div>
+                    <div class="setting-label">${t('welcome.privacy.never.label')}</div>
                     <ul style="font-size:12px;color:var(--kage-text-muted);line-height:1.8;padding-left:20px;margin:0;">
-                        <li>Your messages, prompts, or AI responses</li>
-                        <li>File names, paths, or clipboard contents</li>
-                        <li>Your name, email, or IP address (stripped at ingest)</li>
+                        <li>${t('welcome.privacy.never.content')}</li>
+                        <li>${t('welcome.privacy.never.paths')}</li>
+                        <li>${t('welcome.privacy.never.identity')}</li>
                     </ul>
                 </div>
 
                 <div class="setting-row">
-                    <div class="setting-label">Anonymous install ID</div>
-                    <div class="setting-description">The only identifier we use. It's not linked to your name, email, or device. You can reset it anytime — past events for this install become unlinkable.</div>
+                    <div class="setting-label">${t('settings.privacy.install_id.label')}</div>
+                    <div class="setting-description">${t('settings.privacy.install_id.description')}</div>
                     <div class="setting-control-with-action">
                         <input type="text" class="setting-input" id="telemetryInstallId" readonly style="font-family:monospace;font-size:12px;">
-                        <button class="setting-button" id="resetTelemetryIdBtn" style="min-width:80px;">Reset</button>
+                        <button class="setting-button" id="resetTelemetryIdBtn" style="min-width:80px;">${t('settings.privacy.install_id.reset')}</button>
                     </div>
                 </div>
 
                 <div class="setting-row">
-                    <div class="setting-label">Privacy policy</div>
-                    <div class="setting-description">
-                        Full details of what's collected, how it's stored, and how to request deletion.
-                        <a href="#" id="openPrivacyPolicy" style="color:var(--kage-accent-light);">Read the privacy policy →</a>
-                    </div>
+                    <div class="setting-label">${t('settings.privacy.policy.label')}</div>
+                    <div class="setting-description">${t('settings.privacy.policy.description_html')}</div>
                 </div>
             </div>
         `;
@@ -97,7 +96,7 @@ export class PrivacySettingsModule extends SettingsModule {
 
         if (enabled) enabled.checked = !!this._info.enabled;
         if (idField)
-            idField.value = this._info.install_id || '(not yet assigned — opt in to generate)';
+            idField.value = this._info.install_id || t('settings.privacy.install_id.placeholder');
         if (warning) warning.style.display = this._info.transport_available ? 'none' : '';
 
         // Stale-consent detection: when the bundled privacy policy
@@ -136,11 +135,7 @@ export class PrivacySettingsModule extends SettingsModule {
         const resetBtn = document.getElementById('resetTelemetryIdBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
-                const ok = confirm(
-                    'Generate a new anonymous install ID?\n\n' +
-                        'Past analytics events from this install will no longer be linkable to future events. ' +
-                        'This does not delete past events — it just orphans them.'
-                );
+                const ok = confirm(t('settings.privacy.install_id.reset_confirm'));
                 if (!ok) return;
                 try {
                     await window.__TAURI__.core.invoke('reset_telemetry_install_id');

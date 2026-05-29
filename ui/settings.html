@@ -27,88 +27,88 @@
         <!-- Sidebar -->
         <div class="settings-sidebar">
             <div class="sidebar-section">
-                <div class="sidebar-section-title">User Experience</div>
+                <div class="sidebar-section-title" data-i18n="settings.sidebar.user_experience">User Experience</div>
                 <div class="sidebar-item active" data-section="appearance" data-action="switchSection" data-arg="appearance">
                     <span class="sidebar-item-icon">🎨</span>
-                    <span>Appearance</span>
+                    <span data-i18n="settings.sidebar.appearance">Appearance</span>
                 </div>
                 <div class="sidebar-item" data-section="hotkey" data-action="switchSection" data-arg="hotkey">
                     <span class="sidebar-item-icon">🎹</span>
-                    <span>Hotkey & Shortcuts</span>
+                    <span data-i18n="settings.sidebar.hotkey">Hotkey & Shortcuts</span>
                 </div>
                 <div class="sidebar-item" data-section="system" data-action="switchSection" data-arg="system">
                     <span class="sidebar-item-icon" id="systemSidebarIcon">🚀</span>
-                    <span>Startup</span>
+                    <span data-i18n="settings.sidebar.startup">Startup</span>
                 </div>
                 <div class="sidebar-item hidden" data-section="mac-permissions" data-action="switchSection" data-arg="mac-permissions" id="macPermissionsSidebarItem">
                     <span class="sidebar-item-icon">&#xF8FF;</span>
-                    <span>macOS Permissions</span>
+                    <span data-i18n="settings.sidebar.mac_permissions">macOS Permissions</span>
                 </div>
                 <div class="sidebar-item" data-section="speech" data-action="switchSection" data-arg="speech">
                     <span class="sidebar-item-icon">🎙️</span>
-                    <span>Speech</span>
+                    <span data-i18n="settings.sidebar.speech">Speech</span>
                 </div>
             </div>
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Kage AI</div>
+                <div class="sidebar-section-title" data-i18n="settings.sidebar.kage_ai">Kage AI</div>
                 <div class="sidebar-item" data-section="personalization" data-action="switchSection" data-arg="personalization">
                     <span class="sidebar-item-icon">✨</span>
-                    <span>Personalization</span>
+                    <span data-i18n="settings.sidebar.personalization">Personalization</span>
                 </div>
                 <div class="sidebar-item" data-section="connection" data-action="switchSection" data-arg="connection">
                     <span class="sidebar-item-icon">🤖</span>
-                    <span>Agents</span>
+                    <span data-i18n="settings.sidebar.agents">Agents</span>
                 </div>
                 <div class="sidebar-item" data-section="model" data-action="switchSection" data-arg="model">
                     <span class="sidebar-item-icon">🧠</span>
-                    <span>Model</span>
+                    <span data-i18n="settings.sidebar.model">Model</span>
                 </div>
                 <div class="sidebar-item" data-section="mcp" data-action="switchSection" data-arg="mcp">
                     <span class="sidebar-item-icon">🔌</span>
-                    <span>MCP Servers</span>
+                    <span data-i18n="settings.sidebar.mcp">MCP Servers</span>
                 </div>
                 <div class="sidebar-item" data-section="tool-permissions" data-action="switchSection" data-arg="tool-permissions">
                     <span class="sidebar-item-icon">🔧</span>
-                    <span>Agent Permissions</span>
+                    <span data-i18n="settings.sidebar.tool_permissions">Agent Permissions</span>
                 </div>
             </div>
             <div class="sidebar-section">
-                <div class="sidebar-section-title">Automation</div>
+                <div class="sidebar-section-title" data-i18n="settings.sidebar.automation">Automation</div>
                 <div class="sidebar-item" data-section="integration" data-action="switchSection" data-arg="integration">
                     <span class="sidebar-item-icon" id="integrationSidebarIcon">🔗</span>
-                    <span>System Integration</span>
+                    <span data-i18n="settings.sidebar.integration">System Integration</span>
                 </div>
                 <div class="sidebar-item" data-section="shortcuts" data-action="switchSection" data-arg="shortcuts">
                     <span class="sidebar-item-icon">⚡</span>
-                    <span>Commands &amp; Prompts</span>
+                    <span data-i18n="settings.sidebar.shortcuts">Commands &amp; Prompts</span>
                 </div>
                 <div class="sidebar-item" data-section="macros" data-action="switchSection" data-arg="macros">
                     <span class="sidebar-item-icon">🔄</span>
-                    <span>Automations</span>
+                    <span data-i18n="settings.sidebar.macros">Automations</span>
                 </div>
             </div>
             <div class="sidebar-section" id="extensionsSidebarSection">
-                <div class="sidebar-section-title">Extensions</div>
+                <div class="sidebar-section-title" data-i18n="settings.sidebar.extensions">Extensions</div>
                 <div class="sidebar-item" data-section="store" data-sidebar-store data-action="switchSection" data-arg="store">
                     <span class="sidebar-item-icon">🛍️</span>
-                    <span>Extension Store</span>
+                    <span data-i18n="settings.sidebar.store">Extension Store</span>
                 </div>
                 <div class="sidebar-separator"></div>
                 <!-- Extension sidebar items are added dynamically by manager.js -->
             </div>
             <div class="sidebar-section">
-                <div class="sidebar-section-title">About</div>
+                <div class="sidebar-section-title" data-i18n="settings.sidebar.about_group">About</div>
                 <div class="sidebar-item" data-section="privacy" data-action="switchSection" data-arg="privacy">
                     <span class="sidebar-item-icon">🛡️</span>
-                    <span>Privacy</span>
+                    <span data-i18n="settings.sidebar.privacy">Privacy</span>
                 </div>
                 <div class="sidebar-item" data-section="updates" data-action="switchSection" data-arg="updates">
                     <span class="sidebar-item-icon">🔄</span>
-                    <span>Updates</span>
+                    <span data-i18n="settings.sidebar.updates">Updates</span>
                 </div>
                 <div class="sidebar-item" data-section="about" data-action="switchSection" data-arg="about">
                     <span class="sidebar-item-icon">ℹ️</span>
-                    <span>About Kage</span>
+                    <span data-i18n="settings.sidebar.about">About Kage</span>
                 </div>
             </div>
         </div>
@@ -125,7 +125,7 @@
     <div id="statusMessage" class="status-message"></div>
     <!-- Save Button -->
     <div class="save-button-container">
-        <button class="save-button" data-action="saveAndClose">Save &amp; Close</button>
+        <button class="save-button" data-action="saveAndClose" data-i18n="settings.save_and_close">Save &amp; Close</button>
     </div>
 
     <!-- Single ES module entry — wires up theme, console intercept,

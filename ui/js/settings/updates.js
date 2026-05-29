@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 
 /**
@@ -35,7 +36,7 @@ export function formatErr(e) {
  */
 export class UpdatesSettingsModule extends SettingsModule {
     constructor() {
-        super('updates', 'Updates', '🔄');
+        super('updates', t('settings.updates.title'), '🔄');
         this._knownUpdate = null; // cached available version
     }
 
@@ -49,47 +50,46 @@ export class UpdatesSettingsModule extends SettingsModule {
                         <div class="update-spinner" id="updateSpinner"></div>
                     </div>
                     <div class="update-status-body">
-                        <div class="update-status-title" id="updateStatusTitle">Checking for updates</div>
-                        <div class="update-status-detail" id="updateStatusDetail">Version ${escapeHtml(window._kageVersion || '...')}</div>
+                        <div class="update-status-title" id="updateStatusTitle">${t('settings.updates.checking')}</div>
+                        <div class="update-status-detail" id="updateStatusDetail">${t('settings.updates.version_label', { version: escapeHtml(window._kageVersion || '...') })}</div>
                     </div>
                     <div class="update-status-action" id="updateStatusAction"></div>
                 </div>
 
-                <div class="setting-section-label">Preferences</div>
+                <div class="setting-section-label">${t('settings.updates.preferences.label')}</div>
 
                 ${this.createControlRow(
-                    'Update Channel',
-                    "Which release stream this install follows. <strong>Stable</strong> is the standard release for everyone. <strong>Preview</strong> is for trying what's coming next. <strong>Nightly</strong> tracks every commit — expect rough edges.",
+                    t('settings.updates.channel.label'),
+                    t('settings.updates.channel.description_html'),
                     `<select class="setting-input" id="updateChannel">
-                        <option value="stable">Stable (recommended)</option>
-                        <option value="beta">Preview</option>
-                        <option value="dev">Nightly (bleeding edge)</option>
+                        <option value="stable">${t('settings.updates.channel.option.stable')}</option>
+                        <option value="beta">${t('settings.updates.channel.option.beta')}</option>
+                        <option value="dev">${t('settings.updates.channel.option.dev')}</option>
                     </select>`
                 )}
 
                 ${this.createCheckboxRow(
-                    'Automatically Check for Updates',
-                    'Periodically check for updates.',
+                    t('settings.updates.auto_check.label'),
+                    t('settings.updates.auto_check.description'),
                     'updateAutoCheck',
                     false
                 )}
 
                 ${this.createCheckboxRow(
-                    'Silent Updates',
-                    'Download and install updates automatically when idle (no Launcher activity for 5 minutes).',
+                    t('settings.updates.silent.label'),
+                    t('settings.updates.silent.description'),
                     'updateSilentUpdate',
                     false
                 )}
 
-                <div class="setting-section-label">Changelog</div>
+                <div class="setting-section-label">${t('settings.updates.changelog.label')}</div>
 
                 <div class="setting-row">
                     <div class="setting-description">
-                        Release notes and version history.
-                        <a href="#" id="openReleasesLink" data-action="updates.openReleases" style="margin-left:6px">Browse all releases on GitHub →</a>
+                        ${t('settings.updates.changelog.description_html')}
                     </div>
                     <div id="changelogContainer" class="changelog-box">
-                        <em>Loading changelog...</em>
+                        <em>${t('settings.updates.changelog.loading')}</em>
                     </div>
                 </div>
             </div>
@@ -183,9 +183,9 @@ export class UpdatesSettingsModule extends SettingsModule {
         const channelEl = document.getElementById('updateChannel');
         if (!channelEl || !Array.isArray(this._validChannels)) return;
         const labels = {
-            stable: 'Stable (recommended)',
-            beta: 'Preview',
-            dev: 'Nightly (bleeding edge)',
+            stable: t('settings.updates.channel.option.stable'),
+            beta: t('settings.updates.channel.option.beta'),
+            dev: t('settings.updates.channel.option.dev'),
         };
         const previous = channelEl.value;
         channelEl.innerHTML = this._validChannels
@@ -227,8 +227,11 @@ export class UpdatesSettingsModule extends SettingsModule {
         const detail = document.getElementById('updateStatusDetail');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<div class="update-spinner"></div>';
-        if (title) title.textContent = 'Checking for updates...';
-        if (detail) detail.textContent = 'Version ' + (window._kageVersion || '...');
+        if (title) title.textContent = t('settings.updates.checking_progress');
+        if (detail)
+            detail.textContent = t('settings.updates.version_label', {
+                version: window._kageVersion || '...',
+            });
         if (action) action.innerHTML = '';
     }
 
@@ -238,11 +241,10 @@ export class UpdatesSettingsModule extends SettingsModule {
         const detail = document.getElementById('updateStatusDetail');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<span class="update-check-icon">✓</span>';
-        if (title) title.textContent = 'Kage is up to date';
-        if (detail) detail.textContent = 'Version ' + escapeHtml(version);
+        if (title) title.textContent = t('settings.updates.up_to_date');
+        if (detail) detail.textContent = t('settings.updates.version_label', { version });
         if (action)
-            action.innerHTML =
-                '<button class="setting-button" id="recheckBtn">Check again</button>';
+            action.innerHTML = `<button class="setting-button" id="recheckBtn">${t('settings.updates.action.recheck')}</button>`;
         document.getElementById('recheckBtn')?.addEventListener('click', () => {
             this._knownUpdate = null;
             this.autoCheck();
@@ -255,11 +257,13 @@ export class UpdatesSettingsModule extends SettingsModule {
         const detail = document.getElementById('updateStatusDetail');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<span class="update-available-icon">⬆</span>';
-        if (title) title.textContent = 'Update available — v' + escapeHtml(version);
-        if (detail) detail.textContent = 'Current version: ' + (window._kageVersion || '...');
+        if (title) title.textContent = t('settings.updates.update_available_title', { version });
+        if (detail)
+            detail.textContent = t('settings.updates.current_version_label', {
+                version: window._kageVersion || '...',
+            });
         if (action)
-            action.innerHTML =
-                '<button class="setting-button update-install-btn" id="installNowBtn">Install Now</button>';
+            action.innerHTML = `<button class="setting-button update-install-btn" id="installNowBtn">${t('settings.updates.action.install_now')}</button>`;
         document
             .getElementById('installNowBtn')
             ?.addEventListener('click', () => this.installUpdate());
@@ -271,10 +275,10 @@ export class UpdatesSettingsModule extends SettingsModule {
         const detail = document.getElementById('updateStatusDetail');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<span class="update-error-icon">✕</span>';
-        if (title) title.textContent = 'Update check failed';
+        if (title) title.textContent = t('settings.updates.check_failed');
         if (detail) detail.textContent = error;
         if (action)
-            action.innerHTML = '<button class="setting-button" id="retryBtn">Retry</button>';
+            action.innerHTML = `<button class="setting-button" id="retryBtn">${t('settings.updates.action.retry')}</button>`;
         document.getElementById('retryBtn')?.addEventListener('click', () => this.autoCheck());
     }
 
@@ -283,7 +287,7 @@ export class UpdatesSettingsModule extends SettingsModule {
         const title = document.getElementById('updateStatusTitle');
         const action = document.getElementById('updateStatusAction');
         if (icon) icon.innerHTML = '<div class="update-spinner"></div>';
-        if (title) title.textContent = 'Downloading and installing...';
+        if (title) title.textContent = t('settings.updates.installing');
         if (action) action.innerHTML = '';
         try {
             await window.__TAURI__.core.invoke('download_and_install_update');
@@ -309,7 +313,7 @@ export class UpdatesSettingsModule extends SettingsModule {
                 container.textContent = markdown;
             }
         } catch (_e) {
-            container.innerHTML = '<em>Failed to load changelog.</em>';
+            container.innerHTML = `<em>${t('settings.updates.changelog.load_failed')}</em>`;
         }
     }
 

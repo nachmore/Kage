@@ -574,5 +574,863 @@
     "description": "Spawning the platform installer failed",
     "_machine_translated": true,
     "_source_hash": "13fde8c85d6a3d56"
+  },
+  "common.next": {
+    "message": "التالي",
+    "description": "Generic Next button (wizard navigation, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "d91b7a241c47ca29"
+  },
+  "common.back": {
+    "message": "رجوع",
+    "description": "Generic Back button",
+    "_machine_translated": true,
+    "_source_hash": "739745f8c06102dd"
+  },
+  "common.finish": {
+    "message": "إنهاء",
+    "description": "Final-step button on a wizard",
+    "_machine_translated": true,
+    "_source_hash": "33695be3b79aae96"
+  },
+  "common.skip": {
+    "message": "تخطٍّ",
+    "description": "Generic skip-this-step button",
+    "_machine_translated": true,
+    "_source_hash": "0cfcc982b509d22f"
+  },
+  "common.get_started": {
+    "message": "ابدأ الآن",
+    "description": "Welcome-screen primary call-to-action",
+    "_machine_translated": true,
+    "_source_hash": "9db04e69383fe503"
+  },
+  "welcome.subtitle": {
+    "message": "رفيقك على سطح المكتب المدعوم بالذكاء الاصطناعي",
+    "description": "Welcome step 1 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "15d70e6c05bf41f8"
+  },
+  "welcome.blurb": {
+    "message": "لنُجهّز كل شيء. سنضبط طريقة اتصال Kage بخلفية الذكاء الاصطناعي لديك، ونحدّد اختصار التشغيل العام، ونختار بعض التفضيلات. لن يستغرق ذلك سوى دقيقة.",
+    "description": "Welcome step 1 introduction body",
+    "_machine_translated": true,
+    "_source_hash": "7c12ea31355f244f"
+  },
+  "welcome.launching": {
+    "message": "جارٍ تشغيل Kage…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots",
+    "_machine_translated": true,
+    "_source_hash": "e1870ce191ea38a3"
+  },
+  "welcome.agent.title": {
+    "message": "الوكيل",
+    "description": "Step 2 header — agent connection setup",
+    "_machine_translated": true,
+    "_source_hash": "e75b2608c091f525"
+  },
+  "welcome.agent.subtitle": {
+    "message": "أخبر Kage بكيفية الوصول إلى خلفية الذكاء الاصطناعي لديك",
+    "description": "Step 2 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "c1166ea96bc41195"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 جارٍ البحث عن الوكلاء…",
+    "description": "Placeholder while auto-detection scans for installed AI agents",
+    "_machine_translated": true,
+    "_source_hash": "f3509c3dc56c712e"
+  },
+  "welcome.agent.pick_different": {
+    "message": "أو اختر نوع وكيل مختلفاً…",
+    "description": "Link/button revealing the manual agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "f7a9cd09aac64b7e"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 يتم إعداد Ollama بعد التشغيل الأول. أكمل هذا المعالج، ثم افتح <strong>الإعدادات ← الوكلاء ← + إضافة وكيل ← Ollama</strong> لربط النموذج المحلي. لقد حفظنا عنصراً نائباً حتى تستمر بقية عملية الإعداد بالعمل.",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "aa1a057cacf982db"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "اضبط الاتصال يدوياً. يمكنك تغيير ذلك لاحقاً من الإعدادات ← الوكلاء.",
+    "description": "Body shown above the manual connection editor",
+    "_machine_translated": true,
+    "_source_hash": "4a4dd6900dac4281"
+  },
+  "welcome.preferences.title": {
+    "message": "التفضيلات",
+    "description": "Step 3 header",
+    "_machine_translated": true,
+    "_source_hash": "7fbe3a23acbfba67"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "خصّص طريقة عمل Kage بما يناسبك",
+    "description": "Step 3 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "379494d0f3deffba"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "اختصار التشغيل العام",
+    "description": "Section label for the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "bedb36831cd220b7"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "اضغط هذا الاختصار من أي مكان لاستدعاء Kage",
+    "description": "Helper text under the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "47e610b5a150e675"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "الإعدادات",
+    "description": "Section label for the launch / auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "6c9ba40fe5c54351"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "تشغيل Kage عند بدء تشغيل الكمبيوتر",
+    "description": "Toggle: enable autostart",
+    "_machine_translated": true,
+    "_source_hash": "c01a3a42092990dd"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "إبقاء Kage محدّثاً تلقائياً",
+    "description": "Toggle: enable auto-updates",
+    "_machine_translated": true,
+    "_source_hash": "71f0ad9ba6c331fa"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "القدرات",
+    "description": "Section label for opt-in capability toggles",
+    "_machine_translated": true,
+    "_source_hash": "a4ff700ad0a7a7d9"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "تفعيل التحكم بالكمبيوتر (أتمتة الواجهة، تشغيل التطبيقات)",
+    "description": "Toggle: enable computer-control capabilities",
+    "_machine_translated": true,
+    "_source_hash": "b4732926aa40d6b7"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "تعلّم تفضيلاتي بمرور الوقت",
+    "description": "Toggle: enable per-user steering / personalization",
+    "_machine_translated": true,
+    "_source_hash": "d30ca505baeeadb0"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "سيُنشئ Kage ملفاً لتفضيلاتك من المحادثات. يمكنك عرض هذا الملف وتعديله في أي وقت من الإعدادات. تبقى هذه البيانات على جهازك ولا تتم مشاركتها إلا مع الوكيل الذي اخترته لتحسين الردود.",
+    "description": "Helper text under the personalization toggle",
+    "_machine_translated": true,
+    "_source_hash": "16d2c9b78093eefc"
+  },
+  "welcome.extensions.title": {
+    "message": "الإضافات",
+    "description": "Step 4 header",
+    "_machine_translated": true,
+    "_source_hash": "80bae7ca6d207c17"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "اختر الإضافات التي تريد تثبيتها",
+    "description": "Step 4 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "bac904d3e47ee75f"
+  },
+  "welcome.extensions.loading": {
+    "message": "جارٍ تحميل الإضافات المتاحة…",
+    "description": "Placeholder while the store catalog loads",
+    "_machine_translated": true,
+    "_source_hash": "615e0a7299250b19"
+  },
+  "welcome.privacy.title": {
+    "message": "ساعد في تحسين Kage",
+    "description": "Step 5 header",
+    "_machine_translated": true,
+    "_source_hash": "2e1204cb4101c3de"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "شارك بيانات الاستخدام المجهولة لنعرف ما يجب إصلاحه وبناؤه لاحقًا",
+    "description": "Step 5 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "8dfbef3a2f798fba"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "تم تصميم Kage للمستخدمين المهتمين بالخصوصية. إذا كنت تفضّل عدم مشاركة أي شيء، فأوقِف المُبدِّل — وسيبقى كل شيء آخر يعمل. يمكنك تغيير ذلك في أي وقت من <strong>الإعدادات ← الخصوصية</strong>.",
+    "description": "Body intro on the privacy step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "ac4463c80e4b16b6"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "إرسال بيانات استخدام مجهولة",
+    "description": "Toggle: opt into telemetry",
+    "_machine_translated": true,
+    "_source_hash": "986d6eb8fba989a2"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "يساعدنا في فهم الميزات المهمة واكتشاف الأخطاء مبكرًا. تُخزَّن البيانات في الاتحاد الأوروبي عبر <a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a>، وهي خدمة تحليلات تضع الخصوصية في المقام الأول.",
+    "description": "Helper text under the telemetry toggle (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "bdc55640100063e9"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "ما الذي نجمعه",
+    "description": "Section label listing telemetry data points we DO collect",
+    "_machine_translated": true,
+    "_source_hash": "2ff070bf82224597"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "معرّف تثبيت عشوائي (غير مرتبط بك أو بحسابك)",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "96e58d79f1f6d27e"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "إصدار التطبيق، نظام التشغيل وإصداره، اللغة، البلد",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "0ccc0e529948fe8a"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "استخدام الميزات على مستوى عام — أي الميزات تُستخدم وكم مرة",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "f87859869bbfba1a"
+  },
+  "welcome.privacy.never.label": {
+    "message": "ما الذي لا نجمعه أبدًا",
+    "description": "Section label listing data points we do NOT collect",
+    "_machine_translated": true,
+    "_source_hash": "eec584e045210762"
+  },
+  "welcome.privacy.never.content": {
+    "message": "رسائلك أو مطالباتك أو ردود الذكاء الاصطناعي",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "a3f45778167650be"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "أسماء الملفات أو مساراتها أو محتويات الحافظة",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "319d9b53cd1c0fdd"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "اسمك أو بريدك الإلكتروني أو عنوان IP (يُزال عند الاستلام)",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "01f01349ea33a4f1"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "اقرأ <a href=\"#\" id=\"wOpenPrivacyPolicy\">سياسة الخصوصية</a> الكاملة للاطلاع على التفاصيل.",
+    "description": "Footer linking to full privacy policy (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5e3c456098cfd90b"
+  },
+  "welcome.macos.title": {
+    "message": "أذونات macOS",
+    "description": "macOS-only step header",
+    "_machine_translated": true,
+    "_source_hash": "067ffb2fdbc5c6d5"
+  },
+  "welcome.macos.subtitle": {
+    "message": "امنح بضعة أذونات خصوصية ليتمكن Kage من أداء عمله",
+    "description": "macOS-only step subtitle",
+    "_machine_translated": true,
+    "_source_hash": "acfe6b7734bbf488"
+  },
+  "welcome.macos.intro": {
+    "message": "يطلب macOS كل إذن في أول مرة يحتاجه Kage، لكن يمكنك منحها الآن لتجاوز تلك المطالبات. انقر على كل زر لفتح اللوحة المناسبة في إعدادات النظام وتفعيل Kage.",
+    "description": "Body intro on the macOS permissions step",
+    "_machine_translated": true,
+    "_source_hash": "eec75cbf54a21e8b"
+  },
+  "welcome.macos.note_html": {
+    "message": "لا بأس بتخطي هذه الخطوة — يمكنك العودة إليها في أي وقت من <strong>الإعدادات ← أذونات macOS</strong>.",
+    "description": "Footer note on the macOS permissions step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "47bee7e73adaab00"
+  },
+  "settings.save_and_close": {
+    "message": "حفظ وإغلاق",
+    "description": "Footer button on the settings window",
+    "_machine_translated": true,
+    "_source_hash": "5e9e4a32b4b6309e"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "تجربة المستخدم",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "59407becc0a07782"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "99549c6c2e366ad9"
+  },
+  "settings.sidebar.automation": {
+    "message": "الأتمتة",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "b834795a7ff1ec97"
+  },
+  "settings.sidebar.extensions": {
+    "message": "الإضافات",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "cf4069e44f670db1"
+  },
+  "settings.sidebar.about_group": {
+    "message": "حول",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "78077eddf55c4331"
+  },
+  "settings.sidebar.appearance": {
+    "message": "المظهر",
+    "description": "Sidebar item — appearance / theme / language",
+    "_machine_translated": true,
+    "_source_hash": "1d1dccc74224c031"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "مفاتيح الاختصار",
+    "description": "Sidebar item — global hotkey + window shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "64f81d3adf39f3cc"
+  },
+  "settings.sidebar.startup": {
+    "message": "بدء التشغيل",
+    "description": "Sidebar item — startup / autostart settings",
+    "_machine_translated": true,
+    "_source_hash": "3508e311ca9b4d30"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "أذونات macOS",
+    "description": "Sidebar item — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "ae8946cd92e5173e"
+  },
+  "settings.sidebar.speech": {
+    "message": "الكلام",
+    "description": "Sidebar item — TTS / speech-to-text settings",
+    "_machine_translated": true,
+    "_source_hash": "86a42bb1273525f1"
+  },
+  "settings.sidebar.personalization": {
+    "message": "التخصيص",
+    "description": "Sidebar item — auto-steering / preference learning",
+    "_machine_translated": true,
+    "_source_hash": "6798e60eff852d3e"
+  },
+  "settings.sidebar.agents": {
+    "message": "العملاء",
+    "description": "Sidebar item — agent connection management",
+    "_machine_translated": true,
+    "_source_hash": "8657b15bb5f0483f"
+  },
+  "settings.sidebar.model": {
+    "message": "النموذج",
+    "description": "Sidebar item — model selection settings",
+    "_machine_translated": true,
+    "_source_hash": "2b3d3786a3ec21f1"
+  },
+  "settings.sidebar.mcp": {
+    "message": "خوادم MCP",
+    "description": "Sidebar item — Model Context Protocol server config",
+    "_machine_translated": true,
+    "_source_hash": "0fef1a6c110dac59"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "أذونات العميل",
+    "description": "Sidebar item — per-tool grant policies",
+    "_machine_translated": true,
+    "_source_hash": "568e8e6a02befe4e"
+  },
+  "settings.sidebar.integration": {
+    "message": "تكامل النظام",
+    "description": "Sidebar item — system-level integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "c58679f8323891cc"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "الأوامر والمطالبات",
+    "description": "Sidebar item — user-defined commands & prompts",
+    "_machine_translated": true,
+    "_source_hash": "581aef4520411fb6"
+  },
+  "settings.sidebar.macros": {
+    "message": "الأتمتة",
+    "description": "Sidebar item — automations / macro playback",
+    "_machine_translated": true,
+    "_source_hash": "72171ae0b090b37c"
+  },
+  "settings.sidebar.store": {
+    "message": "متجر الإضافات",
+    "description": "Sidebar item — extension store",
+    "_machine_translated": true,
+    "_source_hash": "26bb2a98c5c70165"
+  },
+  "settings.sidebar.privacy": {
+    "message": "الخصوصية",
+    "description": "Sidebar item — privacy / telemetry settings",
+    "_machine_translated": true,
+    "_source_hash": "fbc089d375996aab"
+  },
+  "settings.sidebar.updates": {
+    "message": "التحديثات",
+    "description": "Sidebar item — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "5dccf5f6bf7f547b"
+  },
+  "settings.sidebar.about": {
+    "message": "حول Kage",
+    "description": "Sidebar item — version / credits / build info",
+    "_machine_translated": true,
+    "_source_hash": "faa7f9e9a2ff4b9a"
+  },
+  "settings.appearance.font_size.label": {
+    "message": "حجم الخط",
+    "description": "Settings — font size slider label",
+    "_machine_translated": true,
+    "_source_hash": "f3c1f1031a89a8f8"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "حجم الخط الأساسي للمشغّل ومدير الجلسات (بالبكسل).",
+    "description": "Helper text for font size slider",
+    "_machine_translated": true,
+    "_source_hash": "a5b0cde46d4dd5f5"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "المُشغِّل",
+    "description": "Subsection header for launcher-related settings",
+    "_machine_translated": true,
+    "_source_hash": "9db4e62252b4a81c"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "الشفافية",
+    "description": "Launcher opacity slider label",
+    "_machine_translated": true,
+    "_source_hash": "60c91f9e83e8f136"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "اضبط الشفافية (0.3 = شفاف جدًا، 1.0 = معتم).",
+    "description": "Helper text for opacity slider",
+    "_machine_translated": true,
+    "_source_hash": "59602da053fab141"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "موضع البدء",
+    "description": "Where the launcher appears on activation",
+    "_machine_translated": true,
+    "_source_hash": "254ef8fd2cc4f5e7"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "أين يظهر المُشغِّل عند تفعيله.",
+    "description": "Helper text for start position dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d7bdfe37714b1283"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "وسط الشاشة النشطة",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "679f600e3b3f67a2"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "بجوار مؤشر الفأرة",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "533ebe00d58a36d4"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "تذكُّر آخر موضع",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "bd9c73076677d435"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "تذكُّر الحجم",
+    "description": "Toggle: restore launcher to last manually resized dimensions",
+    "_machine_translated": true,
+    "_source_hash": "04eaff00c837f240"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "استعادة المُشغِّل إلى آخر أبعاد تم تغييرها يدويًا عند إعادة الفتح.",
+    "description": "Helper text for remember-size toggle",
+    "_machine_translated": true,
+    "_source_hash": "b280dae2de88e1c7"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "الإبقاء على آخر رد",
+    "description": "Toggle: keep last AI response visible on launcher reshow",
+    "_machine_translated": true,
+    "_source_hash": "dfa8615284a90ae0"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "إبقاء آخر رد من الذكاء الاصطناعي ظاهرًا عند إعادة عرض المُشغِّل.",
+    "description": "Helper text for preserve-last-response toggle",
+    "_machine_translated": true,
+    "_source_hash": "e525baf4ba0c2eb1"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "إظهار شريط الأدوات",
+    "description": "Toggle: show attachment toolbar",
+    "_machine_translated": true,
+    "_source_hash": "f006d91f37caee23"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "إظهار شريط إرفاق الملفات/الصور أسفل حقل الإدخال.",
+    "description": "Helper text for show-toolbar toggle",
+    "_machine_translated": true,
+    "_source_hash": "66efadfb3f4a7baa"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "إظهار الوقت",
+    "description": "Toggle: show current time in launcher",
+    "_machine_translated": true,
+    "_source_hash": "bbeb1c0730f63b26"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "عرض الوقت الحالي في منطقة الإدخال.",
+    "description": "Helper text for show-time toggle",
+    "_machine_translated": true,
+    "_source_hash": "b3b1ea1ef3e5c43a"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "تنسيق الوقت",
+    "description": "Time format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1f8e8798340d0896"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "إظهار التاريخ",
+    "description": "Toggle: show current date in launcher",
+    "_machine_translated": true,
+    "_source_hash": "515eaf6f865fa3c6"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "عرض التاريخ الحالي في منطقة الإدخال.",
+    "description": "Helper text for show-date toggle",
+    "_machine_translated": true,
+    "_source_hash": "5a8c8316df6917dd"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "تنسيق التاريخ",
+    "description": "Date format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "ad5e12fc4bd48cdb"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "مدير الجلسات",
+    "description": "Subsection header for session manager settings",
+    "_machine_translated": true,
+    "_source_hash": "3c1588a00125a796"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "تذكُّر حجم النافذة وموضعها",
+    "description": "Toggle: persist session manager geometry",
+    "_machine_translated": true,
+    "_source_hash": "1e949b704c4a0c12"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "استعادة مدير الجلسات إلى آخر حجم وموضع عند إعادة الفتح.",
+    "description": "Helper text for remember-chat-geometry toggle",
+    "_machine_translated": true,
+    "_source_hash": "02a5cbe87cacc5e0"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ تصفح السمات في المتجر…",
+    "description": "Button opening the extension store filtered to themes",
+    "_machine_translated": true,
+    "_source_hash": "2764102a95441bbd"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage (فاتح/داكن تلقائي)",
+    "description": "Built-in theme display name (follows OS theme)",
+    "_machine_translated": true,
+    "_source_hash": "b8016eb83700c7f4"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "يتبع سمة نظام التشغيل",
+    "description": "Built-in system-theme description",
+    "_machine_translated": true,
+    "_source_hash": "61b5b6431dc1b97d"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage فاتح",
+    "description": "Built-in light theme display name",
+    "_machine_translated": true,
+    "_source_hash": "6d1e8e8011d65b6f"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage داكن",
+    "description": "Built-in dark theme display name",
+    "_machine_translated": true,
+    "_source_hash": "9a825894c3d15536"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "استخدام هذه السمة",
+    "description": "Tooltip on the per-theme apply button",
+    "_machine_translated": true,
+    "_source_hash": "86e6959bd6b533a7"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "السمة النشطة",
+    "description": "Tooltip on the active-theme indicator (checkmark)",
+    "_machine_translated": true,
+    "_source_hash": "2bd707a4d5755a36"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "إلغاء تثبيت السمة",
+    "description": "Tooltip on the per-theme remove button",
+    "_machine_translated": true,
+    "_source_hash": "78cabaa8388140ef"
+  },
+  "settings.privacy.title": {
+    "message": "الخصوصية",
+    "description": "Privacy settings header",
+    "_machine_translated": true,
+    "_source_hash": "f56604388bcb691c"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>تم تحديث سياسة الخصوصية</strong> — يُرجى مراجعة الإفصاح الجديد أدناه. تم إيقاف القياس عن بُعد مؤقتًا في هذا التثبيت حتى تتخذ قرارًا.",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a921294f1f31b59d"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ تم تجميع هذا الإصدار بدون مفتاح تحليلات، لذا لا تُرسَل أي بيانات بصرف النظر عن المفتاح. عناصر التحكم أدناه مرئية للتوضيح فقط.",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time",
+    "_machine_translated": true,
+    "_source_hash": "3c4e6d4ce0494f53"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "إرسال بيانات استخدام مجهولة الهوية",
+    "description": "Telemetry opt-in toggle label (settings)",
+    "_machine_translated": true,
+    "_source_hash": "46c207f834e11c98"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "يساعدنا ذلك على فهم الميزات المهمة واكتشاف الأخطاء مبكرًا. تُخزَّن البيانات في الاتحاد الأوروبي عبر Aptabase، وهي خدمة تحليلات تضع الخصوصية في المقام الأول.",
+    "description": "Helper text under the telemetry toggle (settings)",
+    "_machine_translated": true,
+    "_source_hash": "8752ab612bc01eea"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "معرّف التثبيت المجهول",
+    "description": "Label for the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "fbf70289ce536d33"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "هذا هو المعرّف الوحيد الذي نستخدمه. وهو غير مرتبط باسمك أو بريدك الإلكتروني أو جهازك. يمكنك إعادة تعيينه في أي وقت — وعندئذٍ تصبح الأحداث السابقة لهذا التثبيت غير قابلة للربط.",
+    "description": "Helper text under the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "99359140a83cb4d2"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "(لم يُعيَّن بعد — اشترك للتوليد)",
+    "description": "Placeholder shown when no install ID exists yet",
+    "_machine_translated": true,
+    "_source_hash": "2bc4fc0ec0f628ca"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "إعادة تعيين",
+    "description": "Button: regenerate a fresh install ID",
+    "_machine_translated": true,
+    "_source_hash": "101cdbb94e9c32cf"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "هل تريد توليد معرّف تثبيت مجهول جديد؟\n\nلن تكون أحداث التحليلات السابقة من هذا التثبيت قابلة للربط بالأحداث المستقبلية. لا يؤدي هذا إلى حذف الأحداث السابقة — بل يجعلها فقط غير مرتبطة.",
+    "description": "Confirmation dialog text shown before resetting the install ID",
+    "_machine_translated": true,
+    "_source_hash": "796c14a897e256e4"
+  },
+  "settings.privacy.policy.label": {
+    "message": "سياسة الخصوصية",
+    "description": "Section label for the privacy policy link",
+    "_machine_translated": true,
+    "_source_hash": "3925dd66bad96e13"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "تفاصيل كاملة عمّا يُجمع وكيفية تخزينه وكيفية طلب الحذف. <a href=\"#\" id=\"openPrivacyPolicy\">اقرأ سياسة الخصوصية ←</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "1412329cc119cccd"
+  },
+  "settings.system.title": {
+    "message": "بدء التشغيل",
+    "description": "Settings header — system / startup-related settings",
+    "_machine_translated": true,
+    "_source_hash": "77ffaf219d8b35a9"
+  },
+  "settings.system.auto_start.label": {
+    "message": "البدء تلقائيًا عند تشغيل النظام",
+    "description": "Toggle: launch Kage when the user logs in",
+    "_machine_translated": true,
+    "_source_hash": "685b0a95ed44698f"
+  },
+  "settings.system.auto_start.description": {
+    "message": "تشغيل Kage تلقائيًا عند تسجيل الدخول.",
+    "description": "Helper text for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "11b28c1f1b47908f"
+  },
+  "settings.updates.title": {
+    "message": "التحديثات",
+    "description": "Settings header — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "a40c53155418ce1b"
+  },
+  "settings.updates.checking": {
+    "message": "جارٍ التحقق من التحديثات",
+    "description": "Status while the updater plugin polls for the latest version",
+    "_machine_translated": true,
+    "_source_hash": "4124db834dc384e4"
+  },
+  "settings.updates.checking_progress": {
+    "message": "جارٍ التحقق من التحديثات…",
+    "description": "Spinner label while the updater check is in flight",
+    "_machine_translated": true,
+    "_source_hash": "5bf0a54d35bb0f52"
+  },
+  "settings.updates.version_label": {
+    "message": "الإصدار {version}",
+    "description": "Current version display in the update status card",
+    "_machine_translated": true,
+    "_source_hash": "19dfa52d548625fc"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage محدَّث",
+    "description": "Status when the running version equals the latest",
+    "_machine_translated": true,
+    "_source_hash": "622dc3ded7e0e7c9"
+  },
+  "settings.updates.update_available_title": {
+    "message": "تحديث متوفر — الإصدار {version}",
+    "description": "Status when a newer version is available",
+    "_machine_translated": true,
+    "_source_hash": "92485742299d8fc7"
+  },
+  "settings.updates.current_version_label": {
+    "message": "الإصدار الحالي: {version}",
+    "description": "Detail line shown beneath the update-available status",
+    "_machine_translated": true,
+    "_source_hash": "a73271d9ee4b12c6"
+  },
+  "settings.updates.check_failed": {
+    "message": "فشل التحقق من التحديث",
+    "description": "Status when the updater plugin returned an error",
+    "_machine_translated": true,
+    "_source_hash": "35e2ac0aedb8ff03"
+  },
+  "settings.updates.installing": {
+    "message": "جارٍ التنزيل والتثبيت…",
+    "description": "Status while the update installer is running",
+    "_machine_translated": true,
+    "_source_hash": "c43508f23c5aab72"
+  },
+  "settings.updates.action.install_now": {
+    "message": "التثبيت الآن",
+    "description": "Button on the update-available status card",
+    "_machine_translated": true,
+    "_source_hash": "0245fb64db874ead"
+  },
+  "settings.updates.action.recheck": {
+    "message": "التحقق مرة أخرى",
+    "description": "Button on the up-to-date status card",
+    "_machine_translated": true,
+    "_source_hash": "1dc1a68e0be35d10"
+  },
+  "settings.updates.action.retry": {
+    "message": "إعادة المحاولة",
+    "description": "Button on the failed-check status card",
+    "_machine_translated": true,
+    "_source_hash": "165b3326eed1cba9"
+  },
+  "settings.updates.preferences.label": {
+    "message": "التفضيلات",
+    "description": "Subsection header for the auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "ba6d7b2633fca623"
+  },
+  "settings.updates.channel.label": {
+    "message": "قناة التحديث",
+    "description": "Channel selector label",
+    "_machine_translated": true,
+    "_source_hash": "b56944ad2ed8c746"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "تدفق الإصدارات الذي يتبعه هذا التثبيت. <strong>المستقر</strong> هو الإصدار القياسي للجميع. <strong>المعاينة</strong> لتجربة ما هو قادم. <strong>Nightly</strong> يتتبع كل التزام — توقّع بعض العيوب.",
+    "description": "Helper text under the channel selector (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b9202b73aa174a43"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "مستقر (موصى به)",
+    "description": "Channel dropdown option for the stable release stream",
+    "_machine_translated": true,
+    "_source_hash": "4286972740ba01e1"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "معاينة",
+    "description": "Channel dropdown option for the beta / preview stream",
+    "_machine_translated": true,
+    "_source_hash": "875e21922f772146"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "Nightly (الإصدار التجريبي الأحدث)",
+    "description": "Channel dropdown option for the per-commit dev stream",
+    "_machine_translated": true,
+    "_source_hash": "1d482fd83df5e2a9"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "التحقق من التحديثات تلقائيًا",
+    "description": "Toggle: periodic update polling",
+    "_machine_translated": true,
+    "_source_hash": "a54024fd8c6b52f5"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "التحقق من التحديثات بشكل دوري.",
+    "description": "Helper text for the auto-check toggle",
+    "_machine_translated": true,
+    "_source_hash": "04989a0d4bdad9f8"
+  },
+  "settings.updates.silent.label": {
+    "message": "التحديثات الصامتة",
+    "description": "Toggle: install updates automatically when idle",
+    "_machine_translated": true,
+    "_source_hash": "b97b0ff177898bce"
+  },
+  "settings.updates.silent.description": {
+    "message": "تنزيل التحديثات وتثبيتها تلقائيًا عند الخمول (دون نشاط في Launcher لمدة 5 دقائق).",
+    "description": "Helper text for the silent-updates toggle",
+    "_machine_translated": true,
+    "_source_hash": "f8784c8092735e23"
+  },
+  "settings.updates.changelog.label": {
+    "message": "سجل التغييرات",
+    "description": "Subsection header for the changelog block",
+    "_machine_translated": true,
+    "_source_hash": "e166a569f95810f0"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "ملاحظات الإصدار وسجل الإصدارات. <a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">تصفح جميع الإصدارات على GitHub →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "fe09e017988f8e74"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "جارٍ تحميل سجل التغييرات…",
+    "description": "Placeholder while the changelog markdown loads",
+    "_machine_translated": true,
+    "_source_hash": "a7bb227353d0ce61"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "تعذّر تحميل سجل التغييرات.",
+    "description": "Placeholder when the changelog request fails",
+    "_machine_translated": true,
+    "_source_hash": "398cd16e63a3c677"
   }
 }

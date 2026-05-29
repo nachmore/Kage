@@ -33,13 +33,13 @@ export class AppearanceSettingsModule extends SettingsModule {
                         <input type="hidden" id="theme" value="system">
                         <div id="themeList" class="theme-list-scroll" style="margin-top:8px;"></div>
                         <div style="margin-top:8px;">
-                            <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">🛍️ Browse Themes in Store...</button>
+                            <button class="setting-button" id="browseThemesBtn" style="font-size:12px;">${t('settings.appearance.browse_themes')}</button>
                         </div>
                     </div>
 
                     ${this.createControlRow(
-                        'Font Size',
-                        'Base font size for the Launcher and Session Manager (in pixels).',
+                        t('settings.appearance.font_size.label'),
+                        t('settings.appearance.font_size.description'),
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="fontSize" min="11" max="20" step="1" value="14">' +
                             '<span class="range-value" id="fontSizeValue">14px</span>' +
@@ -47,11 +47,11 @@ export class AppearanceSettingsModule extends SettingsModule {
                     )}
 
                     <!-- Launcher -->
-                    <div class="setting-section-label">Launcher</div>
+                    <div class="setting-section-label">${t('settings.appearance.launcher.label')}</div>
 
                     ${this.createControlRow(
-                        'Opacity',
-                        'Adjust transparency (0.3 = very transparent, 1.0 = solid).',
+                        t('settings.appearance.opacity.label'),
+                        t('settings.appearance.opacity.description'),
                         '<div class="range-container">' +
                             '<input type="range" class="range-slider" id="opacity" min="0.3" max="1" step="0.05" value="1">' +
                             '<span class="range-value" id="opacityValue">1.0</span>' +
@@ -59,46 +59,46 @@ export class AppearanceSettingsModule extends SettingsModule {
                     )}
 
                     ${this.createControlRow(
-                        'Start Position',
-                        'Where the Launcher appears when activated.',
+                        t('settings.appearance.start_position.label'),
+                        t('settings.appearance.start_position.description'),
                         '<select class="setting-select" id="windowStartPosition">' +
-                            '<option value="center">Center of active monitor</option>' +
-                            '<option value="mouse">Next to mouse cursor</option>' +
-                            '<option value="remember">Remember last position</option>' +
+                            `<option value="center">${t('settings.appearance.start_position.center')}</option>` +
+                            `<option value="mouse">${t('settings.appearance.start_position.mouse')}</option>` +
+                            `<option value="remember">${t('settings.appearance.start_position.remember')}</option>` +
                             '</select>'
                     )}
 
                     ${this.createCheckboxRow(
-                        'Remember Size',
-                        'Restore the Launcher to its last manually resized dimensions when reopened.',
+                        t('settings.appearance.remember_size.label'),
+                        t('settings.appearance.remember_size.description'),
                         'rememberLauncherSize',
                         false
                     )}
 
                     ${this.createCheckboxRow(
-                        'Preserve Last Response',
-                        'Keep the last AI response visible when the Launcher is reshown.',
+                        t('settings.appearance.preserve_last_response.label'),
+                        t('settings.appearance.preserve_last_response.description'),
                         'preserveLastResponse',
                         true
                     )}
 
                     ${this.createCheckboxRow(
-                        'Show Toolbar',
-                        'Show the attach file/image toolbar below the input.',
+                        t('settings.appearance.show_toolbar.label'),
+                        t('settings.appearance.show_toolbar.description'),
                         'showFloatingToolbar',
                         false
                     )}
 
                     ${this.createCheckboxRow(
-                        'Show Time',
-                        'Display the current time in the input area.',
+                        t('settings.appearance.show_time.label'),
+                        t('settings.appearance.show_time.description'),
                         'showTime',
                         false
                     )}
 
                     <div id="timeFormatRow" style="display:none; padding-left: 28px;">
                         ${this.createControlRow(
-                            'Time Format',
+                            t('settings.appearance.time_format.label'),
                             '',
                             '<select class="setting-select" id="timeFormat">' +
                                 '<option value="HH:mm">14:30 (24h)</option>' +
@@ -110,15 +110,15 @@ export class AppearanceSettingsModule extends SettingsModule {
                     </div>
 
                     ${this.createCheckboxRow(
-                        'Show Date',
-                        'Display the current date in the input area.',
+                        t('settings.appearance.show_date.label'),
+                        t('settings.appearance.show_date.description'),
                         'showDate',
                         false
                     )}
 
                     <div id="dateFormatRow" style="display:none; padding-left: 28px;">
                         ${this.createControlRow(
-                            'Date Format',
+                            t('settings.appearance.date_format.label'),
                             '',
                             '<select class="setting-select" id="dateFormat">' +
                                 '<option value="ddd, MMM D">Mon, Jan 5</option>' +
@@ -133,11 +133,11 @@ export class AppearanceSettingsModule extends SettingsModule {
                     </div>
 
                     <!-- Session Manager -->
-                    <div class="setting-section-label">Session Manager</div>
+                    <div class="setting-section-label">${t('settings.appearance.session_manager.label')}</div>
 
                     ${this.createCheckboxRow(
-                        'Remember Window Size & Position',
-                        'Restore the Session Manager to its last size and position when reopened.',
+                        t('settings.appearance.remember_chat_geometry.label'),
+                        t('settings.appearance.remember_chat_geometry.description'),
                         'rememberChatGeometry',
                         true
                     )}
@@ -332,26 +332,42 @@ export class AppearanceSettingsModule extends SettingsModule {
 
             if (!themeList) return;
 
-            // Built-in themes (cannot be deleted)
+            // Built-in themes (cannot be deleted). Names + descriptions go
+            // through i18n so a German user sees "Kage (Hell / Dunkel)" etc.
+            // The id stays canonical English ("system"/"light"/"dark") because
+            // it's the wire format read from / written to config.ui.theme.
             const builtins = [
                 {
                     id: 'system',
                     icon: '🖥️',
-                    name: 'Kage (Auto Light / Dark)',
-                    description: 'Follows your OS theme',
+                    name: t('settings.appearance.builtin_theme.system.name'),
+                    description: t('settings.appearance.builtin_theme.system.description'),
                 },
-                { id: 'light', icon: '☀️', name: 'Kage Light', description: '' },
-                { id: 'dark', icon: '🌙', name: 'Kage Dark', description: '' },
+                {
+                    id: 'light',
+                    icon: '☀️',
+                    name: t('settings.appearance.builtin_theme.light.name'),
+                    description: '',
+                },
+                {
+                    id: 'dark',
+                    icon: '🌙',
+                    name: t('settings.appearance.builtin_theme.dark.name'),
+                    description: '',
+                },
             ];
+            const useBtnTitle = t('settings.appearance.theme.use_btn_title');
+            const activeTickTitle = t('settings.appearance.theme.active_tick_title');
+            const uninstallBtnTitle = t('settings.appearance.theme.uninstall_btn_title');
 
             let html = '';
             for (const b of builtins) {
                 const isActive = b.id === activeThemeId;
                 const tickBtn = isActive
-                    ? `<span class="theme-action-btn theme-active-tick" title="Active theme">
+                    ? `<span class="theme-action-btn theme-active-tick" title="${activeTickTitle}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </span>`
-                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${b.id}" title="Use this theme">
+                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${b.id}" title="${useBtnTitle}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </button>`;
                 html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">
@@ -366,15 +382,15 @@ export class AppearanceSettingsModule extends SettingsModule {
                 if (!t.enabled) continue;
                 const isActive = t.manifest.id === activeThemeId;
                 const tickBtn = isActive
-                    ? `<span class="theme-action-btn theme-active-tick" title="Active theme">
+                    ? `<span class="theme-action-btn theme-active-tick" title="${activeTickTitle}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </span>`
-                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="Use this theme">
+                    : `<button class="theme-action-btn theme-use-btn" data-theme-id="${esc(t.manifest.id)}" title="${useBtnTitle}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </button>`;
                 const removeBtn = t.bundled
                     ? ''
-                    : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="Uninstall theme">
+                    : `<button class="theme-action-btn theme-remove-btn" data-theme-id="${esc(t.manifest.id)}" title="${uninstallBtnTitle}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>`;
                 html += `<div class="theme-list-item${isActive ? ' theme-list-item-active' : ''}">

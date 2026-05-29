@@ -215,9 +215,9 @@
         <div class="wizard-step active" data-step="0">
             <div class="welcome-hero">
                 <div class="welcome-logo" id="welcomeMascot"></div>
-                <div class="welcome-title">Welcome to Kage</div>
-                <div class="welcome-subtitle">Your AI-powered desktop companion</div>
-                <div class="welcome-blurb">
+                <div class="welcome-title" data-i18n="window.title.welcome">Welcome to Kage</div>
+                <div class="welcome-subtitle" data-i18n="welcome.subtitle">Your AI-powered desktop companion</div>
+                <div class="welcome-blurb" data-i18n="welcome.blurb">
                     Let's get you set up. We'll configure how Kage connects to your AI backend,
                     set your global hotkey, and choose a few preferences. This only takes a minute.
                 </div>
@@ -227,28 +227,31 @@
         <!-- Step 2: Agent -->
         <div class="wizard-step" data-step="1">
             <div class="step-header">
-                <div class="step-title">Agent</div>
-                <div class="step-subtitle">Tell Kage how to reach your AI backend</div>
+                <div class="step-title" data-i18n="welcome.agent.title">Agent</div>
+                <div class="step-subtitle" data-i18n="welcome.agent.subtitle">Tell Kage how to reach your AI backend</div>
             </div>
             <div class="step-content">
 
             <div id="wAgentAutoDetect">
-                <div class="agent-searching">🔍 Searching for agents…</div>
+                <div class="agent-searching" data-i18n="welcome.agent.searching">🔍 Searching for agents…</div>
             </div>
 
             <div style="margin-top:12px;text-align:center;">
                 <button type="button" id="wAgentTypePickerBtn" class="agent-manual-link"
-                        style="background:none;border:none;color:var(--kage-text-muted);font-size:12px;cursor:pointer;text-decoration:underline;">
+                        style="background:none;border:none;color:var(--kage-text-muted);font-size:12px;cursor:pointer;text-decoration:underline;"
+                        data-i18n="welcome.agent.pick_different">
                     Or pick a different agent type…
                 </button>
             </div>
 
-            <div id="wOllamaDeferredHint" class="section-desc" style="display:none;margin-top:12px;padding:10px 12px;background:rgba(192,156,255,0.08);border:1px solid rgba(192,156,255,0.2);border-radius:8px;">
+            <div id="wOllamaDeferredHint" class="section-desc"
+                 style="display:none;margin-top:12px;padding:10px 12px;background:rgba(192,156,255,0.08);border:1px solid rgba(192,156,255,0.2);border-radius:8px;"
+                 data-i18n-html="welcome.agent.ollama_deferred">
                 🦙 Ollama setup happens after first run. Finish this wizard, then open <strong>Settings → Agents → + Add agent → Ollama</strong> to wire up your local model. We've saved a placeholder so the rest of setup keeps working.
             </div>
 
             <div id="wManualConfig" style="display:none;margin-top:16px;">
-                <div class="section-desc" style="margin-bottom:12px;">
+                <div class="section-desc" style="margin-bottom:12px;" data-i18n="welcome.agent.manual_intro">
                     Configure the connection manually. You can change this later from Settings → Agents.
                 </div>
                 <div id="wConnectionEditor"></div>
@@ -260,44 +263,44 @@
         <!-- Step 3: Preferences -->
         <div class="wizard-step" data-step="2">
             <div class="step-header">
-                <div class="step-title">Preferences</div>
-                <div class="step-subtitle">Customize how Kage works for you</div>
+                <div class="step-title" data-i18n="welcome.preferences.title">Preferences</div>
+                <div class="step-subtitle" data-i18n="welcome.preferences.subtitle">Customize how Kage works for you</div>
             </div>
             <div class="step-content">
 
             <div class="form-group">
-                <div class="section-label">Global Hotkey</div>
-                <div class="section-desc">Press this shortcut anywhere to summon Kage</div>
+                <div class="section-label" data-i18n="welcome.preferences.hotkey.label">Global Hotkey</div>
+                <div class="section-desc" data-i18n="welcome.preferences.hotkey.description">Press this shortcut anywhere to summon Kage</div>
                 <div id="hotkeyPickerContainer"></div>
             </div>
 
             <div class="form-group">
-                <div class="section-label">Settings</div>
+                <div class="section-label" data-i18n="welcome.preferences.settings.label">Settings</div>
                 <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;">
                     <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);" onclick="event.stopPropagation()">
                         <input type="checkbox" id="launchStartup" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
-                        <span style="font-size:13px;">Launch Kage when your computer starts</span>
+                        <span style="font-size:13px;" data-i18n="welcome.preferences.launch_at_startup">Launch Kage when your computer starts</span>
                     </label>
                     <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;" onclick="event.stopPropagation()">
                         <input type="checkbox" id="autoUpdate" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
-                        <span style="font-size:13px;">Keep Kage up to date automatically</span>
+                        <span style="font-size:13px;" data-i18n="welcome.preferences.auto_update">Keep Kage up to date automatically</span>
                     </label>
                 </div>
             </div>
 
             <div class="form-group">
-                <div class="section-label">Capabilities</div>
+                <div class="section-label" data-i18n="welcome.preferences.capabilities.label">Capabilities</div>
                 <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;">
                     <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.08);" onclick="event.stopPropagation()">
                         <input type="checkbox" id="computerControl" checked style="width:16px;height:16px;accent-color:var(--kage-accent);">
-                        <span style="font-size:13px;">Enable computer control (UI automation, app launching)</span>
+                        <span style="font-size:13px;" data-i18n="welcome.preferences.computer_control">Enable computer control (UI automation, app launching)</span>
                     </label>
                     <div style="padding:10px 14px;">
                         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="event.stopPropagation()">
                             <input type="checkbox" id="enablePersonalization" checked style="width:16px;height:16px;accent-color:var(--kage-accent);margin-top:2px;flex-shrink:0;">
                             <div>
-                                <span style="font-size:13px;">Learn my preferences over time</span>
-                                <div style="font-size:11px;color:#938F9B;margin-top:4px;line-height:1.5;">
+                                <span style="font-size:13px;" data-i18n="welcome.preferences.personalization.label">Learn my preferences over time</span>
+                                <div style="font-size:11px;color:#938F9B;margin-top:4px;line-height:1.5;" data-i18n="welcome.preferences.personalization.description">
                                     Kage will build a profile of your preferences from conversations. You can view and edit this anytime in Settings. This data stays on your machine and is only shared with your chosen agent to improve responses.
                                 </div>
                             </div>
@@ -311,12 +314,12 @@
         <!-- Step 4: Extensions -->
         <div class="wizard-step" data-step="3">
             <div class="step-header">
-                <div class="step-title">Extensions</div>
-                <div class="step-subtitle">Choose which extensions to install</div>
+                <div class="step-title" data-i18n="welcome.extensions.title">Extensions</div>
+                <div class="step-subtitle" data-i18n="welcome.extensions.subtitle">Choose which extensions to install</div>
             </div>
             <div class="step-content">
                 <div id="extListContainer">
-                    <div class="ext-loading">Loading available extensions…</div>
+                    <div class="ext-loading" data-i18n="welcome.extensions.loading">Loading available extensions…</div>
                 </div>
             </div>
         </div>
@@ -324,11 +327,11 @@
         <!-- Step 5: Privacy & Analytics -->
         <div class="wizard-step" data-step="4">
             <div class="step-header">
-                <div class="step-title">Help improve Kage</div>
-                <div class="step-subtitle">Share anonymous usage data so we know what to fix and build next</div>
+                <div class="step-title" data-i18n="welcome.privacy.title">Help improve Kage</div>
+                <div class="step-subtitle" data-i18n="welcome.privacy.subtitle">Share anonymous usage data so we know what to fix and build next</div>
             </div>
             <div class="step-content">
-                <div class="section-desc" style="margin-bottom:16px;line-height:1.6;">
+                <div class="section-desc" style="margin-bottom:16px;line-height:1.6;" data-i18n-html="welcome.privacy.intro_html">
                     Kage is built for privacy-conscious users. If you'd rather not share anything, flip the toggle off — everything else still works. You can change this anytime in <strong>Settings → Privacy</strong>.
                 </div>
 
@@ -336,8 +339,8 @@
                     <label style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:rgba(113,56,204,0.08);border:1px solid rgba(113,56,204,0.25);border-radius:8px;cursor:pointer;" onclick="event.stopPropagation()">
                         <input type="checkbox" id="enableTelemetry" checked style="width:18px;height:18px;accent-color:var(--kage-accent);margin-top:1px;flex-shrink:0;">
                         <div style="flex:1;">
-                            <span style="font-size:14px;font-weight:600;">Send anonymous usage data</span>
-                            <div style="font-size:12px;color:#938F9B;margin-top:4px;line-height:1.5;">
+                            <span style="font-size:14px;font-weight:600;" data-i18n="welcome.privacy.toggle.label">Send anonymous usage data</span>
+                            <div style="font-size:12px;color:#938F9B;margin-top:4px;line-height:1.5;" data-i18n-html="welcome.privacy.toggle.description_html">
                                 Helps us understand which features matter and catch bugs early. Data is stored in the EU via <a href="https://aptabase.com" target="_blank" style="color:var(--kage-accent-light);">Aptabase</a>, a privacy-first analytics service.
                             </div>
                         </div>
@@ -345,24 +348,24 @@
                 </div>
 
                 <div class="form-group">
-                    <div class="section-label" style="margin-bottom:8px;">What we collect</div>
+                    <div class="section-label" style="margin-bottom:8px;" data-i18n="welcome.privacy.collect.label">What we collect</div>
                     <ul style="font-size:12px;color:#b0adb5;line-height:1.8;padding-left:20px;margin:0;">
-                        <li>A random install ID (not linked to you or your account)</li>
-                        <li>App version, OS and version, language, country</li>
-                        <li>High-level feature usage — which features are used and how often</li>
+                        <li data-i18n="welcome.privacy.collect.install_id">A random install ID (not linked to you or your account)</li>
+                        <li data-i18n="welcome.privacy.collect.app_meta">App version, OS and version, language, country</li>
+                        <li data-i18n="welcome.privacy.collect.feature_usage">High-level feature usage — which features are used and how often</li>
                     </ul>
                 </div>
 
                 <div class="form-group">
-                    <div class="section-label" style="margin-bottom:8px;">What we never collect</div>
+                    <div class="section-label" style="margin-bottom:8px;" data-i18n="welcome.privacy.never.label">What we never collect</div>
                     <ul style="font-size:12px;color:#b0adb5;line-height:1.8;padding-left:20px;margin:0;">
-                        <li>Your messages, prompts, or AI responses</li>
-                        <li>File names, paths, or clipboard contents</li>
-                        <li>Your name, email, or IP address (stripped at ingest)</li>
+                        <li data-i18n="welcome.privacy.never.content">Your messages, prompts, or AI responses</li>
+                        <li data-i18n="welcome.privacy.never.paths">File names, paths, or clipboard contents</li>
+                        <li data-i18n="welcome.privacy.never.identity">Your name, email, or IP address (stripped at ingest)</li>
                     </ul>
                 </div>
 
-                <div style="font-size:11px;color:#938F9B;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
+                <div style="font-size:11px;color:#938F9B;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);" data-i18n-html="welcome.privacy.policy_link_html">
                     Read the full <a href="#" id="wOpenPrivacyPolicy" style="color:var(--kage-accent-light);">privacy policy</a> for details.
                 </div>
             </div>
@@ -371,17 +374,17 @@
         <!-- Step 6: macOS Permissions (shown on macOS only; removed at init on other platforms) -->
         <div class="wizard-step" data-step="5" data-mac-only="true">
             <div class="step-header">
-                <div class="step-title">macOS Permissions</div>
-                <div class="step-subtitle">Grant a few privacy permissions so Kage can do its job</div>
+                <div class="step-title" data-i18n="welcome.macos.title">macOS Permissions</div>
+                <div class="step-subtitle" data-i18n="welcome.macos.subtitle">Grant a few privacy permissions so Kage can do its job</div>
             </div>
             <div class="step-content">
-                <div class="section-desc" style="margin-bottom: 16px;">
+                <div class="section-desc" style="margin-bottom: 16px;" data-i18n="welcome.macos.intro">
                     macOS prompts for each permission the first time Kage needs it, but
                     you can grant them now to skip those prompts. Click each button to
                     open the right pane in System Settings and enable Kage.
                 </div>
                 <div id="wMacPermCards"></div>
-                <div class="mac-perm-note">
+                <div class="mac-perm-note" data-i18n-html="welcome.macos.note_html">
                     It is fine to skip this step — you can revisit it any time from
                     <strong>Settings → macOS Permissions</strong>.
                 </div>
@@ -399,15 +402,15 @@
             <div class="wizard-dot" data-dot="5" data-mac-only="true"></div>
         </div>
         <div class="wizard-btns">
-            <button class="wiz-btn wiz-btn-secondary" id="backBtn" style="display:none;">Back</button>
-            <button class="wiz-btn wiz-btn-primary" id="nextBtn">Get Started</button>
+            <button class="wiz-btn wiz-btn-secondary" id="backBtn" style="display:none;" data-i18n="common.back">Back</button>
+            <button class="wiz-btn wiz-btn-primary" id="nextBtn" data-i18n="common.get_started">Get Started</button>
         </div>
     </div>
 
     <!-- Launch overlay — see CSS comments on .launch-overlay -->
     <div class="launch-overlay" id="launchOverlay" aria-hidden="true">
         <div class="launch-mascot" id="launchMascot"></div>
-        <div class="launch-label">Launching Kage…</div>
+        <div class="launch-label" data-i18n="welcome.launching">Launching Kage…</div>
     </div>
 </div>
 
@@ -421,11 +424,23 @@
     import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
     import { isMacOS as detectMacOS, renderAllInto as renderMacPermsInto } from './js/shared/mac-permissions.js';
     import * as kageAgentConnections from './js/shared/agent-connections.js';
+    import { initI18n, applyStaticTranslations, t } from './js/shared/i18n.js';
 
-    function initWelcome() {
+    async function initWelcome() {
         if (!window.__TAURI__?.core) { setTimeout(initWelcome, 50); return; }
         const { invoke } = window.__TAURI__.core;
         const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
+
+        // Load the active locale's catalog before any rendering. The window
+        // is held off-screen until the mascot's first frame, so the brief
+        // catalog fetch happens before the welcome flow is visible — the
+        // user only ever sees the localised copy.
+        try {
+            await initI18n(invoke);
+        } catch (e) {
+            console.warn('[welcome] i18n init failed', e);
+        }
+        applyStaticTranslations(document);
 
         // Mirror console output into the backend app log so the finish-flow
         // step-by-step trace survives window close. Welcome is a short-lived
@@ -493,7 +508,10 @@
                 d.classList.toggle('done', i < n);
             });
             backBtn.style.display = n === 0 ? 'none' : '';
-            nextBtn.textContent = n === 0 ? 'Get Started' : n === totalSteps - 1 ? 'Finish' : 'Next';
+            nextBtn.textContent =
+                n === 0 ? t('common.get_started')
+                : n === totalSteps - 1 ? t('common.finish')
+                : t('common.next');
         }
 
         // --- Agent connection step --------------------------------------

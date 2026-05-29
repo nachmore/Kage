@@ -574,5 +574,863 @@
     "description": "Spawning the platform installer failed",
     "_machine_translated": true,
     "_source_hash": "13fde8c85d6a3d56"
+  },
+  "common.next": {
+    "message": "다음",
+    "description": "Generic Next button (wizard navigation, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "d91b7a241c47ca29"
+  },
+  "common.back": {
+    "message": "뒤로",
+    "description": "Generic Back button",
+    "_machine_translated": true,
+    "_source_hash": "739745f8c06102dd"
+  },
+  "common.finish": {
+    "message": "완료",
+    "description": "Final-step button on a wizard",
+    "_machine_translated": true,
+    "_source_hash": "33695be3b79aae96"
+  },
+  "common.skip": {
+    "message": "건너뛰기",
+    "description": "Generic skip-this-step button",
+    "_machine_translated": true,
+    "_source_hash": "0cfcc982b509d22f"
+  },
+  "common.get_started": {
+    "message": "시작하기",
+    "description": "Welcome-screen primary call-to-action",
+    "_machine_translated": true,
+    "_source_hash": "9db04e69383fe503"
+  },
+  "welcome.subtitle": {
+    "message": "AI 기반 데스크톱 동반자",
+    "description": "Welcome step 1 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "15d70e6c05bf41f8"
+  },
+  "welcome.blurb": {
+    "message": "설정을 시작하겠습니다. Kage가 AI 백엔드에 연결되는 방식을 구성하고, 전역 단축키를 설정하며, 몇 가지 환경설정을 선택합니다. 1분이면 충분합니다.",
+    "description": "Welcome step 1 introduction body",
+    "_machine_translated": true,
+    "_source_hash": "7c12ea31355f244f"
+  },
+  "welcome.launching": {
+    "message": "Kage를 실행하는 중…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots",
+    "_machine_translated": true,
+    "_source_hash": "e1870ce191ea38a3"
+  },
+  "welcome.agent.title": {
+    "message": "에이전트",
+    "description": "Step 2 header — agent connection setup",
+    "_machine_translated": true,
+    "_source_hash": "e75b2608c091f525"
+  },
+  "welcome.agent.subtitle": {
+    "message": "Kage가 AI 백엔드에 연결되는 방법을 알려주세요",
+    "description": "Step 2 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "c1166ea96bc41195"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 에이전트를 검색하는 중…",
+    "description": "Placeholder while auto-detection scans for installed AI agents",
+    "_machine_translated": true,
+    "_source_hash": "f3509c3dc56c712e"
+  },
+  "welcome.agent.pick_different": {
+    "message": "또는 다른 에이전트 유형을 선택하세요…",
+    "description": "Link/button revealing the manual agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "f7a9cd09aac64b7e"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 Ollama 설정은 첫 실행 이후에 진행됩니다. 이 마법사를 완료한 다음, <strong>설정 → 에이전트 → + 에이전트 추가 → Ollama</strong>를 열어 로컬 모델을 연결하세요. 나머지 설정이 계속 작동하도록 자리 표시자를 저장해 두었습니다.",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "aa1a057cacf982db"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "연결을 수동으로 구성합니다. 나중에 설정 → 에이전트에서 변경할 수 있습니다.",
+    "description": "Body shown above the manual connection editor",
+    "_machine_translated": true,
+    "_source_hash": "4a4dd6900dac4281"
+  },
+  "welcome.preferences.title": {
+    "message": "환경설정",
+    "description": "Step 3 header",
+    "_machine_translated": true,
+    "_source_hash": "7fbe3a23acbfba67"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "Kage가 작동하는 방식을 사용자에 맞게 조정하세요",
+    "description": "Step 3 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "379494d0f3deffba"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "전역 단축키",
+    "description": "Section label for the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "bedb36831cd220b7"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "어디서든 이 단축키를 눌러 Kage를 호출하세요",
+    "description": "Helper text under the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "47e610b5a150e675"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "설정",
+    "description": "Section label for the launch / auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "6c9ba40fe5c54351"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "컴퓨터가 시작될 때 Kage 실행",
+    "description": "Toggle: enable autostart",
+    "_machine_translated": true,
+    "_source_hash": "c01a3a42092990dd"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "Kage를 자동으로 최신 상태로 유지",
+    "description": "Toggle: enable auto-updates",
+    "_machine_translated": true,
+    "_source_hash": "71f0ad9ba6c331fa"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "기능",
+    "description": "Section label for opt-in capability toggles",
+    "_machine_translated": true,
+    "_source_hash": "a4ff700ad0a7a7d9"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "컴퓨터 제어 활성화(UI 자동화, 앱 실행)",
+    "description": "Toggle: enable computer-control capabilities",
+    "_machine_translated": true,
+    "_source_hash": "b4732926aa40d6b7"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "시간이 지나면서 내 선호도 학습",
+    "description": "Toggle: enable per-user steering / personalization",
+    "_machine_translated": true,
+    "_source_hash": "d30ca505baeeadb0"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "Kage가 대화를 통해 사용자 선호도 프로필을 구축합니다. 설정에서 언제든지 확인하고 편집할 수 있습니다. 이 데이터는 사용자 컴퓨터에 보관되며, 응답 개선을 위해 선택한 에이전트에만 공유됩니다.",
+    "description": "Helper text under the personalization toggle",
+    "_machine_translated": true,
+    "_source_hash": "16d2c9b78093eefc"
+  },
+  "welcome.extensions.title": {
+    "message": "확장 기능",
+    "description": "Step 4 header",
+    "_machine_translated": true,
+    "_source_hash": "80bae7ca6d207c17"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "설치할 확장 기능을 선택하세요",
+    "description": "Step 4 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "bac904d3e47ee75f"
+  },
+  "welcome.extensions.loading": {
+    "message": "사용 가능한 확장 기능을 불러오는 중…",
+    "description": "Placeholder while the store catalog loads",
+    "_machine_translated": true,
+    "_source_hash": "615e0a7299250b19"
+  },
+  "welcome.privacy.title": {
+    "message": "Kage 개선에 도움 주기",
+    "description": "Step 5 header",
+    "_machine_translated": true,
+    "_source_hash": "2e1204cb4101c3de"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "익명 사용 데이터를 공유하여 무엇을 개선하고 다음에 만들지 알 수 있도록 도와주세요",
+    "description": "Step 5 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "8dfbef3a2f798fba"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "Kage는 개인 정보를 중시하는 사용자를 위해 만들어졌습니다. 아무것도 공유하고 싶지 않다면 토글을 꺼주세요 — 다른 모든 기능은 그대로 작동합니다. 언제든지 <strong>설정 → 개인 정보 보호</strong>에서 변경할 수 있습니다.",
+    "description": "Body intro on the privacy step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "ac4463c80e4b16b6"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "익명 사용 데이터 보내기",
+    "description": "Toggle: opt into telemetry",
+    "_machine_translated": true,
+    "_source_hash": "986d6eb8fba989a2"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "어떤 기능이 중요한지 파악하고 버그를 조기에 발견하는 데 도움이 됩니다. 데이터는 개인 정보 보호 우선 분석 서비스인 <a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a>를 통해 EU에 저장됩니다.",
+    "description": "Helper text under the telemetry toggle (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "bdc55640100063e9"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "수집하는 정보",
+    "description": "Section label listing telemetry data points we DO collect",
+    "_machine_translated": true,
+    "_source_hash": "2ff070bf82224597"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "임의의 설치 ID (사용자 또는 계정과 연결되지 않음)",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "96e58d79f1f6d27e"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "앱 버전, OS 및 버전, 언어, 국가",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "0ccc0e529948fe8a"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "전반적인 기능 사용 현황 — 어떤 기능이 얼마나 자주 사용되는지",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "f87859869bbfba1a"
+  },
+  "welcome.privacy.never.label": {
+    "message": "절대 수집하지 않는 정보",
+    "description": "Section label listing data points we do NOT collect",
+    "_machine_translated": true,
+    "_source_hash": "eec584e045210762"
+  },
+  "welcome.privacy.never.content": {
+    "message": "메시지, 프롬프트 또는 AI 응답",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "a3f45778167650be"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "파일 이름, 경로 또는 클립보드 내용",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "319d9b53cd1c0fdd"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "이름, 이메일 또는 IP 주소 (수집 시점에 제거됨)",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "01f01349ea33a4f1"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "자세한 내용은 <a href=\"#\" id=\"wOpenPrivacyPolicy\">개인정보 처리방침</a> 전문을 읽어보세요.",
+    "description": "Footer linking to full privacy policy (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5e3c456098cfd90b"
+  },
+  "welcome.macos.title": {
+    "message": "macOS 권한",
+    "description": "macOS-only step header",
+    "_machine_translated": true,
+    "_source_hash": "067ffb2fdbc5c6d5"
+  },
+  "welcome.macos.subtitle": {
+    "message": "Kage가 제대로 작동하도록 몇 가지 개인 정보 권한을 허용해 주세요",
+    "description": "macOS-only step subtitle",
+    "_machine_translated": true,
+    "_source_hash": "acfe6b7734bbf488"
+  },
+  "welcome.macos.intro": {
+    "message": "macOS는 Kage가 권한을 처음 필요로 할 때마다 요청하지만, 지금 미리 허용하면 이러한 알림을 건너뛸 수 있습니다. 각 버튼을 클릭하여 시스템 설정의 해당 창을 열고 Kage를 활성화하세요.",
+    "description": "Body intro on the macOS permissions step",
+    "_machine_translated": true,
+    "_source_hash": "eec75cbf54a21e8b"
+  },
+  "welcome.macos.note_html": {
+    "message": "이 단계를 건너뛰어도 괜찮습니다 — 언제든지 <strong>설정 → macOS 권한</strong>에서 다시 확인할 수 있습니다.",
+    "description": "Footer note on the macOS permissions step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "47bee7e73adaab00"
+  },
+  "settings.save_and_close": {
+    "message": "저장 후 닫기",
+    "description": "Footer button on the settings window",
+    "_machine_translated": true,
+    "_source_hash": "5e9e4a32b4b6309e"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "사용자 환경",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "59407becc0a07782"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "99549c6c2e366ad9"
+  },
+  "settings.sidebar.automation": {
+    "message": "자동화",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "b834795a7ff1ec97"
+  },
+  "settings.sidebar.extensions": {
+    "message": "확장 프로그램",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "cf4069e44f670db1"
+  },
+  "settings.sidebar.about_group": {
+    "message": "정보",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "78077eddf55c4331"
+  },
+  "settings.sidebar.appearance": {
+    "message": "모양",
+    "description": "Sidebar item — appearance / theme / language",
+    "_machine_translated": true,
+    "_source_hash": "1d1dccc74224c031"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "단축키 및 바로 가기",
+    "description": "Sidebar item — global hotkey + window shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "64f81d3adf39f3cc"
+  },
+  "settings.sidebar.startup": {
+    "message": "시작 프로그램",
+    "description": "Sidebar item — startup / autostart settings",
+    "_machine_translated": true,
+    "_source_hash": "3508e311ca9b4d30"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "macOS 권한",
+    "description": "Sidebar item — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "ae8946cd92e5173e"
+  },
+  "settings.sidebar.speech": {
+    "message": "음성",
+    "description": "Sidebar item — TTS / speech-to-text settings",
+    "_machine_translated": true,
+    "_source_hash": "86a42bb1273525f1"
+  },
+  "settings.sidebar.personalization": {
+    "message": "개인화",
+    "description": "Sidebar item — auto-steering / preference learning",
+    "_machine_translated": true,
+    "_source_hash": "6798e60eff852d3e"
+  },
+  "settings.sidebar.agents": {
+    "message": "에이전트",
+    "description": "Sidebar item — agent connection management",
+    "_machine_translated": true,
+    "_source_hash": "8657b15bb5f0483f"
+  },
+  "settings.sidebar.model": {
+    "message": "모델",
+    "description": "Sidebar item — model selection settings",
+    "_machine_translated": true,
+    "_source_hash": "2b3d3786a3ec21f1"
+  },
+  "settings.sidebar.mcp": {
+    "message": "MCP 서버",
+    "description": "Sidebar item — Model Context Protocol server config",
+    "_machine_translated": true,
+    "_source_hash": "0fef1a6c110dac59"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "에이전트 권한",
+    "description": "Sidebar item — per-tool grant policies",
+    "_machine_translated": true,
+    "_source_hash": "568e8e6a02befe4e"
+  },
+  "settings.sidebar.integration": {
+    "message": "시스템 통합",
+    "description": "Sidebar item — system-level integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "c58679f8323891cc"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "명령 및 프롬프트",
+    "description": "Sidebar item — user-defined commands & prompts",
+    "_machine_translated": true,
+    "_source_hash": "581aef4520411fb6"
+  },
+  "settings.sidebar.macros": {
+    "message": "자동화",
+    "description": "Sidebar item — automations / macro playback",
+    "_machine_translated": true,
+    "_source_hash": "72171ae0b090b37c"
+  },
+  "settings.sidebar.store": {
+    "message": "확장 프로그램 스토어",
+    "description": "Sidebar item — extension store",
+    "_machine_translated": true,
+    "_source_hash": "26bb2a98c5c70165"
+  },
+  "settings.sidebar.privacy": {
+    "message": "개인 정보 보호",
+    "description": "Sidebar item — privacy / telemetry settings",
+    "_machine_translated": true,
+    "_source_hash": "fbc089d375996aab"
+  },
+  "settings.sidebar.updates": {
+    "message": "업데이트",
+    "description": "Sidebar item — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "5dccf5f6bf7f547b"
+  },
+  "settings.sidebar.about": {
+    "message": "Kage 정보",
+    "description": "Sidebar item — version / credits / build info",
+    "_machine_translated": true,
+    "_source_hash": "faa7f9e9a2ff4b9a"
+  },
+  "settings.appearance.font_size.label": {
+    "message": "글꼴 크기",
+    "description": "Settings — font size slider label",
+    "_machine_translated": true,
+    "_source_hash": "f3c1f1031a89a8f8"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "런처 및 세션 관리자의 기본 글꼴 크기입니다(픽셀 단위).",
+    "description": "Helper text for font size slider",
+    "_machine_translated": true,
+    "_source_hash": "a5b0cde46d4dd5f5"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "런처",
+    "description": "Subsection header for launcher-related settings",
+    "_machine_translated": true,
+    "_source_hash": "9db4e62252b4a81c"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "불투명도",
+    "description": "Launcher opacity slider label",
+    "_machine_translated": true,
+    "_source_hash": "60c91f9e83e8f136"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "투명도를 조정합니다(0.3 = 매우 투명, 1.0 = 불투명).",
+    "description": "Helper text for opacity slider",
+    "_machine_translated": true,
+    "_source_hash": "59602da053fab141"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "시작 위치",
+    "description": "Where the launcher appears on activation",
+    "_machine_translated": true,
+    "_source_hash": "254ef8fd2cc4f5e7"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "런처가 활성화될 때 나타나는 위치입니다.",
+    "description": "Helper text for start position dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d7bdfe37714b1283"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "활성 모니터 중앙",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "679f600e3b3f67a2"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "마우스 커서 옆",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "533ebe00d58a36d4"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "마지막 위치 기억",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "bd9c73076677d435"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "크기 기억",
+    "description": "Toggle: restore launcher to last manually resized dimensions",
+    "_machine_translated": true,
+    "_source_hash": "04eaff00c837f240"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "런처를 다시 열 때 마지막으로 수동 조정한 크기로 복원합니다.",
+    "description": "Helper text for remember-size toggle",
+    "_machine_translated": true,
+    "_source_hash": "b280dae2de88e1c7"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "마지막 응답 유지",
+    "description": "Toggle: keep last AI response visible on launcher reshow",
+    "_machine_translated": true,
+    "_source_hash": "dfa8615284a90ae0"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "런처를 다시 표시할 때 마지막 AI 응답을 계속 표시합니다.",
+    "description": "Helper text for preserve-last-response toggle",
+    "_machine_translated": true,
+    "_source_hash": "e525baf4ba0c2eb1"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "도구 모음 표시",
+    "description": "Toggle: show attachment toolbar",
+    "_machine_translated": true,
+    "_source_hash": "f006d91f37caee23"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "입력란 아래에 파일/이미지 첨부 도구 모음을 표시합니다.",
+    "description": "Helper text for show-toolbar toggle",
+    "_machine_translated": true,
+    "_source_hash": "66efadfb3f4a7baa"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "시간 표시",
+    "description": "Toggle: show current time in launcher",
+    "_machine_translated": true,
+    "_source_hash": "bbeb1c0730f63b26"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "입력 영역에 현재 시간을 표시합니다.",
+    "description": "Helper text for show-time toggle",
+    "_machine_translated": true,
+    "_source_hash": "b3b1ea1ef3e5c43a"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "시간 형식",
+    "description": "Time format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1f8e8798340d0896"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "날짜 표시",
+    "description": "Toggle: show current date in launcher",
+    "_machine_translated": true,
+    "_source_hash": "515eaf6f865fa3c6"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "입력 영역에 현재 날짜를 표시합니다.",
+    "description": "Helper text for show-date toggle",
+    "_machine_translated": true,
+    "_source_hash": "5a8c8316df6917dd"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "날짜 형식",
+    "description": "Date format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "ad5e12fc4bd48cdb"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "세션 관리자",
+    "description": "Subsection header for session manager settings",
+    "_machine_translated": true,
+    "_source_hash": "3c1588a00125a796"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "창 크기 및 위치 기억",
+    "description": "Toggle: persist session manager geometry",
+    "_machine_translated": true,
+    "_source_hash": "1e949b704c4a0c12"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "세션 관리자를 다시 열 때 마지막 크기와 위치로 복원합니다.",
+    "description": "Helper text for remember-chat-geometry toggle",
+    "_machine_translated": true,
+    "_source_hash": "02a5cbe87cacc5e0"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ 스토어에서 테마 둘러보기…",
+    "description": "Button opening the extension store filtered to themes",
+    "_machine_translated": true,
+    "_source_hash": "2764102a95441bbd"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage(자동 라이트/다크)",
+    "description": "Built-in theme display name (follows OS theme)",
+    "_machine_translated": true,
+    "_source_hash": "b8016eb83700c7f4"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "OS 테마를 따릅니다",
+    "description": "Built-in system-theme description",
+    "_machine_translated": true,
+    "_source_hash": "61b5b6431dc1b97d"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage 라이트",
+    "description": "Built-in light theme display name",
+    "_machine_translated": true,
+    "_source_hash": "6d1e8e8011d65b6f"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage 다크",
+    "description": "Built-in dark theme display name",
+    "_machine_translated": true,
+    "_source_hash": "9a825894c3d15536"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "이 테마 사용",
+    "description": "Tooltip on the per-theme apply button",
+    "_machine_translated": true,
+    "_source_hash": "86e6959bd6b533a7"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "현재 테마",
+    "description": "Tooltip on the active-theme indicator (checkmark)",
+    "_machine_translated": true,
+    "_source_hash": "2bd707a4d5755a36"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "테마 제거",
+    "description": "Tooltip on the per-theme remove button",
+    "_machine_translated": true,
+    "_source_hash": "78cabaa8388140ef"
+  },
+  "settings.privacy.title": {
+    "message": "개인정보",
+    "description": "Privacy settings header",
+    "_machine_translated": true,
+    "_source_hash": "f56604388bcb691c"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>개인정보 처리방침이 업데이트되었습니다</strong> — 아래 새 고지 사항을 검토해 주십시오. 선택을 완료하실 때까지 이 설치본의 텔레메트리는 일시 중지됩니다.",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a921294f1f31b59d"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ 이 빌드는 애널리틱스 키 없이 컴파일되었으므로 토글 설정과 관계없이 어떠한 데이터도 전송되지 않습니다. 아래 컨트롤은 참고용으로만 표시됩니다.",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time",
+    "_machine_translated": true,
+    "_source_hash": "3c4e6d4ce0494f53"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "익명 사용 데이터 전송",
+    "description": "Telemetry opt-in toggle label (settings)",
+    "_machine_translated": true,
+    "_source_hash": "46c207f834e11c98"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "어떤 기능이 중요한지 파악하고 버그를 조기에 발견하는 데 도움이 됩니다. 데이터는 개인정보 보호 우선 애널리틱스 서비스인 Aptabase를 통해 EU에 저장됩니다.",
+    "description": "Helper text under the telemetry toggle (settings)",
+    "_machine_translated": true,
+    "_source_hash": "8752ab612bc01eea"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "익명 설치 ID",
+    "description": "Label for the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "fbf70289ce536d33"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "저희가 사용하는 유일한 식별자입니다. 사용자의 이름, 이메일, 기기와 연결되지 않습니다. 언제든지 재설정할 수 있으며, 재설정 시 이 설치본의 과거 이벤트는 더 이상 연결할 수 없게 됩니다.",
+    "description": "Helper text under the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "99359140a83cb4d2"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "(아직 할당되지 않음 — 동의 시 생성됩니다)",
+    "description": "Placeholder shown when no install ID exists yet",
+    "_machine_translated": true,
+    "_source_hash": "2bc4fc0ec0f628ca"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "재설정",
+    "description": "Button: regenerate a fresh install ID",
+    "_machine_translated": true,
+    "_source_hash": "101cdbb94e9c32cf"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "새로운 익명 설치 ID를 생성하시겠습니까?\n\n이 설치본의 과거 애널리틱스 이벤트는 향후 이벤트와 더 이상 연결되지 않습니다. 과거 이벤트가 삭제되는 것은 아니며, 단지 연결이 끊어질 뿐입니다.",
+    "description": "Confirmation dialog text shown before resetting the install ID",
+    "_machine_translated": true,
+    "_source_hash": "796c14a897e256e4"
+  },
+  "settings.privacy.policy.label": {
+    "message": "개인정보 처리방침",
+    "description": "Section label for the privacy policy link",
+    "_machine_translated": true,
+    "_source_hash": "3925dd66bad96e13"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "수집 항목, 저장 방식, 삭제 요청 방법에 대한 전체 세부 정보입니다. <a href=\"#\" id=\"openPrivacyPolicy\">개인정보 처리방침 읽기 →</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "1412329cc119cccd"
+  },
+  "settings.system.title": {
+    "message": "시작",
+    "description": "Settings header — system / startup-related settings",
+    "_machine_translated": true,
+    "_source_hash": "77ffaf219d8b35a9"
+  },
+  "settings.system.auto_start.label": {
+    "message": "시스템 시작 시 자동 실행",
+    "description": "Toggle: launch Kage when the user logs in",
+    "_machine_translated": true,
+    "_source_hash": "685b0a95ed44698f"
+  },
+  "settings.system.auto_start.description": {
+    "message": "로그인 시 Kage를 자동으로 실행합니다.",
+    "description": "Helper text for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "11b28c1f1b47908f"
+  },
+  "settings.updates.title": {
+    "message": "업데이트",
+    "description": "Settings header — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "a40c53155418ce1b"
+  },
+  "settings.updates.checking": {
+    "message": "업데이트 확인 중",
+    "description": "Status while the updater plugin polls for the latest version",
+    "_machine_translated": true,
+    "_source_hash": "4124db834dc384e4"
+  },
+  "settings.updates.checking_progress": {
+    "message": "업데이트 확인 중…",
+    "description": "Spinner label while the updater check is in flight",
+    "_machine_translated": true,
+    "_source_hash": "5bf0a54d35bb0f52"
+  },
+  "settings.updates.version_label": {
+    "message": "버전 {version}",
+    "description": "Current version display in the update status card",
+    "_machine_translated": true,
+    "_source_hash": "19dfa52d548625fc"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage가 최신 상태입니다",
+    "description": "Status when the running version equals the latest",
+    "_machine_translated": true,
+    "_source_hash": "622dc3ded7e0e7c9"
+  },
+  "settings.updates.update_available_title": {
+    "message": "업데이트 사용 가능 — v{version}",
+    "description": "Status when a newer version is available",
+    "_machine_translated": true,
+    "_source_hash": "92485742299d8fc7"
+  },
+  "settings.updates.current_version_label": {
+    "message": "현재 버전: {version}",
+    "description": "Detail line shown beneath the update-available status",
+    "_machine_translated": true,
+    "_source_hash": "a73271d9ee4b12c6"
+  },
+  "settings.updates.check_failed": {
+    "message": "업데이트 확인에 실패했습니다",
+    "description": "Status when the updater plugin returned an error",
+    "_machine_translated": true,
+    "_source_hash": "35e2ac0aedb8ff03"
+  },
+  "settings.updates.installing": {
+    "message": "다운로드 및 설치 중…",
+    "description": "Status while the update installer is running",
+    "_machine_translated": true,
+    "_source_hash": "c43508f23c5aab72"
+  },
+  "settings.updates.action.install_now": {
+    "message": "지금 설치",
+    "description": "Button on the update-available status card",
+    "_machine_translated": true,
+    "_source_hash": "0245fb64db874ead"
+  },
+  "settings.updates.action.recheck": {
+    "message": "다시 확인",
+    "description": "Button on the up-to-date status card",
+    "_machine_translated": true,
+    "_source_hash": "1dc1a68e0be35d10"
+  },
+  "settings.updates.action.retry": {
+    "message": "다시 시도",
+    "description": "Button on the failed-check status card",
+    "_machine_translated": true,
+    "_source_hash": "165b3326eed1cba9"
+  },
+  "settings.updates.preferences.label": {
+    "message": "환경설정",
+    "description": "Subsection header for the auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "ba6d7b2633fca623"
+  },
+  "settings.updates.channel.label": {
+    "message": "업데이트 채널",
+    "description": "Channel selector label",
+    "_machine_translated": true,
+    "_source_hash": "b56944ad2ed8c746"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "이 설치본이 따라가는 릴리스 스트림입니다. <strong>Stable</strong>은 모든 사용자를 위한 표준 릴리스입니다. <strong>Preview</strong>는 다음에 출시될 기능을 미리 사용해 볼 수 있는 채널입니다. <strong>Nightly</strong>는 모든 커밋을 추적합니다 — 불안정할 수 있습니다.",
+    "description": "Helper text under the channel selector (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b9202b73aa174a43"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "Stable (권장)",
+    "description": "Channel dropdown option for the stable release stream",
+    "_machine_translated": true,
+    "_source_hash": "4286972740ba01e1"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "Preview",
+    "description": "Channel dropdown option for the beta / preview stream",
+    "_machine_translated": true,
+    "_source_hash": "875e21922f772146"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "Nightly (최신 개발 버전)",
+    "description": "Channel dropdown option for the per-commit dev stream",
+    "_machine_translated": true,
+    "_source_hash": "1d482fd83df5e2a9"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "자동으로 업데이트 확인",
+    "description": "Toggle: periodic update polling",
+    "_machine_translated": true,
+    "_source_hash": "a54024fd8c6b52f5"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "주기적으로 업데이트를 확인합니다.",
+    "description": "Helper text for the auto-check toggle",
+    "_machine_translated": true,
+    "_source_hash": "04989a0d4bdad9f8"
+  },
+  "settings.updates.silent.label": {
+    "message": "자동 업데이트",
+    "description": "Toggle: install updates automatically when idle",
+    "_machine_translated": true,
+    "_source_hash": "b97b0ff177898bce"
+  },
+  "settings.updates.silent.description": {
+    "message": "유휴 상태일 때 (Launcher 활동이 5분간 없을 때) 업데이트를 자동으로 다운로드하고 설치합니다.",
+    "description": "Helper text for the silent-updates toggle",
+    "_machine_translated": true,
+    "_source_hash": "f8784c8092735e23"
+  },
+  "settings.updates.changelog.label": {
+    "message": "변경 로그",
+    "description": "Subsection header for the changelog block",
+    "_machine_translated": true,
+    "_source_hash": "e166a569f95810f0"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "릴리스 노트 및 버전 기록입니다. <a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">GitHub에서 모든 릴리스 보기 →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "fe09e017988f8e74"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "변경 로그를 불러오는 중…",
+    "description": "Placeholder while the changelog markdown loads",
+    "_machine_translated": true,
+    "_source_hash": "a7bb227353d0ce61"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "변경 로그를 불러오지 못했습니다.",
+    "description": "Placeholder when the changelog request fails",
+    "_machine_translated": true,
+    "_source_hash": "398cd16e63a3c677"
   }
 }

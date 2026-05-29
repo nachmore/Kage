@@ -354,6 +354,399 @@
     "description": "Banner shown when the active language was filled in by the seed script"
   },
 
+  "settings.save_and_close": {
+    "message": "Save & Close",
+    "description": "Footer button on the settings window"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "User Experience",
+    "description": "Sidebar group heading"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading"
+  },
+  "settings.sidebar.automation": {
+    "message": "Automation",
+    "description": "Sidebar group heading"
+  },
+  "settings.sidebar.extensions": {
+    "message": "Extensions",
+    "description": "Sidebar group heading"
+  },
+  "settings.sidebar.about_group": {
+    "message": "About",
+    "description": "Sidebar group heading"
+  },
+  "settings.sidebar.appearance": {
+    "message": "Appearance",
+    "description": "Sidebar item — appearance / theme / language"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "Hotkey & Shortcuts",
+    "description": "Sidebar item — global hotkey + window shortcuts"
+  },
+  "settings.sidebar.startup": {
+    "message": "Startup",
+    "description": "Sidebar item — startup / autostart settings"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "macOS Permissions",
+    "description": "Sidebar item — macOS-only privacy permissions"
+  },
+  "settings.sidebar.speech": {
+    "message": "Speech",
+    "description": "Sidebar item — TTS / speech-to-text settings"
+  },
+  "settings.sidebar.personalization": {
+    "message": "Personalization",
+    "description": "Sidebar item — auto-steering / preference learning"
+  },
+  "settings.sidebar.agents": {
+    "message": "Agents",
+    "description": "Sidebar item — agent connection management"
+  },
+  "settings.sidebar.model": {
+    "message": "Model",
+    "description": "Sidebar item — model selection settings"
+  },
+  "settings.sidebar.mcp": {
+    "message": "MCP Servers",
+    "description": "Sidebar item — Model Context Protocol server config"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "Agent Permissions",
+    "description": "Sidebar item — per-tool grant policies"
+  },
+  "settings.sidebar.integration": {
+    "message": "System Integration",
+    "description": "Sidebar item — system-level integration toggles"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "Commands & Prompts",
+    "description": "Sidebar item — user-defined commands & prompts"
+  },
+  "settings.sidebar.macros": {
+    "message": "Automations",
+    "description": "Sidebar item — automations / macro playback"
+  },
+  "settings.sidebar.store": {
+    "message": "Extension Store",
+    "description": "Sidebar item — extension store"
+  },
+  "settings.sidebar.privacy": {
+    "message": "Privacy",
+    "description": "Sidebar item — privacy / telemetry settings"
+  },
+  "settings.sidebar.updates": {
+    "message": "Updates",
+    "description": "Sidebar item — auto-update settings"
+  },
+  "settings.sidebar.about": {
+    "message": "About Kage",
+    "description": "Sidebar item — version / credits / build info"
+  },
+
+  "settings.appearance.font_size.label": {
+    "message": "Font Size",
+    "description": "Settings — font size slider label"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "Base font size for the Launcher and Session Manager (in pixels).",
+    "description": "Helper text for font size slider"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "Launcher",
+    "description": "Subsection header for launcher-related settings"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "Opacity",
+    "description": "Launcher opacity slider label"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "Adjust transparency (0.3 = very transparent, 1.0 = solid).",
+    "description": "Helper text for opacity slider"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "Start Position",
+    "description": "Where the launcher appears on activation"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "Where the Launcher appears when activated.",
+    "description": "Helper text for start position dropdown"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "Center of active monitor",
+    "description": "Start position dropdown option"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "Next to mouse cursor",
+    "description": "Start position dropdown option"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "Remember last position",
+    "description": "Start position dropdown option"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "Remember Size",
+    "description": "Toggle: restore launcher to last manually resized dimensions"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "Restore the Launcher to its last manually resized dimensions when reopened.",
+    "description": "Helper text for remember-size toggle"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "Preserve Last Response",
+    "description": "Toggle: keep last AI response visible on launcher reshow"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "Keep the last AI response visible when the Launcher is reshown.",
+    "description": "Helper text for preserve-last-response toggle"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "Show Toolbar",
+    "description": "Toggle: show attachment toolbar"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "Show the attach file/image toolbar below the input.",
+    "description": "Helper text for show-toolbar toggle"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "Show Time",
+    "description": "Toggle: show current time in launcher"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "Display the current time in the input area.",
+    "description": "Helper text for show-time toggle"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "Time Format",
+    "description": "Time format dropdown label"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "Show Date",
+    "description": "Toggle: show current date in launcher"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "Display the current date in the input area.",
+    "description": "Helper text for show-date toggle"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "Date Format",
+    "description": "Date format dropdown label"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "Session Manager",
+    "description": "Subsection header for session manager settings"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "Remember Window Size & Position",
+    "description": "Toggle: persist session manager geometry"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "Restore the Session Manager to its last size and position when reopened.",
+    "description": "Helper text for remember-chat-geometry toggle"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ Browse Themes in Store…",
+    "description": "Button opening the extension store filtered to themes"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage (Auto Light / Dark)",
+    "description": "Built-in theme display name (follows OS theme)"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "Follows your OS theme",
+    "description": "Built-in system-theme description"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage Light",
+    "description": "Built-in light theme display name"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage Dark",
+    "description": "Built-in dark theme display name"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "Use this theme",
+    "description": "Tooltip on the per-theme apply button"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "Active theme",
+    "description": "Tooltip on the active-theme indicator (checkmark)"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "Uninstall theme",
+    "description": "Tooltip on the per-theme remove button"
+  },
+
+  "settings.privacy.title": {
+    "message": "Privacy",
+    "description": "Privacy settings header"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>Privacy policy updated</strong> — please review the new disclosure below. Telemetry is paused on this install until you make a choice.",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ This build was compiled without an analytics key, so no data is sent regardless of the toggle. The controls below are visible for illustration only.",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "Send anonymous usage data",
+    "description": "Telemetry opt-in toggle label (settings)"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "Helps us understand which features matter and catch bugs early. Data is stored in the EU via Aptabase, a privacy-first analytics service.",
+    "description": "Helper text under the telemetry toggle (settings)"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "Anonymous install ID",
+    "description": "Label for the install ID field"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "The only identifier we use. It's not linked to your name, email, or device. You can reset it anytime — past events for this install become unlinkable.",
+    "description": "Helper text under the install ID field"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "(not yet assigned — opt in to generate)",
+    "description": "Placeholder shown when no install ID exists yet"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "Reset",
+    "description": "Button: regenerate a fresh install ID"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "Generate a new anonymous install ID?\n\nPast analytics events from this install will no longer be linkable to future events. This does not delete past events — it just orphans them.",
+    "description": "Confirmation dialog text shown before resetting the install ID"
+  },
+  "settings.privacy.policy.label": {
+    "message": "Privacy policy",
+    "description": "Section label for the privacy policy link"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "Full details of what's collected, how it's stored, and how to request deletion. <a href=\"#\" id=\"openPrivacyPolicy\">Read the privacy policy →</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)"
+  },
+
+  "settings.system.title": {
+    "message": "Startup",
+    "description": "Settings header — system / startup-related settings"
+  },
+  "settings.system.auto_start.label": {
+    "message": "Auto-start on system startup",
+    "description": "Toggle: launch Kage when the user logs in"
+  },
+  "settings.system.auto_start.description": {
+    "message": "Launch Kage automatically when you log in.",
+    "description": "Helper text for the auto-start toggle"
+  },
+
+  "settings.updates.title": {
+    "message": "Updates",
+    "description": "Settings header — auto-update settings"
+  },
+  "settings.updates.checking": {
+    "message": "Checking for updates",
+    "description": "Status while the updater plugin polls for the latest version"
+  },
+  "settings.updates.checking_progress": {
+    "message": "Checking for updates…",
+    "description": "Spinner label while the updater check is in flight"
+  },
+  "settings.updates.version_label": {
+    "message": "Version {version}",
+    "description": "Current version display in the update status card"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage is up to date",
+    "description": "Status when the running version equals the latest"
+  },
+  "settings.updates.update_available_title": {
+    "message": "Update available — v{version}",
+    "description": "Status when a newer version is available"
+  },
+  "settings.updates.current_version_label": {
+    "message": "Current version: {version}",
+    "description": "Detail line shown beneath the update-available status"
+  },
+  "settings.updates.check_failed": {
+    "message": "Update check failed",
+    "description": "Status when the updater plugin returned an error"
+  },
+  "settings.updates.installing": {
+    "message": "Downloading and installing…",
+    "description": "Status while the update installer is running"
+  },
+  "settings.updates.action.install_now": {
+    "message": "Install Now",
+    "description": "Button on the update-available status card"
+  },
+  "settings.updates.action.recheck": {
+    "message": "Check again",
+    "description": "Button on the up-to-date status card"
+  },
+  "settings.updates.action.retry": {
+    "message": "Retry",
+    "description": "Button on the failed-check status card"
+  },
+  "settings.updates.preferences.label": {
+    "message": "Preferences",
+    "description": "Subsection header for the auto-update toggles"
+  },
+  "settings.updates.channel.label": {
+    "message": "Update Channel",
+    "description": "Channel selector label"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "Which release stream this install follows. <strong>Stable</strong> is the standard release for everyone. <strong>Preview</strong> is for trying what's coming next. <strong>Nightly</strong> tracks every commit — expect rough edges.",
+    "description": "Helper text under the channel selector (HTML allowed)"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "Stable (recommended)",
+    "description": "Channel dropdown option for the stable release stream"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "Preview",
+    "description": "Channel dropdown option for the beta / preview stream"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "Nightly (bleeding edge)",
+    "description": "Channel dropdown option for the per-commit dev stream"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "Automatically Check for Updates",
+    "description": "Toggle: periodic update polling"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "Periodically check for updates.",
+    "description": "Helper text for the auto-check toggle"
+  },
+  "settings.updates.silent.label": {
+    "message": "Silent Updates",
+    "description": "Toggle: install updates automatically when idle"
+  },
+  "settings.updates.silent.description": {
+    "message": "Download and install updates automatically when idle (no Launcher activity for 5 minutes).",
+    "description": "Helper text for the silent-updates toggle"
+  },
+  "settings.updates.changelog.label": {
+    "message": "Changelog",
+    "description": "Subsection header for the changelog block"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "Release notes and version history. <a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">Browse all releases on GitHub →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "Loading changelog…",
+    "description": "Placeholder while the changelog markdown loads"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "Failed to load changelog.",
+    "description": "Placeholder when the changelog request fails"
+  },
+
   "common.ok": {
     "message": "OK",
     "description": "Generic acknowledgement button"
@@ -389,5 +782,195 @@
   "common.loading": {
     "message": "Loading…",
     "description": "Generic loading indicator label"
+  },
+  "common.next": {
+    "message": "Next",
+    "description": "Generic Next button (wizard navigation, etc.)"
+  },
+  "common.back": {
+    "message": "Back",
+    "description": "Generic Back button"
+  },
+  "common.finish": {
+    "message": "Finish",
+    "description": "Final-step button on a wizard"
+  },
+  "common.skip": {
+    "message": "Skip",
+    "description": "Generic skip-this-step button"
+  },
+  "common.get_started": {
+    "message": "Get Started",
+    "description": "Welcome-screen primary call-to-action"
+  },
+
+  "welcome.subtitle": {
+    "message": "Your AI-powered desktop companion",
+    "description": "Welcome step 1 subtitle"
+  },
+  "welcome.blurb": {
+    "message": "Let's get you set up. We'll configure how Kage connects to your AI backend, set your global hotkey, and choose a few preferences. This only takes a minute.",
+    "description": "Welcome step 1 introduction body"
+  },
+  "welcome.launching": {
+    "message": "Launching Kage…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots"
+  },
+
+  "welcome.agent.title": {
+    "message": "Agent",
+    "description": "Step 2 header — agent connection setup"
+  },
+  "welcome.agent.subtitle": {
+    "message": "Tell Kage how to reach your AI backend",
+    "description": "Step 2 subtitle"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 Searching for agents…",
+    "description": "Placeholder while auto-detection scans for installed AI agents"
+  },
+  "welcome.agent.pick_different": {
+    "message": "Or pick a different agent type…",
+    "description": "Link/button revealing the manual agent-type picker"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 Ollama setup happens after first run. Finish this wizard, then open <strong>Settings → Agents → + Add agent → Ollama</strong> to wire up your local model. We've saved a placeholder so the rest of setup keeps working.",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "Configure the connection manually. You can change this later from Settings → Agents.",
+    "description": "Body shown above the manual connection editor"
+  },
+
+  "welcome.preferences.title": {
+    "message": "Preferences",
+    "description": "Step 3 header"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "Customize how Kage works for you",
+    "description": "Step 3 subtitle"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "Global Hotkey",
+    "description": "Section label for the hotkey picker"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "Press this shortcut anywhere to summon Kage",
+    "description": "Helper text under the hotkey picker"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "Settings",
+    "description": "Section label for the launch / auto-update toggles"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "Launch Kage when your computer starts",
+    "description": "Toggle: enable autostart"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "Keep Kage up to date automatically",
+    "description": "Toggle: enable auto-updates"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "Capabilities",
+    "description": "Section label for opt-in capability toggles"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "Enable computer control (UI automation, app launching)",
+    "description": "Toggle: enable computer-control capabilities"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "Learn my preferences over time",
+    "description": "Toggle: enable per-user steering / personalization"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "Kage will build a profile of your preferences from conversations. You can view and edit this anytime in Settings. This data stays on your machine and is only shared with your chosen agent to improve responses.",
+    "description": "Helper text under the personalization toggle"
+  },
+
+  "welcome.extensions.title": {
+    "message": "Extensions",
+    "description": "Step 4 header"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "Choose which extensions to install",
+    "description": "Step 4 subtitle"
+  },
+  "welcome.extensions.loading": {
+    "message": "Loading available extensions…",
+    "description": "Placeholder while the store catalog loads"
+  },
+
+  "welcome.privacy.title": {
+    "message": "Help improve Kage",
+    "description": "Step 5 header"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "Share anonymous usage data so we know what to fix and build next",
+    "description": "Step 5 subtitle"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "Kage is built for privacy-conscious users. If you'd rather not share anything, flip the toggle off — everything else still works. You can change this anytime in <strong>Settings → Privacy</strong>.",
+    "description": "Body intro on the privacy step (HTML allowed)"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "Send anonymous usage data",
+    "description": "Toggle: opt into telemetry"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "Helps us understand which features matter and catch bugs early. Data is stored in the EU via <a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a>, a privacy-first analytics service.",
+    "description": "Helper text under the telemetry toggle (HTML allowed)"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "What we collect",
+    "description": "Section label listing telemetry data points we DO collect"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "A random install ID (not linked to you or your account)",
+    "description": "Bullet point — what we collect"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "App version, OS and version, language, country",
+    "description": "Bullet point — what we collect"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "High-level feature usage — which features are used and how often",
+    "description": "Bullet point — what we collect"
+  },
+  "welcome.privacy.never.label": {
+    "message": "What we never collect",
+    "description": "Section label listing data points we do NOT collect"
+  },
+  "welcome.privacy.never.content": {
+    "message": "Your messages, prompts, or AI responses",
+    "description": "Bullet point — what we never collect"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "File names, paths, or clipboard contents",
+    "description": "Bullet point — what we never collect"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "Your name, email, or IP address (stripped at ingest)",
+    "description": "Bullet point — what we never collect"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "Read the full <a href=\"#\" id=\"wOpenPrivacyPolicy\">privacy policy</a> for details.",
+    "description": "Footer linking to full privacy policy (HTML allowed)"
+  },
+
+  "welcome.macos.title": {
+    "message": "macOS Permissions",
+    "description": "macOS-only step header"
+  },
+  "welcome.macos.subtitle": {
+    "message": "Grant a few privacy permissions so Kage can do its job",
+    "description": "macOS-only step subtitle"
+  },
+  "welcome.macos.intro": {
+    "message": "macOS prompts for each permission the first time Kage needs it, but you can grant them now to skip those prompts. Click each button to open the right pane in System Settings and enable Kage.",
+    "description": "Body intro on the macOS permissions step"
+  },
+  "welcome.macos.note_html": {
+    "message": "It is fine to skip this step — you can revisit it any time from <strong>Settings → macOS Permissions</strong>.",
+    "description": "Footer note on the macOS permissions step (HTML allowed)"
   }
 }

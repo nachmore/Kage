@@ -574,5 +574,863 @@
     "description": "Spawning the platform installer failed",
     "_machine_translated": true,
     "_source_hash": "13fde8c85d6a3d56"
+  },
+  "common.next": {
+    "message": "下一步",
+    "description": "Generic Next button (wizard navigation, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "d91b7a241c47ca29"
+  },
+  "common.back": {
+    "message": "上一步",
+    "description": "Generic Back button",
+    "_machine_translated": true,
+    "_source_hash": "739745f8c06102dd"
+  },
+  "common.finish": {
+    "message": "完成",
+    "description": "Final-step button on a wizard",
+    "_machine_translated": true,
+    "_source_hash": "33695be3b79aae96"
+  },
+  "common.skip": {
+    "message": "略過",
+    "description": "Generic skip-this-step button",
+    "_machine_translated": true,
+    "_source_hash": "0cfcc982b509d22f"
+  },
+  "common.get_started": {
+    "message": "開始使用",
+    "description": "Welcome-screen primary call-to-action",
+    "_machine_translated": true,
+    "_source_hash": "9db04e69383fe503"
+  },
+  "welcome.subtitle": {
+    "message": "你的 AI 桌面助理",
+    "description": "Welcome step 1 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "15d70e6c05bf41f8"
+  },
+  "welcome.blurb": {
+    "message": "讓我們開始設定吧。我們會設定 Kage 連線至你的 AI 後端的方式、設定全域熱鍵，並選擇幾項偏好。只需要一分鐘。",
+    "description": "Welcome step 1 introduction body",
+    "_machine_translated": true,
+    "_source_hash": "7c12ea31355f244f"
+  },
+  "welcome.launching": {
+    "message": "正在啟動 Kage…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots",
+    "_machine_translated": true,
+    "_source_hash": "e1870ce191ea38a3"
+  },
+  "welcome.agent.title": {
+    "message": "代理",
+    "description": "Step 2 header — agent connection setup",
+    "_machine_translated": true,
+    "_source_hash": "e75b2608c091f525"
+  },
+  "welcome.agent.subtitle": {
+    "message": "告訴 Kage 如何連線至你的 AI 後端",
+    "description": "Step 2 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "c1166ea96bc41195"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 正在搜尋代理…",
+    "description": "Placeholder while auto-detection scans for installed AI agents",
+    "_machine_translated": true,
+    "_source_hash": "f3509c3dc56c712e"
+  },
+  "welcome.agent.pick_different": {
+    "message": "或選擇其他代理類型…",
+    "description": "Link/button revealing the manual agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "f7a9cd09aac64b7e"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 Ollama 的設定會在首次執行後進行。完成此精靈後，請開啟 <strong>設定 → 代理 → ＋ 新增代理 → Ollama</strong> 來連接你的本機模型。我們已先儲存一個預留位置，讓其餘設定可以繼續進行。",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "aa1a057cacf982db"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "手動設定連線。你之後可以從「設定 → 代理」變更此設定。",
+    "description": "Body shown above the manual connection editor",
+    "_machine_translated": true,
+    "_source_hash": "4a4dd6900dac4281"
+  },
+  "welcome.preferences.title": {
+    "message": "偏好設定",
+    "description": "Step 3 header",
+    "_machine_translated": true,
+    "_source_hash": "7fbe3a23acbfba67"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "自訂 Kage 為你運作的方式",
+    "description": "Step 3 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "379494d0f3deffba"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "全域熱鍵",
+    "description": "Section label for the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "bedb36831cd220b7"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "在任何地方按下此快捷鍵即可喚出 Kage",
+    "description": "Helper text under the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "47e610b5a150e675"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "設定",
+    "description": "Section label for the launch / auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "6c9ba40fe5c54351"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "電腦啟動時自動執行 Kage",
+    "description": "Toggle: enable autostart",
+    "_machine_translated": true,
+    "_source_hash": "c01a3a42092990dd"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "自動將 Kage 保持為最新版本",
+    "description": "Toggle: enable auto-updates",
+    "_machine_translated": true,
+    "_source_hash": "71f0ad9ba6c331fa"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "功能",
+    "description": "Section label for opt-in capability toggles",
+    "_machine_translated": true,
+    "_source_hash": "a4ff700ad0a7a7d9"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "啟用電腦控制（UI 自動化、應用程式啟動）",
+    "description": "Toggle: enable computer-control capabilities",
+    "_machine_translated": true,
+    "_source_hash": "b4732926aa40d6b7"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "隨時間學習我的偏好",
+    "description": "Toggle: enable per-user steering / personalization",
+    "_machine_translated": true,
+    "_source_hash": "d30ca505baeeadb0"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "Kage 會從對話中建立你的偏好設定檔。你隨時可以在「設定」中檢視與編輯。此資料會保留在你的裝置上，僅在改善回應時與你選擇的代理共用。",
+    "description": "Helper text under the personalization toggle",
+    "_machine_translated": true,
+    "_source_hash": "16d2c9b78093eefc"
+  },
+  "welcome.extensions.title": {
+    "message": "擴充功能",
+    "description": "Step 4 header",
+    "_machine_translated": true,
+    "_source_hash": "80bae7ca6d207c17"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "選擇要安裝的擴充功能",
+    "description": "Step 4 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "bac904d3e47ee75f"
+  },
+  "welcome.extensions.loading": {
+    "message": "正在載入可用的擴充功能……",
+    "description": "Placeholder while the store catalog loads",
+    "_machine_translated": true,
+    "_source_hash": "615e0a7299250b19"
+  },
+  "welcome.privacy.title": {
+    "message": "協助改善 Kage",
+    "description": "Step 5 header",
+    "_machine_translated": true,
+    "_source_hash": "2e1204cb4101c3de"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "分享匿名使用資料，讓我們知道下一步要修正與打造什麼",
+    "description": "Step 5 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "8dfbef3a2f798fba"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "Kage 是為重視隱私的使用者打造的。如果你不想分享任何資料，請將開關關閉——其他功能仍可正常運作。你隨時可以在<strong>「設定 → 隱私權」</strong>中變更此選項。",
+    "description": "Body intro on the privacy step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "ac4463c80e4b16b6"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "傳送匿名使用資料",
+    "description": "Toggle: opt into telemetry",
+    "_machine_translated": true,
+    "_source_hash": "986d6eb8fba989a2"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "幫助我們了解哪些功能重要，並及早發現錯誤。資料透過<a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a>儲存在歐盟，這是一項以隱私為優先的分析服務。",
+    "description": "Helper text under the telemetry toggle (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "bdc55640100063e9"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "我們會收集的資料",
+    "description": "Section label listing telemetry data points we DO collect",
+    "_machine_translated": true,
+    "_source_hash": "2ff070bf82224597"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "隨機產生的安裝 ID（不會連結到你或你的帳號）",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "96e58d79f1f6d27e"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "應用程式版本、作業系統與版本、語言、國家／地區",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "0ccc0e529948fe8a"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "概略的功能使用情況——使用了哪些功能以及使用頻率",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "f87859869bbfba1a"
+  },
+  "welcome.privacy.never.label": {
+    "message": "我們絕不收集的資料",
+    "description": "Section label listing data points we do NOT collect",
+    "_machine_translated": true,
+    "_source_hash": "eec584e045210762"
+  },
+  "welcome.privacy.never.content": {
+    "message": "你的訊息、提示詞或 AI 回應",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "a3f45778167650be"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "檔案名稱、路徑或剪貼簿內容",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "319d9b53cd1c0fdd"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "你的姓名、電子郵件或 IP 位址（在接收時已移除）",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "01f01349ea33a4f1"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "詳情請閱讀完整<a href=\"#\" id=\"wOpenPrivacyPolicy\">隱私權政策</a>。",
+    "description": "Footer linking to full privacy policy (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5e3c456098cfd90b"
+  },
+  "welcome.macos.title": {
+    "message": "macOS 權限",
+    "description": "macOS-only step header",
+    "_machine_translated": true,
+    "_source_hash": "067ffb2fdbc5c6d5"
+  },
+  "welcome.macos.subtitle": {
+    "message": "授予幾項隱私權限，讓 Kage 能夠運作",
+    "description": "macOS-only step subtitle",
+    "_machine_translated": true,
+    "_source_hash": "acfe6b7734bbf488"
+  },
+  "welcome.macos.intro": {
+    "message": "macOS 會在 Kage 首次需要每項權限時提示你，但你可以現在就授予這些權限以略過後續提示。點擊各按鈕即可開啟「系統設定」中對應的窗格並啟用 Kage。",
+    "description": "Body intro on the macOS permissions step",
+    "_machine_translated": true,
+    "_source_hash": "eec75cbf54a21e8b"
+  },
+  "welcome.macos.note_html": {
+    "message": "略過此步驟也沒關係——你隨時可以從<strong>「設定 → macOS 權限」</strong>重新檢視。",
+    "description": "Footer note on the macOS permissions step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "47bee7e73adaab00"
+  },
+  "settings.save_and_close": {
+    "message": "儲存並關閉",
+    "description": "Footer button on the settings window",
+    "_machine_translated": true,
+    "_source_hash": "5e9e4a32b4b6309e"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "使用者體驗",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "59407becc0a07782"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "99549c6c2e366ad9"
+  },
+  "settings.sidebar.automation": {
+    "message": "自動化",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "b834795a7ff1ec97"
+  },
+  "settings.sidebar.extensions": {
+    "message": "擴充功能",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "cf4069e44f670db1"
+  },
+  "settings.sidebar.about_group": {
+    "message": "關於",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "78077eddf55c4331"
+  },
+  "settings.sidebar.appearance": {
+    "message": "外觀",
+    "description": "Sidebar item — appearance / theme / language",
+    "_machine_translated": true,
+    "_source_hash": "1d1dccc74224c031"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "快速鍵與捷徑",
+    "description": "Sidebar item — global hotkey + window shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "64f81d3adf39f3cc"
+  },
+  "settings.sidebar.startup": {
+    "message": "啟動",
+    "description": "Sidebar item — startup / autostart settings",
+    "_machine_translated": true,
+    "_source_hash": "3508e311ca9b4d30"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "macOS 權限",
+    "description": "Sidebar item — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "ae8946cd92e5173e"
+  },
+  "settings.sidebar.speech": {
+    "message": "語音",
+    "description": "Sidebar item — TTS / speech-to-text settings",
+    "_machine_translated": true,
+    "_source_hash": "86a42bb1273525f1"
+  },
+  "settings.sidebar.personalization": {
+    "message": "個人化",
+    "description": "Sidebar item — auto-steering / preference learning",
+    "_machine_translated": true,
+    "_source_hash": "6798e60eff852d3e"
+  },
+  "settings.sidebar.agents": {
+    "message": "代理",
+    "description": "Sidebar item — agent connection management",
+    "_machine_translated": true,
+    "_source_hash": "8657b15bb5f0483f"
+  },
+  "settings.sidebar.model": {
+    "message": "模型",
+    "description": "Sidebar item — model selection settings",
+    "_machine_translated": true,
+    "_source_hash": "2b3d3786a3ec21f1"
+  },
+  "settings.sidebar.mcp": {
+    "message": "MCP 伺服器",
+    "description": "Sidebar item — Model Context Protocol server config",
+    "_machine_translated": true,
+    "_source_hash": "0fef1a6c110dac59"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "代理權限",
+    "description": "Sidebar item — per-tool grant policies",
+    "_machine_translated": true,
+    "_source_hash": "568e8e6a02befe4e"
+  },
+  "settings.sidebar.integration": {
+    "message": "系統整合",
+    "description": "Sidebar item — system-level integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "c58679f8323891cc"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "命令與提示詞",
+    "description": "Sidebar item — user-defined commands & prompts",
+    "_machine_translated": true,
+    "_source_hash": "581aef4520411fb6"
+  },
+  "settings.sidebar.macros": {
+    "message": "自動化作業",
+    "description": "Sidebar item — automations / macro playback",
+    "_machine_translated": true,
+    "_source_hash": "72171ae0b090b37c"
+  },
+  "settings.sidebar.store": {
+    "message": "擴充功能商店",
+    "description": "Sidebar item — extension store",
+    "_machine_translated": true,
+    "_source_hash": "26bb2a98c5c70165"
+  },
+  "settings.sidebar.privacy": {
+    "message": "隱私權",
+    "description": "Sidebar item — privacy / telemetry settings",
+    "_machine_translated": true,
+    "_source_hash": "fbc089d375996aab"
+  },
+  "settings.sidebar.updates": {
+    "message": "更新",
+    "description": "Sidebar item — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "5dccf5f6bf7f547b"
+  },
+  "settings.sidebar.about": {
+    "message": "關於 Kage",
+    "description": "Sidebar item — version / credits / build info",
+    "_machine_translated": true,
+    "_source_hash": "faa7f9e9a2ff4b9a"
+  },
+  "settings.appearance.font_size.label": {
+    "message": "字型大小",
+    "description": "Settings — font size slider label",
+    "_machine_translated": true,
+    "_source_hash": "f3c1f1031a89a8f8"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "啟動器與工作階段管理員的基本字型大小（以像素為單位）。",
+    "description": "Helper text for font size slider",
+    "_machine_translated": true,
+    "_source_hash": "a5b0cde46d4dd5f5"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "啟動器",
+    "description": "Subsection header for launcher-related settings",
+    "_machine_translated": true,
+    "_source_hash": "9db4e62252b4a81c"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "不透明度",
+    "description": "Launcher opacity slider label",
+    "_machine_translated": true,
+    "_source_hash": "60c91f9e83e8f136"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "調整透明度（0.3 = 非常透明，1.0 = 不透明）。",
+    "description": "Helper text for opacity slider",
+    "_machine_translated": true,
+    "_source_hash": "59602da053fab141"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "啟動位置",
+    "description": "Where the launcher appears on activation",
+    "_machine_translated": true,
+    "_source_hash": "254ef8fd2cc4f5e7"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "啟動器啟用時出現的位置。",
+    "description": "Helper text for start position dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d7bdfe37714b1283"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "使用中螢幕的中央",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "679f600e3b3f67a2"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "滑鼠游標旁",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "533ebe00d58a36d4"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "記住上次位置",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "bd9c73076677d435"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "記住大小",
+    "description": "Toggle: restore launcher to last manually resized dimensions",
+    "_machine_translated": true,
+    "_source_hash": "04eaff00c837f240"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "重新開啟時將啟動器還原為上次手動調整的尺寸。",
+    "description": "Helper text for remember-size toggle",
+    "_machine_translated": true,
+    "_source_hash": "b280dae2de88e1c7"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "保留上次回應",
+    "description": "Toggle: keep last AI response visible on launcher reshow",
+    "_machine_translated": true,
+    "_source_hash": "dfa8615284a90ae0"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "重新顯示啟動器時保留上次的 AI 回應。",
+    "description": "Helper text for preserve-last-response toggle",
+    "_machine_translated": true,
+    "_source_hash": "e525baf4ba0c2eb1"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "顯示工具列",
+    "description": "Toggle: show attachment toolbar",
+    "_machine_translated": true,
+    "_source_hash": "f006d91f37caee23"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "在輸入區下方顯示附加檔案／圖片的工具列。",
+    "description": "Helper text for show-toolbar toggle",
+    "_machine_translated": true,
+    "_source_hash": "66efadfb3f4a7baa"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "顯示時間",
+    "description": "Toggle: show current time in launcher",
+    "_machine_translated": true,
+    "_source_hash": "bbeb1c0730f63b26"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "在輸入區顯示目前時間。",
+    "description": "Helper text for show-time toggle",
+    "_machine_translated": true,
+    "_source_hash": "b3b1ea1ef3e5c43a"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "時間格式",
+    "description": "Time format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1f8e8798340d0896"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "顯示日期",
+    "description": "Toggle: show current date in launcher",
+    "_machine_translated": true,
+    "_source_hash": "515eaf6f865fa3c6"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "在輸入區顯示目前日期。",
+    "description": "Helper text for show-date toggle",
+    "_machine_translated": true,
+    "_source_hash": "5a8c8316df6917dd"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "日期格式",
+    "description": "Date format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "ad5e12fc4bd48cdb"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "工作階段管理員",
+    "description": "Subsection header for session manager settings",
+    "_machine_translated": true,
+    "_source_hash": "3c1588a00125a796"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "記住視窗大小與位置",
+    "description": "Toggle: persist session manager geometry",
+    "_machine_translated": true,
+    "_source_hash": "1e949b704c4a0c12"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "重新開啟時將工作階段管理員還原為上次的大小與位置。",
+    "description": "Helper text for remember-chat-geometry toggle",
+    "_machine_translated": true,
+    "_source_hash": "02a5cbe87cacc5e0"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ 在商店中瀏覽佈景主題…",
+    "description": "Button opening the extension store filtered to themes",
+    "_machine_translated": true,
+    "_source_hash": "2764102a95441bbd"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage（自動淺色／深色）",
+    "description": "Built-in theme display name (follows OS theme)",
+    "_machine_translated": true,
+    "_source_hash": "b8016eb83700c7f4"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "跟隨作業系統主題",
+    "description": "Built-in system-theme description",
+    "_machine_translated": true,
+    "_source_hash": "61b5b6431dc1b97d"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage 淺色",
+    "description": "Built-in light theme display name",
+    "_machine_translated": true,
+    "_source_hash": "6d1e8e8011d65b6f"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage 深色",
+    "description": "Built-in dark theme display name",
+    "_machine_translated": true,
+    "_source_hash": "9a825894c3d15536"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "使用此主題",
+    "description": "Tooltip on the per-theme apply button",
+    "_machine_translated": true,
+    "_source_hash": "86e6959bd6b533a7"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "目前使用中的主題",
+    "description": "Tooltip on the active-theme indicator (checkmark)",
+    "_machine_translated": true,
+    "_source_hash": "2bd707a4d5755a36"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "解除安裝主題",
+    "description": "Tooltip on the per-theme remove button",
+    "_machine_translated": true,
+    "_source_hash": "78cabaa8388140ef"
+  },
+  "settings.privacy.title": {
+    "message": "隱私",
+    "description": "Privacy settings header",
+    "_machine_translated": true,
+    "_source_hash": "f56604388bcb691c"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>隱私政策已更新</strong> — 請檢視下方的新揭露內容。在您做出選擇之前，此安裝的遙測功能暫停運作。",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a921294f1f31b59d"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ 此組建在編譯時未包含分析金鑰，因此無論切換開關狀態如何，都不會傳送任何資料。下方控制項僅供示意。",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time",
+    "_machine_translated": true,
+    "_source_hash": "3c4e6d4ce0494f53"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "傳送匿名使用資料",
+    "description": "Telemetry opt-in toggle label (settings)",
+    "_machine_translated": true,
+    "_source_hash": "46c207f834e11c98"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "協助我們了解哪些功能重要並及早發現錯誤。資料透過注重隱私的分析服務 Aptabase 儲存於歐盟。",
+    "description": "Helper text under the telemetry toggle (settings)",
+    "_machine_translated": true,
+    "_source_hash": "8752ab612bc01eea"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "匿名安裝 ID",
+    "description": "Label for the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "fbf70289ce536d33"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "我們使用的唯一識別碼。它不會與您的姓名、電子郵件或裝置連結。您可隨時重設 — 此安裝過去的事件將無法被關聯。",
+    "description": "Helper text under the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "99359140a83cb4d2"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "（尚未指派 — 選擇加入即可產生）",
+    "description": "Placeholder shown when no install ID exists yet",
+    "_machine_translated": true,
+    "_source_hash": "2bc4fc0ec0f628ca"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "重設",
+    "description": "Button: regenerate a fresh install ID",
+    "_machine_translated": true,
+    "_source_hash": "101cdbb94e9c32cf"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "要產生新的匿名安裝 ID 嗎？\n\n此安裝過去的分析事件將無法再與未來的事件連結。這不會刪除過去的事件 — 只會讓它們成為孤立資料。",
+    "description": "Confirmation dialog text shown before resetting the install ID",
+    "_machine_translated": true,
+    "_source_hash": "796c14a897e256e4"
+  },
+  "settings.privacy.policy.label": {
+    "message": "隱私政策",
+    "description": "Section label for the privacy policy link",
+    "_machine_translated": true,
+    "_source_hash": "3925dd66bad96e13"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "完整說明所蒐集的內容、儲存方式以及如何請求刪除。<a href=\"#\" id=\"openPrivacyPolicy\">閱讀隱私政策 →</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "1412329cc119cccd"
+  },
+  "settings.system.title": {
+    "message": "啟動",
+    "description": "Settings header — system / startup-related settings",
+    "_machine_translated": true,
+    "_source_hash": "77ffaf219d8b35a9"
+  },
+  "settings.system.auto_start.label": {
+    "message": "系統啟動時自動執行",
+    "description": "Toggle: launch Kage when the user logs in",
+    "_machine_translated": true,
+    "_source_hash": "685b0a95ed44698f"
+  },
+  "settings.system.auto_start.description": {
+    "message": "登入時自動啟動 Kage。",
+    "description": "Helper text for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "11b28c1f1b47908f"
+  },
+  "settings.updates.title": {
+    "message": "更新",
+    "description": "Settings header — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "a40c53155418ce1b"
+  },
+  "settings.updates.checking": {
+    "message": "正在檢查更新",
+    "description": "Status while the updater plugin polls for the latest version",
+    "_machine_translated": true,
+    "_source_hash": "4124db834dc384e4"
+  },
+  "settings.updates.checking_progress": {
+    "message": "正在檢查更新…",
+    "description": "Spinner label while the updater check is in flight",
+    "_machine_translated": true,
+    "_source_hash": "5bf0a54d35bb0f52"
+  },
+  "settings.updates.version_label": {
+    "message": "版本 {version}",
+    "description": "Current version display in the update status card",
+    "_machine_translated": true,
+    "_source_hash": "19dfa52d548625fc"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage 已是最新版本",
+    "description": "Status when the running version equals the latest",
+    "_machine_translated": true,
+    "_source_hash": "622dc3ded7e0e7c9"
+  },
+  "settings.updates.update_available_title": {
+    "message": "有可用更新 — v{version}",
+    "description": "Status when a newer version is available",
+    "_machine_translated": true,
+    "_source_hash": "92485742299d8fc7"
+  },
+  "settings.updates.current_version_label": {
+    "message": "目前版本：{version}",
+    "description": "Detail line shown beneath the update-available status",
+    "_machine_translated": true,
+    "_source_hash": "a73271d9ee4b12c6"
+  },
+  "settings.updates.check_failed": {
+    "message": "更新檢查失敗",
+    "description": "Status when the updater plugin returned an error",
+    "_machine_translated": true,
+    "_source_hash": "35e2ac0aedb8ff03"
+  },
+  "settings.updates.installing": {
+    "message": "正在下載並安裝…",
+    "description": "Status while the update installer is running",
+    "_machine_translated": true,
+    "_source_hash": "c43508f23c5aab72"
+  },
+  "settings.updates.action.install_now": {
+    "message": "立即安裝",
+    "description": "Button on the update-available status card",
+    "_machine_translated": true,
+    "_source_hash": "0245fb64db874ead"
+  },
+  "settings.updates.action.recheck": {
+    "message": "重新檢查",
+    "description": "Button on the up-to-date status card",
+    "_machine_translated": true,
+    "_source_hash": "1dc1a68e0be35d10"
+  },
+  "settings.updates.action.retry": {
+    "message": "重試",
+    "description": "Button on the failed-check status card",
+    "_machine_translated": true,
+    "_source_hash": "165b3326eed1cba9"
+  },
+  "settings.updates.preferences.label": {
+    "message": "偏好設定",
+    "description": "Subsection header for the auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "ba6d7b2633fca623"
+  },
+  "settings.updates.channel.label": {
+    "message": "更新通道",
+    "description": "Channel selector label",
+    "_machine_translated": true,
+    "_source_hash": "b56944ad2ed8c746"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "此安裝所追蹤的發行版串流。<strong>Stable</strong> 為適合所有人的標準發行版。<strong>Preview</strong> 可搶先體驗即將推出的功能。<strong>Nightly</strong> 會追蹤每一次 commit — 預期會有瑕疵。",
+    "description": "Helper text under the channel selector (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b9202b73aa174a43"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "Stable（建議）",
+    "description": "Channel dropdown option for the stable release stream",
+    "_machine_translated": true,
+    "_source_hash": "4286972740ba01e1"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "Preview",
+    "description": "Channel dropdown option for the beta / preview stream",
+    "_machine_translated": true,
+    "_source_hash": "875e21922f772146"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "Nightly（最新前沿）",
+    "description": "Channel dropdown option for the per-commit dev stream",
+    "_machine_translated": true,
+    "_source_hash": "1d482fd83df5e2a9"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "自動檢查更新",
+    "description": "Toggle: periodic update polling",
+    "_machine_translated": true,
+    "_source_hash": "a54024fd8c6b52f5"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "定期檢查更新。",
+    "description": "Helper text for the auto-check toggle",
+    "_machine_translated": true,
+    "_source_hash": "04989a0d4bdad9f8"
+  },
+  "settings.updates.silent.label": {
+    "message": "靜默更新",
+    "description": "Toggle: install updates automatically when idle",
+    "_machine_translated": true,
+    "_source_hash": "b97b0ff177898bce"
+  },
+  "settings.updates.silent.description": {
+    "message": "閒置時自動下載並安裝更新（Launcher 五分鐘無活動）。",
+    "description": "Helper text for the silent-updates toggle",
+    "_machine_translated": true,
+    "_source_hash": "f8784c8092735e23"
+  },
+  "settings.updates.changelog.label": {
+    "message": "變更紀錄",
+    "description": "Subsection header for the changelog block",
+    "_machine_translated": true,
+    "_source_hash": "e166a569f95810f0"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "發行說明與版本歷史。<a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">在 GitHub 瀏覽所有發行版本 →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "fe09e017988f8e74"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "正在載入變更紀錄…",
+    "description": "Placeholder while the changelog markdown loads",
+    "_machine_translated": true,
+    "_source_hash": "a7bb227353d0ce61"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "載入變更紀錄失敗。",
+    "description": "Placeholder when the changelog request fails",
+    "_machine_translated": true,
+    "_source_hash": "398cd16e63a3c677"
   }
 }

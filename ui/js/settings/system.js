@@ -1,4 +1,5 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * Startup Settings Module
  */
@@ -6,23 +7,23 @@ import { SettingsModule } from './base.js';
 export function getSystemIcon() {
     const platform = navigator.platform || '';
     if (platform.startsWith('Win')) return '🪟';
-    if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '\uF8FF';
+    if (platform.startsWith('Mac') || platform.startsWith('iPhone')) return '';
     return '🐧';
 }
 
 export class SystemSettingsModule extends SettingsModule {
     constructor() {
-        super('system', 'Startup', '🚀');
+        super('system', t('settings.system.title'), '🚀');
     }
 
     render() {
         return `
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
-                
+
                 ${this.createCheckboxRow(
-                    'Auto-start on system startup',
-                    'Launch Kage automatically when you log in.',
+                    t('settings.system.auto_start.label'),
+                    t('settings.system.auto_start.description'),
                     'autoStart',
                     false
                 )}

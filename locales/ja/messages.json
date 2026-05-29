@@ -574,5 +574,863 @@
     "description": "Spawning the platform installer failed",
     "_machine_translated": true,
     "_source_hash": "13fde8c85d6a3d56"
+  },
+  "common.next": {
+    "message": "次へ",
+    "description": "Generic Next button (wizard navigation, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "d91b7a241c47ca29"
+  },
+  "common.back": {
+    "message": "戻る",
+    "description": "Generic Back button",
+    "_machine_translated": true,
+    "_source_hash": "739745f8c06102dd"
+  },
+  "common.finish": {
+    "message": "完了",
+    "description": "Final-step button on a wizard",
+    "_machine_translated": true,
+    "_source_hash": "33695be3b79aae96"
+  },
+  "common.skip": {
+    "message": "スキップ",
+    "description": "Generic skip-this-step button",
+    "_machine_translated": true,
+    "_source_hash": "0cfcc982b509d22f"
+  },
+  "common.get_started": {
+    "message": "はじめる",
+    "description": "Welcome-screen primary call-to-action",
+    "_machine_translated": true,
+    "_source_hash": "9db04e69383fe503"
+  },
+  "welcome.subtitle": {
+    "message": "AI 搭載のデスクトップアシスタント",
+    "description": "Welcome step 1 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "15d70e6c05bf41f8"
+  },
+  "welcome.blurb": {
+    "message": "セットアップを始めましょう。Kage を AI バックエンドに接続する方法を設定し、グローバルホットキーを決め、いくつかの設定を選びます。1 分ほどで完了します。",
+    "description": "Welcome step 1 introduction body",
+    "_machine_translated": true,
+    "_source_hash": "7c12ea31355f244f"
+  },
+  "welcome.launching": {
+    "message": "Kage を起動しています…",
+    "description": "Overlay shown after the user clicks Finish, while the app boots",
+    "_machine_translated": true,
+    "_source_hash": "e1870ce191ea38a3"
+  },
+  "welcome.agent.title": {
+    "message": "エージェント",
+    "description": "Step 2 header — agent connection setup",
+    "_machine_translated": true,
+    "_source_hash": "e75b2608c091f525"
+  },
+  "welcome.agent.subtitle": {
+    "message": "Kage が AI バックエンドに接続する方法を指定してください",
+    "description": "Step 2 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "c1166ea96bc41195"
+  },
+  "welcome.agent.searching": {
+    "message": "🔍 エージェントを検索中…",
+    "description": "Placeholder while auto-detection scans for installed AI agents",
+    "_machine_translated": true,
+    "_source_hash": "f3509c3dc56c712e"
+  },
+  "welcome.agent.pick_different": {
+    "message": "別のエージェントタイプを選択…",
+    "description": "Link/button revealing the manual agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "f7a9cd09aac64b7e"
+  },
+  "welcome.agent.ollama_deferred": {
+    "message": "🦙 Ollama のセットアップは初回起動後に行います。このウィザードを完了したら、<strong>設定 → エージェント → ＋エージェントを追加 → Ollama</strong> を開いてローカルモデルを接続してください。残りのセットアップが続けられるように、プレースホルダーを保存しました。",
+    "description": "Hint shown when the user picks Ollama from the type picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "aa1a057cacf982db"
+  },
+  "welcome.agent.manual_intro": {
+    "message": "接続を手動で設定します。後から「設定 → エージェント」で変更できます。",
+    "description": "Body shown above the manual connection editor",
+    "_machine_translated": true,
+    "_source_hash": "4a4dd6900dac4281"
+  },
+  "welcome.preferences.title": {
+    "message": "環境設定",
+    "description": "Step 3 header",
+    "_machine_translated": true,
+    "_source_hash": "7fbe3a23acbfba67"
+  },
+  "welcome.preferences.subtitle": {
+    "message": "Kage の動作をカスタマイズします",
+    "description": "Step 3 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "379494d0f3deffba"
+  },
+  "welcome.preferences.hotkey.label": {
+    "message": "グローバルホットキー",
+    "description": "Section label for the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "bedb36831cd220b7"
+  },
+  "welcome.preferences.hotkey.description": {
+    "message": "このショートカットをどこからでも押すと Kage を呼び出せます",
+    "description": "Helper text under the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "47e610b5a150e675"
+  },
+  "welcome.preferences.settings.label": {
+    "message": "設定",
+    "description": "Section label for the launch / auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "6c9ba40fe5c54351"
+  },
+  "welcome.preferences.launch_at_startup": {
+    "message": "コンピューター起動時に Kage を起動する",
+    "description": "Toggle: enable autostart",
+    "_machine_translated": true,
+    "_source_hash": "c01a3a42092990dd"
+  },
+  "welcome.preferences.auto_update": {
+    "message": "Kage を自動的に最新の状態に保つ",
+    "description": "Toggle: enable auto-updates",
+    "_machine_translated": true,
+    "_source_hash": "71f0ad9ba6c331fa"
+  },
+  "welcome.preferences.capabilities.label": {
+    "message": "機能",
+    "description": "Section label for opt-in capability toggles",
+    "_machine_translated": true,
+    "_source_hash": "a4ff700ad0a7a7d9"
+  },
+  "welcome.preferences.computer_control": {
+    "message": "コンピューター制御を有効にする（UI 自動化、アプリ起動）",
+    "description": "Toggle: enable computer-control capabilities",
+    "_machine_translated": true,
+    "_source_hash": "b4732926aa40d6b7"
+  },
+  "welcome.preferences.personalization.label": {
+    "message": "好みを学習する",
+    "description": "Toggle: enable per-user steering / personalization",
+    "_machine_translated": true,
+    "_source_hash": "d30ca505baeeadb0"
+  },
+  "welcome.preferences.personalization.description": {
+    "message": "Kage は会話からあなたの好みのプロフィールを作成します。設定からいつでも閲覧・編集できます。このデータはお使いのマシンに保存され、応答を改善するために選択したエージェントとのみ共有されます。",
+    "description": "Helper text under the personalization toggle",
+    "_machine_translated": true,
+    "_source_hash": "16d2c9b78093eefc"
+  },
+  "welcome.extensions.title": {
+    "message": "拡張機能",
+    "description": "Step 4 header",
+    "_machine_translated": true,
+    "_source_hash": "80bae7ca6d207c17"
+  },
+  "welcome.extensions.subtitle": {
+    "message": "インストールする拡張機能を選択してください",
+    "description": "Step 4 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "bac904d3e47ee75f"
+  },
+  "welcome.extensions.loading": {
+    "message": "利用可能な拡張機能を読み込み中…",
+    "description": "Placeholder while the store catalog loads",
+    "_machine_translated": true,
+    "_source_hash": "615e0a7299250b19"
+  },
+  "welcome.privacy.title": {
+    "message": "Kage の改善にご協力ください",
+    "description": "Step 5 header",
+    "_machine_translated": true,
+    "_source_hash": "2e1204cb4101c3de"
+  },
+  "welcome.privacy.subtitle": {
+    "message": "匿名の利用データを共有していただくことで、修正点や次に開発すべき機能を把握できます",
+    "description": "Step 5 subtitle",
+    "_machine_translated": true,
+    "_source_hash": "8dfbef3a2f798fba"
+  },
+  "welcome.privacy.intro_html": {
+    "message": "Kage はプライバシーを重視するユーザー向けに作られています。何も共有したくない場合は、トグルをオフにしてください。それ以外の機能はすべて引き続き利用できます。この設定は <strong>設定 → プライバシー</strong> からいつでも変更できます。",
+    "description": "Body intro on the privacy step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "ac4463c80e4b16b6"
+  },
+  "welcome.privacy.toggle.label": {
+    "message": "匿名の利用データを送信する",
+    "description": "Toggle: opt into telemetry",
+    "_machine_translated": true,
+    "_source_hash": "986d6eb8fba989a2"
+  },
+  "welcome.privacy.toggle.description_html": {
+    "message": "どの機能が重要かを把握し、バグを早期に発見するのに役立ちます。データはプライバシー重視の分析サービスである <a href=\"https://aptabase.com\" target=\"_blank\">Aptabase</a> を通じて EU 内に保存されます。",
+    "description": "Helper text under the telemetry toggle (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "bdc55640100063e9"
+  },
+  "welcome.privacy.collect.label": {
+    "message": "収集する情報",
+    "description": "Section label listing telemetry data points we DO collect",
+    "_machine_translated": true,
+    "_source_hash": "2ff070bf82224597"
+  },
+  "welcome.privacy.collect.install_id": {
+    "message": "ランダムなインストール ID（あなたやアカウントとは紐付けられません）",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "96e58d79f1f6d27e"
+  },
+  "welcome.privacy.collect.app_meta": {
+    "message": "アプリのバージョン、OS とそのバージョン、言語、国",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "0ccc0e529948fe8a"
+  },
+  "welcome.privacy.collect.feature_usage": {
+    "message": "概要レベルの機能利用状況 — どの機能が、どのくらいの頻度で使われているか",
+    "description": "Bullet point — what we collect",
+    "_machine_translated": true,
+    "_source_hash": "f87859869bbfba1a"
+  },
+  "welcome.privacy.never.label": {
+    "message": "収集しない情報",
+    "description": "Section label listing data points we do NOT collect",
+    "_machine_translated": true,
+    "_source_hash": "eec584e045210762"
+  },
+  "welcome.privacy.never.content": {
+    "message": "メッセージ、プロンプト、AI の応答内容",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "a3f45778167650be"
+  },
+  "welcome.privacy.never.paths": {
+    "message": "ファイル名、パス、クリップボードの内容",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "319d9b53cd1c0fdd"
+  },
+  "welcome.privacy.never.identity": {
+    "message": "氏名、メールアドレス、IP アドレス（受信時に削除されます）",
+    "description": "Bullet point — what we never collect",
+    "_machine_translated": true,
+    "_source_hash": "01f01349ea33a4f1"
+  },
+  "welcome.privacy.policy_link_html": {
+    "message": "詳細は<a href=\"#\" id=\"wOpenPrivacyPolicy\">プライバシーポリシー全文</a>をご覧ください。",
+    "description": "Footer linking to full privacy policy (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "5e3c456098cfd90b"
+  },
+  "welcome.macos.title": {
+    "message": "macOS の権限",
+    "description": "macOS-only step header",
+    "_machine_translated": true,
+    "_source_hash": "067ffb2fdbc5c6d5"
+  },
+  "welcome.macos.subtitle": {
+    "message": "Kage が機能するために、いくつかのプライバシー権限を付与してください",
+    "description": "macOS-only step subtitle",
+    "_machine_translated": true,
+    "_source_hash": "acfe6b7734bbf488"
+  },
+  "welcome.macos.intro": {
+    "message": "macOS は Kage が各権限を初めて必要とするときに確認を求めますが、ここで先に付与しておけばその確認を省略できます。各ボタンをクリックすると「システム設定」の該当画面が開くので、Kage を有効にしてください。",
+    "description": "Body intro on the macOS permissions step",
+    "_machine_translated": true,
+    "_source_hash": "eec75cbf54a21e8b"
+  },
+  "welcome.macos.note_html": {
+    "message": "この手順はスキップしても問題ありません。<strong>設定 → macOS の権限</strong> からいつでも再度実行できます。",
+    "description": "Footer note on the macOS permissions step (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "47bee7e73adaab00"
+  },
+  "settings.save_and_close": {
+    "message": "保存して閉じる",
+    "description": "Footer button on the settings window",
+    "_machine_translated": true,
+    "_source_hash": "5e9e4a32b4b6309e"
+  },
+  "settings.sidebar.user_experience": {
+    "message": "ユーザー体験",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "59407becc0a07782"
+  },
+  "settings.sidebar.kage_ai": {
+    "message": "Kage AI",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "99549c6c2e366ad9"
+  },
+  "settings.sidebar.automation": {
+    "message": "自動化",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "b834795a7ff1ec97"
+  },
+  "settings.sidebar.extensions": {
+    "message": "拡張機能",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "cf4069e44f670db1"
+  },
+  "settings.sidebar.about_group": {
+    "message": "情報",
+    "description": "Sidebar group heading",
+    "_machine_translated": true,
+    "_source_hash": "78077eddf55c4331"
+  },
+  "settings.sidebar.appearance": {
+    "message": "外観",
+    "description": "Sidebar item — appearance / theme / language",
+    "_machine_translated": true,
+    "_source_hash": "1d1dccc74224c031"
+  },
+  "settings.sidebar.hotkey": {
+    "message": "ホットキーとショートカット",
+    "description": "Sidebar item — global hotkey + window shortcuts",
+    "_machine_translated": true,
+    "_source_hash": "64f81d3adf39f3cc"
+  },
+  "settings.sidebar.startup": {
+    "message": "起動",
+    "description": "Sidebar item — startup / autostart settings",
+    "_machine_translated": true,
+    "_source_hash": "3508e311ca9b4d30"
+  },
+  "settings.sidebar.mac_permissions": {
+    "message": "macOS の権限",
+    "description": "Sidebar item — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "ae8946cd92e5173e"
+  },
+  "settings.sidebar.speech": {
+    "message": "音声",
+    "description": "Sidebar item — TTS / speech-to-text settings",
+    "_machine_translated": true,
+    "_source_hash": "86a42bb1273525f1"
+  },
+  "settings.sidebar.personalization": {
+    "message": "パーソナライズ",
+    "description": "Sidebar item — auto-steering / preference learning",
+    "_machine_translated": true,
+    "_source_hash": "6798e60eff852d3e"
+  },
+  "settings.sidebar.agents": {
+    "message": "エージェント",
+    "description": "Sidebar item — agent connection management",
+    "_machine_translated": true,
+    "_source_hash": "8657b15bb5f0483f"
+  },
+  "settings.sidebar.model": {
+    "message": "モデル",
+    "description": "Sidebar item — model selection settings",
+    "_machine_translated": true,
+    "_source_hash": "2b3d3786a3ec21f1"
+  },
+  "settings.sidebar.mcp": {
+    "message": "MCP サーバー",
+    "description": "Sidebar item — Model Context Protocol server config",
+    "_machine_translated": true,
+    "_source_hash": "0fef1a6c110dac59"
+  },
+  "settings.sidebar.tool_permissions": {
+    "message": "エージェントの権限",
+    "description": "Sidebar item — per-tool grant policies",
+    "_machine_translated": true,
+    "_source_hash": "568e8e6a02befe4e"
+  },
+  "settings.sidebar.integration": {
+    "message": "システム連携",
+    "description": "Sidebar item — system-level integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "c58679f8323891cc"
+  },
+  "settings.sidebar.shortcuts": {
+    "message": "コマンドとプロンプト",
+    "description": "Sidebar item — user-defined commands & prompts",
+    "_machine_translated": true,
+    "_source_hash": "581aef4520411fb6"
+  },
+  "settings.sidebar.macros": {
+    "message": "オートメーション",
+    "description": "Sidebar item — automations / macro playback",
+    "_machine_translated": true,
+    "_source_hash": "72171ae0b090b37c"
+  },
+  "settings.sidebar.store": {
+    "message": "拡張機能ストア",
+    "description": "Sidebar item — extension store",
+    "_machine_translated": true,
+    "_source_hash": "26bb2a98c5c70165"
+  },
+  "settings.sidebar.privacy": {
+    "message": "プライバシー",
+    "description": "Sidebar item — privacy / telemetry settings",
+    "_machine_translated": true,
+    "_source_hash": "fbc089d375996aab"
+  },
+  "settings.sidebar.updates": {
+    "message": "アップデート",
+    "description": "Sidebar item — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "5dccf5f6bf7f547b"
+  },
+  "settings.sidebar.about": {
+    "message": "Kage について",
+    "description": "Sidebar item — version / credits / build info",
+    "_machine_translated": true,
+    "_source_hash": "faa7f9e9a2ff4b9a"
+  },
+  "settings.appearance.font_size.label": {
+    "message": "フォントサイズ",
+    "description": "Settings — font size slider label",
+    "_machine_translated": true,
+    "_source_hash": "f3c1f1031a89a8f8"
+  },
+  "settings.appearance.font_size.description": {
+    "message": "ランチャーとセッションマネージャーの基本フォントサイズ（ピクセル単位）。",
+    "description": "Helper text for font size slider",
+    "_machine_translated": true,
+    "_source_hash": "a5b0cde46d4dd5f5"
+  },
+  "settings.appearance.launcher.label": {
+    "message": "ランチャー",
+    "description": "Subsection header for launcher-related settings",
+    "_machine_translated": true,
+    "_source_hash": "9db4e62252b4a81c"
+  },
+  "settings.appearance.opacity.label": {
+    "message": "不透明度",
+    "description": "Launcher opacity slider label",
+    "_machine_translated": true,
+    "_source_hash": "60c91f9e83e8f136"
+  },
+  "settings.appearance.opacity.description": {
+    "message": "透明度を調整します（0.3 = 非常に透明、1.0 = 不透明）。",
+    "description": "Helper text for opacity slider",
+    "_machine_translated": true,
+    "_source_hash": "59602da053fab141"
+  },
+  "settings.appearance.start_position.label": {
+    "message": "開始位置",
+    "description": "Where the launcher appears on activation",
+    "_machine_translated": true,
+    "_source_hash": "254ef8fd2cc4f5e7"
+  },
+  "settings.appearance.start_position.description": {
+    "message": "ランチャーを起動したときに表示する位置です。",
+    "description": "Helper text for start position dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d7bdfe37714b1283"
+  },
+  "settings.appearance.start_position.center": {
+    "message": "アクティブなモニターの中央",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "679f600e3b3f67a2"
+  },
+  "settings.appearance.start_position.mouse": {
+    "message": "マウスカーソルの隣",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "533ebe00d58a36d4"
+  },
+  "settings.appearance.start_position.remember": {
+    "message": "最後の位置を記憶",
+    "description": "Start position dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "bd9c73076677d435"
+  },
+  "settings.appearance.remember_size.label": {
+    "message": "サイズを記憶",
+    "description": "Toggle: restore launcher to last manually resized dimensions",
+    "_machine_translated": true,
+    "_source_hash": "04eaff00c837f240"
+  },
+  "settings.appearance.remember_size.description": {
+    "message": "再表示時に、ランチャーを最後に手動でリサイズしたサイズで復元します。",
+    "description": "Helper text for remember-size toggle",
+    "_machine_translated": true,
+    "_source_hash": "b280dae2de88e1c7"
+  },
+  "settings.appearance.preserve_last_response.label": {
+    "message": "最後の応答を保持",
+    "description": "Toggle: keep last AI response visible on launcher reshow",
+    "_machine_translated": true,
+    "_source_hash": "dfa8615284a90ae0"
+  },
+  "settings.appearance.preserve_last_response.description": {
+    "message": "ランチャーを再表示したときに最後の AI 応答を表示したままにします。",
+    "description": "Helper text for preserve-last-response toggle",
+    "_machine_translated": true,
+    "_source_hash": "e525baf4ba0c2eb1"
+  },
+  "settings.appearance.show_toolbar.label": {
+    "message": "ツールバーを表示",
+    "description": "Toggle: show attachment toolbar",
+    "_machine_translated": true,
+    "_source_hash": "f006d91f37caee23"
+  },
+  "settings.appearance.show_toolbar.description": {
+    "message": "入力欄の下にファイル / 画像の添付ツールバーを表示します。",
+    "description": "Helper text for show-toolbar toggle",
+    "_machine_translated": true,
+    "_source_hash": "66efadfb3f4a7baa"
+  },
+  "settings.appearance.show_time.label": {
+    "message": "時刻を表示",
+    "description": "Toggle: show current time in launcher",
+    "_machine_translated": true,
+    "_source_hash": "bbeb1c0730f63b26"
+  },
+  "settings.appearance.show_time.description": {
+    "message": "入力エリアに現在の時刻を表示します。",
+    "description": "Helper text for show-time toggle",
+    "_machine_translated": true,
+    "_source_hash": "b3b1ea1ef3e5c43a"
+  },
+  "settings.appearance.time_format.label": {
+    "message": "時刻の形式",
+    "description": "Time format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1f8e8798340d0896"
+  },
+  "settings.appearance.show_date.label": {
+    "message": "日付を表示",
+    "description": "Toggle: show current date in launcher",
+    "_machine_translated": true,
+    "_source_hash": "515eaf6f865fa3c6"
+  },
+  "settings.appearance.show_date.description": {
+    "message": "入力エリアに現在の日付を表示します。",
+    "description": "Helper text for show-date toggle",
+    "_machine_translated": true,
+    "_source_hash": "5a8c8316df6917dd"
+  },
+  "settings.appearance.date_format.label": {
+    "message": "日付の形式",
+    "description": "Date format dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "ad5e12fc4bd48cdb"
+  },
+  "settings.appearance.session_manager.label": {
+    "message": "セッションマネージャー",
+    "description": "Subsection header for session manager settings",
+    "_machine_translated": true,
+    "_source_hash": "3c1588a00125a796"
+  },
+  "settings.appearance.remember_chat_geometry.label": {
+    "message": "ウィンドウのサイズと位置を記憶",
+    "description": "Toggle: persist session manager geometry",
+    "_machine_translated": true,
+    "_source_hash": "1e949b704c4a0c12"
+  },
+  "settings.appearance.remember_chat_geometry.description": {
+    "message": "再表示時に、セッションマネージャーを最後のサイズと位置で復元します。",
+    "description": "Helper text for remember-chat-geometry toggle",
+    "_machine_translated": true,
+    "_source_hash": "02a5cbe87cacc5e0"
+  },
+  "settings.appearance.browse_themes": {
+    "message": "🛍️ ストアでテーマを探す…",
+    "description": "Button opening the extension store filtered to themes",
+    "_machine_translated": true,
+    "_source_hash": "2764102a95441bbd"
+  },
+  "settings.appearance.builtin_theme.system.name": {
+    "message": "Kage（自動ライト / ダーク）",
+    "description": "Built-in theme display name (follows OS theme)",
+    "_machine_translated": true,
+    "_source_hash": "b8016eb83700c7f4"
+  },
+  "settings.appearance.builtin_theme.system.description": {
+    "message": "OS のテーマに従います",
+    "description": "Built-in system-theme description",
+    "_machine_translated": true,
+    "_source_hash": "61b5b6431dc1b97d"
+  },
+  "settings.appearance.builtin_theme.light.name": {
+    "message": "Kage Light",
+    "description": "Built-in light theme display name",
+    "_machine_translated": true,
+    "_source_hash": "6d1e8e8011d65b6f"
+  },
+  "settings.appearance.builtin_theme.dark.name": {
+    "message": "Kage Dark",
+    "description": "Built-in dark theme display name",
+    "_machine_translated": true,
+    "_source_hash": "9a825894c3d15536"
+  },
+  "settings.appearance.theme.use_btn_title": {
+    "message": "このテーマを使用",
+    "description": "Tooltip on the per-theme apply button",
+    "_machine_translated": true,
+    "_source_hash": "86e6959bd6b533a7"
+  },
+  "settings.appearance.theme.active_tick_title": {
+    "message": "現在のテーマ",
+    "description": "Tooltip on the active-theme indicator (checkmark)",
+    "_machine_translated": true,
+    "_source_hash": "2bd707a4d5755a36"
+  },
+  "settings.appearance.theme.uninstall_btn_title": {
+    "message": "テーマをアンインストール",
+    "description": "Tooltip on the per-theme remove button",
+    "_machine_translated": true,
+    "_source_hash": "78cabaa8388140ef"
+  },
+  "settings.privacy.title": {
+    "message": "プライバシー",
+    "description": "Privacy settings header",
+    "_machine_translated": true,
+    "_source_hash": "f56604388bcb691c"
+  },
+  "settings.privacy.stale_consent_html": {
+    "message": "<strong>プライバシーポリシーが更新されました</strong> — 下記の新しい開示内容をご確認ください。選択が完了するまで、このインストールではテレメトリが一時停止されています。",
+    "description": "Banner shown when consent_version < current_policy_version (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a921294f1f31b59d"
+  },
+  "settings.privacy.no_transport_warning": {
+    "message": "⚠ このビルドは分析キーなしでコンパイルされているため、トグルの状態にかかわらずデータは送信されません。以下のコントロールは表示用のみです。",
+    "description": "Banner shown when no APTABASE_KEY was provisioned at build time",
+    "_machine_translated": true,
+    "_source_hash": "3c4e6d4ce0494f53"
+  },
+  "settings.privacy.toggle.label": {
+    "message": "匿名の利用データを送信する",
+    "description": "Telemetry opt-in toggle label (settings)",
+    "_machine_translated": true,
+    "_source_hash": "46c207f834e11c98"
+  },
+  "settings.privacy.toggle.description": {
+    "message": "どの機能が重要かを把握し、バグを早期に発見するのに役立ちます。データはプライバシー重視の分析サービス Aptabase を通じて EU 内に保存されます。",
+    "description": "Helper text under the telemetry toggle (settings)",
+    "_machine_translated": true,
+    "_source_hash": "8752ab612bc01eea"
+  },
+  "settings.privacy.install_id.label": {
+    "message": "匿名インストール ID",
+    "description": "Label for the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "fbf70289ce536d33"
+  },
+  "settings.privacy.install_id.description": {
+    "message": "私たちが使用する唯一の識別子です。お名前、メールアドレス、デバイスとは紐付けられていません。いつでもリセットでき、リセット後はこのインストールの過去のイベントとの関連付けが解除されます。",
+    "description": "Helper text under the install ID field",
+    "_machine_translated": true,
+    "_source_hash": "99359140a83cb4d2"
+  },
+  "settings.privacy.install_id.placeholder": {
+    "message": "(まだ割り当てられていません — オプトインすると生成されます)",
+    "description": "Placeholder shown when no install ID exists yet",
+    "_machine_translated": true,
+    "_source_hash": "2bc4fc0ec0f628ca"
+  },
+  "settings.privacy.install_id.reset": {
+    "message": "リセット",
+    "description": "Button: regenerate a fresh install ID",
+    "_machine_translated": true,
+    "_source_hash": "101cdbb94e9c32cf"
+  },
+  "settings.privacy.install_id.reset_confirm": {
+    "message": "新しい匿名インストール ID を生成しますか？\n\nこのインストールの過去の分析イベントは、今後のイベントと関連付けられなくなります。過去のイベントが削除されるわけではなく、関連付けが解除されるだけです。",
+    "description": "Confirmation dialog text shown before resetting the install ID",
+    "_machine_translated": true,
+    "_source_hash": "796c14a897e256e4"
+  },
+  "settings.privacy.policy.label": {
+    "message": "プライバシーポリシー",
+    "description": "Section label for the privacy policy link",
+    "_machine_translated": true,
+    "_source_hash": "3925dd66bad96e13"
+  },
+  "settings.privacy.policy.description_html": {
+    "message": "収集される情報、保存方法、削除の依頼方法に関する詳細です。<a href=\"#\" id=\"openPrivacyPolicy\">プライバシーポリシーを読む →</a>",
+    "description": "Privacy policy section helper text (HTML allowed; link is wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "1412329cc119cccd"
+  },
+  "settings.system.title": {
+    "message": "起動",
+    "description": "Settings header — system / startup-related settings",
+    "_machine_translated": true,
+    "_source_hash": "77ffaf219d8b35a9"
+  },
+  "settings.system.auto_start.label": {
+    "message": "システム起動時に自動的に開始する",
+    "description": "Toggle: launch Kage when the user logs in",
+    "_machine_translated": true,
+    "_source_hash": "685b0a95ed44698f"
+  },
+  "settings.system.auto_start.description": {
+    "message": "ログイン時に Kage を自動的に起動します。",
+    "description": "Helper text for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "11b28c1f1b47908f"
+  },
+  "settings.updates.title": {
+    "message": "アップデート",
+    "description": "Settings header — auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "a40c53155418ce1b"
+  },
+  "settings.updates.checking": {
+    "message": "アップデートを確認中",
+    "description": "Status while the updater plugin polls for the latest version",
+    "_machine_translated": true,
+    "_source_hash": "4124db834dc384e4"
+  },
+  "settings.updates.checking_progress": {
+    "message": "アップデートを確認中…",
+    "description": "Spinner label while the updater check is in flight",
+    "_machine_translated": true,
+    "_source_hash": "5bf0a54d35bb0f52"
+  },
+  "settings.updates.version_label": {
+    "message": "バージョン {version}",
+    "description": "Current version display in the update status card",
+    "_machine_translated": true,
+    "_source_hash": "19dfa52d548625fc"
+  },
+  "settings.updates.up_to_date": {
+    "message": "Kage は最新です",
+    "description": "Status when the running version equals the latest",
+    "_machine_translated": true,
+    "_source_hash": "622dc3ded7e0e7c9"
+  },
+  "settings.updates.update_available_title": {
+    "message": "アップデートが利用可能 — v{version}",
+    "description": "Status when a newer version is available",
+    "_machine_translated": true,
+    "_source_hash": "92485742299d8fc7"
+  },
+  "settings.updates.current_version_label": {
+    "message": "現在のバージョン: {version}",
+    "description": "Detail line shown beneath the update-available status",
+    "_machine_translated": true,
+    "_source_hash": "a73271d9ee4b12c6"
+  },
+  "settings.updates.check_failed": {
+    "message": "アップデートの確認に失敗しました",
+    "description": "Status when the updater plugin returned an error",
+    "_machine_translated": true,
+    "_source_hash": "35e2ac0aedb8ff03"
+  },
+  "settings.updates.installing": {
+    "message": "ダウンロードしてインストール中…",
+    "description": "Status while the update installer is running",
+    "_machine_translated": true,
+    "_source_hash": "c43508f23c5aab72"
+  },
+  "settings.updates.action.install_now": {
+    "message": "今すぐインストール",
+    "description": "Button on the update-available status card",
+    "_machine_translated": true,
+    "_source_hash": "0245fb64db874ead"
+  },
+  "settings.updates.action.recheck": {
+    "message": "再確認",
+    "description": "Button on the up-to-date status card",
+    "_machine_translated": true,
+    "_source_hash": "1dc1a68e0be35d10"
+  },
+  "settings.updates.action.retry": {
+    "message": "再試行",
+    "description": "Button on the failed-check status card",
+    "_machine_translated": true,
+    "_source_hash": "165b3326eed1cba9"
+  },
+  "settings.updates.preferences.label": {
+    "message": "設定",
+    "description": "Subsection header for the auto-update toggles",
+    "_machine_translated": true,
+    "_source_hash": "ba6d7b2633fca623"
+  },
+  "settings.updates.channel.label": {
+    "message": "更新チャンネル",
+    "description": "Channel selector label",
+    "_machine_translated": true,
+    "_source_hash": "b56944ad2ed8c746"
+  },
+  "settings.updates.channel.description_html": {
+    "message": "このインストールが追従するリリースストリームです。<strong>Stable</strong> はすべてのユーザー向けの標準リリースです。<strong>Preview</strong> は次に来る機能を試すためのものです。<strong>Nightly</strong> はすべてのコミットを追跡します — 不具合が含まれる可能性があります。",
+    "description": "Helper text under the channel selector (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b9202b73aa174a43"
+  },
+  "settings.updates.channel.option.stable": {
+    "message": "Stable（推奨）",
+    "description": "Channel dropdown option for the stable release stream",
+    "_machine_translated": true,
+    "_source_hash": "4286972740ba01e1"
+  },
+  "settings.updates.channel.option.beta": {
+    "message": "Preview",
+    "description": "Channel dropdown option for the beta / preview stream",
+    "_machine_translated": true,
+    "_source_hash": "875e21922f772146"
+  },
+  "settings.updates.channel.option.dev": {
+    "message": "Nightly（最先端）",
+    "description": "Channel dropdown option for the per-commit dev stream",
+    "_machine_translated": true,
+    "_source_hash": "1d482fd83df5e2a9"
+  },
+  "settings.updates.auto_check.label": {
+    "message": "自動的に更新を確認",
+    "description": "Toggle: periodic update polling",
+    "_machine_translated": true,
+    "_source_hash": "a54024fd8c6b52f5"
+  },
+  "settings.updates.auto_check.description": {
+    "message": "定期的に更新を確認します。",
+    "description": "Helper text for the auto-check toggle",
+    "_machine_translated": true,
+    "_source_hash": "04989a0d4bdad9f8"
+  },
+  "settings.updates.silent.label": {
+    "message": "サイレント更新",
+    "description": "Toggle: install updates automatically when idle",
+    "_machine_translated": true,
+    "_source_hash": "b97b0ff177898bce"
+  },
+  "settings.updates.silent.description": {
+    "message": "アイドル時（Launcher の操作が 5 分間ない場合）に更新を自動的にダウンロードしてインストールします。",
+    "description": "Helper text for the silent-updates toggle",
+    "_machine_translated": true,
+    "_source_hash": "f8784c8092735e23"
+  },
+  "settings.updates.changelog.label": {
+    "message": "変更履歴",
+    "description": "Subsection header for the changelog block",
+    "_machine_translated": true,
+    "_source_hash": "e166a569f95810f0"
+  },
+  "settings.updates.changelog.description_html": {
+    "message": "リリースノートとバージョン履歴です。<a href=\"#\" id=\"openReleasesLink\" data-action=\"updates.openReleases\" style=\"margin-left:6px\">GitHub ですべてのリリースを表示 →</a>",
+    "description": "Helper text + link above the changelog block (HTML allowed; data-action wired by JS)",
+    "_machine_translated": true,
+    "_source_hash": "fe09e017988f8e74"
+  },
+  "settings.updates.changelog.loading": {
+    "message": "変更履歴を読み込み中…",
+    "description": "Placeholder while the changelog markdown loads",
+    "_machine_translated": true,
+    "_source_hash": "a7bb227353d0ce61"
+  },
+  "settings.updates.changelog.load_failed": {
+    "message": "変更履歴の読み込みに失敗しました。",
+    "description": "Placeholder when the changelog request fails",
+    "_machine_translated": true,
+    "_source_hash": "398cd16e63a3c677"
   }
 }
