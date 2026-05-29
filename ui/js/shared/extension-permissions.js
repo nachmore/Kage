@@ -192,6 +192,17 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_app_info: null,
     get_os_dark_mode: null,
 
+    // --- i18n (host-managed; the extension's own i18n flows through the
+    // sandbox runtime's `context.i18n.t()` proxy, not these commands) ------
+    get_i18n_catalog: null,
+    get_available_languages: null,
+    set_language: null,
+    // read_extension_locale IS callable from the host but never from an
+    // extension — the host fetches the catalog at sandbox boot and hands
+    // it through the init payload. Marking null reinforces that the
+    // sandbox shouldn't route a t() call through this command.
+    read_extension_locale: null,
+
     // --- agent backend introspection (Kage chrome, not extension business) -
     detect_agents: null,
     list_agent_presets: null,
