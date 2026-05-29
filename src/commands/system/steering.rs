@@ -5,7 +5,7 @@
 //! a configured context rule.
 
 use crate::config::Config;
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::state::FeatureServices;
 use log::{error, info, warn};
@@ -165,14 +165,23 @@ pub async fn get_auto_steering_path() -> Result<String, AppError> {
 // it.
 
 fn parse_steering_kind(kind: &str) -> Result<crate::steering_io::SteeringKind, AppError> {
-    crate::steering_io::SteeringKind::parse(kind)
-        .ok_or_else(|| AppError::from(format!("Unknown steering kind: {}", kind)))
+    crate::steering_io::SteeringKind::parse(kind).ok_or_else(|| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.steering.unknown_kind",
+            &[("kind", kind)],
+        )
+    })
 }
 
 fn path_to_string(p: &std::path::Path) -> Result<String, AppError> {
-    p.to_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| AppError::from("Invalid path encoding".to_string()))
+    p.to_str().map(|s| s.to_string()).ok_or_else(|| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.steering.invalid_path_encoding",
+            &[],
+        )
+    })
 }
 
 #[tauri::command]
@@ -242,8 +251,13 @@ pub async fn write_steering_lines(
 /// replace, and writes via `write_steering_lines`.
 #[tauri::command]
 pub async fn import_steering_lines(path: String) -> Result<Vec<String>, AppError> {
-    crate::steering_io::import_lines_from_path(&path)
-        .map_err(|e| AppError::from(format!("Failed to import steering doc: {}", e)))
+    crate::steering_io::import_lines_from_path(&path).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.steering.import_failed",
+            &[("message", &e.to_string())],
+        )
+    })
 }
 
 // --- App Modes / context rules --------------------------------------

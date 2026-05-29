@@ -4,7 +4,7 @@
 //! Ollama HTTP probes, the window walker, the activity tracker, and the
 //! cached UserInfo lookup.
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::os;
 use crate::state::FeatureServices;
@@ -396,7 +396,13 @@ pub async fn ollama_list_models(
     tauri::async_runtime::spawn_blocking(move || crate::ollama::list_models(&base_url))
         .await
         .map_err(|e| AppError::from(format!("List task failed: {}", e)))?
-        .map_err(|e| AppError::from(format!("Failed to list Ollama models: {}", e)))
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.ollama.list_failed",
+                &[("message", &e.to_string())],
+            )
+        })
 }
 
 /// Build the spawn command used by the "Use Ollama with Codex"

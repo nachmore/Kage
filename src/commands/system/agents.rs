@@ -2,7 +2,7 @@
 //! "+ New connection" dropdown and the connection-validation
 //! affordances in Settings → Connections.
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 
 #[derive(serde::Serialize, Clone)]
 pub struct DetectedAgent {
@@ -506,10 +506,11 @@ pub async fn install_acp_wrapper(package: String) -> Result<String, AppError> {
         .iter()
         .any(|allowed| *allowed == package)
     {
-        return Err(AppError::from(format!(
-            "package not allowlisted for install: {}",
-            package
-        )));
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.agents.package_not_allowlisted",
+            &[("package", &package)],
+        ));
     }
 
     tauri::async_runtime::spawn_blocking(move || install_acp_wrapper_sync(&package))
@@ -522,26 +523,33 @@ fn install_acp_wrapper_sync(package: &str) -> Result<String, AppError> {
     let npm_path = npm_status
         .path
         .as_deref()
-        .ok_or_else(|| AppError::from("npm not found on PATH"))?;
+        .ok_or_else(|| AppError::keyed(ErrorKind::Internal, "errors.agents.npm_not_found", &[]))?;
 
     let mut cmd = std::process::Command::new(npm_path);
     cmd.arg("install").arg("-g").arg(package);
     crate::os::configure_no_window(&mut cmd);
 
-    let out = cmd
-        .output()
-        .map_err(|e| AppError::from(format!("failed to spawn npm: {}", e)))?;
+    let out = cmd.output().map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.agents.npm_spawn_failed",
+            &[("message", &e.to_string())],
+        )
+    })?;
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     let combined = format!("{}{}", stdout, stderr);
 
     if !out.status.success() {
-        return Err(AppError::from(format!(
-            "npm install failed (exit {}): {}",
-            out.status.code().unwrap_or(-1),
-            combined.trim()
-        )));
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.agents.npm_install_failed",
+            &[
+                ("exit", &out.status.code().unwrap_or(-1).to_string()),
+                ("output", combined.trim()),
+            ],
+        ));
     }
 
     Ok(combined.trim().to_string())

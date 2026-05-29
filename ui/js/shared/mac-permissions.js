@@ -20,6 +20,7 @@
  */
 
 import { escapeAttr, escapeHtml } from './tool-utils.js';
+import { t } from './i18n.js';
 
 export function isMacOS() {
     return (navigator.platform || '').startsWith('Mac');
@@ -62,7 +63,7 @@ export function renderPermissionCard(perm, buttonId) {
                 <div class="mac-perm-why">${escapeHtml(perm.why)}</div>
             </div>
             <button type="button" class="mac-perm-btn" id="${escapeAttr(buttonId)}">
-                Open System Settings
+                ${escapeHtml(t('shared.mac_permissions.open_settings'))}
             </button>
         </div>`;
 }

@@ -5,6 +5,7 @@
  */
 
 import { escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 
 /**
  * Try to match a dev tool command. Returns { type, label, icon, value } or null.
@@ -20,10 +21,10 @@ export function matchDevTool(input, config) {
         const uuid = crypto.randomUUID();
         return {
             type: 'devtool',
-            label: 'UUID v4',
+            label: t('floating.devtools.uuid.label'),
             icon: '🔑',
             value: uuid,
-            description: 'Press Enter to copy',
+            description: t('floating.devtools.enter_to_copy'),
         };
     }
 
@@ -34,10 +35,10 @@ export function matchDevTool(input, config) {
             const encoded = btoa(unescape(encodeURIComponent(text)));
             return {
                 type: 'devtool',
-                label: 'Base64 Encode',
+                label: t('floating.devtools.base64_encode.label'),
                 icon: '📦',
                 value: encoded,
-                description: `"${text}" → Enter to copy`,
+                description: t('floating.devtools.base64_encode.description', { text }),
             };
         } catch {
             return null;
@@ -51,10 +52,10 @@ export function matchDevTool(input, config) {
             const decoded = decodeURIComponent(escape(atob(text)));
             return {
                 type: 'devtool',
-                label: 'Base64 Decode',
+                label: t('floating.devtools.base64_decode.label'),
                 icon: '📭',
                 value: decoded,
-                description: 'Enter to copy',
+                description: t('floating.devtools.enter_to_copy_short'),
             };
         } catch {
             return null;
@@ -72,9 +73,9 @@ export function matchDevTool(input, config) {
                 type: 'devtool_async',
                 algo,
                 text,
-                label: `${algo.toUpperCase()} Hash`,
+                label: t('floating.devtools.hash.label', { algo: algo.toUpperCase() }),
                 icon: '#️⃣',
-                description: 'Computing...',
+                description: t('floating.devtools.hash.computing'),
             };
         }
     }
@@ -88,7 +89,7 @@ export function matchDevTool(input, config) {
             const iso = date.toISOString();
             return {
                 type: 'devtool',
-                label: 'Epoch → Date',
+                label: t('floating.devtools.epoch.label'),
                 icon: '🕐',
                 value: `${local}\n${iso}`,
                 description: local,
@@ -103,10 +104,10 @@ export function matchDevTool(input, config) {
         const local = new Date(now).toLocaleString();
         return {
             type: 'devtool',
-            label: 'Current Epoch',
+            label: t('floating.devtools.epoch.now_label'),
             icon: '🕐',
             value: secs.toString(),
-            description: `${secs} (${local})`,
+            description: t('floating.devtools.epoch.now_description', { seconds: secs, local }),
         };
     }
 
@@ -119,10 +120,12 @@ export function matchDevTool(input, config) {
             if (!input.includes('\n') && formatted.includes('\n')) {
                 return {
                     type: 'devtool',
-                    label: 'Format JSON',
+                    label: t('floating.devtools.json_format.label'),
                     icon: '📐',
                     value: formatted,
-                    description: `${Object.keys(parsed).length || '?'} keys · Enter to copy`,
+                    description: t('floating.devtools.json_format.description', {
+                        count: Object.keys(parsed).length || '?',
+                    }),
                 };
             }
         } catch {

@@ -7,6 +7,8 @@
  *   const picker = new HotkeyPicker(containerEl, invoke, { modifiers: ['Alt'], key: 'Space' });
  *   picker.onChange((hotkey) => { ... });
  */
+import { t } from './i18n.js';
+
 export class HotkeyPicker {
     constructor(container, invoke, initialHotkey, slot) {
         this.container = container;
@@ -35,9 +37,9 @@ export class HotkeyPicker {
     render() {
         this.container.innerHTML = `
             <div class="hk-picker">
-                <div class="hk-picker-display" title="Click to change hotkey">
+                <div class="hk-picker-display" title="${t('shared.hotkey_picker.click_title')}">
                     <span class="hk-picker-keycaps"></span>
-                    <span class="hk-picker-edit-hint">click to change</span>
+                    <span class="hk-picker-edit-hint">${t('shared.hotkey_picker.click_hint')}</span>
                 </div>
                 <div class="hk-picker-status"></div>
             </div>
@@ -76,7 +78,7 @@ export class HotkeyPicker {
         if (this.capturing) return;
         this.capturing = true;
         this.displayEl.classList.add('hk-capturing');
-        this.keycapsEl.innerHTML = '<span class="hk-picker-waiting">Press any key combo...</span>';
+        this.keycapsEl.innerHTML = `<span class="hk-picker-waiting">${t('shared.hotkey_picker.waiting')}</span>`;
         this.clearStatus();
 
         try {
@@ -90,7 +92,7 @@ export class HotkeyPicker {
                         slot: this.slot,
                     });
                     this.hotkey = { modifiers: result.modifiers, key: result.key };
-                    this.showStatus('✓ Hotkey registered', 'success');
+                    this.showStatus(t('shared.hotkey_picker.registered'), 'success');
                     this._notify();
                 } catch (e) {
                     this.showStatus('✗ ' + this.friendlyError(e), 'error');
@@ -108,14 +110,14 @@ export class HotkeyPicker {
     friendlyError(err) {
         const msg = String(err);
         if (msg.includes('already used as the main hotkey')) {
-            return 'This shortcut is already used as the main hotkey';
+            return t('shared.hotkey_picker.error.main');
         }
         if (msg.includes('already used as the clipboard hotkey')) {
-            return 'This shortcut is already used as the clipboard hotkey';
+            return t('shared.hotkey_picker.error.clipboard');
         }
         if (msg.includes('already registered') || msg.includes('HotKey')) {
-            return 'This shortcut is already in use by another application';
+            return t('shared.hotkey_picker.error.in_use');
         }
-        return 'Failed to register: ' + msg;
+        return t('shared.hotkey_picker.error.generic', { message: msg });
     }
 }

@@ -26,7 +26,7 @@ import {
     checkOnline,
     markOnline,
     onNetworkChange,
-    OFFLINE_MESSAGE,
+    offlineMessage,
 } from '../shared/network.js';
 import {
     renderToolChipsHtml,
@@ -320,8 +320,8 @@ export class ChatApp {
                             .trim();
                         await sendAppNotification(
                             app.invoke,
-                            'Kage',
-                            preview || 'Response ready',
+                            t('shared.notify.kage_title'),
+                            preview || t('chat.notification.response_ready'),
                             WINDOW.MAIN
                         );
                     }
@@ -338,8 +338,8 @@ export class ChatApp {
                 app.isWaitingForResponse = false;
                 app.updateInputState();
                 app.elements.chatInput.focus();
-                if (!online) app.showError(OFFLINE_MESSAGE);
-                else app.showError('Error: ' + event.payload);
+                if (!online) app.showError(offlineMessage());
+                else app.showError(t('chat.error.error_with_payload', { payload: event.payload }));
                 app.isConnected = online;
                 app.updateConnectionStatus();
             },
@@ -963,11 +963,11 @@ export class ChatApp {
                             args: { input: opt.value },
                         });
                         container.remove();
-                        const msg = result?.message || 'Done';
+                        const msg = result?.message || t('chat.command.result_done');
                         this.addMessageFromHistory('assistant', msg);
                         this.scrollToBottom();
                     } catch (err) {
-                        this.showError(errLabel('Command failed', err));
+                        this.showError(errLabel(t('chat.error.command_failed'), err));
                     }
                 });
                 container.appendChild(btn);
@@ -1446,12 +1446,12 @@ export class ChatApp {
             this.displaySession(sessionData);
         } catch (error) {
             console.error('Failed to load session files:', error);
-            this.showError('Failed to load session: ' + this.formatError(error));
+            this.showError(errLabel(t('chat.error.failed_load_session'), error));
         }
 
         // Show connecting state in the input
         this.elements.chatInput.disabled = true;
-        this.elements.chatInput.placeholder = 'Connecting to session...';
+        this.elements.chatInput.placeholder = t('chat.placeholder.connecting');
         this.elements.sendBtn.disabled = true;
 
         // Switch ACP session in parallel
@@ -1462,7 +1462,7 @@ export class ChatApp {
             this.isConnected = true;
             this.updateConnectionStatus();
             this.elements.chatInput.disabled = false;
-            this.elements.chatInput.placeholder = 'Type your message...';
+            this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
             this.elements.sendBtn.disabled = false;
             this.elements.chatInput.focus();
         } catch (error) {
@@ -1481,8 +1481,8 @@ export class ChatApp {
             // Keep input disabled on session error
             this.elements.chatInput.disabled = true;
             this.elements.chatInput.placeholder = isLocked
-                ? 'Session is read-only'
-                : 'Session unavailable';
+                ? t('chat.placeholder.session_readonly')
+                : t('chat.placeholder.session_unavailable');
             this.elements.sendBtn.disabled = true;
         }
     }
@@ -1497,8 +1497,7 @@ export class ChatApp {
         const durations = sessionData.message_durations || {};
 
         if (!sessionData.messages || sessionData.messages.length === 0) {
-            this.elements.messagesArea.innerHTML =
-                '<div class="message-placeholder">Empty session</div>';
+            this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.empty_session')}</div>`;
             return;
         }
 
@@ -1506,8 +1505,7 @@ export class ChatApp {
         const renderQueue = this._buildRenderQueue(sessionData.messages, timestamps, durations);
 
         if (renderQueue.length === 0) {
-            this.elements.messagesArea.innerHTML =
-                '<div class="message-placeholder">Empty session</div>';
+            this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.empty_session')}</div>`;
             return;
         }
 
@@ -1533,7 +1531,7 @@ export class ChatApp {
                 const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
                 if (session) {
                     this.elements.chatHeaderTitle.textContent =
-                        stripKageTags(session.title) || 'Chat';
+                        stripKageTags(session.title) || t('chat.session.fallback_title');
                 }
                 this.scrollToBottom();
                 if (this.messages.length > 0) {
@@ -1545,7 +1543,8 @@ export class ChatApp {
         // Update header title immediately (don't wait for batches)
         const session = this.sessions.find((s) => s.session_id === this.activeSessionId);
         if (session) {
-            this.elements.chatHeaderTitle.textContent = stripKageTags(session.title) || 'Chat';
+            this.elements.chatHeaderTitle.textContent =
+                stripKageTags(session.title) || t('chat.session.fallback_title');
         }
 
         renderBatch();
@@ -1570,7 +1569,7 @@ export class ChatApp {
                 steeringEl.innerHTML = `
                     <div class="steering-header" onclick="this.parentElement.classList.toggle('collapsed')">
                         <span class="steering-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="14" x2="12" y2="22"/><line x1="10" y1="12" x2="2.5" y2="10.7"/><line x1="14" y1="12" x2="21.5" y2="10.7"/></svg></span>
-                        <span class="steering-label">Steering context sent</span>
+                        <span class="steering-label">${t('chat.message.steering_label')}</span>
                         <span class="steering-toggle">▶</span>
                     </div>
                     <div class="steering-body">
@@ -1726,7 +1725,7 @@ export class ChatApp {
 
             this.renderSessionList();
         } catch (e) {
-            this.showError(errLabel('Failed to delete session', e));
+            this.showError(errLabel(t('chat.error.failed_delete_session'), e));
         }
     }
 
@@ -1803,7 +1802,7 @@ export class ChatApp {
                     attachments: null,
                 });
             } catch (e) {
-                this.handleMessageError({ payload: errLabel('Error', e) });
+                this.handleMessageError({ payload: errLabel(t('chat.error.error_label'), e) });
             }
             return;
         }
@@ -1869,7 +1868,10 @@ export class ChatApp {
             } catch (e) {
                 console.error('Slash command failed:', e);
                 this.addUserMessage(message);
-                this.addMessageFromHistory('assistant', errLabel('Command failed', e));
+                this.addMessageFromHistory(
+                    'assistant',
+                    errLabel(t('chat.error.command_failed'), e)
+                );
                 this.scrollToBottom();
                 return;
             }
@@ -1897,7 +1899,7 @@ export class ChatApp {
                 this.currentStreamingMessage.remove();
                 this.currentStreamingMessage = null;
             }
-            this.showError(errLabel('Error', error));
+            this.showError(errLabel(t('chat.error.error_label'), error));
             this.isConnected = false;
             this.updateConnectionStatus();
             this.isWaitingForResponse = false;
@@ -2204,10 +2206,10 @@ export class ChatApp {
         onNetworkChange((online) => {
             this.updateConnectionStatus();
             if (!online) {
-                this.showError(OFFLINE_MESSAGE);
+                this.showError(offlineMessage());
             } else {
                 const container = this.elements.errorContainer;
-                if (container?.textContent?.includes('No internet')) {
+                if (container?.textContent?.includes(offlineMessage())) {
                     container.innerHTML = '';
                 }
             }
@@ -2240,8 +2242,8 @@ export class ChatApp {
             <div class="chat-error">
                 <span>${escapeHtml(message)}</span>
                 <div class="chat-error-actions">
-                    <button class="chat-error-btn reconnect" id="errorReconnectBtn">Reconnect</button>
-                    <button class="chat-error-btn dismiss" id="errorDismissBtn">Dismiss</button>
+                    <button class="chat-error-btn reconnect" id="errorReconnectBtn">${t('chat.error.btn.reconnect')}</button>
+                    <button class="chat-error-btn dismiss" id="errorDismissBtn">${t('chat.error.btn.dismiss')}</button>
                 </div>
             </div>
         `;
@@ -2258,10 +2260,10 @@ export class ChatApp {
                     this.updateConnectionStatus();
                     this.elements.errorContainer.innerHTML = '';
                 } else {
-                    this.showError('Reconnection failed.');
+                    this.showError(t('chat.error.reconnect_failed'));
                 }
             } catch (e) {
-                this.showError(errLabel('Reconnection failed', e));
+                this.showError(errLabel(t('chat.error.reconnect_failed_label'), e));
             }
         });
     }
@@ -2278,9 +2280,9 @@ export class ChatApp {
         }
         this.elements.errorContainer.innerHTML = `
                 <div class="chat-error chat-warning">
-                    <span>This session is read-only as it is open in another process${escapeHtml(processInfo)}.</span>
+                    <span>${t('chat.error.session_locked', { processInfo: escapeHtml(processInfo) })}</span>
                     <div class="chat-error-actions">
-                        <button class="chat-error-btn retry" id="errorRetryBtn">Retry</button>
+                        <button class="chat-error-btn retry" id="errorRetryBtn">${t('chat.error.btn.retry')}</button>
                     </div>
                 </div>
             `;
@@ -2292,7 +2294,7 @@ export class ChatApp {
                 this.isConnected = true;
                 this.updateConnectionStatus();
                 this.elements.chatInput.disabled = false;
-                this.elements.chatInput.placeholder = 'Type your message...';
+                this.elements.chatInput.placeholder = t('chat.placeholder.type_message');
                 this.elements.sendBtn.disabled = false;
                 this.elements.chatInput.focus();
             } catch (error) {
@@ -2508,7 +2510,7 @@ export class ChatApp {
                 if (done) {
                     if (existing) existing.remove();
                 } else if (container.classList.contains('visible')) {
-                    let label = 'Loading more results';
+                    let label = t('chat.suggestions.loading_more');
                     if (pending && pending.length > 0) {
                         const shown = pending.slice(0, 2).join(', ');
                         label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
@@ -2901,7 +2903,8 @@ export class ChatApp {
             if (this.availableModels.length > 0) {
                 // Try to find the current model name from the first model or a marked current one
                 const current = this.availableModels[0];
-                this.elements.modelName.textContent = current.name || current.modelId || 'Unknown';
+                this.elements.modelName.textContent =
+                    current.name || current.modelId || t('chat.model.unknown');
                 this.currentModelId = current.modelId;
             } else {
                 this.elements.modelName.textContent = t('chat.model.no_models');
@@ -2920,8 +2923,7 @@ export class ChatApp {
         }
         dd.innerHTML = '';
         if (!this.availableModels || this.availableModels.length === 0) {
-            dd.innerHTML =
-                '<div class="chat-model-dropdown-item"><span class="chat-model-dropdown-item-name">No models available</span></div>';
+            dd.innerHTML = `<div class="chat-model-dropdown-item"><span class="chat-model-dropdown-item-name">${t('chat.model.no_models_available')}</span></div>`;
             dd.style.display = '';
             return;
         }
@@ -2952,7 +2954,7 @@ export class ChatApp {
             });
         } catch (e) {
             console.error('[MODELS] Failed to switch model:', e);
-            this.showError(errLabel('Failed to switch model', e));
+            this.showError(errLabel(t('chat.error.failed_switch_model'), e));
         }
     }
 

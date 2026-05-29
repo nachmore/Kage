@@ -10,6 +10,7 @@
  */
 
 import { escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 
 const CB_PREFIXES = ['>cb', '>clipboard'];
 
@@ -54,10 +55,10 @@ function formatTime(isoString) {
         const now = new Date();
         const diffMs = now - d;
         const diffMin = Math.floor(diffMs / 60000);
-        if (diffMin < 1) return 'just now';
-        if (diffMin < 60) return `${diffMin}m ago`;
+        if (diffMin < 1) return t('floating.clipboard.time.just_now');
+        if (diffMin < 60) return t('floating.clipboard.time.minutes_ago', { count: diffMin });
         const diffHr = Math.floor(diffMin / 60);
-        if (diffHr < 24) return `${diffHr}h ago`;
+        if (diffHr < 24) return t('floating.clipboard.time.hours_ago', { count: diffHr });
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     } catch {
         return '';
@@ -84,8 +85,8 @@ export function renderClipboardHistory(entries, container, currentMatches, resiz
             <div class="app-suggestion-item" style="opacity:0.6;pointer-events:none;">
                 <div class="app-icon">📋</div>
                 <div class="app-info">
-                    <div class="app-name">No clipboard history</div>
-                    <div class="app-description">Enable clipboard history in Windows Settings → System → Clipboard</div>
+                    <div class="app-name">${escapeHtml(t('floating.clipboard.empty.title'))}</div>
+                    <div class="app-description">${escapeHtml(t('floating.clipboard.empty.description'))}</div>
                 </div>
             </div>
         `;
@@ -98,7 +99,7 @@ export function renderClipboardHistory(entries, container, currentMatches, resiz
         const entry = entries[i];
         const isImage = entry.content_type === 'image';
         const icon = isImage ? '🖼️' : '📄';
-        const preview = isImage ? '[Image]' : truncate(entry.text);
+        const preview = isImage ? t('floating.clipboard.image_label') : truncate(entry.text);
         const time = formatTime(entry.timestamp);
 
         const item = document.createElement('div');

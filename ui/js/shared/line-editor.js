@@ -33,6 +33,7 @@
  */
 
 import { escapeAttr } from './tool-utils.js';
+import { t } from './i18n.js';
 
 const NS = 'line-editor';
 
@@ -41,7 +42,12 @@ const NS = 'line-editor';
  * with `getLines`, `setLines`, `destroy`, and `focusLast`.
  */
 export function createLineEditor(container, opts = {}) {
-    const { lines = [], emptyHint = '', addLabel = '+ Add line', rowPlaceholder = '' } = opts;
+    const {
+        lines = [],
+        emptyHint = '',
+        addLabel = t('shared.line_editor.add_label'),
+        rowPlaceholder = '',
+    } = opts;
 
     if (!container) throw new Error('createLineEditor: container is required');
 
@@ -77,10 +83,10 @@ export function createLineEditor(container, opts = {}) {
         const row = document.createElement('div');
         row.className = `${NS}-row`;
         row.innerHTML = `
-            <button type="button" class="${NS}-btn ${NS}-up" title="Move up" aria-label="Move line up">▲</button>
-            <button type="button" class="${NS}-btn ${NS}-down" title="Move down" aria-label="Move line down">▼</button>
+            <button type="button" class="${NS}-btn ${NS}-up" title="${escapeAttr(t('shared.line_editor.move_up_title'))}" aria-label="${escapeAttr(t('shared.line_editor.move_up_aria'))}">▲</button>
+            <button type="button" class="${NS}-btn ${NS}-down" title="${escapeAttr(t('shared.line_editor.move_down_title'))}" aria-label="${escapeAttr(t('shared.line_editor.move_down_aria'))}">▼</button>
             <input type="text" class="${NS}-input setting-input" value="${escapeAttr(text)}" placeholder="${escapeAttr(rowPlaceholder)}" spellcheck="false">
-            <button type="button" class="${NS}-btn ${NS}-remove" title="Delete line" aria-label="Delete line">✕</button>
+            <button type="button" class="${NS}-btn ${NS}-remove" title="${escapeAttr(t('shared.line_editor.delete_title'))}" aria-label="${escapeAttr(t('shared.line_editor.delete_aria'))}">✕</button>
         `;
         return row;
     }

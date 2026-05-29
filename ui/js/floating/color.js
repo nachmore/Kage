@@ -3,6 +3,8 @@
  * Detects hex, rgb, hsl color strings and shows a preview with format conversions.
  */
 
+import { tHtml } from '../shared/i18n.js';
+
 // --- Color detection ---
 
 /**
@@ -256,7 +258,7 @@ export function renderColorSuggestion(
     // Hint
     const hint = document.createElement('div');
     hint.className = 'suggestions-hint';
-    hint.innerHTML = '<span class="hint-key">Enter</span> to copy · Click swatch to pick';
+    hint.innerHTML = tHtml('floating.color.enter_to_copy_html');
     container.appendChild(hint);
 
     container.classList.add('visible');

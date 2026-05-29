@@ -3795,5 +3795,647 @@
   "welcome.extensions.cap.none.title": {
     "message": "This extension requests no capabilities",
     "description": "Tooltip on the no-permissions capability badge"
+  },
+
+  "errors.agents.package_not_allowlisted": {
+    "message": "package not allowlisted for install: {package}",
+    "description": "Returned when install_acp_wrapper is asked to install a package outside the allowlist"
+  },
+  "errors.agents.npm_not_found": {
+    "message": "npm not found on PATH",
+    "description": "Returned when install_acp_wrapper can't find npm"
+  },
+  "errors.agents.npm_spawn_failed": {
+    "message": "failed to spawn npm: {message}",
+    "description": "Returned when std::process::Command::new(npm).output() fails"
+  },
+  "errors.agents.npm_install_failed": {
+    "message": "npm install failed (exit {exit}): {output}",
+    "description": "Returned when npm install -g exits non-zero"
+  },
+  "errors.config.export_task_failed": {
+    "message": "Export task failed: {message}",
+    "description": "Returned when the spawn_blocking export task fails to join"
+  },
+  "errors.config.export_build_failed": {
+    "message": "Failed to build backup: {message}",
+    "description": "Returned when config_export::export() fails"
+  },
+  "errors.config.export_write_failed": {
+    "message": "Failed to write backup to {path}: {message}",
+    "description": "Returned when std::fs::write fails on the backup path"
+  },
+  "errors.config.import_read_failed": {
+    "message": "Failed to read backup at {path}: {message}",
+    "description": "Returned when std::fs::read fails on the backup path during import"
+  },
+  "errors.config.import_task_failed": {
+    "message": "Import task failed: {message}",
+    "description": "Returned when the spawn_blocking import task fails to join"
+  },
+  "errors.config.import_build_failed": {
+    "message": "Failed to import backup: {message}",
+    "description": "Returned when config_export::import() fails"
+  },
+  "errors.config.persist_failed": {
+    "message": "Failed to persist imported config: {message}",
+    "description": "Returned when saving the imported config to disk fails"
+  },
+  "errors.config.write_file_failed": {
+    "message": "Failed to write {path}: {message}",
+    "description": "Returned when writing a config-related file (other than backup) fails"
+  },
+  "errors.steering.unknown_kind": {
+    "message": "Unknown steering kind: {kind}",
+    "description": "Returned when a steering 'kind' parameter is unrecognised"
+  },
+  "errors.steering.invalid_path_encoding": {
+    "message": "Invalid path encoding",
+    "description": "Returned when a steering doc path can't be expressed as UTF-8"
+  },
+  "errors.steering.import_failed": {
+    "message": "Failed to import steering doc: {message}",
+    "description": "Returned when reading a user-picked steering doc from disk fails"
+  },
+  "errors.update.no_update_available": {
+    "message": "No update available",
+    "description": "Returned when install_update is called but there's no pending update"
+  },
+  "errors.extensions.no_store_url": {
+    "message": "No store URL configured",
+    "description": "Returned when store_install is called but no store URL is set"
+  },
+  "errors.ollama.list_failed": {
+    "message": "Failed to list Ollama models: {message}",
+    "description": "Returned when /api/tags fails on the user-supplied Ollama daemon"
+  },
+
+  "shared.hotkey_picker.click_title": {
+    "message": "Click to change hotkey",
+    "description": "Tooltip on the hotkey picker's keycap display"
+  },
+  "shared.hotkey_picker.click_hint": {
+    "message": "click to change",
+    "description": "Helper hint text inside the hotkey picker"
+  },
+  "shared.hotkey_picker.waiting": {
+    "message": "Press any key combo...",
+    "description": "Placeholder shown while capturing a new hotkey"
+  },
+  "shared.hotkey_picker.registered": {
+    "message": "✓ Hotkey registered",
+    "description": "Status message when a new hotkey is successfully registered"
+  },
+  "shared.hotkey_picker.error.main": {
+    "message": "This shortcut is already used as the main hotkey",
+    "description": "Error when the user picks the global main hotkey for another slot"
+  },
+  "shared.hotkey_picker.error.clipboard": {
+    "message": "This shortcut is already used as the clipboard hotkey",
+    "description": "Error when the user picks the clipboard hotkey for another slot"
+  },
+  "shared.hotkey_picker.error.in_use": {
+    "message": "This shortcut is already in use by another application",
+    "description": "Error when the OS-level shortcut registration conflicts with another app"
+  },
+  "shared.hotkey_picker.error.generic": {
+    "message": "Failed to register: {message}",
+    "description": "Fallback error when hotkey registration fails for an unrecognised reason"
+  },
+
+  "ext_perm.empty": {
+    "message": "🔒 This extension does not request any capabilities. It cannot access your clipboard, files, calendar, or the AI agent.",
+    "description": "Shown when an extension requests no permissions"
+  },
+  "ext_perm.footnote": {
+    "message": "Extensions run in a sandbox. They cannot access anything not listed above.",
+    "description": "Disclosure footnote shown below the permissions list"
+  },
+  "ext_perm.title.upgrade": {
+    "message": "{name} has requested new permissions",
+    "description": "Modal title when an extension upgrade requests new caps"
+  },
+  "ext_perm.title.install": {
+    "message": "Install {name}",
+    "description": "Modal title for a fresh extension install"
+  },
+  "ext_perm.subtitle.upgrade": {
+    "message": "The extension was updated and is asking for additional access. Review the list below.",
+    "description": "Subtitle when prompting for new permissions on upgrade"
+  },
+  "ext_perm.subtitle.install": {
+    "message": "This extension is asking for the following access. Review the list and approve only if you trust it.",
+    "description": "Subtitle when prompting for permissions on first install"
+  },
+  "ext_perm.author_html": {
+    "message": "<span class=\"kage-ext-perm-author\">by {author}</span>",
+    "description": "Author byline shown next to the extension name (HTML allowed)"
+  },
+  "ext_perm.cancel_btn": {
+    "message": "Cancel",
+    "description": "Cancel button on the permission prompt"
+  },
+  "ext_perm.install_btn": {
+    "message": "Install",
+    "description": "Approve button label when no caps are requested"
+  },
+  "ext_perm.approve_btn": {
+    "message": "Approve & Install",
+    "description": "Approve button label when caps are requested"
+  },
+  "ext_perm.badge.existing": {
+    "message": "already granted",
+    "description": "Badge on a capability the user previously approved"
+  },
+  "ext_perm.badge.new": {
+    "message": "new",
+    "description": "Badge on a newly-requested capability"
+  },
+
+  "floating.banner.update_available": {
+    "message": "Kage v{version} is available!",
+    "description": "Banner text shown when an app update is available"
+  },
+  "floating.banner.action.install_now": {
+    "message": "Install now →",
+    "description": "Banner action label to install an available update"
+  },
+  "floating.banner.update_installed": {
+    "message": "Kage has been updated!",
+    "description": "Celebration banner shown after a successful update"
+  },
+  "floating.banner.action.view_changelog": {
+    "message": "View changelog →",
+    "description": "Banner action label that opens the changelog"
+  },
+  "floating.banner.crash_with_message": {
+    "message": "Kage crashed last session: {message}",
+    "description": "Banner shown after a previous run crashed, with the panic message"
+  },
+  "floating.banner.crash_generic": {
+    "message": "Kage crashed last session.",
+    "description": "Banner shown after a previous run crashed (no panic message available)"
+  },
+  "floating.banner.action.view_log": {
+    "message": "View log →",
+    "description": "Banner action label that opens the crash log"
+  },
+  "floating.banner.action.dismiss": {
+    "message": "Dismiss",
+    "description": "Banner action label that dismisses the banner without other action"
+  },
+  "floating.banner.installing_update": {
+    "message": "Downloading and installing update...",
+    "description": "Banner shown while an update is being downloaded and installed"
+  },
+  "floating.bootstrap.spinner": {
+    "message": "Spinning up agent",
+    "description": "Placeholder shown while the floating window is waiting for its agent session to bootstrap"
+  },
+  "floating.error.agent_unavailable": {
+    "message": "Agent unavailable: {reason}",
+    "description": "Shown when the floating window's session bootstrap fails permanently"
+  },
+  "floating.error.no_session": {
+    "message": "No session available — cannot send message",
+    "description": "Shown when the floating window can't send because no session is active"
+  },
+  "floating.error.failed_to_execute_shortcut": {
+    "message": "Failed to execute shortcut",
+    "description": "Error label prefix when a shortcut command fails"
+  },
+  "floating.error.error_label": {
+    "message": "Error",
+    "description": "Generic Error label prefix used in error messages"
+  },
+  "floating.error.error_with_payload": {
+    "message": "Error: {payload}",
+    "description": "Error message when streaming returns an error payload"
+  },
+  "floating.error.automation_failed": {
+    "message": "Automation failed",
+    "description": "Error label prefix when automation plan execution fails"
+  },
+  "floating.notification.response_ready": {
+    "message": "Response ready",
+    "description": "Fallback notification body when response text is empty"
+  },
+  "floating.suggestions.loading_more": {
+    "message": "Loading more results",
+    "description": "Loading indicator label shown while search providers are still resolving"
+  },
+  "floating.suggestions.system.confirm_select": {
+    "message": "Press Enter to select",
+    "description": "Description shown on a system command suggestion that needs confirmation"
+  },
+  "floating.suggestions.system.enter_admin_hint": {
+    "message": "Enter to run · {keys} as Admin",
+    "description": "Hint shown on system commands that can be run with elevation"
+  },
+  "floating.suggestions.system.enter_to_execute": {
+    "message": "Press Enter to execute",
+    "description": "Hint shown on system commands that don't need elevation"
+  },
+  "floating.suggestions.system.are_you_sure": {
+    "message": "Are you sure?",
+    "description": "Confirmation prompt for system commands that require it"
+  },
+  "floating.suggestions.system.are_you_sure_admin": {
+    "message": "Are you sure? (as Admin)",
+    "description": "Confirmation prompt for system commands run with elevation"
+  },
+  "floating.suggestions.system.confirm_hint": {
+    "message": "Press Enter to confirm · Clear text to cancel",
+    "description": "Hint under the system command confirmation prompt"
+  },
+  "floating.suggestions.selection_fallback": {
+    "message": "Selected: {value}",
+    "description": "Fallback message after a selection is applied via slash command"
+  },
+  "floating.terminator.text": {
+    "message": "Terminator Mode — all tools auto-approved",
+    "description": "Banner shown when terminator (auto-approve) mode is active"
+  },
+  "floating.terminator.dismiss_title": {
+    "message": "Dismiss",
+    "description": "Tooltip on the dismiss button of the terminator mode bar"
+  },
+  "floating.compaction.in_progress": {
+    "message": "Compacting context...",
+    "description": "Notice shown while the agent is compacting context history"
+  },
+  "floating.timer.notification_title": {
+    "message": "Timer Complete",
+    "description": "Notification title when a timer finishes"
+  },
+  "floating.timer.notification_body": {
+    "message": "Your timer has finished!",
+    "description": "Notification body when a timer finishes"
+  },
+  "floating.timer.start_label": {
+    "message": "Start {duration} timer",
+    "description": "Suggestion label to start a timer for the given duration"
+  },
+  "floating.timer.start_label_replace": {
+    "message": "Start {duration} timer (replaces current)",
+    "description": "Suggestion label when starting a timer would replace an existing one"
+  },
+  "floating.timer.start_description": {
+    "message": "Press Enter to start countdown",
+    "description": "Description under the start-timer suggestion"
+  },
+  "floating.timer.hint_label": {
+    "message": "Timer",
+    "description": "Suggestion title when the user types just 'timer'"
+  },
+  "floating.timer.hint_description": {
+    "message": "timer 5m · timer 1h30m · timer 90s · timer 5:00",
+    "description": "Hint listing example timer command formats"
+  },
+  "floating.timer.hint_description_replace": {
+    "message": "timer 5m · timer 1h30m · timer 90s · timer 5:00 · replaces current timer",
+    "description": "Timer hint when an existing timer would be replaced"
+  },
+  "floating.timer.stopwatch.pause": {
+    "message": "Pause Stopwatch",
+    "description": "Suggestion title to pause the running stopwatch"
+  },
+  "floating.timer.stopwatch.pause_description": {
+    "message": "Press Enter to pause",
+    "description": "Description under the pause-stopwatch suggestion"
+  },
+  "floating.timer.stopwatch.stop": {
+    "message": "Stop Stopwatch",
+    "description": "Suggestion title to stop the paused stopwatch"
+  },
+  "floating.timer.stopwatch.stop_description": {
+    "message": "Press Enter to stop (currently paused)",
+    "description": "Description under the stop-stopwatch suggestion"
+  },
+  "floating.timer.stopwatch.start": {
+    "message": "Start Stopwatch",
+    "description": "Suggestion title to start a new stopwatch"
+  },
+  "floating.timer.stopwatch.start_description": {
+    "message": "Press Enter to start counting up",
+    "description": "Description under the start-stopwatch suggestion"
+  },
+  "floating.timer.bar.add_one_minute": {
+    "message": "+1 minute",
+    "description": "Tooltip on the +1m button on the timer bar"
+  },
+  "floating.timer.bar.pause_resume": {
+    "message": "Pause/Resume",
+    "description": "Tooltip on the pause/resume button on the timer bar"
+  },
+  "floating.timer.bar.stop": {
+    "message": "Stop",
+    "description": "Tooltip on the stop button on the timer bar"
+  },
+  "floating.clipboard.empty.title": {
+    "message": "No clipboard history",
+    "description": "Title shown when no clipboard history items are available"
+  },
+  "floating.clipboard.empty.description": {
+    "message": "Enable clipboard history in Windows Settings → System → Clipboard",
+    "description": "Hint shown beneath the no-clipboard-history title"
+  },
+  "floating.clipboard.image_label": {
+    "message": "[Image]",
+    "description": "Preview placeholder shown for an image clipboard entry"
+  },
+  "floating.clipboard.time.just_now": {
+    "message": "just now",
+    "description": "Relative time label for the most recent clipboard entry"
+  },
+  "floating.clipboard.time.minutes_ago": {
+    "message": "{count}m ago",
+    "description": "Relative time label for clipboard entries from a few minutes ago"
+  },
+  "floating.clipboard.time.hours_ago": {
+    "message": "{count}h ago",
+    "description": "Relative time label for clipboard entries from a few hours ago"
+  },
+  "floating.color.enter_to_copy_html": {
+    "message": "<span class=\"hint-key\">Enter</span> to copy · Click swatch to pick",
+    "description": "Hint shown beneath a color suggestion (HTML allowed)"
+  },
+  "floating.suggestions.shortcut.enter_to_send_html": {
+    "message": "<span class=\"hint-key\">{keys}</span> to send to agent",
+    "description": "Hint shown beneath shortcut suggestions; {keys} is the platform send shortcut"
+  },
+  "floating.suggestions.url.open_in_browser": {
+    "message": "Open in browser...",
+    "description": "Suggestion title for opening a URL in the default browser"
+  },
+  "floating.suggestions.path.open_file": {
+    "message": "Open File: {path}",
+    "description": "Suggestion title for opening a file path"
+  },
+  "floating.suggestions.path.open_folder": {
+    "message": "Open Folder: {path}",
+    "description": "Suggestion title for opening a folder path"
+  },
+  "floating.devtools.uuid.label": {
+    "message": "UUID v4",
+    "description": "Dev tool label for a generated UUID"
+  },
+  "floating.devtools.enter_to_copy": {
+    "message": "Press Enter to copy",
+    "description": "Generic hint shown beneath dev tool results"
+  },
+  "floating.devtools.enter_to_copy_short": {
+    "message": "Enter to copy",
+    "description": "Short hint shown beneath dev tool results"
+  },
+  "floating.devtools.base64_encode.label": {
+    "message": "Base64 Encode",
+    "description": "Dev tool label for base64 encoding"
+  },
+  "floating.devtools.base64_encode.description": {
+    "message": "\"{text}\" → Enter to copy",
+    "description": "Description shown beneath base64 encode results"
+  },
+  "floating.devtools.base64_decode.label": {
+    "message": "Base64 Decode",
+    "description": "Dev tool label for base64 decoding"
+  },
+  "floating.devtools.hash.label": {
+    "message": "{algo} Hash",
+    "description": "Dev tool label for a hash computation; {algo} is the algorithm name (SHA-256, etc.)"
+  },
+  "floating.devtools.hash.computing": {
+    "message": "Computing...",
+    "description": "Dev tool description shown while a hash is being computed"
+  },
+  "floating.devtools.epoch.label": {
+    "message": "Epoch → Date",
+    "description": "Dev tool label for converting an epoch timestamp to a date"
+  },
+  "floating.devtools.epoch.now_label": {
+    "message": "Current Epoch",
+    "description": "Dev tool label for the current Unix timestamp"
+  },
+  "floating.devtools.epoch.now_description": {
+    "message": "{seconds} ({local})",
+    "description": "Description shown beneath the current Epoch result"
+  },
+  "floating.devtools.json_format.label": {
+    "message": "Format JSON",
+    "description": "Dev tool label for formatting minified JSON"
+  },
+  "floating.devtools.json_format.description": {
+    "message": "{count} keys · Enter to copy",
+    "description": "Description shown beneath formatted JSON results"
+  },
+  "floating.permission.notification_title": {
+    "message": "🔐 Tool Permission Required",
+    "description": "Title of the system notification when a tool wants permission while the floating window is hidden"
+  },
+  "floating.permission.notification_body": {
+    "message": "{tool}: {title}",
+    "description": "Body of the tool permission notification, with tool name and description"
+  },
+
+  "chat.placeholder.type_message": {
+    "message": "Type your message...",
+    "description": "Placeholder shown in the chat input"
+  },
+  "chat.placeholder.connecting": {
+    "message": "Connecting to session...",
+    "description": "Placeholder shown while the chat is connecting to its session"
+  },
+  "chat.placeholder.session_readonly": {
+    "message": "Session is read-only",
+    "description": "Placeholder shown when the active session is open in another process"
+  },
+  "chat.placeholder.session_unavailable": {
+    "message": "Session unavailable",
+    "description": "Placeholder shown when the session can't be loaded"
+  },
+  "chat.placeholder.empty_session": {
+    "message": "Empty session",
+    "description": "Placeholder shown when a session has no messages"
+  },
+  "chat.session.fallback_title": {
+    "message": "Chat",
+    "description": "Fallback title for the active chat when the session has no name"
+  },
+  "chat.error.failed_load_session": {
+    "message": "Failed to load session",
+    "description": "Error label prefix when a session can't be loaded"
+  },
+  "chat.error.failed_delete_session": {
+    "message": "Failed to delete session",
+    "description": "Error label prefix when a session can't be deleted"
+  },
+  "chat.error.command_failed": {
+    "message": "Command failed",
+    "description": "Error label prefix when a slash or local command fails"
+  },
+  "chat.error.failed_switch_model": {
+    "message": "Failed to switch model",
+    "description": "Error label prefix when switching the model fails"
+  },
+  "chat.error.error_label": {
+    "message": "Error",
+    "description": "Generic Error label prefix"
+  },
+  "chat.error.error_with_payload": {
+    "message": "Error: {payload}",
+    "description": "Error message format when streaming returns an error payload"
+  },
+  "chat.error.reconnect_failed": {
+    "message": "Reconnection failed.",
+    "description": "Error message shown when reconnect fails"
+  },
+  "chat.error.reconnect_failed_label": {
+    "message": "Reconnection failed",
+    "description": "Error label prefix when reconnect throws"
+  },
+  "chat.error.session_locked": {
+    "message": "This session is read-only as it is open in another process{processInfo}.",
+    "description": "Error shown when a session is locked by another instance"
+  },
+  "chat.error.btn.reconnect": {
+    "message": "Reconnect",
+    "description": "Button label to retry connecting"
+  },
+  "chat.error.btn.dismiss": {
+    "message": "Dismiss",
+    "description": "Button label to dismiss an error"
+  },
+  "chat.error.btn.retry": {
+    "message": "Retry",
+    "description": "Button label to retry an action"
+  },
+  "chat.notification.response_ready": {
+    "message": "Response ready",
+    "description": "Fallback notification body for the chat window when response is empty"
+  },
+  "chat.message.steering_label": {
+    "message": "Steering context sent",
+    "description": "Header text on collapsed steering context blocks"
+  },
+  "chat.suggestions.loading_more": {
+    "message": "Loading more results",
+    "description": "Loading indicator label in the chat suggestions panel"
+  },
+  "chat.command.result_done": {
+    "message": "Done",
+    "description": "Default fallback message when a slash-command selection completes with no message"
+  },
+  "chat.model.no_models_available": {
+    "message": "No models available",
+    "description": "Dropdown placeholder when no models are returned by the backend"
+  },
+  "chat.model.unknown": {
+    "message": "Unknown",
+    "description": "Fallback model display name when none is provided"
+  },
+
+  "shared.permission.unknown_tool": {
+    "message": "Unknown Tool",
+    "description": "Fallback shown when a permission request has no tool title"
+  },
+  "shared.permission.unknown": {
+    "message": "Unknown",
+    "description": "Generic fallback used as a tool title in policy decisions"
+  },
+  "shared.script_editor.ai_placeholder": {
+    "message": "Ask AI to write or update the script...",
+    "description": "Placeholder in the script editor's AI prompt input"
+  },
+  "shared.script_editor.btn.generate": {
+    "message": "✨ Generate",
+    "description": "Button label to generate a script via AI"
+  },
+  "shared.script_editor.btn.generating": {
+    "message": "Generating...",
+    "description": "Button label while generation is in flight"
+  },
+  "shared.script_editor.btn.undo": {
+    "message": "Undo",
+    "description": "Button label to undo a generated script"
+  },
+  "shared.script_editor.status.enter_description": {
+    "message": "Enter a description first.",
+    "description": "Status shown when the user clicks Generate without entering a prompt"
+  },
+  "shared.script_editor.status.sending": {
+    "message": "Sending to agent...",
+    "description": "Status shown while the AI request is being sent"
+  },
+  "shared.script_editor.status.receiving": {
+    "message": "Receiving...",
+    "description": "Status shown while the AI response is streaming"
+  },
+  "shared.script_editor.status.generated": {
+    "message": "Script generated. Review and save.",
+    "description": "Status shown after successful generation"
+  },
+  "shared.script_editor.context_default": {
+    "message": "Return a string.",
+    "description": "Default context hint added beneath the script editor"
+  },
+  "shared.script_editor.var_help_html": {
+    "message": "JavaScript function body. The variable <code style=\"background:var(--kage-bg-input);padding:1px 4px;border-radius:3px;\">{var}</code> contains the input. {context}",
+    "description": "Help text shown beneath the script editor input (HTML allowed; {var} is the JS variable name, {context} is the per-caller hint string)"
+  },
+  "shared.automation.run_btn": {
+    "message": "▶ Run",
+    "description": "Button label to run an automation plan"
+  },
+  "shared.automation.run_hint": {
+    "message": "or type to revise the plan",
+    "description": "Hint shown next to the Run button"
+  },
+  "shared.line_editor.add_label": {
+    "message": "+ Add line",
+    "description": "Default label for the add-line button in the line editor"
+  },
+  "shared.line_editor.move_up_title": {
+    "message": "Move up",
+    "description": "Tooltip on the move-up button"
+  },
+  "shared.line_editor.move_up_aria": {
+    "message": "Move line up",
+    "description": "Aria label on the move-up button"
+  },
+  "shared.line_editor.move_down_title": {
+    "message": "Move down",
+    "description": "Tooltip on the move-down button"
+  },
+  "shared.line_editor.move_down_aria": {
+    "message": "Move line down",
+    "description": "Aria label on the move-down button"
+  },
+  "shared.line_editor.delete_title": {
+    "message": "Delete line",
+    "description": "Tooltip on the delete-line button"
+  },
+  "shared.line_editor.delete_aria": {
+    "message": "Delete line",
+    "description": "Aria label on the delete-line button"
+  },
+  "shared.network.offline_message": {
+    "message": "No internet connection. Search, shortcuts, and app launching still work, but AI features need a connection.",
+    "description": "User-friendly message when the device is offline"
+  },
+  "shared.notify.kage_title": {
+    "message": "Kage",
+    "description": "Default notification title (the app name) used as a fallback"
+  },
+  "shared.extension.widget.paused_html": {
+    "message": "<span>⚠️ Widget paused — <strong>{name}</strong> kept failing or running too slow.</span>",
+    "description": "Notice when a misbehaving extension widget is paused"
+  },
+  "shared.extension.widget.retry": {
+    "message": "Retry",
+    "description": "Link label to retry a paused extension widget"
+  },
+  "shared.mac_permissions.open_settings": {
+    "message": "Open System Settings",
+    "description": "Button label that deep-links to System Settings → Privacy"
   }
 }

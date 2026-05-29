@@ -8,7 +8,7 @@
 //! - generic write-text-file pass-through used by the dialog plugin
 
 use crate::config::Config;
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::state::{FeatureServices, UiState};
 use log::{error, info};
@@ -323,12 +323,29 @@ pub async fn export_config_bundle(
         crate::config_export::export(&config, passphrase.as_deref())
     })
     .await
-    .map_err(|e| AppError::from(format!("Export task failed: {}", e)))?
-    .map_err(|e| AppError::from(format!("Failed to build backup: {}", e)))?;
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_task_failed",
+            &[("message", &e.to_string())],
+        )
+    })?
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_build_failed",
+            &[("message", &e.to_string())],
+        )
+    })?;
 
     let len = bytes.len() as u64;
-    std::fs::write(&path, &bytes)
-        .map_err(|e| AppError::from(format!("Failed to write backup to {}: {}", path, e)))?;
+    std::fs::write(&path, &bytes).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.export_write_failed",
+            &[("path", &path), ("message", &e.to_string())],
+        )
+    })?;
     Ok(len)
 }
 
@@ -343,8 +360,13 @@ pub async fn import_config_bundle(
     features: State<'_, FeatureServices>,
     app: tauri::AppHandle,
 ) -> Result<crate::config_export::ImportSummary, AppError> {
-    let bytes = std::fs::read(&path)
-        .map_err(|e| AppError::from(format!("Failed to read backup at {}: {}", path, e)))?;
+    let bytes = std::fs::read(&path).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_read_failed",
+            &[("path", &path), ("message", &e.to_string())],
+        )
+    })?;
     let local = {
         let cfg = features.config.lock_or_recover();
         cfg.clone()
@@ -356,8 +378,20 @@ pub async fn import_config_bundle(
         crate::config_export::import(&bytes, passphrase.as_deref(), &local)
     })
     .await
-    .map_err(|e| AppError::from(format!("Import task failed: {}", e)))?
-    .map_err(|e| AppError::from(format!("Failed to import backup: {}", e)))?;
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_task_failed",
+            &[("message", &e.to_string())],
+        )
+    })?
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.import_build_failed",
+            &[("message", &e.to_string())],
+        )
+    })?;
 
     // Persist + swap the in-memory state under the same lock —
     // mirrors save_config so concurrent permission saves don't race.
@@ -369,9 +403,13 @@ pub async fn import_config_bundle(
         *state_config = new_config;
         // Channel is a typed enum — unknown values from a hand-edited
         // backup collapsed to Stable at deserialise time.
-        state_config
-            .save()
-            .map_err(|e| format!("Failed to persist imported config: {}", e))?;
+        state_config.save().map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.persist_failed",
+                &[("message", &e.to_string())],
+            )
+        })?;
         prior
     };
 
@@ -462,7 +500,12 @@ pub async fn dismiss_recent_crash(
 #[tauri::command]
 pub async fn write_text_file(path: String, contents: String) -> Result<u64, AppError> {
     let len = contents.len() as u64;
-    std::fs::write(&path, contents.as_bytes())
-        .map_err(|e| AppError::from(format!("Failed to write {}: {}", path, e)))?;
+    std::fs::write(&path, contents.as_bytes()).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.config.write_file_failed",
+            &[("path", &path), ("message", &e.to_string())],
+        )
+    })?;
     Ok(len)
 }

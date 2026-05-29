@@ -18,6 +18,7 @@
 
 import { getToolEmoji, escapeHtml } from './tool-utils.js';
 import { EVT } from './events.js';
+import { t } from './i18n.js';
 
 export function createPermissionHandler(invoke, appWindow, hooks = {}) {
     let currentPermissionRequest = null;
@@ -50,7 +51,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             toolName: toolName || null,
         };
 
-        toolTitleEl.textContent = toolCall.title || 'Unknown Tool';
+        toolTitleEl.textContent = toolCall.title || t('shared.permission.unknown_tool');
 
         // Show tool name with emoji if available
         if (toolNameEl) {
@@ -105,7 +106,7 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
             const policyTitle =
                 currentPermissionRequest.toolName ||
                 currentPermissionRequest.toolCall.title ||
-                'Unknown';
+                t('shared.permission.unknown');
 
             // Extension tool requests use a callback instead of ACP response
             if (_extensionToolCallback) {
@@ -255,7 +256,8 @@ export function createPermissionHandler(invoke, appWindow, hooks = {}) {
                     sessionId: notification.params?.sessionId || null,
                     requestId: notification.id,
                     optionId: 'allow_once',
-                    toolTitle: notification.params?.toolCall?.title || 'Unknown',
+                    toolTitle:
+                        notification.params?.toolCall?.title || t('shared.permission.unknown'),
                 }).catch((e) => console.error('Auto-approve failed:', e));
             } else {
                 await showPermissionModal(notification, event.payload.toolName);

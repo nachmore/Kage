@@ -13,6 +13,7 @@
  */
 
 import { CAPABILITIES, normalizePermissions } from './extension-permissions.js';
+import { t, tHtml } from './i18n.js';
 
 const MODAL_ID = 'kage-extension-permission-modal';
 
@@ -83,12 +84,17 @@ function escape(s) {
 }
 
 function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
-    const id = escape(manifest?.id || 'unknown');
-    const name = escape(manifest?.name || id);
+    // Raw values go to the t()/tHtml() callsites; pre-escaped values get
+    // dropped directly into HTML. Mixing would either render `&amp;`
+    // literally or skip an escape that should have happened.
+    const idRaw = manifest?.id || 'unknown';
+    const nameRaw = manifest?.name || idRaw;
+    const id = escape(idRaw);
+    const name = escape(nameRaw);
     const version = escape(manifest?.version || '');
     const icon = escape(manifest?.icon || '🧩');
     const author = manifest?.author
-        ? `<span class="kage-ext-perm-author">by ${escape(manifest.author)}</span>`
+        ? tHtml('ext_perm.author_html', { author: manifest.author })
         : '';
     const description = manifest?.description
         ? `<div class="kage-ext-perm-description">${escape(manifest.description)}</div>`
@@ -97,31 +103,28 @@ function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
     let permsSection;
     if (requested.length === 0) {
         permsSection = `
-            <div class="kage-ext-perm-empty">
-                🔒 This extension does not request any capabilities.
-                It cannot access your clipboard, files, calendar, or the AI agent.
-            </div>`;
+            <div class="kage-ext-perm-empty">${t('ext_perm.empty')}</div>`;
     } else {
         const rows = requested.map((cap) => renderCapRow(cap, previouslyGranted.has(cap))).join('');
         permsSection = `
             <div class="kage-ext-perm-list">${rows}</div>
-            <div class="kage-ext-perm-footnote">
-                Extensions run in a sandbox. They cannot access anything not listed above.
-            </div>`;
+            <div class="kage-ext-perm-footnote">${t('ext_perm.footnote')}</div>`;
     }
 
-    const title = isUpgrade ? `${name} has requested new permissions` : `Install ${name}`;
-    const subtitle = isUpgrade
-        ? 'The extension was updated and is asking for additional access. Review the list below.'
-        : 'This extension is asking for the following access. Review the list and approve only if you trust it.';
+    // tHtml escapes nameRaw, so the title lands HTML-safe even if a
+    // manifest.name contains `<` or `&`.
+    const titleHtml = isUpgrade
+        ? tHtml('ext_perm.title.upgrade', { name: nameRaw })
+        : tHtml('ext_perm.title.install', { name: nameRaw });
+    const subtitle = isUpgrade ? t('ext_perm.subtitle.upgrade') : t('ext_perm.subtitle.install');
 
     return `
         <div class="kage-ext-perm-modal" role="dialog" aria-modal="true" aria-labelledby="kage-ext-perm-title">
             <div class="kage-ext-perm-header">
                 <div class="kage-ext-perm-icon">${icon}</div>
                 <div class="kage-ext-perm-heading">
-                    <div id="kage-ext-perm-title" class="kage-ext-perm-title">${escape(title)}</div>
-                    <div class="kage-ext-perm-subtitle">${escape(subtitle)}</div>
+                    <div id="kage-ext-perm-title" class="kage-ext-perm-title">${titleHtml}</div>
+                    <div class="kage-ext-perm-subtitle">${subtitle}</div>
                 </div>
             </div>
             <div class="kage-ext-perm-body">
@@ -134,9 +137,9 @@ function renderModal(manifest, requested, previouslyGranted, isUpgrade) {
                 ${permsSection}
             </div>
             <div class="kage-ext-perm-footer">
-                <button class="kage-ext-perm-btn" data-action="cancel">Cancel</button>
+                <button class="kage-ext-perm-btn" data-action="cancel">${t('ext_perm.cancel_btn')}</button>
                 <button class="kage-ext-perm-btn kage-ext-perm-btn-primary" data-action="approve">
-                    ${requested.length === 0 ? 'Install' : 'Approve &amp; Install'}
+                    ${requested.length === 0 ? t('ext_perm.install_btn') : t('ext_perm.approve_btn')}
                 </button>
             </div>
         </div>
@@ -147,8 +150,8 @@ function renderCapRow(cap, previouslyGranted) {
     const meta = CAPABILITIES[cap];
     if (!meta) return ''; // unknown cap — already filtered by normalizePermissions
     const badge = previouslyGranted
-        ? '<span class="kage-ext-perm-badge kage-ext-perm-badge-existing">already granted</span>'
-        : '<span class="kage-ext-perm-badge kage-ext-perm-badge-new">new</span>';
+        ? `<span class="kage-ext-perm-badge kage-ext-perm-badge-existing">${t('ext_perm.badge.existing')}</span>`
+        : `<span class="kage-ext-perm-badge kage-ext-perm-badge-new">${t('ext_perm.badge.new')}</span>`;
     return `
         <div class="kage-ext-perm-row">
             <div class="kage-ext-perm-cap-icon">${escape(meta.icon)}</div>

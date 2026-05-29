@@ -3,7 +3,7 @@
 //! relaunch) lives in the `tauri-plugin-updater` plugin and our
 //! `updater` module's scheduling layer. See `docs/RELEASE.md`.
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
@@ -97,7 +97,13 @@ pub async fn download_and_install_update(
         crate::updater::plugin_check(&app, channel)
             .await
             .map_err(|e| format!("Check failed: {}", e))?
-            .ok_or_else(|| AppError::from("No update available"))?
+            .ok_or_else(|| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.update.no_update_available",
+                    &[],
+                )
+            })?
     };
 
     // Stamp last_updated_version so the post-restart launch can show

@@ -69,9 +69,11 @@ RUST_PATTERNS = [
     re.compile(r"""\bAppError::keyed\s*\([^,]+,\s*"([^"]+)"""),
 ]
 
-# JS: `t("key", ...)`, `t('key', ...)`, `data-i18n="key"`, `data-i18n-title="key"`, etc.
+# JS: `t("key", ...)`, `t('key', ...)`, `tHtml("key", ...)`, `data-i18n="key"`,
+# `data-i18n-title="key"`, etc.
 JS_PATTERNS = [
     re.compile(r"""\bt\s*\(\s*['"]([^'"]+)['"]"""),
+    re.compile(r"""\btHtml\s*\(\s*['"]([^'"]+)['"]"""),
     re.compile(r"""\bformatMessage\s*\(\s*['"]([^'"]+)['"]"""),
 ]
 

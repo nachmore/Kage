@@ -56,7 +56,7 @@ import { formatError } from '../shared/session-render.js';
 import { executeShortcutCommand, handleEnterAction } from '../shared/result-executor.js';
 import { setupRtlDetection } from '../shared/rtl.js';
 import { escapeHtml, formatBytes } from '../shared/tool-utils.js';
-import { checkOnline, markOnline, onNetworkChange, OFFLINE_MESSAGE } from '../shared/network.js';
+import { checkOnline, markOnline, onNetworkChange, offlineMessage } from '../shared/network.js';
 import { getConfig } from '../shared/config-cache.js';
 import { ExtensionToolController } from '../shared/extension-tool-controller.js';
 import { AutomationPlanController } from '../shared/automation-plan-controller.js';
@@ -64,6 +64,7 @@ import { MessageStreamController } from '../shared/message-stream-controller.js'
 import { trackEvent, messageLengthBucket } from '../shared/telemetry.js';
 import { hideExtensionBar, showExtensionBar, updateExtensionBar } from '../shared/extension-bar.js';
 import { sanitizeExtensionHtml } from '../shared/extension-html-sanitizer.js';
+import { t } from '../shared/i18n.js';
 
 /**
  * Measure the natural (no-overflow) content height of a textarea without
@@ -204,7 +205,7 @@ export class FloatingApp {
                 await this.windowManager.resizeWindow();
             },
             onPlanFailed: (e) => {
-                this.showError(errLabel('Automation failed', e));
+                this.showError(errLabel(t('floating.error.automation_failed'), e));
                 this.isWaitingForResponse = false;
             },
         });
@@ -318,8 +319,8 @@ export class FloatingApp {
                             .trim();
                         await sendAppNotification(
                             this.invoke,
-                            'Kage',
-                            preview || 'Response ready',
+                            t('shared.notify.kage_title'),
+                            preview || t('floating.notification.response_ready'),
                             WINDOW.FLOATING
                         );
                     }
@@ -334,8 +335,11 @@ export class FloatingApp {
                 this._noBlurTools.clear();
                 this.elements.floatingStopBtn.style.display = 'none';
                 this.updateDatetimeVisibility();
-                if (!online) this.showError(OFFLINE_MESSAGE);
-                else this.showError('Error: ' + event.payload);
+                if (!online) this.showError(offlineMessage());
+                else
+                    this.showError(
+                        t('floating.error.error_with_payload', { payload: event.payload })
+                    );
             },
             onSessionReset: (_event, msg) => {
                 this.isWaitingForResponse = false;
@@ -572,8 +576,8 @@ export class FloatingApp {
             const version = event.payload;
             this.showBanner(
                 '⬆️',
-                'Kage v' + version + ' is available!',
-                'Install now →',
+                t('floating.banner.update_available', { version }),
+                t('floating.banner.action.install_now'),
                 'update_install',
                 ''
             );
@@ -1846,7 +1850,7 @@ export class FloatingApp {
         this.elements.contentArea.classList.add('visible');
         this.elements.responseText.innerHTML = `
             <div class="bootstrap-spinner">
-                Spinning up agent
+                ${t('floating.bootstrap.spinner')}
                 <span class="bootstrap-dot">.</span><span class="bootstrap-dot">.</span><span class="bootstrap-dot">.</span>
             </div>`;
         this.windowManager.resizeWindow();
@@ -1867,11 +1871,13 @@ export class FloatingApp {
             this.elements.responseText.innerHTML = '';
         }
         if (this.sessionBootstrapError) {
-            this.showError(`Agent unavailable: ${this.sessionBootstrapError}`);
+            this.showError(
+                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
+            );
             return;
         }
         if (!this.floatingSessionId) {
-            this.showError('No session available — cannot send message');
+            this.showError(t('floating.error.no_session'));
             return;
         }
         // Re-enter sendChatMessage; the bootstrap-guard at the top
@@ -1953,8 +1959,8 @@ export class FloatingApp {
             try {
                 await sendAppNotification(
                     this.invoke,
-                    'Timer Complete',
-                    '⏱️ Your timer has finished!',
+                    t('floating.timer.notification_title'),
+                    '⏱️ ' + t('floating.timer.notification_body'),
                     WINDOW.FLOATING
                 );
             } catch {}
@@ -1990,8 +1996,8 @@ export class FloatingApp {
             if (wasUpdated) {
                 this.showBanner(
                     '🎉',
-                    'Kage has been updated!',
-                    'View changelog →',
+                    t('floating.banner.update_installed'),
+                    t('floating.banner.action.view_changelog'),
                     'settings',
                     // `<section>:<subsection>` — handleBannerClick
                     // splits on the colon and forwards both to
@@ -2038,9 +2044,15 @@ export class FloatingApp {
             if (this._bannerVisible) return;
 
             const msg = crash.panic_message
-                ? `Kage crashed last session: ${crash.panic_message}`
-                : 'Kage crashed last session.';
-            this.showBanner('💥', msg, 'View log →', 'crash_log', crash.log_path);
+                ? t('floating.banner.crash_with_message', { message: crash.panic_message })
+                : t('floating.banner.crash_generic');
+            this.showBanner(
+                '💥',
+                msg,
+                t('floating.banner.action.view_log'),
+                'crash_log',
+                crash.log_path
+            );
             // Mark seen now — we've shown the user once. If they
             // ignore the banner we don't re-show; "View log" / any
             // dismiss completes the lifecycle either way. Failure to
@@ -2127,9 +2139,15 @@ export class FloatingApp {
             // formatError unwraps the AppError shape so we don't show
             // "[object Object]" when the rejection is a serialised
             // struct (which it is over the Tauri invoke boundary).
-            this.showBanner('⬇️', 'Downloading and installing update...', '', 'dismiss', '');
+            this.showBanner('⬇️', t('floating.banner.installing_update'), '', 'dismiss', '');
             this.invoke('download_and_install_update').catch((e) => {
-                this.showBanner('❌', formatError(e), 'Dismiss', 'dismiss', '');
+                this.showBanner(
+                    '❌',
+                    formatError(e),
+                    t('floating.banner.action.dismiss'),
+                    'dismiss',
+                    ''
+                );
             });
         } else {
             // 'dismiss' — reset the UI and refocus input
@@ -2172,13 +2190,13 @@ export class FloatingApp {
                     showExtensionBar({
                         id: 'terminator',
                         icon: '🤖',
-                        text: 'Terminator Mode — all tools auto-approved',
+                        text: t('floating.terminator.text'),
                         className: 'terminator-bar',
                         buttons: [
                             {
                                 id: 'dismiss',
                                 label: '✕',
-                                title: 'Dismiss',
+                                title: t('floating.terminator.dismiss_title'),
                                 onClick: () => {
                                     sessionStorage.setItem('terminator_bar_dismissed', '1');
                                     hideExtensionBar('terminator');
@@ -2304,7 +2322,7 @@ export class FloatingApp {
             this._clearInput();
         } catch (error) {
             console.error('Failed to execute shortcut:', error);
-            this.showError(errLabel('Failed to execute shortcut', error));
+            this.showError(errLabel(t('floating.error.failed_to_execute_shortcut'), error));
         }
     }
 
@@ -2399,7 +2417,7 @@ export class FloatingApp {
                     if (done) {
                         if (existing) existing.remove();
                     } else {
-                        let label = 'Loading more results';
+                        let label = t('floating.suggestions.loading_more');
                         if (pending && pending.length > 0) {
                             const shown = pending.slice(0, 2).join(', ');
                             label += ' (' + shown + (pending.length > 2 ? ', \u2026' : '') + ')';
@@ -2511,7 +2529,7 @@ export class FloatingApp {
                 <div class="app-icon">⚠️</div>
                 <div class="app-info">
                     <div class="app-name">${cmdLabel}</div>
-                    <div class="app-description">Press Enter to select</div>
+                    <div class="app-description">${t('floating.suggestions.system.confirm_select')}</div>
                 </div>
             `;
         } else {
@@ -2519,7 +2537,7 @@ export class FloatingApp {
                 <div class="app-icon">${cmdLabel.split(' ')[0]}</div>
                 <div class="app-info">
                     <div class="app-name">${cmdLabel.substring(cmdLabel.indexOf(' ') + 1)}</div>
-                    <div class="app-description">${canElevate ? `Enter to run · ${platformKeyLabel('Ctrl+Shift+Enter')} as Admin` : 'Press Enter to execute'}</div>
+                    <div class="app-description">${canElevate ? t('floating.suggestions.system.enter_admin_hint', { keys: platformKeyLabel('Ctrl+Shift+Enter') }) : t('floating.suggestions.system.enter_to_execute')}</div>
                 </div>
             `;
         }
@@ -2541,8 +2559,8 @@ export class FloatingApp {
             confirmItem.innerHTML = `
                 <div class="app-icon">⚠️</div>
                 <div class="app-info">
-                    <div class="app-name">Are you sure?${elevated ? ' (as Admin)' : ''}</div>
-                    <div class="app-description">Press Enter to confirm · Clear text to cancel</div>
+                    <div class="app-name">${elevated ? t('floating.suggestions.system.are_you_sure_admin') : t('floating.suggestions.system.are_you_sure')}</div>
+                    <div class="app-description">${t('floating.suggestions.system.confirm_hint')}</div>
                 </div>
             `;
             confirmItem.addEventListener('click', async () => {
@@ -2585,11 +2603,13 @@ export class FloatingApp {
                 command: command,
                 args: { [argKey]: value },
             });
-            const msg = result?.message || `Selected: ${value}`;
+            const msg = result?.message || t('floating.suggestions.selection_fallback', { value });
             document.dispatchEvent(new CustomEvent('kage-show-response', { detail: msg }));
         } catch (e) {
             document.dispatchEvent(
-                new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                new CustomEvent('kage-show-response', {
+                    detail: errLabel(t('floating.error.error_label'), e),
+                })
             );
         }
     }
@@ -2815,7 +2835,9 @@ export class FloatingApp {
         // Bootstrap explicitly failed — surface the error rather than
         // letting the user wonder why nothing happens.
         if (this.sessionBootstrapError) {
-            this.showError(`Agent unavailable: ${this.sessionBootstrapError}`);
+            this.showError(
+                t('floating.error.agent_unavailable', { reason: this.sessionBootstrapError })
+            );
             return;
         }
 
@@ -2866,7 +2888,7 @@ export class FloatingApp {
                     attachments: null,
                 });
             } catch (e) {
-                this.showError(errLabel('Error', e));
+                this.showError(errLabel(t('floating.error.error_label'), e));
             }
             return;
         }
@@ -3011,7 +3033,7 @@ export class FloatingApp {
             }
         } catch (error) {
             console.error('Error handling input:', error);
-            this.showError(errLabel('Error', error));
+            this.showError(errLabel(t('floating.error.error_label'), error));
         }
     }
 
@@ -3160,7 +3182,7 @@ export class FloatingApp {
             notice = document.createElement('div');
             notice.id = 'compactionNotice';
             notice.className = 'compaction-notice';
-            notice.innerHTML = '<span class="folder-plan-spinner"></span> Compacting context...';
+            notice.innerHTML = `<span class="folder-plan-spinner"></span> ${t('floating.compaction.in_progress')}`;
             this.elements.responseText?.appendChild(notice);
         }
     }

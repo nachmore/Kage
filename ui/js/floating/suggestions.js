@@ -1,6 +1,7 @@
 // App suggestions and search functionality
 
 import { platformKeyLabel } from '../shared/shortcuts.js';
+import { t, tHtml } from '../shared/i18n.js';
 
 function shortcutIconHtml(shortcut) {
     if (shortcut.icon?.startsWith('data:')) {
@@ -85,7 +86,7 @@ export function renderUrlSuggestion(url, appSuggestions, currentMatches, openUrl
     item.className = 'app-suggestion-item selected';
     item.innerHTML = `
         <div class="app-icon">🌐</div>
-        <div class="app-name">Open in browser...</div>
+        <div class="app-name">${t('floating.suggestions.url.open_in_browser')}</div>
     `;
     item.addEventListener('click', async () => await openUrl(url));
 
@@ -113,11 +114,14 @@ export function renderPathSuggestion(
     item.className = 'app-suggestion-item selected';
 
     const icon = type === 'file' ? '📄' : '📁';
-    const label = type === 'file' ? 'Open File' : 'Open Folder';
+    const label =
+        type === 'file'
+            ? t('floating.suggestions.path.open_file', { path })
+            : t('floating.suggestions.path.open_folder', { path });
 
     item.innerHTML = `
         <div class="app-icon">${icon}</div>
-        <div class="app-name">${label}: ${path}</div>
+        <div class="app-name">${label}</div>
     `;
     item.addEventListener('click', async () => await openPath(path));
 
@@ -195,6 +199,8 @@ export function appendSendHint(container) {
 
     const hint = document.createElement('div');
     hint.className = 'suggestions-hint';
-    hint.innerHTML = `<span class="hint-key">${platformKeyLabel('Ctrl+Enter')}</span> to send to agent`;
+    hint.innerHTML = tHtml('floating.suggestions.shortcut.enter_to_send_html', {
+        keys: platformKeyLabel('Ctrl+Enter'),
+    });
     container.appendChild(hint);
 }

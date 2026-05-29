@@ -20,6 +20,7 @@
 import { createPermissionHandler } from '../shared/permissions-core.js';
 import { waitForTauri } from '../shared/tauri-init.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { t } from '../shared/i18n.js';
 
 waitForTauri(({ invoke, appWindow }) => {
     const handler = createPermissionHandler(invoke, appWindow, {
@@ -133,9 +134,15 @@ waitForTauri(({ invoke, appWindow }) => {
 
             // Force-show the floating window if the request originated from it
             if (!currentlyVisible && eventSource === WINDOW.FLOATING) {
-                const toolTitle = notification.params?.toolCall?.title || 'Unknown Tool';
+                const toolTitle =
+                    notification.params?.toolCall?.title || t('shared.permission.unknown_tool');
                 const toolName = event.payload.toolName || '';
-                const body = toolName ? `${toolName}: ${toolTitle}` : toolTitle;
+                const body = toolName
+                    ? t('floating.permission.notification_body', {
+                          tool: toolName,
+                          title: toolTitle,
+                      })
+                    : toolTitle;
                 try {
                     const notif = window.__TAURI__?.notification;
                     if (notif) {
@@ -146,7 +153,7 @@ waitForTauri(({ invoke, appWindow }) => {
                         }
                         if (granted) {
                             notif.sendNotification({
-                                title: '🔐 Tool Permission Required',
+                                title: t('floating.permission.notification_title'),
                                 body: body,
                             });
                         }

@@ -50,6 +50,7 @@ import {
 } from './streaming-utils.js';
 
 import { EVT } from './events.js';
+import { t } from './i18n.js';
 
 export class AutomationPlanController {
     constructor(host) {
@@ -137,8 +138,8 @@ export class AutomationPlanController {
         const actionsBar = document.createElement('div');
         actionsBar.className = 'taskplan-review-actions';
         actionsBar.innerHTML = `
-            <button class="taskplan-review-btn taskplan-run-btn" id="planRunBtn">▶ Run</button>
-            <span class="taskplan-review-hint">or type to revise the plan</span>
+            <button class="taskplan-review-btn taskplan-run-btn" id="planRunBtn">${t('shared.automation.run_btn')}</button>
+            <span class="taskplan-review-hint">${t('shared.automation.run_hint')}</span>
         `;
         this.host.appendReviewActions(actionsBar);
 

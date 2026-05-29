@@ -4,7 +4,7 @@
  * an actual HTTP ping to detect real internet connectivity.
  *
  * Usage:
- *   import { isOnline, checkOnline, onNetworkChange, OFFLINE_MESSAGE } from './network.js';
+ *   import { isOnline, checkOnline, onNetworkChange, offlineMessage } from './network.js';
  *   if (!isOnline()) { ... }
  *   await checkOnline(); // force a real check
  *   onNetworkChange((online) => { ... });
@@ -103,6 +103,17 @@ export function markOnline() {
     _setOnline(true);
 }
 
-/** User-friendly message explaining what works offline. */
+import { t } from './i18n.js';
+
+/** Resolve the offline message in the currently-active language.
+ *  Always call this lazily — language can change at runtime. */
+export function offlineMessage() {
+    return t('shared.network.offline_message');
+}
+
+/** Snapshot of {@link offlineMessage}. The export exists for backward
+ *  compatibility (older code and the network test suite); new callers
+ *  should use {@link offlineMessage} so the string follows language
+ *  changes at runtime. */
 export const OFFLINE_MESSAGE =
     'No internet connection. Search, shortcuts, and app launching still work, but AI features need a connection.';

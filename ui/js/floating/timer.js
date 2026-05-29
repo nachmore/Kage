@@ -4,6 +4,8 @@
  * Triggers: "timer 5m", "timer 1h30m", "timer 5:00", "timer 90s", "stopwatch"/"sw"
  */
 
+import { t } from '../shared/i18n.js';
+
 // --- Dual state: one timer slot + one stopwatch slot ---
 const _slots = {
     timer: null, // { running, startTime, elapsed, duration, pausedAt, intervalId, onTick, onComplete }
@@ -176,23 +178,27 @@ export function renderTimerSuggestion(parsed, container, currentMatches, resizeW
         const display = formatMs(parsed.durationMs);
         const existing = getSlotState('timer');
         currentMatches.push({ type: 'start_timer', durationMs: parsed.durationMs });
-        const replaceNote = existing.active ? ' (replaces current)' : '';
+        const titleText = existing.active
+            ? t('floating.timer.start_label_replace', { duration: display })
+            : t('floating.timer.start_label', { duration: display });
         item.innerHTML = `
             <div class="app-icon">⏱️</div>
             <div class="app-info">
-                <div class="app-name">Start ${display} timer${replaceNote}</div>
-                <div class="app-description">Press Enter to start countdown</div>
+                <div class="app-name">${titleText}</div>
+                <div class="app-description">${t('floating.timer.start_description')}</div>
             </div>
         `;
     } else if (parsed.type === 'hint') {
         currentMatches.push({ type: 'timer_hint' });
         const existing = getSlotState('timer');
-        const replaceNote = existing.active ? ' · replaces current timer' : '';
+        const descText = existing.active
+            ? t('floating.timer.hint_description_replace')
+            : t('floating.timer.hint_description');
         item.innerHTML = `
             <div class="app-icon">⏱️</div>
             <div class="app-info">
-                <div class="app-name">Timer</div>
-                <div class="app-description">timer 5m · timer 1h30m · timer 90s · timer 5:00${replaceNote}</div>
+                <div class="app-name">${t('floating.timer.hint_label')}</div>
+                <div class="app-description">${descText}</div>
             </div>
         `;
     } else {
@@ -202,8 +208,8 @@ export function renderTimerSuggestion(parsed, container, currentMatches, resizeW
             item.innerHTML = `
                 <div class="app-icon">⏸</div>
                 <div class="app-info">
-                    <div class="app-name">Pause Stopwatch</div>
-                    <div class="app-description">Press Enter to pause</div>
+                    <div class="app-name">${t('floating.timer.stopwatch.pause')}</div>
+                    <div class="app-description">${t('floating.timer.stopwatch.pause_description')}</div>
                 </div>
             `;
         } else if (sw.active && !sw.running) {
@@ -211,8 +217,8 @@ export function renderTimerSuggestion(parsed, container, currentMatches, resizeW
             item.innerHTML = `
                 <div class="app-icon">⏹</div>
                 <div class="app-info">
-                    <div class="app-name">Stop Stopwatch</div>
-                    <div class="app-description">Press Enter to stop (currently paused)</div>
+                    <div class="app-name">${t('floating.timer.stopwatch.stop')}</div>
+                    <div class="app-description">${t('floating.timer.stopwatch.stop_description')}</div>
                 </div>
             `;
         } else {
@@ -220,8 +226,8 @@ export function renderTimerSuggestion(parsed, container, currentMatches, resizeW
             item.innerHTML = `
                 <div class="app-icon">⏱️</div>
                 <div class="app-info">
-                    <div class="app-name">Start Stopwatch</div>
-                    <div class="app-description">Press Enter to start counting up</div>
+                    <div class="app-name">${t('floating.timer.stopwatch.start')}</div>
+                    <div class="app-description">${t('floating.timer.stopwatch.start_description')}</div>
                 </div>
             `;
         }
@@ -258,9 +264,9 @@ export function updateTimerBar(slotName, displayStr, progress, running) {
             <span class="extension-bar-icon">${icon}</span>
             <span class="extension-bar-text" id="${barId}_time"></span>
             <div class="extension-bar-controls">
-                <button class="extension-bar-btn" id="${barId}_add" title="+1 minute"${showAdd}>+1m</button>
-                <button class="extension-bar-btn" id="${barId}_pause" title="Pause/Resume">⏸</button>
-                <button class="extension-bar-btn" id="${barId}_stop" title="Stop">⏹</button>
+                <button class="extension-bar-btn" id="${barId}_add" title="${t('floating.timer.bar.add_one_minute')}"${showAdd}>+1m</button>
+                <button class="extension-bar-btn" id="${barId}_pause" title="${t('floating.timer.bar.pause_resume')}">⏸</button>
+                <button class="extension-bar-btn" id="${barId}_stop" title="${t('floating.timer.bar.stop')}">⏹</button>
             </div>
         `;
         // Prevent buttons from stealing focus (which triggers window blur → hide)

@@ -1,6 +1,7 @@
 import { EVT } from './events.js';
 import { WINDOW } from './window-labels.js';
 import { errLabel } from './error-message.js';
+import { t, tHtml } from './i18n.js';
 
 /**
  * Shared Script Editor component with syntax highlighting and AI generation.
@@ -38,7 +39,7 @@ export function createScriptEditor(container, opts = {}) {
     const rows = opts.rows || 6;
     const showAi = opts.showAi !== false;
     const varHint = opts.variableHint || 'input';
-    const ctxHint = opts.contextHint || 'Return a string.';
+    const ctxHint = opts.contextHint || t('shared.script_editor.context_default');
 
     let previousScript = null;
 
@@ -46,9 +47,9 @@ export function createScriptEditor(container, opts = {}) {
     let html = '';
     if (showAi) {
         html += `<div class="script-ai-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
-            <input type="text" class="setting-input" id="${id}_aiPrompt" placeholder="Ask AI to write or update the script..." style="flex:1;font-size:12px;">
-            <button class="setting-button" id="${id}_aiBtn" style="font-size:11px;white-space:nowrap;">✨ Generate</button>
-            <button class="setting-button" id="${id}_aiUndo" style="font-size:11px;display:none;">Undo</button>
+            <input type="text" class="setting-input" id="${id}_aiPrompt" placeholder="${t('shared.script_editor.ai_placeholder')}" style="flex:1;font-size:12px;">
+            <button class="setting-button" id="${id}_aiBtn" style="font-size:11px;white-space:nowrap;">${t('shared.script_editor.btn.generate')}</button>
+            <button class="setting-button" id="${id}_aiUndo" style="font-size:11px;display:none;">${t('shared.script_editor.btn.undo')}</button>
         </div>
         <div id="${id}_aiStatus" style="font-size:11px;color:var(--kage-text-secondary);margin-bottom:4px;"></div>`;
     }
@@ -59,7 +60,7 @@ export function createScriptEditor(container, opts = {}) {
             placeholder="${opts.placeholder || '// ' + varHint + ' contains the previous output\\nreturn ' + varHint + '.toUpperCase();'}">${_esc(opts.value || '')}</textarea>
     </div>
     <div style="font-size:10px;color:var(--kage-text-secondary);margin-top:2px;">
-        JavaScript function body. The variable <code style="background:var(--kage-bg-input);padding:1px 4px;border-radius:3px;">${varHint}</code> contains the input. ${ctxHint}
+        ${tHtml('shared.script_editor.var_help_html', { var: varHint, context: ctxHint })}
     </div>`;
 
     container.innerHTML = html;
@@ -110,7 +111,8 @@ export function createScriptEditor(container, opts = {}) {
         async function generate() {
             const userPrompt = aiPrompt?.value.trim();
             if (!userPrompt) {
-                if (aiStatus) aiStatus.textContent = 'Enter a description first.';
+                if (aiStatus)
+                    aiStatus.textContent = t('shared.script_editor.status.enter_description');
                 return;
             }
 
@@ -132,9 +134,9 @@ export function createScriptEditor(container, opts = {}) {
             previousScript = textarea?.value || '';
             if (aiBtn) {
                 aiBtn.disabled = true;
-                aiBtn.textContent = 'Generating...';
+                aiBtn.textContent = t('shared.script_editor.btn.generating');
             }
-            if (aiStatus) aiStatus.textContent = 'Sending to agent...';
+            if (aiStatus) aiStatus.textContent = t('shared.script_editor.status.sending');
             if (aiUndo) aiUndo.style.display = 'none';
 
             try {
@@ -149,7 +151,7 @@ export function createScriptEditor(container, opts = {}) {
                             ? event.payload.text || ''
                             : String(event.payload || '');
                     response += delta;
-                    if (aiStatus) aiStatus.textContent = 'Receiving...';
+                    if (aiStatus) aiStatus.textContent = t('shared.script_editor.status.receiving');
                 });
                 const completionPromise = new Promise((resolve) => {
                     listen(EVT.MESSAGE_COMPLETE, () => resolve()).then((fn) => {
@@ -181,14 +183,14 @@ export function createScriptEditor(container, opts = {}) {
                     textarea.value = code;
                     updateHighlight();
                 }
-                if (aiStatus) aiStatus.textContent = 'Script generated. Review and save.';
+                if (aiStatus) aiStatus.textContent = t('shared.script_editor.status.generated');
                 if (aiUndo) aiUndo.style.display = '';
             } catch (e) {
-                if (aiStatus) aiStatus.textContent = errLabel('Error', e);
+                if (aiStatus) aiStatus.textContent = errLabel(t('chat.error.error_label'), e);
             } finally {
                 if (aiBtn) {
                     aiBtn.disabled = false;
-                    aiBtn.textContent = '✨ Generate';
+                    aiBtn.textContent = t('shared.script_editor.btn.generate');
                 }
             }
         }

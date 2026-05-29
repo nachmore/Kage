@@ -72,7 +72,7 @@ const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
 import { normalizePermissions } from './extension-permissions.js';
 import { ExtensionSandboxPool } from './extension-sandbox-host.js';
 import { sanitizeExtensionHtml, findExtActions } from './extension-html-sanitizer.js';
-import { activeLanguage as hostLanguage, isRtl as hostIsRtl } from './i18n.js';
+import { activeLanguage as hostLanguage, isRtl as hostIsRtl, t, tHtml } from './i18n.js';
 
 // --- Extension i18n helpers --------------------------------------------------
 //
@@ -1415,10 +1415,10 @@ export class ExtensionManager {
             const extName =
                 this.extensions.get(controller.extensionId)?.manifest?.name ||
                 controller.extensionId;
-            notice.innerHTML = `<span>⚠️ Widget paused — <strong>${extName}</strong> kept failing or running too slow.</span>`;
+            notice.innerHTML = tHtml('shared.extension.widget.paused_html', { name: extName });
             const retry = document.createElement('a');
             retry.href = '#';
-            retry.textContent = 'Retry';
+            retry.textContent = t('shared.extension.widget.retry');
             retry.style.cssText = 'color:var(--kage-accent);text-decoration:underline;';
             retry.addEventListener('click', (ev) => {
                 ev.preventDefault();

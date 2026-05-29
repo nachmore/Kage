@@ -1,6 +1,6 @@
 //! Tauri commands for extension, theme, and store management.
 
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::events;
 use crate::extensions;
 use crate::lock_ext::LockExt;
@@ -697,7 +697,11 @@ pub async fn store_get_detail(
     };
 
     if base_url.is_empty() {
-        return Err("No store URL configured".into());
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.extensions.no_store_url",
+            &[],
+        ));
     }
 
     extensions::validate_store_url(&base_url)?;
@@ -753,7 +757,11 @@ pub async fn store_install(
     };
 
     if base_url.is_empty() {
-        return Err("No store URL configured".into());
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.extensions.no_store_url",
+            &[],
+        ));
     }
 
     extensions::validate_store_url(&base_url)?;

@@ -5626,5 +5626,959 @@
     "description": "Tooltip on the no-permissions capability badge",
     "_machine_translated": true,
     "_source_hash": "53beb2639d54335c"
+  },
+  "errors.agents.package_not_allowlisted": {
+    "message": "पैकेज इंस्टॉल के लिए अनुमति-सूची में नहीं है: {package}",
+    "description": "Returned when install_acp_wrapper is asked to install a package outside the allowlist",
+    "_machine_translated": true,
+    "_source_hash": "453e6ff73b8b9e3f"
+  },
+  "errors.agents.npm_not_found": {
+    "message": "PATH पर npm नहीं मिला",
+    "description": "Returned when install_acp_wrapper can't find npm",
+    "_machine_translated": true,
+    "_source_hash": "c16f0d487f41e2bb"
+  },
+  "errors.agents.npm_spawn_failed": {
+    "message": "npm शुरू करने में विफल: {message}",
+    "description": "Returned when std::process::Command::new(npm).output() fails",
+    "_machine_translated": true,
+    "_source_hash": "557acdd903f4b430"
+  },
+  "errors.agents.npm_install_failed": {
+    "message": "npm इंस्टॉल विफल हुआ (exit {exit}): {output}",
+    "description": "Returned when npm install -g exits non-zero",
+    "_machine_translated": true,
+    "_source_hash": "4c8e9c2cb0f4c64b"
+  },
+  "errors.config.export_task_failed": {
+    "message": "एक्सपोर्ट कार्य विफल हुआ: {message}",
+    "description": "Returned when the spawn_blocking export task fails to join",
+    "_machine_translated": true,
+    "_source_hash": "260fad8514e5ae15"
+  },
+  "errors.config.export_build_failed": {
+    "message": "बैकअप बनाने में विफल: {message}",
+    "description": "Returned when config_export::export() fails",
+    "_machine_translated": true,
+    "_source_hash": "f8766ee4197657f5"
+  },
+  "errors.config.export_write_failed": {
+    "message": "{path} पर बैकअप लिखने में विफल: {message}",
+    "description": "Returned when std::fs::write fails on the backup path",
+    "_machine_translated": true,
+    "_source_hash": "bb2e4a503c15418f"
+  },
+  "errors.config.import_read_failed": {
+    "message": "{path} पर बैकअप पढ़ने में विफल: {message}",
+    "description": "Returned when std::fs::read fails on the backup path during import",
+    "_machine_translated": true,
+    "_source_hash": "619d7e8d4dfd60a2"
+  },
+  "errors.config.import_task_failed": {
+    "message": "इंपोर्ट कार्य विफल हुआ: {message}",
+    "description": "Returned when the spawn_blocking import task fails to join",
+    "_machine_translated": true,
+    "_source_hash": "68e491009346cc65"
+  },
+  "errors.config.import_build_failed": {
+    "message": "बैकअप इंपोर्ट करने में विफल: {message}",
+    "description": "Returned when config_export::import() fails",
+    "_machine_translated": true,
+    "_source_hash": "e42e41f3443da60a"
+  },
+  "errors.config.persist_failed": {
+    "message": "इंपोर्ट किए गए कॉन्फ़िग को सहेजने में विफल: {message}",
+    "description": "Returned when saving the imported config to disk fails",
+    "_machine_translated": true,
+    "_source_hash": "e0d5a4bef8f9eff3"
+  },
+  "errors.config.write_file_failed": {
+    "message": "{path} लिखने में विफल: {message}",
+    "description": "Returned when writing a config-related file (other than backup) fails",
+    "_machine_translated": true,
+    "_source_hash": "6b77e967211f0c53"
+  },
+  "errors.steering.unknown_kind": {
+    "message": "अज्ञात स्टीयरिंग प्रकार: {kind}",
+    "description": "Returned when a steering 'kind' parameter is unrecognised",
+    "_machine_translated": true,
+    "_source_hash": "5b2ba77da202c439"
+  },
+  "errors.steering.invalid_path_encoding": {
+    "message": "अमान्य पाथ एन्कोडिंग",
+    "description": "Returned when a steering doc path can't be expressed as UTF-8",
+    "_machine_translated": true,
+    "_source_hash": "c382ac45d087b0fb"
+  },
+  "errors.steering.import_failed": {
+    "message": "स्टीयरिंग दस्तावेज़ इंपोर्ट करने में विफल: {message}",
+    "description": "Returned when reading a user-picked steering doc from disk fails",
+    "_machine_translated": true,
+    "_source_hash": "e1dffe9502b4d1aa"
+  },
+  "errors.update.no_update_available": {
+    "message": "कोई अपडेट उपलब्ध नहीं है",
+    "description": "Returned when install_update is called but there's no pending update",
+    "_machine_translated": true,
+    "_source_hash": "3c998d3aae024cee"
+  },
+  "errors.extensions.no_store_url": {
+    "message": "कोई स्टोर URL कॉन्फ़िगर नहीं किया गया",
+    "description": "Returned when store_install is called but no store URL is set",
+    "_machine_translated": true,
+    "_source_hash": "e486a17ec92f99aa"
+  },
+  "errors.ollama.list_failed": {
+    "message": "Ollama मॉडल सूचीबद्ध करने में विफल: {message}",
+    "description": "Returned when /api/tags fails on the user-supplied Ollama daemon",
+    "_machine_translated": true,
+    "_source_hash": "c00c697bdfb7454b"
+  },
+  "shared.hotkey_picker.click_title": {
+    "message": "हॉटकी बदलने के लिए क्लिक करें",
+    "description": "Tooltip on the hotkey picker's keycap display",
+    "_machine_translated": true,
+    "_source_hash": "1c3fc315cb806785"
+  },
+  "shared.hotkey_picker.click_hint": {
+    "message": "बदलने के लिए क्लिक करें",
+    "description": "Helper hint text inside the hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "25ffd7add86b6462"
+  },
+  "shared.hotkey_picker.waiting": {
+    "message": "कोई भी कुंजी संयोजन दबाएँ...",
+    "description": "Placeholder shown while capturing a new hotkey",
+    "_machine_translated": true,
+    "_source_hash": "7eece58266fab767"
+  },
+  "shared.hotkey_picker.registered": {
+    "message": "✓ हॉटकी पंजीकृत हुई",
+    "description": "Status message when a new hotkey is successfully registered",
+    "_machine_translated": true,
+    "_source_hash": "0458825d76419909"
+  },
+  "shared.hotkey_picker.error.main": {
+    "message": "यह शॉर्टकट पहले से ही मुख्य हॉटकी के रूप में उपयोग में है",
+    "description": "Error when the user picks the global main hotkey for another slot",
+    "_machine_translated": true,
+    "_source_hash": "9eea99273cc94a9b"
+  },
+  "shared.hotkey_picker.error.clipboard": {
+    "message": "यह शॉर्टकट पहले से ही क्लिपबोर्ड हॉटकी के रूप में उपयोग में है",
+    "description": "Error when the user picks the clipboard hotkey for another slot",
+    "_machine_translated": true,
+    "_source_hash": "7bf15ce82392219c"
+  },
+  "shared.hotkey_picker.error.in_use": {
+    "message": "यह शॉर्टकट पहले से ही किसी अन्य एप्लिकेशन द्वारा उपयोग में है",
+    "description": "Error when the OS-level shortcut registration conflicts with another app",
+    "_machine_translated": true,
+    "_source_hash": "a7b3234d9ff75301"
+  },
+  "shared.hotkey_picker.error.generic": {
+    "message": "रजिस्टर करने में विफल: {message}",
+    "description": "Fallback error when hotkey registration fails for an unrecognised reason",
+    "_machine_translated": true,
+    "_source_hash": "db9ead5730430c79"
+  },
+  "ext_perm.empty": {
+    "message": "🔒 यह एक्सटेंशन किसी भी क्षमता का अनुरोध नहीं करता। यह आपके क्लिपबोर्ड, फ़ाइलों, कैलेंडर, या AI एजेंट तक नहीं पहुँच सकता।",
+    "description": "Shown when an extension requests no permissions",
+    "_machine_translated": true,
+    "_source_hash": "d430fd3f92f1a0e6"
+  },
+  "ext_perm.footnote": {
+    "message": "एक्सटेंशन सैंडबॉक्स में चलते हैं। वे ऊपर सूचीबद्ध न की गई किसी भी चीज़ तक नहीं पहुँच सकते।",
+    "description": "Disclosure footnote shown below the permissions list",
+    "_machine_translated": true,
+    "_source_hash": "572575573169a045"
+  },
+  "ext_perm.title.upgrade": {
+    "message": "{name} ने नई अनुमतियों का अनुरोध किया है",
+    "description": "Modal title when an extension upgrade requests new caps",
+    "_machine_translated": true,
+    "_source_hash": "35f904b9bac4ee26"
+  },
+  "ext_perm.title.install": {
+    "message": "{name} इंस्टॉल करें",
+    "description": "Modal title for a fresh extension install",
+    "_machine_translated": true,
+    "_source_hash": "43f44f1552889ce2"
+  },
+  "ext_perm.subtitle.upgrade": {
+    "message": "एक्सटेंशन अपडेट किया गया है और अतिरिक्त एक्सेस माँग रहा है। नीचे दी गई सूची की समीक्षा करें।",
+    "description": "Subtitle when prompting for new permissions on upgrade",
+    "_machine_translated": true,
+    "_source_hash": "2f40fbb2b375e9fb"
+  },
+  "ext_perm.subtitle.install": {
+    "message": "यह एक्सटेंशन निम्नलिखित एक्सेस माँग रहा है। सूची की समीक्षा करें और केवल तभी स्वीकृत करें जब आप इस पर भरोसा करते हों।",
+    "description": "Subtitle when prompting for permissions on first install",
+    "_machine_translated": true,
+    "_source_hash": "aa4ea029fcd84083"
+  },
+  "ext_perm.author_html": {
+    "message": "<span class=\"kage-ext-perm-author\">{author} द्वारा</span>",
+    "description": "Author byline shown next to the extension name (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "58ed74ea78108816"
+  },
+  "ext_perm.cancel_btn": {
+    "message": "रद्द करें",
+    "description": "Cancel button on the permission prompt",
+    "_machine_translated": true,
+    "_source_hash": "9b7b9e75748bc262"
+  },
+  "ext_perm.install_btn": {
+    "message": "इंस्टॉल करें",
+    "description": "Approve button label when no caps are requested",
+    "_machine_translated": true,
+    "_source_hash": "358e5a198d2aec1c"
+  },
+  "ext_perm.approve_btn": {
+    "message": "स्वीकृत करें और इंस्टॉल करें",
+    "description": "Approve button label when caps are requested",
+    "_machine_translated": true,
+    "_source_hash": "e299eb19b2e574e3"
+  },
+  "ext_perm.badge.existing": {
+    "message": "पहले से स्वीकृत",
+    "description": "Badge on a capability the user previously approved",
+    "_machine_translated": true,
+    "_source_hash": "b2da934b309a5034"
+  },
+  "ext_perm.badge.new": {
+    "message": "नया",
+    "description": "Badge on a newly-requested capability",
+    "_machine_translated": true,
+    "_source_hash": "e43cf67ed3f1e0cb"
+  },
+  "floating.banner.update_available": {
+    "message": "Kage v{version} उपलब्ध है!",
+    "description": "Banner text shown when an app update is available",
+    "_machine_translated": true,
+    "_source_hash": "ca74e03a04c83c31"
+  },
+  "floating.banner.action.install_now": {
+    "message": "अभी इंस्टॉल करें →",
+    "description": "Banner action label to install an available update",
+    "_machine_translated": true,
+    "_source_hash": "8e9aea95338e0384"
+  },
+  "floating.banner.update_installed": {
+    "message": "Kage अपडेट हो गया है!",
+    "description": "Celebration banner shown after a successful update",
+    "_machine_translated": true,
+    "_source_hash": "fee3bb399a33606d"
+  },
+  "floating.banner.action.view_changelog": {
+    "message": "चेंजलॉग देखें →",
+    "description": "Banner action label that opens the changelog",
+    "_machine_translated": true,
+    "_source_hash": "6ee352b8c16f60ac"
+  },
+  "floating.banner.crash_with_message": {
+    "message": "पिछले सत्र में Kage क्रैश हो गया: {message}",
+    "description": "Banner shown after a previous run crashed, with the panic message",
+    "_machine_translated": true,
+    "_source_hash": "d5ec1fe7801a3cde"
+  },
+  "floating.banner.crash_generic": {
+    "message": "पिछले सत्र में Kage क्रैश हो गया।",
+    "description": "Banner shown after a previous run crashed (no panic message available)",
+    "_machine_translated": true,
+    "_source_hash": "47aacc7d2cc0efef"
+  },
+  "floating.banner.action.view_log": {
+    "message": "लॉग देखें →",
+    "description": "Banner action label that opens the crash log",
+    "_machine_translated": true,
+    "_source_hash": "04fee1000a530057"
+  },
+  "floating.banner.action.dismiss": {
+    "message": "खारिज करें",
+    "description": "Banner action label that dismisses the banner without other action",
+    "_machine_translated": true,
+    "_source_hash": "a38e2380aff3fa6b"
+  },
+  "floating.banner.installing_update": {
+    "message": "अपडेट डाउनलोड और इंस्टॉल हो रहा है...",
+    "description": "Banner shown while an update is being downloaded and installed",
+    "_machine_translated": true,
+    "_source_hash": "56b0296f77a58733"
+  },
+  "floating.bootstrap.spinner": {
+    "message": "एजेंट शुरू हो रहा है",
+    "description": "Placeholder shown while the floating window is waiting for its agent session to bootstrap",
+    "_machine_translated": true,
+    "_source_hash": "b316a8c713eaa0de"
+  },
+  "floating.error.agent_unavailable": {
+    "message": "एजेंट अनुपलब्ध: {reason}",
+    "description": "Shown when the floating window's session bootstrap fails permanently",
+    "_machine_translated": true,
+    "_source_hash": "19dacc8e8f99c658"
+  },
+  "floating.error.no_session": {
+    "message": "कोई सत्र उपलब्ध नहीं — संदेश नहीं भेजा जा सकता",
+    "description": "Shown when the floating window can't send because no session is active",
+    "_machine_translated": true,
+    "_source_hash": "2af813a671c01696"
+  },
+  "floating.error.failed_to_execute_shortcut": {
+    "message": "शॉर्टकट निष्पादित करने में विफल",
+    "description": "Error label prefix when a shortcut command fails",
+    "_machine_translated": true,
+    "_source_hash": "031d6b9a01d53b45"
+  },
+  "floating.error.error_label": {
+    "message": "त्रुटि",
+    "description": "Generic Error label prefix used in error messages",
+    "_machine_translated": true,
+    "_source_hash": "4e43630dc555e9bc"
+  },
+  "floating.error.error_with_payload": {
+    "message": "त्रुटि: {payload}",
+    "description": "Error message when streaming returns an error payload",
+    "_machine_translated": true,
+    "_source_hash": "9a634c2b7f019f60"
+  },
+  "floating.error.automation_failed": {
+    "message": "ऑटोमेशन विफल",
+    "description": "Error label prefix when automation plan execution fails",
+    "_machine_translated": true,
+    "_source_hash": "782c514100c0bf7b"
+  },
+  "floating.notification.response_ready": {
+    "message": "प्रतिक्रिया तैयार है",
+    "description": "Fallback notification body when response text is empty",
+    "_machine_translated": true,
+    "_source_hash": "f20fd7fbf754fdf5"
+  },
+  "floating.suggestions.loading_more": {
+    "message": "और परिणाम लोड हो रहे हैं",
+    "description": "Loading indicator label shown while search providers are still resolving",
+    "_machine_translated": true,
+    "_source_hash": "d914329b412ff44b"
+  },
+  "floating.suggestions.system.confirm_select": {
+    "message": "चुनने के लिए Enter दबाएँ",
+    "description": "Description shown on a system command suggestion that needs confirmation",
+    "_machine_translated": true,
+    "_source_hash": "dc6ac7234ddfcd97"
+  },
+  "floating.suggestions.system.enter_admin_hint": {
+    "message": "चलाने के लिए Enter · व्यवस्थापक के रूप में {keys}",
+    "description": "Hint shown on system commands that can be run with elevation",
+    "_machine_translated": true,
+    "_source_hash": "f2e14050ff681410"
+  },
+  "floating.suggestions.system.enter_to_execute": {
+    "message": "निष्पादित करने के लिए Enter दबाएँ",
+    "description": "Hint shown on system commands that don't need elevation",
+    "_machine_translated": true,
+    "_source_hash": "51b0a2f0bfad0a3b"
+  },
+  "floating.suggestions.system.are_you_sure": {
+    "message": "क्या आप निश्चित हैं?",
+    "description": "Confirmation prompt for system commands that require it",
+    "_machine_translated": true,
+    "_source_hash": "e398d237f809a6cd"
+  },
+  "floating.suggestions.system.are_you_sure_admin": {
+    "message": "क्या आप निश्चित हैं? (व्यवस्थापक के रूप में)",
+    "description": "Confirmation prompt for system commands run with elevation",
+    "_machine_translated": true,
+    "_source_hash": "1ebc7bbb1b30e822"
+  },
+  "floating.suggestions.system.confirm_hint": {
+    "message": "पुष्टि के लिए Enter दबाएँ · रद्द करने के लिए टेक्स्ट साफ़ करें",
+    "description": "Hint under the system command confirmation prompt",
+    "_machine_translated": true,
+    "_source_hash": "b34e75c67630a9ed"
+  },
+  "floating.suggestions.selection_fallback": {
+    "message": "चयनित: {value}",
+    "description": "Fallback message after a selection is applied via slash command",
+    "_machine_translated": true,
+    "_source_hash": "01dd13f8cd15aa74"
+  },
+  "floating.terminator.text": {
+    "message": "टर्मिनेटर मोड — सभी टूल स्वतः-अनुमोदित",
+    "description": "Banner shown when terminator (auto-approve) mode is active",
+    "_machine_translated": true,
+    "_source_hash": "e53687ee1d65f634"
+  },
+  "floating.terminator.dismiss_title": {
+    "message": "खारिज करें",
+    "description": "Tooltip on the dismiss button of the terminator mode bar",
+    "_machine_translated": true,
+    "_source_hash": "da405b69e1627b99"
+  },
+  "floating.compaction.in_progress": {
+    "message": "कॉन्टेक्स्ट संकुचित हो रहा है...",
+    "description": "Notice shown while the agent is compacting context history",
+    "_machine_translated": true,
+    "_source_hash": "50a7d3ee8edcb86f"
+  },
+  "floating.timer.notification_title": {
+    "message": "टाइमर पूर्ण",
+    "description": "Notification title when a timer finishes",
+    "_machine_translated": true,
+    "_source_hash": "178c9e1398a93d36"
+  },
+  "floating.timer.notification_body": {
+    "message": "आपका टाइमर समाप्त हो गया है!",
+    "description": "Notification body when a timer finishes",
+    "_machine_translated": true,
+    "_source_hash": "e344ac26e7e706fa"
+  },
+  "floating.timer.start_label": {
+    "message": "{duration} का टाइमर शुरू करें",
+    "description": "Suggestion label to start a timer for the given duration",
+    "_machine_translated": true,
+    "_source_hash": "45b2ecd0a72dfbcd"
+  },
+  "floating.timer.start_label_replace": {
+    "message": "{duration} का टाइमर शुरू करें (मौजूदा को बदलता है)",
+    "description": "Suggestion label when starting a timer would replace an existing one",
+    "_machine_translated": true,
+    "_source_hash": "d0f45555bc215fdc"
+  },
+  "floating.timer.start_description": {
+    "message": "उल्टी गिनती शुरू करने के लिए Enter दबाएँ",
+    "description": "Description under the start-timer suggestion",
+    "_machine_translated": true,
+    "_source_hash": "80ea24fc88a8f588"
+  },
+  "floating.timer.hint_label": {
+    "message": "टाइमर",
+    "description": "Suggestion title when the user types just 'timer'",
+    "_machine_translated": true,
+    "_source_hash": "ca96e2e8e8833cca"
+  },
+  "floating.timer.hint_description": {
+    "message": "timer 5m · timer 1h30m · timer 90s · timer 5:00",
+    "description": "Hint listing example timer command formats",
+    "_machine_translated": true,
+    "_source_hash": "5030d3f84b9e4b9d"
+  },
+  "floating.timer.hint_description_replace": {
+    "message": "timer 5m · timer 1h30m · timer 90s · timer 5:00 · मौजूदा टाइमर को बदलता है",
+    "description": "Timer hint when an existing timer would be replaced",
+    "_machine_translated": true,
+    "_source_hash": "d103f340ec759594"
+  },
+  "floating.timer.stopwatch.pause": {
+    "message": "स्टॉपवॉच रोकें",
+    "description": "Suggestion title to pause the running stopwatch",
+    "_machine_translated": true,
+    "_source_hash": "f48bcc427e2ee601"
+  },
+  "floating.timer.stopwatch.pause_description": {
+    "message": "रोकने के लिए Enter दबाएं",
+    "description": "Description under the pause-stopwatch suggestion",
+    "_machine_translated": true,
+    "_source_hash": "388662c0d77d203c"
+  },
+  "floating.timer.stopwatch.stop": {
+    "message": "स्टॉपवॉच बंद करें",
+    "description": "Suggestion title to stop the paused stopwatch",
+    "_machine_translated": true,
+    "_source_hash": "f7bda383c17662c0"
+  },
+  "floating.timer.stopwatch.stop_description": {
+    "message": "बंद करने के लिए Enter दबाएं (वर्तमान में रुका हुआ)",
+    "description": "Description under the stop-stopwatch suggestion",
+    "_machine_translated": true,
+    "_source_hash": "c87de0df83e46f3d"
+  },
+  "floating.timer.stopwatch.start": {
+    "message": "स्टॉपवॉच शुरू करें",
+    "description": "Suggestion title to start a new stopwatch",
+    "_machine_translated": true,
+    "_source_hash": "caf06f576c8d900d"
+  },
+  "floating.timer.stopwatch.start_description": {
+    "message": "गिनती शुरू करने के लिए Enter दबाएं",
+    "description": "Description under the start-stopwatch suggestion",
+    "_machine_translated": true,
+    "_source_hash": "7c75a52e84b4ac9f"
+  },
+  "floating.timer.bar.add_one_minute": {
+    "message": "+1 मिनट",
+    "description": "Tooltip on the +1m button on the timer bar",
+    "_machine_translated": true,
+    "_source_hash": "f8cc9666b505a543"
+  },
+  "floating.timer.bar.pause_resume": {
+    "message": "रोकें/जारी रखें",
+    "description": "Tooltip on the pause/resume button on the timer bar",
+    "_machine_translated": true,
+    "_source_hash": "22152eb3bf15237e"
+  },
+  "floating.timer.bar.stop": {
+    "message": "बंद करें",
+    "description": "Tooltip on the stop button on the timer bar",
+    "_machine_translated": true,
+    "_source_hash": "7761a19ea769cd24"
+  },
+  "floating.clipboard.empty.title": {
+    "message": "कोई क्लिपबोर्ड इतिहास नहीं",
+    "description": "Title shown when no clipboard history items are available",
+    "_machine_translated": true,
+    "_source_hash": "6cac298e9edf4604"
+  },
+  "floating.clipboard.empty.description": {
+    "message": "Windows Settings → System → Clipboard में क्लिपबोर्ड इतिहास सक्षम करें",
+    "description": "Hint shown beneath the no-clipboard-history title",
+    "_machine_translated": true,
+    "_source_hash": "29988dc9c03d4538"
+  },
+  "floating.clipboard.image_label": {
+    "message": "[छवि]",
+    "description": "Preview placeholder shown for an image clipboard entry",
+    "_machine_translated": true,
+    "_source_hash": "9f54b7cefca2bad6"
+  },
+  "floating.clipboard.time.just_now": {
+    "message": "अभी",
+    "description": "Relative time label for the most recent clipboard entry",
+    "_machine_translated": true,
+    "_source_hash": "2a6ac8bf221d58c0"
+  },
+  "floating.clipboard.time.minutes_ago": {
+    "message": "{count} मि. पहले",
+    "description": "Relative time label for clipboard entries from a few minutes ago",
+    "_machine_translated": true,
+    "_source_hash": "e2f47acb4d7132cf"
+  },
+  "floating.clipboard.time.hours_ago": {
+    "message": "{count} घं. पहले",
+    "description": "Relative time label for clipboard entries from a few hours ago",
+    "_machine_translated": true,
+    "_source_hash": "9b9ec232d5aac09b"
+  },
+  "floating.color.enter_to_copy_html": {
+    "message": "कॉपी करने के लिए <span class=\"hint-key\">Enter</span> · चुनने के लिए स्वैच पर क्लिक करें",
+    "description": "Hint shown beneath a color suggestion (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "e2a0a1c41e8d225c"
+  },
+  "floating.suggestions.shortcut.enter_to_send_html": {
+    "message": "एजेंट को भेजने के लिए <span class=\"hint-key\">{keys}</span>",
+    "description": "Hint shown beneath shortcut suggestions; {keys} is the platform send shortcut",
+    "_machine_translated": true,
+    "_source_hash": "60443baecff66ea9"
+  },
+  "floating.suggestions.url.open_in_browser": {
+    "message": "ब्राउज़र में खोलें...",
+    "description": "Suggestion title for opening a URL in the default browser",
+    "_machine_translated": true,
+    "_source_hash": "8557bc9df44fe567"
+  },
+  "floating.suggestions.path.open_file": {
+    "message": "फ़ाइल खोलें: {path}",
+    "description": "Suggestion title for opening a file path",
+    "_machine_translated": true,
+    "_source_hash": "b0331d8d8cad03f8"
+  },
+  "floating.suggestions.path.open_folder": {
+    "message": "फ़ोल्डर खोलें: {path}",
+    "description": "Suggestion title for opening a folder path",
+    "_machine_translated": true,
+    "_source_hash": "9ffea96e301fc11f"
+  },
+  "floating.devtools.uuid.label": {
+    "message": "UUID v4",
+    "description": "Dev tool label for a generated UUID",
+    "_machine_translated": true,
+    "_source_hash": "aee3744c43df4101"
+  },
+  "floating.devtools.enter_to_copy": {
+    "message": "कॉपी करने के लिए Enter दबाएं",
+    "description": "Generic hint shown beneath dev tool results",
+    "_machine_translated": true,
+    "_source_hash": "6d11966dbe78b50a"
+  },
+  "floating.devtools.enter_to_copy_short": {
+    "message": "कॉपी करने के लिए Enter",
+    "description": "Short hint shown beneath dev tool results",
+    "_machine_translated": true,
+    "_source_hash": "4a93421274f9abea"
+  },
+  "floating.devtools.base64_encode.label": {
+    "message": "Base64 एन्कोड",
+    "description": "Dev tool label for base64 encoding",
+    "_machine_translated": true,
+    "_source_hash": "b344217e400f66d7"
+  },
+  "floating.devtools.base64_encode.description": {
+    "message": "\"{text}\" → कॉपी करने के लिए Enter",
+    "description": "Description shown beneath base64 encode results",
+    "_machine_translated": true,
+    "_source_hash": "ef88239104225007"
+  },
+  "floating.devtools.base64_decode.label": {
+    "message": "Base64 डिकोड",
+    "description": "Dev tool label for base64 decoding",
+    "_machine_translated": true,
+    "_source_hash": "d5513c636d49588f"
+  },
+  "floating.devtools.hash.label": {
+    "message": "{algo} हैश",
+    "description": "Dev tool label for a hash computation; {algo} is the algorithm name (SHA-256, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "2f6aca95a34f79bb"
+  },
+  "floating.devtools.hash.computing": {
+    "message": "गणना हो रही है...",
+    "description": "Dev tool description shown while a hash is being computed",
+    "_machine_translated": true,
+    "_source_hash": "277b7fb745aaf2c3"
+  },
+  "floating.devtools.epoch.label": {
+    "message": "Epoch → दिनांक",
+    "description": "Dev tool label for converting an epoch timestamp to a date",
+    "_machine_translated": true,
+    "_source_hash": "5056dff733704f63"
+  },
+  "floating.devtools.epoch.now_label": {
+    "message": "वर्तमान Epoch",
+    "description": "Dev tool label for the current Unix timestamp",
+    "_machine_translated": true,
+    "_source_hash": "5029e18fe34a328a"
+  },
+  "floating.devtools.epoch.now_description": {
+    "message": "{seconds} ({local})",
+    "description": "Description shown beneath the current Epoch result",
+    "_machine_translated": true,
+    "_source_hash": "9669256a1251e7df"
+  },
+  "floating.devtools.json_format.label": {
+    "message": "JSON फ़ॉर्मेट करें",
+    "description": "Dev tool label for formatting minified JSON",
+    "_machine_translated": true,
+    "_source_hash": "9dc630d3d3652336"
+  },
+  "floating.devtools.json_format.description": {
+    "message": "{count} कुंजियाँ · कॉपी करने के लिए Enter दबाएँ",
+    "description": "Description shown beneath formatted JSON results",
+    "_machine_translated": true,
+    "_source_hash": "bc5fcaa4b0717dca"
+  },
+  "floating.permission.notification_title": {
+    "message": "🔐 टूल अनुमति आवश्यक",
+    "description": "Title of the system notification when a tool wants permission while the floating window is hidden",
+    "_machine_translated": true,
+    "_source_hash": "f87d83a1787755c4"
+  },
+  "floating.permission.notification_body": {
+    "message": "{tool}: {title}",
+    "description": "Body of the tool permission notification, with tool name and description",
+    "_machine_translated": true,
+    "_source_hash": "991bf1afd8022430"
+  },
+  "chat.placeholder.type_message": {
+    "message": "अपना संदेश लिखें...",
+    "description": "Placeholder shown in the chat input",
+    "_machine_translated": true,
+    "_source_hash": "fc256546cb08ce47"
+  },
+  "chat.placeholder.connecting": {
+    "message": "सत्र से कनेक्ट हो रहा है...",
+    "description": "Placeholder shown while the chat is connecting to its session",
+    "_machine_translated": true,
+    "_source_hash": "2edafb10f033f452"
+  },
+  "chat.placeholder.session_readonly": {
+    "message": "सत्र केवल-पठन है",
+    "description": "Placeholder shown when the active session is open in another process",
+    "_machine_translated": true,
+    "_source_hash": "d4ec52fb07b6de47"
+  },
+  "chat.placeholder.session_unavailable": {
+    "message": "सत्र उपलब्ध नहीं है",
+    "description": "Placeholder shown when the session can't be loaded",
+    "_machine_translated": true,
+    "_source_hash": "9c290949d8d39aff"
+  },
+  "chat.placeholder.empty_session": {
+    "message": "खाली सत्र",
+    "description": "Placeholder shown when a session has no messages",
+    "_machine_translated": true,
+    "_source_hash": "c3a238761a233ec5"
+  },
+  "chat.session.fallback_title": {
+    "message": "चैट",
+    "description": "Fallback title for the active chat when the session has no name",
+    "_machine_translated": true,
+    "_source_hash": "8b4194d5d3d16a6d"
+  },
+  "chat.error.failed_load_session": {
+    "message": "सत्र लोड करने में विफल",
+    "description": "Error label prefix when a session can't be loaded",
+    "_machine_translated": true,
+    "_source_hash": "9a8ba81458073bde"
+  },
+  "chat.error.failed_delete_session": {
+    "message": "सत्र हटाने में विफल",
+    "description": "Error label prefix when a session can't be deleted",
+    "_machine_translated": true,
+    "_source_hash": "fafd033dfba27877"
+  },
+  "chat.error.command_failed": {
+    "message": "कमांड विफल",
+    "description": "Error label prefix when a slash or local command fails",
+    "_machine_translated": true,
+    "_source_hash": "dec10bb0c2cf41b2"
+  },
+  "chat.error.failed_switch_model": {
+    "message": "मॉडल बदलने में विफल",
+    "description": "Error label prefix when switching the model fails",
+    "_machine_translated": true,
+    "_source_hash": "7b8edbc4ce743556"
+  },
+  "chat.error.error_label": {
+    "message": "त्रुटि",
+    "description": "Generic Error label prefix",
+    "_machine_translated": true,
+    "_source_hash": "54d7838c09a72014"
+  },
+  "chat.error.error_with_payload": {
+    "message": "त्रुटि: {payload}",
+    "description": "Error message format when streaming returns an error payload",
+    "_machine_translated": true,
+    "_source_hash": "c34ac802cdbe7586"
+  },
+  "chat.error.reconnect_failed": {
+    "message": "पुनः कनेक्ट विफल हुआ।",
+    "description": "Error message shown when reconnect fails",
+    "_machine_translated": true,
+    "_source_hash": "e0f567e4c1921c99"
+  },
+  "chat.error.reconnect_failed_label": {
+    "message": "पुनः कनेक्ट विफल",
+    "description": "Error label prefix when reconnect throws",
+    "_machine_translated": true,
+    "_source_hash": "2c6efe607d1aaea7"
+  },
+  "chat.error.session_locked": {
+    "message": "यह सत्र केवल-पठन है क्योंकि यह किसी अन्य प्रक्रिया में खुला है{processInfo}।",
+    "description": "Error shown when a session is locked by another instance",
+    "_machine_translated": true,
+    "_source_hash": "ce038fc938ef3fa5"
+  },
+  "chat.error.btn.reconnect": {
+    "message": "पुनः कनेक्ट करें",
+    "description": "Button label to retry connecting",
+    "_machine_translated": true,
+    "_source_hash": "b53e917100ad669c"
+  },
+  "chat.error.btn.dismiss": {
+    "message": "बंद करें",
+    "description": "Button label to dismiss an error",
+    "_machine_translated": true,
+    "_source_hash": "d3a5fa71a92f40bf"
+  },
+  "chat.error.btn.retry": {
+    "message": "पुनः प्रयास करें",
+    "description": "Button label to retry an action",
+    "_machine_translated": true,
+    "_source_hash": "b61189d10c9a4c1c"
+  },
+  "chat.notification.response_ready": {
+    "message": "उत्तर तैयार है",
+    "description": "Fallback notification body for the chat window when response is empty",
+    "_machine_translated": true,
+    "_source_hash": "d5f1393c8aedaed2"
+  },
+  "chat.message.steering_label": {
+    "message": "स्टीयरिंग संदर्भ भेजा गया",
+    "description": "Header text on collapsed steering context blocks",
+    "_machine_translated": true,
+    "_source_hash": "79ba74c871c01327"
+  },
+  "chat.suggestions.loading_more": {
+    "message": "अधिक परिणाम लोड हो रहे हैं",
+    "description": "Loading indicator label in the chat suggestions panel",
+    "_machine_translated": true,
+    "_source_hash": "4e7a4f3404937422"
+  },
+  "chat.command.result_done": {
+    "message": "पूर्ण",
+    "description": "Default fallback message when a slash-command selection completes with no message",
+    "_machine_translated": true,
+    "_source_hash": "9a6c4d4ca1a4233a"
+  },
+  "chat.model.no_models_available": {
+    "message": "कोई मॉडल उपलब्ध नहीं है",
+    "description": "Dropdown placeholder when no models are returned by the backend",
+    "_machine_translated": true,
+    "_source_hash": "65090b3b6e774b36"
+  },
+  "chat.model.unknown": {
+    "message": "अज्ञात",
+    "description": "Fallback model display name when none is provided",
+    "_machine_translated": true,
+    "_source_hash": "0ec8b403f25a443e"
+  },
+  "shared.permission.unknown_tool": {
+    "message": "अज्ञात टूल",
+    "description": "Fallback shown when a permission request has no tool title",
+    "_machine_translated": true,
+    "_source_hash": "3bbee9ee375ded57"
+  },
+  "shared.permission.unknown": {
+    "message": "अज्ञात",
+    "description": "Generic fallback used as a tool title in policy decisions",
+    "_machine_translated": true,
+    "_source_hash": "307a0bc0d42a2013"
+  },
+  "shared.script_editor.ai_placeholder": {
+    "message": "स्क्रिप्ट लिखने या अपडेट करने के लिए AI से कहें...",
+    "description": "Placeholder in the script editor's AI prompt input",
+    "_machine_translated": true,
+    "_source_hash": "2bfc1112b48f45a0"
+  },
+  "shared.script_editor.btn.generate": {
+    "message": "✨ जनरेट करें",
+    "description": "Button label to generate a script via AI",
+    "_machine_translated": true,
+    "_source_hash": "8d535b370dcaeb6d"
+  },
+  "shared.script_editor.btn.generating": {
+    "message": "जनरेट हो रहा है...",
+    "description": "Button label while generation is in flight",
+    "_machine_translated": true,
+    "_source_hash": "35fd4a2696a104eb"
+  },
+  "shared.script_editor.btn.undo": {
+    "message": "पूर्ववत करें",
+    "description": "Button label to undo a generated script",
+    "_machine_translated": true,
+    "_source_hash": "76918e3495ce7c87"
+  },
+  "shared.script_editor.status.enter_description": {
+    "message": "पहले विवरण दर्ज करें।",
+    "description": "Status shown when the user clicks Generate without entering a prompt",
+    "_machine_translated": true,
+    "_source_hash": "d3d2ba26325e8337"
+  },
+  "shared.script_editor.status.sending": {
+    "message": "एजेंट को भेजा जा रहा है...",
+    "description": "Status shown while the AI request is being sent",
+    "_machine_translated": true,
+    "_source_hash": "aa0a68d297123b09"
+  },
+  "shared.script_editor.status.receiving": {
+    "message": "प्राप्त हो रहा है...",
+    "description": "Status shown while the AI response is streaming",
+    "_machine_translated": true,
+    "_source_hash": "b933e6920a84358b"
+  },
+  "shared.script_editor.status.generated": {
+    "message": "स्क्रिप्ट जनरेट हो गई। समीक्षा करें और सहेजें।",
+    "description": "Status shown after successful generation",
+    "_machine_translated": true,
+    "_source_hash": "49e72a1b618c3314"
+  },
+  "shared.script_editor.context_default": {
+    "message": "एक स्ट्रिंग लौटाएँ।",
+    "description": "Default context hint added beneath the script editor",
+    "_machine_translated": true,
+    "_source_hash": "2100e2ea45c39d91"
+  },
+  "shared.script_editor.var_help_html": {
+    "message": "JavaScript फ़ंक्शन बॉडी। वेरिएबल <code style=\"background:var(--kage-bg-input);padding:1px 4px;border-radius:3px;\">{var}</code> में इनपुट होता है। {context}",
+    "description": "Help text shown beneath the script editor input (HTML allowed; {var} is the JS variable name, {context} is the per-caller hint string)",
+    "_machine_translated": true,
+    "_source_hash": "92862a2e4786ef5f"
+  },
+  "shared.automation.run_btn": {
+    "message": "▶ चलाएँ",
+    "description": "Button label to run an automation plan",
+    "_machine_translated": true,
+    "_source_hash": "6d288f1e08840b5a"
+  },
+  "shared.automation.run_hint": {
+    "message": "या योजना बदलने के लिए टाइप करें",
+    "description": "Hint shown next to the Run button",
+    "_machine_translated": true,
+    "_source_hash": "be15f3b06df16171"
+  },
+  "shared.line_editor.add_label": {
+    "message": "+ पंक्ति जोड़ें",
+    "description": "Default label for the add-line button in the line editor",
+    "_machine_translated": true,
+    "_source_hash": "df26eb8f60ce7d1c"
+  },
+  "shared.line_editor.move_up_title": {
+    "message": "ऊपर ले जाएँ",
+    "description": "Tooltip on the move-up button",
+    "_machine_translated": true,
+    "_source_hash": "93b086f96e88e5a3"
+  },
+  "shared.line_editor.move_up_aria": {
+    "message": "पंक्ति ऊपर ले जाएँ",
+    "description": "Aria label on the move-up button",
+    "_machine_translated": true,
+    "_source_hash": "88c1350e6e853323"
+  },
+  "shared.line_editor.move_down_title": {
+    "message": "नीचे ले जाएं",
+    "description": "Tooltip on the move-down button",
+    "_machine_translated": true,
+    "_source_hash": "084eab0eb0f6fb06"
+  },
+  "shared.line_editor.move_down_aria": {
+    "message": "लाइन नीचे ले जाएं",
+    "description": "Aria label on the move-down button",
+    "_machine_translated": true,
+    "_source_hash": "62812ed3a558545e"
+  },
+  "shared.line_editor.delete_title": {
+    "message": "लाइन हटाएं",
+    "description": "Tooltip on the delete-line button",
+    "_machine_translated": true,
+    "_source_hash": "92a0bd4707da40c9"
+  },
+  "shared.line_editor.delete_aria": {
+    "message": "लाइन हटाएं",
+    "description": "Aria label on the delete-line button",
+    "_machine_translated": true,
+    "_source_hash": "f6ebdf934d5f799f"
+  },
+  "shared.network.offline_message": {
+    "message": "कोई इंटरनेट कनेक्शन नहीं है। सर्च, शॉर्टकट और ऐप लॉन्च करना अब भी काम करता है, लेकिन AI सुविधाओं के लिए कनेक्शन ज़रूरी है।",
+    "description": "User-friendly message when the device is offline",
+    "_machine_translated": true,
+    "_source_hash": "0ba27080603379ab"
+  },
+  "shared.notify.kage_title": {
+    "message": "Kage",
+    "description": "Default notification title (the app name) used as a fallback",
+    "_machine_translated": true,
+    "_source_hash": "08f7a9ebf3a4f9a1"
+  },
+  "shared.extension.widget.paused_html": {
+    "message": "<span>⚠️ विजेट रोका गया — <strong>{name}</strong> बार-बार विफल हो रहा था या बहुत धीरे चल रहा था।</span>",
+    "description": "Notice when a misbehaving extension widget is paused",
+    "_machine_translated": true,
+    "_source_hash": "7e88e4aeddd540b7"
+  },
+  "shared.extension.widget.retry": {
+    "message": "पुनः प्रयास करें",
+    "description": "Link label to retry a paused extension widget",
+    "_machine_translated": true,
+    "_source_hash": "2b2fcbb8151829fe"
+  },
+  "shared.mac_permissions.open_settings": {
+    "message": "सिस्टम सेटिंग्स खोलें",
+    "description": "Button label that deep-links to System Settings → Privacy",
+    "_machine_translated": true,
+    "_source_hash": "94e2b0b26c74ff31"
   }
 }
