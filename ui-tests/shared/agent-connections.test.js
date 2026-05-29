@@ -20,7 +20,7 @@
  * canonical home after consolidation.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import {
     bindEditForm,
     connectionFromDetected,
@@ -33,6 +33,26 @@ import {
     uuidLite,
     validateMode,
 } from '../../ui/js/shared/agent-connections.js';
+import { initI18n } from '../../ui/js/shared/i18n.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load the canonical EN catalog so t() inside agent-connections.js resolves
+// to real strings instead of returning the literal key. Without this every
+// localised assertion would have to compare against the key path.
+beforeAll(async () => {
+    const catalogPath = join(__dirname, '..', '..', 'locales', 'en', 'messages.json');
+    const catalog = JSON.parse(readFileSync(catalogPath, 'utf-8'));
+    await initI18n(async (cmd) => {
+        if (cmd === 'get_i18n_catalog') {
+            return { language: 'en', rtl: false, catalog, fallback: catalog };
+        }
+        throw new Error(`unexpected invoke: ${cmd}`);
+    });
+});
 
 beforeEach(() => {
     document.body.innerHTML = '';
