@@ -101,7 +101,13 @@ body {
 .settings-content {
     flex: 1;
     overflow-y: auto;
-    padding: 30px 40px 60px 40px;
+    /* Bottom padding has to clear the fixed save bar (~52px tall: 24px
+       padding * 2 + 36px button) plus a small breathing buffer, otherwise
+       the last setting in any section stays permanently hidden under the
+       bar. The previous 60px just barely worked for short rows but cut
+       off help text on multi-line description rows. 80px gives every row
+       a clean reveal at the scroll bottom. */
+    padding: 30px 40px 80px 40px;
 }
 .settings-section {
     margin-bottom: 40px;
@@ -290,6 +296,11 @@ body {
     border-top: 1px solid var(--kage-border-subtle);
     display: flex;
     justify-content: flex-end;
+    /* Above sticky section headers (z-index: 10) and sub-section labels
+       (z-index: 9). Without this, the section title bars rendered ON TOP
+       of the save bar at the bottom of the viewport — visually weird and
+       hid the Save button briefly while scrolling. */
+    z-index: 50;
 }
 .save-button {
     padding: 8px 24px;
