@@ -5572,5 +5572,59 @@
     "description": "Default response when a slash command succeeds with no message",
     "_machine_translated": true,
     "_source_hash": "736169e784b4207a"
+  },
+  "welcome.extensions.intro_html": {
+    "message": "Kage este creat să fie ușor și rapid. Extensiile adaugă funcționalitate suplimentară — alege-le pe cele cu care vrei să începi. Fiecare extensie arată ce acces necesită; poți oricând să instalezi altele sau să retragi permisiuni mai târziu din <strong>Magazinul de extensii</strong>.",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "51cb7229bbe5c0d8"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "Extensii",
+    "description": "Section heading: extensions",
+    "_machine_translated": true,
+    "_source_hash": "d9daeceebb0b406b"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "Teme",
+    "description": "Section heading: themes",
+    "_machine_translated": true,
+    "_source_hash": "9ebc0a71c7fa23ea"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "Deselectează tot",
+    "description": "Toggle button label when all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "95e3246714180783"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "Selectează tot",
+    "description": "Toggle button label when not all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "51a3998aad26bb4a"
+  },
+  "welcome.extensions.empty": {
+    "message": "Nicio extensie disponibilă.",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing",
+    "_machine_translated": true,
+    "_source_hash": "6c84927905e05411"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "Nu s-au putut încărca extensiile. Le poți instala mai târziu din Magazinul de extensii.",
+    "description": "Empty state when the recommended catalog can't be reached",
+    "_machine_translated": true,
+    "_source_hash": "dae7ce70ac7017c8"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 Fără permisiuni",
+    "description": "Capability badge shown when an extension requests no capabilities",
+    "_machine_translated": true,
+    "_source_hash": "6f2d7d193bbd4147"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "Această extensie nu solicită nicio capabilitate",
+    "description": "Tooltip on the no-permissions capability badge",
+    "_machine_translated": true,
+    "_source_hash": "53beb2639d54335c"
   }
 }

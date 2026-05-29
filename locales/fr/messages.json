@@ -5572,5 +5572,59 @@
     "description": "Default response when a slash command succeeds with no message",
     "_machine_translated": true,
     "_source_hash": "736169e784b4207a"
+  },
+  "welcome.extensions.intro_html": {
+    "message": "Kage est conçu pour être léger et rapide. Les extensions ajoutent des fonctionnalités par-dessus — choisissez celles avec lesquelles vous souhaitez commencer. Chaque extension indique les accès dont elle a besoin ; vous pourrez toujours en installer d'autres, ou révoquer des autorisations, plus tard depuis le <strong>magasin d'extensions</strong>.",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "51cb7229bbe5c0d8"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "Extensions",
+    "description": "Section heading: extensions",
+    "_machine_translated": true,
+    "_source_hash": "d9daeceebb0b406b"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "Thèmes",
+    "description": "Section heading: themes",
+    "_machine_translated": true,
+    "_source_hash": "9ebc0a71c7fa23ea"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "Tout désélectionner",
+    "description": "Toggle button label when all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "95e3246714180783"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "Tout sélectionner",
+    "description": "Toggle button label when not all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "51a3998aad26bb4a"
+  },
+  "welcome.extensions.empty": {
+    "message": "Aucune extension disponible.",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing",
+    "_machine_translated": true,
+    "_source_hash": "6c84927905e05411"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "Impossible de charger les extensions. Vous pourrez les installer plus tard depuis le magasin d'extensions.",
+    "description": "Empty state when the recommended catalog can't be reached",
+    "_machine_translated": true,
+    "_source_hash": "dae7ce70ac7017c8"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 Aucune autorisation",
+    "description": "Capability badge shown when an extension requests no capabilities",
+    "_machine_translated": true,
+    "_source_hash": "6f2d7d193bbd4147"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "Cette extension ne demande aucune capacité",
+    "description": "Tooltip on the no-permissions capability badge",
+    "_machine_translated": true,
+    "_source_hash": "53beb2639d54335c"
   }
 }

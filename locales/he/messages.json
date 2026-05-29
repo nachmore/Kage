@@ -5572,5 +5572,59 @@
     "description": "Default response when a slash command succeeds with no message",
     "_machine_translated": true,
     "_source_hash": "736169e784b4207a"
+  },
+  "welcome.extensions.intro_html": {
+    "message": "Kage בנויה להיות רזה ומהירה. הרחבות מוסיפות פונקציונליות על גביה — בחרו את אלה שתרצו להתחיל איתן. כל הרחבה מציגה לאילו הרשאות היא זקוקה; תמיד אפשר להתקין עוד, או להסיר הרשאות, בהמשך דרך <strong>חנות ההרחבות</strong>.",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "51cb7229bbe5c0d8"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "הרחבות",
+    "description": "Section heading: extensions",
+    "_machine_translated": true,
+    "_source_hash": "d9daeceebb0b406b"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "ערכות נושא",
+    "description": "Section heading: themes",
+    "_machine_translated": true,
+    "_source_hash": "9ebc0a71c7fa23ea"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "בטל בחירה של הכול",
+    "description": "Toggle button label when all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "95e3246714180783"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "בחר הכול",
+    "description": "Toggle button label when not all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "51a3998aad26bb4a"
+  },
+  "welcome.extensions.empty": {
+    "message": "אין הרחבות זמינות.",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing",
+    "_machine_translated": true,
+    "_source_hash": "6c84927905e05411"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "לא ניתן היה לטעון הרחבות. אפשר להתקין אותן מאוחר יותר דרך חנות ההרחבות.",
+    "description": "Empty state when the recommended catalog can't be reached",
+    "_machine_translated": true,
+    "_source_hash": "dae7ce70ac7017c8"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 ללא הרשאות",
+    "description": "Capability badge shown when an extension requests no capabilities",
+    "_machine_translated": true,
+    "_source_hash": "6f2d7d193bbd4147"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "הרחבה זו אינה מבקשת הרשאות",
+    "description": "Tooltip on the no-permissions capability badge",
+    "_machine_translated": true,
+    "_source_hash": "53beb2639d54335c"
   }
 }

@@ -5572,5 +5572,59 @@
     "description": "Default response when a slash command succeeds with no message",
     "_machine_translated": true,
     "_source_hash": "736169e784b4207a"
+  },
+  "welcome.extensions.intro_html": {
+    "message": "Kage 致力于轻量、快速。扩展可在此基础上增加功能 — 请选择您想要开始使用的扩展。每个扩展都会显示其所需的访问权限；您随后可以随时在<strong>扩展商店</strong>中安装更多扩展，或撤销已授予的权限。",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "51cb7229bbe5c0d8"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "扩展",
+    "description": "Section heading: extensions",
+    "_machine_translated": true,
+    "_source_hash": "d9daeceebb0b406b"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "主题",
+    "description": "Section heading: themes",
+    "_machine_translated": true,
+    "_source_hash": "9ebc0a71c7fa23ea"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "取消全选",
+    "description": "Toggle button label when all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "95e3246714180783"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "全选",
+    "description": "Toggle button label when not all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "51a3998aad26bb4a"
+  },
+  "welcome.extensions.empty": {
+    "message": "暂无可用扩展。",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing",
+    "_machine_translated": true,
+    "_source_hash": "6c84927905e05411"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "无法加载扩展。您可以稍后从扩展商店安装。",
+    "description": "Empty state when the recommended catalog can't be reached",
+    "_machine_translated": true,
+    "_source_hash": "dae7ce70ac7017c8"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 无权限",
+    "description": "Capability badge shown when an extension requests no capabilities",
+    "_machine_translated": true,
+    "_source_hash": "6f2d7d193bbd4147"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "此扩展不请求任何权限",
+    "description": "Tooltip on the no-permissions capability badge",
+    "_machine_translated": true,
+    "_source_hash": "53beb2639d54335c"
   }
 }

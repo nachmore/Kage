@@ -5572,5 +5572,59 @@
     "description": "Default response when a slash command succeeds with no message",
     "_machine_translated": true,
     "_source_hash": "736169e784b4207a"
+  },
+  "welcome.extensions.intro_html": {
+    "message": "Kage کو ہلکا اور تیز رفتار بنایا گیا ہے۔ ایکسٹینشنز اس کے اوپر فعالیت کا اضافہ کرتی ہیں — وہ منتخب کریں جن سے آپ آغاز کرنا چاہتے ہیں۔ ہر ایکسٹینشن یہ ظاہر کرتی ہے کہ اسے کن رسائیوں کی ضرورت ہے؛ آپ بعد میں <strong>Extension Store</strong> سے مزید انسٹال کر سکتے ہیں یا اجازتیں ہٹا سکتے ہیں۔",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "51cb7229bbe5c0d8"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "ایکسٹینشنز",
+    "description": "Section heading: extensions",
+    "_machine_translated": true,
+    "_source_hash": "d9daeceebb0b406b"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "تھیمز",
+    "description": "Section heading: themes",
+    "_machine_translated": true,
+    "_source_hash": "9ebc0a71c7fa23ea"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "تمام غیر منتخب کریں",
+    "description": "Toggle button label when all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "95e3246714180783"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "تمام منتخب کریں",
+    "description": "Toggle button label when not all extensions are selected",
+    "_machine_translated": true,
+    "_source_hash": "51a3998aad26bb4a"
+  },
+  "welcome.extensions.empty": {
+    "message": "کوئی ایکسٹینشن دستیاب نہیں۔",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing",
+    "_machine_translated": true,
+    "_source_hash": "6c84927905e05411"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "ایکسٹینشنز لوڈ نہیں ہو سکیں۔ آپ انہیں بعد میں Extension Store سے انسٹال کر سکتے ہیں۔",
+    "description": "Empty state when the recommended catalog can't be reached",
+    "_machine_translated": true,
+    "_source_hash": "dae7ce70ac7017c8"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 کوئی اجازتیں نہیں",
+    "description": "Capability badge shown when an extension requests no capabilities",
+    "_machine_translated": true,
+    "_source_hash": "6f2d7d193bbd4147"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "یہ ایکسٹینشن کسی صلاحیت کی درخواست نہیں کرتی",
+    "description": "Tooltip on the no-permissions capability badge",
+    "_machine_translated": true,
+    "_source_hash": "53beb2639d54335c"
   }
 }

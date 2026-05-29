@@ -668,14 +668,14 @@
                 storeExtensions = await resp.json();
 
                 if (storeExtensions.length === 0) {
-                    container.innerHTML = '<div class="ext-empty">No extensions available.</div>';
+                    container.innerHTML = `<div class="ext-empty">${t('welcome.extensions.empty')}</div>`;
                 } else {
                     renderExtensionList(container);
                 }
                 extCatalogLoaded = true;
             } catch (e) {
                 console.error('Failed to load recommended extensions:', e);
-                container.innerHTML = '<div class="ext-empty">Could not load extensions. You can install them later from the Extension Store.</div>';
+                container.innerHTML = `<div class="ext-empty">${t('welcome.extensions.load_failed')}</div>`;
                 extCatalogLoaded = true;
             }
         }
@@ -685,7 +685,9 @@
                 const cb = document.getElementById('ext-cb-' + i);
                 return !cb || cb.checked;
             });
-            const toggleLabel = allSelected ? 'Deselect All' : 'Select All';
+            const toggleLabel = allSelected
+                ? t('welcome.extensions.toggle.deselect_all')
+                : t('welcome.extensions.toggle.select_all');
 
             // Render capability badges for an extension. Kept in sync with
             // ui/js/settings/manager.js → renderCapabilityBadges; the two
@@ -695,7 +697,7 @@
             // just honest disclosure of what the extension will receive.
             function renderCapPills(permissions) {
                 if (!Array.isArray(permissions) || permissions.length === 0) {
-                    return '<span class="ext-cap-pill ext-cap-pill-none" title="This extension requests no capabilities">🔒 No permissions</span>';
+                    return `<span class="ext-cap-pill ext-cap-pill-none" title="${escapeHtml(t('welcome.extensions.cap.none.title'))}">${t('welcome.extensions.cap.none')}</span>`;
                 }
                 return permissions.map(cap => {
                     const meta = CAPABILITIES[cap];
@@ -704,7 +706,7 @@
                 }).join('');
             }
 
-            let html = `<div class="section-desc" style="margin-bottom:16px;color:var(--kage-text-primary, #E5E7EB);">Kage is built to be lean and fast. Extensions add functionality on top — pick the ones you want to start with. Each extension shows what access it needs; you can always install more, or remove grants, later from the <strong>Extension Store</strong>.</div>`;
+            let html = `<div class="section-desc" style="margin-bottom:16px;color:var(--kage-text-primary, #E5E7EB);">${t('welcome.extensions.intro_html')}</div>`;
 
             // Split into extensions and themes
             const extensions = storeExtensions.map((e, i) => ({ ...e, _idx: i })).filter(e => e.type !== 'theme');
@@ -712,7 +714,7 @@
 
             if (extensions.length > 0) {
                 html += `<div class="ext-header">
-                    <div class="section-label" style="margin:0;">Extensions</div>
+                    <div class="section-label" style="margin:0;">${t('welcome.extensions.section.extensions')}</div>
                     <button class="ext-toggle-btn" id="extToggleAll">${toggleLabel}</button>
                 </div><div class="ext-list">`;
                 for (const ext of extensions) {
@@ -732,7 +734,7 @@
             }
 
             if (themes.length > 0) {
-                html += '<div class="section-label" style="margin-top:20px;">Themes</div><div class="ext-list">';
+                html += `<div class="section-label" style="margin-top:20px;">${t('welcome.extensions.section.themes')}</div><div class="ext-list">`;
                 for (const ext of themes) {
                     const icon = ext.icon || '🎨';
                     const checked = document.getElementById('ext-cb-' + ext._idx)?.checked ?? true;
@@ -755,7 +757,9 @@
                 const allChecked = Array.from(cbs).every(cb => cb.checked);
                 cbs.forEach(cb => cb.checked = !allChecked);
                 // Update button label
-                document.getElementById('extToggleAll').textContent = allChecked ? 'Select All' : 'Deselect All';
+                document.getElementById('extToggleAll').textContent = allChecked
+                    ? t('welcome.extensions.toggle.select_all')
+                    : t('welcome.extensions.toggle.deselect_all');
             });
         }
 

@@ -3758,5 +3758,42 @@
   "command.slash.executed": {
     "message": "Command executed",
     "description": "Default response when a slash command succeeds with no message"
+  },
+
+  "welcome.extensions.intro_html": {
+    "message": "Kage is built to be lean and fast. Extensions add functionality on top — pick the ones you want to start with. Each extension shows what access it needs; you can always install more, or remove grants, later from the <strong>Extension Store</strong>.",
+    "description": "Intro paragraph above the extensions picker (HTML allowed)"
+  },
+  "welcome.extensions.section.extensions": {
+    "message": "Extensions",
+    "description": "Section heading: extensions"
+  },
+  "welcome.extensions.section.themes": {
+    "message": "Themes",
+    "description": "Section heading: themes"
+  },
+  "welcome.extensions.toggle.deselect_all": {
+    "message": "Deselect All",
+    "description": "Toggle button label when all extensions are selected"
+  },
+  "welcome.extensions.toggle.select_all": {
+    "message": "Select All",
+    "description": "Toggle button label when not all extensions are selected"
+  },
+  "welcome.extensions.empty": {
+    "message": "No extensions available.",
+    "description": "Empty state when the recommended catalog is reachable but contains nothing"
+  },
+  "welcome.extensions.load_failed": {
+    "message": "Could not load extensions. You can install them later from the Extension Store.",
+    "description": "Empty state when the recommended catalog can't be reached"
+  },
+  "welcome.extensions.cap.none": {
+    "message": "🔒 No permissions",
+    "description": "Capability badge shown when an extension requests no capabilities"
+  },
+  "welcome.extensions.cap.none.title": {
+    "message": "This extension requests no capabilities",
+    "description": "Tooltip on the no-permissions capability badge"
   }
 }
