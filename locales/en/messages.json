@@ -4467,6 +4467,60 @@
     "description": "Notice shown after a context compaction completes"
   },
 
+  "settings.assistant.app_modes.suggest.none_added": {
+    "message": "All suggested apps already have rules — nothing to add.",
+    "description": "Status when user clicks Add Suggested but everything is already present"
+  },
+  "settings.assistant.app_modes.suggest.added": {
+    "message": "{count, plural, one {Added 1 starter rule} other {Added # starter rules}}{skipped}. Edit and Save when ready.",
+    "description": "Status after adding suggested App Modes rules"
+  },
+  "settings.assistant.app_modes.suggest.skipped_suffix": {
+    "message": " (skipped {count} already present)",
+    "description": "Suffix on the Added-rules status when some were skipped"
+  },
+  "settings.assistant.app_modes.validate.name_required": {
+    "message": "Every rule needs a friendly name.",
+    "description": "Validation error when a populated row lacks a friendly name"
+  },
+  "settings.assistant.app_modes.validate.exe_required": {
+    "message": "\"{name}\" is missing an executable to match.",
+    "description": "Validation error when a row lacks an executable"
+  },
+  "settings.assistant.app_modes.validate.steering_too_long": {
+    "message": "\"{name}\" steering is {length} chars (cap: {max}).",
+    "description": "Validation error when steering exceeds the per-rule cap"
+  },
+  "settings.assistant.app_modes.save.saved": {
+    "message": "Saved.",
+    "description": "Status after a successful App Modes save"
+  },
+  "settings.assistant.app_modes.save.failed": {
+    "message": "Failed to save: {message}",
+    "description": "Status when an App Modes save fails"
+  },
+
+  "settings.automations.script.context_hint": {
+    "message": "Return a string.",
+    "description": "Hint shown above the script-step JS editor"
+  },
+  "settings.automations.validate.name_required": {
+    "message": "Name is required.",
+    "description": "Validation error when an automation lacks a name"
+  },
+  "settings.automations.validate.schedule_interval_required": {
+    "message": "Schedule trigger needs an interval configured.",
+    "description": "Validation error when a schedule trigger has no interval set"
+  },
+  "settings.automations.validate.signal_required": {
+    "message": "Signal trigger needs a signal selected.",
+    "description": "Validation error when a signal trigger has no signal selected"
+  },
+  "settings.automations.validate.steps_required": {
+    "message": "At least one step is required.",
+    "description": "Validation error when an automation has zero steps"
+  },
+
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",
     "description": "Tooltip on the hotkey picker's keycap display"

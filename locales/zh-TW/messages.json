@@ -7678,5 +7678,83 @@
     "description": "Notice shown after a context compaction completes",
     "_machine_translated": true,
     "_source_hash": "5fab54213b093d0a"
+  },
+  "settings.assistant.app_modes.suggest.none_added": {
+    "message": "所有建議的應用程式都已有規則——沒有可新增的項目。",
+    "description": "Status when user clicks Add Suggested but everything is already present",
+    "_machine_translated": true,
+    "_source_hash": "9ce2dff0da9bc1dd"
+  },
+  "settings.assistant.app_modes.suggest.added": {
+    "message": "{count, plural, other {已新增 # 條起始規則}}{skipped}。準備好後編輯並儲存。",
+    "description": "Status after adding suggested App Modes rules",
+    "_machine_translated": true,
+    "_source_hash": "357cf5d6102d434c"
+  },
+  "settings.assistant.app_modes.suggest.skipped_suffix": {
+    "message": "（已略過 {count} 條既有規則）",
+    "description": "Suffix on the Added-rules status when some were skipped",
+    "_machine_translated": true,
+    "_source_hash": "84556e8b7d2a1953"
+  },
+  "settings.assistant.app_modes.validate.name_required": {
+    "message": "每條規則都需要一個易記名稱。",
+    "description": "Validation error when a populated row lacks a friendly name",
+    "_machine_translated": true,
+    "_source_hash": "ced3e9efcb052a50"
+  },
+  "settings.assistant.app_modes.validate.exe_required": {
+    "message": "「{name}」缺少要比對的執行檔。",
+    "description": "Validation error when a row lacks an executable",
+    "_machine_translated": true,
+    "_source_hash": "aaa8f693f397bd9f"
+  },
+  "settings.assistant.app_modes.validate.steering_too_long": {
+    "message": "「{name}」的引導內容為 {length} 字元（上限：{max}）。",
+    "description": "Validation error when steering exceeds the per-rule cap",
+    "_machine_translated": true,
+    "_source_hash": "c54918434281fe61"
+  },
+  "settings.assistant.app_modes.save.saved": {
+    "message": "已儲存。",
+    "description": "Status after a successful App Modes save",
+    "_machine_translated": true,
+    "_source_hash": "0f24eabe4bd6c601"
+  },
+  "settings.assistant.app_modes.save.failed": {
+    "message": "儲存失敗：{message}",
+    "description": "Status when an App Modes save fails",
+    "_machine_translated": true,
+    "_source_hash": "66eb5f01ab121dd7"
+  },
+  "settings.automations.script.context_hint": {
+    "message": "請回傳字串。",
+    "description": "Hint shown above the script-step JS editor",
+    "_machine_translated": true,
+    "_source_hash": "c7288ec33babc658"
+  },
+  "settings.automations.validate.name_required": {
+    "message": "必須填寫名稱。",
+    "description": "Validation error when an automation lacks a name",
+    "_machine_translated": true,
+    "_source_hash": "7366555b2ddadee4"
+  },
+  "settings.automations.validate.schedule_interval_required": {
+    "message": "排程觸發需要設定間隔。",
+    "description": "Validation error when a schedule trigger has no interval set",
+    "_machine_translated": true,
+    "_source_hash": "f5d1a33f99fc6a2e"
+  },
+  "settings.automations.validate.signal_required": {
+    "message": "訊號觸發需要選擇訊號。",
+    "description": "Validation error when a signal trigger has no signal selected",
+    "_machine_translated": true,
+    "_source_hash": "c637e9a97418f957"
+  },
+  "settings.automations.validate.steps_required": {
+    "message": "至少需要一個步驟。",
+    "description": "Validation error when an automation has zero steps",
+    "_machine_translated": true,
+    "_source_hash": "d42a9b7b799ec2f4"
   }
 }

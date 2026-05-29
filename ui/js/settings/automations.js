@@ -564,7 +564,7 @@ export class AutomationsSettingsModule extends SettingsModule {
                     id: `auto_${i}_script_${Math.random().toString(36).slice(2, 6)}`,
                     value: container.dataset.script || '',
                     variableHint: 'input',
-                    contextHint: 'Return a string.',
+                    contextHint: t('settings.automations.script.context_hint'),
                     rows: 5,
                 });
                 container._editor = editor;
@@ -573,12 +573,12 @@ export class AutomationsSettingsModule extends SettingsModule {
     }
 
     _validateOne(auto) {
-        if (!auto.name.trim()) return 'Name is required.';
+        if (!auto.name.trim()) return t('settings.automations.validate.name_required');
         if (auto.trigger?.type === 'schedule' && !auto.trigger.interval)
-            return 'Schedule trigger needs an interval configured.';
+            return t('settings.automations.validate.schedule_interval_required');
         if (auto.trigger?.type === 'signal' && !auto.trigger.signal)
-            return 'Signal trigger needs a signal selected.';
-        if (auto.steps.length === 0) return 'At least one step is required.';
+            return t('settings.automations.validate.signal_required');
+        if (auto.steps.length === 0) return t('settings.automations.validate.steps_required');
         return null;
     }
 

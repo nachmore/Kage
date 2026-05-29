@@ -697,13 +697,19 @@ export class AssistantSettingsModule extends SettingsModule {
 
         if (added === 0) {
             this._setAppModesStatus(
-                'All suggested apps already have rules — nothing to add.',
+                t('settings.assistant.app_modes.suggest.none_added'),
                 'success'
             );
         } else {
-            const skipNote = skipped > 0 ? ` (skipped ${skipped} already present)` : '';
+            const skipNote =
+                skipped > 0
+                    ? t('settings.assistant.app_modes.suggest.skipped_suffix', { count: skipped })
+                    : '';
             this._setAppModesStatus(
-                `Added ${added} starter rule${added === 1 ? '' : 's'}${skipNote}. Edit and Save when ready.`,
+                t('settings.assistant.app_modes.suggest.added', {
+                    count: added,
+                    skipped: skipNote,
+                }),
                 'success'
             );
         }
@@ -739,19 +745,28 @@ export class AssistantSettingsModule extends SettingsModule {
         const max = AssistantSettingsModule.APP_MODE_STEERING_MAX;
         for (const r of rules) {
             if (!r.friendly_name) {
-                this._setAppModesStatus('Every rule needs a friendly name.', 'error');
+                this._setAppModesStatus(
+                    t('settings.assistant.app_modes.validate.name_required'),
+                    'error'
+                );
                 return;
             }
             if (!r.executable) {
                 this._setAppModesStatus(
-                    `"${r.friendly_name}" is missing an executable to match.`,
+                    t('settings.assistant.app_modes.validate.exe_required', {
+                        name: r.friendly_name,
+                    }),
                     'error'
                 );
                 return;
             }
             if (r.steering.length > max) {
                 this._setAppModesStatus(
-                    `"${r.friendly_name}" steering is ${r.steering.length} chars (cap: ${max}).`,
+                    t('settings.assistant.app_modes.validate.steering_too_long', {
+                        name: r.friendly_name,
+                        length: r.steering.length,
+                        max,
+                    }),
                     'error'
                 );
                 return;
@@ -770,12 +785,15 @@ export class AssistantSettingsModule extends SettingsModule {
             await invoke('save_config', { config });
             this._appModesSnapshot = rules.slice();
             this._renderAppModesSummary();
-            this._setAppModesStatus('Saved.', 'success');
+            this._setAppModesStatus(t('settings.assistant.app_modes.save.saved'), 'success');
             // Brief delay so the user sees the success toast, then
             // back to the main view.
             setTimeout(() => this._showMainView(), 450);
         } catch (e) {
-            this._setAppModesStatus('Failed to save: ' + this._formatError(e), 'error');
+            this._setAppModesStatus(
+                t('settings.assistant.app_modes.save.failed', { message: this._formatError(e) }),
+                'error'
+            );
         }
     }
 

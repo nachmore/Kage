@@ -7678,5 +7678,83 @@
     "description": "Notice shown after a context compaction completes",
     "_machine_translated": true,
     "_source_hash": "5fab54213b093d0a"
+  },
+  "settings.assistant.app_modes.suggest.none_added": {
+    "message": "Todas as aplicações sugeridas já têm regras — nada a adicionar.",
+    "description": "Status when user clicks Add Suggested but everything is already present",
+    "_machine_translated": true,
+    "_source_hash": "9ce2dff0da9bc1dd"
+  },
+  "settings.assistant.app_modes.suggest.added": {
+    "message": "{count, plural, one {Adicionada 1 regra inicial} other {Adicionadas # regras iniciais}}{skipped}. Edite e guarde quando estiver pronto.",
+    "description": "Status after adding suggested App Modes rules",
+    "_machine_translated": true,
+    "_source_hash": "357cf5d6102d434c"
+  },
+  "settings.assistant.app_modes.suggest.skipped_suffix": {
+    "message": " ({count} ignoradas por já existirem)",
+    "description": "Suffix on the Added-rules status when some were skipped",
+    "_machine_translated": true,
+    "_source_hash": "84556e8b7d2a1953"
+  },
+  "settings.assistant.app_modes.validate.name_required": {
+    "message": "Cada regra precisa de um nome amigável.",
+    "description": "Validation error when a populated row lacks a friendly name",
+    "_machine_translated": true,
+    "_source_hash": "ced3e9efcb052a50"
+  },
+  "settings.assistant.app_modes.validate.exe_required": {
+    "message": "\"{name}\" não tem um executável para corresponder.",
+    "description": "Validation error when a row lacks an executable",
+    "_machine_translated": true,
+    "_source_hash": "aaa8f693f397bd9f"
+  },
+  "settings.assistant.app_modes.validate.steering_too_long": {
+    "message": "A orientação de \"{name}\" tem {length} carateres (limite: {max}).",
+    "description": "Validation error when steering exceeds the per-rule cap",
+    "_machine_translated": true,
+    "_source_hash": "c54918434281fe61"
+  },
+  "settings.assistant.app_modes.save.saved": {
+    "message": "Guardado.",
+    "description": "Status after a successful App Modes save",
+    "_machine_translated": true,
+    "_source_hash": "0f24eabe4bd6c601"
+  },
+  "settings.assistant.app_modes.save.failed": {
+    "message": "Falha ao guardar: {message}",
+    "description": "Status when an App Modes save fails",
+    "_machine_translated": true,
+    "_source_hash": "66eb5f01ab121dd7"
+  },
+  "settings.automations.script.context_hint": {
+    "message": "Devolva uma string.",
+    "description": "Hint shown above the script-step JS editor",
+    "_machine_translated": true,
+    "_source_hash": "c7288ec33babc658"
+  },
+  "settings.automations.validate.name_required": {
+    "message": "O nome é obrigatório.",
+    "description": "Validation error when an automation lacks a name",
+    "_machine_translated": true,
+    "_source_hash": "7366555b2ddadee4"
+  },
+  "settings.automations.validate.schedule_interval_required": {
+    "message": "O acionador de agendamento precisa de um intervalo configurado.",
+    "description": "Validation error when a schedule trigger has no interval set",
+    "_machine_translated": true,
+    "_source_hash": "f5d1a33f99fc6a2e"
+  },
+  "settings.automations.validate.signal_required": {
+    "message": "O acionador de sinal precisa de um sinal selecionado.",
+    "description": "Validation error when a signal trigger has no signal selected",
+    "_machine_translated": true,
+    "_source_hash": "c637e9a97418f957"
+  },
+  "settings.automations.validate.steps_required": {
+    "message": "É necessário pelo menos um passo.",
+    "description": "Validation error when an automation has zero steps",
+    "_machine_translated": true,
+    "_source_hash": "d42a9b7b799ec2f4"
   }
 }
