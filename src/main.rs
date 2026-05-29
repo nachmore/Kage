@@ -23,6 +23,7 @@ mod error;
 mod events;
 mod extensions;
 mod hotkey_norm;
+mod i18n;
 mod link_metadata_cache;
 mod lock_ext;
 mod logger;
@@ -218,6 +219,15 @@ async fn run() {
     // single-instance IPC dance still dominates a second-instance launch.
     let config = startup::load_config_with_overrides(debug_mode, Config::load);
     info!("Configuration loaded");
+
+    // Initialize the localisation catalogs from the embedded JSON resources.
+    // Resolution order: explicit override in config.ui.language → OS locale
+    // (sys_locale::get_locale, which honours CFLocale / GetUserDefaultLocaleName
+    // / $LANG depending on platform) → fall back to English. The function
+    // also strips region tags ("en-GB" → "en") when no exact catalog ships.
+    let preferred_lang = config.ui.language.clone().or_else(sys_locale::get_locale);
+    let active_lang = i18n::init(preferred_lang.as_deref());
+    info!("i18n: active language = {}", active_lang);
     if dev_mode {
         info!("⏱ Config loaded at +{}ms", startup_t0.elapsed().as_millis());
     }

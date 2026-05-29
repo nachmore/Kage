@@ -1,0 +1,241 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "rtl": false,
+    "machine_translated": false
+  },
+
+  "errors.connection.lost": {
+    "message": "Connection lost: {reason}",
+    "description": "ACP transport dropped while a request was in flight"
+  },
+  "errors.connection.not_connected": {
+    "message": "Not connected",
+    "description": "User attempted an operation that requires an active ACP connection"
+  },
+  "errors.connection.reconnect_failed": {
+    "message": "Failed to reconnect: {reason}",
+    "description": "Reconnect attempt to the agent backend failed"
+  },
+  "errors.timeout.generic": {
+    "message": "Timed out waiting for response",
+    "description": "ACP request exceeded the configured timeout"
+  },
+  "errors.session.corrupted": {
+    "message": "Session is corrupted: {reason}",
+    "description": "Session file or in-memory state failed validation"
+  },
+  "errors.session.create_failed": {
+    "message": "Could not create session: {reason}",
+    "description": "Initial session creation against the agent backend failed"
+  },
+  "errors.session.load_failed": {
+    "message": "Could not load session: {reason}",
+    "description": "Resuming a stored session against the agent backend failed"
+  },
+  "errors.image.unsupported": {
+    "message": "This model does not support image attachments",
+    "description": "User attached an image to a model whose backend can't accept them"
+  },
+  "errors.lock.acquire_failed": {
+    "message": "Internal lock could not be acquired",
+    "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic"
+  },
+  "errors.serialize.failed": {
+    "message": "Could not serialize data: {reason}",
+    "description": "JSON or other serialization failed at a command boundary"
+  },
+  "errors.rate_limited.generic": {
+    "message": "Rate limit exceeded. Please wait and try again.",
+    "description": "Upstream agent or model API returned a rate-limit error"
+  },
+  "errors.permission.response_failed": {
+    "message": "Could not send permission response: {reason}",
+    "description": "Frontend permission decision failed to round-trip to the agent"
+  },
+  "errors.command.failed": {
+    "message": "Command failed: {reason}",
+    "description": "Generic command execution failure shown to the user"
+  },
+  "errors.cancel.failed": {
+    "message": "Could not cancel: {reason}",
+    "description": "Canceling an in-flight ACP request failed"
+  },
+  "errors.plan.invalid_json": {
+    "message": "Invalid plan format",
+    "description": "Agent returned a plan that didn't match the expected JSON shape"
+  },
+  "errors.plan.empty": {
+    "message": "Plan is empty",
+    "description": "Agent returned a plan with no steps"
+  },
+  "errors.transport.tcp_in_local_mode": {
+    "message": "Cannot use TCP transport in local mode",
+    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested"
+  },
+  "errors.transport.empty_spawn_command": {
+    "message": "Spawn command is empty",
+    "description": "Local connection has no command to launch"
+  },
+  "errors.transport.no_write_handle": {
+    "message": "Connection is not writable",
+    "description": "Attempted to send on a half-closed transport"
+  },
+  "errors.unknown": {
+    "message": "Unknown error",
+    "description": "Fallback when an error has no message at all"
+  },
+  "errors.passthrough": {
+    "message": "{message}",
+    "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim."
+  },
+  "errors.config.save_failed": {
+    "message": "Could not save settings: {reason}",
+    "description": "Settings persistence to disk failed (permission, disk full, etc.)"
+  },
+  "errors.config.load_failed": {
+    "message": "Could not load settings: {reason}",
+    "description": "Reading config.json from disk failed"
+  },
+  "errors.extension.invalid_id": {
+    "message": "Invalid extension id: {reason}",
+    "description": "Extension id failed validation (used to prevent path injection)"
+  },
+  "errors.extension.invalid_locale": {
+    "message": "Invalid language code: {language}",
+    "description": "Language code failed validation when loading an extension's locale catalog"
+  },
+  "errors.extension.invalid_kind": {
+    "message": "Invalid extension kind: {reason}",
+    "description": "Extension kind (extension/theme/command-pack) failed validation"
+  },
+  "errors.extension.dir_unavailable": {
+    "message": "Could not access extension directory: {reason}",
+    "description": "User extension dir lookup failed (config dir error)"
+  },
+  "errors.extension.locale_read_failed": {
+    "message": "Could not read extension locale: {reason}",
+    "description": "Reading the matched _locales/<lang>/messages.json file failed"
+  },
+  "errors.extension.locale_parse_failed": {
+    "message": "Extension locale file is invalid ({language}): {reason}",
+    "description": "Extension's _locales/<lang>/messages.json had a JSON parse error"
+  },
+
+  "tray.show": {
+    "message": "Show",
+    "description": "Tray menu — show the floating window"
+  },
+  "tray.new_chat": {
+    "message": "New Chat Window",
+    "description": "Tray menu — open a new chat window"
+  },
+  "tray.settings": {
+    "message": "Settings",
+    "description": "Tray menu — open the settings window"
+  },
+  "tray.quit": {
+    "message": "Quit",
+    "description": "Tray menu — exit the application"
+  },
+
+  "window.title.chat": {
+    "message": "Kage Chat",
+    "description": "Title bar for chat windows"
+  },
+  "window.title.settings": {
+    "message": "Settings — Kage",
+    "description": "Title bar for the settings window"
+  },
+  "window.title.welcome": {
+    "message": "Welcome to Kage",
+    "description": "Title bar for the welcome / first-run window"
+  },
+  "window.title.store": {
+    "message": "Extension Store — Kage",
+    "description": "Title bar for the extension store window"
+  },
+  "window.title.select_folder": {
+    "message": "Select Folder to Organize",
+    "description": "Title for the folder picker dialog opened by the organize-files tool"
+  },
+
+  "settings.appearance.title": {
+    "message": "Appearance",
+    "description": "Settings sidebar — Appearance section header"
+  },
+  "settings.appearance.theme.label": {
+    "message": "Theme",
+    "description": "Settings — Theme dropdown label"
+  },
+  "settings.appearance.theme.description": {
+    "message": "Choose your preferred theme or follow system settings.",
+    "description": "Settings — Theme dropdown helper text"
+  },
+  "settings.appearance.theme.system": {
+    "message": "System",
+    "description": "Theme option — follow OS theme"
+  },
+  "settings.appearance.theme.light": {
+    "message": "Light",
+    "description": "Theme option — light mode"
+  },
+  "settings.appearance.theme.dark": {
+    "message": "Dark",
+    "description": "Theme option — dark mode"
+  },
+  "settings.appearance.language.label": {
+    "message": "Language",
+    "description": "Settings — Language dropdown label"
+  },
+  "settings.appearance.language.description": {
+    "message": "Choose the display language. Restart may be required for some text.",
+    "description": "Settings — Language dropdown helper text"
+  },
+  "settings.appearance.language.system": {
+    "message": "System default ({detected})",
+    "description": "Language option — follow OS locale, with the detected language shown in parens"
+  },
+  "settings.appearance.language.machine_translated_warning": {
+    "message": "This language was machine-translated. Please report errors at our GitHub issues page.",
+    "description": "Banner shown when the active language was filled in by the seed script"
+  },
+
+  "common.ok": {
+    "message": "OK",
+    "description": "Generic acknowledgement button"
+  },
+  "common.cancel": {
+    "message": "Cancel",
+    "description": "Generic cancel button"
+  },
+  "common.save": {
+    "message": "Save",
+    "description": "Generic save button"
+  },
+  "common.delete": {
+    "message": "Delete",
+    "description": "Generic delete button"
+  },
+  "common.confirm": {
+    "message": "Confirm",
+    "description": "Generic confirmation button"
+  },
+  "common.copy": {
+    "message": "Copy",
+    "description": "Generic copy button"
+  },
+  "common.copied_to_clipboard": {
+    "message": "Copied to clipboard",
+    "description": "Toast shown after a copy action"
+  },
+  "common.unknown_error": {
+    "message": "An unknown error occurred",
+    "description": "Generic fallback when no specific error is available"
+  },
+  "common.loading": {
+    "message": "Loading…",
+    "description": "Generic loading indicator label"
+  }
+}

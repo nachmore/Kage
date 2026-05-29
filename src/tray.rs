@@ -1,4 +1,5 @@
 use crate::events;
+use crate::t;
 use crate::window_labels;
 use log::info;
 use tauri::{
@@ -7,16 +8,22 @@ use tauri::{
     Manager,
 };
 
-/// Build and configure the system tray icon with menu
+/// Build and configure the system tray icon with menu.
+///
+/// Production menu items are translated via the i18n catalog so a German user
+/// gets "Anzeigen" / "Beenden" instead of "Show" / "Quit". Dev-only items
+/// stay English — they're a debug surface, not a user-facing one.
 pub fn setup_tray(app: &mut tauri::App, dev_mode: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let show = MenuItemBuilder::with_id("show", "Show").build(app)?;
+    let show = MenuItemBuilder::with_id("show", t!("tray.show")).build(app)?;
     let new_chat_window =
-        MenuItemBuilder::with_id("new-chat-window", "New Chat Window").build(app)?;
-    let settings = MenuItemBuilder::with_id("settings", "Settings").build(app)?;
-    let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
+        MenuItemBuilder::with_id("new-chat-window", t!("tray.new_chat")).build(app)?;
+    let settings = MenuItemBuilder::with_id("settings", t!("tray.settings")).build(app)?;
+    let quit = MenuItemBuilder::with_id("quit", t!("tray.quit")).build(app)?;
 
     let menu = if dev_mode {
         info!("Dev mode enabled - adding developer menu items");
+        // Dev-only items stay English. They're surfaced behind /dev mode and
+        // exist for engineers debugging the app, not for end users.
         let inspect = MenuItemBuilder::with_id("inspect", "Inspect Chat").build(app)?;
         let inspect_floating =
             MenuItemBuilder::with_id("inspect-floating", "Inspect Floating").build(app)?;

@@ -109,6 +109,11 @@ rand = "0.9"
 # lets store_install_inner drop the heavyweight `ring` API.
 sha2 = "0.10"
 hex = "0.4"
+# OS locale detection so the i18n module can default to the user's system
+# language when `config.ui.language` is unset. Tiny, zero-deps crate that
+# wraps the platform-native API on each OS (CFLocale on macOS,
+# GetUserDefaultLocaleName on Windows, $LANG / $LC_* on Linux).
+sys-locale = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

@@ -2808,6 +2808,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "signal-hook 0.4.3",
+ "sys-locale",
  "tauri",
  "tauri-build",
  "tauri-plugin-aptabase",

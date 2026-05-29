@@ -532,6 +532,12 @@ pub struct UiConfig {
     pub time_format: String,
     #[serde(default = "default_date_format")]
     pub date_format: String,
+    /// UI language code (e.g. "en", "ja", "ar"). When unset, falls back to
+    /// the OS locale via `sys_locale::get_locale()`. The runtime catalog
+    /// resolver then strips region tags ("en-GB" → "en") if no exact match
+    /// is shipped. See `src/i18n.rs`.
+    #[serde(default)]
+    pub language: Option<String>,
 }
 
 fn default_theme() -> String {
@@ -1025,6 +1031,7 @@ impl Default for Config {
                 speech_voice: None,
                 time_format: "HH:mm".to_string(),
                 date_format: "ddd, MMM D".to_string(),
+                language: None,
             },
             system: SystemConfig {
                 auto_start: false,

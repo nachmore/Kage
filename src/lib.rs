@@ -19,6 +19,7 @@ pub mod error;
 pub mod events;
 pub mod extensions;
 pub mod hotkey_norm;
+pub mod i18n;
 pub mod link_metadata_cache;
 pub mod lock_ext;
 pub mod logger;
