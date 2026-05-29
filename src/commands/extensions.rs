@@ -153,6 +153,101 @@ pub async fn load_theme_colors(
 // Read extension file content (for loading user-installed extension JS/CSS)
 // ---------------------------------------------------------------------------
 
+/// Load an extension's `_locales/<lang>/messages.json`. Falls back through
+/// region-stripped variants ("zh-CN" → "zh") and finally to "en". Returns the
+/// catalog as a JSON object so the host can hand it directly to the sandbox
+/// runtime; an extension with no `_locales/` ships back an empty object,
+/// which the runtime treats as "no translations, render keys verbatim".
+///
+/// Path-containment is validated identically to `read_extension_file` to
+/// keep extensions from escaping their own directory via `..` segments in
+/// the language code. The language argument is restricted to a small
+/// alphabet (letters, digits, hyphens) for the same reason.
+#[tauri::command]
+pub async fn read_extension_locale(
+    extension_id: String,
+    kind: String,
+    language: String,
+) -> Result<serde_json::Value, AppError> {
+    extensions::validate_extension_id(&extension_id).map_err(|e| {
+        AppError::keyed(
+            crate::error::ErrorKind::Internal,
+            "errors.extension.invalid_id",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+
+    if !language
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        || language.is_empty()
+        || language.len() > 16
+    {
+        return Err(AppError::keyed(
+            crate::error::ErrorKind::Internal,
+            "errors.extension.invalid_locale",
+            &[("language", &language)],
+        ));
+    }
+
+    let subdir = extensions::kind_to_subdir(&kind).map_err(|e| {
+        AppError::keyed(
+            crate::error::ErrorKind::Internal,
+            "errors.extension.invalid_kind",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+    let base = extensions::user_item_dir(subdir).map_err(|e| {
+        AppError::keyed(
+            crate::error::ErrorKind::Internal,
+            "errors.extension.dir_unavailable",
+            &[("reason", &e.to_string())],
+        )
+    })?;
+    let ext_root = base.join(&extension_id);
+    let locales_dir = ext_root.join("_locales");
+
+    // Try the requested language, then region-stripped form, then en. The
+    // first hit wins; an entirely-absent _locales directory returns `{}`.
+    let candidates: Vec<String> = {
+        let mut out = vec![language.clone()];
+        if let Some((stem, _)) = language.split_once('-') {
+            if !out.contains(&stem.to_string()) {
+                out.push(stem.to_string());
+            }
+        }
+        if !out.iter().any(|c| c == "en") {
+            out.push("en".to_string());
+        }
+        out
+    };
+
+    for cand in &candidates {
+        let path = locales_dir.join(cand).join("messages.json");
+        if !path.exists() {
+            continue;
+        }
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            AppError::keyed(
+                crate::error::ErrorKind::Internal,
+                "errors.extension.locale_read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
+        let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+            AppError::keyed(
+                crate::error::ErrorKind::Internal,
+                "errors.extension.locale_parse_failed",
+                &[("language", cand), ("reason", &e.to_string())],
+            )
+        })?;
+        return Ok(value);
+    }
+
+    // No catalog at all — return an empty object so the runtime can still boot.
+    Ok(serde_json::json!({}))
+}
+
 /// Read a file from a user-installed extension's directory.
 /// Returns the file content as a string. Used by the frontend to dynamically
 /// load search providers and settings modules from user-installed extensions.

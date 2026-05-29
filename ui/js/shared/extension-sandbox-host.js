@@ -102,6 +102,13 @@ export class ExtensionSandbox {
         this.sharedSources = spec.sharedSources || {};
         /** Name → UMD/IIFE source map for allow-listed vendor globals. */
         this.vendorSources = spec.vendorSources || {};
+        // i18n payload — host-resolved before sandbox start.
+        // The host calls `read_extension_locale(id, kind, lang)` for the
+        // active locale and EN, then hands the resulting JSON over here.
+        this.i18nCatalog = spec.i18nCatalog || {};
+        this.i18nFallback = spec.i18nFallback || {};
+        this.i18nLanguage = spec.i18nLanguage || 'en';
+        this.i18nRtl = !!spec.i18nRtl;
         this._rawInvoke = rawInvoke;
         this._container = container;
 
@@ -182,6 +189,14 @@ export class ExtensionSandbox {
                 sources: this.sources,
                 sharedSources: this.sharedSources,
                 vendorSources: this.vendorSources,
+                // i18n payload — host already fetched the matched
+                // `_locales/<lang>/messages.json` for the active language
+                // and an EN fallback. The runtime exposes them via
+                // `context.i18n.t(key, vars)` to the extension.
+                i18nCatalog: this.i18nCatalog || {},
+                i18nFallback: this.i18nFallback || {},
+                i18nLanguage: this.i18nLanguage || 'en',
+                i18nRtl: !!this.i18nRtl,
             },
             { ackType: 'init-ack' }
         );

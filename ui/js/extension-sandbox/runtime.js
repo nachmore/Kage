@@ -34,6 +34,19 @@ let hostPort = null;
 /** @type {any} */
 let extensionConfig = {};
 
+/**
+ * Per-extension i18n state. Populated from the host's `init` message:
+ *   - `catalog`: the matched `_locales/<lang>/messages.json` payload, OR
+ *     the EN fallback when the active language has no translation file.
+ *   - `fallback`: the EN catalog. Used when a key is missing from `catalog`.
+ *   - `language`: the resolved language code (after region-strip / fallback).
+ *   - `rtl`: whether the active language is right-to-left.
+ *
+ * The runtime exposes `context.i18n.t(key, vars)` to extensions; the lookup
+ * goes catalog → fallback → literal-key, mirroring host i18n semantics.
+ */
+let i18nState = { catalog: {}, fallback: {}, language: 'en', rtl: false };
+
 /** Cache of vendor sources provided at init time. Used by runSandboxed()
  *  to inject allow-listed libraries into per-call Workers. */
 let vendorSourcesCache = {};
@@ -103,7 +116,132 @@ function buildContext() {
         warn: (...a) => log('warn', ...a),
         error: (...a) => log('error', ...a),
     };
-    return { invoke, config: extensionConfig, log: extLog, runSandboxed };
+    // i18n proxy. Lives on `context.i18n.t(key, vars)`. Implementation is a
+    // self-contained ICU MessageFormat subset (simple sub + plural + select)
+    // so extensions don't need to load the host's i18n.js. It's identical in
+    // behaviour to the host implementation and shares the test suite.
+    const i18n = {
+        t(key, vars) {
+            const tpl =
+                i18nState.catalog?.[key]?.message ?? i18nState.fallback?.[key]?.message ?? key;
+            return formatIcu(tpl, vars || {}, i18nState.language || 'en');
+        },
+        language() {
+            return i18nState.language || 'en';
+        },
+        isRtl() {
+            return !!i18nState.rtl;
+        },
+    };
+    return { invoke, config: extensionConfig, log: extLog, runSandboxed, i18n };
+}
+
+// --- ICU MessageFormat subset (kept in sync with ui/js/shared/i18n.js) -------
+
+function formatIcu(template, vars, locale) {
+    if (typeof template !== 'string' || !template.includes('{')) return template || '';
+    let out = '';
+    let i = 0;
+    while (i < template.length) {
+        const ch = template[i];
+        if (ch !== '{') {
+            out += ch;
+            i++;
+            continue;
+        }
+        const close = findMatchingBrace(template, i);
+        if (close < 0) {
+            out += template.slice(i);
+            break;
+        }
+        const inner = template.slice(i + 1, close);
+        out += expandIcuPlaceholder(inner, vars, locale);
+        i = close + 1;
+    }
+    return out;
+}
+
+function findMatchingBrace(s, start) {
+    let depth = 0;
+    for (let j = start; j < s.length; j++) {
+        if (s[j] === '{') depth++;
+        else if (s[j] === '}') {
+            depth--;
+            if (depth === 0) return j;
+        }
+    }
+    return -1;
+}
+
+function expandIcuPlaceholder(inner, vars, locale) {
+    const top = splitTopLevel(inner, ',');
+    if (top.length === 1) {
+        const name = inner.trim();
+        const v = vars[name];
+        return v === undefined || v === null ? '{' + name + '}' : String(v);
+    }
+    const [varName, kind, ...rest] = top.map((s) => s.trim());
+    const body = rest.join(', ').trim();
+    if (kind === 'plural') return expandIcuPlural(varName, body, vars, locale);
+    if (kind === 'select') return expandIcuSelect(varName, body, vars, locale);
+    return '{' + inner + '}';
+}
+
+function splitTopLevel(s, sep) {
+    const out = [];
+    let depth = 0;
+    let buf = '';
+    for (const ch of s) {
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        if (depth === 0 && ch === sep) {
+            out.push(buf);
+            buf = '';
+        } else {
+            buf += ch;
+        }
+    }
+    out.push(buf);
+    return out;
+}
+
+function parseIcuArms(body) {
+    const arms = new Map();
+    let i = 0;
+    while (i < body.length) {
+        while (i < body.length && /\s/.test(body[i])) i++;
+        if (i >= body.length) break;
+        const keyEnd = body.indexOf('{', i);
+        if (keyEnd < 0) break;
+        const key = body.slice(i, keyEnd).trim();
+        const close = findMatchingBrace(body, keyEnd);
+        if (close < 0) break;
+        arms.set(key, body.slice(keyEnd + 1, close));
+        i = close + 1;
+    }
+    return arms;
+}
+
+function expandIcuPlural(varName, body, vars, locale) {
+    const count = vars[varName];
+    const arms = parseIcuArms(body);
+    let arm = arms.get('=' + count);
+    if (arm === undefined) {
+        let cat = 'other';
+        try {
+            cat = new Intl.PluralRules(locale).select(Number(count));
+        } catch {
+            // bad locale or non-numeric count — fall through.
+        }
+        arm = arms.get(cat) || arms.get('other') || '';
+    }
+    return formatIcu(arm.replaceAll('#', String(count)), vars, locale);
+}
+
+function expandIcuSelect(varName, body, vars, locale) {
+    const value = String(vars[varName] ?? '');
+    const arms = parseIcuArms(body);
+    return formatIcu(arms.get(value) || arms.get('other') || '', vars, locale);
 }
 
 /**
@@ -456,6 +594,16 @@ function registerSharedModules(sharedSources) {
 async function initExtension(init) {
     extensionConfig = init.config || {};
     vendorSourcesCache = init.vendorSources || {};
+    // i18n payload: catalog + fallback + active language + RTL flag. Each
+    // is plain JSON; the host fetched the right `_locales/<lang>/messages.json`
+    // before sending init. A missing payload (older host or extension with
+    // no `_locales/`) collapses to literal-key rendering.
+    i18nState = {
+        catalog: init.i18nCatalog || {},
+        fallback: init.i18nFallback || {},
+        language: init.i18nLanguage || 'en',
+        rtl: !!init.i18nRtl,
+    };
 
     const context = buildContext();
     const sources = init.sources || {};

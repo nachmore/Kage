@@ -675,6 +675,7 @@ async fn run() {
             commands::get_i18n_catalog,
             commands::get_available_languages,
             commands::set_language,
+            commands::read_extension_locale,
             commands::send_message_streaming,
             commands::check_connection,
             commands::open_chat_with_message,

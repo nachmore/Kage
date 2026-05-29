@@ -72,6 +72,98 @@ const WIDGET_FAILURE_TRIP_THRESHOLD = 3;
 import { normalizePermissions } from './extension-permissions.js';
 import { ExtensionSandboxPool } from './extension-sandbox-host.js';
 import { sanitizeExtensionHtml, findExtActions } from './extension-html-sanitizer.js';
+import { activeLanguage as hostLanguage, isRtl as hostIsRtl } from './i18n.js';
+
+// --- Extension i18n helpers --------------------------------------------------
+//
+// Each extension can ship `_locales/<lang>/messages.json` files following the
+// same shape as the host catalog. The host fetches the active locale's
+// catalog plus the EN fallback at extension load time; both are passed to
+// the sandbox runtime so its `context.i18n.t(key, vars)` proxy can render
+// without a per-call IPC roundtrip.
+//
+// For bundled extensions we fetch via HTTP from the in-binary asset path; for
+// user-installed extensions we go through the `read_extension_locale` Tauri
+// command (which validates the extension id and stays inside the user dir).
+
+async function _fetchBundledJson(path) {
+    try {
+        const r = await fetch(path);
+        if (!r.ok) return null;
+        return await r.json();
+    } catch {
+        return null;
+    }
+}
+
+function _stripCatalogMeta(catalog) {
+    if (!catalog || typeof catalog !== 'object') return {};
+    const out = {};
+    for (const [k, v] of Object.entries(catalog)) {
+        if (k.startsWith('_')) continue;
+        out[k] = v;
+    }
+    return out;
+}
+
+/**
+ * Resolve `__MSG_key__` tokens in the manifest's localizable fields against
+ * the extension's catalog (with EN fallback). Returns a shallow clone so the
+ * original manifest stays in wire form for places that hash / compare it.
+ *
+ * Chrome convention: any string-typed field that starts and ends with
+ * `__MSG_` and `__` is a translation token. We only resolve `name` and
+ * `description` for now — those are the user-visible ones; other manifest
+ * fields are wire data.
+ */
+export function applyManifestI18n(manifest, catalog, fallback) {
+    const out = { ...manifest };
+    for (const field of ['name', 'description']) {
+        const v = manifest[field];
+        if (typeof v !== 'string' || !v.startsWith('__MSG_') || !v.endsWith('__')) continue;
+        const key = v.slice(6, -2);
+        const entry = catalog?.[key] || fallback?.[key];
+        if (entry?.message) out[field] = entry.message;
+    }
+    return out;
+}
+
+async function _resolveExtensionCatalog(fetchByCode) {
+    const want = [hostLanguage(), 'en'];
+    let catalog = {};
+    let fallback = {};
+    // Try to land the active language first; fall through to the
+    // region-stripped form if needed.
+    const tried = new Set();
+    for (const code of want) {
+        if (tried.has(code)) continue;
+        tried.add(code);
+        const c = await fetchByCode(code);
+        if (c && Object.keys(c).length) {
+            catalog = _stripCatalogMeta(c);
+            break;
+        }
+        if (code.includes('-')) {
+            const stem = code.split('-')[0];
+            if (!tried.has(stem)) {
+                tried.add(stem);
+                const c2 = await fetchByCode(stem);
+                if (c2 && Object.keys(c2).length) {
+                    catalog = _stripCatalogMeta(c2);
+                    break;
+                }
+            }
+        }
+    }
+    const en = await fetchByCode('en');
+    if (en) fallback = _stripCatalogMeta(en);
+    return {
+        catalog,
+        fallback,
+        language: hostLanguage(),
+        rtl: hostIsRtl(),
+    };
+}
 
 export class ExtensionManager {
     /**
@@ -177,6 +269,12 @@ export class ExtensionManager {
         const sharedSources = sources.sharedSources;
         delete sources.sharedSources;
         const vendorSources = await this._fetchVendorSources(manifest);
+        const i18n = await this._fetchExtensionLocaleBundled(basePath);
+        // Resolve __MSG_*__ tokens in the manifest's name/description so
+        // search results, settings rows, and the store all show localised
+        // labels. Mutates a copy so the original manifest stays the wire
+        // form (used elsewhere for hashes / etc.).
+        ext.localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
         if (this._hasSandboxedProvider(sources)) {
             try {
                 ext.sandbox = await this._pool.load({
@@ -186,6 +284,10 @@ export class ExtensionManager {
                     sources,
                     sharedSources,
                     vendorSources,
+                    i18nCatalog: i18n.catalog,
+                    i18nFallback: i18n.fallback,
+                    i18nLanguage: i18n.language,
+                    i18nRtl: i18n.rtl,
                 });
             } catch (e) {
                 console.warn(`Sandbox boot failed for '${id}':`, e);
@@ -218,6 +320,8 @@ export class ExtensionManager {
         const sharedSources = sources.sharedSources;
         delete sources.sharedSources;
         const vendorSources = await this._fetchVendorSources(manifest);
+        const i18n = await this._fetchExtensionLocaleUser(id, manifest);
+        ext.localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
         if (this._hasSandboxedProvider(sources)) {
             try {
                 ext.sandbox = await this._pool.load({
@@ -227,6 +331,10 @@ export class ExtensionManager {
                     sources,
                     sharedSources,
                     vendorSources,
+                    i18nCatalog: i18n.catalog,
+                    i18nFallback: i18n.fallback,
+                    i18nLanguage: i18n.language,
+                    i18nRtl: i18n.rtl,
                 });
             } catch (e) {
                 console.warn(`Sandbox boot failed for user extension '${id}':`, e);
@@ -371,6 +479,38 @@ export class ExtensionManager {
      * @returns {Promise<Record<string,string> | undefined>}
      *   Map of allow-list name → source text, or undefined if none.
      */
+    /**
+     * Fetch a bundled extension's `_locales/<lang>/messages.json` for the
+     * currently active host language, plus the EN fallback. Resolves to
+     * empty catalogs if the extension ships no `_locales/` directory.
+     */
+    async _fetchExtensionLocaleBundled(basePath) {
+        return _resolveExtensionCatalog(async (code) => {
+            return await _fetchBundledJson(`${basePath}/_locales/${code}/messages.json`);
+        });
+    }
+
+    /**
+     * Fetch a user-installed extension's locale catalog via the Tauri command
+     * `read_extension_locale`, which path-validates the extension id and
+     * stays inside the user dir.
+     */
+    async _fetchExtensionLocaleUser(id, manifest) {
+        const kind = manifest?.type || 'extension';
+        return _resolveExtensionCatalog(async (code) => {
+            try {
+                const v = await this.invoke('read_extension_locale', {
+                    extensionId: id,
+                    kind,
+                    language: code,
+                });
+                return v && typeof v === 'object' ? v : null;
+            } catch {
+                return null;
+            }
+        });
+    }
+
     async _fetchVendorSources(manifest) {
         const list = Array.isArray(manifest?.sandboxVendor) ? manifest.sandboxVendor : null;
         if (!list || list.length === 0) return undefined;
