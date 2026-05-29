@@ -1,10 +1,11 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * MCP Settings Module
  */
 export class McpSettingsModule extends SettingsModule {
     constructor() {
-        super('mcp', 'MCP Servers', '🔌');
+        super('mcp', t('settings.mcp.title'), '🔌');
         this._mcpConfig = null;
         this._mcpPath = null;
     }
@@ -15,19 +16,19 @@ export class McpSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 <div class="setting-row">
-                    <div class="setting-label">Configuration File</div>
+                    <div class="setting-label">${t('settings.mcp.config_file.label')}</div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <div class="setting-description" id="mcpPathDisplay" style="font-family: monospace; font-size: 12px; word-break: break-all; flex: 1;"></div>
-                        <button class="setting-button" id="mcpOpenFileBtn" style="font-size: 12px; flex-shrink: 0;">Browse...</button>
+                        <button class="setting-button" id="mcpOpenFileBtn" style="font-size: 12px; flex-shrink: 0;">${t('settings.mcp.browse_btn')}</button>
                     </div>
                 </div>
 
                 <div class="setting-row">
-                    <div class="setting-label">Servers</div>
-                    <div class="setting-description">MCP servers provide tools the agent can use. Built-in servers are managed by Kage.</div>
+                    <div class="setting-label">${t('settings.mcp.servers.label')}</div>
+                    <div class="setting-description">${t('settings.mcp.servers.description')}</div>
                     <div id="mcpServerList" style="margin-top: 8px;"></div>
                     <div style="margin-top: 10px;">
-                        <button class="setting-button" id="mcpAddServerBtn" style="font-size: 12px;">+ Add Server</button>
+                        <button class="setting-button" id="mcpAddServerBtn" style="font-size: 12px;">${t('settings.mcp.servers.add_btn')}</button>
                     </div>
                 </div>
             </div>
@@ -70,7 +71,7 @@ export class McpSettingsModule extends SettingsModule {
             try {
                 const { open } = window.__TAURI__.dialog;
                 const selected = await open({
-                    title: 'Select MCP configuration file',
+                    title: t('settings.mcp.browse_dialog_title'),
                     filters: [{ name: 'JSON', extensions: ['json'] }],
                     defaultPath: this._mcpPath || undefined,
                 });
@@ -95,9 +96,9 @@ export class McpSettingsModule extends SettingsModule {
         return [
             {
                 key: 'kage-computer-control',
-                name: 'Computer Control',
+                name: t('settings.mcp.builtin.computer_control.name'),
                 icon: '🖥️',
-                description: 'UI automation, app launching, and desktop interaction',
+                description: t('settings.mcp.builtin.computer_control.description'),
                 builtin: true,
                 getCommand: () => {
                     // The command is the path to the MCP binary next to the main exe
@@ -127,7 +128,7 @@ export class McpSettingsModule extends SettingsModule {
                 <div class="mcp-server-info">
                     <span class="mcp-server-icon">${b.icon}</span>
                     <div class="mcp-server-details">
-                        <div class="mcp-server-name">${b.name} <span class="mcp-server-badge">Built-in</span></div>
+                        <div class="mcp-server-name">${b.name} <span class="mcp-server-badge">${t('settings.mcp.badge.builtin')}</span></div>
                         <div class="mcp-server-desc">${b.description}</div>
                     </div>
                 </div>
@@ -157,10 +158,10 @@ export class McpSettingsModule extends SettingsModule {
                     </div>
                 </div>
                 <div class="mcp-server-actions">
-                    <button class="mcp-server-edit-btn" data-key="${esc(key)}" title="Edit">
+                    <button class="mcp-server-edit-btn" data-key="${esc(key)}" title="${t('settings.mcp.action.edit_title')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button class="mcp-server-delete-btn" data-key="${esc(key)}" title="Remove">
+                    <button class="mcp-server-delete-btn" data-key="${esc(key)}" title="${t('settings.mcp.action.delete_title')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>
                     <label class="kage-toggle">
@@ -172,8 +173,7 @@ export class McpSettingsModule extends SettingsModule {
         }
 
         if (!html) {
-            html =
-                '<div style="color: var(--kage-text-muted); font-size: 12px; padding: 8px 0;">No MCP servers configured.</div>';
+            html = `<div style="color: var(--kage-text-muted); font-size: 12px; padding: 8px 0;">${t('settings.mcp.servers.empty')}</div>`;
         }
 
         list.innerHTML = html;
@@ -225,7 +225,7 @@ export class McpSettingsModule extends SettingsModule {
         list.querySelectorAll('.mcp-server-delete-btn').forEach((btn) => {
             btn.addEventListener('click', async () => {
                 const key = btn.dataset.key;
-                if (!confirm(`Remove MCP server "${key}"?`)) return;
+                if (!confirm(t('settings.mcp.delete_confirm', { key }))) return;
                 const servers = this._mcpConfig.mcpServers || {};
                 delete servers[key];
                 await invoke('save_mcp_config', { path: null, config: this._mcpConfig });
@@ -249,18 +249,18 @@ export class McpSettingsModule extends SettingsModule {
         overlay.className = 'mcp-dialog-overlay';
         overlay.innerHTML = `
             <div class="mcp-dialog">
-                <div class="mcp-dialog-title">${isEdit ? 'Edit' : 'Add'} MCP Server</div>
-                <label class="mcp-dialog-label">Name (unique key)</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" value="${isEdit ? editKey : ''}" ${isEdit ? 'disabled' : ''} placeholder="e.g. my-server">
-                <label class="mcp-dialog-label">Command</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" value="${existing.command || ''}" placeholder="e.g. python, uvx, node">
-                <label class="mcp-dialog-label">Arguments (one per line)</label>
-                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" placeholder="e.g. -m my_server">${(existing.args || []).join('\n')}</textarea>
-                <label class="mcp-dialog-label">Working Directory (optional)</label>
-                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" value="${existing.cwd || ''}" placeholder="Leave empty for default">
+                <div class="mcp-dialog-title">${isEdit ? t('settings.mcp.dialog.edit_title') : t('settings.mcp.dialog.add_title')}</div>
+                <label class="mcp-dialog-label">${t('settings.mcp.dialog.name.label')}</label>
+                <input class="setting-input mcp-dialog-input" id="mcpDialogKey" value="${isEdit ? editKey : ''}" ${isEdit ? 'disabled' : ''} placeholder="${t('settings.mcp.dialog.name.placeholder')}">
+                <label class="mcp-dialog-label">${t('settings.mcp.dialog.command.label')}</label>
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCmd" value="${existing.command || ''}" placeholder="${t('settings.mcp.dialog.command.placeholder')}">
+                <label class="mcp-dialog-label">${t('settings.mcp.dialog.args.label')}</label>
+                <textarea class="setting-input mcp-dialog-input" id="mcpDialogArgs" rows="3" placeholder="${t('settings.mcp.dialog.args.placeholder')}">${(existing.args || []).join('\n')}</textarea>
+                <label class="mcp-dialog-label">${t('settings.mcp.dialog.cwd.label')}</label>
+                <input class="setting-input mcp-dialog-input" id="mcpDialogCwd" value="${existing.cwd || ''}" placeholder="${t('settings.mcp.dialog.cwd.placeholder')}">
                 <div class="mcp-dialog-actions">
-                    <button class="setting-button" id="mcpDialogCancel">Cancel</button>
-                    <button class="setting-button mcp-dialog-save" id="mcpDialogSave">${isEdit ? 'Save' : 'Add'}</button>
+                    <button class="setting-button" id="mcpDialogCancel">${t('common.cancel')}</button>
+                    <button class="setting-button mcp-dialog-save" id="mcpDialogSave">${isEdit ? t('settings.mcp.dialog.save') : t('settings.mcp.dialog.add')}</button>
                 </div>
             </div>
         `;
@@ -282,7 +282,7 @@ export class McpSettingsModule extends SettingsModule {
             const cwd = document.getElementById('mcpDialogCwd').value.trim();
 
             if (!key || !cmd) {
-                alert('Name and command are required.');
+                alert(t('settings.mcp.dialog.required_alert'));
                 return;
             }
 

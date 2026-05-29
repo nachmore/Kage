@@ -2344,5 +2344,443 @@
     "description": "Tooltip on the copy button inside an Other-Agent session view",
     "_machine_translated": true,
     "_source_hash": "2b83ddd1a3d1d5e9"
+  },
+  "settings.mcp.title": {
+    "message": "Сервери MCP",
+    "description": "Settings header — MCP server management",
+    "_machine_translated": true,
+    "_source_hash": "73ce9af232f4185b"
+  },
+  "settings.mcp.config_file.label": {
+    "message": "Файл конфігурації",
+    "description": "Label for the MCP config file path",
+    "_machine_translated": true,
+    "_source_hash": "62305274cd443394"
+  },
+  "settings.mcp.browse_btn": {
+    "message": "Огляд…",
+    "description": "Button to pick a different MCP config file",
+    "_machine_translated": true,
+    "_source_hash": "6b189279f7a4767c"
+  },
+  "settings.mcp.browse_dialog_title": {
+    "message": "Виберіть файл конфігурації MCP",
+    "description": "Title of the file picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "87f129646e8742a4"
+  },
+  "settings.mcp.servers.label": {
+    "message": "Сервери",
+    "description": "Label for the MCP server list",
+    "_machine_translated": true,
+    "_source_hash": "56b50079eafe6124"
+  },
+  "settings.mcp.servers.description": {
+    "message": "Сервери MCP надають інструменти, якими може користуватися агент. Вбудованими серверами керує Kage.",
+    "description": "Helper text under the server list",
+    "_machine_translated": true,
+    "_source_hash": "f8b8840726f6e6bb"
+  },
+  "settings.mcp.servers.add_btn": {
+    "message": "+ Додати сервер",
+    "description": "Button to add a custom MCP server",
+    "_machine_translated": true,
+    "_source_hash": "719ede95562cd509"
+  },
+  "settings.mcp.servers.empty": {
+    "message": "Сервери MCP не налаштовано.",
+    "description": "Empty state when no servers exist",
+    "_machine_translated": true,
+    "_source_hash": "941b5023c64bc7e4"
+  },
+  "settings.mcp.builtin.computer_control.name": {
+    "message": "Керування комп'ютером",
+    "description": "Built-in MCP server display name",
+    "_machine_translated": true,
+    "_source_hash": "4e00829341805bbb"
+  },
+  "settings.mcp.builtin.computer_control.description": {
+    "message": "Автоматизація інтерфейсу, запуск застосунків і взаємодія з робочим столом",
+    "description": "Built-in MCP server description",
+    "_machine_translated": true,
+    "_source_hash": "343e1db34dfb475f"
+  },
+  "settings.mcp.badge.builtin": {
+    "message": "Вбудований",
+    "description": "Pill shown next to built-in server names",
+    "_machine_translated": true,
+    "_source_hash": "b43ab70259798721"
+  },
+  "settings.mcp.action.edit_title": {
+    "message": "Редагувати",
+    "description": "Tooltip on the per-server edit button",
+    "_machine_translated": true,
+    "_source_hash": "a7c81da39e45c445"
+  },
+  "settings.mcp.action.delete_title": {
+    "message": "Видалити",
+    "description": "Tooltip on the per-server remove button",
+    "_machine_translated": true,
+    "_source_hash": "47a65e418423560a"
+  },
+  "settings.mcp.delete_confirm": {
+    "message": "Видалити сервер MCP «{key}»?",
+    "description": "Confirm dialog before deleting a server entry",
+    "_machine_translated": true,
+    "_source_hash": "c0765cbbddda511d"
+  },
+  "settings.mcp.dialog.add_title": {
+    "message": "Додати сервер MCP",
+    "description": "Dialog title in add mode",
+    "_machine_translated": true,
+    "_source_hash": "e6e720e4cd37ff90"
+  },
+  "settings.mcp.dialog.edit_title": {
+    "message": "Редагувати сервер MCP",
+    "description": "Dialog title in edit mode",
+    "_machine_translated": true,
+    "_source_hash": "f9bcf064b78d46cd"
+  },
+  "settings.mcp.dialog.name.label": {
+    "message": "Назва (унікальний ключ)",
+    "description": "Label for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "d794f284e3be52c3"
+  },
+  "settings.mcp.dialog.name.placeholder": {
+    "message": "напр. my-server",
+    "description": "Placeholder for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "48702158caeda69b"
+  },
+  "settings.mcp.dialog.command.label": {
+    "message": "Команда",
+    "description": "Label for the command field",
+    "_machine_translated": true,
+    "_source_hash": "a7d69dd2259d43e4"
+  },
+  "settings.mcp.dialog.command.placeholder": {
+    "message": "напр. python, uvx, node",
+    "description": "Placeholder for the command field",
+    "_machine_translated": true,
+    "_source_hash": "3cc9cb0ffe06eab2"
+  },
+  "settings.mcp.dialog.args.label": {
+    "message": "Аргументи (по одному в рядку)",
+    "description": "Label for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "67d674c4a65bd1a2"
+  },
+  "settings.mcp.dialog.args.placeholder": {
+    "message": "напр. -m my_server",
+    "description": "Placeholder for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "9f8dc5eb97ed206b"
+  },
+  "settings.mcp.dialog.cwd.label": {
+    "message": "Робочий каталог (необов'язково)",
+    "description": "Label for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "ec9ebe23bcbcf59e"
+  },
+  "settings.mcp.dialog.cwd.placeholder": {
+    "message": "Залиште порожнім для типового",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "fcf53a41b61be4dc"
+  },
+  "settings.mcp.dialog.save": {
+    "message": "Зберегти",
+    "description": "Save button in the edit dialog",
+    "_machine_translated": true,
+    "_source_hash": "fad1506ba253655c"
+  },
+  "settings.mcp.dialog.add": {
+    "message": "Додати",
+    "description": "Add button in the add dialog",
+    "_machine_translated": true,
+    "_source_hash": "a1fcff2c765d3923"
+  },
+  "settings.mcp.dialog.required_alert": {
+    "message": "Потрібні назва та команда.",
+    "description": "alert() shown when the user tries to save without name or command",
+    "_machine_translated": true,
+    "_source_hash": "57d126d725a6cab2"
+  },
+  "settings.tool_permissions.title": {
+    "message": "Інструменти агента",
+    "description": "Settings header — agent tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "80fb0b916804491e"
+  },
+  "settings.tool_permissions.seen.label": {
+    "message": "Помічені інструменти",
+    "description": "Section label for the per-tool policy list",
+    "_machine_translated": true,
+    "_source_hash": "c67a166e40b4423f"
+  },
+  "settings.tool_permissions.seen.description": {
+    "message": "Інструменти, які запитував ШІ. Налаштуйте політику дозволів для кожного.",
+    "description": "Helper text under the seen-tools list",
+    "_machine_translated": true,
+    "_source_hash": "5691d86d6c9f652e"
+  },
+  "settings.tool_permissions.empty": {
+    "message": "Поки що інструментів не помічено. Вони з'являться тут, коли ШІ їх запитає.",
+    "description": "Empty-state for the tool list",
+    "_machine_translated": true,
+    "_source_hash": "6f6aa13ea94449cb"
+  },
+  "settings.tool_permissions.reset_btn": {
+    "message": "Скинути всі дозволи",
+    "description": "Button to clear every per-tool grant",
+    "_machine_translated": true,
+    "_source_hash": "9707b324e53eda38"
+  },
+  "settings.tool_permissions.reset_confirm": {
+    "message": "Це видалить усі дозволи інструментів і скине їх до «Завжди запитувати». Продовжити?",
+    "description": "Confirm dialog before resetting",
+    "_machine_translated": true,
+    "_source_hash": "3f0f9660ee47ffb9"
+  },
+  "settings.tool_permissions.audit.section": {
+    "message": "📜 Журнал аудиту",
+    "description": "Subsection header for the permission audit log",
+    "_machine_translated": true,
+    "_source_hash": "1e507496d13efce5"
+  },
+  "settings.tool_permissions.audit.label": {
+    "message": "Історія дозволів",
+    "description": "Section label for the audit log block",
+    "_machine_translated": true,
+    "_source_hash": "197987343bd8f777"
+  },
+  "settings.tool_permissions.audit.description": {
+    "message": "Тут фіксується кожне надання, відмова, відкликання, закінчення терміну дозволу й перемикання режиму термінатора. Журнал зберігається локально у звичайному JSON і його можна підробити — використовуйте його для вибіркової перевірки нещодавньої активності, а не для криміналістичного аудиту.",
+    "description": "Helper text above the audit log",
+    "_machine_translated": true,
+    "_source_hash": "89a4d589ba5c25e7"
+  },
+  "settings.tool_permissions.audit.filter.all": {
+    "message": "Усі події",
+    "description": "Filter dropdown — show all event kinds",
+    "_machine_translated": true,
+    "_source_hash": "ef963bd3d57a69e3"
+  },
+  "settings.tool_permissions.audit.filter.granted": {
+    "message": "Надано",
+    "description": "Filter — only granted events",
+    "_machine_translated": true,
+    "_source_hash": "1212c246579d078c"
+  },
+  "settings.tool_permissions.audit.filter.denied": {
+    "message": "Відмовлено",
+    "description": "Filter — only denied events",
+    "_machine_translated": true,
+    "_source_hash": "676ca92b6090dba1"
+  },
+  "settings.tool_permissions.audit.filter.revoked": {
+    "message": "Відкликано",
+    "description": "Filter — only revoked events",
+    "_machine_translated": true,
+    "_source_hash": "759102fc95ce6b1d"
+  },
+  "settings.tool_permissions.audit.filter.expired": {
+    "message": "Прострочено",
+    "description": "Filter — only expired events",
+    "_machine_translated": true,
+    "_source_hash": "3452d35f583fa87a"
+  },
+  "settings.tool_permissions.audit.filter.terminator": {
+    "message": "Режим термінатора",
+    "description": "Filter — only terminator-mode toggle events",
+    "_machine_translated": true,
+    "_source_hash": "c199053bdd3fc444"
+  },
+  "settings.tool_permissions.audit.refresh": {
+    "message": "Оновити",
+    "description": "Button to reload the audit log",
+    "_machine_translated": true,
+    "_source_hash": "2d04c572772d368a"
+  },
+  "settings.tool_permissions.audit.clear": {
+    "message": "Очистити журнал",
+    "description": "Button to clear the audit log",
+    "_machine_translated": true,
+    "_source_hash": "f3d923ca2eab5f8b"
+  },
+  "settings.tool_permissions.audit.clear_confirm": {
+    "message": "Очистити журнал аудиту дозволів? Цю дію неможливо скасувати. На самі дозволи це НЕ вплине.",
+    "description": "Confirm dialog before clearing the log",
+    "_machine_translated": true,
+    "_source_hash": "7eda4b2a9701119c"
+  },
+  "settings.tool_permissions.audit.loading": {
+    "message": "Завантаження…",
+    "description": "Placeholder while the audit log loads",
+    "_machine_translated": true,
+    "_source_hash": "b5be95290c2e30a2"
+  },
+  "settings.tool_permissions.audit.empty": {
+    "message": "Поки що немає записів аудиту. Події з'являться тут, коли ШІ запитуватиме інструменти.",
+    "description": "Empty state when the log has zero entries",
+    "_machine_translated": true,
+    "_source_hash": "8eb0dc8aa27fdbc9"
+  },
+  "settings.tool_permissions.audit.no_match": {
+    "message": "Немає записів, що відповідають поточному фільтру.",
+    "description": "Empty state when the log has entries but none match the filter",
+    "_machine_translated": true,
+    "_source_hash": "b73cd5372b419187"
+  },
+  "settings.tool_permissions.audit.unknown_time": {
+    "message": "(невідомий час)",
+    "description": "Fallback when an entry has no `at` timestamp",
+    "_machine_translated": true,
+    "_source_hash": "d58d9dfe6571a87b"
+  },
+  "settings.tool_permissions.audit.summary.granted": {
+    "message": "Надано <strong>{tool}</strong> ({grant_type})",
+    "description": "Audit row summary — grant event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6fc01e3b617d3f21"
+  },
+  "settings.tool_permissions.audit.summary.denied": {
+    "message": "Відхилено <strong>{tool}</strong>",
+    "description": "Audit row summary — deny event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "596b830083aa8dcb"
+  },
+  "settings.tool_permissions.audit.summary.revoked": {
+    "message": "Скасовано <strong>{tool}</strong>",
+    "description": "Audit row summary — revoke event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "9fdb75fada222cdb"
+  },
+  "settings.tool_permissions.audit.summary.expired": {
+    "message": "Термін дії <strong>{tool}</strong> завершився",
+    "description": "Audit row summary — expiry event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "39f8b0ef768e2c66"
+  },
+  "settings.tool_permissions.audit.summary.terminator_on": {
+    "message": "<strong>Режим термінатора ввімкнено</strong>",
+    "description": "Audit row summary — terminator mode turned on (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "55a291c1cb2f6ed6"
+  },
+  "settings.tool_permissions.audit.summary.terminator_off": {
+    "message": "Режим термінатора вимкнено",
+    "description": "Audit row summary — terminator mode turned off",
+    "_machine_translated": true,
+    "_source_hash": "2ad803948087380e"
+  },
+  "settings.tool_permissions.audit.summary.unknown": {
+    "message": "Невідома подія: {kind}",
+    "description": "Audit row summary — fallback for an unrecognised event kind",
+    "_machine_translated": true,
+    "_source_hash": "e83863444f8914a8"
+  },
+  "settings.tool_permissions.audit.meta.session": {
+    "message": "сеанс {id}",
+    "description": "Meta line — session id for the event",
+    "_machine_translated": true,
+    "_source_hash": "391248a6a222b60d"
+  },
+  "settings.tool_permissions.audit.meta.was_policy": {
+    "message": "було {policy}",
+    "description": "Meta line — prior policy for revoke/expiry events",
+    "_machine_translated": true,
+    "_source_hash": "482c7a4c90c5ff34"
+  },
+  "settings.tool_permissions.danger.section": {
+    "message": "⚠️ Небезпечна зона",
+    "description": "Subsection header for the terminator-mode toggle",
+    "_machine_translated": true,
+    "_source_hash": "cc3073aae24a0b5c"
+  },
+  "settings.tool_permissions.terminator.label": {
+    "message": "Режим термінатора",
+    "description": "Toggle: auto-approve all tool requests",
+    "_machine_translated": true,
+    "_source_hash": "08740ca3d23503e7"
+  },
+  "settings.tool_permissions.terminator.description": {
+    "message": "Автоматично схвалювати ВСІ запити інструментів без підтвердження. ШІ може читати, записувати, виконувати та видаляти без вашого дозволу.",
+    "description": "Helper text under the terminator toggle",
+    "_machine_translated": true,
+    "_source_hash": "1942ab049e1bedb9"
+  },
+  "settings.tool_permissions.terminator.confirm_full": {
+    "message": "Режим термінатора автоматично схвалюватиме ВСІ запити інструментів.\n\nШІ може читати, записувати, виконувати та видаляти без запиту.\n\nВи впевнені?",
+    "description": "Full confirm dialog body when enabling terminator (Tauri ask)",
+    "_machine_translated": true,
+    "_source_hash": "a1003aa098ccc14d"
+  },
+  "settings.tool_permissions.terminator.confirm_short": {
+    "message": "⚠️ Режим термінатора автоматично схвалюватиме ВСІ запити інструментів. Ви впевнені?",
+    "description": "Fallback confirm() when Tauri dialog API is unavailable",
+    "_machine_translated": true,
+    "_source_hash": "bdf26517d527622b"
+  },
+  "settings.tool_permissions.terminator.dialog_title": {
+    "message": "⚠️ Увімкнути режим термінатора",
+    "description": "Title of the confirm dialog",
+    "_machine_translated": true,
+    "_source_hash": "68f7764c337ba4b9"
+  },
+  "settings.tool_permissions.tool.last_seen": {
+    "message": "Останнє використання: {date}",
+    "description": "Per-tool meta line — last invocation date",
+    "_machine_translated": true,
+    "_source_hash": "6b79c17da83da7d3"
+  },
+  "settings.tool_permissions.tool.granted_at": {
+    "message": " · Надано: {date}",
+    "description": "Appended to last_seen for 24h grants",
+    "_machine_translated": true,
+    "_source_hash": "731ba36dc7a143c7"
+  },
+  "settings.tool_permissions.tool.badge.extension": {
+    "message": "Розширення",
+    "description": "Pill shown on extension-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "7896849cd04a7674"
+  },
+  "settings.tool_permissions.tool.badge.mcp": {
+    "message": "MCP",
+    "description": "Pill shown on MCP-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "2989363ea3d062a7"
+  },
+  "settings.tool_permissions.tool.policy.ask": {
+    "message": "Завжди запитувати",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "2d9891361b640554"
+  },
+  "settings.tool_permissions.tool.policy.allow_24h": {
+    "message": "Дозволити на 24 год",
+    "description": "Per-tool policy option — 24-hour grant",
+    "_machine_translated": true,
+    "_source_hash": "6192bb5c00b4e4c5"
+  },
+  "settings.tool_permissions.tool.policy.always_allow": {
+    "message": "Завжди дозволяти",
+    "description": "Per-tool policy option — persistent grant",
+    "_machine_translated": true,
+    "_source_hash": "99584d87918082a3"
+  },
+  "settings.tool_permissions.tool.policy.deny": {
+    "message": "Відхилити",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "d79610dc3c64434a"
+  },
+  "settings.tool_permissions.tool.remove_title": {
+    "message": "Видалити",
+    "description": "Tooltip on the per-tool remove button",
+    "_machine_translated": true,
+    "_source_hash": "310c8caf4846272c"
   }
 }

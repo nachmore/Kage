@@ -2344,5 +2344,443 @@
     "description": "Tooltip on the copy button inside an Other-Agent session view",
     "_machine_translated": true,
     "_source_hash": "2b83ddd1a3d1d5e9"
+  },
+  "settings.mcp.title": {
+    "message": "MCP 서버",
+    "description": "Settings header — MCP server management",
+    "_machine_translated": true,
+    "_source_hash": "73ce9af232f4185b"
+  },
+  "settings.mcp.config_file.label": {
+    "message": "구성 파일",
+    "description": "Label for the MCP config file path",
+    "_machine_translated": true,
+    "_source_hash": "62305274cd443394"
+  },
+  "settings.mcp.browse_btn": {
+    "message": "찾아보기…",
+    "description": "Button to pick a different MCP config file",
+    "_machine_translated": true,
+    "_source_hash": "6b189279f7a4767c"
+  },
+  "settings.mcp.browse_dialog_title": {
+    "message": "MCP 구성 파일 선택",
+    "description": "Title of the file picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "87f129646e8742a4"
+  },
+  "settings.mcp.servers.label": {
+    "message": "서버",
+    "description": "Label for the MCP server list",
+    "_machine_translated": true,
+    "_source_hash": "56b50079eafe6124"
+  },
+  "settings.mcp.servers.description": {
+    "message": "MCP 서버는 에이전트가 사용할 수 있는 도구를 제공합니다. 기본 제공 서버는 Kage가 관리합니다.",
+    "description": "Helper text under the server list",
+    "_machine_translated": true,
+    "_source_hash": "f8b8840726f6e6bb"
+  },
+  "settings.mcp.servers.add_btn": {
+    "message": "+ 서버 추가",
+    "description": "Button to add a custom MCP server",
+    "_machine_translated": true,
+    "_source_hash": "719ede95562cd509"
+  },
+  "settings.mcp.servers.empty": {
+    "message": "구성된 MCP 서버가 없습니다.",
+    "description": "Empty state when no servers exist",
+    "_machine_translated": true,
+    "_source_hash": "941b5023c64bc7e4"
+  },
+  "settings.mcp.builtin.computer_control.name": {
+    "message": "컴퓨터 제어",
+    "description": "Built-in MCP server display name",
+    "_machine_translated": true,
+    "_source_hash": "4e00829341805bbb"
+  },
+  "settings.mcp.builtin.computer_control.description": {
+    "message": "UI 자동화, 앱 실행, 데스크톱 상호작용",
+    "description": "Built-in MCP server description",
+    "_machine_translated": true,
+    "_source_hash": "343e1db34dfb475f"
+  },
+  "settings.mcp.badge.builtin": {
+    "message": "기본 제공",
+    "description": "Pill shown next to built-in server names",
+    "_machine_translated": true,
+    "_source_hash": "b43ab70259798721"
+  },
+  "settings.mcp.action.edit_title": {
+    "message": "편집",
+    "description": "Tooltip on the per-server edit button",
+    "_machine_translated": true,
+    "_source_hash": "a7c81da39e45c445"
+  },
+  "settings.mcp.action.delete_title": {
+    "message": "제거",
+    "description": "Tooltip on the per-server remove button",
+    "_machine_translated": true,
+    "_source_hash": "47a65e418423560a"
+  },
+  "settings.mcp.delete_confirm": {
+    "message": "MCP 서버 \"{key}\"을(를) 제거하시겠습니까?",
+    "description": "Confirm dialog before deleting a server entry",
+    "_machine_translated": true,
+    "_source_hash": "c0765cbbddda511d"
+  },
+  "settings.mcp.dialog.add_title": {
+    "message": "MCP 서버 추가",
+    "description": "Dialog title in add mode",
+    "_machine_translated": true,
+    "_source_hash": "e6e720e4cd37ff90"
+  },
+  "settings.mcp.dialog.edit_title": {
+    "message": "MCP 서버 편집",
+    "description": "Dialog title in edit mode",
+    "_machine_translated": true,
+    "_source_hash": "f9bcf064b78d46cd"
+  },
+  "settings.mcp.dialog.name.label": {
+    "message": "이름(고유 키)",
+    "description": "Label for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "d794f284e3be52c3"
+  },
+  "settings.mcp.dialog.name.placeholder": {
+    "message": "예: my-server",
+    "description": "Placeholder for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "48702158caeda69b"
+  },
+  "settings.mcp.dialog.command.label": {
+    "message": "명령",
+    "description": "Label for the command field",
+    "_machine_translated": true,
+    "_source_hash": "a7d69dd2259d43e4"
+  },
+  "settings.mcp.dialog.command.placeholder": {
+    "message": "예: python, uvx, node",
+    "description": "Placeholder for the command field",
+    "_machine_translated": true,
+    "_source_hash": "3cc9cb0ffe06eab2"
+  },
+  "settings.mcp.dialog.args.label": {
+    "message": "인수(한 줄에 하나씩)",
+    "description": "Label for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "67d674c4a65bd1a2"
+  },
+  "settings.mcp.dialog.args.placeholder": {
+    "message": "예: -m my_server",
+    "description": "Placeholder for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "9f8dc5eb97ed206b"
+  },
+  "settings.mcp.dialog.cwd.label": {
+    "message": "작업 디렉터리(선택 사항)",
+    "description": "Label for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "ec9ebe23bcbcf59e"
+  },
+  "settings.mcp.dialog.cwd.placeholder": {
+    "message": "기본값을 사용하려면 비워 두세요",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "fcf53a41b61be4dc"
+  },
+  "settings.mcp.dialog.save": {
+    "message": "저장",
+    "description": "Save button in the edit dialog",
+    "_machine_translated": true,
+    "_source_hash": "fad1506ba253655c"
+  },
+  "settings.mcp.dialog.add": {
+    "message": "추가",
+    "description": "Add button in the add dialog",
+    "_machine_translated": true,
+    "_source_hash": "a1fcff2c765d3923"
+  },
+  "settings.mcp.dialog.required_alert": {
+    "message": "이름과 명령어는 필수입니다.",
+    "description": "alert() shown when the user tries to save without name or command",
+    "_machine_translated": true,
+    "_source_hash": "57d126d725a6cab2"
+  },
+  "settings.tool_permissions.title": {
+    "message": "에이전트 도구",
+    "description": "Settings header — agent tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "80fb0b916804491e"
+  },
+  "settings.tool_permissions.seen.label": {
+    "message": "확인된 도구",
+    "description": "Section label for the per-tool policy list",
+    "_machine_translated": true,
+    "_source_hash": "c67a166e40b4423f"
+  },
+  "settings.tool_permissions.seen.description": {
+    "message": "AI가 사용을 요청한 도구입니다. 각 도구의 권한 정책을 설정하세요.",
+    "description": "Helper text under the seen-tools list",
+    "_machine_translated": true,
+    "_source_hash": "5691d86d6c9f652e"
+  },
+  "settings.tool_permissions.empty": {
+    "message": "아직 확인된 도구가 없습니다. AI가 도구를 요청하면 여기에 표시됩니다.",
+    "description": "Empty-state for the tool list",
+    "_machine_translated": true,
+    "_source_hash": "6f6aa13ea94449cb"
+  },
+  "settings.tool_permissions.reset_btn": {
+    "message": "모든 권한 재설정",
+    "description": "Button to clear every per-tool grant",
+    "_machine_translated": true,
+    "_source_hash": "9707b324e53eda38"
+  },
+  "settings.tool_permissions.reset_confirm": {
+    "message": "모든 도구 권한이 제거되고 모두 \"항상 묻기\"로 재설정됩니다. 계속하시겠습니까?",
+    "description": "Confirm dialog before resetting",
+    "_machine_translated": true,
+    "_source_hash": "3f0f9660ee47ffb9"
+  },
+  "settings.tool_permissions.audit.section": {
+    "message": "📜 감사 로그",
+    "description": "Subsection header for the permission audit log",
+    "_machine_translated": true,
+    "_source_hash": "1e507496d13efce5"
+  },
+  "settings.tool_permissions.audit.label": {
+    "message": "권한 기록",
+    "description": "Section label for the audit log block",
+    "_machine_translated": true,
+    "_source_hash": "197987343bd8f777"
+  },
+  "settings.tool_permissions.audit.description": {
+    "message": "모든 권한 부여, 거부, 취소, 만료, 터미네이터 모드 전환이 여기에 기록됩니다. 로그는 일반 JSON으로 로컬에 저장되며 변조될 수 있으므로, 최근 활동을 간단히 확인하는 용도로만 사용하고 정식 감사용으로는 사용하지 마세요.",
+    "description": "Helper text above the audit log",
+    "_machine_translated": true,
+    "_source_hash": "89a4d589ba5c25e7"
+  },
+  "settings.tool_permissions.audit.filter.all": {
+    "message": "모든 이벤트",
+    "description": "Filter dropdown — show all event kinds",
+    "_machine_translated": true,
+    "_source_hash": "ef963bd3d57a69e3"
+  },
+  "settings.tool_permissions.audit.filter.granted": {
+    "message": "허용됨",
+    "description": "Filter — only granted events",
+    "_machine_translated": true,
+    "_source_hash": "1212c246579d078c"
+  },
+  "settings.tool_permissions.audit.filter.denied": {
+    "message": "거부됨",
+    "description": "Filter — only denied events",
+    "_machine_translated": true,
+    "_source_hash": "676ca92b6090dba1"
+  },
+  "settings.tool_permissions.audit.filter.revoked": {
+    "message": "취소됨",
+    "description": "Filter — only revoked events",
+    "_machine_translated": true,
+    "_source_hash": "759102fc95ce6b1d"
+  },
+  "settings.tool_permissions.audit.filter.expired": {
+    "message": "만료됨",
+    "description": "Filter — only expired events",
+    "_machine_translated": true,
+    "_source_hash": "3452d35f583fa87a"
+  },
+  "settings.tool_permissions.audit.filter.terminator": {
+    "message": "터미네이터 모드",
+    "description": "Filter — only terminator-mode toggle events",
+    "_machine_translated": true,
+    "_source_hash": "c199053bdd3fc444"
+  },
+  "settings.tool_permissions.audit.refresh": {
+    "message": "새로고침",
+    "description": "Button to reload the audit log",
+    "_machine_translated": true,
+    "_source_hash": "2d04c572772d368a"
+  },
+  "settings.tool_permissions.audit.clear": {
+    "message": "로그 지우기",
+    "description": "Button to clear the audit log",
+    "_machine_translated": true,
+    "_source_hash": "f3d923ca2eab5f8b"
+  },
+  "settings.tool_permissions.audit.clear_confirm": {
+    "message": "권한 감사 로그를 지우시겠습니까? 이 작업은 되돌릴 수 없습니다. 권한 자체에는 영향이 없습니다.",
+    "description": "Confirm dialog before clearing the log",
+    "_machine_translated": true,
+    "_source_hash": "7eda4b2a9701119c"
+  },
+  "settings.tool_permissions.audit.loading": {
+    "message": "불러오는 중…",
+    "description": "Placeholder while the audit log loads",
+    "_machine_translated": true,
+    "_source_hash": "b5be95290c2e30a2"
+  },
+  "settings.tool_permissions.audit.empty": {
+    "message": "아직 감사 항목이 없습니다. AI가 도구를 요청하면 이벤트가 여기에 표시됩니다.",
+    "description": "Empty state when the log has zero entries",
+    "_machine_translated": true,
+    "_source_hash": "8eb0dc8aa27fdbc9"
+  },
+  "settings.tool_permissions.audit.no_match": {
+    "message": "현재 필터와 일치하는 항목이 없습니다.",
+    "description": "Empty state when the log has entries but none match the filter",
+    "_machine_translated": true,
+    "_source_hash": "b73cd5372b419187"
+  },
+  "settings.tool_permissions.audit.unknown_time": {
+    "message": "(시간 알 수 없음)",
+    "description": "Fallback when an entry has no `at` timestamp",
+    "_machine_translated": true,
+    "_source_hash": "d58d9dfe6571a87b"
+  },
+  "settings.tool_permissions.audit.summary.granted": {
+    "message": "<strong>{tool}</strong> 허용됨 ({grant_type})",
+    "description": "Audit row summary — grant event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6fc01e3b617d3f21"
+  },
+  "settings.tool_permissions.audit.summary.denied": {
+    "message": "<strong>{tool}</strong> 거부됨",
+    "description": "Audit row summary — deny event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "596b830083aa8dcb"
+  },
+  "settings.tool_permissions.audit.summary.revoked": {
+    "message": "<strong>{tool}</strong> 해제됨",
+    "description": "Audit row summary — revoke event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "9fdb75fada222cdb"
+  },
+  "settings.tool_permissions.audit.summary.expired": {
+    "message": "<strong>{tool}</strong> 만료됨",
+    "description": "Audit row summary — expiry event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "39f8b0ef768e2c66"
+  },
+  "settings.tool_permissions.audit.summary.terminator_on": {
+    "message": "<strong>터미네이터 모드 활성화됨</strong>",
+    "description": "Audit row summary — terminator mode turned on (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "55a291c1cb2f6ed6"
+  },
+  "settings.tool_permissions.audit.summary.terminator_off": {
+    "message": "터미네이터 모드 비활성화됨",
+    "description": "Audit row summary — terminator mode turned off",
+    "_machine_translated": true,
+    "_source_hash": "2ad803948087380e"
+  },
+  "settings.tool_permissions.audit.summary.unknown": {
+    "message": "알 수 없는 이벤트: {kind}",
+    "description": "Audit row summary — fallback for an unrecognised event kind",
+    "_machine_translated": true,
+    "_source_hash": "e83863444f8914a8"
+  },
+  "settings.tool_permissions.audit.meta.session": {
+    "message": "세션 {id}",
+    "description": "Meta line — session id for the event",
+    "_machine_translated": true,
+    "_source_hash": "391248a6a222b60d"
+  },
+  "settings.tool_permissions.audit.meta.was_policy": {
+    "message": "이전: {policy}",
+    "description": "Meta line — prior policy for revoke/expiry events",
+    "_machine_translated": true,
+    "_source_hash": "482c7a4c90c5ff34"
+  },
+  "settings.tool_permissions.danger.section": {
+    "message": "⚠️ 위험 구역",
+    "description": "Subsection header for the terminator-mode toggle",
+    "_machine_translated": true,
+    "_source_hash": "cc3073aae24a0b5c"
+  },
+  "settings.tool_permissions.terminator.label": {
+    "message": "터미네이터 모드",
+    "description": "Toggle: auto-approve all tool requests",
+    "_machine_translated": true,
+    "_source_hash": "08740ca3d23503e7"
+  },
+  "settings.tool_permissions.terminator.description": {
+    "message": "확인 없이 모든 도구 요청을 자동 승인합니다. AI가 허가 없이 읽기, 쓰기, 실행, 삭제를 수행할 수 있습니다.",
+    "description": "Helper text under the terminator toggle",
+    "_machine_translated": true,
+    "_source_hash": "1942ab049e1bedb9"
+  },
+  "settings.tool_permissions.terminator.confirm_full": {
+    "message": "터미네이터 모드는 모든 도구 요청을 자동 승인합니다.\n\nAI가 묻지 않고 읽기, 쓰기, 실행, 삭제를 수행할 수 있습니다.\n\n계속하시겠습니까?",
+    "description": "Full confirm dialog body when enabling terminator (Tauri ask)",
+    "_machine_translated": true,
+    "_source_hash": "a1003aa098ccc14d"
+  },
+  "settings.tool_permissions.terminator.confirm_short": {
+    "message": "⚠️ 터미네이터 모드는 모든 도구 요청을 자동 승인합니다. 계속하시겠습니까?",
+    "description": "Fallback confirm() when Tauri dialog API is unavailable",
+    "_machine_translated": true,
+    "_source_hash": "bdf26517d527622b"
+  },
+  "settings.tool_permissions.terminator.dialog_title": {
+    "message": "⚠️ 터미네이터 모드 활성화",
+    "description": "Title of the confirm dialog",
+    "_machine_translated": true,
+    "_source_hash": "68f7764c337ba4b9"
+  },
+  "settings.tool_permissions.tool.last_seen": {
+    "message": "마지막 사용: {date}",
+    "description": "Per-tool meta line — last invocation date",
+    "_machine_translated": true,
+    "_source_hash": "6b79c17da83da7d3"
+  },
+  "settings.tool_permissions.tool.granted_at": {
+    "message": " · 허용 시각: {date}",
+    "description": "Appended to last_seen for 24h grants",
+    "_machine_translated": true,
+    "_source_hash": "731ba36dc7a143c7"
+  },
+  "settings.tool_permissions.tool.badge.extension": {
+    "message": "확장",
+    "description": "Pill shown on extension-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "7896849cd04a7674"
+  },
+  "settings.tool_permissions.tool.badge.mcp": {
+    "message": "MCP",
+    "description": "Pill shown on MCP-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "2989363ea3d062a7"
+  },
+  "settings.tool_permissions.tool.policy.ask": {
+    "message": "항상 묻기",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "2d9891361b640554"
+  },
+  "settings.tool_permissions.tool.policy.allow_24h": {
+    "message": "24시간 허용",
+    "description": "Per-tool policy option — 24-hour grant",
+    "_machine_translated": true,
+    "_source_hash": "6192bb5c00b4e4c5"
+  },
+  "settings.tool_permissions.tool.policy.always_allow": {
+    "message": "항상 허용",
+    "description": "Per-tool policy option — persistent grant",
+    "_machine_translated": true,
+    "_source_hash": "99584d87918082a3"
+  },
+  "settings.tool_permissions.tool.policy.deny": {
+    "message": "거부",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "d79610dc3c64434a"
+  },
+  "settings.tool_permissions.tool.remove_title": {
+    "message": "제거",
+    "description": "Tooltip on the per-tool remove button",
+    "_machine_translated": true,
+    "_source_hash": "310c8caf4846272c"
   }
 }

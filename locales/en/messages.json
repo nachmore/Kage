@@ -1364,6 +1364,300 @@
     "description": "Tooltip on the copy button inside an Other-Agent session view"
   },
 
+  "settings.mcp.title": {
+    "message": "MCP Servers",
+    "description": "Settings header — MCP server management"
+  },
+  "settings.mcp.config_file.label": {
+    "message": "Configuration File",
+    "description": "Label for the MCP config file path"
+  },
+  "settings.mcp.browse_btn": {
+    "message": "Browse…",
+    "description": "Button to pick a different MCP config file"
+  },
+  "settings.mcp.browse_dialog_title": {
+    "message": "Select MCP configuration file",
+    "description": "Title of the file picker dialog"
+  },
+  "settings.mcp.servers.label": {
+    "message": "Servers",
+    "description": "Label for the MCP server list"
+  },
+  "settings.mcp.servers.description": {
+    "message": "MCP servers provide tools the agent can use. Built-in servers are managed by Kage.",
+    "description": "Helper text under the server list"
+  },
+  "settings.mcp.servers.add_btn": {
+    "message": "+ Add Server",
+    "description": "Button to add a custom MCP server"
+  },
+  "settings.mcp.servers.empty": {
+    "message": "No MCP servers configured.",
+    "description": "Empty state when no servers exist"
+  },
+  "settings.mcp.builtin.computer_control.name": {
+    "message": "Computer Control",
+    "description": "Built-in MCP server display name"
+  },
+  "settings.mcp.builtin.computer_control.description": {
+    "message": "UI automation, app launching, and desktop interaction",
+    "description": "Built-in MCP server description"
+  },
+  "settings.mcp.badge.builtin": {
+    "message": "Built-in",
+    "description": "Pill shown next to built-in server names"
+  },
+  "settings.mcp.action.edit_title": {
+    "message": "Edit",
+    "description": "Tooltip on the per-server edit button"
+  },
+  "settings.mcp.action.delete_title": {
+    "message": "Remove",
+    "description": "Tooltip on the per-server remove button"
+  },
+  "settings.mcp.delete_confirm": {
+    "message": "Remove MCP server \"{key}\"?",
+    "description": "Confirm dialog before deleting a server entry"
+  },
+  "settings.mcp.dialog.add_title": {
+    "message": "Add MCP Server",
+    "description": "Dialog title in add mode"
+  },
+  "settings.mcp.dialog.edit_title": {
+    "message": "Edit MCP Server",
+    "description": "Dialog title in edit mode"
+  },
+  "settings.mcp.dialog.name.label": {
+    "message": "Name (unique key)",
+    "description": "Label for the server-name field"
+  },
+  "settings.mcp.dialog.name.placeholder": {
+    "message": "e.g. my-server",
+    "description": "Placeholder for the server-name field"
+  },
+  "settings.mcp.dialog.command.label": {
+    "message": "Command",
+    "description": "Label for the command field"
+  },
+  "settings.mcp.dialog.command.placeholder": {
+    "message": "e.g. python, uvx, node",
+    "description": "Placeholder for the command field"
+  },
+  "settings.mcp.dialog.args.label": {
+    "message": "Arguments (one per line)",
+    "description": "Label for the args textarea"
+  },
+  "settings.mcp.dialog.args.placeholder": {
+    "message": "e.g. -m my_server",
+    "description": "Placeholder for the args textarea"
+  },
+  "settings.mcp.dialog.cwd.label": {
+    "message": "Working Directory (optional)",
+    "description": "Label for the working-directory field"
+  },
+  "settings.mcp.dialog.cwd.placeholder": {
+    "message": "Leave empty for default",
+    "description": "Placeholder for the working-directory field"
+  },
+  "settings.mcp.dialog.save": {
+    "message": "Save",
+    "description": "Save button in the edit dialog"
+  },
+  "settings.mcp.dialog.add": {
+    "message": "Add",
+    "description": "Add button in the add dialog"
+  },
+  "settings.mcp.dialog.required_alert": {
+    "message": "Name and command are required.",
+    "description": "alert() shown when the user tries to save without name or command"
+  },
+
+  "settings.tool_permissions.title": {
+    "message": "Agent Tools",
+    "description": "Settings header — agent tool permissions"
+  },
+  "settings.tool_permissions.seen.label": {
+    "message": "Seen Tools",
+    "description": "Section label for the per-tool policy list"
+  },
+  "settings.tool_permissions.seen.description": {
+    "message": "Tools the AI has requested to use. Set each tool's permission policy.",
+    "description": "Helper text under the seen-tools list"
+  },
+  "settings.tool_permissions.empty": {
+    "message": "No tools seen yet. Tools will appear here as the AI requests them.",
+    "description": "Empty-state for the tool list"
+  },
+  "settings.tool_permissions.reset_btn": {
+    "message": "Reset All Permissions",
+    "description": "Button to clear every per-tool grant"
+  },
+  "settings.tool_permissions.reset_confirm": {
+    "message": "This will remove all tool permissions and reset to \"Always Ask\" for everything. Continue?",
+    "description": "Confirm dialog before resetting"
+  },
+  "settings.tool_permissions.audit.section": {
+    "message": "📜 Audit Log",
+    "description": "Subsection header for the permission audit log"
+  },
+  "settings.tool_permissions.audit.label": {
+    "message": "Permission History",
+    "description": "Section label for the audit log block"
+  },
+  "settings.tool_permissions.audit.description": {
+    "message": "Every permission grant, denial, revoke, expiry, and terminator-mode toggle is recorded here. The log is stored locally in plain JSON and can be tampered with — use it to spot-check recent activity, not for forensic audit.",
+    "description": "Helper text above the audit log"
+  },
+  "settings.tool_permissions.audit.filter.all": {
+    "message": "All events",
+    "description": "Filter dropdown — show all event kinds"
+  },
+  "settings.tool_permissions.audit.filter.granted": {
+    "message": "Granted",
+    "description": "Filter — only granted events"
+  },
+  "settings.tool_permissions.audit.filter.denied": {
+    "message": "Denied",
+    "description": "Filter — only denied events"
+  },
+  "settings.tool_permissions.audit.filter.revoked": {
+    "message": "Revoked",
+    "description": "Filter — only revoked events"
+  },
+  "settings.tool_permissions.audit.filter.expired": {
+    "message": "Expired",
+    "description": "Filter — only expired events"
+  },
+  "settings.tool_permissions.audit.filter.terminator": {
+    "message": "Terminator mode",
+    "description": "Filter — only terminator-mode toggle events"
+  },
+  "settings.tool_permissions.audit.refresh": {
+    "message": "Refresh",
+    "description": "Button to reload the audit log"
+  },
+  "settings.tool_permissions.audit.clear": {
+    "message": "Clear log",
+    "description": "Button to clear the audit log"
+  },
+  "settings.tool_permissions.audit.clear_confirm": {
+    "message": "Clear the permission audit log? This cannot be undone. Permissions themselves are NOT affected.",
+    "description": "Confirm dialog before clearing the log"
+  },
+  "settings.tool_permissions.audit.loading": {
+    "message": "Loading…",
+    "description": "Placeholder while the audit log loads"
+  },
+  "settings.tool_permissions.audit.empty": {
+    "message": "No audit entries yet. Events will appear here as the AI requests tools.",
+    "description": "Empty state when the log has zero entries"
+  },
+  "settings.tool_permissions.audit.no_match": {
+    "message": "No entries match the current filter.",
+    "description": "Empty state when the log has entries but none match the filter"
+  },
+  "settings.tool_permissions.audit.unknown_time": {
+    "message": "(unknown time)",
+    "description": "Fallback when an entry has no `at` timestamp"
+  },
+  "settings.tool_permissions.audit.summary.granted": {
+    "message": "Granted <strong>{tool}</strong> ({grant_type})",
+    "description": "Audit row summary — grant event (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.denied": {
+    "message": "Denied <strong>{tool}</strong>",
+    "description": "Audit row summary — deny event (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.revoked": {
+    "message": "Revoked <strong>{tool}</strong>",
+    "description": "Audit row summary — revoke event (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.expired": {
+    "message": "Expired <strong>{tool}</strong>",
+    "description": "Audit row summary — expiry event (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.terminator_on": {
+    "message": "<strong>Terminator mode enabled</strong>",
+    "description": "Audit row summary — terminator mode turned on (HTML allowed)"
+  },
+  "settings.tool_permissions.audit.summary.terminator_off": {
+    "message": "Terminator mode disabled",
+    "description": "Audit row summary — terminator mode turned off"
+  },
+  "settings.tool_permissions.audit.summary.unknown": {
+    "message": "Unknown event: {kind}",
+    "description": "Audit row summary — fallback for an unrecognised event kind"
+  },
+  "settings.tool_permissions.audit.meta.session": {
+    "message": "session {id}",
+    "description": "Meta line — session id for the event"
+  },
+  "settings.tool_permissions.audit.meta.was_policy": {
+    "message": "was {policy}",
+    "description": "Meta line — prior policy for revoke/expiry events"
+  },
+  "settings.tool_permissions.danger.section": {
+    "message": "⚠️ Danger Zone",
+    "description": "Subsection header for the terminator-mode toggle"
+  },
+  "settings.tool_permissions.terminator.label": {
+    "message": "Terminator Mode",
+    "description": "Toggle: auto-approve all tool requests"
+  },
+  "settings.tool_permissions.terminator.description": {
+    "message": "Auto-approve ALL tool requests without prompting. The AI can read, write, execute, and delete without your permission.",
+    "description": "Helper text under the terminator toggle"
+  },
+  "settings.tool_permissions.terminator.confirm_full": {
+    "message": "Terminator Mode will auto-approve ALL tool requests.\n\nThe AI can read, write, execute, and delete without asking.\n\nAre you sure?",
+    "description": "Full confirm dialog body when enabling terminator (Tauri ask)"
+  },
+  "settings.tool_permissions.terminator.confirm_short": {
+    "message": "⚠️ Terminator Mode will auto-approve ALL tool requests. Are you sure?",
+    "description": "Fallback confirm() when Tauri dialog API is unavailable"
+  },
+  "settings.tool_permissions.terminator.dialog_title": {
+    "message": "⚠️ Enable Terminator Mode",
+    "description": "Title of the confirm dialog"
+  },
+  "settings.tool_permissions.tool.last_seen": {
+    "message": "Last seen: {date}",
+    "description": "Per-tool meta line — last invocation date"
+  },
+  "settings.tool_permissions.tool.granted_at": {
+    "message": " · Granted: {date}",
+    "description": "Appended to last_seen for 24h grants"
+  },
+  "settings.tool_permissions.tool.badge.extension": {
+    "message": "Extension",
+    "description": "Pill shown on extension-provided tools"
+  },
+  "settings.tool_permissions.tool.badge.mcp": {
+    "message": "MCP",
+    "description": "Pill shown on MCP-provided tools"
+  },
+  "settings.tool_permissions.tool.policy.ask": {
+    "message": "Always Ask",
+    "description": "Per-tool policy option"
+  },
+  "settings.tool_permissions.tool.policy.allow_24h": {
+    "message": "Allow 24h",
+    "description": "Per-tool policy option — 24-hour grant"
+  },
+  "settings.tool_permissions.tool.policy.always_allow": {
+    "message": "Always Allow",
+    "description": "Per-tool policy option — persistent grant"
+  },
+  "settings.tool_permissions.tool.policy.deny": {
+    "message": "Deny",
+    "description": "Per-tool policy option"
+  },
+  "settings.tool_permissions.tool.remove_title": {
+    "message": "Remove",
+    "description": "Tooltip on the per-tool remove button"
+  },
+
   "common.ok": {
     "message": "OK",
     "description": "Generic acknowledgement button"

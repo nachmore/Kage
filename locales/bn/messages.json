@@ -2344,5 +2344,443 @@
     "description": "Tooltip on the copy button inside an Other-Agent session view",
     "_machine_translated": true,
     "_source_hash": "2b83ddd1a3d1d5e9"
+  },
+  "settings.mcp.title": {
+    "message": "MCP সার্ভার",
+    "description": "Settings header — MCP server management",
+    "_machine_translated": true,
+    "_source_hash": "73ce9af232f4185b"
+  },
+  "settings.mcp.config_file.label": {
+    "message": "কনফিগারেশন ফাইল",
+    "description": "Label for the MCP config file path",
+    "_machine_translated": true,
+    "_source_hash": "62305274cd443394"
+  },
+  "settings.mcp.browse_btn": {
+    "message": "ব্রাউজ করুন…",
+    "description": "Button to pick a different MCP config file",
+    "_machine_translated": true,
+    "_source_hash": "6b189279f7a4767c"
+  },
+  "settings.mcp.browse_dialog_title": {
+    "message": "MCP কনফিগারেশন ফাইল নির্বাচন করুন",
+    "description": "Title of the file picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "87f129646e8742a4"
+  },
+  "settings.mcp.servers.label": {
+    "message": "সার্ভার",
+    "description": "Label for the MCP server list",
+    "_machine_translated": true,
+    "_source_hash": "56b50079eafe6124"
+  },
+  "settings.mcp.servers.description": {
+    "message": "MCP সার্ভার এজেন্টের ব্যবহারযোগ্য টুল সরবরাহ করে। বিল্ট-ইন সার্ভারগুলি Kage দ্বারা পরিচালিত হয়।",
+    "description": "Helper text under the server list",
+    "_machine_translated": true,
+    "_source_hash": "f8b8840726f6e6bb"
+  },
+  "settings.mcp.servers.add_btn": {
+    "message": "+ সার্ভার যোগ করুন",
+    "description": "Button to add a custom MCP server",
+    "_machine_translated": true,
+    "_source_hash": "719ede95562cd509"
+  },
+  "settings.mcp.servers.empty": {
+    "message": "কোনো MCP সার্ভার কনফিগার করা নেই।",
+    "description": "Empty state when no servers exist",
+    "_machine_translated": true,
+    "_source_hash": "941b5023c64bc7e4"
+  },
+  "settings.mcp.builtin.computer_control.name": {
+    "message": "কম্পিউটার নিয়ন্ত্রণ",
+    "description": "Built-in MCP server display name",
+    "_machine_translated": true,
+    "_source_hash": "4e00829341805bbb"
+  },
+  "settings.mcp.builtin.computer_control.description": {
+    "message": "UI অটোমেশন, অ্যাপ চালু করা এবং ডেস্কটপ ইন্টার‍্যাকশন",
+    "description": "Built-in MCP server description",
+    "_machine_translated": true,
+    "_source_hash": "343e1db34dfb475f"
+  },
+  "settings.mcp.badge.builtin": {
+    "message": "বিল্ট-ইন",
+    "description": "Pill shown next to built-in server names",
+    "_machine_translated": true,
+    "_source_hash": "b43ab70259798721"
+  },
+  "settings.mcp.action.edit_title": {
+    "message": "সম্পাদনা করুন",
+    "description": "Tooltip on the per-server edit button",
+    "_machine_translated": true,
+    "_source_hash": "a7c81da39e45c445"
+  },
+  "settings.mcp.action.delete_title": {
+    "message": "সরান",
+    "description": "Tooltip on the per-server remove button",
+    "_machine_translated": true,
+    "_source_hash": "47a65e418423560a"
+  },
+  "settings.mcp.delete_confirm": {
+    "message": "MCP সার্ভার \"{key}\" সরাবেন?",
+    "description": "Confirm dialog before deleting a server entry",
+    "_machine_translated": true,
+    "_source_hash": "c0765cbbddda511d"
+  },
+  "settings.mcp.dialog.add_title": {
+    "message": "MCP সার্ভার যোগ করুন",
+    "description": "Dialog title in add mode",
+    "_machine_translated": true,
+    "_source_hash": "e6e720e4cd37ff90"
+  },
+  "settings.mcp.dialog.edit_title": {
+    "message": "MCP সার্ভার সম্পাদনা করুন",
+    "description": "Dialog title in edit mode",
+    "_machine_translated": true,
+    "_source_hash": "f9bcf064b78d46cd"
+  },
+  "settings.mcp.dialog.name.label": {
+    "message": "নাম (অনন্য কী)",
+    "description": "Label for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "d794f284e3be52c3"
+  },
+  "settings.mcp.dialog.name.placeholder": {
+    "message": "যেমন my-server",
+    "description": "Placeholder for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "48702158caeda69b"
+  },
+  "settings.mcp.dialog.command.label": {
+    "message": "কমান্ড",
+    "description": "Label for the command field",
+    "_machine_translated": true,
+    "_source_hash": "a7d69dd2259d43e4"
+  },
+  "settings.mcp.dialog.command.placeholder": {
+    "message": "যেমন python, uvx, node",
+    "description": "Placeholder for the command field",
+    "_machine_translated": true,
+    "_source_hash": "3cc9cb0ffe06eab2"
+  },
+  "settings.mcp.dialog.args.label": {
+    "message": "আর্গুমেন্ট (প্রতি লাইনে একটি)",
+    "description": "Label for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "67d674c4a65bd1a2"
+  },
+  "settings.mcp.dialog.args.placeholder": {
+    "message": "যেমন -m my_server",
+    "description": "Placeholder for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "9f8dc5eb97ed206b"
+  },
+  "settings.mcp.dialog.cwd.label": {
+    "message": "ওয়ার্কিং ডিরেক্টরি (ঐচ্ছিক)",
+    "description": "Label for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "ec9ebe23bcbcf59e"
+  },
+  "settings.mcp.dialog.cwd.placeholder": {
+    "message": "ডিফল্টের জন্য খালি রাখুন",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "fcf53a41b61be4dc"
+  },
+  "settings.mcp.dialog.save": {
+    "message": "সংরক্ষণ করুন",
+    "description": "Save button in the edit dialog",
+    "_machine_translated": true,
+    "_source_hash": "fad1506ba253655c"
+  },
+  "settings.mcp.dialog.add": {
+    "message": "যোগ করুন",
+    "description": "Add button in the add dialog",
+    "_machine_translated": true,
+    "_source_hash": "a1fcff2c765d3923"
+  },
+  "settings.mcp.dialog.required_alert": {
+    "message": "নাম ও কমান্ড আবশ্যক।",
+    "description": "alert() shown when the user tries to save without name or command",
+    "_machine_translated": true,
+    "_source_hash": "57d126d725a6cab2"
+  },
+  "settings.tool_permissions.title": {
+    "message": "এজেন্ট টুল",
+    "description": "Settings header — agent tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "80fb0b916804491e"
+  },
+  "settings.tool_permissions.seen.label": {
+    "message": "দেখা টুল",
+    "description": "Section label for the per-tool policy list",
+    "_machine_translated": true,
+    "_source_hash": "c67a166e40b4423f"
+  },
+  "settings.tool_permissions.seen.description": {
+    "message": "AI যেসব টুল ব্যবহার করতে চেয়েছে। প্রতিটি টুলের অনুমতি নীতি নির্ধারণ করুন।",
+    "description": "Helper text under the seen-tools list",
+    "_machine_translated": true,
+    "_source_hash": "5691d86d6c9f652e"
+  },
+  "settings.tool_permissions.empty": {
+    "message": "এখনও কোনো টুল দেখা যায়নি। AI টুল চাইলে সেগুলো এখানে দেখা যাবে।",
+    "description": "Empty-state for the tool list",
+    "_machine_translated": true,
+    "_source_hash": "6f6aa13ea94449cb"
+  },
+  "settings.tool_permissions.reset_btn": {
+    "message": "সব অনুমতি রিসেট করুন",
+    "description": "Button to clear every per-tool grant",
+    "_machine_translated": true,
+    "_source_hash": "9707b324e53eda38"
+  },
+  "settings.tool_permissions.reset_confirm": {
+    "message": "এটি সব টুলের অনুমতি সরিয়ে দেবে এবং সবকিছু \"সবসময় জিজ্ঞাসা করুন\"-এ রিসেট করবে। চালিয়ে যাবেন?",
+    "description": "Confirm dialog before resetting",
+    "_machine_translated": true,
+    "_source_hash": "3f0f9660ee47ffb9"
+  },
+  "settings.tool_permissions.audit.section": {
+    "message": "📜 অডিট লগ",
+    "description": "Subsection header for the permission audit log",
+    "_machine_translated": true,
+    "_source_hash": "1e507496d13efce5"
+  },
+  "settings.tool_permissions.audit.label": {
+    "message": "অনুমতির ইতিহাস",
+    "description": "Section label for the audit log block",
+    "_machine_translated": true,
+    "_source_hash": "197987343bd8f777"
+  },
+  "settings.tool_permissions.audit.description": {
+    "message": "প্রতিটি অনুমতি প্রদান, অস্বীকার, প্রত্যাহার, মেয়াদোত্তীর্ণ ও টার্মিনেটর-মোড টগল এখানে রেকর্ড হয়। লগটি স্থানীয়ভাবে সাধারণ JSON ফরম্যাটে সংরক্ষিত হয় এবং পরিবর্তন করা সম্ভব — সাম্প্রতিক কার্যকলাপ যাচাই করতে ব্যবহার করুন, ফরেনসিক অডিটের জন্য নয়।",
+    "description": "Helper text above the audit log",
+    "_machine_translated": true,
+    "_source_hash": "89a4d589ba5c25e7"
+  },
+  "settings.tool_permissions.audit.filter.all": {
+    "message": "সব ইভেন্ট",
+    "description": "Filter dropdown — show all event kinds",
+    "_machine_translated": true,
+    "_source_hash": "ef963bd3d57a69e3"
+  },
+  "settings.tool_permissions.audit.filter.granted": {
+    "message": "অনুমোদিত",
+    "description": "Filter — only granted events",
+    "_machine_translated": true,
+    "_source_hash": "1212c246579d078c"
+  },
+  "settings.tool_permissions.audit.filter.denied": {
+    "message": "অস্বীকৃত",
+    "description": "Filter — only denied events",
+    "_machine_translated": true,
+    "_source_hash": "676ca92b6090dba1"
+  },
+  "settings.tool_permissions.audit.filter.revoked": {
+    "message": "প্রত্যাহৃত",
+    "description": "Filter — only revoked events",
+    "_machine_translated": true,
+    "_source_hash": "759102fc95ce6b1d"
+  },
+  "settings.tool_permissions.audit.filter.expired": {
+    "message": "মেয়াদোত্তীর্ণ",
+    "description": "Filter — only expired events",
+    "_machine_translated": true,
+    "_source_hash": "3452d35f583fa87a"
+  },
+  "settings.tool_permissions.audit.filter.terminator": {
+    "message": "টার্মিনেটর মোড",
+    "description": "Filter — only terminator-mode toggle events",
+    "_machine_translated": true,
+    "_source_hash": "c199053bdd3fc444"
+  },
+  "settings.tool_permissions.audit.refresh": {
+    "message": "রিফ্রেশ করুন",
+    "description": "Button to reload the audit log",
+    "_machine_translated": true,
+    "_source_hash": "2d04c572772d368a"
+  },
+  "settings.tool_permissions.audit.clear": {
+    "message": "লগ মুছুন",
+    "description": "Button to clear the audit log",
+    "_machine_translated": true,
+    "_source_hash": "f3d923ca2eab5f8b"
+  },
+  "settings.tool_permissions.audit.clear_confirm": {
+    "message": "অনুমতির অডিট লগ মুছে ফেলবেন? এটি অপরিবর্তনীয়। অনুমতিগুলো নিজে প্রভাবিত হবে না।",
+    "description": "Confirm dialog before clearing the log",
+    "_machine_translated": true,
+    "_source_hash": "7eda4b2a9701119c"
+  },
+  "settings.tool_permissions.audit.loading": {
+    "message": "লোড হচ্ছে…",
+    "description": "Placeholder while the audit log loads",
+    "_machine_translated": true,
+    "_source_hash": "b5be95290c2e30a2"
+  },
+  "settings.tool_permissions.audit.empty": {
+    "message": "এখনও কোনো অডিট এন্ট্রি নেই। AI টুল চাইলে ইভেন্টগুলো এখানে দেখা যাবে।",
+    "description": "Empty state when the log has zero entries",
+    "_machine_translated": true,
+    "_source_hash": "8eb0dc8aa27fdbc9"
+  },
+  "settings.tool_permissions.audit.no_match": {
+    "message": "বর্তমান ফিল্টারের সঙ্গে কোনো এন্ট্রি মেলেনি।",
+    "description": "Empty state when the log has entries but none match the filter",
+    "_machine_translated": true,
+    "_source_hash": "b73cd5372b419187"
+  },
+  "settings.tool_permissions.audit.unknown_time": {
+    "message": "(সময় অজানা)",
+    "description": "Fallback when an entry has no `at` timestamp",
+    "_machine_translated": true,
+    "_source_hash": "d58d9dfe6571a87b"
+  },
+  "settings.tool_permissions.audit.summary.granted": {
+    "message": "<strong>{tool}</strong> অনুমোদিত ({grant_type})",
+    "description": "Audit row summary — grant event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6fc01e3b617d3f21"
+  },
+  "settings.tool_permissions.audit.summary.denied": {
+    "message": "<strong>{tool}</strong> অস্বীকৃত",
+    "description": "Audit row summary — deny event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "596b830083aa8dcb"
+  },
+  "settings.tool_permissions.audit.summary.revoked": {
+    "message": "<strong>{tool}</strong> প্রত্যাহার করা হয়েছে",
+    "description": "Audit row summary — revoke event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "9fdb75fada222cdb"
+  },
+  "settings.tool_permissions.audit.summary.expired": {
+    "message": "<strong>{tool}</strong> মেয়াদোত্তীর্ণ",
+    "description": "Audit row summary — expiry event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "39f8b0ef768e2c66"
+  },
+  "settings.tool_permissions.audit.summary.terminator_on": {
+    "message": "<strong>টার্মিনেটর মোড সক্রিয় করা হয়েছে</strong>",
+    "description": "Audit row summary — terminator mode turned on (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "55a291c1cb2f6ed6"
+  },
+  "settings.tool_permissions.audit.summary.terminator_off": {
+    "message": "টার্মিনেটর মোড নিষ্ক্রিয় করা হয়েছে",
+    "description": "Audit row summary — terminator mode turned off",
+    "_machine_translated": true,
+    "_source_hash": "2ad803948087380e"
+  },
+  "settings.tool_permissions.audit.summary.unknown": {
+    "message": "অজানা ইভেন্ট: {kind}",
+    "description": "Audit row summary — fallback for an unrecognised event kind",
+    "_machine_translated": true,
+    "_source_hash": "e83863444f8914a8"
+  },
+  "settings.tool_permissions.audit.meta.session": {
+    "message": "সেশন {id}",
+    "description": "Meta line — session id for the event",
+    "_machine_translated": true,
+    "_source_hash": "391248a6a222b60d"
+  },
+  "settings.tool_permissions.audit.meta.was_policy": {
+    "message": "ছিল {policy}",
+    "description": "Meta line — prior policy for revoke/expiry events",
+    "_machine_translated": true,
+    "_source_hash": "482c7a4c90c5ff34"
+  },
+  "settings.tool_permissions.danger.section": {
+    "message": "⚠️ বিপদজনক অঞ্চল",
+    "description": "Subsection header for the terminator-mode toggle",
+    "_machine_translated": true,
+    "_source_hash": "cc3073aae24a0b5c"
+  },
+  "settings.tool_permissions.terminator.label": {
+    "message": "টার্মিনেটর মোড",
+    "description": "Toggle: auto-approve all tool requests",
+    "_machine_translated": true,
+    "_source_hash": "08740ca3d23503e7"
+  },
+  "settings.tool_permissions.terminator.description": {
+    "message": "অনুরোধ না করেই সমস্ত টুল অনুরোধ স্বয়ংক্রিয়ভাবে অনুমোদন করে। AI আপনার অনুমতি ছাড়াই পড়তে, লিখতে, চালাতে এবং মুছতে পারে।",
+    "description": "Helper text under the terminator toggle",
+    "_machine_translated": true,
+    "_source_hash": "1942ab049e1bedb9"
+  },
+  "settings.tool_permissions.terminator.confirm_full": {
+    "message": "টার্মিনেটর মোড সমস্ত টুল অনুরোধ স্বয়ংক্রিয়ভাবে অনুমোদন করবে।\n\nAI জিজ্ঞাসা না করেই পড়তে, লিখতে, চালাতে এবং মুছতে পারে।\n\nআপনি কি নিশ্চিত?",
+    "description": "Full confirm dialog body when enabling terminator (Tauri ask)",
+    "_machine_translated": true,
+    "_source_hash": "a1003aa098ccc14d"
+  },
+  "settings.tool_permissions.terminator.confirm_short": {
+    "message": "⚠️ টার্মিনেটর মোড সমস্ত টুল অনুরোধ স্বয়ংক্রিয়ভাবে অনুমোদন করবে। আপনি কি নিশ্চিত?",
+    "description": "Fallback confirm() when Tauri dialog API is unavailable",
+    "_machine_translated": true,
+    "_source_hash": "bdf26517d527622b"
+  },
+  "settings.tool_permissions.terminator.dialog_title": {
+    "message": "⚠️ টার্মিনেটর মোড সক্রিয় করুন",
+    "description": "Title of the confirm dialog",
+    "_machine_translated": true,
+    "_source_hash": "68f7764c337ba4b9"
+  },
+  "settings.tool_permissions.tool.last_seen": {
+    "message": "শেষ দেখা: {date}",
+    "description": "Per-tool meta line — last invocation date",
+    "_machine_translated": true,
+    "_source_hash": "6b79c17da83da7d3"
+  },
+  "settings.tool_permissions.tool.granted_at": {
+    "message": " · মঞ্জুর: {date}",
+    "description": "Appended to last_seen for 24h grants",
+    "_machine_translated": true,
+    "_source_hash": "731ba36dc7a143c7"
+  },
+  "settings.tool_permissions.tool.badge.extension": {
+    "message": "এক্সটেনশন",
+    "description": "Pill shown on extension-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "7896849cd04a7674"
+  },
+  "settings.tool_permissions.tool.badge.mcp": {
+    "message": "MCP",
+    "description": "Pill shown on MCP-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "2989363ea3d062a7"
+  },
+  "settings.tool_permissions.tool.policy.ask": {
+    "message": "সর্বদা জিজ্ঞাসা করুন",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "2d9891361b640554"
+  },
+  "settings.tool_permissions.tool.policy.allow_24h": {
+    "message": "২৪ ঘণ্টা অনুমতি দিন",
+    "description": "Per-tool policy option — 24-hour grant",
+    "_machine_translated": true,
+    "_source_hash": "6192bb5c00b4e4c5"
+  },
+  "settings.tool_permissions.tool.policy.always_allow": {
+    "message": "সর্বদা অনুমতি দিন",
+    "description": "Per-tool policy option — persistent grant",
+    "_machine_translated": true,
+    "_source_hash": "99584d87918082a3"
+  },
+  "settings.tool_permissions.tool.policy.deny": {
+    "message": "অস্বীকার করুন",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "d79610dc3c64434a"
+  },
+  "settings.tool_permissions.tool.remove_title": {
+    "message": "সরান",
+    "description": "Tooltip on the per-tool remove button",
+    "_machine_translated": true,
+    "_source_hash": "310c8caf4846272c"
   }
 }

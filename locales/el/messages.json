@@ -2344,5 +2344,443 @@
     "description": "Tooltip on the copy button inside an Other-Agent session view",
     "_machine_translated": true,
     "_source_hash": "2b83ddd1a3d1d5e9"
+  },
+  "settings.mcp.title": {
+    "message": "Διακομιστές MCP",
+    "description": "Settings header — MCP server management",
+    "_machine_translated": true,
+    "_source_hash": "73ce9af232f4185b"
+  },
+  "settings.mcp.config_file.label": {
+    "message": "Αρχείο ρυθμίσεων",
+    "description": "Label for the MCP config file path",
+    "_machine_translated": true,
+    "_source_hash": "62305274cd443394"
+  },
+  "settings.mcp.browse_btn": {
+    "message": "Αναζήτηση…",
+    "description": "Button to pick a different MCP config file",
+    "_machine_translated": true,
+    "_source_hash": "6b189279f7a4767c"
+  },
+  "settings.mcp.browse_dialog_title": {
+    "message": "Επιλέξτε αρχείο ρυθμίσεων MCP",
+    "description": "Title of the file picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "87f129646e8742a4"
+  },
+  "settings.mcp.servers.label": {
+    "message": "Διακομιστές",
+    "description": "Label for the MCP server list",
+    "_machine_translated": true,
+    "_source_hash": "56b50079eafe6124"
+  },
+  "settings.mcp.servers.description": {
+    "message": "Οι διακομιστές MCP παρέχουν εργαλεία που μπορεί να χρησιμοποιήσει ο πράκτορας. Οι ενσωματωμένοι διακομιστές διαχειρίζονται από το Kage.",
+    "description": "Helper text under the server list",
+    "_machine_translated": true,
+    "_source_hash": "f8b8840726f6e6bb"
+  },
+  "settings.mcp.servers.add_btn": {
+    "message": "+ Προσθήκη διακομιστή",
+    "description": "Button to add a custom MCP server",
+    "_machine_translated": true,
+    "_source_hash": "719ede95562cd509"
+  },
+  "settings.mcp.servers.empty": {
+    "message": "Δεν έχουν ρυθμιστεί διακομιστές MCP.",
+    "description": "Empty state when no servers exist",
+    "_machine_translated": true,
+    "_source_hash": "941b5023c64bc7e4"
+  },
+  "settings.mcp.builtin.computer_control.name": {
+    "message": "Έλεγχος υπολογιστή",
+    "description": "Built-in MCP server display name",
+    "_machine_translated": true,
+    "_source_hash": "4e00829341805bbb"
+  },
+  "settings.mcp.builtin.computer_control.description": {
+    "message": "Αυτοματισμός UI, εκκίνηση εφαρμογών και αλληλεπίδραση με την επιφάνεια εργασίας",
+    "description": "Built-in MCP server description",
+    "_machine_translated": true,
+    "_source_hash": "343e1db34dfb475f"
+  },
+  "settings.mcp.badge.builtin": {
+    "message": "Ενσωματωμένο",
+    "description": "Pill shown next to built-in server names",
+    "_machine_translated": true,
+    "_source_hash": "b43ab70259798721"
+  },
+  "settings.mcp.action.edit_title": {
+    "message": "Επεξεργασία",
+    "description": "Tooltip on the per-server edit button",
+    "_machine_translated": true,
+    "_source_hash": "a7c81da39e45c445"
+  },
+  "settings.mcp.action.delete_title": {
+    "message": "Αφαίρεση",
+    "description": "Tooltip on the per-server remove button",
+    "_machine_translated": true,
+    "_source_hash": "47a65e418423560a"
+  },
+  "settings.mcp.delete_confirm": {
+    "message": "Αφαίρεση διακομιστή MCP «{key}»;",
+    "description": "Confirm dialog before deleting a server entry",
+    "_machine_translated": true,
+    "_source_hash": "c0765cbbddda511d"
+  },
+  "settings.mcp.dialog.add_title": {
+    "message": "Προσθήκη διακομιστή MCP",
+    "description": "Dialog title in add mode",
+    "_machine_translated": true,
+    "_source_hash": "e6e720e4cd37ff90"
+  },
+  "settings.mcp.dialog.edit_title": {
+    "message": "Επεξεργασία διακομιστή MCP",
+    "description": "Dialog title in edit mode",
+    "_machine_translated": true,
+    "_source_hash": "f9bcf064b78d46cd"
+  },
+  "settings.mcp.dialog.name.label": {
+    "message": "Όνομα (μοναδικό κλειδί)",
+    "description": "Label for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "d794f284e3be52c3"
+  },
+  "settings.mcp.dialog.name.placeholder": {
+    "message": "π.χ. my-server",
+    "description": "Placeholder for the server-name field",
+    "_machine_translated": true,
+    "_source_hash": "48702158caeda69b"
+  },
+  "settings.mcp.dialog.command.label": {
+    "message": "Εντολή",
+    "description": "Label for the command field",
+    "_machine_translated": true,
+    "_source_hash": "a7d69dd2259d43e4"
+  },
+  "settings.mcp.dialog.command.placeholder": {
+    "message": "π.χ. python, uvx, node",
+    "description": "Placeholder for the command field",
+    "_machine_translated": true,
+    "_source_hash": "3cc9cb0ffe06eab2"
+  },
+  "settings.mcp.dialog.args.label": {
+    "message": "Παράμετροι (μία ανά γραμμή)",
+    "description": "Label for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "67d674c4a65bd1a2"
+  },
+  "settings.mcp.dialog.args.placeholder": {
+    "message": "π.χ. -m my_server",
+    "description": "Placeholder for the args textarea",
+    "_machine_translated": true,
+    "_source_hash": "9f8dc5eb97ed206b"
+  },
+  "settings.mcp.dialog.cwd.label": {
+    "message": "Κατάλογος εργασίας (προαιρετικό)",
+    "description": "Label for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "ec9ebe23bcbcf59e"
+  },
+  "settings.mcp.dialog.cwd.placeholder": {
+    "message": "Αφήστε κενό για την προεπιλογή",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "fcf53a41b61be4dc"
+  },
+  "settings.mcp.dialog.save": {
+    "message": "Αποθήκευση",
+    "description": "Save button in the edit dialog",
+    "_machine_translated": true,
+    "_source_hash": "fad1506ba253655c"
+  },
+  "settings.mcp.dialog.add": {
+    "message": "Προσθήκη",
+    "description": "Add button in the add dialog",
+    "_machine_translated": true,
+    "_source_hash": "a1fcff2c765d3923"
+  },
+  "settings.mcp.dialog.required_alert": {
+    "message": "Απαιτούνται όνομα και εντολή.",
+    "description": "alert() shown when the user tries to save without name or command",
+    "_machine_translated": true,
+    "_source_hash": "57d126d725a6cab2"
+  },
+  "settings.tool_permissions.title": {
+    "message": "Εργαλεία πράκτορα",
+    "description": "Settings header — agent tool permissions",
+    "_machine_translated": true,
+    "_source_hash": "80fb0b916804491e"
+  },
+  "settings.tool_permissions.seen.label": {
+    "message": "Εντοπισμένα εργαλεία",
+    "description": "Section label for the per-tool policy list",
+    "_machine_translated": true,
+    "_source_hash": "c67a166e40b4423f"
+  },
+  "settings.tool_permissions.seen.description": {
+    "message": "Εργαλεία που έχει ζητήσει να χρησιμοποιήσει το AI. Ορίστε την πολιτική δικαιωμάτων για κάθε εργαλείο.",
+    "description": "Helper text under the seen-tools list",
+    "_machine_translated": true,
+    "_source_hash": "5691d86d6c9f652e"
+  },
+  "settings.tool_permissions.empty": {
+    "message": "Δεν έχουν εντοπιστεί εργαλεία ακόμη. Τα εργαλεία θα εμφανίζονται εδώ καθώς τα ζητά το AI.",
+    "description": "Empty-state for the tool list",
+    "_machine_translated": true,
+    "_source_hash": "6f6aa13ea94449cb"
+  },
+  "settings.tool_permissions.reset_btn": {
+    "message": "Επαναφορά όλων των δικαιωμάτων",
+    "description": "Button to clear every per-tool grant",
+    "_machine_translated": true,
+    "_source_hash": "9707b324e53eda38"
+  },
+  "settings.tool_permissions.reset_confirm": {
+    "message": "Αυτό θα αφαιρέσει όλα τα δικαιώματα εργαλείων και θα τα επαναφέρει σε «Πάντα ερώτηση». Συνέχεια;",
+    "description": "Confirm dialog before resetting",
+    "_machine_translated": true,
+    "_source_hash": "3f0f9660ee47ffb9"
+  },
+  "settings.tool_permissions.audit.section": {
+    "message": "📜 Αρχείο ελέγχου",
+    "description": "Subsection header for the permission audit log",
+    "_machine_translated": true,
+    "_source_hash": "1e507496d13efce5"
+  },
+  "settings.tool_permissions.audit.label": {
+    "message": "Ιστορικό δικαιωμάτων",
+    "description": "Section label for the audit log block",
+    "_machine_translated": true,
+    "_source_hash": "197987343bd8f777"
+  },
+  "settings.tool_permissions.audit.description": {
+    "message": "Κάθε χορήγηση, άρνηση, ανάκληση, λήξη δικαιώματος και εναλλαγή λειτουργίας terminator καταγράφεται εδώ. Το αρχείο αποθηκεύεται τοπικά σε απλό JSON και μπορεί να αλλοιωθεί — χρησιμοποιήστε το για γρήγορο έλεγχο της πρόσφατης δραστηριότητας, όχι για εγκληματολογικό έλεγχο.",
+    "description": "Helper text above the audit log",
+    "_machine_translated": true,
+    "_source_hash": "89a4d589ba5c25e7"
+  },
+  "settings.tool_permissions.audit.filter.all": {
+    "message": "Όλα τα συμβάντα",
+    "description": "Filter dropdown — show all event kinds",
+    "_machine_translated": true,
+    "_source_hash": "ef963bd3d57a69e3"
+  },
+  "settings.tool_permissions.audit.filter.granted": {
+    "message": "Χορηγημένα",
+    "description": "Filter — only granted events",
+    "_machine_translated": true,
+    "_source_hash": "1212c246579d078c"
+  },
+  "settings.tool_permissions.audit.filter.denied": {
+    "message": "Απορριφθέντα",
+    "description": "Filter — only denied events",
+    "_machine_translated": true,
+    "_source_hash": "676ca92b6090dba1"
+  },
+  "settings.tool_permissions.audit.filter.revoked": {
+    "message": "Ανακληθέντα",
+    "description": "Filter — only revoked events",
+    "_machine_translated": true,
+    "_source_hash": "759102fc95ce6b1d"
+  },
+  "settings.tool_permissions.audit.filter.expired": {
+    "message": "Ληγμένα",
+    "description": "Filter — only expired events",
+    "_machine_translated": true,
+    "_source_hash": "3452d35f583fa87a"
+  },
+  "settings.tool_permissions.audit.filter.terminator": {
+    "message": "Λειτουργία terminator",
+    "description": "Filter — only terminator-mode toggle events",
+    "_machine_translated": true,
+    "_source_hash": "c199053bdd3fc444"
+  },
+  "settings.tool_permissions.audit.refresh": {
+    "message": "Ανανέωση",
+    "description": "Button to reload the audit log",
+    "_machine_translated": true,
+    "_source_hash": "2d04c572772d368a"
+  },
+  "settings.tool_permissions.audit.clear": {
+    "message": "Εκκαθάριση αρχείου",
+    "description": "Button to clear the audit log",
+    "_machine_translated": true,
+    "_source_hash": "f3d923ca2eab5f8b"
+  },
+  "settings.tool_permissions.audit.clear_confirm": {
+    "message": "Να εκκαθαριστεί το αρχείο ελέγχου δικαιωμάτων; Αυτή η ενέργεια δεν μπορεί να αναιρεθεί. Τα ίδια τα δικαιώματα ΔΕΝ επηρεάζονται.",
+    "description": "Confirm dialog before clearing the log",
+    "_machine_translated": true,
+    "_source_hash": "7eda4b2a9701119c"
+  },
+  "settings.tool_permissions.audit.loading": {
+    "message": "Φόρτωση…",
+    "description": "Placeholder while the audit log loads",
+    "_machine_translated": true,
+    "_source_hash": "b5be95290c2e30a2"
+  },
+  "settings.tool_permissions.audit.empty": {
+    "message": "Δεν υπάρχουν καταχωρίσεις ελέγχου ακόμη. Τα συμβάντα θα εμφανίζονται εδώ καθώς το AI ζητά εργαλεία.",
+    "description": "Empty state when the log has zero entries",
+    "_machine_translated": true,
+    "_source_hash": "8eb0dc8aa27fdbc9"
+  },
+  "settings.tool_permissions.audit.no_match": {
+    "message": "Καμία καταχώριση δεν ταιριάζει με το τρέχον φίλτρο.",
+    "description": "Empty state when the log has entries but none match the filter",
+    "_machine_translated": true,
+    "_source_hash": "b73cd5372b419187"
+  },
+  "settings.tool_permissions.audit.unknown_time": {
+    "message": "(άγνωστη ώρα)",
+    "description": "Fallback when an entry has no `at` timestamp",
+    "_machine_translated": true,
+    "_source_hash": "d58d9dfe6571a87b"
+  },
+  "settings.tool_permissions.audit.summary.granted": {
+    "message": "Χορηγήθηκε <strong>{tool}</strong> ({grant_type})",
+    "description": "Audit row summary — grant event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6fc01e3b617d3f21"
+  },
+  "settings.tool_permissions.audit.summary.denied": {
+    "message": "Απορρίφθηκε το <strong>{tool}</strong>",
+    "description": "Audit row summary — deny event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "596b830083aa8dcb"
+  },
+  "settings.tool_permissions.audit.summary.revoked": {
+    "message": "Ανακλήθηκε το <strong>{tool}</strong>",
+    "description": "Audit row summary — revoke event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "9fdb75fada222cdb"
+  },
+  "settings.tool_permissions.audit.summary.expired": {
+    "message": "Έληξε το <strong>{tool}</strong>",
+    "description": "Audit row summary — expiry event (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "39f8b0ef768e2c66"
+  },
+  "settings.tool_permissions.audit.summary.terminator_on": {
+    "message": "<strong>Η λειτουργία Terminator ενεργοποιήθηκε</strong>",
+    "description": "Audit row summary — terminator mode turned on (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "55a291c1cb2f6ed6"
+  },
+  "settings.tool_permissions.audit.summary.terminator_off": {
+    "message": "Η λειτουργία Terminator απενεργοποιήθηκε",
+    "description": "Audit row summary — terminator mode turned off",
+    "_machine_translated": true,
+    "_source_hash": "2ad803948087380e"
+  },
+  "settings.tool_permissions.audit.summary.unknown": {
+    "message": "Άγνωστο συμβάν: {kind}",
+    "description": "Audit row summary — fallback for an unrecognised event kind",
+    "_machine_translated": true,
+    "_source_hash": "e83863444f8914a8"
+  },
+  "settings.tool_permissions.audit.meta.session": {
+    "message": "συνεδρία {id}",
+    "description": "Meta line — session id for the event",
+    "_machine_translated": true,
+    "_source_hash": "391248a6a222b60d"
+  },
+  "settings.tool_permissions.audit.meta.was_policy": {
+    "message": "ήταν {policy}",
+    "description": "Meta line — prior policy for revoke/expiry events",
+    "_machine_translated": true,
+    "_source_hash": "482c7a4c90c5ff34"
+  },
+  "settings.tool_permissions.danger.section": {
+    "message": "⚠️ Ζώνη κινδύνου",
+    "description": "Subsection header for the terminator-mode toggle",
+    "_machine_translated": true,
+    "_source_hash": "cc3073aae24a0b5c"
+  },
+  "settings.tool_permissions.terminator.label": {
+    "message": "Λειτουργία Terminator",
+    "description": "Toggle: auto-approve all tool requests",
+    "_machine_translated": true,
+    "_source_hash": "08740ca3d23503e7"
+  },
+  "settings.tool_permissions.terminator.description": {
+    "message": "Αυτόματη έγκριση ΟΛΩΝ των αιτημάτων εργαλείων χωρίς ερώτηση. Το AI μπορεί να διαβάζει, να γράφει, να εκτελεί και να διαγράφει χωρίς την άδειά σας.",
+    "description": "Helper text under the terminator toggle",
+    "_machine_translated": true,
+    "_source_hash": "1942ab049e1bedb9"
+  },
+  "settings.tool_permissions.terminator.confirm_full": {
+    "message": "Η λειτουργία Terminator θα εγκρίνει αυτόματα ΟΛΑ τα αιτήματα εργαλείων.\n\nΤο AI μπορεί να διαβάζει, να γράφει, να εκτελεί και να διαγράφει χωρίς να ρωτά.\n\nΕίστε σίγουροι;",
+    "description": "Full confirm dialog body when enabling terminator (Tauri ask)",
+    "_machine_translated": true,
+    "_source_hash": "a1003aa098ccc14d"
+  },
+  "settings.tool_permissions.terminator.confirm_short": {
+    "message": "⚠️ Η λειτουργία Terminator θα εγκρίνει αυτόματα ΟΛΑ τα αιτήματα εργαλείων. Είστε σίγουροι;",
+    "description": "Fallback confirm() when Tauri dialog API is unavailable",
+    "_machine_translated": true,
+    "_source_hash": "bdf26517d527622b"
+  },
+  "settings.tool_permissions.terminator.dialog_title": {
+    "message": "⚠️ Ενεργοποίηση λειτουργίας Terminator",
+    "description": "Title of the confirm dialog",
+    "_machine_translated": true,
+    "_source_hash": "68f7764c337ba4b9"
+  },
+  "settings.tool_permissions.tool.last_seen": {
+    "message": "Τελευταία εμφάνιση: {date}",
+    "description": "Per-tool meta line — last invocation date",
+    "_machine_translated": true,
+    "_source_hash": "6b79c17da83da7d3"
+  },
+  "settings.tool_permissions.tool.granted_at": {
+    "message": " · Παραχωρήθηκε: {date}",
+    "description": "Appended to last_seen for 24h grants",
+    "_machine_translated": true,
+    "_source_hash": "731ba36dc7a143c7"
+  },
+  "settings.tool_permissions.tool.badge.extension": {
+    "message": "Επέκταση",
+    "description": "Pill shown on extension-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "7896849cd04a7674"
+  },
+  "settings.tool_permissions.tool.badge.mcp": {
+    "message": "MCP",
+    "description": "Pill shown on MCP-provided tools",
+    "_machine_translated": true,
+    "_source_hash": "2989363ea3d062a7"
+  },
+  "settings.tool_permissions.tool.policy.ask": {
+    "message": "Πάντα ερώτηση",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "2d9891361b640554"
+  },
+  "settings.tool_permissions.tool.policy.allow_24h": {
+    "message": "Αποδοχή 24 ώρες",
+    "description": "Per-tool policy option — 24-hour grant",
+    "_machine_translated": true,
+    "_source_hash": "6192bb5c00b4e4c5"
+  },
+  "settings.tool_permissions.tool.policy.always_allow": {
+    "message": "Πάντα αποδοχή",
+    "description": "Per-tool policy option — persistent grant",
+    "_machine_translated": true,
+    "_source_hash": "99584d87918082a3"
+  },
+  "settings.tool_permissions.tool.policy.deny": {
+    "message": "Απόρριψη",
+    "description": "Per-tool policy option",
+    "_machine_translated": true,
+    "_source_hash": "d79610dc3c64434a"
+  },
+  "settings.tool_permissions.tool.remove_title": {
+    "message": "Αφαίρεση",
+    "description": "Tooltip on the per-tool remove button",
+    "_machine_translated": true,
+    "_source_hash": "310c8caf4846272c"
   }
 }

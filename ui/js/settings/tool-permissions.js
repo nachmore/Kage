@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { getToolEmoji, escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
  * Agent Tools Settings Module
@@ -8,58 +9,58 @@ import { getSettingsManager, registerSettingsActions } from './module-registry.j
 
 export class ToolPermissionsSettingsModule extends SettingsModule {
     constructor() {
-        super('tool-permissions', 'Agent Permissions', '🔧');
+        super('tool-permissions', t('settings.sidebar.tool_permissions'), '🔧');
         this.trustAll = false;
         this.tools = [];
     }
 
     render() {
         return `
-            <div class="settings-section-header">${this.icon} Agent Tools</div>
+            <div class="settings-section-header">${this.icon} ${t('settings.tool_permissions.title')}</div>
 
             <div class="setting-row">
-                <div class="setting-label">Seen Tools</div>
+                <div class="setting-label">${t('settings.tool_permissions.seen.label')}</div>
                 <div class="setting-description">
-                    Tools the AI has requested to use. Set each tool's permission policy.
+                    ${t('settings.tool_permissions.seen.description')}
                 </div>
                 <div class="agent-tools-list" id="agentToolsList" style="margin-top: 8px;">
-                    <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
+                    <div class="tools-empty">${t('settings.tool_permissions.empty')}</div>
                 </div>
-                <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">Reset All Permissions</button>
+                <button class="reset-permissions-btn" id="resetPermissionsBtn" style="margin-top: 12px;">${t('settings.tool_permissions.reset_btn')}</button>
             </div>
 
-            <div class="setting-section-label" style="margin-top: 32px;">📜 Audit Log</div>
+            <div class="setting-section-label" style="margin-top: 32px;">${t('settings.tool_permissions.audit.section')}</div>
             <div class="setting-row">
-                <div class="setting-label">Permission History</div>
+                <div class="setting-label">${t('settings.tool_permissions.audit.label')}</div>
                 <div class="setting-description">
-                    Every permission grant, denial, revoke, expiry, and terminator-mode toggle is recorded here. The log is stored locally in plain JSON and can be tampered with — use it to spot-check recent activity, not for forensic audit.
+                    ${t('settings.tool_permissions.audit.description')}
                 </div>
                 <div class="audit-log-controls" style="display:flex; gap:8px; margin-top:8px; align-items:center;">
                     <select id="auditLogFilter" class="agent-tool-select" style="min-width:140px;">
-                        <option value="all">All events</option>
-                        <option value="granted">Granted</option>
-                        <option value="denied">Denied</option>
-                        <option value="revoked">Revoked</option>
-                        <option value="expired">Expired</option>
-                        <option value="terminator_mode_changed">Terminator mode</option>
+                        <option value="all">${t('settings.tool_permissions.audit.filter.all')}</option>
+                        <option value="granted">${t('settings.tool_permissions.audit.filter.granted')}</option>
+                        <option value="denied">${t('settings.tool_permissions.audit.filter.denied')}</option>
+                        <option value="revoked">${t('settings.tool_permissions.audit.filter.revoked')}</option>
+                        <option value="expired">${t('settings.tool_permissions.audit.filter.expired')}</option>
+                        <option value="terminator_mode_changed">${t('settings.tool_permissions.audit.filter.terminator')}</option>
                     </select>
-                    <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">Refresh</button>
-                    <button id="auditLogClearBtn" class="reset-permissions-btn">Clear log</button>
+                    <button id="auditLogRefreshBtn" class="reset-permissions-btn" style="background:#3a3640;">${t('settings.tool_permissions.audit.refresh')}</button>
+                    <button id="auditLogClearBtn" class="reset-permissions-btn">${t('settings.tool_permissions.audit.clear')}</button>
                     <span id="auditLogPath" style="flex:1; text-align:right; font-size:11px; color:#938f9b; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
                 </div>
                 <div class="audit-log-list" id="auditLogList" style="margin-top: 8px; max-height: 320px; overflow-y: auto; border:1px solid #3a3640; border-radius:6px; background:#1a1720;">
-                    <div class="tools-empty">Loading…</div>
+                    <div class="tools-empty">${t('settings.tool_permissions.audit.loading')}</div>
                 </div>
             </div>
 
-            <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">⚠️ Danger Zone</div>
+            <div class="setting-section-label" style="color: #ef4444; margin-top: 32px;">${t('settings.tool_permissions.danger.section')}</div>
             <div class="setting-row terminator-row">
                 <div class="terminator-header">
                     <div class="terminator-mascot" id="terminatorMascot"></div>
                     <div class="terminator-text">
                         ${this.createCheckboxRow(
-                            'Terminator Mode',
-                            'Auto-approve ALL tool requests without prompting. The AI can read, write, execute, and delete without your permission.',
+                            t('settings.tool_permissions.terminator.label'),
+                            t('settings.tool_permissions.terminator.description'),
                             'terminatorMode',
                             false
                         )}
@@ -92,12 +93,15 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     let confirmed = false;
                     if (ask) {
                         confirmed = await ask(
-                            'Terminator Mode will auto-approve ALL tool requests.\n\nThe AI can read, write, execute, and delete without asking.\n\nAre you sure?',
-                            { title: '⚠️ Enable Terminator Mode', kind: 'warning' }
+                            t('settings.tool_permissions.terminator.confirm_full'),
+                            {
+                                title: t('settings.tool_permissions.terminator.dialog_title'),
+                                kind: 'warning',
+                            }
                         );
                     } else {
                         confirmed = confirm(
-                            '⚠️ Terminator Mode will auto-approve ALL tool requests. Are you sure?'
+                            t('settings.tool_permissions.terminator.confirm_short')
                         );
                     }
                     if (!confirmed) {
@@ -112,12 +116,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         const resetBtn = document.getElementById('resetPermissionsBtn');
         if (resetBtn) {
             resetBtn.addEventListener('click', async () => {
-                if (
-                    !confirm(
-                        'This will remove all tool permissions and reset to "Always Ask" for everything. Continue?'
-                    )
-                )
-                    return;
+                if (!confirm(t('settings.tool_permissions.reset_confirm'))) return;
                 this.tools = [];
                 this.terminatorMode = false;
                 const terminatorCheckbox = document.getElementById('terminatorMode');
@@ -150,12 +149,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         const clearBtn = document.getElementById('auditLogClearBtn');
         if (clearBtn) {
             clearBtn.addEventListener('click', async () => {
-                if (
-                    !confirm(
-                        'Clear the permission audit log? This cannot be undone. Permissions themselves are NOT affected.'
-                    )
-                )
-                    return;
+                if (!confirm(t('settings.tool_permissions.audit.clear_confirm'))) return;
                 try {
                     await window.__TAURI__.core.invoke('clear_permission_audit_log');
                     this.auditEntries = [];
@@ -211,7 +205,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
 
         if (this.tools.length === 0) {
             container.innerHTML = `
-                <div class="tools-empty">No tools seen yet. Tools will appear here as the AI requests them.</div>
+                <div class="tools-empty">${t('settings.tool_permissions.empty')}</div>
             `;
             return;
         }
@@ -224,22 +218,28 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                     : '';
                 const isExtension = tool.title.startsWith('ext:');
                 const badge = isExtension
-                    ? '<span class="agent-tool-badge ext-badge">Extension</span>'
-                    : '<span class="agent-tool-badge mcp-badge">MCP</span>';
+                    ? `<span class="agent-tool-badge ext-badge">${t('settings.tool_permissions.tool.badge.extension')}</span>`
+                    : `<span class="agent-tool-badge mcp-badge">${t('settings.tool_permissions.tool.badge.mcp')}</span>`;
+                const grantedSuffix =
+                    tool.grant_type === '24h' && tool.granted_at
+                        ? t('settings.tool_permissions.tool.granted_at', {
+                              date: new Date(tool.granted_at).toLocaleString(),
+                          })
+                        : '';
                 return `
                 <div class="agent-tool-item">
                     <div class="agent-tool-icon">${icon}</div>
                     <div class="agent-tool-info">
                         <div class="agent-tool-name">${escapeHtml(tool.title)} ${badge}</div>
-                        <div class="agent-tool-meta">Last seen: ${lastSeen}${tool.grant_type === '24h' && tool.granted_at ? ' · Granted: ' + new Date(tool.granted_at).toLocaleString() : ''}</div>
+                        <div class="agent-tool-meta">${t('settings.tool_permissions.tool.last_seen', { date: lastSeen })}${grantedSuffix}</div>
                     </div>
                     <select class="agent-tool-select" data-index="${index}" data-action-change="toolPermissions.updatePolicy" data-arg="${index}">
-                        <option value="ask" ${tool.policy === 'ask' ? 'selected' : ''}>Always Ask</option>
-                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === '24h' ? 'selected' : ''} data-grant="24h">Allow 24h</option>
-                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === 'always' ? 'selected' : ''} data-grant="always">Always Allow</option>
-                        <option value="deny" ${tool.policy === 'deny' ? 'selected' : ''}>Deny</option>
+                        <option value="ask" ${tool.policy === 'ask' ? 'selected' : ''}>${t('settings.tool_permissions.tool.policy.ask')}</option>
+                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === '24h' ? 'selected' : ''} data-grant="24h">${t('settings.tool_permissions.tool.policy.allow_24h')}</option>
+                        <option value="allow" ${tool.policy === 'allow' && tool.grant_type === 'always' ? 'selected' : ''} data-grant="always">${t('settings.tool_permissions.tool.policy.always_allow')}</option>
+                        <option value="deny" ${tool.policy === 'deny' ? 'selected' : ''}>${t('settings.tool_permissions.tool.policy.deny')}</option>
                     </select>
-                    <button class="agent-tool-remove" data-action="toolPermissions.removeTool" data-arg="${index}" title="Remove">✕</button>
+                    <button class="agent-tool-remove" data-action="toolPermissions.removeTool" data-arg="${index}" title="${t('settings.tool_permissions.tool.remove_title')}">✕</button>
                 </div>
             `;
             })
@@ -303,7 +303,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
 
         if (filtered.length === 0) {
             list.innerHTML = `<div class="tools-empty" style="padding:14px; text-align:center; color:#938f9b;">
-                ${entries.length === 0 ? 'No audit entries yet. Events will appear here as the AI requests tools.' : 'No entries match the current filter.'}
+                ${entries.length === 0 ? t('settings.tool_permissions.audit.empty') : t('settings.tool_permissions.audit.no_match')}
             </div>`;
             return;
         }
@@ -324,7 +324,7 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                   minute: '2-digit',
                   second: '2-digit',
               })
-            : '(unknown time)';
+            : t('settings.tool_permissions.audit.unknown_time');
         const kind = entry.event || 'unknown';
 
         let icon = '📝';
@@ -334,8 +334,14 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
         switch (kind) {
             case 'granted':
                 icon = '✅';
-                summary = `Granted <strong>${escapeHtml(entry.tool || '?')}</strong> (${escapeHtml(entry.grant_type || '?')})`;
-                if (entry.session_id) meta = `session ${escapeHtml(entry.session_id.slice(0, 8))}`;
+                summary = t('settings.tool_permissions.audit.summary.granted', {
+                    tool: escapeHtml(entry.tool || '?'),
+                    grant_type: escapeHtml(entry.grant_type || '?'),
+                });
+                if (entry.session_id)
+                    meta = t('settings.tool_permissions.audit.meta.session', {
+                        id: escapeHtml(entry.session_id.slice(0, 8)),
+                    });
                 if (entry.args_preview) {
                     meta +=
                         (meta ? ' · ' : '') +
@@ -344,30 +350,47 @@ export class ToolPermissionsSettingsModule extends SettingsModule {
                 break;
             case 'denied':
                 icon = '⛔';
-                summary = `Denied <strong>${escapeHtml(entry.tool || '?')}</strong>`;
-                if (entry.session_id) meta = `session ${escapeHtml(entry.session_id.slice(0, 8))}`;
+                summary = t('settings.tool_permissions.audit.summary.denied', {
+                    tool: escapeHtml(entry.tool || '?'),
+                });
+                if (entry.session_id)
+                    meta = t('settings.tool_permissions.audit.meta.session', {
+                        id: escapeHtml(entry.session_id.slice(0, 8)),
+                    });
                 break;
             case 'revoked':
                 icon = '🗑️';
-                summary = `Revoked <strong>${escapeHtml(entry.tool || '?')}</strong>`;
-                if (entry.prior_policy) meta = `was ${escapeHtml(entry.prior_policy)}`;
+                summary = t('settings.tool_permissions.audit.summary.revoked', {
+                    tool: escapeHtml(entry.tool || '?'),
+                });
+                if (entry.prior_policy)
+                    meta = t('settings.tool_permissions.audit.meta.was_policy', {
+                        policy: escapeHtml(entry.prior_policy),
+                    });
                 if (entry.prior_grant_type)
                     meta += (meta ? ' ' : '') + `(${escapeHtml(entry.prior_grant_type)})`;
                 break;
             case 'expired':
                 icon = '⏳';
-                summary = `Expired <strong>${escapeHtml(entry.tool || '?')}</strong>`;
-                if (entry.prior_grant_type) meta = `was ${escapeHtml(entry.prior_grant_type)}`;
+                summary = t('settings.tool_permissions.audit.summary.expired', {
+                    tool: escapeHtml(entry.tool || '?'),
+                });
+                if (entry.prior_grant_type)
+                    meta = t('settings.tool_permissions.audit.meta.was_policy', {
+                        policy: escapeHtml(entry.prior_grant_type),
+                    });
                 break;
             case 'terminator_mode_changed':
                 icon = entry.enabled ? '⚠️' : '🛡️';
                 summary = entry.enabled
-                    ? '<strong>Terminator mode enabled</strong>'
-                    : 'Terminator mode disabled';
+                    ? t('settings.tool_permissions.audit.summary.terminator_on')
+                    : t('settings.tool_permissions.audit.summary.terminator_off');
                 break;
             default:
                 icon = '❔';
-                summary = `Unknown event: ${escapeHtml(kind)}`;
+                summary = t('settings.tool_permissions.audit.summary.unknown', {
+                    kind: escapeHtml(kind),
+                });
                 try {
                     meta = escapeHtml(JSON.stringify(entry));
                 } catch {}
