@@ -1,6 +1,6 @@
 import { SettingsModule } from './base.js';
 import { applyTheme as kageApplyTheme, loadAndApplyTheme } from '../shared/theme.js';
-import { t, isMachineTranslated, activeLanguage } from '../shared/i18n.js';
+import { t, isMachineTranslated, activeLanguage, systemLanguage } from '../shared/i18n.js';
 /**
  * Appearance Settings Module
  */
@@ -19,7 +19,7 @@ export class AppearanceSettingsModule extends SettingsModule {
                         <div class="setting-label">${t('settings.appearance.language.label')}</div>
                         <div class="setting-description">${t('settings.appearance.language.description')}</div>
                         <select class="setting-select" id="language">
-                            <option value="">${t('settings.appearance.language.system', { detected: activeLanguage() })}</option>
+                            <option value="">${t('settings.appearance.language.system', { detected: systemLanguage() || activeLanguage() })}</option>
                         </select>
                         <div id="languageMachineWarning" class="setting-description" style="display:none;color:var(--kage-text-muted);margin-top:6px;">
                             ${t('settings.appearance.language.machine_translated_warning')}
@@ -298,14 +298,25 @@ export class AppearanceSettingsModule extends SettingsModule {
             sel.innerHTML = '';
             const systemOpt = document.createElement('option');
             systemOpt.value = '';
+            // Show the OS-reported locale, not the currently-active language.
+            // The active language can differ if the user has an explicit
+            // override; the "System default" hint should describe what
+            // selecting "" will resolve to (i.e. sys-locale).
             systemOpt.textContent = t('settings.appearance.language.system', {
-                detected: activeLanguage(),
+                detected: systemLanguage() || activeLanguage(),
             });
             sel.appendChild(systemOpt);
             for (const l of langs) {
                 const opt = document.createElement('option');
                 opt.value = l.code;
-                opt.textContent = l.machine_translated ? `${l.name} (β)` : l.name;
+                // Append the language code in parens — disambiguates pairs like
+                // "Português" pt-BR vs pt-PT and "中文" zh-CN vs zh-TW for
+                // people who speak the language. The (β) marker has been
+                // dropped: every non-EN catalog is currently machine-
+                // translated, so the per-row badge was universal noise. The
+                // global banner under the dropdown still warns about
+                // machine-translated content for the *active* language.
+                opt.textContent = `${l.name} (${l.code})`;
                 sel.appendChild(opt);
             }
             sel.value = currentValue || '';

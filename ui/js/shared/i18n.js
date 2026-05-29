@@ -59,7 +59,7 @@
 
 let _catalog = null;
 let _fallback = null;
-let _meta = { language: 'en', rtl: false, machine_translated: false };
+let _meta = { language: 'en', system_language: '', rtl: false, machine_translated: false };
 let _loadPromise = null;
 
 /**
@@ -78,7 +78,7 @@ export async function initI18n(invoke) {
             // This keeps the UI from going blank if the IPC ever breaks.
             _catalog = {};
             _fallback = {};
-            _meta = { language: 'en', rtl: false, machine_translated: false };
+            _meta = { language: 'en', system_language: '', rtl: false, machine_translated: false };
         }
         _applyDocumentDir();
     })();
@@ -114,6 +114,7 @@ function _applyPayload(payload) {
     _fallback = payload?.fallback || {};
     _meta = {
         language: payload?.language || 'en',
+        system_language: payload?.system_language || '',
         rtl: !!payload?.rtl,
         machine_translated: !!payload?.machine_translated,
     };
@@ -133,6 +134,16 @@ function _applyDocumentDir() {
  */
 export function activeLanguage() {
     return _meta.language;
+}
+
+/**
+ * The OS-reported locale at app startup (e.g. "en-US", "ja-JP"), regardless
+ * of any user override. Returns an empty string if `sys-locale` couldn't
+ * detect anything. Surfaced for the settings picker so the "System default"
+ * option can hint at the *system* language rather than the active one.
+ */
+export function systemLanguage() {
+    return _meta.system_language;
 }
 
 /**

@@ -25,6 +25,12 @@ use tauri::{AppHandle, Emitter, State};
 pub struct I18nPayload {
     /// Active language code (the canonical key, e.g. "en", "zh-CN").
     pub language: String,
+    /// OS-detected locale at app startup (e.g. "en-US", "ja-JP"), regardless
+    /// of any user override. Used by the settings picker to render a "System
+    /// default ({system})" hint that points at the *system* language, not
+    /// whatever the user picked. Empty string when sys-locale couldn't
+    /// detect anything.
+    pub system_language: String,
     /// `true` if the active language is right-to-left.
     pub rtl: bool,
     /// `true` if the active catalog is mostly machine-translated.
@@ -54,6 +60,10 @@ pub fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
     let language = i18n::active_language();
     let rtl = i18n::active_is_rtl();
     let machine_translated = i18n::active_is_machine_translated();
+    // sys_locale returns whatever the OS told us at startup; this is
+    // independent of the user's `config.ui.language` override and lets the
+    // settings UI honestly answer "what is the system language?".
+    let system_language = sys_locale::get_locale().unwrap_or_default();
 
     let catalog = i18n::serialise_catalog(&language).unwrap_or_default();
     let fallback = if language == "en" {
@@ -64,6 +74,7 @@ pub fn get_i18n_catalog() -> Result<I18nPayload, AppError> {
 
     Ok(I18nPayload {
         language,
+        system_language,
         rtl,
         machine_translated,
         catalog,
