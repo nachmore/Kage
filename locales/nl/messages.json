@@ -4198,5 +4198,893 @@
     "description": "Filter button — show only installed extensions",
     "_machine_translated": true,
     "_source_hash": "d87b8ef505f77e45"
+  },
+  "chat.session.default_title": {
+    "message": "Nieuwe chat",
+    "description": "Default placeholder title for a brand-new chat session",
+    "_machine_translated": true,
+    "_source_hash": "9ae274eff23c4495"
+  },
+  "chat.session.current_title": {
+    "message": "Huidige sessie",
+    "description": "Synthetic title for the active session before it has been saved to disk",
+    "_machine_translated": true,
+    "_source_hash": "9769ec71ffc0826b"
+  },
+  "chat.placeholder.continue": {
+    "message": "Zet je gesprek voort...",
+    "description": "Placeholder text shown in an empty chat that's already active but has no messages on disk",
+    "_machine_translated": true,
+    "_source_hash": "a2a8eeacb6b13ba9"
+  },
+  "chat.placeholder.deleted": {
+    "message": "Deze sessie is verwijderd vanuit een ander venster.",
+    "description": "Placeholder text shown after the active session was deleted from another window",
+    "_machine_translated": true,
+    "_source_hash": "df9afcd0923c4321"
+  },
+  "chat.placeholder.select_session": {
+    "message": "Selecteer een sessie om verder te gaan...",
+    "description": "Placeholder shown after the active session was deleted, prompting the user to pick another",
+    "_machine_translated": true,
+    "_source_hash": "378b4d333e174470"
+  },
+  "chat.delete.cannot_active": {
+    "message": "De actieve sessie kan niet worden verwijderd. Schakel eerst over naar een andere sessie.",
+    "description": "Error message when the user tries to delete the currently active chat session",
+    "_machine_translated": true,
+    "_source_hash": "98fd876a289c5d78"
+  },
+  "chat.delete.confirm": {
+    "message": "Sessie \"{title}\" verwijderen uit {dir}?\n\n• {sessionId}.json\n• {sessionId}.jsonl\n• {sessionId}.lock\n\nDit kan niet ongedaan worden gemaakt.",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "12e174f4fb794406"
+  },
+  "chat.delete.dir_fallback": {
+    "message": "sessiemap",
+    "description": "Fallback shown in delete confirmation when the sessions directory path could not be retrieved",
+    "_machine_translated": true,
+    "_source_hash": "31e55a857e4ee5e3"
+  },
+  "chat.export.failed": {
+    "message": "Exporteren mislukt: {message}",
+    "description": "alert() shown when chat export to markdown fails",
+    "_machine_translated": true,
+    "_source_hash": "f6065f4d9a637401"
+  },
+  "settings.timer.title": {
+    "message": "Timer en stopwatch",
+    "description": "Settings header for timer/stopwatch module",
+    "_machine_translated": true,
+    "_source_hash": "9a18a31bfc5bde6c"
+  },
+  "settings.timer.enable.label": {
+    "message": "Timer en stopwatch inschakelen",
+    "description": "Toggle: enable timer/stopwatch detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "678bddaa749ddaad"
+  },
+  "settings.timer.enable.description": {
+    "message": "Typ \"timer 5m\" voor een aftelling of \"stopwatch\" om op te tellen.",
+    "description": "Helper for the enable timer toggle",
+    "_machine_translated": true,
+    "_source_hash": "8e3ffb4dafcb31e4"
+  },
+  "settings.timer.completion.section": {
+    "message": "Acties bij voltooiing",
+    "description": "Section label for what happens when a timer completes",
+    "_machine_translated": true,
+    "_source_hash": "ef9859fad114361b"
+  },
+  "settings.timer.notify.label": {
+    "message": "Systeemmelding tonen",
+    "description": "Toggle: show notification when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "fef291a150283d6f"
+  },
+  "settings.timer.notify.description": {
+    "message": "Toon een bureaubladmelding wanneer de aftelling nul bereikt.",
+    "description": "Helper for notification toggle",
+    "_machine_translated": true,
+    "_source_hash": "a2e9a16648985101"
+  },
+  "settings.timer.sound.label": {
+    "message": "Geluid afspelen",
+    "description": "Toggle: play sound when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "d2edbd77cdec8c2f"
+  },
+  "settings.timer.sound.description": {
+    "message": "Speel een meldingsgeluid af wanneer de aftelling nul bereikt.",
+    "description": "Helper for play-sound toggle",
+    "_machine_translated": true,
+    "_source_hash": "60675c6425d47bc7"
+  },
+  "settings.timer.sound_id.label": {
+    "message": "Meldingsgeluid",
+    "description": "Label for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "57e02b925ebf52ef"
+  },
+  "settings.timer.sound_id.description": {
+    "message": "Selecteer een geluid dat wordt afgespeeld wanneer de timer voltooid is. Klik op de afspeelknop voor een voorbeeld.",
+    "description": "Helper for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "cce5f3938abf79b7"
+  },
+  "settings.timer.sound.two_tone": {
+    "message": "Tweetonige pieptoon",
+    "description": "Sound option: two-tone beep",
+    "_machine_translated": true,
+    "_source_hash": "812de892f92da1ee"
+  },
+  "settings.timer.sound.chime": {
+    "message": "Belgeluid",
+    "description": "Sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "dee93f9099598fd7"
+  },
+  "settings.timer.sound.alert": {
+    "message": "Waarschuwing",
+    "description": "Sound option: alert",
+    "_machine_translated": true,
+    "_source_hash": "ecd8336bd091fa21"
+  },
+  "settings.timer.sound.gentle": {
+    "message": "Zacht",
+    "description": "Sound option: gentle",
+    "_machine_translated": true,
+    "_source_hash": "626a62bef353f3a2"
+  },
+  "settings.timer.sound.bell": {
+    "message": "Bel",
+    "description": "Sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "28aebe3a9a9f7b8f"
+  },
+  "settings.timer.sound.success": {
+    "message": "Succes",
+    "description": "Sound option: success",
+    "_machine_translated": true,
+    "_source_hash": "962715f3e0091aa9"
+  },
+  "settings.timer.sound.custom": {
+    "message": "Aangepast bestand...",
+    "description": "Sound option: custom audio file",
+    "_machine_translated": true,
+    "_source_hash": "6956fdd1676b5c58"
+  },
+  "settings.timer.preview_btn": {
+    "message": "▶ Voorbeeld",
+    "description": "Button to preview the chosen timer sound",
+    "_machine_translated": true,
+    "_source_hash": "87519a0ca20ef14f"
+  },
+  "settings.timer.preview_btn.title": {
+    "message": "Geluid beluisteren",
+    "description": "Tooltip on the preview button",
+    "_machine_translated": true,
+    "_source_hash": "75e5749ca8084165"
+  },
+  "settings.timer.preview_btn.stop": {
+    "message": "⏹ Stoppen",
+    "description": "Button label while a preview is playing",
+    "_machine_translated": true,
+    "_source_hash": "fa950b19e63df980"
+  },
+  "settings.timer.custom_path.placeholder": {
+    "message": "Pad naar .wav- of .mp3-bestand",
+    "description": "Placeholder for the custom-sound path input",
+    "_machine_translated": true,
+    "_source_hash": "20f560de1b087e47"
+  },
+  "settings.timer.repeats.description": {
+    "message": "Aantal herhalingen — hoe vaak het geluid wordt afgespeeld.",
+    "description": "Helper for repeat-count slider",
+    "_machine_translated": true,
+    "_source_hash": "5963cf2304e44e8a"
+  },
+  "settings.timer.show_window.label": {
+    "message": "Launcher tonen",
+    "description": "Toggle: auto-show Launcher when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "b89f96608c997a07"
+  },
+  "settings.timer.show_window.description": {
+    "message": "Toon de Launcher automatisch als deze verborgen is wanneer de timer afloopt.",
+    "description": "Helper for show-Launcher toggle",
+    "_machine_translated": true,
+    "_source_hash": "7ff55a9af935c571"
+  },
+  "settings.notifications.title": {
+    "message": "Meldingen",
+    "description": "Settings header for notifications module",
+    "_machine_translated": true,
+    "_source_hash": "802d0ca6901e980b"
+  },
+  "settings.notifications.enable.label": {
+    "message": "Meldingen inschakelen",
+    "description": "Toggle: enable desktop notifications",
+    "_machine_translated": true,
+    "_source_hash": "a8a384e0dddafee2"
+  },
+  "settings.notifications.enable.description": {
+    "message": "Toon bureaubladmeldingen voor belangrijke gebeurtenissen",
+    "description": "Helper for enable-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "504688beb7feed27"
+  },
+  "settings.notifications.sound.label": {
+    "message": "Meldingsgeluid",
+    "description": "Label for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "697d1f9511d8253e"
+  },
+  "settings.notifications.sound.description": {
+    "message": "Geluid dat wordt afgespeeld bij meldingen",
+    "description": "Helper for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "0b6060f0568911e5"
+  },
+  "settings.notifications.sound.none": {
+    "message": "Geen",
+    "description": "Notification sound option: none",
+    "_machine_translated": true,
+    "_source_hash": "c08dadeba752bdf3"
+  },
+  "settings.notifications.sound.default": {
+    "message": "Standaard",
+    "description": "Notification sound option: default",
+    "_machine_translated": true,
+    "_source_hash": "b8615c6b791d899d"
+  },
+  "settings.notifications.sound.chime": {
+    "message": "Klokje",
+    "description": "Notification sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "20b372fc3c5a7174"
+  },
+  "settings.notifications.sound.bell": {
+    "message": "Bel",
+    "description": "Notification sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "d68754fc424ee33b"
+  },
+  "settings.notifications.duration.label": {
+    "message": "Duur van melding (seconden)",
+    "description": "Label for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "59c13d24dc2deabc"
+  },
+  "settings.notifications.duration.description": {
+    "message": "Hoe lang meldingen zichtbaar blijven",
+    "description": "Helper for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "768e6087d2e30827"
+  },
+  "settings.notifications.duration.error": {
+    "message": "Duur van melding moet tussen 1 en 30 seconden liggen",
+    "description": "Validation error: notification duration out of range",
+    "_machine_translated": true,
+    "_source_hash": "23b19fa709a72d89"
+  },
+  "settings.math.title": {
+    "message": "Wiskunde",
+    "description": "Settings header for math calculator module",
+    "_machine_translated": true,
+    "_source_hash": "c6546a00df18ff94"
+  },
+  "settings.math.section_description": {
+    "message": "Evalueer wiskundige uitdrukkingen rechtstreeks in de invoerbalk zonder ze naar de agent te sturen.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.math.enable.label": {
+    "message": "Rekenmachine inschakelen",
+    "description": "Toggle: enable math calculator",
+    "_machine_translated": true,
+    "_source_hash": "9a6df98005e21c97"
+  },
+  "settings.math.enable.description": {
+    "message": "Wiskundige uitdrukkingen detecteren en evalueren tijdens het typen",
+    "description": "Helper for enable-math toggle",
+    "_machine_translated": true,
+    "_source_hash": "10dec2fc89a3824d"
+  },
+  "settings.math.precision.label": {
+    "message": "Decimale precisie",
+    "description": "Label for math precision input",
+    "_machine_translated": true,
+    "_source_hash": "e4e1dbc32d42b3bc"
+  },
+  "settings.math.precision.description": {
+    "message": "Aantal decimalen om weer te geven (0 = automatisch)",
+    "description": "Helper for precision input",
+    "_machine_translated": true,
+    "_source_hash": "6f7a548531547790"
+  },
+  "settings.math.auto_copy.label": {
+    "message": "Resultaat automatisch kopiëren",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.math.auto_copy.description": {
+    "message": "Kopieer het antwoord automatisch naar het klembord bij het indrukken van Enter",
+    "description": "Helper for auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "f2b748db360e4e30"
+  },
+  "settings.math.thousands.label": {
+    "message": "Duizendtalscheidingsteken gebruiken",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.math.thousands.description": {
+    "message": "Grote getallen opmaken met scheidingstekens (bijv. 1.000.000)",
+    "description": "Helper for thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "2231a04a320a43f5"
+  },
+  "settings.math.precision.error": {
+    "message": "Wiskundeprecisie moet tussen 0 en 15 liggen",
+    "description": "Validation error: math precision out of range",
+    "_machine_translated": true,
+    "_source_hash": "a4785b2a8011ac2a"
+  },
+  "settings.devtools.title": {
+    "message": "Ontwikkelaarstools",
+    "description": "Settings header for developer-tools module",
+    "_machine_translated": true,
+    "_source_hash": "71275b784fdcd3aa"
+  },
+  "settings.devtools.enable.label": {
+    "message": "Ontwikkelaarstools inschakelen",
+    "description": "Toggle: enable developer tools detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "347f002f1f0e1b28"
+  },
+  "settings.devtools.enable.description": {
+    "message": "Detecteer ontwikkelaarscommando's in de Launcher (UUID, base64, hashing, enz.).",
+    "description": "Helper for enable-devtools toggle",
+    "_machine_translated": true,
+    "_source_hash": "dee3069f5ff9dcf0"
+  },
+  "settings.devtools.individual.label": {
+    "message": "Afzonderlijke tools",
+    "description": "Section label for individual devtool toggles",
+    "_machine_translated": true,
+    "_source_hash": "7187975c54cabc84"
+  },
+  "settings.devtools.individual.description": {
+    "message": "Specifieke ontwikkelaarstools in- of uitschakelen.",
+    "description": "Helper for individual-tools section",
+    "_machine_translated": true,
+    "_source_hash": "8486f3f29aa26a9d"
+  },
+  "settings.devtools.uuid.label": {
+    "message": "UUID-generator",
+    "description": "Toggle: UUID generator devtool",
+    "_machine_translated": true,
+    "_source_hash": "3d53f1c471eefe71"
+  },
+  "settings.devtools.uuid.description": {
+    "message": "Typ \"uuid\" om een willekeurige UUID v4 te genereren.",
+    "description": "Helper for UUID toggle",
+    "_machine_translated": true,
+    "_source_hash": "039feb9565bf38a0"
+  },
+  "settings.devtools.base64.label": {
+    "message": "Base64 coderen/decoderen",
+    "description": "Toggle: base64 devtool",
+    "_machine_translated": true,
+    "_source_hash": "9e7b931393f5aa90"
+  },
+  "settings.devtools.base64.description": {
+    "message": "Typ \"base64 tekst\" om te coderen of \"b64d gecodeerd\" om te decoderen.",
+    "description": "Helper for base64 toggle",
+    "_machine_translated": true,
+    "_source_hash": "d6784c887c4f764f"
+  },
+  "settings.devtools.hash.label": {
+    "message": "Hash-calculator",
+    "description": "Toggle: hash calculator devtool",
+    "_machine_translated": true,
+    "_source_hash": "5d96804fbb2cffe0"
+  },
+  "settings.devtools.hash.description": {
+    "message": "Typ \"md5 tekst\", \"sha1 tekst\", \"sha256 tekst\" of \"sha512 tekst\".",
+    "description": "Helper for hash toggle",
+    "_machine_translated": true,
+    "_source_hash": "9fdee12784e49a1a"
+  },
+  "settings.devtools.epoch.label": {
+    "message": "Epoch/datum-converter",
+    "description": "Toggle: epoch/date converter devtool",
+    "_machine_translated": true,
+    "_source_hash": "aca2837b8049671b"
+  },
+  "settings.devtools.epoch.description": {
+    "message": "Typ een Unix-tijdstempel om de datum te zien, of \"now\" voor de huidige epoch.",
+    "description": "Helper for epoch toggle",
+    "_machine_translated": true,
+    "_source_hash": "a30f56c4694fe14f"
+  },
+  "settings.devtools.json.label": {
+    "message": "JSON-formatter",
+    "description": "Toggle: JSON formatter devtool",
+    "_machine_translated": true,
+    "_source_hash": "494398bbfdcb1eb6"
+  },
+  "settings.devtools.json.description": {
+    "message": "Plak geminimaliseerde JSON om deze opgemaakt te zien.",
+    "description": "Helper for JSON toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bb7a3809c7fc676"
+  },
+  "settings.connection.validate.no_active": {
+    "message": "Geen actieve verbinding geselecteerd.",
+    "description": "Validation error when no active connection is configured",
+    "_machine_translated": true,
+    "_source_hash": "9d769539c51e200a"
+  },
+  "settings.connection.validate.missing_spawn": {
+    "message": "De actieve verbinding mist een spawn-commando.",
+    "description": "Validation error when active local connection has no spawn_command",
+    "_machine_translated": true,
+    "_source_hash": "8a0d548aa625233f"
+  },
+  "settings.connection.session.section": {
+    "message": "Sessie",
+    "description": "Section heading: session-related settings",
+    "_machine_translated": true,
+    "_source_hash": "7501fb307ca1c84d"
+  },
+  "settings.connection.session.start_on_launch.label": {
+    "message": "Agent-backend starten bij opstarten",
+    "description": "Toggle: pre-launch ACP backend at app start",
+    "_machine_translated": true,
+    "_source_hash": "bac19573eda9a8b3"
+  },
+  "settings.connection.session.start_on_launch.description": {
+    "message": "Versnel de eerste reacties door de ACP-backend vooraf te starten wanneer Kage start.",
+    "description": "Helper for start-on-launch toggle",
+    "_machine_translated": true,
+    "_source_hash": "33586de2907d7b81"
+  },
+  "settings.connection.workspace.label": {
+    "message": "Werkmap van agent",
+    "description": "Label for the agent workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "3e045148e890b349"
+  },
+  "settings.connection.workspace.description": {
+    "message": "De map waarin de agent werkt. Hij kan bestanden onder dit pad lezen en wijzigen. Laat leeg om de huidige map te gebruiken.",
+    "description": "Helper for workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "656751e87be5e2ad"
+  },
+  "settings.connection.workspace.placeholder.windows": {
+    "message": "bijv. C:\\Projects\\my-app",
+    "description": "Placeholder for workspace input on Windows",
+    "_machine_translated": true,
+    "_source_hash": "846621c6491e275c"
+  },
+  "settings.connection.workspace.placeholder.unix": {
+    "message": "bijv. /home/you/projects/my-app",
+    "description": "Placeholder for workspace input on macOS/Linux",
+    "_machine_translated": true,
+    "_source_hash": "d87b730787bb8a86"
+  },
+  "settings.connection.list.section": {
+    "message": "Verbindingen",
+    "description": "Section heading: connection list",
+    "_machine_translated": true,
+    "_source_hash": "8cc783ba5ed3b8da"
+  },
+  "settings.connection.list.description": {
+    "message": "De actieve verbinding is wat Kage gebruikt om sessies uit te voeren. Het wisselen van de actieve verbinding vereist een herstart.",
+    "description": "Helper above the connection list",
+    "_machine_translated": true,
+    "_source_hash": "c996a8c073667e90"
+  },
+  "settings.connection.list.detected_subhead": {
+    "message": "Automatisch gedetecteerde agents",
+    "description": "Subheading above the auto-detected agents group",
+    "_machine_translated": true,
+    "_source_hash": "67c7c7b07a1c784b"
+  },
+  "settings.connection.list.searching": {
+    "message": "🔍 Zoeken naar agents…",
+    "description": "Placeholder shown while detection is running",
+    "_machine_translated": true,
+    "_source_hash": "4da1bad7adfe20a9"
+  },
+  "settings.connection.list.add_btn": {
+    "message": "+ Agent toevoegen",
+    "description": "Button: open the add-agent type picker",
+    "_machine_translated": true,
+    "_source_hash": "757b81fbf702e85b"
+  },
+  "settings.connection.list.rescan_btn": {
+    "message": "Opnieuw scannen",
+    "description": "Button: re-run agent auto-detection",
+    "_machine_translated": true,
+    "_source_hash": "e69d56bf6b911f85"
+  },
+  "settings.connection.row.active.title": {
+    "message": "Actief",
+    "description": "Tooltip / pill on the active connection's row",
+    "_machine_translated": true,
+    "_source_hash": "c5effb9e1bcf2e89"
+  },
+  "settings.connection.row.issue_count": {
+    "message": "{count, plural, one {⚠️ {count} probleem} other {⚠️ {count} problemen}}",
+    "description": "Issue badge — count varies",
+    "_machine_translated": true,
+    "_source_hash": "01fcfd012f86c2b6"
+  },
+  "settings.connection.row.make_active_btn": {
+    "message": "Activeren",
+    "description": "Button: switch the active connection",
+    "_machine_translated": true,
+    "_source_hash": "50594c50aaa1065c"
+  },
+  "settings.connection.row.edit_title": {
+    "message": "Deze verbinding bewerken",
+    "description": "Tooltip on the edit (pencil) icon button",
+    "_machine_translated": true,
+    "_source_hash": "802209068e8d3514"
+  },
+  "settings.connection.row.duplicate_title": {
+    "message": "Deze verbinding dupliceren",
+    "description": "Tooltip on the duplicate icon button",
+    "_machine_translated": true,
+    "_source_hash": "7795fb7b1d877c25"
+  },
+  "settings.connection.row.delete_title": {
+    "message": "Deze verbinding verwijderen",
+    "description": "Tooltip on the delete icon button",
+    "_machine_translated": true,
+    "_source_hash": "525d9961c0c3ffa3"
+  },
+  "settings.connection.detected.add_btn": {
+    "message": "Toevoegen",
+    "description": "Button on detected-agent row: adopt as a saved connection",
+    "_machine_translated": true,
+    "_source_hash": "42fd92275af936c7"
+  },
+  "settings.connection.detected.needs_wrapper": {
+    "message": "wrapper vereist",
+    "description": "Pill on detected-agent rows that require an npm wrapper install",
+    "_machine_translated": true,
+    "_source_hash": "9af8700a137aa9eb"
+  },
+  "settings.connection.detected.wrapper_hint_html": {
+    "message": "Installeer <code>{package}</code> via npm om deze CLI te gebruiken.",
+    "description": "Inline hint shown on a needs-wrapper detected agent row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "c0ede81e4f2cfbae"
+  },
+  "settings.connection.detected.install_wrapper_btn": {
+    "message": "ACP-wrapper installeren",
+    "description": "Button: trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "9bbaf09577c61d95"
+  },
+  "settings.connection.install.checking_npm": {
+    "message": "npm controleren…",
+    "description": "Button label while checking whether npm is available",
+    "_machine_translated": true,
+    "_source_hash": "a640e4a3f557a7e3"
+  },
+  "settings.connection.install.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm is niet gevonden op PATH. Installeer Node.js via <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> of voer <code>{cmd}</code> uit in een terminal.</div>",
+    "description": "Inline message when npm is missing (HTML allowed; cmd is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "9b947c169eed3328"
+  },
+  "settings.connection.install.installing": {
+    "message": "Installeren…",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "d2c1d6894f954d6b"
+  },
+  "settings.connection.install.failed_html": {
+    "message": "<div class=\"agent-install-error\">Installatie mislukt: {message}. Probeer <code>{cmd}</code> uit te voeren in een terminal.</div>",
+    "description": "Inline message when ACP wrapper install fails (HTML allowed; message and cmd are pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "93405f902ec170b5"
+  },
+  "settings.connection.install.failed_default": {
+    "message": "installatie mislukt",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "settings.connection.install.success_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Wrapper geïnstalleerd. Vernieuwen…</div>",
+    "description": "Inline message when ACP wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1307f78a857fa11b"
+  },
+  "settings.connection.draft.default_name": {
+    "message": "Nieuwe verbinding",
+    "description": "Default name for a freshly-drafted connection",
+    "_machine_translated": true,
+    "_source_hash": "e3ae7cd633af9468"
+  },
+  "settings.connection.edit.back_btn": {
+    "message": "← Terug",
+    "description": "Button: leave the edit view",
+    "_machine_translated": true,
+    "_source_hash": "89eef33b57ca9572"
+  },
+  "settings.connection.edit.cancel_btn": {
+    "message": "Annuleren",
+    "description": "Button: discard edits and return to the list",
+    "_machine_translated": true,
+    "_source_hash": "3b0afd61ffe6617b"
+  },
+  "settings.connection.edit.save_changes_btn": {
+    "message": "Wijzigingen opslaan",
+    "description": "Button label when editing an existing connection",
+    "_machine_translated": true,
+    "_source_hash": "4971a90ac2a5c545"
+  },
+  "settings.connection.edit.add_btn": {
+    "message": "Verbinding toevoegen",
+    "description": "Button label when adding a new connection",
+    "_machine_translated": true,
+    "_source_hash": "a9e738f47a8a0f68"
+  },
+  "settings.connection.edit.subtitle.new": {
+    "message": "Nieuwe verbinding",
+    "description": "Subtitle in the edit header for a new draft",
+    "_machine_translated": true,
+    "_source_hash": "13bf1a7c8f80554a"
+  },
+  "settings.connection.edit.subtitle.active": {
+    "message": "Actieve verbinding bewerken",
+    "description": "Subtitle in the edit header when editing the active connection",
+    "_machine_translated": true,
+    "_source_hash": "200aedf8d0f8fe49"
+  },
+  "settings.connection.edit.subtitle.editing": {
+    "message": "Verbinding bewerken",
+    "description": "Subtitle in the edit header when editing a non-active connection",
+    "_machine_translated": true,
+    "_source_hash": "5fbdeafb80f26d41"
+  },
+  "settings.connection.edit.preset_install_link": {
+    "message": "Installatie / documentatie ↗",
+    "description": "Link to the preset's install page / documentation",
+    "_machine_translated": true,
+    "_source_hash": "542adda6e3c376a7"
+  },
+  "settings.connection.edit.spawn_required": {
+    "message": "Spawn-commando is vereist voor lokale verbindingen.",
+    "description": "alert() shown when saving a local connection without a spawn command",
+    "_machine_translated": true,
+    "_source_hash": "3e5dfbd1faff51b2"
+  },
+  "settings.connection.edit.cannot_delete_active": {
+    "message": "Schakel over naar een andere verbinding voordat je deze verwijdert.",
+    "description": "alert() shown when trying to delete the active connection",
+    "_machine_translated": true,
+    "_source_hash": "42281a4834bd9da8"
+  },
+  "settings.connection.duplicate.copy_of": {
+    "message": "Kopie van {name}",
+    "description": "Default name for a duplicated connection",
+    "_machine_translated": true,
+    "_source_hash": "b681bfb804f02847"
+  },
+  "settings.connection.duplicate.fallback_name": {
+    "message": "verbinding",
+    "description": "Fallback name if the original connection has no name when duplicating",
+    "_machine_translated": true,
+    "_source_hash": "6a5fe3eac37be17f"
+  },
+  "settings.connection.error.unknown": {
+    "message": "Onbekende fout",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "settings.connection.row.no_command": {
+    "message": "(geen commando)",
+    "description": "Detail text shown for a local connection with no spawn command",
+    "_machine_translated": true,
+    "_source_hash": "815817ac9c41e96a"
+  },
+  "settings.connection.ollama.subtitle.new": {
+    "message": "Nieuwe Ollama-agent",
+    "description": "Subtitle in the Ollama edit header for a new agent",
+    "_machine_translated": true,
+    "_source_hash": "b2c1a8c2f912ce42"
+  },
+  "settings.connection.ollama.subtitle.editing": {
+    "message": "Ollama-agent bewerken",
+    "description": "Subtitle in the Ollama edit header when editing an existing agent",
+    "_machine_translated": true,
+    "_source_hash": "da137a4ecd8c47e4"
+  },
+  "settings.connection.ollama.intro_html": {
+    "message": "Gebruik een lokaal model dat draait op <a href=\"https://ollama.com/\" target=\"_blank\" rel=\"noreferrer noopener\">Ollama</a> met Kage. Gratis, privé, geen API-sleutel. Verbonden via de Codex ACP-adapter — Kage regelt het env-var-gedoe voor je.",
+    "description": "Intro paragraph above the Ollama wizard form",
+    "_machine_translated": true,
+    "_source_hash": "0fa7aaf2790cb4d2"
+  },
+  "settings.connection.ollama.name.label": {
+    "message": "Vriendelijke naam",
+    "description": "Label for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "253a3c2f4c48f37d"
+  },
+  "settings.connection.ollama.name.description": {
+    "message": "Wordt getoond in de verbindingenlijst. Standaard \"Ollama: <model>\" bij opslaan als dit leeg blijft.",
+    "description": "Helper text under the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "ba9a56bb7062e6b7"
+  },
+  "settings.connection.ollama.name.placeholder": {
+    "message": "bijv. Ollama: llama3:8b",
+    "description": "Placeholder for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "73c0bb7ee4db8dd9"
+  },
+  "settings.connection.ollama.base_url.label": {
+    "message": "Ollama-basis-URL",
+    "description": "Label for the Ollama base URL input",
+    "_machine_translated": true,
+    "_source_hash": "cf2edc2cf8eb9e80"
+  },
+  "settings.connection.ollama.base_url.description": {
+    "message": "Waar de Ollama-daemon luistert. Standaard is de lokale installatie.",
+    "description": "Helper for base URL input",
+    "_machine_translated": true,
+    "_source_hash": "0837db926ed2096a"
+  },
+  "settings.connection.ollama.test_btn": {
+    "message": "Verbinding testen",
+    "description": "Button: probe the Ollama daemon",
+    "_machine_translated": true,
+    "_source_hash": "5c67d8fb8d3afa67"
+  },
+  "settings.connection.ollama.model.label": {
+    "message": "Model",
+    "description": "Label for the model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "aa416903e483c45b"
+  },
+  "settings.connection.ollama.model.description": {
+    "message": "Modellen die zijn opgehaald vanuit deze Ollama-daemon. Klik op Vernieuwen om opnieuw te scannen.",
+    "description": "Helper for model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "969e16ee1718c94a"
+  },
+  "settings.connection.ollama.refresh_btn": {
+    "message": "Vernieuwen",
+    "description": "Button: refresh the model list",
+    "_machine_translated": true,
+    "_source_hash": "b79a76ac20ef6089"
+  },
+  "settings.connection.ollama.show_widget.label": {
+    "message": "Statuswidget tonen in zwevend venster",
+    "description": "Toggle: show Ollama status chip in floating window",
+    "_machine_translated": true,
+    "_source_hash": "4d1146bcb97f7132"
+  },
+  "settings.connection.ollama.show_widget.description_html": {
+    "message": "Voegt een kleine \"🦙 {model} · gereed\"-chip toe bij de bovenkant van het zwevende venster, zodat je in één oogopslag ziet dat het lokale model actief is. Pollt Ollama elke ~30 seconden.",
+    "description": "Helper for show-widget toggle (HTML allowed; model is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "8f722056112d1c56"
+  },
+  "settings.connection.ollama.show_widget.fallback_model": {
+    "message": "model",
+    "description": "Fallback word used in the show-widget description when no model is selected",
+    "_machine_translated": true,
+    "_source_hash": "88a2311074c87c8c"
+  },
+  "settings.connection.ollama.help.summary": {
+    "message": "Heb je Ollama nog niet?",
+    "description": "Disclosure summary for Ollama install instructions",
+    "_machine_translated": true,
+    "_source_hash": "1fa3fef99ccf2e10"
+  },
+  "settings.connection.ollama.help.body_html": {
+    "message": "1. Installeer Ollama via <a href=\"https://ollama.com/download\" target=\"_blank\" rel=\"noreferrer noopener\">ollama.com/download</a>.<br>2. Start de daemon (deze draait op de achtergrond).<br>3. Haal een model op — bijvoorbeeld <code>ollama pull llama3</code> of <code>ollama pull qwen2.5-coder</code>.<br>4. Klik hierboven op Verbinding testen, kies het model en sla op.",
+    "description": "Body of the Ollama install instructions (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b20774be7bbcfcc7"
+  },
+  "settings.connection.ollama.add_btn": {
+    "message": "Agent toevoegen",
+    "description": "Button label when adding a new Ollama agent",
+    "_machine_translated": true,
+    "_source_hash": "3641752712b36cc7"
+  },
+  "settings.connection.ollama.probe.probing": {
+    "message": "Bezig met testen…",
+    "description": "Probe status: in progress",
+    "_machine_translated": true,
+    "_source_hash": "102eee51876fb1a6"
+  },
+  "settings.connection.ollama.probe.reachable": {
+    "message": "✓ Bereikbaar{version}",
+    "description": "Probe status: reachable, optional version suffix already includes leading text",
+    "_machine_translated": true,
+    "_source_hash": "c2d837630b0ec531"
+  },
+  "settings.connection.ollama.probe.version_suffix": {
+    "message": " (Ollama {version})",
+    "description": "Suffix appended to the reachable status when version is known",
+    "_machine_translated": true,
+    "_source_hash": "5a3ab3ca1fa135c1"
+  },
+  "settings.connection.ollama.probe.unreachable": {
+    "message": "✕ {reason}",
+    "description": "Probe status: failed",
+    "_machine_translated": true,
+    "_source_hash": "ed5157f105537578"
+  },
+  "settings.connection.ollama.probe.unreachable_default": {
+    "message": "Niet bereikbaar",
+    "description": "Default reason when probe fails with no detail",
+    "_machine_translated": true,
+    "_source_hash": "9148b883820068ea"
+  },
+  "settings.connection.ollama.models.loading": {
+    "message": "Laden…",
+    "description": "Hint text while listing Ollama models",
+    "_machine_translated": true,
+    "_source_hash": "96e4cbd38f43354a"
+  },
+  "settings.connection.ollama.models.list_failed": {
+    "message": "Kon modellen niet ophalen: {message}",
+    "description": "Hint text when listing models fails",
+    "_machine_translated": true,
+    "_source_hash": "8cc63010d60a06b2"
+  },
+  "settings.connection.ollama.models.none": {
+    "message": "Nog geen modellen opgehaald. Probeer `ollama pull llama3` of `ollama pull qwen2.5-coder`.",
+    "description": "Hint text when the daemon has no models pulled",
+    "_machine_translated": true,
+    "_source_hash": "e92aa916f5033695"
+  },
+  "settings.connection.ollama.models.count": {
+    "message": "{count, plural, one {{count} model beschikbaar.} other {{count} modellen beschikbaar.}}",
+    "description": "Hint text showing the number of available models",
+    "_machine_translated": true,
+    "_source_hash": "a985cabb2940de7c"
+  },
+  "settings.connection.ollama.save.pick_model": {
+    "message": "Kies een model voor je opslaat.",
+    "description": "Inline error: no model selected",
+    "_machine_translated": true,
+    "_source_hash": "9213bb7b6d1d7026"
+  },
+  "settings.connection.ollama.save.spawn_failed": {
+    "message": "Kon de spawn-opdracht niet samenstellen: {message}",
+    "description": "Inline error: building the Ollama spawn command failed",
+    "_machine_translated": true,
+    "_source_hash": "527a2818c51e57c0"
+  },
+  "settings.connection.ollama.save.default_name": {
+    "message": "Ollama: {model}",
+    "description": "Default friendly name when the user leaves it blank",
+    "_machine_translated": true,
+    "_source_hash": "5ddda04cf210409e"
+  },
+  "settings.connection.ollama.dropdown.empty": {
+    "message": "—",
+    "description": "Default option in the empty model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5686c4a3725114de"
   }
 }

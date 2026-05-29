@@ -4198,5 +4198,893 @@
     "description": "Filter button — show only installed extensions",
     "_machine_translated": true,
     "_source_hash": "d87b8ef505f77e45"
+  },
+  "chat.session.default_title": {
+    "message": "新しいチャット",
+    "description": "Default placeholder title for a brand-new chat session",
+    "_machine_translated": true,
+    "_source_hash": "9ae274eff23c4495"
+  },
+  "chat.session.current_title": {
+    "message": "現在のセッション",
+    "description": "Synthetic title for the active session before it has been saved to disk",
+    "_machine_translated": true,
+    "_source_hash": "9769ec71ffc0826b"
+  },
+  "chat.placeholder.continue": {
+    "message": "会話を続けてください...",
+    "description": "Placeholder text shown in an empty chat that's already active but has no messages on disk",
+    "_machine_translated": true,
+    "_source_hash": "a2a8eeacb6b13ba9"
+  },
+  "chat.placeholder.deleted": {
+    "message": "このセッションは別のウィンドウから削除されました。",
+    "description": "Placeholder text shown after the active session was deleted from another window",
+    "_machine_translated": true,
+    "_source_hash": "df9afcd0923c4321"
+  },
+  "chat.placeholder.select_session": {
+    "message": "続行するセッションを選択してください...",
+    "description": "Placeholder shown after the active session was deleted, prompting the user to pick another",
+    "_machine_translated": true,
+    "_source_hash": "378b4d333e174470"
+  },
+  "chat.delete.cannot_active": {
+    "message": "アクティブなセッションは削除できません。先に別のセッションに切り替えてください。",
+    "description": "Error message when the user tries to delete the currently active chat session",
+    "_machine_translated": true,
+    "_source_hash": "98fd876a289c5d78"
+  },
+  "chat.delete.confirm": {
+    "message": "セッション「{title}」を {dir} から削除しますか？\n\n• {sessionId}.json\n• {sessionId}.jsonl\n• {sessionId}.lock\n\nこの操作は取り消せません。",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "12e174f4fb794406"
+  },
+  "chat.delete.dir_fallback": {
+    "message": "セッションディレクトリ",
+    "description": "Fallback shown in delete confirmation when the sessions directory path could not be retrieved",
+    "_machine_translated": true,
+    "_source_hash": "31e55a857e4ee5e3"
+  },
+  "chat.export.failed": {
+    "message": "エクスポートに失敗しました: {message}",
+    "description": "alert() shown when chat export to markdown fails",
+    "_machine_translated": true,
+    "_source_hash": "f6065f4d9a637401"
+  },
+  "settings.timer.title": {
+    "message": "タイマーとストップウォッチ",
+    "description": "Settings header for timer/stopwatch module",
+    "_machine_translated": true,
+    "_source_hash": "9a18a31bfc5bde6c"
+  },
+  "settings.timer.enable.label": {
+    "message": "タイマーとストップウォッチを有効にする",
+    "description": "Toggle: enable timer/stopwatch detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "678bddaa749ddaad"
+  },
+  "settings.timer.enable.description": {
+    "message": "カウントダウンには「timer 5m」、カウントアップには「stopwatch」と入力してください。",
+    "description": "Helper for the enable timer toggle",
+    "_machine_translated": true,
+    "_source_hash": "8e3ffb4dafcb31e4"
+  },
+  "settings.timer.completion.section": {
+    "message": "完了時のアクション",
+    "description": "Section label for what happens when a timer completes",
+    "_machine_translated": true,
+    "_source_hash": "ef9859fad114361b"
+  },
+  "settings.timer.notify.label": {
+    "message": "システム通知を表示",
+    "description": "Toggle: show notification when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "fef291a150283d6f"
+  },
+  "settings.timer.notify.description": {
+    "message": "カウントダウンがゼロに達したときにデスクトップ通知を表示します。",
+    "description": "Helper for notification toggle",
+    "_machine_translated": true,
+    "_source_hash": "a2e9a16648985101"
+  },
+  "settings.timer.sound.label": {
+    "message": "サウンドを再生",
+    "description": "Toggle: play sound when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "d2edbd77cdec8c2f"
+  },
+  "settings.timer.sound.description": {
+    "message": "カウントダウンがゼロに達したときに通知音を再生します。",
+    "description": "Helper for play-sound toggle",
+    "_machine_translated": true,
+    "_source_hash": "60675c6425d47bc7"
+  },
+  "settings.timer.sound_id.label": {
+    "message": "通知音",
+    "description": "Label for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "57e02b925ebf52ef"
+  },
+  "settings.timer.sound_id.description": {
+    "message": "タイマー完了時に再生するサウンドを選択してください。再生ボタンをクリックするとプレビューできます。",
+    "description": "Helper for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "cce5f3938abf79b7"
+  },
+  "settings.timer.sound.two_tone": {
+    "message": "2トーンビープ",
+    "description": "Sound option: two-tone beep",
+    "_machine_translated": true,
+    "_source_hash": "812de892f92da1ee"
+  },
+  "settings.timer.sound.chime": {
+    "message": "チャイム",
+    "description": "Sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "dee93f9099598fd7"
+  },
+  "settings.timer.sound.alert": {
+    "message": "アラート",
+    "description": "Sound option: alert",
+    "_machine_translated": true,
+    "_source_hash": "ecd8336bd091fa21"
+  },
+  "settings.timer.sound.gentle": {
+    "message": "ジェントル",
+    "description": "Sound option: gentle",
+    "_machine_translated": true,
+    "_source_hash": "626a62bef353f3a2"
+  },
+  "settings.timer.sound.bell": {
+    "message": "ベル",
+    "description": "Sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "28aebe3a9a9f7b8f"
+  },
+  "settings.timer.sound.success": {
+    "message": "サクセス",
+    "description": "Sound option: success",
+    "_machine_translated": true,
+    "_source_hash": "962715f3e0091aa9"
+  },
+  "settings.timer.sound.custom": {
+    "message": "カスタムファイル...",
+    "description": "Sound option: custom audio file",
+    "_machine_translated": true,
+    "_source_hash": "6956fdd1676b5c58"
+  },
+  "settings.timer.preview_btn": {
+    "message": "▶ プレビュー",
+    "description": "Button to preview the chosen timer sound",
+    "_machine_translated": true,
+    "_source_hash": "87519a0ca20ef14f"
+  },
+  "settings.timer.preview_btn.title": {
+    "message": "サウンドをプレビュー",
+    "description": "Tooltip on the preview button",
+    "_machine_translated": true,
+    "_source_hash": "75e5749ca8084165"
+  },
+  "settings.timer.preview_btn.stop": {
+    "message": "⏹ 停止",
+    "description": "Button label while a preview is playing",
+    "_machine_translated": true,
+    "_source_hash": "fa950b19e63df980"
+  },
+  "settings.timer.custom_path.placeholder": {
+    "message": ".wav または .mp3 ファイルのパス",
+    "description": "Placeholder for the custom-sound path input",
+    "_machine_translated": true,
+    "_source_hash": "20f560de1b087e47"
+  },
+  "settings.timer.repeats.description": {
+    "message": "繰り返し回数 — サウンドを再生する回数です。",
+    "description": "Helper for repeat-count slider",
+    "_machine_translated": true,
+    "_source_hash": "5963cf2304e44e8a"
+  },
+  "settings.timer.show_window.label": {
+    "message": "ランチャーを表示",
+    "description": "Toggle: auto-show Launcher when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "b89f96608c997a07"
+  },
+  "settings.timer.show_window.description": {
+    "message": "タイマー完了時にランチャーが非表示の場合、自動的に表示します。",
+    "description": "Helper for show-Launcher toggle",
+    "_machine_translated": true,
+    "_source_hash": "7ff55a9af935c571"
+  },
+  "settings.notifications.title": {
+    "message": "通知",
+    "description": "Settings header for notifications module",
+    "_machine_translated": true,
+    "_source_hash": "802d0ca6901e980b"
+  },
+  "settings.notifications.enable.label": {
+    "message": "通知を有効にする",
+    "description": "Toggle: enable desktop notifications",
+    "_machine_translated": true,
+    "_source_hash": "a8a384e0dddafee2"
+  },
+  "settings.notifications.enable.description": {
+    "message": "重要なイベントについてデスクトップ通知を表示します",
+    "description": "Helper for enable-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "504688beb7feed27"
+  },
+  "settings.notifications.sound.label": {
+    "message": "通知音",
+    "description": "Label for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "697d1f9511d8253e"
+  },
+  "settings.notifications.sound.description": {
+    "message": "通知が表示されたときに再生するサウンド",
+    "description": "Helper for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "0b6060f0568911e5"
+  },
+  "settings.notifications.sound.none": {
+    "message": "なし",
+    "description": "Notification sound option: none",
+    "_machine_translated": true,
+    "_source_hash": "c08dadeba752bdf3"
+  },
+  "settings.notifications.sound.default": {
+    "message": "デフォルト",
+    "description": "Notification sound option: default",
+    "_machine_translated": true,
+    "_source_hash": "b8615c6b791d899d"
+  },
+  "settings.notifications.sound.chime": {
+    "message": "チャイム",
+    "description": "Notification sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "20b372fc3c5a7174"
+  },
+  "settings.notifications.sound.bell": {
+    "message": "ベル",
+    "description": "Notification sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "d68754fc424ee33b"
+  },
+  "settings.notifications.duration.label": {
+    "message": "通知の表示時間（秒）",
+    "description": "Label for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "59c13d24dc2deabc"
+  },
+  "settings.notifications.duration.description": {
+    "message": "通知が表示される時間の長さ",
+    "description": "Helper for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "768e6087d2e30827"
+  },
+  "settings.notifications.duration.error": {
+    "message": "通知の表示時間は 1〜30 秒の範囲で指定してください",
+    "description": "Validation error: notification duration out of range",
+    "_machine_translated": true,
+    "_source_hash": "23b19fa709a72d89"
+  },
+  "settings.math.title": {
+    "message": "計算",
+    "description": "Settings header for math calculator module",
+    "_machine_translated": true,
+    "_source_hash": "c6546a00df18ff94"
+  },
+  "settings.math.section_description": {
+    "message": "数式を入力バーで直接評価し、エージェントに送信せずに結果を表示します。",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.math.enable.label": {
+    "message": "計算機能を有効にする",
+    "description": "Toggle: enable math calculator",
+    "_machine_translated": true,
+    "_source_hash": "9a6df98005e21c97"
+  },
+  "settings.math.enable.description": {
+    "message": "入力中に数式を検出して評価します",
+    "description": "Helper for enable-math toggle",
+    "_machine_translated": true,
+    "_source_hash": "10dec2fc89a3824d"
+  },
+  "settings.math.precision.label": {
+    "message": "小数点以下の桁数",
+    "description": "Label for math precision input",
+    "_machine_translated": true,
+    "_source_hash": "e4e1dbc32d42b3bc"
+  },
+  "settings.math.precision.description": {
+    "message": "表示する小数点以下の桁数（0 で自動）",
+    "description": "Helper for precision input",
+    "_machine_translated": true,
+    "_source_hash": "6f7a548531547790"
+  },
+  "settings.math.auto_copy.label": {
+    "message": "結果を自動コピー",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.math.auto_copy.description": {
+    "message": "Enter キーを押したときに答えをクリップボードへ自動的にコピーします",
+    "description": "Helper for auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "f2b748db360e4e30"
+  },
+  "settings.math.thousands.label": {
+    "message": "桁区切りを使用",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.math.thousands.description": {
+    "message": "大きな数値をカンマで区切って表示します（例: 1,000,000）",
+    "description": "Helper for thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "2231a04a320a43f5"
+  },
+  "settings.math.precision.error": {
+    "message": "数式の精度は 0 から 15 の間で指定してください",
+    "description": "Validation error: math precision out of range",
+    "_machine_translated": true,
+    "_source_hash": "a4785b2a8011ac2a"
+  },
+  "settings.devtools.title": {
+    "message": "開発者ツール",
+    "description": "Settings header for developer-tools module",
+    "_machine_translated": true,
+    "_source_hash": "71275b784fdcd3aa"
+  },
+  "settings.devtools.enable.label": {
+    "message": "開発者ツールを有効にする",
+    "description": "Toggle: enable developer tools detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "347f002f1f0e1b28"
+  },
+  "settings.devtools.enable.description": {
+    "message": "ランチャーで開発者向けユーティリティコマンド（UUID、base64、ハッシュなど）を検出します。",
+    "description": "Helper for enable-devtools toggle",
+    "_machine_translated": true,
+    "_source_hash": "dee3069f5ff9dcf0"
+  },
+  "settings.devtools.individual.label": {
+    "message": "個別のツール",
+    "description": "Section label for individual devtool toggles",
+    "_machine_translated": true,
+    "_source_hash": "7187975c54cabc84"
+  },
+  "settings.devtools.individual.description": {
+    "message": "特定の開発者ツールを個別にオン／オフします。",
+    "description": "Helper for individual-tools section",
+    "_machine_translated": true,
+    "_source_hash": "8486f3f29aa26a9d"
+  },
+  "settings.devtools.uuid.label": {
+    "message": "UUID ジェネレーター",
+    "description": "Toggle: UUID generator devtool",
+    "_machine_translated": true,
+    "_source_hash": "3d53f1c471eefe71"
+  },
+  "settings.devtools.uuid.description": {
+    "message": "「uuid」と入力するとランダムな UUID v4 を生成します。",
+    "description": "Helper for UUID toggle",
+    "_machine_translated": true,
+    "_source_hash": "039feb9565bf38a0"
+  },
+  "settings.devtools.base64.label": {
+    "message": "Base64 エンコード／デコード",
+    "description": "Toggle: base64 devtool",
+    "_machine_translated": true,
+    "_source_hash": "9e7b931393f5aa90"
+  },
+  "settings.devtools.base64.description": {
+    "message": "エンコードするには「base64 text」、デコードするには「b64d encoded」と入力します。",
+    "description": "Helper for base64 toggle",
+    "_machine_translated": true,
+    "_source_hash": "d6784c887c4f764f"
+  },
+  "settings.devtools.hash.label": {
+    "message": "ハッシュ計算ツール",
+    "description": "Toggle: hash calculator devtool",
+    "_machine_translated": true,
+    "_source_hash": "5d96804fbb2cffe0"
+  },
+  "settings.devtools.hash.description": {
+    "message": "「md5 text」、「sha1 text」、「sha256 text」、または「sha512 text」と入力します。",
+    "description": "Helper for hash toggle",
+    "_machine_translated": true,
+    "_source_hash": "9fdee12784e49a1a"
+  },
+  "settings.devtools.epoch.label": {
+    "message": "エポック／日付コンバーター",
+    "description": "Toggle: epoch/date converter devtool",
+    "_machine_translated": true,
+    "_source_hash": "aca2837b8049671b"
+  },
+  "settings.devtools.epoch.description": {
+    "message": "Unix タイムスタンプを入力すると日付が表示され、「now」で現在のエポックを取得できます。",
+    "description": "Helper for epoch toggle",
+    "_machine_translated": true,
+    "_source_hash": "a30f56c4694fe14f"
+  },
+  "settings.devtools.json.label": {
+    "message": "JSON フォーマッター",
+    "description": "Toggle: JSON formatter devtool",
+    "_machine_translated": true,
+    "_source_hash": "494398bbfdcb1eb6"
+  },
+  "settings.devtools.json.description": {
+    "message": "圧縮された JSON を貼り付けると整形して表示します。",
+    "description": "Helper for JSON toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bb7a3809c7fc676"
+  },
+  "settings.connection.validate.no_active": {
+    "message": "アクティブな接続が選択されていません。",
+    "description": "Validation error when no active connection is configured",
+    "_machine_translated": true,
+    "_source_hash": "9d769539c51e200a"
+  },
+  "settings.connection.validate.missing_spawn": {
+    "message": "アクティブな接続に spawn コマンドが設定されていません。",
+    "description": "Validation error when active local connection has no spawn_command",
+    "_machine_translated": true,
+    "_source_hash": "8a0d548aa625233f"
+  },
+  "settings.connection.session.section": {
+    "message": "セッション",
+    "description": "Section heading: session-related settings",
+    "_machine_translated": true,
+    "_source_hash": "7501fb307ca1c84d"
+  },
+  "settings.connection.session.start_on_launch.label": {
+    "message": "起動時にエージェントバックエンドを開始",
+    "description": "Toggle: pre-launch ACP backend at app start",
+    "_machine_translated": true,
+    "_source_hash": "bac19573eda9a8b3"
+  },
+  "settings.connection.session.start_on_launch.description": {
+    "message": "Kage の起動時に ACP バックエンドを事前起動して、初回応答を高速化します。",
+    "description": "Helper for start-on-launch toggle",
+    "_machine_translated": true,
+    "_source_hash": "33586de2907d7b81"
+  },
+  "settings.connection.workspace.label": {
+    "message": "エージェントのワークスペースフォルダ",
+    "description": "Label for the agent workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "3e045148e890b349"
+  },
+  "settings.connection.workspace.description": {
+    "message": "エージェントが作業を行うフォルダです。このパス配下のファイルを読み取り・変更できます。空欄の場合は現在のディレクトリが使用されます。",
+    "description": "Helper for workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "656751e87be5e2ad"
+  },
+  "settings.connection.workspace.placeholder.windows": {
+    "message": "例: C:\\Projects\\my-app",
+    "description": "Placeholder for workspace input on Windows",
+    "_machine_translated": true,
+    "_source_hash": "846621c6491e275c"
+  },
+  "settings.connection.workspace.placeholder.unix": {
+    "message": "例: /home/you/projects/my-app",
+    "description": "Placeholder for workspace input on macOS/Linux",
+    "_machine_translated": true,
+    "_source_hash": "d87b730787bb8a86"
+  },
+  "settings.connection.list.section": {
+    "message": "接続",
+    "description": "Section heading: connection list",
+    "_machine_translated": true,
+    "_source_hash": "8cc783ba5ed3b8da"
+  },
+  "settings.connection.list.description": {
+    "message": "アクティブな接続は、Kage がセッションの実行に使用するものです。アクティブな接続を切り替えるには再起動が必要です。",
+    "description": "Helper above the connection list",
+    "_machine_translated": true,
+    "_source_hash": "c996a8c073667e90"
+  },
+  "settings.connection.list.detected_subhead": {
+    "message": "自動検出されたエージェント",
+    "description": "Subheading above the auto-detected agents group",
+    "_machine_translated": true,
+    "_source_hash": "67c7c7b07a1c784b"
+  },
+  "settings.connection.list.searching": {
+    "message": "🔍 エージェントを検索中…",
+    "description": "Placeholder shown while detection is running",
+    "_machine_translated": true,
+    "_source_hash": "4da1bad7adfe20a9"
+  },
+  "settings.connection.list.add_btn": {
+    "message": "+ エージェントを追加",
+    "description": "Button: open the add-agent type picker",
+    "_machine_translated": true,
+    "_source_hash": "757b81fbf702e85b"
+  },
+  "settings.connection.list.rescan_btn": {
+    "message": "再スキャン",
+    "description": "Button: re-run agent auto-detection",
+    "_machine_translated": true,
+    "_source_hash": "e69d56bf6b911f85"
+  },
+  "settings.connection.row.active.title": {
+    "message": "アクティブ",
+    "description": "Tooltip / pill on the active connection's row",
+    "_machine_translated": true,
+    "_source_hash": "c5effb9e1bcf2e89"
+  },
+  "settings.connection.row.issue_count": {
+    "message": "{count, plural, other {⚠️ {count} 件の問題}}",
+    "description": "Issue badge — count varies",
+    "_machine_translated": true,
+    "_source_hash": "01fcfd012f86c2b6"
+  },
+  "settings.connection.row.make_active_btn": {
+    "message": "アクティブにする",
+    "description": "Button: switch the active connection",
+    "_machine_translated": true,
+    "_source_hash": "50594c50aaa1065c"
+  },
+  "settings.connection.row.edit_title": {
+    "message": "この接続を編集",
+    "description": "Tooltip on the edit (pencil) icon button",
+    "_machine_translated": true,
+    "_source_hash": "802209068e8d3514"
+  },
+  "settings.connection.row.duplicate_title": {
+    "message": "この接続を複製",
+    "description": "Tooltip on the duplicate icon button",
+    "_machine_translated": true,
+    "_source_hash": "7795fb7b1d877c25"
+  },
+  "settings.connection.row.delete_title": {
+    "message": "この接続を削除",
+    "description": "Tooltip on the delete icon button",
+    "_machine_translated": true,
+    "_source_hash": "525d9961c0c3ffa3"
+  },
+  "settings.connection.detected.add_btn": {
+    "message": "追加",
+    "description": "Button on detected-agent row: adopt as a saved connection",
+    "_machine_translated": true,
+    "_source_hash": "42fd92275af936c7"
+  },
+  "settings.connection.detected.needs_wrapper": {
+    "message": "ラッパーが必要",
+    "description": "Pill on detected-agent rows that require an npm wrapper install",
+    "_machine_translated": true,
+    "_source_hash": "9af8700a137aa9eb"
+  },
+  "settings.connection.detected.wrapper_hint_html": {
+    "message": "この CLI を使用するには、npm 経由で <code>{package}</code> をインストールしてください。",
+    "description": "Inline hint shown on a needs-wrapper detected agent row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "c0ede81e4f2cfbae"
+  },
+  "settings.connection.detected.install_wrapper_btn": {
+    "message": "ACP ラッパーをインストール",
+    "description": "Button: trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "9bbaf09577c61d95"
+  },
+  "settings.connection.install.checking_npm": {
+    "message": "npm を確認中…",
+    "description": "Button label while checking whether npm is available",
+    "_machine_translated": true,
+    "_source_hash": "a640e4a3f557a7e3"
+  },
+  "settings.connection.install.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">PATH 上に npm が見つかりませんでした。<a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> から Node.js をインストールするか、ターミナルで <code>{cmd}</code> を実行してください。</div>",
+    "description": "Inline message when npm is missing (HTML allowed; cmd is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "9b947c169eed3328"
+  },
+  "settings.connection.install.installing": {
+    "message": "インストール中…",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "d2c1d6894f954d6b"
+  },
+  "settings.connection.install.failed_html": {
+    "message": "<div class=\"agent-install-error\">インストールに失敗しました: {message}。ターミナルで <code>{cmd}</code> を実行してみてください。</div>",
+    "description": "Inline message when ACP wrapper install fails (HTML allowed; message and cmd are pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "93405f902ec170b5"
+  },
+  "settings.connection.install.failed_default": {
+    "message": "インストールに失敗しました",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "settings.connection.install.success_html": {
+    "message": "<div class=\"agent-install-ok\">✅ ラッパーをインストールしました。再読み込み中…</div>",
+    "description": "Inline message when ACP wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1307f78a857fa11b"
+  },
+  "settings.connection.draft.default_name": {
+    "message": "新しい接続",
+    "description": "Default name for a freshly-drafted connection",
+    "_machine_translated": true,
+    "_source_hash": "e3ae7cd633af9468"
+  },
+  "settings.connection.edit.back_btn": {
+    "message": "← 戻る",
+    "description": "Button: leave the edit view",
+    "_machine_translated": true,
+    "_source_hash": "89eef33b57ca9572"
+  },
+  "settings.connection.edit.cancel_btn": {
+    "message": "キャンセル",
+    "description": "Button: discard edits and return to the list",
+    "_machine_translated": true,
+    "_source_hash": "3b0afd61ffe6617b"
+  },
+  "settings.connection.edit.save_changes_btn": {
+    "message": "変更を保存",
+    "description": "Button label when editing an existing connection",
+    "_machine_translated": true,
+    "_source_hash": "4971a90ac2a5c545"
+  },
+  "settings.connection.edit.add_btn": {
+    "message": "接続を追加",
+    "description": "Button label when adding a new connection",
+    "_machine_translated": true,
+    "_source_hash": "a9e738f47a8a0f68"
+  },
+  "settings.connection.edit.subtitle.new": {
+    "message": "新しい接続",
+    "description": "Subtitle in the edit header for a new draft",
+    "_machine_translated": true,
+    "_source_hash": "13bf1a7c8f80554a"
+  },
+  "settings.connection.edit.subtitle.active": {
+    "message": "アクティブな接続を編集中",
+    "description": "Subtitle in the edit header when editing the active connection",
+    "_machine_translated": true,
+    "_source_hash": "200aedf8d0f8fe49"
+  },
+  "settings.connection.edit.subtitle.editing": {
+    "message": "接続を編集中",
+    "description": "Subtitle in the edit header when editing a non-active connection",
+    "_machine_translated": true,
+    "_source_hash": "5fbdeafb80f26d41"
+  },
+  "settings.connection.edit.preset_install_link": {
+    "message": "インストール / ドキュメント ↗",
+    "description": "Link to the preset's install page / documentation",
+    "_machine_translated": true,
+    "_source_hash": "542adda6e3c376a7"
+  },
+  "settings.connection.edit.spawn_required": {
+    "message": "ローカル接続には spawn コマンドが必要です。",
+    "description": "alert() shown when saving a local connection without a spawn command",
+    "_machine_translated": true,
+    "_source_hash": "3e5dfbd1faff51b2"
+  },
+  "settings.connection.edit.cannot_delete_active": {
+    "message": "この接続を削除する前に、別の接続に切り替えてください。",
+    "description": "alert() shown when trying to delete the active connection",
+    "_machine_translated": true,
+    "_source_hash": "42281a4834bd9da8"
+  },
+  "settings.connection.duplicate.copy_of": {
+    "message": "{name} のコピー",
+    "description": "Default name for a duplicated connection",
+    "_machine_translated": true,
+    "_source_hash": "b681bfb804f02847"
+  },
+  "settings.connection.duplicate.fallback_name": {
+    "message": "接続",
+    "description": "Fallback name if the original connection has no name when duplicating",
+    "_machine_translated": true,
+    "_source_hash": "6a5fe3eac37be17f"
+  },
+  "settings.connection.error.unknown": {
+    "message": "不明なエラー",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "settings.connection.row.no_command": {
+    "message": "(コマンドなし)",
+    "description": "Detail text shown for a local connection with no spawn command",
+    "_machine_translated": true,
+    "_source_hash": "815817ac9c41e96a"
+  },
+  "settings.connection.ollama.subtitle.new": {
+    "message": "新しい Ollama エージェント",
+    "description": "Subtitle in the Ollama edit header for a new agent",
+    "_machine_translated": true,
+    "_source_hash": "b2c1a8c2f912ce42"
+  },
+  "settings.connection.ollama.subtitle.editing": {
+    "message": "Ollama エージェントを編集中",
+    "description": "Subtitle in the Ollama edit header when editing an existing agent",
+    "_machine_translated": true,
+    "_source_hash": "da137a4ecd8c47e4"
+  },
+  "settings.connection.ollama.intro_html": {
+    "message": "<a href=\"https://ollama.com/\" target=\"_blank\" rel=\"noreferrer noopener\">Ollama</a> で動作するローカルモデルを Kage と組み合わせて使用できます。無料・プライベート・API キー不要。Codex ACP アダプター経由で接続され、環境変数の設定は Kage が引き受けます。",
+    "description": "Intro paragraph above the Ollama wizard form",
+    "_machine_translated": true,
+    "_source_hash": "0fa7aaf2790cb4d2"
+  },
+  "settings.connection.ollama.name.label": {
+    "message": "わかりやすい名前",
+    "description": "Label for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "253a3c2f4c48f37d"
+  },
+  "settings.connection.ollama.name.description": {
+    "message": "接続リストに表示されます。空欄のまま保存すると「Ollama: <model>」が既定で使用されます。",
+    "description": "Helper text under the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "ba9a56bb7062e6b7"
+  },
+  "settings.connection.ollama.name.placeholder": {
+    "message": "例: Ollama: llama3:8b",
+    "description": "Placeholder for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "73c0bb7ee4db8dd9"
+  },
+  "settings.connection.ollama.base_url.label": {
+    "message": "Ollama ベース URL",
+    "description": "Label for the Ollama base URL input",
+    "_machine_translated": true,
+    "_source_hash": "cf2edc2cf8eb9e80"
+  },
+  "settings.connection.ollama.base_url.description": {
+    "message": "Ollama デーモンがリッスンしている場所です。既定値はローカルインストール用です。",
+    "description": "Helper for base URL input",
+    "_machine_translated": true,
+    "_source_hash": "0837db926ed2096a"
+  },
+  "settings.connection.ollama.test_btn": {
+    "message": "接続をテスト",
+    "description": "Button: probe the Ollama daemon",
+    "_machine_translated": true,
+    "_source_hash": "5c67d8fb8d3afa67"
+  },
+  "settings.connection.ollama.model.label": {
+    "message": "モデル",
+    "description": "Label for the model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "aa416903e483c45b"
+  },
+  "settings.connection.ollama.model.description": {
+    "message": "この Ollama デーモンから取得したモデルです。再スキャンするには「更新」をクリックしてください。",
+    "description": "Helper for model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "969e16ee1718c94a"
+  },
+  "settings.connection.ollama.refresh_btn": {
+    "message": "更新",
+    "description": "Button: refresh the model list",
+    "_machine_translated": true,
+    "_source_hash": "b79a76ac20ef6089"
+  },
+  "settings.connection.ollama.show_widget.label": {
+    "message": "フローティングウィンドウにステータスウィジェットを表示",
+    "description": "Toggle: show Ollama status chip in floating window",
+    "_machine_translated": true,
+    "_source_hash": "4d1146bcb97f7132"
+  },
+  "settings.connection.ollama.show_widget.description_html": {
+    "message": "フローティングウィンドウの上部付近に小さな「🦙 {model} · ready」チップを表示し、ローカルモデルが起動していることを一目で確認できます。Ollama を約 30 秒ごとにポーリングします。",
+    "description": "Helper for show-widget toggle (HTML allowed; model is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "8f722056112d1c56"
+  },
+  "settings.connection.ollama.show_widget.fallback_model": {
+    "message": "モデル",
+    "description": "Fallback word used in the show-widget description when no model is selected",
+    "_machine_translated": true,
+    "_source_hash": "88a2311074c87c8c"
+  },
+  "settings.connection.ollama.help.summary": {
+    "message": "Ollama をまだお持ちではありませんか？",
+    "description": "Disclosure summary for Ollama install instructions",
+    "_machine_translated": true,
+    "_source_hash": "1fa3fef99ccf2e10"
+  },
+  "settings.connection.ollama.help.body_html": {
+    "message": "1. <a href=\"https://ollama.com/download\" target=\"_blank\" rel=\"noreferrer noopener\">ollama.com/download</a> から Ollama をインストールします。<br>2. デーモンを起動します（バックグラウンドで動作します）。<br>3. モデルを取得します。例: <code>ollama pull llama3</code> または <code>ollama pull qwen2.5-coder</code>。<br>4. 上の「接続をテスト」をクリックし、モデルを選択して保存します。",
+    "description": "Body of the Ollama install instructions (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b20774be7bbcfcc7"
+  },
+  "settings.connection.ollama.add_btn": {
+    "message": "エージェントを追加",
+    "description": "Button label when adding a new Ollama agent",
+    "_machine_translated": true,
+    "_source_hash": "3641752712b36cc7"
+  },
+  "settings.connection.ollama.probe.probing": {
+    "message": "確認中…",
+    "description": "Probe status: in progress",
+    "_machine_translated": true,
+    "_source_hash": "102eee51876fb1a6"
+  },
+  "settings.connection.ollama.probe.reachable": {
+    "message": "✓ 接続可能{version}",
+    "description": "Probe status: reachable, optional version suffix already includes leading text",
+    "_machine_translated": true,
+    "_source_hash": "c2d837630b0ec531"
+  },
+  "settings.connection.ollama.probe.version_suffix": {
+    "message": "（Ollama {version}）",
+    "description": "Suffix appended to the reachable status when version is known",
+    "_machine_translated": true,
+    "_source_hash": "5a3ab3ca1fa135c1"
+  },
+  "settings.connection.ollama.probe.unreachable": {
+    "message": "✕ {reason}",
+    "description": "Probe status: failed",
+    "_machine_translated": true,
+    "_source_hash": "ed5157f105537578"
+  },
+  "settings.connection.ollama.probe.unreachable_default": {
+    "message": "接続できません",
+    "description": "Default reason when probe fails with no detail",
+    "_machine_translated": true,
+    "_source_hash": "9148b883820068ea"
+  },
+  "settings.connection.ollama.models.loading": {
+    "message": "読み込み中…",
+    "description": "Hint text while listing Ollama models",
+    "_machine_translated": true,
+    "_source_hash": "96e4cbd38f43354a"
+  },
+  "settings.connection.ollama.models.list_failed": {
+    "message": "モデルを一覧表示できませんでした: {message}",
+    "description": "Hint text when listing models fails",
+    "_machine_translated": true,
+    "_source_hash": "8cc63010d60a06b2"
+  },
+  "settings.connection.ollama.models.none": {
+    "message": "モデルがまだ取得されていません。`ollama pull llama3` または `ollama pull qwen2.5-coder` をお試しください。",
+    "description": "Hint text when the daemon has no models pulled",
+    "_machine_translated": true,
+    "_source_hash": "e92aa916f5033695"
+  },
+  "settings.connection.ollama.models.count": {
+    "message": "{count, plural, other {{count} 個のモデルが利用可能です。}}",
+    "description": "Hint text showing the number of available models",
+    "_machine_translated": true,
+    "_source_hash": "a985cabb2940de7c"
+  },
+  "settings.connection.ollama.save.pick_model": {
+    "message": "保存する前にモデルを選択してください。",
+    "description": "Inline error: no model selected",
+    "_machine_translated": true,
+    "_source_hash": "9213bb7b6d1d7026"
+  },
+  "settings.connection.ollama.save.spawn_failed": {
+    "message": "spawn コマンドを構築できませんでした: {message}",
+    "description": "Inline error: building the Ollama spawn command failed",
+    "_machine_translated": true,
+    "_source_hash": "527a2818c51e57c0"
+  },
+  "settings.connection.ollama.save.default_name": {
+    "message": "Ollama: {model}",
+    "description": "Default friendly name when the user leaves it blank",
+    "_machine_translated": true,
+    "_source_hash": "5ddda04cf210409e"
+  },
+  "settings.connection.ollama.dropdown.empty": {
+    "message": "—",
+    "description": "Default option in the empty model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5686c4a3725114de"
   }
 }

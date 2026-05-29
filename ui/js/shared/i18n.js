@@ -156,6 +156,11 @@ export function isMachineTranslated() {
  * EN, so the literal-key fallback only fires for typos in the calling code.
  *
  * `vars` can be a plain object (`{ name: 'World', count: 3 }`).
+ *
+ * Catalog strings are trusted (we author them). `t()` does NOT escape — it
+ * is safe to drop the result into HTML, BUT any user-data variable you pass
+ * in `vars` will land verbatim. Use `tHtml()` if the result is going to
+ * `innerHTML` and the vars might contain `<` / `&` / quotes.
  */
 export function t(key, vars) {
     const template = _catalog?.[key]?.message || _fallback?.[key]?.message || key;
@@ -163,14 +168,43 @@ export function t(key, vars) {
 }
 
 /**
+ * Same as `t()`, but auto-escapes every variable so the result is safe to
+ * drop into `innerHTML`. The catalog string itself is trusted (we author
+ * it; `_html` keys may contain intentional markup like `<a>` / `<code>`),
+ * so it is NOT re-escaped — only the interpolated `vars`.
+ *
+ * Use this for any `t()` call whose result is concatenated into a template
+ * literal that becomes innerHTML. Use plain `t()` for `confirm()`,
+ * `alert()`, `textContent`, or values stored as data (e.g. a friendly
+ * connection name). Mixing the two would render `&amp;` literally in
+ * non-HTML contexts.
+ */
+export function tHtml(key, vars) {
+    const template = _catalog?.[key]?.message || _fallback?.[key]?.message || key;
+    return formatMessage(template, vars || {}, _meta.language, { escape: true });
+}
+
+/**
  * Lower-level: format an ICU template against the given vars. Exported for
  * callers (extensions) that want to format their own templates without
  * going through the host catalog.
+ *
+ * `opts.escape` (default false): when true, every interpolated variable is
+ * HTML-escaped before substitution. The template itself is never escaped.
  */
-export function formatMessage(template, vars, locale) {
+export function formatMessage(template, vars, locale, opts) {
     if (typeof template !== 'string') return '';
     if (!template.includes('{')) return template;
-    return _expand(template, vars, locale || _meta.language || 'en');
+    return _expand(template, vars, locale || _meta.language || 'en', !!opts?.escape);
+}
+
+function _escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 }
 
 /**
@@ -224,7 +258,7 @@ export function applyStaticTranslations(root) {
 // Tests cover Arabic / Polish plural categories so we know `Intl.PluralRules`
 // integration is correct.
 
-function _expand(template, vars, locale) {
+function _expand(template, vars, locale, escape) {
     let out = '';
     let i = 0;
     while (i < template.length) {
@@ -241,7 +275,7 @@ function _expand(template, vars, locale) {
             break;
         }
         const inner = template.slice(i + 1, close);
-        out += _expandPlaceholder(inner, vars, locale);
+        out += _expandPlaceholder(inner, vars, locale, escape);
         i = close + 1;
     }
     return out;
@@ -259,7 +293,7 @@ function _findMatchingBrace(s, start) {
     return -1;
 }
 
-function _expandPlaceholder(inner, vars, locale) {
+function _expandPlaceholder(inner, vars, locale, escape) {
     // inner is what was between the outer braces, e.g.:
     //   "name"                                 → simple sub
     //   "count, plural, one {1 chat} other {# chats}"
@@ -269,15 +303,16 @@ function _expandPlaceholder(inner, vars, locale) {
         // Simple substitution.
         const name = inner.trim();
         const v = vars[name];
-        return v === undefined || v === null ? `{${name}}` : String(v);
+        if (v === undefined || v === null) return `{${name}}`;
+        return escape ? _escapeHtml(v) : String(v);
     }
     const [varName, kind, ...rest] = firstComma.map((s) => s.trim());
     const body = rest.join(', ').trim();
     if (kind === 'plural') {
-        return _expandPlural(varName, body, vars, locale);
+        return _expandPlural(varName, body, vars, locale, escape);
     }
     if (kind === 'select') {
-        return _expandSelect(varName, body, vars, locale);
+        return _expandSelect(varName, body, vars, locale, escape);
     }
     // Unknown formatter — preserve the source so the dev sees something is wrong.
     return `{${inner}}`;
@@ -325,7 +360,7 @@ function _parseArms(body) {
     return arms;
 }
 
-function _expandPlural(varName, body, vars, locale) {
+function _expandPlural(varName, body, vars, locale, escape) {
     const count = vars[varName];
     const arms = _parseArms(body);
     // Exact-match `=N` arms win over CLDR categories.
@@ -342,12 +377,15 @@ function _expandPlural(varName, body, vars, locale) {
         arm = arms.get(category) || arms.get('other') || '';
     }
     // Inside the arm, `#` expands to the count and nested `{name}` substitutes.
-    return _expand(arm.replaceAll('#', String(count)), vars, locale);
+    // The count itself is numeric, so escaping it is a no-op — but we go
+    // through the same path for consistency.
+    const countStr = escape ? _escapeHtml(count) : String(count);
+    return _expand(arm.replaceAll('#', countStr), vars, locale, escape);
 }
 
-function _expandSelect(varName, body, vars, locale) {
+function _expandSelect(varName, body, vars, locale, escape) {
     const value = String(vars[varName] ?? '');
     const arms = _parseArms(body);
     const arm = arms.get(value) || arms.get('other') || '';
-    return _expand(arm, vars, locale);
+    return _expand(arm, vars, locale, escape);
 }

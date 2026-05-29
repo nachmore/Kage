@@ -1,10 +1,11 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * Developer Tools Settings Module
  */
 export class DevToolsSettingsModule extends SettingsModule {
     constructor() {
-        super('devtools', 'Developer Tools', '🛠️');
+        super('devtools', t('settings.devtools.title'), '🛠️');
         this.bindFields([
             { id: 'devToolsEnabled', path: 'dev_tools.enabled', kind: 'checkbox', default: true },
             { id: 'devToolUuid', path: 'dev_tools.uuid', kind: 'checkbox', default: true },
@@ -26,48 +27,48 @@ export class DevToolsSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 ${this.createCheckboxRow(
-                    'Enable developer tools',
-                    'Detect developer utility commands in the Launcher (UUID, base64, hashing, etc.).',
+                    t('settings.devtools.enable.label'),
+                    t('settings.devtools.enable.description'),
                     'devToolsEnabled',
                     true
                 )}
 
                 <div class="setting-row" style="margin-top: 16px;">
-                    <div class="setting-label">Individual tools</div>
-                    <div class="setting-description">Toggle specific developer tools on or off.</div>
+                    <div class="setting-label">${t('settings.devtools.individual.label')}</div>
+                    <div class="setting-description">${t('settings.devtools.individual.description')}</div>
                 </div>
 
                 ${this.createCheckboxRow(
-                    'UUID generator',
-                    'Type "uuid" to generate a random UUID v4.',
+                    t('settings.devtools.uuid.label'),
+                    t('settings.devtools.uuid.description'),
                     'devToolUuid',
                     true
                 )}
 
                 ${this.createCheckboxRow(
-                    'Base64 encode/decode',
-                    'Type "base64 text" to encode or "b64d encoded" to decode.',
+                    t('settings.devtools.base64.label'),
+                    t('settings.devtools.base64.description'),
                     'devToolBase64',
                     true
                 )}
 
                 ${this.createCheckboxRow(
-                    'Hash calculator',
-                    'Type "md5 text", "sha1 text", "sha256 text", or "sha512 text".',
+                    t('settings.devtools.hash.label'),
+                    t('settings.devtools.hash.description'),
                     'devToolHash',
                     true
                 )}
 
                 ${this.createCheckboxRow(
-                    'Epoch/date converter',
-                    'Type a Unix timestamp to see the date, or "now" for the current epoch.',
+                    t('settings.devtools.epoch.label'),
+                    t('settings.devtools.epoch.description'),
                     'devToolEpoch',
                     true
                 )}
 
                 ${this.createCheckboxRow(
-                    'JSON formatter',
-                    'Paste minified JSON to see it pretty-printed.',
+                    t('settings.devtools.json.label'),
+                    t('settings.devtools.json.description'),
                     'devToolJson',
                     true
                 )}

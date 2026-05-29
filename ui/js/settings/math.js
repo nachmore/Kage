@@ -1,11 +1,12 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * Math Settings Module
  * Controls the inline math calculator feature
  */
 export class MathSettingsModule extends SettingsModule {
     constructor() {
-        super('math', 'Math', '🧮');
+        super('math', t('settings.math.title'), '🧮');
         this.bindFields([
             { id: 'mathEnabled', path: 'math.enabled', kind: 'checkbox', default: true },
             { id: 'mathPrecision', path: 'math.precision', kind: 'int', default: 0 },
@@ -24,28 +25,28 @@ export class MathSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2>${this.icon} ${this.title}</h2>
                 <p class="section-description">
-                    Evaluate math expressions directly in the input bar without sending them to the agent.
+                    ${t('settings.math.section_description')}
                 </p>
                 ${this.createCheckboxRow(
-                    'Enable Math Calculator',
-                    'Detect and evaluate math expressions as you type',
+                    t('settings.math.enable.label'),
+                    t('settings.math.enable.description'),
                     'mathEnabled',
                     true
                 )}
                 ${this.createControlRow(
-                    'Decimal Precision',
-                    'Number of decimal places to display (0 = auto)',
+                    t('settings.math.precision.label'),
+                    t('settings.math.precision.description'),
                     '<input type="number" class="setting-input" id="mathPrecision" min="0" max="15" value="0">'
                 )}
                 ${this.createCheckboxRow(
-                    'Auto-copy Result',
-                    'Automatically copy the answer to clipboard when pressing Enter',
+                    t('settings.math.auto_copy.label'),
+                    t('settings.math.auto_copy.description'),
                     'mathAutoCopy',
                     true
                 )}
                 ${this.createCheckboxRow(
-                    'Use Thousands Separator',
-                    'Format large numbers with commas (e.g. 1,000,000)',
+                    t('settings.math.thousands.label'),
+                    t('settings.math.thousands.description'),
                     'mathThousandsSeparator',
                     false
                 )}
@@ -64,7 +65,7 @@ export class MathSettingsModule extends SettingsModule {
     validate() {
         const precision = parseInt(document.getElementById('mathPrecision')?.value ?? '0', 10);
         if (precision < 0 || precision > 15) {
-            return { valid: false, error: 'Math precision must be between 0 and 15' };
+            return { valid: false, error: t('settings.math.precision.error') };
         }
         return { valid: true };
     }

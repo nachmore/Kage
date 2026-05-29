@@ -4198,5 +4198,893 @@
     "description": "Filter button — show only installed extensions",
     "_machine_translated": true,
     "_source_hash": "d87b8ef505f77e45"
+  },
+  "chat.session.default_title": {
+    "message": "新建对话",
+    "description": "Default placeholder title for a brand-new chat session",
+    "_machine_translated": true,
+    "_source_hash": "9ae274eff23c4495"
+  },
+  "chat.session.current_title": {
+    "message": "当前会话",
+    "description": "Synthetic title for the active session before it has been saved to disk",
+    "_machine_translated": true,
+    "_source_hash": "9769ec71ffc0826b"
+  },
+  "chat.placeholder.continue": {
+    "message": "继续你的对话……",
+    "description": "Placeholder text shown in an empty chat that's already active but has no messages on disk",
+    "_machine_translated": true,
+    "_source_hash": "a2a8eeacb6b13ba9"
+  },
+  "chat.placeholder.deleted": {
+    "message": "此会话已在另一个窗口中删除。",
+    "description": "Placeholder text shown after the active session was deleted from another window",
+    "_machine_translated": true,
+    "_source_hash": "df9afcd0923c4321"
+  },
+  "chat.placeholder.select_session": {
+    "message": "选择一个会话以继续……",
+    "description": "Placeholder shown after the active session was deleted, prompting the user to pick another",
+    "_machine_translated": true,
+    "_source_hash": "378b4d333e174470"
+  },
+  "chat.delete.cannot_active": {
+    "message": "无法删除当前活动的会话。请先切换到其他会话。",
+    "description": "Error message when the user tries to delete the currently active chat session",
+    "_machine_translated": true,
+    "_source_hash": "98fd876a289c5d78"
+  },
+  "chat.delete.confirm": {
+    "message": "从 {dir} 中删除会话“{title}”？\n\n• {sessionId}.json\n• {sessionId}.jsonl\n• {sessionId}.lock\n\n此操作无法撤销。",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "12e174f4fb794406"
+  },
+  "chat.delete.dir_fallback": {
+    "message": "会话目录",
+    "description": "Fallback shown in delete confirmation when the sessions directory path could not be retrieved",
+    "_machine_translated": true,
+    "_source_hash": "31e55a857e4ee5e3"
+  },
+  "chat.export.failed": {
+    "message": "导出失败：{message}",
+    "description": "alert() shown when chat export to markdown fails",
+    "_machine_translated": true,
+    "_source_hash": "f6065f4d9a637401"
+  },
+  "settings.timer.title": {
+    "message": "计时器与秒表",
+    "description": "Settings header for timer/stopwatch module",
+    "_machine_translated": true,
+    "_source_hash": "9a18a31bfc5bde6c"
+  },
+  "settings.timer.enable.label": {
+    "message": "启用计时器与秒表",
+    "description": "Toggle: enable timer/stopwatch detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "678bddaa749ddaad"
+  },
+  "settings.timer.enable.description": {
+    "message": "输入“timer 5m”进行倒计时，或输入“stopwatch”进行正向计时。",
+    "description": "Helper for the enable timer toggle",
+    "_machine_translated": true,
+    "_source_hash": "8e3ffb4dafcb31e4"
+  },
+  "settings.timer.completion.section": {
+    "message": "完成时的操作",
+    "description": "Section label for what happens when a timer completes",
+    "_machine_translated": true,
+    "_source_hash": "ef9859fad114361b"
+  },
+  "settings.timer.notify.label": {
+    "message": "显示系统通知",
+    "description": "Toggle: show notification when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "fef291a150283d6f"
+  },
+  "settings.timer.notify.description": {
+    "message": "倒计时归零时显示桌面通知。",
+    "description": "Helper for notification toggle",
+    "_machine_translated": true,
+    "_source_hash": "a2e9a16648985101"
+  },
+  "settings.timer.sound.label": {
+    "message": "播放声音",
+    "description": "Toggle: play sound when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "d2edbd77cdec8c2f"
+  },
+  "settings.timer.sound.description": {
+    "message": "倒计时归零时播放提示音。",
+    "description": "Helper for play-sound toggle",
+    "_machine_translated": true,
+    "_source_hash": "60675c6425d47bc7"
+  },
+  "settings.timer.sound_id.label": {
+    "message": "提示音",
+    "description": "Label for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "57e02b925ebf52ef"
+  },
+  "settings.timer.sound_id.description": {
+    "message": "选择计时器完成时播放的声音。点击播放按钮可试听。",
+    "description": "Helper for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "cce5f3938abf79b7"
+  },
+  "settings.timer.sound.two_tone": {
+    "message": "双音蜂鸣",
+    "description": "Sound option: two-tone beep",
+    "_machine_translated": true,
+    "_source_hash": "812de892f92da1ee"
+  },
+  "settings.timer.sound.chime": {
+    "message": "钟声",
+    "description": "Sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "dee93f9099598fd7"
+  },
+  "settings.timer.sound.alert": {
+    "message": "警示",
+    "description": "Sound option: alert",
+    "_machine_translated": true,
+    "_source_hash": "ecd8336bd091fa21"
+  },
+  "settings.timer.sound.gentle": {
+    "message": "柔和",
+    "description": "Sound option: gentle",
+    "_machine_translated": true,
+    "_source_hash": "626a62bef353f3a2"
+  },
+  "settings.timer.sound.bell": {
+    "message": "铃声",
+    "description": "Sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "28aebe3a9a9f7b8f"
+  },
+  "settings.timer.sound.success": {
+    "message": "成功",
+    "description": "Sound option: success",
+    "_machine_translated": true,
+    "_source_hash": "962715f3e0091aa9"
+  },
+  "settings.timer.sound.custom": {
+    "message": "自定义文件……",
+    "description": "Sound option: custom audio file",
+    "_machine_translated": true,
+    "_source_hash": "6956fdd1676b5c58"
+  },
+  "settings.timer.preview_btn": {
+    "message": "▶ 预览",
+    "description": "Button to preview the chosen timer sound",
+    "_machine_translated": true,
+    "_source_hash": "87519a0ca20ef14f"
+  },
+  "settings.timer.preview_btn.title": {
+    "message": "预览声音",
+    "description": "Tooltip on the preview button",
+    "_machine_translated": true,
+    "_source_hash": "75e5749ca8084165"
+  },
+  "settings.timer.preview_btn.stop": {
+    "message": "⏹ 停止",
+    "description": "Button label while a preview is playing",
+    "_machine_translated": true,
+    "_source_hash": "fa950b19e63df980"
+  },
+  "settings.timer.custom_path.placeholder": {
+    "message": ".wav 或 .mp3 文件的路径",
+    "description": "Placeholder for the custom-sound path input",
+    "_machine_translated": true,
+    "_source_hash": "20f560de1b087e47"
+  },
+  "settings.timer.repeats.description": {
+    "message": "重复次数——声音播放的次数。",
+    "description": "Helper for repeat-count slider",
+    "_machine_translated": true,
+    "_source_hash": "5963cf2304e44e8a"
+  },
+  "settings.timer.show_window.label": {
+    "message": "显示启动器",
+    "description": "Toggle: auto-show Launcher when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "b89f96608c997a07"
+  },
+  "settings.timer.show_window.description": {
+    "message": "计时器结束时，如果启动器处于隐藏状态，则自动显示。",
+    "description": "Helper for show-Launcher toggle",
+    "_machine_translated": true,
+    "_source_hash": "7ff55a9af935c571"
+  },
+  "settings.notifications.title": {
+    "message": "通知",
+    "description": "Settings header for notifications module",
+    "_machine_translated": true,
+    "_source_hash": "802d0ca6901e980b"
+  },
+  "settings.notifications.enable.label": {
+    "message": "启用通知",
+    "description": "Toggle: enable desktop notifications",
+    "_machine_translated": true,
+    "_source_hash": "a8a384e0dddafee2"
+  },
+  "settings.notifications.enable.description": {
+    "message": "为重要事件显示桌面通知",
+    "description": "Helper for enable-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "504688beb7feed27"
+  },
+  "settings.notifications.sound.label": {
+    "message": "通知声音",
+    "description": "Label for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "697d1f9511d8253e"
+  },
+  "settings.notifications.sound.description": {
+    "message": "通知出现时播放的声音",
+    "description": "Helper for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "0b6060f0568911e5"
+  },
+  "settings.notifications.sound.none": {
+    "message": "无",
+    "description": "Notification sound option: none",
+    "_machine_translated": true,
+    "_source_hash": "c08dadeba752bdf3"
+  },
+  "settings.notifications.sound.default": {
+    "message": "默认",
+    "description": "Notification sound option: default",
+    "_machine_translated": true,
+    "_source_hash": "b8615c6b791d899d"
+  },
+  "settings.notifications.sound.chime": {
+    "message": "铃声",
+    "description": "Notification sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "20b372fc3c5a7174"
+  },
+  "settings.notifications.sound.bell": {
+    "message": "钟声",
+    "description": "Notification sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "d68754fc424ee33b"
+  },
+  "settings.notifications.duration.label": {
+    "message": "通知持续时间（秒）",
+    "description": "Label for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "59c13d24dc2deabc"
+  },
+  "settings.notifications.duration.description": {
+    "message": "通知保持可见的时长",
+    "description": "Helper for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "768e6087d2e30827"
+  },
+  "settings.notifications.duration.error": {
+    "message": "通知持续时间必须在 1 到 30 秒之间",
+    "description": "Validation error: notification duration out of range",
+    "_machine_translated": true,
+    "_source_hash": "23b19fa709a72d89"
+  },
+  "settings.math.title": {
+    "message": "数学",
+    "description": "Settings header for math calculator module",
+    "_machine_translated": true,
+    "_source_hash": "c6546a00df18ff94"
+  },
+  "settings.math.section_description": {
+    "message": "直接在输入栏中计算数学表达式，无需发送给代理。",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.math.enable.label": {
+    "message": "启用数学计算器",
+    "description": "Toggle: enable math calculator",
+    "_machine_translated": true,
+    "_source_hash": "9a6df98005e21c97"
+  },
+  "settings.math.enable.description": {
+    "message": "在输入时检测并计算数学表达式",
+    "description": "Helper for enable-math toggle",
+    "_machine_translated": true,
+    "_source_hash": "10dec2fc89a3824d"
+  },
+  "settings.math.precision.label": {
+    "message": "小数精度",
+    "description": "Label for math precision input",
+    "_machine_translated": true,
+    "_source_hash": "e4e1dbc32d42b3bc"
+  },
+  "settings.math.precision.description": {
+    "message": "显示的小数位数（0 = 自动）",
+    "description": "Helper for precision input",
+    "_machine_translated": true,
+    "_source_hash": "6f7a548531547790"
+  },
+  "settings.math.auto_copy.label": {
+    "message": "自动复制结果",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.math.auto_copy.description": {
+    "message": "按下 Enter 时自动将答案复制到剪贴板",
+    "description": "Helper for auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "f2b748db360e4e30"
+  },
+  "settings.math.thousands.label": {
+    "message": "使用千位分隔符",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.math.thousands.description": {
+    "message": "使用逗号格式化大数字（例如 1,000,000）",
+    "description": "Helper for thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "2231a04a320a43f5"
+  },
+  "settings.math.precision.error": {
+    "message": "数学精度必须介于 0 到 15 之间",
+    "description": "Validation error: math precision out of range",
+    "_machine_translated": true,
+    "_source_hash": "a4785b2a8011ac2a"
+  },
+  "settings.devtools.title": {
+    "message": "开发者工具",
+    "description": "Settings header for developer-tools module",
+    "_machine_translated": true,
+    "_source_hash": "71275b784fdcd3aa"
+  },
+  "settings.devtools.enable.label": {
+    "message": "启用开发者工具",
+    "description": "Toggle: enable developer tools detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "347f002f1f0e1b28"
+  },
+  "settings.devtools.enable.description": {
+    "message": "在启动器中检测开发者实用命令（UUID、base64、哈希等）。",
+    "description": "Helper for enable-devtools toggle",
+    "_machine_translated": true,
+    "_source_hash": "dee3069f5ff9dcf0"
+  },
+  "settings.devtools.individual.label": {
+    "message": "单个工具",
+    "description": "Section label for individual devtool toggles",
+    "_machine_translated": true,
+    "_source_hash": "7187975c54cabc84"
+  },
+  "settings.devtools.individual.description": {
+    "message": "单独开启或关闭特定的开发者工具。",
+    "description": "Helper for individual-tools section",
+    "_machine_translated": true,
+    "_source_hash": "8486f3f29aa26a9d"
+  },
+  "settings.devtools.uuid.label": {
+    "message": "UUID 生成器",
+    "description": "Toggle: UUID generator devtool",
+    "_machine_translated": true,
+    "_source_hash": "3d53f1c471eefe71"
+  },
+  "settings.devtools.uuid.description": {
+    "message": "输入 “uuid” 生成随机的 UUID v4。",
+    "description": "Helper for UUID toggle",
+    "_machine_translated": true,
+    "_source_hash": "039feb9565bf38a0"
+  },
+  "settings.devtools.base64.label": {
+    "message": "Base64 编码/解码",
+    "description": "Toggle: base64 devtool",
+    "_machine_translated": true,
+    "_source_hash": "9e7b931393f5aa90"
+  },
+  "settings.devtools.base64.description": {
+    "message": "输入 “base64 text” 进行编码，或输入 “b64d encoded” 进行解码。",
+    "description": "Helper for base64 toggle",
+    "_machine_translated": true,
+    "_source_hash": "d6784c887c4f764f"
+  },
+  "settings.devtools.hash.label": {
+    "message": "哈希计算器",
+    "description": "Toggle: hash calculator devtool",
+    "_machine_translated": true,
+    "_source_hash": "5d96804fbb2cffe0"
+  },
+  "settings.devtools.hash.description": {
+    "message": "输入 “md5 text”、“sha1 text”、“sha256 text” 或 “sha512 text”。",
+    "description": "Helper for hash toggle",
+    "_machine_translated": true,
+    "_source_hash": "9fdee12784e49a1a"
+  },
+  "settings.devtools.epoch.label": {
+    "message": "Epoch/日期转换器",
+    "description": "Toggle: epoch/date converter devtool",
+    "_machine_translated": true,
+    "_source_hash": "aca2837b8049671b"
+  },
+  "settings.devtools.epoch.description": {
+    "message": "输入 Unix 时间戳查看对应日期，或输入 “now” 获取当前 epoch。",
+    "description": "Helper for epoch toggle",
+    "_machine_translated": true,
+    "_source_hash": "a30f56c4694fe14f"
+  },
+  "settings.devtools.json.label": {
+    "message": "JSON 格式化工具",
+    "description": "Toggle: JSON formatter devtool",
+    "_machine_translated": true,
+    "_source_hash": "494398bbfdcb1eb6"
+  },
+  "settings.devtools.json.description": {
+    "message": "粘贴压缩的 JSON 即可查看美化后的格式。",
+    "description": "Helper for JSON toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bb7a3809c7fc676"
+  },
+  "settings.connection.validate.no_active": {
+    "message": "未选择活动连接。",
+    "description": "Validation error when no active connection is configured",
+    "_machine_translated": true,
+    "_source_hash": "9d769539c51e200a"
+  },
+  "settings.connection.validate.missing_spawn": {
+    "message": "活动连接缺少启动命令。",
+    "description": "Validation error when active local connection has no spawn_command",
+    "_machine_translated": true,
+    "_source_hash": "8a0d548aa625233f"
+  },
+  "settings.connection.session.section": {
+    "message": "会话",
+    "description": "Section heading: session-related settings",
+    "_machine_translated": true,
+    "_source_hash": "7501fb307ca1c84d"
+  },
+  "settings.connection.session.start_on_launch.label": {
+    "message": "启动时运行代理后端",
+    "description": "Toggle: pre-launch ACP backend at app start",
+    "_machine_translated": true,
+    "_source_hash": "bac19573eda9a8b3"
+  },
+  "settings.connection.session.start_on_launch.description": {
+    "message": "在 Kage 启动时预先启动 ACP 后端，加快初次响应速度。",
+    "description": "Helper for start-on-launch toggle",
+    "_machine_translated": true,
+    "_source_hash": "33586de2907d7b81"
+  },
+  "settings.connection.workspace.label": {
+    "message": "代理工作区文件夹",
+    "description": "Label for the agent workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "3e045148e890b349"
+  },
+  "settings.connection.workspace.description": {
+    "message": "代理工作所在的文件夹。它可以读取和修改此路径下的文件。留空则使用当前目录。",
+    "description": "Helper for workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "656751e87be5e2ad"
+  },
+  "settings.connection.workspace.placeholder.windows": {
+    "message": "例如：C:\\Projects\\my-app",
+    "description": "Placeholder for workspace input on Windows",
+    "_machine_translated": true,
+    "_source_hash": "846621c6491e275c"
+  },
+  "settings.connection.workspace.placeholder.unix": {
+    "message": "例如：/home/you/projects/my-app",
+    "description": "Placeholder for workspace input on macOS/Linux",
+    "_machine_translated": true,
+    "_source_hash": "d87b730787bb8a86"
+  },
+  "settings.connection.list.section": {
+    "message": "连接",
+    "description": "Section heading: connection list",
+    "_machine_translated": true,
+    "_source_hash": "8cc783ba5ed3b8da"
+  },
+  "settings.connection.list.description": {
+    "message": "Kage 使用活动连接来运行会话。切换活动连接需要重启。",
+    "description": "Helper above the connection list",
+    "_machine_translated": true,
+    "_source_hash": "c996a8c073667e90"
+  },
+  "settings.connection.list.detected_subhead": {
+    "message": "自动检测到的代理",
+    "description": "Subheading above the auto-detected agents group",
+    "_machine_translated": true,
+    "_source_hash": "67c7c7b07a1c784b"
+  },
+  "settings.connection.list.searching": {
+    "message": "🔍 正在搜索代理…",
+    "description": "Placeholder shown while detection is running",
+    "_machine_translated": true,
+    "_source_hash": "4da1bad7adfe20a9"
+  },
+  "settings.connection.list.add_btn": {
+    "message": "+ 添加代理",
+    "description": "Button: open the add-agent type picker",
+    "_machine_translated": true,
+    "_source_hash": "757b81fbf702e85b"
+  },
+  "settings.connection.list.rescan_btn": {
+    "message": "重新扫描",
+    "description": "Button: re-run agent auto-detection",
+    "_machine_translated": true,
+    "_source_hash": "e69d56bf6b911f85"
+  },
+  "settings.connection.row.active.title": {
+    "message": "活动",
+    "description": "Tooltip / pill on the active connection's row",
+    "_machine_translated": true,
+    "_source_hash": "c5effb9e1bcf2e89"
+  },
+  "settings.connection.row.issue_count": {
+    "message": "{count, plural, other {⚠️ {count} 个问题}}",
+    "description": "Issue badge — count varies",
+    "_machine_translated": true,
+    "_source_hash": "01fcfd012f86c2b6"
+  },
+  "settings.connection.row.make_active_btn": {
+    "message": "设为活动",
+    "description": "Button: switch the active connection",
+    "_machine_translated": true,
+    "_source_hash": "50594c50aaa1065c"
+  },
+  "settings.connection.row.edit_title": {
+    "message": "编辑此连接",
+    "description": "Tooltip on the edit (pencil) icon button",
+    "_machine_translated": true,
+    "_source_hash": "802209068e8d3514"
+  },
+  "settings.connection.row.duplicate_title": {
+    "message": "复制此连接",
+    "description": "Tooltip on the duplicate icon button",
+    "_machine_translated": true,
+    "_source_hash": "7795fb7b1d877c25"
+  },
+  "settings.connection.row.delete_title": {
+    "message": "删除此连接",
+    "description": "Tooltip on the delete icon button",
+    "_machine_translated": true,
+    "_source_hash": "525d9961c0c3ffa3"
+  },
+  "settings.connection.detected.add_btn": {
+    "message": "添加",
+    "description": "Button on detected-agent row: adopt as a saved connection",
+    "_machine_translated": true,
+    "_source_hash": "42fd92275af936c7"
+  },
+  "settings.connection.detected.needs_wrapper": {
+    "message": "需要包装器",
+    "description": "Pill on detected-agent rows that require an npm wrapper install",
+    "_machine_translated": true,
+    "_source_hash": "9af8700a137aa9eb"
+  },
+  "settings.connection.detected.wrapper_hint_html": {
+    "message": "通过 npm 安装 <code>{package}</code> 以使用此 CLI。",
+    "description": "Inline hint shown on a needs-wrapper detected agent row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "c0ede81e4f2cfbae"
+  },
+  "settings.connection.detected.install_wrapper_btn": {
+    "message": "安装 ACP 包装器",
+    "description": "Button: trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "9bbaf09577c61d95"
+  },
+  "settings.connection.install.checking_npm": {
+    "message": "正在检查 npm…",
+    "description": "Button label while checking whether npm is available",
+    "_machine_translated": true,
+    "_source_hash": "a640e4a3f557a7e3"
+  },
+  "settings.connection.install.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">未在 PATH 中找到 npm。请从 <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> 安装 Node.js，或在终端中运行 <code>{cmd}</code>。</div>",
+    "description": "Inline message when npm is missing (HTML allowed; cmd is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "9b947c169eed3328"
+  },
+  "settings.connection.install.installing": {
+    "message": "正在安装…",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "d2c1d6894f954d6b"
+  },
+  "settings.connection.install.failed_html": {
+    "message": "<div class=\"agent-install-error\">安装失败：{message}。请尝试在终端中运行 <code>{cmd}</code>。</div>",
+    "description": "Inline message when ACP wrapper install fails (HTML allowed; message and cmd are pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "93405f902ec170b5"
+  },
+  "settings.connection.install.failed_default": {
+    "message": "安装失败",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "settings.connection.install.success_html": {
+    "message": "<div class=\"agent-install-ok\">✅ 包装器已安装。正在刷新…</div>",
+    "description": "Inline message when ACP wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1307f78a857fa11b"
+  },
+  "settings.connection.draft.default_name": {
+    "message": "新建连接",
+    "description": "Default name for a freshly-drafted connection",
+    "_machine_translated": true,
+    "_source_hash": "e3ae7cd633af9468"
+  },
+  "settings.connection.edit.back_btn": {
+    "message": "← 返回",
+    "description": "Button: leave the edit view",
+    "_machine_translated": true,
+    "_source_hash": "89eef33b57ca9572"
+  },
+  "settings.connection.edit.cancel_btn": {
+    "message": "取消",
+    "description": "Button: discard edits and return to the list",
+    "_machine_translated": true,
+    "_source_hash": "3b0afd61ffe6617b"
+  },
+  "settings.connection.edit.save_changes_btn": {
+    "message": "保存更改",
+    "description": "Button label when editing an existing connection",
+    "_machine_translated": true,
+    "_source_hash": "4971a90ac2a5c545"
+  },
+  "settings.connection.edit.add_btn": {
+    "message": "添加连接",
+    "description": "Button label when adding a new connection",
+    "_machine_translated": true,
+    "_source_hash": "a9e738f47a8a0f68"
+  },
+  "settings.connection.edit.subtitle.new": {
+    "message": "新建连接",
+    "description": "Subtitle in the edit header for a new draft",
+    "_machine_translated": true,
+    "_source_hash": "13bf1a7c8f80554a"
+  },
+  "settings.connection.edit.subtitle.active": {
+    "message": "正在编辑当前连接",
+    "description": "Subtitle in the edit header when editing the active connection",
+    "_machine_translated": true,
+    "_source_hash": "200aedf8d0f8fe49"
+  },
+  "settings.connection.edit.subtitle.editing": {
+    "message": "编辑连接",
+    "description": "Subtitle in the edit header when editing a non-active connection",
+    "_machine_translated": true,
+    "_source_hash": "5fbdeafb80f26d41"
+  },
+  "settings.connection.edit.preset_install_link": {
+    "message": "安装 / 文档 ↗",
+    "description": "Link to the preset's install page / documentation",
+    "_machine_translated": true,
+    "_source_hash": "542adda6e3c376a7"
+  },
+  "settings.connection.edit.spawn_required": {
+    "message": "本地连接必须填写启动命令。",
+    "description": "alert() shown when saving a local connection without a spawn command",
+    "_machine_translated": true,
+    "_source_hash": "3e5dfbd1faff51b2"
+  },
+  "settings.connection.edit.cannot_delete_active": {
+    "message": "请先切换到其他连接，再删除此连接。",
+    "description": "alert() shown when trying to delete the active connection",
+    "_machine_translated": true,
+    "_source_hash": "42281a4834bd9da8"
+  },
+  "settings.connection.duplicate.copy_of": {
+    "message": "{name} 的副本",
+    "description": "Default name for a duplicated connection",
+    "_machine_translated": true,
+    "_source_hash": "b681bfb804f02847"
+  },
+  "settings.connection.duplicate.fallback_name": {
+    "message": "连接",
+    "description": "Fallback name if the original connection has no name when duplicating",
+    "_machine_translated": true,
+    "_source_hash": "6a5fe3eac37be17f"
+  },
+  "settings.connection.error.unknown": {
+    "message": "未知错误",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "settings.connection.row.no_command": {
+    "message": "（无命令）",
+    "description": "Detail text shown for a local connection with no spawn command",
+    "_machine_translated": true,
+    "_source_hash": "815817ac9c41e96a"
+  },
+  "settings.connection.ollama.subtitle.new": {
+    "message": "新建 Ollama 代理",
+    "description": "Subtitle in the Ollama edit header for a new agent",
+    "_machine_translated": true,
+    "_source_hash": "b2c1a8c2f912ce42"
+  },
+  "settings.connection.ollama.subtitle.editing": {
+    "message": "编辑 Ollama 代理",
+    "description": "Subtitle in the Ollama edit header when editing an existing agent",
+    "_machine_translated": true,
+    "_source_hash": "da137a4ecd8c47e4"
+  },
+  "settings.connection.ollama.intro_html": {
+    "message": "在 Kage 中使用运行于 <a href=\"https://ollama.com/\" target=\"_blank\" rel=\"noreferrer noopener\">Ollama</a> 的本地模型。免费、私密，无需 API 密钥。通过 Codex ACP 适配器接入 — Kage 会为你处理环境变量配置。",
+    "description": "Intro paragraph above the Ollama wizard form",
+    "_machine_translated": true,
+    "_source_hash": "0fa7aaf2790cb4d2"
+  },
+  "settings.connection.ollama.name.label": {
+    "message": "友好名称",
+    "description": "Label for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "253a3c2f4c48f37d"
+  },
+  "settings.connection.ollama.name.description": {
+    "message": "显示在连接列表中。如果留空，保存时默认使用 \"Ollama: <model>\"。",
+    "description": "Helper text under the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "ba9a56bb7062e6b7"
+  },
+  "settings.connection.ollama.name.placeholder": {
+    "message": "例如 Ollama: llama3:8b",
+    "description": "Placeholder for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "73c0bb7ee4db8dd9"
+  },
+  "settings.connection.ollama.base_url.label": {
+    "message": "Ollama base URL",
+    "description": "Label for the Ollama base URL input",
+    "_machine_translated": true,
+    "_source_hash": "cf2edc2cf8eb9e80"
+  },
+  "settings.connection.ollama.base_url.description": {
+    "message": "Ollama 守护进程监听的地址。默认值为本地安装。",
+    "description": "Helper for base URL input",
+    "_machine_translated": true,
+    "_source_hash": "0837db926ed2096a"
+  },
+  "settings.connection.ollama.test_btn": {
+    "message": "测试连接",
+    "description": "Button: probe the Ollama daemon",
+    "_machine_translated": true,
+    "_source_hash": "5c67d8fb8d3afa67"
+  },
+  "settings.connection.ollama.model.label": {
+    "message": "模型",
+    "description": "Label for the model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "aa416903e483c45b"
+  },
+  "settings.connection.ollama.model.description": {
+    "message": "从该 Ollama 守护进程拉取的模型。点击刷新可重新扫描。",
+    "description": "Helper for model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "969e16ee1718c94a"
+  },
+  "settings.connection.ollama.refresh_btn": {
+    "message": "刷新",
+    "description": "Button: refresh the model list",
+    "_machine_translated": true,
+    "_source_hash": "b79a76ac20ef6089"
+  },
+  "settings.connection.ollama.show_widget.label": {
+    "message": "在悬浮窗中显示状态小组件",
+    "description": "Toggle: show Ollama status chip in floating window",
+    "_machine_translated": true,
+    "_source_hash": "4d1146bcb97f7132"
+  },
+  "settings.connection.ollama.show_widget.description_html": {
+    "message": "在悬浮窗顶部附近添加一个小型的 \"🦙 {model} · ready\" 标签，让你一眼就能看到本地模型是否已启动。每 30 秒左右轮询一次 Ollama。",
+    "description": "Helper for show-widget toggle (HTML allowed; model is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "8f722056112d1c56"
+  },
+  "settings.connection.ollama.show_widget.fallback_model": {
+    "message": "模型",
+    "description": "Fallback word used in the show-widget description when no model is selected",
+    "_machine_translated": true,
+    "_source_hash": "88a2311074c87c8c"
+  },
+  "settings.connection.ollama.help.summary": {
+    "message": "还没有 Ollama？",
+    "description": "Disclosure summary for Ollama install instructions",
+    "_machine_translated": true,
+    "_source_hash": "1fa3fef99ccf2e10"
+  },
+  "settings.connection.ollama.help.body_html": {
+    "message": "1. 从 <a href=\"https://ollama.com/download\" target=\"_blank\" rel=\"noreferrer noopener\">ollama.com/download</a> 安装 Ollama。<br>2. 启动守护进程（在后台运行）。<br>3. 拉取一个模型——例如 <code>ollama pull llama3</code> 或 <code>ollama pull qwen2.5-coder</code>。<br>4. 点击上方的测试连接，选择模型，然后保存。",
+    "description": "Body of the Ollama install instructions (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b20774be7bbcfcc7"
+  },
+  "settings.connection.ollama.add_btn": {
+    "message": "添加代理",
+    "description": "Button label when adding a new Ollama agent",
+    "_machine_translated": true,
+    "_source_hash": "3641752712b36cc7"
+  },
+  "settings.connection.ollama.probe.probing": {
+    "message": "探测中…",
+    "description": "Probe status: in progress",
+    "_machine_translated": true,
+    "_source_hash": "102eee51876fb1a6"
+  },
+  "settings.connection.ollama.probe.reachable": {
+    "message": "✓ 可访问{version}",
+    "description": "Probe status: reachable, optional version suffix already includes leading text",
+    "_machine_translated": true,
+    "_source_hash": "c2d837630b0ec531"
+  },
+  "settings.connection.ollama.probe.version_suffix": {
+    "message": "（Ollama {version}）",
+    "description": "Suffix appended to the reachable status when version is known",
+    "_machine_translated": true,
+    "_source_hash": "5a3ab3ca1fa135c1"
+  },
+  "settings.connection.ollama.probe.unreachable": {
+    "message": "✕ {reason}",
+    "description": "Probe status: failed",
+    "_machine_translated": true,
+    "_source_hash": "ed5157f105537578"
+  },
+  "settings.connection.ollama.probe.unreachable_default": {
+    "message": "无法访问",
+    "description": "Default reason when probe fails with no detail",
+    "_machine_translated": true,
+    "_source_hash": "9148b883820068ea"
+  },
+  "settings.connection.ollama.models.loading": {
+    "message": "加载中…",
+    "description": "Hint text while listing Ollama models",
+    "_machine_translated": true,
+    "_source_hash": "96e4cbd38f43354a"
+  },
+  "settings.connection.ollama.models.list_failed": {
+    "message": "无法列出模型：{message}",
+    "description": "Hint text when listing models fails",
+    "_machine_translated": true,
+    "_source_hash": "8cc63010d60a06b2"
+  },
+  "settings.connection.ollama.models.none": {
+    "message": "尚未拉取任何模型。请尝试 `ollama pull llama3` 或 `ollama pull qwen2.5-coder`。",
+    "description": "Hint text when the daemon has no models pulled",
+    "_machine_translated": true,
+    "_source_hash": "e92aa916f5033695"
+  },
+  "settings.connection.ollama.models.count": {
+    "message": "{count, plural, other {可用模型 {count} 个。}}",
+    "description": "Hint text showing the number of available models",
+    "_machine_translated": true,
+    "_source_hash": "a985cabb2940de7c"
+  },
+  "settings.connection.ollama.save.pick_model": {
+    "message": "保存前请选择一个模型。",
+    "description": "Inline error: no model selected",
+    "_machine_translated": true,
+    "_source_hash": "9213bb7b6d1d7026"
+  },
+  "settings.connection.ollama.save.spawn_failed": {
+    "message": "无法构建启动命令：{message}",
+    "description": "Inline error: building the Ollama spawn command failed",
+    "_machine_translated": true,
+    "_source_hash": "527a2818c51e57c0"
+  },
+  "settings.connection.ollama.save.default_name": {
+    "message": "Ollama：{model}",
+    "description": "Default friendly name when the user leaves it blank",
+    "_machine_translated": true,
+    "_source_hash": "5ddda04cf210409e"
+  },
+  "settings.connection.ollama.dropdown.empty": {
+    "message": "—",
+    "description": "Default option in the empty model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5686c4a3725114de"
   }
 }

@@ -495,7 +495,7 @@ export class ChatApp {
                 );
                 const synthetic = {
                     session_id: this.currentAcpSessionId,
-                    title: 'Current Session',
+                    title: t('chat.session.current_title'),
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                 };
@@ -513,11 +513,10 @@ export class ChatApp {
             } catch (e) {
                 console.log('[CHAT] Could not load session from disk (may be new):', e);
                 // Session is new / not on disk — just show empty chat
-                this.elements.messagesArea.innerHTML =
-                    '<div class="message-placeholder">Continue your conversation...</div>';
+                this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.continue')}</div>`;
             }
             this.elements.chatHeaderTitle.textContent =
-                stripKageTags(exists?.title) || 'Current Session';
+                stripKageTags(exists?.title) || t('chat.session.current_title');
         }
 
         this.elements.chatInput.focus();
@@ -876,8 +875,7 @@ export class ChatApp {
             } else if (kind === 'deleted') {
                 this.activeSessionId = null;
                 this.currentAcpSessionId = null;
-                this.elements.messagesArea.innerHTML =
-                    '<div class="message-placeholder">This session was deleted from another window.</div>';
+                this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.deleted')}</div>`;
                 this.elements.chatHeaderTitle.textContent = 'Kage';
             }
         });
@@ -1303,7 +1301,7 @@ export class ChatApp {
             const isCurrent = session.session_id === this.currentAcpSessionId;
             const isActive = session.session_id === this.activeSessionId;
             const isNew = !this._seenSessionIds.has(session.session_id);
-            const title = stripKageTags(session.title) || 'New Chat';
+            const title = stripKageTags(session.title) || t('chat.session.default_title');
             const date = new Date(session.updated_at || session.created_at);
             const dateStr = this.formatDate(date);
 
@@ -1697,9 +1695,7 @@ export class ChatApp {
             sessionId === this.currentAcpSessionId || sessionId === this.floatingSessionId;
 
         if (isCurrent) {
-            this.showError(
-                'Cannot delete the active session. Switch to a different session first.'
-            );
+            this.showError(t('chat.delete.cannot_active'));
             return;
         }
 
@@ -1710,7 +1706,11 @@ export class ChatApp {
             /* ignore */
         }
 
-        const msg = `Delete session "${title} from ${dir || 'sessions directory'}?\n\n• ${sessionId}.json\n• ${sessionId}.jsonl\n• ${sessionId}.lock\n\nThis cannot be undone.`;
+        const msg = t('chat.delete.confirm', {
+            title,
+            dir: dir || t('chat.delete.dir_fallback'),
+            sessionId,
+        });
         if (!confirm(msg)) return;
 
         try {
@@ -1720,8 +1720,7 @@ export class ChatApp {
             if (isActive) {
                 // Clear the display
                 this.activeSessionId = null;
-                this.elements.messagesArea.innerHTML =
-                    '<div class="message-placeholder">Select a session to continue...</div>';
+                this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.select_session')}</div>`;
                 this.elements.chatHeaderTitle.textContent = 'Kage';
             }
 
@@ -2367,7 +2366,7 @@ export class ChatApp {
             await this.invoke('write_text_file', { path: target, contents: md });
         } catch (e) {
             console.error('Failed to export chat:', e);
-            alert('Export failed: ' + (e?.message || e));
+            alert(t('chat.export.failed', { message: e?.message || String(e) }));
         }
     }
 

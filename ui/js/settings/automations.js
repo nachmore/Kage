@@ -1,7 +1,7 @@
 import { SettingsModule } from './base.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
-import { t } from '../shared/i18n.js';
+import { t, tHtml } from '../shared/i18n.js';
 /**
  * Automations Settings Module — collapsed/expanded card UI for automation rules.
  */
@@ -235,7 +235,7 @@ export class AutomationsSettingsModule extends SettingsModule {
                     '</option>'
             )
             .join('');
-        const detailHtml = t('settings.automations.power_mode.detail_html', {
+        const detailHtml = tHtml('settings.automations.power_mode.detail_html', {
             battery: p.battery_multiplier,
             low: p.low_battery_multiplier,
         });

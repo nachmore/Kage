@@ -4198,5 +4198,893 @@
     "description": "Filter button — show only installed extensions",
     "_machine_translated": true,
     "_source_hash": "d87b8ef505f77e45"
+  },
+  "chat.session.default_title": {
+    "message": "नई चैट",
+    "description": "Default placeholder title for a brand-new chat session",
+    "_machine_translated": true,
+    "_source_hash": "9ae274eff23c4495"
+  },
+  "chat.session.current_title": {
+    "message": "वर्तमान सत्र",
+    "description": "Synthetic title for the active session before it has been saved to disk",
+    "_machine_translated": true,
+    "_source_hash": "9769ec71ffc0826b"
+  },
+  "chat.placeholder.continue": {
+    "message": "अपनी बातचीत जारी रखें...",
+    "description": "Placeholder text shown in an empty chat that's already active but has no messages on disk",
+    "_machine_translated": true,
+    "_source_hash": "a2a8eeacb6b13ba9"
+  },
+  "chat.placeholder.deleted": {
+    "message": "यह सत्र किसी अन्य विंडो से हटा दिया गया था।",
+    "description": "Placeholder text shown after the active session was deleted from another window",
+    "_machine_translated": true,
+    "_source_hash": "df9afcd0923c4321"
+  },
+  "chat.placeholder.select_session": {
+    "message": "जारी रखने के लिए कोई सत्र चुनें...",
+    "description": "Placeholder shown after the active session was deleted, prompting the user to pick another",
+    "_machine_translated": true,
+    "_source_hash": "378b4d333e174470"
+  },
+  "chat.delete.cannot_active": {
+    "message": "सक्रिय सत्र को हटाया नहीं जा सकता। पहले किसी अन्य सत्र पर स्विच करें।",
+    "description": "Error message when the user tries to delete the currently active chat session",
+    "_machine_translated": true,
+    "_source_hash": "98fd876a289c5d78"
+  },
+  "chat.delete.confirm": {
+    "message": "{dir} से सत्र \"{title}\" हटाएँ?\n\n• {sessionId}.json\n• {sessionId}.jsonl\n• {sessionId}.lock\n\nइसे पूर्ववत नहीं किया जा सकता।",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "12e174f4fb794406"
+  },
+  "chat.delete.dir_fallback": {
+    "message": "सत्र निर्देशिका",
+    "description": "Fallback shown in delete confirmation when the sessions directory path could not be retrieved",
+    "_machine_translated": true,
+    "_source_hash": "31e55a857e4ee5e3"
+  },
+  "chat.export.failed": {
+    "message": "निर्यात विफल: {message}",
+    "description": "alert() shown when chat export to markdown fails",
+    "_machine_translated": true,
+    "_source_hash": "f6065f4d9a637401"
+  },
+  "settings.timer.title": {
+    "message": "टाइमर और स्टॉपवॉच",
+    "description": "Settings header for timer/stopwatch module",
+    "_machine_translated": true,
+    "_source_hash": "9a18a31bfc5bde6c"
+  },
+  "settings.timer.enable.label": {
+    "message": "टाइमर और स्टॉपवॉच सक्षम करें",
+    "description": "Toggle: enable timer/stopwatch detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "678bddaa749ddaad"
+  },
+  "settings.timer.enable.description": {
+    "message": "उल्टी गिनती के लिए \"timer 5m\" टाइप करें या ऊपर गिनने के लिए \"stopwatch\" टाइप करें।",
+    "description": "Helper for the enable timer toggle",
+    "_machine_translated": true,
+    "_source_hash": "8e3ffb4dafcb31e4"
+  },
+  "settings.timer.completion.section": {
+    "message": "पूर्णता क्रियाएँ",
+    "description": "Section label for what happens when a timer completes",
+    "_machine_translated": true,
+    "_source_hash": "ef9859fad114361b"
+  },
+  "settings.timer.notify.label": {
+    "message": "सिस्टम सूचना दिखाएँ",
+    "description": "Toggle: show notification when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "fef291a150283d6f"
+  },
+  "settings.timer.notify.description": {
+    "message": "उल्टी गिनती शून्य पर पहुँचने पर डेस्कटॉप सूचना दिखाएँ।",
+    "description": "Helper for notification toggle",
+    "_machine_translated": true,
+    "_source_hash": "a2e9a16648985101"
+  },
+  "settings.timer.sound.label": {
+    "message": "ध्वनि चलाएँ",
+    "description": "Toggle: play sound when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "d2edbd77cdec8c2f"
+  },
+  "settings.timer.sound.description": {
+    "message": "उल्टी गिनती शून्य पर पहुँचने पर सूचना ध्वनि चलाएँ।",
+    "description": "Helper for play-sound toggle",
+    "_machine_translated": true,
+    "_source_hash": "60675c6425d47bc7"
+  },
+  "settings.timer.sound_id.label": {
+    "message": "सूचना ध्वनि",
+    "description": "Label for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "57e02b925ebf52ef"
+  },
+  "settings.timer.sound_id.description": {
+    "message": "टाइमर पूरा होने पर चलाने के लिए ध्वनि चुनें। पूर्वावलोकन के लिए प्ले बटन क्लिक करें।",
+    "description": "Helper for sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "cce5f3938abf79b7"
+  },
+  "settings.timer.sound.two_tone": {
+    "message": "टू-टोन बीप",
+    "description": "Sound option: two-tone beep",
+    "_machine_translated": true,
+    "_source_hash": "812de892f92da1ee"
+  },
+  "settings.timer.sound.chime": {
+    "message": "चाइम",
+    "description": "Sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "dee93f9099598fd7"
+  },
+  "settings.timer.sound.alert": {
+    "message": "अलर्ट",
+    "description": "Sound option: alert",
+    "_machine_translated": true,
+    "_source_hash": "ecd8336bd091fa21"
+  },
+  "settings.timer.sound.gentle": {
+    "message": "मृदु",
+    "description": "Sound option: gentle",
+    "_machine_translated": true,
+    "_source_hash": "626a62bef353f3a2"
+  },
+  "settings.timer.sound.bell": {
+    "message": "घंटी",
+    "description": "Sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "28aebe3a9a9f7b8f"
+  },
+  "settings.timer.sound.success": {
+    "message": "सफलता",
+    "description": "Sound option: success",
+    "_machine_translated": true,
+    "_source_hash": "962715f3e0091aa9"
+  },
+  "settings.timer.sound.custom": {
+    "message": "कस्टम फ़ाइल...",
+    "description": "Sound option: custom audio file",
+    "_machine_translated": true,
+    "_source_hash": "6956fdd1676b5c58"
+  },
+  "settings.timer.preview_btn": {
+    "message": "▶ पूर्वावलोकन",
+    "description": "Button to preview the chosen timer sound",
+    "_machine_translated": true,
+    "_source_hash": "87519a0ca20ef14f"
+  },
+  "settings.timer.preview_btn.title": {
+    "message": "ध्वनि का पूर्वावलोकन करें",
+    "description": "Tooltip on the preview button",
+    "_machine_translated": true,
+    "_source_hash": "75e5749ca8084165"
+  },
+  "settings.timer.preview_btn.stop": {
+    "message": "⏹ रोकें",
+    "description": "Button label while a preview is playing",
+    "_machine_translated": true,
+    "_source_hash": "fa950b19e63df980"
+  },
+  "settings.timer.custom_path.placeholder": {
+    "message": ".wav या .mp3 फ़ाइल का पथ",
+    "description": "Placeholder for the custom-sound path input",
+    "_machine_translated": true,
+    "_source_hash": "20f560de1b087e47"
+  },
+  "settings.timer.repeats.description": {
+    "message": "दोहराव की संख्या — ध्वनि कितनी बार बजेगी।",
+    "description": "Helper for repeat-count slider",
+    "_machine_translated": true,
+    "_source_hash": "5963cf2304e44e8a"
+  },
+  "settings.timer.show_window.label": {
+    "message": "लॉन्चर दिखाएँ",
+    "description": "Toggle: auto-show Launcher when timer completes",
+    "_machine_translated": true,
+    "_source_hash": "b89f96608c997a07"
+  },
+  "settings.timer.show_window.description": {
+    "message": "टाइमर पूरा होने पर यदि लॉन्चर छिपा हो तो उसे स्वचालित रूप से दिखाएँ।",
+    "description": "Helper for show-Launcher toggle",
+    "_machine_translated": true,
+    "_source_hash": "7ff55a9af935c571"
+  },
+  "settings.notifications.title": {
+    "message": "सूचनाएँ",
+    "description": "Settings header for notifications module",
+    "_machine_translated": true,
+    "_source_hash": "802d0ca6901e980b"
+  },
+  "settings.notifications.enable.label": {
+    "message": "सूचनाएँ सक्षम करें",
+    "description": "Toggle: enable desktop notifications",
+    "_machine_translated": true,
+    "_source_hash": "a8a384e0dddafee2"
+  },
+  "settings.notifications.enable.description": {
+    "message": "महत्वपूर्ण घटनाओं के लिए डेस्कटॉप सूचनाएँ दिखाएँ",
+    "description": "Helper for enable-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "504688beb7feed27"
+  },
+  "settings.notifications.sound.label": {
+    "message": "सूचना ध्वनि",
+    "description": "Label for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "697d1f9511d8253e"
+  },
+  "settings.notifications.sound.description": {
+    "message": "सूचनाएँ दिखाई देने पर बजने वाली ध्वनि",
+    "description": "Helper for notification sound dropdown",
+    "_machine_translated": true,
+    "_source_hash": "0b6060f0568911e5"
+  },
+  "settings.notifications.sound.none": {
+    "message": "कोई नहीं",
+    "description": "Notification sound option: none",
+    "_machine_translated": true,
+    "_source_hash": "c08dadeba752bdf3"
+  },
+  "settings.notifications.sound.default": {
+    "message": "डिफ़ॉल्ट",
+    "description": "Notification sound option: default",
+    "_machine_translated": true,
+    "_source_hash": "b8615c6b791d899d"
+  },
+  "settings.notifications.sound.chime": {
+    "message": "चाइम",
+    "description": "Notification sound option: chime",
+    "_machine_translated": true,
+    "_source_hash": "20b372fc3c5a7174"
+  },
+  "settings.notifications.sound.bell": {
+    "message": "घंटी",
+    "description": "Notification sound option: bell",
+    "_machine_translated": true,
+    "_source_hash": "d68754fc424ee33b"
+  },
+  "settings.notifications.duration.label": {
+    "message": "सूचना अवधि (सेकंड)",
+    "description": "Label for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "59c13d24dc2deabc"
+  },
+  "settings.notifications.duration.description": {
+    "message": "सूचनाएँ कितनी देर तक दिखाई देंगी",
+    "description": "Helper for notification duration input",
+    "_machine_translated": true,
+    "_source_hash": "768e6087d2e30827"
+  },
+  "settings.notifications.duration.error": {
+    "message": "सूचना अवधि 1 से 30 सेकंड के बीच होनी चाहिए",
+    "description": "Validation error: notification duration out of range",
+    "_machine_translated": true,
+    "_source_hash": "23b19fa709a72d89"
+  },
+  "settings.math.title": {
+    "message": "गणित",
+    "description": "Settings header for math calculator module",
+    "_machine_translated": true,
+    "_source_hash": "c6546a00df18ff94"
+  },
+  "settings.math.section_description": {
+    "message": "गणितीय व्यंजकों को एजेंट को भेजे बिना सीधे इनपुट बार में मूल्यांकित करें।",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "83232d2e406cdab5"
+  },
+  "settings.math.enable.label": {
+    "message": "गणित कैलकुलेटर सक्षम करें",
+    "description": "Toggle: enable math calculator",
+    "_machine_translated": true,
+    "_source_hash": "9a6df98005e21c97"
+  },
+  "settings.math.enable.description": {
+    "message": "टाइप करते समय गणितीय व्यंजकों का पता लगाएँ और मूल्यांकन करें",
+    "description": "Helper for enable-math toggle",
+    "_machine_translated": true,
+    "_source_hash": "10dec2fc89a3824d"
+  },
+  "settings.math.precision.label": {
+    "message": "दशमलव परिशुद्धता",
+    "description": "Label for math precision input",
+    "_machine_translated": true,
+    "_source_hash": "e4e1dbc32d42b3bc"
+  },
+  "settings.math.precision.description": {
+    "message": "दिखाने के लिए दशमलव स्थानों की संख्या (0 = स्वचालित)",
+    "description": "Helper for precision input",
+    "_machine_translated": true,
+    "_source_hash": "6f7a548531547790"
+  },
+  "settings.math.auto_copy.label": {
+    "message": "परिणाम स्वतः कॉपी करें",
+    "description": "Toggle: copy math result to clipboard on Enter",
+    "_machine_translated": true,
+    "_source_hash": "d6ca34a24bd63a0b"
+  },
+  "settings.math.auto_copy.description": {
+    "message": "Enter दबाने पर उत्तर को स्वचालित रूप से क्लिपबोर्ड पर कॉपी करें",
+    "description": "Helper for auto-copy toggle",
+    "_machine_translated": true,
+    "_source_hash": "f2b748db360e4e30"
+  },
+  "settings.math.thousands.label": {
+    "message": "हज़ार विभाजक का उपयोग करें",
+    "description": "Toggle: format large numbers with thousands separators",
+    "_machine_translated": true,
+    "_source_hash": "153820c35293c297"
+  },
+  "settings.math.thousands.description": {
+    "message": "बड़ी संख्याओं को अल्पविराम के साथ स्वरूपित करें (उदा. 1,000,000)",
+    "description": "Helper for thousands-separator toggle",
+    "_machine_translated": true,
+    "_source_hash": "2231a04a320a43f5"
+  },
+  "settings.math.precision.error": {
+    "message": "गणित परिशुद्धता 0 और 15 के बीच होनी चाहिए",
+    "description": "Validation error: math precision out of range",
+    "_machine_translated": true,
+    "_source_hash": "a4785b2a8011ac2a"
+  },
+  "settings.devtools.title": {
+    "message": "डेवलपर टूल",
+    "description": "Settings header for developer-tools module",
+    "_machine_translated": true,
+    "_source_hash": "71275b784fdcd3aa"
+  },
+  "settings.devtools.enable.label": {
+    "message": "डेवलपर टूल सक्षम करें",
+    "description": "Toggle: enable developer tools detection in launcher",
+    "_machine_translated": true,
+    "_source_hash": "347f002f1f0e1b28"
+  },
+  "settings.devtools.enable.description": {
+    "message": "Launcher में डेवलपर उपयोगिता कमांड का पता लगाएं (UUID, base64, हैशिंग, आदि)।",
+    "description": "Helper for enable-devtools toggle",
+    "_machine_translated": true,
+    "_source_hash": "dee3069f5ff9dcf0"
+  },
+  "settings.devtools.individual.label": {
+    "message": "व्यक्तिगत टूल",
+    "description": "Section label for individual devtool toggles",
+    "_machine_translated": true,
+    "_source_hash": "7187975c54cabc84"
+  },
+  "settings.devtools.individual.description": {
+    "message": "विशिष्ट डेवलपर टूल को चालू या बंद करें।",
+    "description": "Helper for individual-tools section",
+    "_machine_translated": true,
+    "_source_hash": "8486f3f29aa26a9d"
+  },
+  "settings.devtools.uuid.label": {
+    "message": "UUID जनरेटर",
+    "description": "Toggle: UUID generator devtool",
+    "_machine_translated": true,
+    "_source_hash": "3d53f1c471eefe71"
+  },
+  "settings.devtools.uuid.description": {
+    "message": "रैंडम UUID v4 जेनरेट करने के लिए \"uuid\" टाइप करें।",
+    "description": "Helper for UUID toggle",
+    "_machine_translated": true,
+    "_source_hash": "039feb9565bf38a0"
+  },
+  "settings.devtools.base64.label": {
+    "message": "Base64 एन्कोड/डिकोड",
+    "description": "Toggle: base64 devtool",
+    "_machine_translated": true,
+    "_source_hash": "9e7b931393f5aa90"
+  },
+  "settings.devtools.base64.description": {
+    "message": "एन्कोड करने के लिए \"base64 text\" टाइप करें या डिकोड करने के लिए \"b64d encoded\"।",
+    "description": "Helper for base64 toggle",
+    "_machine_translated": true,
+    "_source_hash": "d6784c887c4f764f"
+  },
+  "settings.devtools.hash.label": {
+    "message": "हैश कैलकुलेटर",
+    "description": "Toggle: hash calculator devtool",
+    "_machine_translated": true,
+    "_source_hash": "5d96804fbb2cffe0"
+  },
+  "settings.devtools.hash.description": {
+    "message": "\"md5 text\", \"sha1 text\", \"sha256 text\", या \"sha512 text\" टाइप करें।",
+    "description": "Helper for hash toggle",
+    "_machine_translated": true,
+    "_source_hash": "9fdee12784e49a1a"
+  },
+  "settings.devtools.epoch.label": {
+    "message": "Epoch/दिनांक कनवर्टर",
+    "description": "Toggle: epoch/date converter devtool",
+    "_machine_translated": true,
+    "_source_hash": "aca2837b8049671b"
+  },
+  "settings.devtools.epoch.description": {
+    "message": "दिनांक देखने के लिए Unix टाइमस्टैम्प टाइप करें, या वर्तमान epoch के लिए \"now\"।",
+    "description": "Helper for epoch toggle",
+    "_machine_translated": true,
+    "_source_hash": "a30f56c4694fe14f"
+  },
+  "settings.devtools.json.label": {
+    "message": "JSON फ़ॉर्मेटर",
+    "description": "Toggle: JSON formatter devtool",
+    "_machine_translated": true,
+    "_source_hash": "494398bbfdcb1eb6"
+  },
+  "settings.devtools.json.description": {
+    "message": "इसे प्रिटी-प्रिंट देखने के लिए मिनिफ़ाइड JSON पेस्ट करें।",
+    "description": "Helper for JSON toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bb7a3809c7fc676"
+  },
+  "settings.connection.validate.no_active": {
+    "message": "कोई सक्रिय कनेक्शन चयनित नहीं है।",
+    "description": "Validation error when no active connection is configured",
+    "_machine_translated": true,
+    "_source_hash": "9d769539c51e200a"
+  },
+  "settings.connection.validate.missing_spawn": {
+    "message": "सक्रिय कनेक्शन में spawn कमांड नहीं है।",
+    "description": "Validation error when active local connection has no spawn_command",
+    "_machine_translated": true,
+    "_source_hash": "8a0d548aa625233f"
+  },
+  "settings.connection.session.section": {
+    "message": "सत्र",
+    "description": "Section heading: session-related settings",
+    "_machine_translated": true,
+    "_source_hash": "7501fb307ca1c84d"
+  },
+  "settings.connection.session.start_on_launch.label": {
+    "message": "लॉन्च पर एजेंट बैकएंड शुरू करें",
+    "description": "Toggle: pre-launch ACP backend at app start",
+    "_machine_translated": true,
+    "_source_hash": "bac19573eda9a8b3"
+  },
+  "settings.connection.session.start_on_launch.description": {
+    "message": "Kage के शुरू होने पर ACP बैकएंड को पहले से लॉन्च करके प्रारंभिक प्रतिक्रियाओं को तेज़ करें।",
+    "description": "Helper for start-on-launch toggle",
+    "_machine_translated": true,
+    "_source_hash": "33586de2907d7b81"
+  },
+  "settings.connection.workspace.label": {
+    "message": "एजेंट कार्यक्षेत्र फ़ोल्डर",
+    "description": "Label for the agent workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "3e045148e890b349"
+  },
+  "settings.connection.workspace.description": {
+    "message": "वह फ़ोल्डर जिसमें एजेंट काम करता है। यह इस पथ के अंतर्गत फ़ाइलें पढ़ और संशोधित कर सकता है। वर्तमान निर्देशिका का उपयोग करने के लिए खाली छोड़ें।",
+    "description": "Helper for workspace folder input",
+    "_machine_translated": true,
+    "_source_hash": "656751e87be5e2ad"
+  },
+  "settings.connection.workspace.placeholder.windows": {
+    "message": "उदा., C:\\Projects\\my-app",
+    "description": "Placeholder for workspace input on Windows",
+    "_machine_translated": true,
+    "_source_hash": "846621c6491e275c"
+  },
+  "settings.connection.workspace.placeholder.unix": {
+    "message": "उदा., /home/you/projects/my-app",
+    "description": "Placeholder for workspace input on macOS/Linux",
+    "_machine_translated": true,
+    "_source_hash": "d87b730787bb8a86"
+  },
+  "settings.connection.list.section": {
+    "message": "कनेक्शन",
+    "description": "Section heading: connection list",
+    "_machine_translated": true,
+    "_source_hash": "8cc783ba5ed3b8da"
+  },
+  "settings.connection.list.description": {
+    "message": "सक्रिय कनेक्शन वह है जिसका उपयोग Kage सत्र चलाने के लिए करता है। सक्रिय कनेक्शन बदलने के लिए पुनरारंभ की आवश्यकता होती है।",
+    "description": "Helper above the connection list",
+    "_machine_translated": true,
+    "_source_hash": "c996a8c073667e90"
+  },
+  "settings.connection.list.detected_subhead": {
+    "message": "स्वतः-पहचाने गए एजेंट",
+    "description": "Subheading above the auto-detected agents group",
+    "_machine_translated": true,
+    "_source_hash": "67c7c7b07a1c784b"
+  },
+  "settings.connection.list.searching": {
+    "message": "🔍 एजेंटों की खोज हो रही है…",
+    "description": "Placeholder shown while detection is running",
+    "_machine_translated": true,
+    "_source_hash": "4da1bad7adfe20a9"
+  },
+  "settings.connection.list.add_btn": {
+    "message": "+ एजेंट जोड़ें",
+    "description": "Button: open the add-agent type picker",
+    "_machine_translated": true,
+    "_source_hash": "757b81fbf702e85b"
+  },
+  "settings.connection.list.rescan_btn": {
+    "message": "पुनः स्कैन करें",
+    "description": "Button: re-run agent auto-detection",
+    "_machine_translated": true,
+    "_source_hash": "e69d56bf6b911f85"
+  },
+  "settings.connection.row.active.title": {
+    "message": "सक्रिय",
+    "description": "Tooltip / pill on the active connection's row",
+    "_machine_translated": true,
+    "_source_hash": "c5effb9e1bcf2e89"
+  },
+  "settings.connection.row.issue_count": {
+    "message": "{count, plural, one {⚠️ {count} समस्या} other {⚠️ {count} समस्याएँ}}",
+    "description": "Issue badge — count varies",
+    "_machine_translated": true,
+    "_source_hash": "01fcfd012f86c2b6"
+  },
+  "settings.connection.row.make_active_btn": {
+    "message": "सक्रिय बनाएँ",
+    "description": "Button: switch the active connection",
+    "_machine_translated": true,
+    "_source_hash": "50594c50aaa1065c"
+  },
+  "settings.connection.row.edit_title": {
+    "message": "इस कनेक्शन को संपादित करें",
+    "description": "Tooltip on the edit (pencil) icon button",
+    "_machine_translated": true,
+    "_source_hash": "802209068e8d3514"
+  },
+  "settings.connection.row.duplicate_title": {
+    "message": "इस कनेक्शन की प्रतिलिपि बनाएँ",
+    "description": "Tooltip on the duplicate icon button",
+    "_machine_translated": true,
+    "_source_hash": "7795fb7b1d877c25"
+  },
+  "settings.connection.row.delete_title": {
+    "message": "इस कनेक्शन को हटाएँ",
+    "description": "Tooltip on the delete icon button",
+    "_machine_translated": true,
+    "_source_hash": "525d9961c0c3ffa3"
+  },
+  "settings.connection.detected.add_btn": {
+    "message": "जोड़ें",
+    "description": "Button on detected-agent row: adopt as a saved connection",
+    "_machine_translated": true,
+    "_source_hash": "42fd92275af936c7"
+  },
+  "settings.connection.detected.needs_wrapper": {
+    "message": "रैपर आवश्यक",
+    "description": "Pill on detected-agent rows that require an npm wrapper install",
+    "_machine_translated": true,
+    "_source_hash": "9af8700a137aa9eb"
+  },
+  "settings.connection.detected.wrapper_hint_html": {
+    "message": "इस CLI का उपयोग करने के लिए npm के माध्यम से <code>{package}</code> इंस्टॉल करें।",
+    "description": "Inline hint shown on a needs-wrapper detected agent row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "c0ede81e4f2cfbae"
+  },
+  "settings.connection.detected.install_wrapper_btn": {
+    "message": "ACP रैपर इंस्टॉल करें",
+    "description": "Button: trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "9bbaf09577c61d95"
+  },
+  "settings.connection.install.checking_npm": {
+    "message": "npm जाँच रहे हैं…",
+    "description": "Button label while checking whether npm is available",
+    "_machine_translated": true,
+    "_source_hash": "a640e4a3f557a7e3"
+  },
+  "settings.connection.install.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">PATH पर npm नहीं मिला। <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> से Node.js इंस्टॉल करें या टर्मिनल में <code>{cmd}</code> चलाएँ।</div>",
+    "description": "Inline message when npm is missing (HTML allowed; cmd is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "9b947c169eed3328"
+  },
+  "settings.connection.install.installing": {
+    "message": "इंस्टॉल हो रहा है…",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "d2c1d6894f954d6b"
+  },
+  "settings.connection.install.failed_html": {
+    "message": "<div class=\"agent-install-error\">इंस्टॉल विफल: {message}। टर्मिनल में <code>{cmd}</code> चलाकर देखें।</div>",
+    "description": "Inline message when ACP wrapper install fails (HTML allowed; message and cmd are pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "93405f902ec170b5"
+  },
+  "settings.connection.install.failed_default": {
+    "message": "इंस्टॉल विफल",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "settings.connection.install.success_html": {
+    "message": "<div class=\"agent-install-ok\">✅ रैपर इंस्टॉल हो गया। रिफ्रेश हो रहा है…</div>",
+    "description": "Inline message when ACP wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1307f78a857fa11b"
+  },
+  "settings.connection.draft.default_name": {
+    "message": "नया कनेक्शन",
+    "description": "Default name for a freshly-drafted connection",
+    "_machine_translated": true,
+    "_source_hash": "e3ae7cd633af9468"
+  },
+  "settings.connection.edit.back_btn": {
+    "message": "← वापस",
+    "description": "Button: leave the edit view",
+    "_machine_translated": true,
+    "_source_hash": "89eef33b57ca9572"
+  },
+  "settings.connection.edit.cancel_btn": {
+    "message": "रद्द करें",
+    "description": "Button: discard edits and return to the list",
+    "_machine_translated": true,
+    "_source_hash": "3b0afd61ffe6617b"
+  },
+  "settings.connection.edit.save_changes_btn": {
+    "message": "बदलाव सहेजें",
+    "description": "Button label when editing an existing connection",
+    "_machine_translated": true,
+    "_source_hash": "4971a90ac2a5c545"
+  },
+  "settings.connection.edit.add_btn": {
+    "message": "कनेक्शन जोड़ें",
+    "description": "Button label when adding a new connection",
+    "_machine_translated": true,
+    "_source_hash": "a9e738f47a8a0f68"
+  },
+  "settings.connection.edit.subtitle.new": {
+    "message": "नया कनेक्शन",
+    "description": "Subtitle in the edit header for a new draft",
+    "_machine_translated": true,
+    "_source_hash": "13bf1a7c8f80554a"
+  },
+  "settings.connection.edit.subtitle.active": {
+    "message": "सक्रिय कनेक्शन संपादित कर रहे हैं",
+    "description": "Subtitle in the edit header when editing the active connection",
+    "_machine_translated": true,
+    "_source_hash": "200aedf8d0f8fe49"
+  },
+  "settings.connection.edit.subtitle.editing": {
+    "message": "कनेक्शन संपादित कर रहे हैं",
+    "description": "Subtitle in the edit header when editing a non-active connection",
+    "_machine_translated": true,
+    "_source_hash": "5fbdeafb80f26d41"
+  },
+  "settings.connection.edit.preset_install_link": {
+    "message": "इंस्टॉल / दस्तावेज़ ↗",
+    "description": "Link to the preset's install page / documentation",
+    "_machine_translated": true,
+    "_source_hash": "542adda6e3c376a7"
+  },
+  "settings.connection.edit.spawn_required": {
+    "message": "स्थानीय कनेक्शन के लिए स्पॉन कमांड आवश्यक है।",
+    "description": "alert() shown when saving a local connection without a spawn command",
+    "_machine_translated": true,
+    "_source_hash": "3e5dfbd1faff51b2"
+  },
+  "settings.connection.edit.cannot_delete_active": {
+    "message": "इसे हटाने से पहले किसी दूसरे कनेक्शन पर स्विच करें।",
+    "description": "alert() shown when trying to delete the active connection",
+    "_machine_translated": true,
+    "_source_hash": "42281a4834bd9da8"
+  },
+  "settings.connection.duplicate.copy_of": {
+    "message": "{name} की प्रति",
+    "description": "Default name for a duplicated connection",
+    "_machine_translated": true,
+    "_source_hash": "b681bfb804f02847"
+  },
+  "settings.connection.duplicate.fallback_name": {
+    "message": "कनेक्शन",
+    "description": "Fallback name if the original connection has no name when duplicating",
+    "_machine_translated": true,
+    "_source_hash": "6a5fe3eac37be17f"
+  },
+  "settings.connection.error.unknown": {
+    "message": "अज्ञात त्रुटि",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "settings.connection.row.no_command": {
+    "message": "(कोई कमांड नहीं)",
+    "description": "Detail text shown for a local connection with no spawn command",
+    "_machine_translated": true,
+    "_source_hash": "815817ac9c41e96a"
+  },
+  "settings.connection.ollama.subtitle.new": {
+    "message": "नया Ollama एजेंट",
+    "description": "Subtitle in the Ollama edit header for a new agent",
+    "_machine_translated": true,
+    "_source_hash": "b2c1a8c2f912ce42"
+  },
+  "settings.connection.ollama.subtitle.editing": {
+    "message": "Ollama एजेंट संपादित कर रहे हैं",
+    "description": "Subtitle in the Ollama edit header when editing an existing agent",
+    "_machine_translated": true,
+    "_source_hash": "da137a4ecd8c47e4"
+  },
+  "settings.connection.ollama.intro_html": {
+    "message": "Kage के साथ <a href=\"https://ollama.com/\" target=\"_blank\" rel=\"noreferrer noopener\">Ollama</a> पर चलने वाले स्थानीय मॉडल का उपयोग करें। मुफ़्त, निजी, कोई API key नहीं। Codex ACP अडैप्टर के माध्यम से जुड़ा हुआ — Kage आपके लिए env-var की पेचीदगियाँ संभाल लेता है।",
+    "description": "Intro paragraph above the Ollama wizard form",
+    "_machine_translated": true,
+    "_source_hash": "0fa7aaf2790cb4d2"
+  },
+  "settings.connection.ollama.name.label": {
+    "message": "सुगम नाम",
+    "description": "Label for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "253a3c2f4c48f37d"
+  },
+  "settings.connection.ollama.name.description": {
+    "message": "कनेक्शन सूची में दिखाया गया। खाली छोड़ने पर सहेजते समय डिफ़ॉल्ट रूप से \"Ollama: <model>\" हो जाता है।",
+    "description": "Helper text under the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "ba9a56bb7062e6b7"
+  },
+  "settings.connection.ollama.name.placeholder": {
+    "message": "उदा. Ollama: llama3:8b",
+    "description": "Placeholder for the friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "73c0bb7ee4db8dd9"
+  },
+  "settings.connection.ollama.base_url.label": {
+    "message": "Ollama बेस URL",
+    "description": "Label for the Ollama base URL input",
+    "_machine_translated": true,
+    "_source_hash": "cf2edc2cf8eb9e80"
+  },
+  "settings.connection.ollama.base_url.description": {
+    "message": "जहाँ Ollama डेमन सुन रहा है। डिफ़ॉल्ट लोकल इंस्टॉल है।",
+    "description": "Helper for base URL input",
+    "_machine_translated": true,
+    "_source_hash": "0837db926ed2096a"
+  },
+  "settings.connection.ollama.test_btn": {
+    "message": "कनेक्शन जाँचें",
+    "description": "Button: probe the Ollama daemon",
+    "_machine_translated": true,
+    "_source_hash": "5c67d8fb8d3afa67"
+  },
+  "settings.connection.ollama.model.label": {
+    "message": "मॉडल",
+    "description": "Label for the model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "aa416903e483c45b"
+  },
+  "settings.connection.ollama.model.description": {
+    "message": "इस Ollama डेमन से पुल किए गए मॉडल। दोबारा स्कैन करने के लिए रीफ्रेश पर क्लिक करें।",
+    "description": "Helper for model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "969e16ee1718c94a"
+  },
+  "settings.connection.ollama.refresh_btn": {
+    "message": "रीफ्रेश",
+    "description": "Button: refresh the model list",
+    "_machine_translated": true,
+    "_source_hash": "b79a76ac20ef6089"
+  },
+  "settings.connection.ollama.show_widget.label": {
+    "message": "फ्लोटिंग विंडो में स्टेटस विजेट दिखाएँ",
+    "description": "Toggle: show Ollama status chip in floating window",
+    "_machine_translated": true,
+    "_source_hash": "4d1146bcb97f7132"
+  },
+  "settings.connection.ollama.show_widget.description_html": {
+    "message": "फ्लोटिंग विंडो के ऊपर एक छोटी \"🦙 {model} · ready\" चिप जोड़ता है ताकि आप एक नज़र में देख सकें कि लोकल मॉडल चालू है। Ollama को हर ~30 सेकंड में पोल करता है।",
+    "description": "Helper for show-widget toggle (HTML allowed; model is pre-escaped)",
+    "_machine_translated": true,
+    "_source_hash": "8f722056112d1c56"
+  },
+  "settings.connection.ollama.show_widget.fallback_model": {
+    "message": "मॉडल",
+    "description": "Fallback word used in the show-widget description when no model is selected",
+    "_machine_translated": true,
+    "_source_hash": "88a2311074c87c8c"
+  },
+  "settings.connection.ollama.help.summary": {
+    "message": "अभी तक Ollama नहीं है?",
+    "description": "Disclosure summary for Ollama install instructions",
+    "_machine_translated": true,
+    "_source_hash": "1fa3fef99ccf2e10"
+  },
+  "settings.connection.ollama.help.body_html": {
+    "message": "1. Ollama को <a href=\"https://ollama.com/download\" target=\"_blank\" rel=\"noreferrer noopener\">ollama.com/download</a> से इंस्टॉल करें।<br>2. डेमन शुरू करें (यह बैकग्राउंड में चलता है)।<br>3. एक मॉडल पुल करें — उदाहरण के लिए <code>ollama pull llama3</code> या <code>ollama pull qwen2.5-coder</code>।<br>4. ऊपर कनेक्शन जाँचें पर क्लिक करें, मॉडल चुनें, फिर सहेजें।",
+    "description": "Body of the Ollama install instructions (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "b20774be7bbcfcc7"
+  },
+  "settings.connection.ollama.add_btn": {
+    "message": "एजेंट जोड़ें",
+    "description": "Button label when adding a new Ollama agent",
+    "_machine_translated": true,
+    "_source_hash": "3641752712b36cc7"
+  },
+  "settings.connection.ollama.probe.probing": {
+    "message": "जाँच हो रही है…",
+    "description": "Probe status: in progress",
+    "_machine_translated": true,
+    "_source_hash": "102eee51876fb1a6"
+  },
+  "settings.connection.ollama.probe.reachable": {
+    "message": "✓ पहुँच योग्य{version}",
+    "description": "Probe status: reachable, optional version suffix already includes leading text",
+    "_machine_translated": true,
+    "_source_hash": "c2d837630b0ec531"
+  },
+  "settings.connection.ollama.probe.version_suffix": {
+    "message": " (Ollama {version})",
+    "description": "Suffix appended to the reachable status when version is known",
+    "_machine_translated": true,
+    "_source_hash": "5a3ab3ca1fa135c1"
+  },
+  "settings.connection.ollama.probe.unreachable": {
+    "message": "✕ {reason}",
+    "description": "Probe status: failed",
+    "_machine_translated": true,
+    "_source_hash": "ed5157f105537578"
+  },
+  "settings.connection.ollama.probe.unreachable_default": {
+    "message": "पहुँच योग्य नहीं",
+    "description": "Default reason when probe fails with no detail",
+    "_machine_translated": true,
+    "_source_hash": "9148b883820068ea"
+  },
+  "settings.connection.ollama.models.loading": {
+    "message": "लोड हो रहा है…",
+    "description": "Hint text while listing Ollama models",
+    "_machine_translated": true,
+    "_source_hash": "96e4cbd38f43354a"
+  },
+  "settings.connection.ollama.models.list_failed": {
+    "message": "मॉडल सूचीबद्ध नहीं कर सका: {message}",
+    "description": "Hint text when listing models fails",
+    "_machine_translated": true,
+    "_source_hash": "8cc63010d60a06b2"
+  },
+  "settings.connection.ollama.models.none": {
+    "message": "अभी तक कोई मॉडल पुल नहीं किया गया। `ollama pull llama3` या `ollama pull qwen2.5-coder` आज़माएँ।",
+    "description": "Hint text when the daemon has no models pulled",
+    "_machine_translated": true,
+    "_source_hash": "e92aa916f5033695"
+  },
+  "settings.connection.ollama.models.count": {
+    "message": "{count, plural, one {{count} मॉडल उपलब्ध है।} other {{count} मॉडल उपलब्ध हैं।}}",
+    "description": "Hint text showing the number of available models",
+    "_machine_translated": true,
+    "_source_hash": "a985cabb2940de7c"
+  },
+  "settings.connection.ollama.save.pick_model": {
+    "message": "सहेजने से पहले एक मॉडल चुनें।",
+    "description": "Inline error: no model selected",
+    "_machine_translated": true,
+    "_source_hash": "9213bb7b6d1d7026"
+  },
+  "settings.connection.ollama.save.spawn_failed": {
+    "message": "स्पॉन कमांड नहीं बना सका: {message}",
+    "description": "Inline error: building the Ollama spawn command failed",
+    "_machine_translated": true,
+    "_source_hash": "527a2818c51e57c0"
+  },
+  "settings.connection.ollama.save.default_name": {
+    "message": "Ollama: {model}",
+    "description": "Default friendly name when the user leaves it blank",
+    "_machine_translated": true,
+    "_source_hash": "5ddda04cf210409e"
+  },
+  "settings.connection.ollama.dropdown.empty": {
+    "message": "—",
+    "description": "Default option in the empty model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5686c4a3725114de"
   }
 }

@@ -1,7 +1,7 @@
 import { SettingsModule } from './base.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
 import { escapeAttr, formatBytes } from '../shared/tool-utils.js';
-import { t } from '../shared/i18n.js';
+import { t, tHtml } from '../shared/i18n.js';
 
 // Lucide-style inline SVGs for the icon-only row actions. Matches the
 // chat session list (`kd-action-btn`) so users see one consistent
@@ -153,13 +153,13 @@ export class ConnectionSettingsModule extends SettingsModule {
         this._captureEdit();
         const active = this._activeConnection();
         if (!active) {
-            return { valid: false, error: 'No active connection selected.' };
+            return { valid: false, error: t('settings.connection.validate.no_active') };
         }
         if (active.mode?.type === 'local') {
             if (!(active.mode.spawn_command || '').trim()) {
                 return {
                     valid: false,
-                    error: 'The active connection is missing a spawn command.',
+                    error: t('settings.connection.validate.missing_spawn'),
                 };
             }
         }
@@ -234,8 +234,8 @@ export class ConnectionSettingsModule extends SettingsModule {
         const escape = api?.escapeHtml || ((s) => s);
         const platform = navigator.platform || '';
         const wdPlaceholder = platform.startsWith('Win')
-            ? 'e.g., C:\\Projects\\my-app'
-            : 'e.g., /home/you/projects/my-app';
+            ? t('settings.connection.workspace.placeholder.windows')
+            : t('settings.connection.workspace.placeholder.unix');
 
         const active = this._activeConnection();
         const others = this._connections.filter((c) => c.id !== this._activeId);
@@ -244,23 +244,22 @@ export class ConnectionSettingsModule extends SettingsModule {
         );
 
         root.innerHTML = `
-            <div class="setting-section-label">Session</div>
+            <div class="setting-section-label">${t('settings.connection.session.section')}</div>
             <div class="setting-row">
-                <div class="setting-label">Start agent backend on launch</div>
+                <div class="setting-label">${t('settings.connection.session.start_on_launch.label')}</div>
                 <div class="setting-checkbox-row">
                     <label class="kage-checkbox">
                         <input type="checkbox" id="startSessionOnLaunch"${this._startSessionOnLaunch ? ' checked' : ''}>
                     </label>
                     <div class="setting-description">
-                        Speed up initial responses by pre-launching the ACP backend when Kage starts.
+                        ${t('settings.connection.session.start_on_launch.description')}
                     </div>
                 </div>
             </div>
             <div class="setting-row">
-                <div class="setting-label">Agent workspace folder</div>
+                <div class="setting-label">${t('settings.connection.workspace.label')}</div>
                 <div class="setting-description">
-                    The folder the agent works in. It can read and modify files under this path.
-                    Leave empty to use the current directory.
+                    ${t('settings.connection.workspace.description')}
                 </div>
                 <div class="setting-control">
                     <input type="text" class="setting-input" id="workingDirectory"
@@ -269,28 +268,27 @@ export class ConnectionSettingsModule extends SettingsModule {
                 </div>
             </div>
 
-            <div class="setting-section-label">Connections</div>
+            <div class="setting-section-label">${t('settings.connection.list.section')}</div>
             <div class="setting-row">
                 <div class="setting-description">
-                    The active connection is what Kage uses to run sessions. Switching the active
-                    connection requires a restart.
+                    ${t('settings.connection.list.description')}
                 </div>
                 <div id="connUnifiedList" class="conn-saved-list">
                     ${active ? this._renderConnectionRow(active, { active: true }) : ''}
                     ${others.map((c) => this._renderConnectionRow(c, { active: false })).join('')}
                     ${
                         this._detectLoading
-                            ? `<div class="conn-detected-subhead">Auto-detected agents</div>
-                               <div class="agent-searching">🔍 Searching for agents…</div>`
+                            ? `<div class="conn-detected-subhead">${t('settings.connection.list.detected_subhead')}</div>
+                               <div class="agent-searching">${t('settings.connection.list.searching')}</div>`
                             : detectedNotSaved.length
-                              ? `<div class="conn-detected-subhead">Auto-detected agents</div>
+                              ? `<div class="conn-detected-subhead">${t('settings.connection.list.detected_subhead')}</div>
                                  ${detectedNotSaved.map((d) => this._renderDetectedRow(d)).join('')}`
                               : ''
                     }
                 </div>
                 <div class="conn-list-actions">
-                    <button type="button" class="setting-btn-secondary" id="connAddBtn">+ Add agent</button>
-                    <button type="button" class="setting-btn-secondary" id="connRescanBtn">Rescan</button>
+                    <button type="button" class="setting-btn-secondary" id="connAddBtn">${t('settings.connection.list.add_btn')}</button>
+                    <button type="button" class="setting-btn-secondary" id="connRescanBtn">${t('settings.connection.list.rescan_btn')}</button>
                 </div>
             </div>
         `;
@@ -304,13 +302,13 @@ export class ConnectionSettingsModule extends SettingsModule {
         const issues = this._issues.get(c.id);
         const detail =
             c.mode?.type === 'local'
-                ? c.mode.spawn_command || '(no command)'
+                ? c.mode.spawn_command || t('settings.connection.row.no_command')
                 : `${c.mode?.host || '?'}:${c.mode?.port || '?'}`;
         const issueBadge =
             issues && !issues.ok
                 ? `<span class="conn-issue-badge" title="${escape(
                       issues.issues.map((i) => api?.describeIssue?.(i) || i).join(' ')
-                  )}">⚠️ ${escape(issues.issues.length)} issue${issues.issues.length === 1 ? '' : 's'}</span>`
+                  )}">${t('settings.connection.row.issue_count', { count: issues.issues.length })}</span>`
                 : '';
         const presetBadge = c.preset_id
             ? `<span class="conn-preset-badge">${escape(c.preset_id)}</span>`
@@ -324,12 +322,12 @@ export class ConnectionSettingsModule extends SettingsModule {
             <div class="conn-row${active ? ' conn-row-active' : ''}" data-id="${escape(c.id)}">
                 <div class="conn-row-main">
                     <div class="conn-row-name">
-                        ${active ? '<span class="conn-active-dot" title="Active"></span>' : ''}
+                        ${active ? `<span class="conn-active-dot" title="${t('settings.connection.row.active.title')}"></span>` : ''}
                         <span class="conn-row-title">${escape(c.name)}</span>
                         ${presetBadge}
                         ${versionBadge}
                         ${issueBadge}
-                        ${active ? '<span class="conn-active-label">Active</span>' : ''}
+                        ${active ? `<span class="conn-active-label">${t('settings.connection.row.active.title')}</span>` : ''}
                     </div>
                     <div class="conn-row-detail">${escape(detail)}</div>
                 </div>
@@ -337,20 +335,20 @@ export class ConnectionSettingsModule extends SettingsModule {
                     ${
                         active
                             ? ''
-                            : `<button type="button" class="setting-btn-secondary conn-set-active-btn" data-id="${escape(c.id)}">Make active</button>`
+                            : `<button type="button" class="setting-btn-secondary conn-set-active-btn" data-id="${escape(c.id)}">${t('settings.connection.row.make_active_btn')}</button>`
                     }
                     <button type="button" class="conn-icon-btn conn-edit-btn" data-id="${escape(c.id)}"
-                            title="Edit this connection" aria-label="Edit this connection">
+                            title="${t('settings.connection.row.edit_title')}" aria-label="${t('settings.connection.row.edit_title')}">
                         ${ICON_EDIT}
                     </button>
                     <button type="button" class="conn-icon-btn conn-duplicate-btn" data-id="${escape(c.id)}"
-                            title="Duplicate this connection" aria-label="Duplicate this connection">
+                            title="${t('settings.connection.row.duplicate_title')}" aria-label="${t('settings.connection.row.duplicate_title')}">
                         ${ICON_DUPLICATE}
                     </button>
                     ${
                         canDelete
                             ? `<button type="button" class="conn-icon-btn conn-delete-btn" data-id="${escape(c.id)}"
-                                    title="Delete this connection" aria-label="Delete this connection">
+                                    title="${t('settings.connection.row.delete_title')}" aria-label="${t('settings.connection.row.delete_title')}">
                                 ${ICON_DELETE}
                             </button>`
                             : ''
@@ -375,17 +373,17 @@ export class ConnectionSettingsModule extends SettingsModule {
                     <div class="conn-row-main">
                         <div class="conn-row-name">
                             <span class="conn-row-title">${escape(d.name)}</span>
-                            <span class="conn-preset-badge">needs wrapper</span>
+                            <span class="conn-preset-badge">${t('settings.connection.detected.needs_wrapper')}</span>
                         </div>
                         <div class="conn-row-detail">${escape(detail)}</div>
                         <div class="conn-row-detail conn-wrapper-hint">
-                            Install <code>${escape(d.needs_wrapper_npm_package)}</code> via npm to use this CLI.
+                            ${tHtml('settings.connection.detected.wrapper_hint_html', { package: d.needs_wrapper_npm_package })}
                         </div>
                         <div class="agent-install-status" data-detected-key="${escape(d.path)}" aria-live="polite"></div>
                     </div>
                     <div class="conn-row-actions">
                         <button type="button" class="setting-btn-secondary conn-install-wrapper-btn"
-                                data-detected-key="${escape(d.path)}">Install ACP wrapper</button>
+                                data-detected-key="${escape(d.path)}">${t('settings.connection.detected.install_wrapper_btn')}</button>
                     </div>
                 </div>`;
         }
@@ -401,7 +399,7 @@ export class ConnectionSettingsModule extends SettingsModule {
                 </div>
                 <div class="conn-row-actions">
                     <button type="button" class="setting-btn-secondary conn-add-detected-btn"
-                            data-detected-key="${escape(d.path)}">Add</button>
+                            data-detected-key="${escape(d.path)}">${t('settings.connection.detected.add_btn')}</button>
                 </div>
             </div>`;
     }
@@ -500,7 +498,7 @@ export class ConnectionSettingsModule extends SettingsModule {
 
         const originalLabel = btn.textContent;
         btn.disabled = true;
-        btn.textContent = 'Checking npm…';
+        btn.textContent = t('settings.connection.install.checking_npm');
         setStatus('');
 
         const invoke = window.__TAURI__?.core?.invoke;
@@ -522,15 +520,11 @@ export class ConnectionSettingsModule extends SettingsModule {
         if (!npm?.available) {
             btn.disabled = false;
             btn.textContent = originalLabel;
-            setStatus(
-                `<div class="agent-install-error">npm wasn't found on PATH. ` +
-                    `Install Node.js from <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a> ` +
-                    `or run <code>${escape(cmd)}</code> in a terminal.</div>`
-            );
+            setStatus(tHtml('settings.connection.install.no_npm_html', { cmd }));
             return;
         }
 
-        btn.textContent = 'Installing…';
+        btn.textContent = t('settings.connection.install.installing');
         try {
             await invoke('install_acp_wrapper', {
                 package: detected.needs_wrapper_npm_package,
@@ -539,15 +533,19 @@ export class ConnectionSettingsModule extends SettingsModule {
             console.warn('install_acp_wrapper failed:', e);
             btn.disabled = false;
             btn.textContent = originalLabel;
-            const msg = e?.message || (typeof e === 'string' ? e : 'install failed');
+            const msg =
+                e?.message ||
+                (typeof e === 'string' ? e : t('settings.connection.install.failed_default'));
             setStatus(
-                `<div class="agent-install-error">Install failed: ${escape(msg)}. ` +
-                    `Try running <code>${escape(cmd)}</code> in a terminal.</div>`
+                tHtml('settings.connection.install.failed_html', {
+                    message: msg,
+                    cmd,
+                })
             );
             return;
         }
 
-        setStatus('<div class="agent-install-ok">✅ Wrapper installed. Refreshing…</div>');
+        setStatus(tHtml('settings.connection.install.success_html'));
         // Re-detect — the wrapper now shows up as a ready-to-use entry,
         // and the backend filter hides the wrapper-needed entry.
         this._detectLoading = true;
@@ -601,7 +599,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         const api = this._api();
         return {
             id: api ? api.uuidLite() : `c-${Date.now()}`,
-            name: 'New connection',
+            name: t('settings.connection.draft.default_name'),
             preset_id: null,
             mode: { type: 'local', spawn_command: '' },
             sessions_directory: null,
@@ -635,7 +633,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         if (!form) return;
         // Validation: local mode requires a non-empty spawn command.
         if (form.mode?.type === 'local' && !(form.mode.spawn_command || '').trim()) {
-            alert('Spawn command is required for local connections.');
+            alert(t('settings.connection.edit.spawn_required'));
             return;
         }
         const merged = {
@@ -690,20 +688,20 @@ export class ConnectionSettingsModule extends SettingsModule {
                             ? `<div class="conn-preset-info-auth">🔑 ${escape(preset.auth_hint)}</div>`
                             : ''
                     }
-                    <a href="${escape(preset.install_url)}" target="_blank" class="conn-preset-info-link">Install / docs ↗</a>
+                    <a href="${escape(preset.install_url)}" target="_blank" class="conn-preset-info-link">${t('settings.connection.edit.preset_install_link')}</a>
                 </div>`
             : '';
 
         const isActive = this._editing.id === this._activeId;
         const subtitle = this._editingIsNew
-            ? 'New connection'
+            ? t('settings.connection.edit.subtitle.new')
             : isActive
-              ? 'Editing the active connection'
-              : 'Editing connection';
+              ? t('settings.connection.edit.subtitle.active')
+              : t('settings.connection.edit.subtitle.editing');
 
         root.innerHTML = `
             <div class="conn-edit-header">
-                <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">← Back</button>
+                <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">${t('settings.connection.edit.back_btn')}</button>
                 <div class="conn-edit-subtitle">${escape(subtitle)}</div>
             </div>
             ${presetBlock}
@@ -711,8 +709,8 @@ export class ConnectionSettingsModule extends SettingsModule {
                 ${api.renderEditForm(this._editing, { idPrefix: 'connEdit', style: 'settings' })}
             </div>
             <div class="conn-edit-actions">
-                <button type="button" class="setting-btn-secondary" id="connEditCancelBtn">Cancel</button>
-                <button type="button" class="setting-btn-primary" id="connEditSaveBtn">${this._editingIsNew ? 'Add connection' : 'Save changes'}</button>
+                <button type="button" class="setting-btn-secondary" id="connEditCancelBtn">${t('settings.connection.edit.cancel_btn')}</button>
+                <button type="button" class="setting-btn-primary" id="connEditSaveBtn">${escape(this._editingIsNew ? t('settings.connection.edit.add_btn') : t('settings.connection.edit.save_changes_btn'))}</button>
             </div>
         `;
         api.bindEditForm('connEdit');
@@ -778,77 +776,77 @@ export class ConnectionSettingsModule extends SettingsModule {
             root.innerHTML = '';
             return;
         }
-        const subtitle = this._editingIsNew ? 'New Ollama agent' : 'Editing Ollama agent';
+        const subtitle = this._editingIsNew
+            ? t('settings.connection.ollama.subtitle.new')
+            : t('settings.connection.ollama.subtitle.editing');
         const settings = this._editing.ollama_settings || {};
+        const widgetModel =
+            settings.model || t('settings.connection.ollama.show_widget.fallback_model');
         root.innerHTML = `
             <div class="conn-edit-header">
-                <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">← Back</button>
+                <button type="button" class="setting-btn-secondary conn-back-btn" id="connBackBtn">${t('settings.connection.edit.back_btn')}</button>
                 <div class="conn-edit-subtitle">🦙 ${escape(subtitle)}</div>
             </div>
             <p class="setting-description" style="margin-bottom:12px;">
-                Use a local model running on <a href="https://ollama.com/" target="_blank" rel="noreferrer noopener">Ollama</a> with Kage.
-                Free, private, no API key. Wired through the Codex ACP adapter — Kage handles the env-var dance for you.
+                ${t('settings.connection.ollama.intro_html')}
             </p>
 
             <div class="setting-row">
-                <div class="setting-label">Friendly name</div>
-                <div class="setting-description">Shown in the connections list. Defaults to "Ollama: &lt;model&gt;" on save if left empty.</div>
+                <div class="setting-label">${t('settings.connection.ollama.name.label')}</div>
+                <div class="setting-description">${t('settings.connection.ollama.name.description')}</div>
                 <div class="setting-control">
                     <input type="text" class="setting-input" id="ollEditName"
                         value="${escape(this._editing.name || '')}"
-                        placeholder="e.g. Ollama: llama3:8b">
+                        placeholder="${t('settings.connection.ollama.name.placeholder')}">
                 </div>
             </div>
 
             <div class="setting-row">
-                <div class="setting-label">Ollama base URL</div>
-                <div class="setting-description">Where the Ollama daemon is listening. Default is the local install.</div>
+                <div class="setting-label">${t('settings.connection.ollama.base_url.label')}</div>
+                <div class="setting-description">${t('settings.connection.ollama.base_url.description')}</div>
                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                     <input type="text" class="setting-input" id="ollEditBaseUrl"
                         value="${escape(settings.base_url || 'http://localhost:11434')}"
                         placeholder="http://localhost:11434" style="flex:1;">
-                    <button class="setting-button" type="button" id="ollEditTestBtn">Test connection</button>
+                    <button class="setting-button" type="button" id="ollEditTestBtn">${t('settings.connection.ollama.test_btn')}</button>
                 </div>
                 <div id="ollEditProbeStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
             </div>
 
             <div class="setting-row">
-                <div class="setting-label">Model</div>
-                <div class="setting-description">Pulled models from this Ollama daemon. Click Refresh to re-scan.</div>
+                <div class="setting-label">${t('settings.connection.ollama.model.label')}</div>
+                <div class="setting-description">${t('settings.connection.ollama.model.description')}</div>
                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
                     <select class="setting-select" id="ollEditModel" style="flex:1;">
-                        <option value="">—</option>
+                        <option value="">${t('settings.connection.ollama.dropdown.empty')}</option>
                     </select>
-                    <button class="setting-button" type="button" id="ollEditRefreshBtn">Refresh</button>
+                    <button class="setting-button" type="button" id="ollEditRefreshBtn">${t('settings.connection.ollama.refresh_btn')}</button>
                 </div>
                 <div id="ollEditModelHint" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
             </div>
 
             <div class="setting-row">
-                <div class="setting-label">Show status widget in floating window</div>
+                <div class="setting-label">${t('settings.connection.ollama.show_widget.label')}</div>
                 <div class="setting-checkbox-row">
                     <label class="kage-checkbox">
                         <input type="checkbox" id="ollEditShowWidget"${settings.show_status_widget ? ' checked' : ''}>
                     </label>
                     <div class="setting-description">
-                        Adds a small "🦙 ${escape(settings.model || 'model')} · ready" chip near the top of the floating window so you can see at a glance that the local model is up. Polls Ollama every ~30 seconds.
+                        ${tHtml('settings.connection.ollama.show_widget.description_html', { model: widgetModel })}
                     </div>
                 </div>
             </div>
 
             <details style="margin-top:12px;">
-                <summary style="cursor:pointer;font-size:12px;color:var(--kage-text-secondary);">Don't have Ollama yet?</summary>
+                <summary style="cursor:pointer;font-size:12px;color:var(--kage-text-secondary);">${t('settings.connection.ollama.help.summary')}</summary>
                 <div class="setting-description" style="margin-top:8px;line-height:1.6;">
-                    1. Install Ollama from <a href="https://ollama.com/download" target="_blank" rel="noreferrer noopener">ollama.com/download</a>.<br>
-                    2. Start the daemon (it runs in the background).<br>
-                    3. Pull a model — for example <code>ollama pull llama3</code> or <code>ollama pull qwen2.5-coder</code>.<br>
-                    4. Click Test connection above, pick the model, then save.
+                    ${t('settings.connection.ollama.help.body_html')}
                 </div>
             </details>
 
             <div class="conn-edit-actions">
-                <button type="button" class="setting-btn-secondary" id="connEditCancelBtn">Cancel</button>
-                <button type="button" class="setting-btn-primary" id="ollEditSaveBtn">${this._editingIsNew ? 'Add agent' : 'Save changes'}</button>
+                <button type="button" class="setting-btn-secondary" id="connEditCancelBtn">${t('settings.connection.edit.cancel_btn')}</button>
+                <button type="button" class="setting-btn-primary" id="ollEditSaveBtn">${escape(this._editingIsNew ? t('settings.connection.ollama.add_btn') : t('settings.connection.edit.save_changes_btn'))}</button>
             </div>
             <div id="ollEditStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
         `;
@@ -883,7 +881,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         const baseUrl = this._currentOllamaBaseUrl();
         const status = document.getElementById('ollEditProbeStatus');
         if (verbose && status) {
-            status.textContent = 'Probing…';
+            status.textContent = t('settings.connection.ollama.probe.probing');
             status.style.color = '';
         }
         try {
@@ -895,11 +893,21 @@ export class ConnectionSettingsModule extends SettingsModule {
         }
         if (status) {
             if (this._ollamaProbe?.status === 'Reachable') {
-                const v = this._ollamaProbe.version ? ` (Ollama ${this._ollamaProbe.version})` : '';
-                status.textContent = `✓ Reachable${v}`;
+                const versionSuffix = this._ollamaProbe.version
+                    ? t('settings.connection.ollama.probe.version_suffix', {
+                          version: this._ollamaProbe.version,
+                      })
+                    : '';
+                status.textContent = t('settings.connection.ollama.probe.reachable', {
+                    version: versionSuffix,
+                });
                 status.style.color = 'var(--kage-accent)';
             } else if (this._ollamaProbe) {
-                status.textContent = `✕ ${this._ollamaProbe.reason || 'Unreachable'}`;
+                status.textContent = t('settings.connection.ollama.probe.unreachable', {
+                    reason:
+                        this._ollamaProbe.reason ||
+                        t('settings.connection.ollama.probe.unreachable_default'),
+                });
                 status.style.color = '#c44';
             }
         }
@@ -916,7 +924,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         const baseUrl = this._currentOllamaBaseUrl();
         const hint = document.getElementById('ollEditModelHint');
         if (verbose && hint) {
-            hint.textContent = 'Loading…';
+            hint.textContent = t('settings.connection.ollama.models.loading');
             hint.style.color = '';
         }
         let models = [];
@@ -926,7 +934,9 @@ export class ConnectionSettingsModule extends SettingsModule {
             this._ollamaModels = [];
             this._populateOllamaModelDropdown([], '');
             if (hint) {
-                hint.textContent = `Couldn't list models: ${this._formatError(e)}`;
+                hint.textContent = t('settings.connection.ollama.models.list_failed', {
+                    message: this._formatError(e),
+                });
                 hint.style.color = '#c44';
             }
             return;
@@ -939,11 +949,12 @@ export class ConnectionSettingsModule extends SettingsModule {
         this._populateOllamaModelDropdown(this._ollamaModels, previous);
         if (hint) {
             if (this._ollamaModels.length === 0) {
-                hint.textContent =
-                    'No models pulled yet. Try `ollama pull llama3` or `ollama pull qwen2.5-coder`.';
+                hint.textContent = t('settings.connection.ollama.models.none');
                 hint.style.color = '';
             } else {
-                hint.textContent = `${this._ollamaModels.length} model${this._ollamaModels.length === 1 ? '' : 's'} available.`;
+                hint.textContent = t('settings.connection.ollama.models.count', {
+                    count: this._ollamaModels.length,
+                });
                 hint.style.color = 'var(--kage-text-secondary)';
             }
         }
@@ -952,7 +963,9 @@ export class ConnectionSettingsModule extends SettingsModule {
     _populateOllamaModelDropdown(models, selected) {
         const sel = document.getElementById('ollEditModel');
         if (!sel) return;
-        const opts = ['<option value="">—</option>'];
+        const opts = [
+            `<option value="">${t('settings.connection.ollama.dropdown.empty')}</option>`,
+        ];
         for (const m of models || []) {
             const sizeStr = formatBytes(m.size);
             const label = sizeStr ? `${m.name} — ${sizeStr}` : m.name;
@@ -975,7 +988,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         const enteredName = document.getElementById('ollEditName')?.value?.trim() || '';
 
         if (!model) {
-            setStatus('Pick a model before saving.', 'error');
+            setStatus(t('settings.connection.ollama.save.pick_model'), 'error');
             return;
         }
 
@@ -989,7 +1002,12 @@ export class ConnectionSettingsModule extends SettingsModule {
                 model,
             });
         } catch (e) {
-            setStatus('Could not build spawn command: ' + this._formatError(e), 'error');
+            setStatus(
+                t('settings.connection.ollama.save.spawn_failed', {
+                    message: this._formatError(e),
+                }),
+                'error'
+            );
             return;
         }
 
@@ -999,7 +1017,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             // Default the friendly name to "Ollama: <model>" on save
             // when the user left it blank — matches the templating
             // convention agreed with the user.
-            name: enteredName || `Ollama: ${model}`,
+            name: enteredName || t('settings.connection.ollama.save.default_name', { model }),
             preset_id: 'ollama',
             mode: { type: 'local', spawn_command: spawnCommand },
             sessions_directory: this._editing.sessions_directory ?? null,
@@ -1038,7 +1056,7 @@ export class ConnectionSettingsModule extends SettingsModule {
     }
 
     _formatError(e) {
-        if (!e) return 'Unknown error';
+        if (!e) return t('settings.connection.error.unknown');
         if (typeof e === 'string') return e;
         if (e instanceof Error) return e.message || String(e);
         if (typeof e === 'object') {
@@ -1124,7 +1142,7 @@ export class ConnectionSettingsModule extends SettingsModule {
     _deleteConnection(id) {
         if (this._connections.length <= 1) return;
         if (id === this._activeId) {
-            alert('Switch to a different connection before deleting this one.');
+            alert(t('settings.connection.edit.cannot_delete_active'));
             return;
         }
         this._connections = this._connections.filter((c) => c.id !== id);
@@ -1150,7 +1168,9 @@ export class ConnectionSettingsModule extends SettingsModule {
         // original until Save commits them.
         const draft = JSON.parse(JSON.stringify(original));
         draft.id = api?.uuidLite ? api.uuidLite() : `c-${Date.now()}`;
-        draft.name = `Copy of ${original.name || 'connection'}`;
+        draft.name = t('settings.connection.duplicate.copy_of', {
+            name: original.name || t('settings.connection.duplicate.fallback_name'),
+        });
         if (original.preset_id === 'ollama') {
             this._enterOllamaEdit(draft, { isNew: true });
         } else {

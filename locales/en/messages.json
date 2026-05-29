@@ -1363,6 +1363,604 @@
     "message": "Copy",
     "description": "Tooltip on the copy button inside an Other-Agent session view"
   },
+  "chat.session.default_title": {
+    "message": "New Chat",
+    "description": "Default placeholder title for a brand-new chat session"
+  },
+  "chat.session.current_title": {
+    "message": "Current Session",
+    "description": "Synthetic title for the active session before it has been saved to disk"
+  },
+  "chat.placeholder.continue": {
+    "message": "Continue your conversation...",
+    "description": "Placeholder text shown in an empty chat that's already active but has no messages on disk"
+  },
+  "chat.placeholder.deleted": {
+    "message": "This session was deleted from another window.",
+    "description": "Placeholder text shown after the active session was deleted from another window"
+  },
+  "chat.placeholder.select_session": {
+    "message": "Select a session to continue...",
+    "description": "Placeholder shown after the active session was deleted, prompting the user to pick another"
+  },
+  "chat.delete.cannot_active": {
+    "message": "Cannot delete the active session. Switch to a different session first.",
+    "description": "Error message when the user tries to delete the currently active chat session"
+  },
+  "chat.delete.confirm": {
+    "message": "Delete session \"{title}\" from {dir}?\n\n• {sessionId}.json\n• {sessionId}.jsonl\n• {sessionId}.lock\n\nThis cannot be undone.",
+    "description": "confirm() text before deleting a session"
+  },
+  "chat.delete.dir_fallback": {
+    "message": "sessions directory",
+    "description": "Fallback shown in delete confirmation when the sessions directory path could not be retrieved"
+  },
+  "chat.export.failed": {
+    "message": "Export failed: {message}",
+    "description": "alert() shown when chat export to markdown fails"
+  },
+
+  "settings.timer.title": {
+    "message": "Timer & Stopwatch",
+    "description": "Settings header for timer/stopwatch module"
+  },
+  "settings.timer.enable.label": {
+    "message": "Enable timer & stopwatch",
+    "description": "Toggle: enable timer/stopwatch detection in launcher"
+  },
+  "settings.timer.enable.description": {
+    "message": "Type \"timer 5m\" for a countdown or \"stopwatch\" to count up.",
+    "description": "Helper for the enable timer toggle"
+  },
+  "settings.timer.completion.section": {
+    "message": "Completion Actions",
+    "description": "Section label for what happens when a timer completes"
+  },
+  "settings.timer.notify.label": {
+    "message": "Show system notification",
+    "description": "Toggle: show notification when timer completes"
+  },
+  "settings.timer.notify.description": {
+    "message": "Display a desktop notification when the countdown reaches zero.",
+    "description": "Helper for notification toggle"
+  },
+  "settings.timer.sound.label": {
+    "message": "Play sound",
+    "description": "Toggle: play sound when timer completes"
+  },
+  "settings.timer.sound.description": {
+    "message": "Play a notification sound when the countdown reaches zero.",
+    "description": "Helper for play-sound toggle"
+  },
+  "settings.timer.sound_id.label": {
+    "message": "Notification sound",
+    "description": "Label for sound dropdown"
+  },
+  "settings.timer.sound_id.description": {
+    "message": "Select a sound to play when the timer completes. Click the play button to preview.",
+    "description": "Helper for sound dropdown"
+  },
+  "settings.timer.sound.two_tone": {
+    "message": "Two-Tone Beep",
+    "description": "Sound option: two-tone beep"
+  },
+  "settings.timer.sound.chime": {
+    "message": "Chime",
+    "description": "Sound option: chime"
+  },
+  "settings.timer.sound.alert": {
+    "message": "Alert",
+    "description": "Sound option: alert"
+  },
+  "settings.timer.sound.gentle": {
+    "message": "Gentle",
+    "description": "Sound option: gentle"
+  },
+  "settings.timer.sound.bell": {
+    "message": "Bell",
+    "description": "Sound option: bell"
+  },
+  "settings.timer.sound.success": {
+    "message": "Success",
+    "description": "Sound option: success"
+  },
+  "settings.timer.sound.custom": {
+    "message": "Custom file...",
+    "description": "Sound option: custom audio file"
+  },
+  "settings.timer.preview_btn": {
+    "message": "▶ Preview",
+    "description": "Button to preview the chosen timer sound"
+  },
+  "settings.timer.preview_btn.title": {
+    "message": "Preview sound",
+    "description": "Tooltip on the preview button"
+  },
+  "settings.timer.preview_btn.stop": {
+    "message": "⏹ Stop",
+    "description": "Button label while a preview is playing"
+  },
+  "settings.timer.custom_path.placeholder": {
+    "message": "Path to .wav or .mp3 file",
+    "description": "Placeholder for the custom-sound path input"
+  },
+  "settings.timer.repeats.description": {
+    "message": "Repeat count — how many times the sound plays.",
+    "description": "Helper for repeat-count slider"
+  },
+  "settings.timer.show_window.label": {
+    "message": "Show Launcher",
+    "description": "Toggle: auto-show Launcher when timer completes"
+  },
+  "settings.timer.show_window.description": {
+    "message": "Automatically show the Launcher if it is hidden when the timer completes.",
+    "description": "Helper for show-Launcher toggle"
+  },
+
+  "settings.notifications.title": {
+    "message": "Notifications",
+    "description": "Settings header for notifications module"
+  },
+  "settings.notifications.enable.label": {
+    "message": "Enable Notifications",
+    "description": "Toggle: enable desktop notifications"
+  },
+  "settings.notifications.enable.description": {
+    "message": "Show desktop notifications for important events",
+    "description": "Helper for enable-notifications toggle"
+  },
+  "settings.notifications.sound.label": {
+    "message": "Notification Sound",
+    "description": "Label for notification sound dropdown"
+  },
+  "settings.notifications.sound.description": {
+    "message": "Sound to play when notifications appear",
+    "description": "Helper for notification sound dropdown"
+  },
+  "settings.notifications.sound.none": {
+    "message": "None",
+    "description": "Notification sound option: none"
+  },
+  "settings.notifications.sound.default": {
+    "message": "Default",
+    "description": "Notification sound option: default"
+  },
+  "settings.notifications.sound.chime": {
+    "message": "Chime",
+    "description": "Notification sound option: chime"
+  },
+  "settings.notifications.sound.bell": {
+    "message": "Bell",
+    "description": "Notification sound option: bell"
+  },
+  "settings.notifications.duration.label": {
+    "message": "Notification Duration (seconds)",
+    "description": "Label for notification duration input"
+  },
+  "settings.notifications.duration.description": {
+    "message": "How long notifications stay visible",
+    "description": "Helper for notification duration input"
+  },
+  "settings.notifications.duration.error": {
+    "message": "Notification duration must be between 1 and 30 seconds",
+    "description": "Validation error: notification duration out of range"
+  },
+
+  "settings.math.title": {
+    "message": "Math",
+    "description": "Settings header for math calculator module"
+  },
+  "settings.math.section_description": {
+    "message": "Evaluate math expressions directly in the input bar without sending them to the agent.",
+    "description": "Top-of-pane description"
+  },
+  "settings.math.enable.label": {
+    "message": "Enable Math Calculator",
+    "description": "Toggle: enable math calculator"
+  },
+  "settings.math.enable.description": {
+    "message": "Detect and evaluate math expressions as you type",
+    "description": "Helper for enable-math toggle"
+  },
+  "settings.math.precision.label": {
+    "message": "Decimal Precision",
+    "description": "Label for math precision input"
+  },
+  "settings.math.precision.description": {
+    "message": "Number of decimal places to display (0 = auto)",
+    "description": "Helper for precision input"
+  },
+  "settings.math.auto_copy.label": {
+    "message": "Auto-copy Result",
+    "description": "Toggle: copy math result to clipboard on Enter"
+  },
+  "settings.math.auto_copy.description": {
+    "message": "Automatically copy the answer to clipboard when pressing Enter",
+    "description": "Helper for auto-copy toggle"
+  },
+  "settings.math.thousands.label": {
+    "message": "Use Thousands Separator",
+    "description": "Toggle: format large numbers with thousands separators"
+  },
+  "settings.math.thousands.description": {
+    "message": "Format large numbers with commas (e.g. 1,000,000)",
+    "description": "Helper for thousands-separator toggle"
+  },
+  "settings.math.precision.error": {
+    "message": "Math precision must be between 0 and 15",
+    "description": "Validation error: math precision out of range"
+  },
+
+  "settings.devtools.title": {
+    "message": "Developer Tools",
+    "description": "Settings header for developer-tools module"
+  },
+  "settings.devtools.enable.label": {
+    "message": "Enable developer tools",
+    "description": "Toggle: enable developer tools detection in launcher"
+  },
+  "settings.devtools.enable.description": {
+    "message": "Detect developer utility commands in the Launcher (UUID, base64, hashing, etc.).",
+    "description": "Helper for enable-devtools toggle"
+  },
+  "settings.devtools.individual.label": {
+    "message": "Individual tools",
+    "description": "Section label for individual devtool toggles"
+  },
+  "settings.devtools.individual.description": {
+    "message": "Toggle specific developer tools on or off.",
+    "description": "Helper for individual-tools section"
+  },
+  "settings.devtools.uuid.label": {
+    "message": "UUID generator",
+    "description": "Toggle: UUID generator devtool"
+  },
+  "settings.devtools.uuid.description": {
+    "message": "Type \"uuid\" to generate a random UUID v4.",
+    "description": "Helper for UUID toggle"
+  },
+  "settings.devtools.base64.label": {
+    "message": "Base64 encode/decode",
+    "description": "Toggle: base64 devtool"
+  },
+  "settings.devtools.base64.description": {
+    "message": "Type \"base64 text\" to encode or \"b64d encoded\" to decode.",
+    "description": "Helper for base64 toggle"
+  },
+  "settings.devtools.hash.label": {
+    "message": "Hash calculator",
+    "description": "Toggle: hash calculator devtool"
+  },
+  "settings.devtools.hash.description": {
+    "message": "Type \"md5 text\", \"sha1 text\", \"sha256 text\", or \"sha512 text\".",
+    "description": "Helper for hash toggle"
+  },
+  "settings.devtools.epoch.label": {
+    "message": "Epoch/date converter",
+    "description": "Toggle: epoch/date converter devtool"
+  },
+  "settings.devtools.epoch.description": {
+    "message": "Type a Unix timestamp to see the date, or \"now\" for the current epoch.",
+    "description": "Helper for epoch toggle"
+  },
+  "settings.devtools.json.label": {
+    "message": "JSON formatter",
+    "description": "Toggle: JSON formatter devtool"
+  },
+  "settings.devtools.json.description": {
+    "message": "Paste minified JSON to see it pretty-printed.",
+    "description": "Helper for JSON toggle"
+  },
+
+  "settings.connection.validate.no_active": {
+    "message": "No active connection selected.",
+    "description": "Validation error when no active connection is configured"
+  },
+  "settings.connection.validate.missing_spawn": {
+    "message": "The active connection is missing a spawn command.",
+    "description": "Validation error when active local connection has no spawn_command"
+  },
+  "settings.connection.session.section": {
+    "message": "Session",
+    "description": "Section heading: session-related settings"
+  },
+  "settings.connection.session.start_on_launch.label": {
+    "message": "Start agent backend on launch",
+    "description": "Toggle: pre-launch ACP backend at app start"
+  },
+  "settings.connection.session.start_on_launch.description": {
+    "message": "Speed up initial responses by pre-launching the ACP backend when Kage starts.",
+    "description": "Helper for start-on-launch toggle"
+  },
+  "settings.connection.workspace.label": {
+    "message": "Agent workspace folder",
+    "description": "Label for the agent workspace folder input"
+  },
+  "settings.connection.workspace.description": {
+    "message": "The folder the agent works in. It can read and modify files under this path. Leave empty to use the current directory.",
+    "description": "Helper for workspace folder input"
+  },
+  "settings.connection.workspace.placeholder.windows": {
+    "message": "e.g., C:\\Projects\\my-app",
+    "description": "Placeholder for workspace input on Windows"
+  },
+  "settings.connection.workspace.placeholder.unix": {
+    "message": "e.g., /home/you/projects/my-app",
+    "description": "Placeholder for workspace input on macOS/Linux"
+  },
+  "settings.connection.list.section": {
+    "message": "Connections",
+    "description": "Section heading: connection list"
+  },
+  "settings.connection.list.description": {
+    "message": "The active connection is what Kage uses to run sessions. Switching the active connection requires a restart.",
+    "description": "Helper above the connection list"
+  },
+  "settings.connection.list.detected_subhead": {
+    "message": "Auto-detected agents",
+    "description": "Subheading above the auto-detected agents group"
+  },
+  "settings.connection.list.searching": {
+    "message": "🔍 Searching for agents…",
+    "description": "Placeholder shown while detection is running"
+  },
+  "settings.connection.list.add_btn": {
+    "message": "+ Add agent",
+    "description": "Button: open the add-agent type picker"
+  },
+  "settings.connection.list.rescan_btn": {
+    "message": "Rescan",
+    "description": "Button: re-run agent auto-detection"
+  },
+  "settings.connection.row.active.title": {
+    "message": "Active",
+    "description": "Tooltip / pill on the active connection's row"
+  },
+  "settings.connection.row.issue_count": {
+    "message": "{count, plural, one {⚠️ {count} issue} other {⚠️ {count} issues}}",
+    "description": "Issue badge — count varies"
+  },
+  "settings.connection.row.make_active_btn": {
+    "message": "Make active",
+    "description": "Button: switch the active connection"
+  },
+  "settings.connection.row.edit_title": {
+    "message": "Edit this connection",
+    "description": "Tooltip on the edit (pencil) icon button"
+  },
+  "settings.connection.row.duplicate_title": {
+    "message": "Duplicate this connection",
+    "description": "Tooltip on the duplicate icon button"
+  },
+  "settings.connection.row.delete_title": {
+    "message": "Delete this connection",
+    "description": "Tooltip on the delete icon button"
+  },
+  "settings.connection.detected.add_btn": {
+    "message": "Add",
+    "description": "Button on detected-agent row: adopt as a saved connection"
+  },
+  "settings.connection.detected.needs_wrapper": {
+    "message": "needs wrapper",
+    "description": "Pill on detected-agent rows that require an npm wrapper install"
+  },
+  "settings.connection.detected.wrapper_hint_html": {
+    "message": "Install <code>{package}</code> via npm to use this CLI.",
+    "description": "Inline hint shown on a needs-wrapper detected agent row (HTML allowed)"
+  },
+  "settings.connection.detected.install_wrapper_btn": {
+    "message": "Install ACP wrapper",
+    "description": "Button: trigger the npm install for the ACP wrapper"
+  },
+  "settings.connection.install.checking_npm": {
+    "message": "Checking npm…",
+    "description": "Button label while checking whether npm is available"
+  },
+  "settings.connection.install.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm wasn't found on PATH. Install Node.js from <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> or run <code>{cmd}</code> in a terminal.</div>",
+    "description": "Inline message when npm is missing (HTML allowed; cmd is pre-escaped)"
+  },
+  "settings.connection.install.installing": {
+    "message": "Installing…",
+    "description": "Button label while npm install runs"
+  },
+  "settings.connection.install.failed_html": {
+    "message": "<div class=\"agent-install-error\">Install failed: {message}. Try running <code>{cmd}</code> in a terminal.</div>",
+    "description": "Inline message when ACP wrapper install fails (HTML allowed; message and cmd are pre-escaped)"
+  },
+  "settings.connection.install.failed_default": {
+    "message": "install failed",
+    "description": "Default text when an install error has no message"
+  },
+  "settings.connection.install.success_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Wrapper installed. Refreshing…</div>",
+    "description": "Inline message when ACP wrapper install succeeds (HTML allowed)"
+  },
+  "settings.connection.draft.default_name": {
+    "message": "New connection",
+    "description": "Default name for a freshly-drafted connection"
+  },
+  "settings.connection.edit.back_btn": {
+    "message": "← Back",
+    "description": "Button: leave the edit view"
+  },
+  "settings.connection.edit.cancel_btn": {
+    "message": "Cancel",
+    "description": "Button: discard edits and return to the list"
+  },
+  "settings.connection.edit.save_changes_btn": {
+    "message": "Save changes",
+    "description": "Button label when editing an existing connection"
+  },
+  "settings.connection.edit.add_btn": {
+    "message": "Add connection",
+    "description": "Button label when adding a new connection"
+  },
+  "settings.connection.edit.subtitle.new": {
+    "message": "New connection",
+    "description": "Subtitle in the edit header for a new draft"
+  },
+  "settings.connection.edit.subtitle.active": {
+    "message": "Editing the active connection",
+    "description": "Subtitle in the edit header when editing the active connection"
+  },
+  "settings.connection.edit.subtitle.editing": {
+    "message": "Editing connection",
+    "description": "Subtitle in the edit header when editing a non-active connection"
+  },
+  "settings.connection.edit.preset_install_link": {
+    "message": "Install / docs ↗",
+    "description": "Link to the preset's install page / documentation"
+  },
+  "settings.connection.edit.spawn_required": {
+    "message": "Spawn command is required for local connections.",
+    "description": "alert() shown when saving a local connection without a spawn command"
+  },
+  "settings.connection.edit.cannot_delete_active": {
+    "message": "Switch to a different connection before deleting this one.",
+    "description": "alert() shown when trying to delete the active connection"
+  },
+  "settings.connection.duplicate.copy_of": {
+    "message": "Copy of {name}",
+    "description": "Default name for a duplicated connection"
+  },
+  "settings.connection.duplicate.fallback_name": {
+    "message": "connection",
+    "description": "Fallback name if the original connection has no name when duplicating"
+  },
+  "settings.connection.error.unknown": {
+    "message": "Unknown error",
+    "description": "Fallback when an error has no message"
+  },
+  "settings.connection.row.no_command": {
+    "message": "(no command)",
+    "description": "Detail text shown for a local connection with no spawn command"
+  },
+
+  "settings.connection.ollama.subtitle.new": {
+    "message": "New Ollama agent",
+    "description": "Subtitle in the Ollama edit header for a new agent"
+  },
+  "settings.connection.ollama.subtitle.editing": {
+    "message": "Editing Ollama agent",
+    "description": "Subtitle in the Ollama edit header when editing an existing agent"
+  },
+  "settings.connection.ollama.intro_html": {
+    "message": "Use a local model running on <a href=\"https://ollama.com/\" target=\"_blank\" rel=\"noreferrer noopener\">Ollama</a> with Kage. Free, private, no API key. Wired through the Codex ACP adapter — Kage handles the env-var dance for you.",
+    "description": "Intro paragraph above the Ollama wizard form"
+  },
+  "settings.connection.ollama.name.label": {
+    "message": "Friendly name",
+    "description": "Label for the friendly-name input"
+  },
+  "settings.connection.ollama.name.description": {
+    "message": "Shown in the connections list. Defaults to \"Ollama: <model>\" on save if left empty.",
+    "description": "Helper text under the friendly-name input"
+  },
+  "settings.connection.ollama.name.placeholder": {
+    "message": "e.g. Ollama: llama3:8b",
+    "description": "Placeholder for the friendly-name input"
+  },
+  "settings.connection.ollama.base_url.label": {
+    "message": "Ollama base URL",
+    "description": "Label for the Ollama base URL input"
+  },
+  "settings.connection.ollama.base_url.description": {
+    "message": "Where the Ollama daemon is listening. Default is the local install.",
+    "description": "Helper for base URL input"
+  },
+  "settings.connection.ollama.test_btn": {
+    "message": "Test connection",
+    "description": "Button: probe the Ollama daemon"
+  },
+  "settings.connection.ollama.model.label": {
+    "message": "Model",
+    "description": "Label for the model dropdown"
+  },
+  "settings.connection.ollama.model.description": {
+    "message": "Pulled models from this Ollama daemon. Click Refresh to re-scan.",
+    "description": "Helper for model dropdown"
+  },
+  "settings.connection.ollama.refresh_btn": {
+    "message": "Refresh",
+    "description": "Button: refresh the model list"
+  },
+  "settings.connection.ollama.show_widget.label": {
+    "message": "Show status widget in floating window",
+    "description": "Toggle: show Ollama status chip in floating window"
+  },
+  "settings.connection.ollama.show_widget.description_html": {
+    "message": "Adds a small \"🦙 {model} · ready\" chip near the top of the floating window so you can see at a glance that the local model is up. Polls Ollama every ~30 seconds.",
+    "description": "Helper for show-widget toggle (HTML allowed; model is pre-escaped)"
+  },
+  "settings.connection.ollama.show_widget.fallback_model": {
+    "message": "model",
+    "description": "Fallback word used in the show-widget description when no model is selected"
+  },
+  "settings.connection.ollama.help.summary": {
+    "message": "Don't have Ollama yet?",
+    "description": "Disclosure summary for Ollama install instructions"
+  },
+  "settings.connection.ollama.help.body_html": {
+    "message": "1. Install Ollama from <a href=\"https://ollama.com/download\" target=\"_blank\" rel=\"noreferrer noopener\">ollama.com/download</a>.<br>2. Start the daemon (it runs in the background).<br>3. Pull a model — for example <code>ollama pull llama3</code> or <code>ollama pull qwen2.5-coder</code>.<br>4. Click Test connection above, pick the model, then save.",
+    "description": "Body of the Ollama install instructions (HTML allowed)"
+  },
+  "settings.connection.ollama.add_btn": {
+    "message": "Add agent",
+    "description": "Button label when adding a new Ollama agent"
+  },
+  "settings.connection.ollama.probe.probing": {
+    "message": "Probing…",
+    "description": "Probe status: in progress"
+  },
+  "settings.connection.ollama.probe.reachable": {
+    "message": "✓ Reachable{version}",
+    "description": "Probe status: reachable, optional version suffix already includes leading text"
+  },
+  "settings.connection.ollama.probe.version_suffix": {
+    "message": " (Ollama {version})",
+    "description": "Suffix appended to the reachable status when version is known"
+  },
+  "settings.connection.ollama.probe.unreachable": {
+    "message": "✕ {reason}",
+    "description": "Probe status: failed"
+  },
+  "settings.connection.ollama.probe.unreachable_default": {
+    "message": "Unreachable",
+    "description": "Default reason when probe fails with no detail"
+  },
+  "settings.connection.ollama.models.loading": {
+    "message": "Loading…",
+    "description": "Hint text while listing Ollama models"
+  },
+  "settings.connection.ollama.models.list_failed": {
+    "message": "Couldn't list models: {message}",
+    "description": "Hint text when listing models fails"
+  },
+  "settings.connection.ollama.models.none": {
+    "message": "No models pulled yet. Try `ollama pull llama3` or `ollama pull qwen2.5-coder`.",
+    "description": "Hint text when the daemon has no models pulled"
+  },
+  "settings.connection.ollama.models.count": {
+    "message": "{count, plural, one {{count} model available.} other {{count} models available.}}",
+    "description": "Hint text showing the number of available models"
+  },
+  "settings.connection.ollama.save.pick_model": {
+    "message": "Pick a model before saving.",
+    "description": "Inline error: no model selected"
+  },
+  "settings.connection.ollama.save.spawn_failed": {
+    "message": "Could not build spawn command: {message}",
+    "description": "Inline error: building the Ollama spawn command failed"
+  },
+  "settings.connection.ollama.save.default_name": {
+    "message": "Ollama: {model}",
+    "description": "Default friendly name when the user leaves it blank"
+  },
+  "settings.connection.ollama.dropdown.empty": {
+    "message": "—",
+    "description": "Default option in the empty model dropdown"
+  },
 
   "settings.mcp.title": {
     "message": "MCP Servers",

@@ -156,7 +156,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
                                 <div class="script-editor-container">
                                     <pre class="script-highlight" aria-hidden="true"><code class="language-javascript" id="shortcutScriptHighlight"></code></pre>
                                     <textarea id="shortcutScript" class="setting-input script-editor" rows="8" spellcheck="false" wrap="off"
-                                        placeholder="${escapeHtml(t('settings.shortcuts.dialog.script.body.placeholder'))}"></textarea>
+                                        placeholder="${t('settings.shortcuts.dialog.script.body.placeholder')}"></textarea>
                                 </div>
                                 <div class="setting-description" style="margin-top: 4px;">
                                     ${t('settings.shortcuts.dialog.script.body.help_html')}

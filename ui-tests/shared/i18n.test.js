@@ -18,6 +18,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
     t,
+    tHtml,
     formatMessage,
     applyStaticTranslations,
     initI18n,
@@ -277,5 +278,86 @@ describe('applyStaticTranslations', () => {
         root.appendChild(span);
         mod.applyStaticTranslations(root);
         expect(span.textContent).toBe('Hello Ada');
+    });
+
+    describe('tHtml — auto-escape vars for HTML contexts', () => {
+        it('escapes HTML special characters in interpolated vars', async () => {
+            const mod = await import('../../ui/js/shared/i18n.js?tHtml-basic');
+            await mod.initI18n(
+                mockInvoke({
+                    language: 'en',
+                    rtl: false,
+                    catalog: {
+                        wrap: { message: 'Hello {who}' },
+                    },
+                    fallback: {},
+                })
+            );
+            // The vars must be HTML-escaped so a session named "Foo & <bar>"
+            // can't break out of its container.
+            expect(mod.tHtml('wrap', { who: 'Foo & <bar>' })).toBe(
+                'Hello Foo &amp; &lt;bar&gt;'
+            );
+        });
+
+        it('does NOT escape the catalog template — _html keys keep their markup', async () => {
+            const mod = await import('../../ui/js/shared/i18n.js?tHtml-template');
+            await mod.initI18n(
+                mockInvoke({
+                    language: 'en',
+                    rtl: false,
+                    catalog: {
+                        link: {
+                            message: 'Install <code>{package}</code> to continue.',
+                        },
+                    },
+                    fallback: {},
+                })
+            );
+            // The <code> from the template survives, but the {package} var is
+            // escaped so a malicious package name cannot inject its own tags.
+            expect(
+                mod.tHtml('link', { package: '<script>alert(1)</script>' })
+            ).toBe(
+                'Install <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> to continue.'
+            );
+        });
+
+        it('does not affect plain t() — vars there pass through verbatim', async () => {
+            const mod = await import('../../ui/js/shared/i18n.js?tHtml-plain');
+            await mod.initI18n(
+                mockInvoke({
+                    language: 'en',
+                    rtl: false,
+                    catalog: {
+                        wrap: { message: 'Hello {who}' },
+                    },
+                    fallback: {},
+                })
+            );
+            // Plain t() is for confirm()/alert()/textContent — escaping there
+            // would render &amp; literally.
+            expect(mod.t('wrap', { who: 'Foo & Bar' })).toBe('Hello Foo & Bar');
+        });
+
+        it('escapes vars inside plural arms', async () => {
+            const mod = await import('../../ui/js/shared/i18n.js?tHtml-plural');
+            await mod.initI18n(
+                mockInvoke({
+                    language: 'en',
+                    rtl: false,
+                    catalog: {
+                        items: {
+                            message:
+                                '{count, plural, one {1 item by {who}} other {# items by {who}}}',
+                        },
+                    },
+                    fallback: {},
+                })
+            );
+            expect(mod.tHtml('items', { count: 3, who: '<x>' })).toBe(
+                '3 items by &lt;x&gt;'
+            );
+        });
     });
 });
