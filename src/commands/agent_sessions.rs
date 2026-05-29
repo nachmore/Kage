@@ -5,7 +5,7 @@
 //! changes here — only an entry in `AgentSessionRegistry::new()`.
 
 use crate::agent_sessions::{AgentMessage, AgentSession, ProviderInfo, SessionLocator};
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::state::FeatureServices;
 use tauri::State;
 
@@ -25,13 +25,23 @@ pub async fn agent_list_sessions(
     let registry = features.agent_session_registry.clone();
     let limit = limit.unwrap_or(50);
     tauri::async_runtime::spawn_blocking(move || {
-        let provider = registry
-            .get(&provider_id)
-            .ok_or_else(|| AppError::internal(format!("Unknown provider: {}", provider_id)))?;
+        let provider = registry.get(&provider_id).ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.unknown_provider",
+                &[("provider", &provider_id)],
+            )
+        })?;
         provider.list_sessions(limit)
     })
     .await
-    .map_err(|e| AppError::internal(format!("Task: {}", e)))?
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
 }
 
 #[tauri::command]
@@ -42,13 +52,23 @@ pub async fn agent_load_session(
 ) -> Result<Vec<AgentMessage>, AppError> {
     let registry = features.agent_session_registry.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let provider = registry
-            .get(&provider_id)
-            .ok_or_else(|| AppError::internal(format!("Unknown provider: {}", provider_id)))?;
+        let provider = registry.get(&provider_id).ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.unknown_provider",
+                &[("provider", &provider_id)],
+            )
+        })?;
         provider.load_session(&locator)
     })
     .await
-    .map_err(|e| AppError::internal(format!("Task: {}", e)))?
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
 }
 
 #[tauri::command]
@@ -60,11 +80,21 @@ pub async fn agent_check_session_updated(
 ) -> Result<Option<i64>, AppError> {
     let registry = features.agent_session_registry.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let provider = registry
-            .get(&provider_id)
-            .ok_or_else(|| AppError::internal(format!("Unknown provider: {}", provider_id)))?;
+        let provider = registry.get(&provider_id).ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.unknown_provider",
+                &[("provider", &provider_id)],
+            )
+        })?;
         provider.check_session_updated(&locator, since_ms)
     })
     .await
-    .map_err(|e| AppError::internal(format!("Task: {}", e)))?
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?
 }

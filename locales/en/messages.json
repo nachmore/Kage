@@ -98,6 +98,158 @@
     "message": "Could not load settings: {reason}",
     "description": "Reading config.json from disk failed"
   },
+  "errors.permission.dismiss_failed": {
+    "message": "Could not dismiss permission prompt: {reason}",
+    "description": "Pending tool-permission prompt failed to clear"
+  },
+  "errors.task.failed": {
+    "message": "Background task failed: {reason}",
+    "description": "Tokio task or async block returned an error"
+  },
+  "errors.agent.protocol_error": {
+    "message": "Agent error ({code}): {reason}",
+    "description": "JSON-RPC protocol error from the agent backend with numeric code"
+  },
+  "errors.macro.connect_failed": {
+    "message": "Step {step}: could not connect to the agent: {reason}",
+    "description": "Macro automation step failed to establish an ACP connection"
+  },
+  "errors.macro.step_failed": {
+    "message": "Step {step} failed: {reason}",
+    "description": "Macro automation step ran but the agent returned an error"
+  },
+  "errors.macro.step_empty_result": {
+    "message": "Step {step} returned an empty result",
+    "description": "Macro automation step succeeded but produced no output"
+  },
+  "errors.macro.invalid_regex": {
+    "message": "Step {step}: invalid regex {pattern!r}: {reason}",
+    "description": "find_replace step had a regex that wouldn't compile"
+  },
+  "errors.macro.unknown_step": {
+    "message": "Step {step}: unknown step type {kind!r}",
+    "description": "Macro JSON contained a step type the runtime doesn't recognise"
+  },
+  "errors.session.dir_unavailable": {
+    "message": "Could not access sessions directory: {reason}",
+    "description": "Resolving the per-agent sessions directory failed"
+  },
+  "errors.session.list_failed": {
+    "message": "Could not list sessions: {reason}",
+    "description": "Reading the per-agent sessions directory failed"
+  },
+  "errors.session.read_failed": {
+    "message": "Could not read session file: {reason}",
+    "description": "Reading a single session file from disk failed"
+  },
+  "errors.session.parse_failed": {
+    "message": "Could not parse session file: {reason}",
+    "description": "Session JSON failed to deserialise into the expected shape"
+  },
+  "errors.session.title_failed": {
+    "message": "Could not update session title: {reason}",
+    "description": "Writing a renamed title back to the session file failed"
+  },
+  "errors.session.delete_failed": {
+    "message": "Could not delete session: {reason}",
+    "description": "Removing the session file from disk failed"
+  },
+  "errors.session.not_found": {
+    "message": "Session not found",
+    "description": "Looked-up session id doesn't match any file on disk"
+  },
+  "errors.session.invalid_id": {
+    "message": "Invalid session id: {reason}",
+    "description": "Session id failed validation (path-injection guard)"
+  },
+  "errors.session.unknown_provider": {
+    "message": "Unknown agent session provider: {provider}",
+    "description": "Frontend asked for sessions from a provider id we don't recognise"
+  },
+  "errors.session.connect_failed": {
+    "message": "Could not connect to the agent: {reason}",
+    "description": "Failed to establish an ACP connection while loading or resuming a session"
+  },
+  "errors.window.create_failed": {
+    "message": "Could not create window: {reason}",
+    "description": "Tauri window construction failed"
+  },
+  "errors.window.show_failed": {
+    "message": "Could not show window: {reason}",
+    "description": "Tauri window failed to surface (focus/show/setSize/etc.)"
+  },
+  "errors.window.title_failed": {
+    "message": "Could not set window title: {reason}",
+    "description": "Window title update failed"
+  },
+  "errors.window.not_found": {
+    "message": "Window not found: {label}",
+    "description": "No window registered under the given label"
+  },
+  "errors.window.privileged_close_refused": {
+    "message": "Refusing to close privileged window: {label}",
+    "description": "Caller tried to close a window (main/floating) that should be hidden, not closed"
+  },
+  "errors.window.non_chat_close_refused": {
+    "message": "Refusing to close non-chat window: {label}",
+    "description": "Caller tried to close-by-label a window that isn't a chat-shaped window"
+  },
+  "errors.tool.execute_failed": {
+    "message": "Tool execution failed: {reason}",
+    "description": "Tool invocation against the agent failed"
+  },
+  "errors.tool.cancelled": {
+    "message": "Tool execution cancelled",
+    "description": "User cancelled an in-flight tool call"
+  },
+  "errors.fs.read_failed": {
+    "message": "Could not read file: {reason}",
+    "description": "Filesystem read operation failed"
+  },
+  "errors.fs.write_failed": {
+    "message": "Could not write file: {reason}",
+    "description": "Filesystem write operation failed"
+  },
+  "errors.fs.path_invalid": {
+    "message": "Invalid path: {reason}",
+    "description": "Path failed validation (traversal guard, missing component, etc.)"
+  },
+  "errors.preset.unknown": {
+    "message": "Unknown agent preset: {preset}",
+    "description": "Agent preset id doesn't match any known preset"
+  },
+  "errors.preset.locator_failed": {
+    "message": "Could not locate the agent: {reason}",
+    "description": "Preset locator (which/where lookup) failed to find the binary"
+  },
+  "errors.preset.spawn_failed": {
+    "message": "Could not start the agent: {reason}",
+    "description": "Spawning the agent process failed"
+  },
+  "errors.steering.update_failed": {
+    "message": "Could not update steering document: {reason}",
+    "description": "Writing or syncing the auto-steering markdown failed"
+  },
+  "errors.shortcut.invalid": {
+    "message": "Invalid shortcut: {reason}",
+    "description": "Hotkey string failed validation"
+  },
+  "errors.shortcut.register_failed": {
+    "message": "Could not register shortcut {shortcut}: {reason}",
+    "description": "Global hotkey registration failed (already taken, OS denial, etc.)"
+  },
+  "errors.update.check_failed": {
+    "message": "Could not check for updates: {reason}",
+    "description": "Updater plugin call failed"
+  },
+  "errors.update.download_failed": {
+    "message": "Could not download update: {reason}",
+    "description": "Update download or signature verification failed"
+  },
+  "errors.update.install_failed": {
+    "message": "Could not install update: {reason}",
+    "description": "Spawning the platform installer failed"
+  },
   "errors.extension.invalid_id": {
     "message": "Invalid extension id: {reason}",
     "description": "Extension id failed validation (used to prevent path injection)"

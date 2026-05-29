@@ -346,5 +346,233 @@
     "description": "Generic loading indicator label",
     "_machine_translated": true,
     "_source_hash": "f4206248605fb6be"
+  },
+  "errors.permission.dismiss_failed": {
+    "message": "بستن درخواست مجوز ممکن نشد: {reason}",
+    "description": "Pending tool-permission prompt failed to clear",
+    "_machine_translated": true,
+    "_source_hash": "7f75fcbcc66361ff"
+  },
+  "errors.task.failed": {
+    "message": "اجرای وظیفهٔ پس‌زمینه ناموفق بود: {reason}",
+    "description": "Tokio task or async block returned an error",
+    "_machine_translated": true,
+    "_source_hash": "f7eeaccf52d57536"
+  },
+  "errors.agent.protocol_error": {
+    "message": "خطای عامل ({code}): {reason}",
+    "description": "JSON-RPC protocol error from the agent backend with numeric code",
+    "_machine_translated": true,
+    "_source_hash": "7cf00792a427ca47"
+  },
+  "errors.macro.connect_failed": {
+    "message": "گام {step}: اتصال به عامل ممکن نشد: {reason}",
+    "description": "Macro automation step failed to establish an ACP connection",
+    "_machine_translated": true,
+    "_source_hash": "417cdd5e0003ac53"
+  },
+  "errors.macro.step_failed": {
+    "message": "گام {step} ناموفق بود: {reason}",
+    "description": "Macro automation step ran but the agent returned an error",
+    "_machine_translated": true,
+    "_source_hash": "54f6817ff5bf7ed8"
+  },
+  "errors.macro.step_empty_result": {
+    "message": "گام {step} نتیجه‌ای برنگرداند",
+    "description": "Macro automation step succeeded but produced no output",
+    "_machine_translated": true,
+    "_source_hash": "0b82a5293d98abd4"
+  },
+  "errors.macro.invalid_regex": {
+    "message": "گام {step}: regex نامعتبر {pattern!r}: {reason}",
+    "description": "find_replace step had a regex that wouldn't compile",
+    "_machine_translated": true,
+    "_source_hash": "f8e173ed4d6cd97e"
+  },
+  "errors.macro.unknown_step": {
+    "message": "گام {step}: نوع گام ناشناخته {kind!r}",
+    "description": "Macro JSON contained a step type the runtime doesn't recognise",
+    "_machine_translated": true,
+    "_source_hash": "473a157d271850b8"
+  },
+  "errors.session.dir_unavailable": {
+    "message": "دسترسی به پوشهٔ نشست‌ها ممکن نشد: {reason}",
+    "description": "Resolving the per-agent sessions directory failed",
+    "_machine_translated": true,
+    "_source_hash": "fc880e6aeb3fa360"
+  },
+  "errors.session.list_failed": {
+    "message": "فهرست‌کردن نشست‌ها ممکن نشد: {reason}",
+    "description": "Reading the per-agent sessions directory failed",
+    "_machine_translated": true,
+    "_source_hash": "82aec1ca4d3282f5"
+  },
+  "errors.session.read_failed": {
+    "message": "خواندن فایل نشست ممکن نشد: {reason}",
+    "description": "Reading a single session file from disk failed",
+    "_machine_translated": true,
+    "_source_hash": "045c502903c36345"
+  },
+  "errors.session.parse_failed": {
+    "message": "تجزیهٔ فایل نشست ممکن نشد: {reason}",
+    "description": "Session JSON failed to deserialise into the expected shape",
+    "_machine_translated": true,
+    "_source_hash": "25247991cc6076ae"
+  },
+  "errors.session.title_failed": {
+    "message": "به‌روزرسانی عنوان نشست ممکن نشد: {reason}",
+    "description": "Writing a renamed title back to the session file failed",
+    "_machine_translated": true,
+    "_source_hash": "157636f985139b42"
+  },
+  "errors.session.delete_failed": {
+    "message": "حذف نشست ممکن نشد: {reason}",
+    "description": "Removing the session file from disk failed",
+    "_machine_translated": true,
+    "_source_hash": "342e562791717052"
+  },
+  "errors.session.not_found": {
+    "message": "نشست پیدا نشد",
+    "description": "Looked-up session id doesn't match any file on disk",
+    "_machine_translated": true,
+    "_source_hash": "5d89339ac7867fe0"
+  },
+  "errors.session.invalid_id": {
+    "message": "ID نشست نامعتبر است: {reason}",
+    "description": "Session id failed validation (path-injection guard)",
+    "_machine_translated": true,
+    "_source_hash": "b5781061e36d9d43"
+  },
+  "errors.session.unknown_provider": {
+    "message": "ارائه‌دهندهٔ نشست عامل ناشناخته است: {provider}",
+    "description": "Frontend asked for sessions from a provider id we don't recognise",
+    "_machine_translated": true,
+    "_source_hash": "866aef77ec8865fa"
+  },
+  "errors.session.connect_failed": {
+    "message": "اتصال به عامل ممکن نشد: {reason}",
+    "description": "Failed to establish an ACP connection while loading or resuming a session",
+    "_machine_translated": true,
+    "_source_hash": "43f81ad6529ae8e7"
+  },
+  "errors.window.create_failed": {
+    "message": "ایجاد پنجره ممکن نشد: {reason}",
+    "description": "Tauri window construction failed",
+    "_machine_translated": true,
+    "_source_hash": "6d09bd33f37ab422"
+  },
+  "errors.window.show_failed": {
+    "message": "نمایش پنجره ممکن نشد: {reason}",
+    "description": "Tauri window failed to surface (focus/show/setSize/etc.)",
+    "_machine_translated": true,
+    "_source_hash": "176e91c20ddf3ac4"
+  },
+  "errors.window.title_failed": {
+    "message": "تنظیم عنوان پنجره ممکن نشد: {reason}",
+    "description": "Window title update failed",
+    "_machine_translated": true,
+    "_source_hash": "0a53b14693d5fb22"
+  },
+  "errors.window.not_found": {
+    "message": "پنجره پیدا نشد: {label}",
+    "description": "No window registered under the given label",
+    "_machine_translated": true,
+    "_source_hash": "9a1f16298715bf58"
+  },
+  "errors.window.privileged_close_refused": {
+    "message": "بستن پنجرهٔ ممتاز رد شد: {label}",
+    "description": "Caller tried to close a window (main/floating) that should be hidden, not closed",
+    "_machine_translated": true,
+    "_source_hash": "e3780d5557d8818d"
+  },
+  "errors.window.non_chat_close_refused": {
+    "message": "بستن پنجرهٔ غیرگفت‌وگو رد شد: {label}",
+    "description": "Caller tried to close-by-label a window that isn't a chat-shaped window",
+    "_machine_translated": true,
+    "_source_hash": "79691ab3410b4fff"
+  },
+  "errors.tool.execute_failed": {
+    "message": "اجرای ابزار ناموفق بود: {reason}",
+    "description": "Tool invocation against the agent failed",
+    "_machine_translated": true,
+    "_source_hash": "91784eacc7c04266"
+  },
+  "errors.tool.cancelled": {
+    "message": "اجرای ابزار لغو شد",
+    "description": "User cancelled an in-flight tool call",
+    "_machine_translated": true,
+    "_source_hash": "f9b199243e5372fb"
+  },
+  "errors.fs.read_failed": {
+    "message": "خواندن فایل ممکن نشد: {reason}",
+    "description": "Filesystem read operation failed",
+    "_machine_translated": true,
+    "_source_hash": "dee583d20cc98085"
+  },
+  "errors.fs.write_failed": {
+    "message": "نوشتن فایل ممکن نشد: {reason}",
+    "description": "Filesystem write operation failed",
+    "_machine_translated": true,
+    "_source_hash": "a3d00a60fe3f46e0"
+  },
+  "errors.fs.path_invalid": {
+    "message": "مسیر نامعتبر است: {reason}",
+    "description": "Path failed validation (traversal guard, missing component, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "3161b7366b7d19b2"
+  },
+  "errors.preset.unknown": {
+    "message": "پیش‌تنظیم ناشناخته‌ی عامل: {preset}",
+    "description": "Agent preset id doesn't match any known preset",
+    "_machine_translated": true,
+    "_source_hash": "d7ffdbd2326156f6"
+  },
+  "errors.preset.locator_failed": {
+    "message": "یافتن عامل ممکن نشد: {reason}",
+    "description": "Preset locator (which/where lookup) failed to find the binary",
+    "_machine_translated": true,
+    "_source_hash": "93ea61cbcff4670d"
+  },
+  "errors.preset.spawn_failed": {
+    "message": "اجرای عامل ممکن نشد: {reason}",
+    "description": "Spawning the agent process failed",
+    "_machine_translated": true,
+    "_source_hash": "7103dc5cac8dbdff"
+  },
+  "errors.steering.update_failed": {
+    "message": "به‌روزرسانی سند هدایت ممکن نشد: {reason}",
+    "description": "Writing or syncing the auto-steering markdown failed",
+    "_machine_translated": true,
+    "_source_hash": "0f8cbe979edb4d5a"
+  },
+  "errors.shortcut.invalid": {
+    "message": "میان‌بر نامعتبر است: {reason}",
+    "description": "Hotkey string failed validation",
+    "_machine_translated": true,
+    "_source_hash": "c0ca434aef03a546"
+  },
+  "errors.shortcut.register_failed": {
+    "message": "ثبت میان‌بر {shortcut} ممکن نشد: {reason}",
+    "description": "Global hotkey registration failed (already taken, OS denial, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "897c939180743b1f"
+  },
+  "errors.update.check_failed": {
+    "message": "بررسی به‌روزرسانی‌ها ممکن نشد: {reason}",
+    "description": "Updater plugin call failed",
+    "_machine_translated": true,
+    "_source_hash": "d201413b0a2b2aad"
+  },
+  "errors.update.download_failed": {
+    "message": "دانلود به‌روزرسانی ممکن نشد: {reason}",
+    "description": "Update download or signature verification failed",
+    "_machine_translated": true,
+    "_source_hash": "a70608aec1a9cd19"
+  },
+  "errors.update.install_failed": {
+    "message": "نصب به‌روزرسانی ممکن نشد: {reason}",
+    "description": "Spawning the platform installer failed",
+    "_machine_translated": true,
+    "_source_hash": "13fde8c85d6a3d56"
   }
 }

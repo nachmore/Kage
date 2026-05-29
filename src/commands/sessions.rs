@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices};
 use log::{error, info, warn};
@@ -935,10 +935,11 @@ pub async fn switch_acp_session(
         info!("Not connected, attempting to connect for session switch...");
         if let Err(e) = client_guard.connect() {
             error!("Connection failed: {}", e);
-            return Err(AppError::connection_lost(format!(
-                "Failed to connect: {}",
-                e
-            )));
+            return Err(AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.session.connect_failed",
+                &[("reason", &e.to_string())],
+            ));
         }
     }
 
@@ -966,9 +967,14 @@ pub async fn switch_acp_session(
                 }
             };
 
-            let (loaded_id, models_json) = client_guard
-                .load_existing_session(&id, cwd)
-                .map_err(|e| AppError::internal(format!("Failed to load session: {}", e)))?;
+            let (loaded_id, models_json) =
+                client_guard.load_existing_session(&id, cwd).map_err(|e| {
+                    AppError::keyed(
+                        ErrorKind::Internal,
+                        "errors.session.load_failed",
+                        &[("reason", &e.to_string())],
+                    )
+                })?;
             crate::telemetry::track(
                 &app,
                 "session_resumed",

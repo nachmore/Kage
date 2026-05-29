@@ -8,7 +8,7 @@ use super::{
     clip_title, rfc3339_from_epoch_ms, AgentMessage, AgentSession, AgentSessionProvider,
     SessionLocator,
 };
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use log::info;
 use serde::Deserialize;
 use serde_json::json;
@@ -52,12 +52,24 @@ impl KiroCliProvider {
     }
 
     fn open_db() -> Result<rusqlite::Connection, AppError> {
-        let db_path = Self::db_path().ok_or_else(|| AppError::internal("kiro-cli path resolve"))?;
+        let db_path = Self::db_path().ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.dir_unavailable",
+                &[("reason", "Kiro CLI database path could not be located")],
+            )
+        })?;
         rusqlite::Connection::open_with_flags(
             &db_path,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
         )
-        .map_err(|e| AppError::internal(format!("SQLite open: {}", e)))
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })
     }
 }
 
@@ -75,8 +87,13 @@ impl AgentSessionProvider for KiroCliProvider {
     }
 
     fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
-        let db_path = Self::db_path()
-            .ok_or_else(|| AppError::internal("kiro-cli database path unresolvable"))?;
+        let db_path = Self::db_path().ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.dir_unavailable",
+                &[("reason", "Kiro CLI database path could not be located")],
+            )
+        })?;
         if !db_path.exists() {
             return Ok(Vec::new());
         }
@@ -87,7 +104,13 @@ impl AgentSessionProvider for KiroCliProvider {
                 "SELECT key, conversation_id, value, created_at, updated_at \
                  FROM conversations_v2 ORDER BY updated_at DESC LIMIT ?1",
             )
-            .map_err(|e| AppError::internal(format!("SQLite prepare: {}", e)))?;
+            .map_err(|e| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.read_failed",
+                    &[("reason", &e.to_string())],
+                )
+            })?;
 
         let rows = stmt
             .query_map([limit as i64], |row| {
@@ -99,7 +122,13 @@ impl AgentSessionProvider for KiroCliProvider {
                     row.get::<_, i64>(4)?,
                 ))
             })
-            .map_err(|e| AppError::internal(format!("SQLite query: {}", e)))?;
+            .map_err(|e| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.read_failed",
+                    &[("reason", &e.to_string())],
+                )
+            })?;
 
         let db_path_str = db_path.to_string_lossy().to_string();
         let mut sessions = Vec::new();
@@ -128,8 +157,13 @@ impl AgentSessionProvider for KiroCliProvider {
     }
 
     fn load_session(&self, locator: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
-        let loc: KiroCliLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("kiro-cli locator: {}", e)))?;
+        let loc: KiroCliLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         let db = Self::open_db()?;
 
         let value_json: String = db
@@ -138,10 +172,21 @@ impl AgentSessionProvider for KiroCliProvider {
                 [&loc.conversation_id],
                 |row| row.get(0),
             )
-            .map_err(|e| AppError::internal(format!("SQLite query: {}", e)))?;
+            .map_err(|e| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.read_failed",
+                    &[("reason", &e.to_string())],
+                )
+            })?;
 
-        let json: serde_json::Value = serde_json::from_str(&value_json)
-            .map_err(|e| AppError::internal(format!("JSON parse: {}", e)))?;
+        let json: serde_json::Value = serde_json::from_str(&value_json).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
         let messages = render_history(&json);
         info!(
@@ -157,8 +202,13 @@ impl AgentSessionProvider for KiroCliProvider {
         locator: &SessionLocator,
         since_ms: i64,
     ) -> Result<Option<i64>, AppError> {
-        let loc: KiroCliLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("kiro-cli locator: {}", e)))?;
+        let loc: KiroCliLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         let db = Self::open_db()?;
         let current: i64 = db
             .query_row(
@@ -166,7 +216,13 @@ impl AgentSessionProvider for KiroCliProvider {
                 [&loc.conversation_id],
                 |row| row.get(0),
             )
-            .map_err(|e| AppError::internal(format!("SQLite query: {}", e)))?;
+            .map_err(|e| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.read_failed",
+                    &[("reason", &e.to_string())],
+                )
+            })?;
         if current > since_ms {
             Ok(Some(current))
         } else {

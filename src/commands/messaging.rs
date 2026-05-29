@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::events;
 use crate::lock_ext::LockExt;
 use crate::state::{AcpHandles, FeatureServices, UiState};
@@ -638,13 +638,18 @@ pub async fn send_permission_response(
 
     acp.client
         .send_permission_response(&request_id, &option_id)
-        .map_err(|e| AppError::connection_lost(format!("Permission response failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.permission.response_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
     if option_id == "allow_always" {
-        let mut config = features
-            .config
-            .lock()
-            .map_err(|e| AppError::lock(format!("{}", e)))?;
+        let mut config = features.config.lock().map_err(|_| {
+            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+        })?;
         if let Some(tool) = config
             .tool_permissions
             .tools
@@ -653,9 +658,13 @@ pub async fn send_permission_response(
         {
             tool.policy = crate::config::PolicyKind::Allow;
         }
-        config
-            .save()
-            .map_err(|e| AppError::internal(format!("Save: {}", e)))?;
+        config.save().map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.config.save_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
     }
 
     // Audit log: record the user's decision. We classify option_id into
@@ -706,9 +715,13 @@ pub async fn check_connection(acp: State<'_, AcpHandles>) -> Result<bool, AppErr
 
 #[tauri::command]
 pub async fn reconnect_acp(acp: State<'_, AcpHandles>) -> Result<bool, AppError> {
-    acp.client
-        .connect()
-        .map_err(|e| AppError::connection_lost(format!("Failed to reconnect: {}", e)))?;
+    acp.client.connect().map_err(|e| {
+        AppError::keyed(
+            ErrorKind::ConnectionLost,
+            "errors.connection.reconnect_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
     Ok(true)
 }
 
@@ -723,9 +736,13 @@ pub async fn cancel_generation(
         .automation_plan_cancelled
         .store(true, std::sync::atomic::Ordering::Relaxed);
 
-    acp.client
-        .cancel_session(&session_id)
-        .map_err(|e| AppError::connection_lost(format!("Cancel failed: {}", e)))?;
+    acp.client.cancel_session(&session_id).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::ConnectionLost,
+            "errors.cancel.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
 
     Ok(())
 }
@@ -808,10 +825,9 @@ pub async fn dismiss_pending_permission(
     app: tauri::AppHandle,
 ) -> Result<bool, AppError> {
     let pending = {
-        let guard = acp
-            .pending_permission
-            .lock()
-            .map_err(|e| AppError::lock(format!("{}", e)))?;
+        let guard = acp.pending_permission.lock().map_err(|_| {
+            AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+        })?;
         guard.clone()
     };
 
@@ -840,10 +856,11 @@ pub async fn dismiss_pending_permission(
                     "Failed to dismiss pending permission, keeping local state: {}",
                     e
                 );
-                Err(AppError::internal(format!(
-                    "Failed to dismiss permission: {}",
-                    e
-                )))
+                Err(AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.permission.dismiss_failed",
+                    &[("reason", &e.to_string())],
+                ))
             }
         }
     } else {
@@ -856,7 +873,7 @@ pub async fn has_pending_permission(acp: State<'_, AcpHandles>) -> Result<bool, 
     let guard = acp
         .pending_permission
         .lock()
-        .map_err(|e| AppError::lock(format!("{}", e)))?;
+        .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
     Ok(guard.is_some())
 }
 
@@ -867,7 +884,7 @@ pub async fn get_slash_commands(
     let cmds = acp
         .slash_commands
         .lock()
-        .map_err(|e| AppError::lock(format!("{}", e)))?;
+        .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
     Ok(cmds.clone())
 }
 
@@ -888,7 +905,11 @@ pub async fn execute_slash_command(
 
     let result = async_runtime::spawn_blocking(move || -> Result<serde_json::Value, AppError> {
         if !client.is_connected() {
-            return Err(AppError::connection_lost("Not connected"));
+            return Err(AppError::keyed(
+                ErrorKind::ConnectionLost,
+                "errors.connection.not_connected",
+                &[],
+            ));
         }
         let cmd_name = command.strip_prefix('/').unwrap_or(&command);
 
@@ -900,17 +921,33 @@ pub async fn execute_slash_command(
                     "command": { "command": cmd_name, "args": args.unwrap_or(serde_json::json!({})) }
                 }),
             )
-            .map_err(|e| AppError::internal(format!("Command failed: {}", e)))?;
+            .map_err(|e| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.command.failed",
+                    &[("reason", &e.to_string())],
+                )
+            })?;
         if let Some(error) = response.error {
-            return Err(AppError::internal(format!(
-                "{} (code: {})",
-                error.message, error.code
-            )));
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.agent.protocol_error",
+                &[
+                    ("reason", error.message.as_str()),
+                    ("code", &error.code.to_string()),
+                ],
+            ));
         }
         Ok(response.result.unwrap_or(serde_json::json!(null)))
     })
     .await
-    .map_err(|e| AppError::internal(format!("Task: {}", e)))??;
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })??;
 
     // Telemetry — fire AFTER the call so we only count successful
     // command executions, not failed ones (though we don't bother
@@ -966,10 +1003,9 @@ pub async fn send_steering_message(
         // reads. Holding the global config Mutex across blocking I/O
         // would block every concurrent config reader for the duration.
         let inputs = {
-            let config = features
-                .config
-                .lock()
-                .map_err(|e| AppError::lock(format!("{}", e)))?;
+            let config = features.config.lock().map_err(|_| {
+                AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[])
+            })?;
             crate::commands::system::SteeringInputs::from_config(&config)
         };
         let parts = crate::commands::system::assemble_steering_parts(&inputs);
@@ -999,7 +1035,7 @@ pub async fn get_available_models(
     let models = acp
         .available_models
         .lock()
-        .map_err(|e| AppError::lock(format!("{}", e)))?;
+        .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
     Ok(models
         .iter()
         .map(|m| {
@@ -1030,10 +1066,14 @@ pub async fn execute_automation_plan(
 
     // Parse the plan
     let plan: Vec<serde_json::Value> = serde_json::from_str(&plan_json)
-        .map_err(|e| AppError::internal(format!("Invalid plan JSON: {}", e)))?;
+        .map_err(|_| AppError::keyed(ErrorKind::Internal, "errors.plan.invalid_json", &[]))?;
 
     if plan.is_empty() {
-        return Err(AppError::internal("Empty plan"));
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.plan.empty",
+            &[],
+        ));
     }
 
     let total_steps = plan.len();
@@ -1359,7 +1399,7 @@ pub async fn check_extension_tool_permission(
     let mut config = features
         .config
         .lock()
-        .map_err(|e| AppError::lock(format!("{}", e)))?;
+        .map_err(|_| AppError::keyed(ErrorKind::LockError, "errors.lock.acquire_failed", &[]))?;
 
     // Check trust_all first
     if config.tool_permissions.trust_all {
@@ -1509,26 +1549,33 @@ pub async fn execute_macro(
 
                     if !client.is_connected() {
                         if let Err(e) = client.connect() {
-                            return Err(AppError::connection_lost(format!(
-                                "Step {}: Unable to connect: {}",
-                                i + 1,
-                                e
-                            )));
+                            return Err(AppError::keyed(
+                                ErrorKind::ConnectionLost,
+                                "errors.macro.connect_failed",
+                                &[
+                                    ("step", &(i + 1).to_string()),
+                                    ("reason", &e.to_string()),
+                                ],
+                            ));
                         }
                     }
                     if let Err(e) = client.send_chat_streaming(&session_id, &full_prompt, None) {
-                        return Err(AppError::internal(format!(
-                            "Step {} failed: {}",
-                            i + 1,
-                            e
-                        )));
+                        return Err(AppError::keyed(
+                            ErrorKind::Internal,
+                            "errors.macro.step_failed",
+                            &[
+                                ("step", &(i + 1).to_string()),
+                                ("reason", &e.to_string()),
+                            ],
+                        ));
                     }
                     let result = client.take_session_accumulator(&session_id);
                     if result.trim().is_empty() {
-                        return Err(AppError::internal(format!(
-                            "Step {} returned empty result",
-                            i + 1
-                        )));
+                        return Err(AppError::keyed(
+                            ErrorKind::Internal,
+                            "errors.macro.step_empty_result",
+                            &[("step", &(i + 1).to_string())],
+                        ));
                     }
                     current_input = result.trim().to_string();
                 }
@@ -1542,12 +1589,15 @@ pub async fn execute_macro(
                                 current_input = re.replace_all(&current_input, replace).to_string();
                             }
                             Err(e) => {
-                                return Err(AppError::internal(format!(
-                                    "Step {}: Invalid regex '{}': {}",
-                                    i + 1,
-                                    find,
-                                    e
-                                )));
+                                return Err(AppError::keyed(
+                                    ErrorKind::Internal,
+                                    "errors.macro.invalid_regex",
+                                    &[
+                                        ("step", &(i + 1).to_string()),
+                                        ("pattern", find),
+                                        ("reason", &e.to_string()),
+                                    ],
+                                ));
                             }
                         }
                     }
@@ -1559,11 +1609,11 @@ pub async fn execute_macro(
                 }
 
                 other => {
-                    return Err(AppError::internal(format!(
-                        "Step {}: Unknown step type '{}'",
-                        i + 1,
-                        other
-                    )));
+                    return Err(AppError::keyed(
+                        ErrorKind::Internal,
+                        "errors.macro.unknown_step",
+                        &[("step", &(i + 1).to_string()), ("kind", other)],
+                    ));
                 }
             }
 
@@ -1571,7 +1621,15 @@ pub async fn execute_macro(
         }
 
         Ok(current_input)
-    }).await.map_err(|e| AppError::internal(format!("Task error: {}", e)))?;
+    })
+    .await
+    .map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.task.failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
 
     // Telemetry — fire on success only. step_count is captured before
     // the move; we don't include macro names because those are user-typed.

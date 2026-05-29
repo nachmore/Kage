@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::events;
 use crate::lock_ext::LockExt;
 use crate::os;
@@ -409,7 +409,11 @@ pub async fn test_floating_window(app: tauri::AppHandle) -> Result<String, AppEr
             Ok("Window was hidden, now visible and positioned".to_string())
         }
     } else {
-        Err(AppError::internal("Floating window not found"))
+        Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.window.not_found",
+            &[("label", "floating")],
+        ))
     }
 }
 
@@ -418,7 +422,11 @@ pub async fn start_drag_window(window: WebviewWindow) -> Result<(), AppError> {
     info!("Starting window drag");
     window.start_dragging().map_err(|e| {
         error!("Failed to start dragging: {}", e);
-        AppError::internal(e.to_string())
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.window.show_failed",
+            &[("reason", &e.to_string())],
+        )
     })
 }
 
@@ -695,7 +703,13 @@ pub async fn open_new_chat_window(
         .center()
         .visible(false)
         .build()
-        .map_err(|e| AppError::internal(format!("Failed to build chat window: {}", e)))?;
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.window.create_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
     // Per-window event handler: track focus for "most recent chat
     // window" routing, and clean up bookkeeping on close.
@@ -779,22 +793,28 @@ pub async fn close_chat_window(
     ui: tauri::State<'_, crate::state::UiState>,
 ) -> Result<(), AppError> {
     if label == window_labels::MAIN || label == window_labels::FLOATING {
-        return Err(AppError::internal(format!(
-            "{} is a privileged window and can't be closed via close_chat_window",
-            label
-        )));
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.window.privileged_close_refused",
+            &[("label", &label)],
+        ));
     }
     if !is_chat_label(&label) {
-        return Err(AppError::internal(format!(
-            "Refusing to close non-chat window: {}",
-            label
-        )));
+        return Err(AppError::keyed(
+            ErrorKind::Internal,
+            "errors.window.non_chat_close_refused",
+            &[("label", &label)],
+        ));
     }
 
     if let Some(window) = app.get_webview_window(&label) {
-        window
-            .close()
-            .map_err(|e| AppError::internal(format!("Close failed: {}", e)))?;
+        window.close().map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.window.show_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
     }
 
     if let Ok(mut ws) = ui.window_sessions.lock() {
@@ -869,7 +889,13 @@ pub async fn resize_floating_window(
             width: target_width,
             height: target_height,
         }))
-        .map_err(|e| AppError::internal(e.to_string()))
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.window.show_failed",
+                &[("reason", &e.to_string())],
+            )
+        })
 }
 
 #[tauri::command]
@@ -944,7 +970,13 @@ pub async fn open_settings_window(
         .center()
         .visible(false) // shown below after we know it built
         .build()
-        .map_err(|e| AppError::internal(format!("Failed to build settings window: {}", e)))?
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.window.create_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?
     };
 
     let _ = window.show();
@@ -1007,7 +1039,13 @@ pub async fn show_context_menu(x: i32, y: i32, app: tauri::AppHandle) -> Result<
         .focused(false)
         .visible(false)
         .build()
-        .map_err(|e| AppError::internal(format!("Failed to build context menu: {}", e)))?;
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.window.create_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         // Match what configure_transparent_windows did for the
         // preloaded version. set_shadow is Windows-only on the trait.
         let _ = w.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));

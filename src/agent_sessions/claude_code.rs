@@ -29,7 +29,7 @@ use super::{
     clip_title, file_mtime_ms, rfc3339_from_system_time, AgentMessage, AgentSession,
     AgentSessionProvider, SessionLocator,
 };
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use log::info;
 use serde::Deserialize;
@@ -98,8 +98,16 @@ impl AgentSessionProvider for ClaudeCodeProvider {
     }
 
     fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
-        let base = Self::projects_dir()
-            .ok_or_else(|| AppError::internal("Claude Code projects dir unresolvable"))?;
+        let base = Self::projects_dir().ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.dir_unavailable",
+                &[(
+                    "reason",
+                    "Claude Code projects directory could not be located",
+                )],
+            )
+        })?;
         if !base.exists() {
             return Ok(Vec::new());
         }
@@ -107,8 +115,13 @@ impl AgentSessionProvider for ClaudeCodeProvider {
         // Walk every project subdir for `.jsonl` files. Skip nested
         // directories (memory/, <sessionId>/ for subagent traces).
         let mut seen_files: Vec<(PathBuf, FileFingerprint)> = Vec::new();
-        let project_entries =
-            std::fs::read_dir(&base).map_err(|e| AppError::internal(e.to_string()))?;
+        let project_entries = std::fs::read_dir(&base).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         for proj in project_entries.flatten() {
             if !proj.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                 continue;
@@ -172,8 +185,13 @@ impl AgentSessionProvider for ClaudeCodeProvider {
     }
 
     fn load_session(&self, locator: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
-        let loc: ClaudeCodeLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("claude-code locator: {}", e)))?;
+        let loc: ClaudeCodeLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         let path = PathBuf::from(&loc.file_path);
         let messages = parse_session_messages(&path)?;
         info!(
@@ -191,8 +209,13 @@ impl AgentSessionProvider for ClaudeCodeProvider {
         locator: &SessionLocator,
         since_ms: i64,
     ) -> Result<Option<i64>, AppError> {
-        let loc: ClaudeCodeLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("claude-code locator: {}", e)))?;
+        let loc: ClaudeCodeLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         let path = PathBuf::from(&loc.file_path);
         let Some(current) = file_mtime_ms(&path) else {
             return Ok(None);
@@ -327,7 +350,13 @@ fn parse_session_metadata(path: &Path) -> Option<AgentSession> {
 
 fn parse_session_messages(path: &Path) -> Result<Vec<AgentMessage>, AppError> {
     use std::io::{BufRead, BufReader};
-    let file = std::fs::File::open(path).map_err(|e| AppError::internal(format!("Open: {}", e)))?;
+    let file = std::fs::File::open(path).map_err(|e| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.session.read_failed",
+            &[("reason", &e.to_string())],
+        )
+    })?;
     let reader = BufReader::new(file);
 
     let mut out: Vec<AgentMessage> = Vec::new();

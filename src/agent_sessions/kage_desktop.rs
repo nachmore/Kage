@@ -22,7 +22,7 @@ use super::{
     clip_title, file_mtime_ms, rfc3339_from_epoch_ms, rfc3339_from_system_time, AgentMessage,
     AgentSession, AgentSessionProvider, SessionLocator,
 };
-use crate::error::AppError;
+use crate::error::{AppError, ErrorKind};
 use crate::lock_ext::LockExt;
 use log::info;
 use serde::Deserialize;
@@ -133,8 +133,13 @@ impl AgentSessionProvider for KageDesktopProvider {
     }
 
     fn list_sessions(&self, limit: usize) -> Result<Vec<AgentSession>, AppError> {
-        let base = Self::data_dir()
-            .ok_or_else(|| AppError::internal("Kage Desktop data dir unresolvable"))?;
+        let base = Self::data_dir().ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.dir_unavailable",
+                &[("reason", "Kage Desktop data directory could not be located")],
+            )
+        })?;
         if !base.exists() {
             return Ok(Vec::new());
         }
@@ -150,8 +155,13 @@ impl AgentSessionProvider for KageDesktopProvider {
     }
 
     fn load_session(&self, locator: &SessionLocator) -> Result<Vec<AgentMessage>, AppError> {
-        let loc: KageDesktopLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("kage-desktop locator: {}", e)))?;
+        let loc: KageDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
         match loc {
             KageDesktopLocator::WorkspaceSession {
@@ -167,15 +177,26 @@ impl AgentSessionProvider for KageDesktopProvider {
         locator: &SessionLocator,
         since_ms: i64,
     ) -> Result<Option<i64>, AppError> {
-        let loc: KageDesktopLocator = serde_json::from_value(locator.clone())
-            .map_err(|e| AppError::internal(format!("kage-desktop locator: {}", e)))?;
+        let loc: KageDesktopLocator = serde_json::from_value(locator.clone()).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
         let path = match loc {
             KageDesktopLocator::WorkspaceSession {
                 workspace_encoded,
                 session_id,
             } => {
-                let base = Self::data_dir().ok_or_else(|| AppError::internal("data dir"))?;
+                let base = Self::data_dir().ok_or_else(|| {
+                    AppError::keyed(
+                        ErrorKind::Internal,
+                        "errors.session.dir_unavailable",
+                        &[("reason", "Kage Desktop data directory could not be located")],
+                    )
+                })?;
                 base.join("workspace-sessions")
                     .join(workspace_encoded)
                     .join(format!("{}.json", session_id))
@@ -213,7 +234,13 @@ impl KageDesktopProvider {
             vec![(enc.to_string(), ws_dir.join(enc))]
         } else {
             std::fs::read_dir(ws_dir)
-                .map_err(|e| AppError::internal(e.to_string()))?
+                .map_err(|e| {
+                    AppError::keyed(
+                        ErrorKind::Internal,
+                        "errors.session.read_failed",
+                        &[("reason", &e.to_string())],
+                    )
+                })?
                 .flatten()
                 .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
                 .map(|e| (e.file_name().to_string_lossy().to_string(), e.path()))
@@ -352,7 +379,13 @@ fn parse_workspace_session(path: &Path, ws_name: &str, encoded: &str) -> Option<
 impl KageDesktopProvider {
     fn scan_chat_sessions(&self, base: &Path, limit: usize) -> Result<Vec<AgentSession>, AppError> {
         let mut seen_files: Vec<(PathBuf, FileFingerprint, String)> = Vec::new();
-        let entries = std::fs::read_dir(base).map_err(|e| AppError::internal(e.to_string()))?;
+        let entries = std::fs::read_dir(base).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().to_string();
             if name.len() != 32 || !name.chars().all(|c| c.is_ascii_hexdigit()) {
@@ -576,28 +609,51 @@ impl KageDesktopProvider {
         workspace_encoded: &str,
         session_id: &str,
     ) -> Result<Vec<AgentMessage>, AppError> {
-        let base = Self::data_dir().ok_or_else(|| AppError::internal("data dir"))?;
+        let base = Self::data_dir().ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.dir_unavailable",
+                &[("reason", "Kage Desktop data directory could not be located")],
+            )
+        })?;
         let path = base
             .join("workspace-sessions")
             .join(workspace_encoded)
             .join(format!("{}.json", session_id));
 
         if !path.exists() {
-            return Err(AppError::internal(format!(
-                "Session not found: {}",
-                session_id
-            )));
+            return Err(AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.not_found",
+                &[],
+            ));
         }
 
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| AppError::internal(format!("Read: {}", e)))?;
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| AppError::internal(format!("Parse: {}", e)))?;
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
         let history = json
             .get("history")
             .and_then(|h| h.as_array())
-            .ok_or_else(|| AppError::internal("No history"))?;
+            .ok_or_else(|| {
+                AppError::keyed(
+                    ErrorKind::Internal,
+                    "errors.session.parse_failed",
+                    &[("reason", "session file has no `history` field")],
+                )
+            })?;
         let mut messages: Vec<AgentMessage> = Vec::new();
 
         for entry in history {
@@ -671,15 +727,28 @@ impl KageDesktopProvider {
     }
 
     fn load_chat_file(&self, file_path: &str) -> Result<Vec<AgentMessage>, AppError> {
-        let content = std::fs::read_to_string(file_path)
-            .map_err(|e| AppError::internal(format!("Read: {}", e)))?;
-        let json: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| AppError::internal(format!("Parse: {}", e)))?;
+        let content = std::fs::read_to_string(file_path).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?;
 
-        let chat = json
-            .get("chat")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| AppError::internal("No chat array"))?;
+        let chat = json.get("chat").and_then(|c| c.as_array()).ok_or_else(|| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.parse_failed",
+                &[("reason", "session file has no `chat` array")],
+            )
+        })?;
         let mut messages = Vec::new();
 
         for msg in chat {
@@ -848,8 +917,13 @@ pub struct KageDesktopWorkspace {
 }
 
 pub fn list_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
-    let base = KageDesktopProvider::data_dir()
-        .ok_or_else(|| AppError::internal("Kage Desktop not found"))?;
+    let base = KageDesktopProvider::data_dir().ok_or_else(|| {
+        AppError::keyed(
+            ErrorKind::Internal,
+            "errors.session.dir_unavailable",
+            &[("reason", "Kage Desktop installation not detected")],
+        )
+    })?;
     let ws_dir = base.join("workspace-sessions");
     if !ws_dir.exists() {
         return Ok(Vec::new());
@@ -857,7 +931,13 @@ pub fn list_workspaces() -> Result<Vec<KageDesktopWorkspace>, AppError> {
 
     let mut workspaces = Vec::new();
     for entry in std::fs::read_dir(&ws_dir)
-        .map_err(|e| AppError::internal(e.to_string()))?
+        .map_err(|e| {
+            AppError::keyed(
+                ErrorKind::Internal,
+                "errors.session.read_failed",
+                &[("reason", &e.to_string())],
+            )
+        })?
         .flatten()
     {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
