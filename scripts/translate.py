@@ -32,11 +32,27 @@ we just hand it a prompt and a JSON schema and read the result.
   python scripts/translate.py --langs ja,ar,de      # subset of languages
   python scripts/translate.py --catalog host        # only the host catalog
   python scripts/translate.py --catalog extensions  # only extensions
+  python scripts/translate.py --workers 8           # raise concurrency from default 4
+  python scripts/translate.py --workers 1           # serial (debugging / rate-limit avoidance)
   python scripts/translate.py --dry-run             # show pending work, no Claude calls
 
-The script is safe to run repeatedly — only keys with a stale `_source_hash`
-or missing translation are re-translated. Re-running on a clean catalog is
-a fast no-op.
+# Concurrency
+
+The script runs each (catalog, language) pair in its own worker thread. Because
+every pair owns a distinct `messages.json` file and the prompts are fully
+self-contained (no shared session, no cross-call context — `--bare` plus
+`--no-session-persistence` make every Claude invocation stateless), there's no
+risk of translations leaking between pairs. The only practical limit on
+parallelism is the developer's Anthropic rate limit; the default `--workers 4`
+keeps well under typical tier ceilings while still cutting wall time roughly
+4×. A global print lock keeps progress output from interleaving.
+
+# Idempotency
+
+Safe to run repeatedly. Each entry stores a `_source_hash` of the EN message
++ description; on re-run, only entries whose hash changed (or are missing
+entirely) are re-translated. Hand-edited entries (where a human translator
+removed the `_machine_translated: true` flag) are never overwritten.
 """
 
 from __future__ import annotations
@@ -47,7 +63,9 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Force UTF-8 on stdout/stderr so non-ASCII language names print on Windows
@@ -320,13 +338,27 @@ def call_claude(prompt: str, max_retries: int = 2) -> dict | None:
     return None
 
 
-def update_catalog(
-    label: str, en: dict, target_path: Path, lang: str, lang_meta: dict, dry_run: bool
-) -> None:
-    """Update a single non-English catalog file against the canonical EN."""
-    print(f"\n=== {label} :: {lang} ({lang_meta['name']}) ===")
+# Lock around stdout/stderr so progress lines from concurrent workers don't
+# interleave mid-line. Each worker prints a self-contained block (start +
+# result) under the lock so the user sees the units of work cleanly.
+_PRINT_LOCK = threading.Lock()
+
+
+def _log(msg: str, *, err: bool = False) -> None:
+    with _PRINT_LOCK:
+        print(msg, file=sys.stderr if err else sys.stdout, flush=True)
+
+
+def _build_task(label: str, en: dict, target_path: Path, lang: str, lang_meta: dict) -> dict | None:
+    """Compute what work is needed for one (catalog, language) pair.
+
+    Returns a task dict with the catalog, the pending list, and identifying
+    metadata. Returns None if the catalog is up-to-date (already saves on
+    disk after stale-key removal). Side effect: writes the catalog file
+    when no translation is needed (so the no-op path still refreshes
+    `_meta` and prunes stale keys atomically).
+    """
     catalog = load_or_init(target_path, lang, lang_meta)
-    # Refresh meta — display names / rtl flags evolve as we add languages.
     catalog["_meta"] = {
         "language": lang,
         "name": lang_meta["name"],
@@ -334,7 +366,6 @@ def update_catalog(
         "machine_translated": True,
     }
 
-    # Find what needs (re)translation.
     pending: list[tuple[str, dict]] = []
     for key, en_entry in en.items():
         if key.startswith("_"):
@@ -344,41 +375,73 @@ def update_catalog(
         if existing is None:
             pending.append((key, en_entry))
             continue
-        # Hand-edited entries (translator removed the machine flag) are
-        # left alone, even if the source drifted. The reviewer's call.
         if not existing.get("_machine_translated", False):
             continue
         if existing.get("_source_hash") != src_hash:
             pending.append((key, en_entry))
 
-    # Drop EN keys that no longer exist.
     en_keys = {k for k in en if not k.startswith("_")}
     stale = [k for k in catalog if not k.startswith("_") and k not in en_keys]
     for k in stale:
-        print(f"  - removing stale key {k!r}")
         del catalog[k]
 
-    print(f"  {len(pending)} keys need translation, {len(stale)} stale removed")
-    if not pending:
-        save(target_path, catalog)
-        return
-    if dry_run:
-        print("  (dry run; not calling Claude)")
-        return
+    if not pending and not stale:
+        # Catalog is already current — nothing to do.
+        return None
 
-    # Batch the calls.
+    if not pending:
+        # Stale keys removed but nothing to translate. Persist and skip.
+        save(target_path, catalog)
+        _log(f"  - {label} :: {lang}: pruned {len(stale)} stale, no translation needed")
+        return None
+
+    return {
+        "label": label,
+        "target_path": target_path,
+        "lang": lang,
+        "lang_meta": lang_meta,
+        "catalog": catalog,
+        "pending": pending,
+        "stale_count": len(stale),
+    }
+
+
+def _run_task(task: dict, dry_run: bool) -> tuple[str, str, int, int]:
+    """Execute one (catalog, language) translation task.
+
+    Each task owns its own catalog file — no two tasks ever write to the
+    same path — so concurrent workers don't race on disk. We do batch the
+    calls within the task sequentially because batches share state (a
+    later batch may need to write to the same file).
+
+    Returns (label, lang, ok_count, fail_count) for summary reporting.
+    """
+    label = task["label"]
+    lang = task["lang"]
+    target_path = task["target_path"]
+    lang_meta = task["lang_meta"]
+    catalog = task["catalog"]
+    pending = task["pending"]
+
+    _log(f"  + {label} :: {lang} ({lang_meta['name']}) — {len(pending)} keys")
+
+    if dry_run:
+        return (label, lang, 0, len(pending))
+
+    ok = 0
+    failed = 0
     for i in range(0, len(pending), BATCH_SIZE):
         batch = pending[i : i + BATCH_SIZE]
-        print(f"  - batch {i // BATCH_SIZE + 1}: {len(batch)} keys")
         prompt = build_prompt(lang, lang_meta["name"], batch)
         response = call_claude(prompt)
         if response is None:
+            failed += len(batch)
             continue
         translations = {t["key"]: t["message"] for t in response.get("translations", [])}
         for key, en_entry in batch:
             translated = translations.get(key)
             if translated is None:
-                print(f"    ! no translation returned for {key!r}, skipping")
+                failed += 1
                 continue
             src_hash = hash_source(en_entry["message"], en_entry.get("description", ""))
             catalog[key] = {
@@ -387,49 +450,117 @@ def update_catalog(
                 "_machine_translated": True,
                 "_source_hash": src_hash,
             }
-        # Write incrementally so a mid-run failure doesn't lose previous batches.
+            ok += 1
+        # Write incrementally so a mid-run failure or kill doesn't lose
+        # previous batches in this task.
         save(target_path, catalog)
 
-
-def update_host(targets: dict[str, dict], dry_run: bool) -> None:
-    if not EN_PATH.exists():
-        print(f"FATAL: {EN_PATH} missing", file=sys.stderr)
-        return
-    en = json.loads(EN_PATH.read_text(encoding="utf-8"))
-    for lang, meta in targets.items():
-        target = LOCALES / lang / "messages.json"
-        try:
-            update_catalog("host", en, target, lang, meta, dry_run)
-        except Exception as e:  # noqa: BLE001
-            print(f"  ! {lang} failed: {e}", file=sys.stderr)
+    status = "✓" if failed == 0 else "✗"
+    _log(f"  {status} {label} :: {lang} — {ok}/{len(pending)} keys translated")
+    return (label, lang, ok, failed)
 
 
-def update_extensions(targets: dict[str, dict], dry_run: bool) -> None:
-    """Update catalogs under Kage-Extensions/extensions/<id>/_locales/."""
-    if not EXTENSIONS_DIR.exists():
-        print(f"WARN: extensions dir not found at {EXTENSIONS_DIR}, skipping", file=sys.stderr)
-        return
-    for ext_dir in sorted(p for p in EXTENSIONS_DIR.iterdir() if p.is_dir()):
-        en_path = ext_dir / "_locales" / "en" / "messages.json"
-        if not en_path.exists():
-            print(f"  - {ext_dir.name}: no _locales/en/messages.json — skip")
-            continue
-        en = json.loads(en_path.read_text(encoding="utf-8"))
-        for lang, meta in targets.items():
-            target = ext_dir / "_locales" / lang / "messages.json"
+def collect_tasks(targets: dict[str, dict], catalogs: str) -> list[dict]:
+    """Walk the host catalog and (optionally) every extension's catalog,
+    returning the list of (catalog, language) tasks that have pending work.
+    Catalogs already in sync produce no task entry.
+    """
+    tasks: list[dict] = []
+
+    if catalogs in ("host", "all"):
+        if not EN_PATH.exists():
+            _log(f"FATAL: {EN_PATH} missing", err=True)
+        else:
+            en = json.loads(EN_PATH.read_text(encoding="utf-8"))
+            for lang, meta in targets.items():
+                target = LOCALES / lang / "messages.json"
+                try:
+                    t = _build_task("host", en, target, lang, meta)
+                    if t is not None:
+                        tasks.append(t)
+                except Exception as e:  # noqa: BLE001
+                    _log(f"  ! host {lang} task-build failed: {e}", err=True)
+
+    if catalogs in ("extensions", "all"):
+        if not EXTENSIONS_DIR.exists():
+            _log(f"WARN: extensions dir not found at {EXTENSIONS_DIR}, skipping", err=True)
+        else:
+            for ext_dir in sorted(p for p in EXTENSIONS_DIR.iterdir() if p.is_dir()):
+                en_path = ext_dir / "_locales" / "en" / "messages.json"
+                if not en_path.exists():
+                    continue
+                ext_en = json.loads(en_path.read_text(encoding="utf-8"))
+                for lang, meta in targets.items():
+                    target = ext_dir / "_locales" / lang / "messages.json"
+                    try:
+                        t = _build_task(f"ext:{ext_dir.name}", ext_en, target, lang, meta)
+                        if t is not None:
+                            tasks.append(t)
+                    except Exception as e:  # noqa: BLE001
+                        _log(
+                            f"  ! ext {ext_dir.name} {lang} task-build failed: {e}",
+                            err=True,
+                        )
+
+    return tasks
+
+
+def run_tasks(tasks: list[dict], workers: int, dry_run: bool) -> tuple[int, int]:
+    """Run all tasks across a worker pool. Returns (ok_total, failed_total)
+    aggregated across every task. Each task writes its own catalog file
+    so workers can't race on disk; a global print lock keeps progress
+    output legible.
+    """
+    if not tasks:
+        return (0, 0)
+    if workers <= 1 or dry_run:
+        # Serial path — easier to debug, also the path used by --dry-run.
+        ok_total = failed_total = 0
+        for t in tasks:
+            _, _, ok, failed = _run_task(t, dry_run)
+            ok_total += ok
+            failed_total += failed
+        return (ok_total, failed_total)
+
+    ok_total = failed_total = 0
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="i18n") as pool:
+        futures = [pool.submit(_run_task, t, dry_run) for t in tasks]
+        for fut in as_completed(futures):
             try:
-                update_catalog(f"ext:{ext_dir.name}", en, target, lang, meta, dry_run)
+                _, _, ok, failed = fut.result()
             except Exception as e:  # noqa: BLE001
-                print(f"  ! ext {ext_dir.name} {lang} failed: {e}", file=sys.stderr)
+                _log(f"  ! worker raised: {e}", err=True)
+                failed_total += 1
+                continue
+            ok_total += ok
+            failed_total += failed
+    return (ok_total, failed_total)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--langs", help="Comma-separated language codes (default: all)")
-    parser.add_argument("--catalog", choices=("host", "extensions", "all"), default="all",
-                        help="Which catalogs to update")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="List pending work without calling Claude")
+    parser.add_argument(
+        "--catalog",
+        choices=("host", "extensions", "all"),
+        default="all",
+        help="Which catalogs to update",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help=(
+            "Number of concurrent Claude calls (default: 4). Each (catalog, language) "
+            "pair is independent — different files, different prompts — so concurrency "
+            "is safe; tasks never share in-flight state. Bump this if your "
+            "Anthropic-tier rate limit allows; drop to 1 for serial execution / "
+            "easier debugging."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="List pending work without calling Claude"
+    )
     args = parser.parse_args()
 
     targets: dict[str, dict]
@@ -450,13 +581,21 @@ def main() -> int:
         )
         return 2
 
-    if args.catalog in ("host", "all"):
-        update_host(targets, args.dry_run)
-    if args.catalog in ("extensions", "all"):
-        update_extensions(targets, args.dry_run)
-
-    print("\nDone. Run `python scripts/check_i18n.py` to verify the build is clean.")
-    return 0
+    print(f"Collecting tasks (catalog={args.catalog}, langs={len(targets)})...")
+    tasks = collect_tasks(targets, args.catalog)
+    if not tasks:
+        print("\nAll catalogs already up to date — nothing to translate.")
+        return 0
+    print(f"  {len(tasks)} (catalog, language) pair(s) need translation")
+    print(f"  workers={args.workers}, batch_size={BATCH_SIZE}")
+    if args.dry_run:
+        print("  (dry run; not calling Claude)")
+    start = time.time()
+    ok, failed = run_tasks(tasks, args.workers, args.dry_run)
+    elapsed = time.time() - start
+    print(f"\nDone in {elapsed:.0f}s. Translated {ok} keys; {failed} failed.")
+    print("Run `python scripts/check_i18n.py` to verify the build is clean.")
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":
