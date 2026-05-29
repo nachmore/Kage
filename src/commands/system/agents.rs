@@ -233,6 +233,14 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                 }
             }
 
+            // npm-installed Windows binaries land as a pair: a Unix
+            // script with no extension *and* a `.cmd` shim in the same
+            // folder. `where` returns both, so without dedup the user
+            // sees two "Claude Code" entries pointing at the same
+            // install. Collapse same-(dir, stem) candidates and prefer
+            // the executable extension (.exe > .cmd > .bat > no-ext).
+            let candidates = dedupe_shim_candidates(candidates);
+
             for path in candidates {
                 if !path.exists() {
                     continue;
@@ -247,6 +255,16 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                 // Try to capture a version string. Skipped when the
                 // preset declares no version_args (some adapters don't
                 // implement --version).
+                //
+                // CLIs vary wildly in --version output:
+                //   `kiro-cli --version` → "kiro-cli-chat 0.0.0-dev"
+                //   `claude --version`   → multi-line, version on its
+                //                          own line "2.1.128 (Claude Code)"
+                // Whitespace-splitting the first line picked up
+                // "kiro-cli-chat" as the version. We extract the first
+                // token that looks like a version (digit-led, contains
+                // a dot) instead. Some CLIs print to stderr, so merge
+                // both streams before parsing.
                 let version = if hint.version_args.is_empty() {
                     None
                 } else {
@@ -256,16 +274,13 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                     // where/which call.
                     crate::os::configure_no_window(&mut version_cmd);
                     version_cmd.output().ok().and_then(|o| {
-                        if o.status.success() {
-                            let v = String::from_utf8_lossy(&o.stdout).trim().to_string();
-                            if !v.is_empty() {
-                                Some(v)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
+                        if !o.status.success() {
+                            return None;
                         }
+                        let mut combined = String::from_utf8_lossy(&o.stdout).into_owned();
+                        combined.push('\n');
+                        combined.push_str(&String::from_utf8_lossy(&o.stderr));
+                        extract_version(&combined)
                     })
                 };
 
@@ -310,6 +325,90 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
     });
 
     agents
+}
+
+/// Collapse candidate paths that point at the same logical binary
+/// because of Windows shim pairs. npm `-g` drops both `claude-code-acp`
+/// and `claude-code-acp.cmd` in the same directory; `where` returns
+/// both. We keep one entry per (parent_dir, file_stem) and prefer the
+/// most-executable extension so the version probe and downstream
+/// `Command::new` get a binary that actually runs.
+///
+/// Order is preserved beyond the dedup so the rest of the detector's
+/// candidate ordering (well-known dirs first, PATH last) keeps
+/// determining display order.
+fn dedupe_shim_candidates(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    use std::collections::HashMap;
+
+    fn ext_priority(p: &std::path::Path) -> u8 {
+        // Higher = preferred. .exe wins over .cmd/.bat (which are
+        // shell shims) which win over no extension. Anything else
+        // ranks lowest so unexpected extensions can still appear if
+        // they're the only option.
+        match p
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("exe") => 4,
+            Some("cmd") => 3,
+            Some("bat") => 2,
+            None => 1,
+            _ => 0,
+        }
+    }
+
+    // Index of (dir, stem) -> position in `out`. Lets us replace an
+    // already-kept entry when a higher-priority sibling shows up
+    // without rebuilding the vector.
+    let mut keep: HashMap<(std::path::PathBuf, String), usize> = HashMap::new();
+    let mut out: Vec<std::path::PathBuf> = Vec::with_capacity(paths.len());
+
+    for path in paths {
+        let dir = path.parent().map(|p| p.to_path_buf()).unwrap_or_default();
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_default();
+        let key = (dir, stem);
+
+        match keep.get(&key) {
+            Some(&idx) => {
+                if ext_priority(&path) > ext_priority(&out[idx]) {
+                    out[idx] = path;
+                }
+            }
+            None => {
+                keep.insert(key, out.len());
+                out.push(path);
+            }
+        }
+    }
+    out
+}
+
+/// Pull the first version-shaped token out of a CLI's `--version`
+/// output. A token qualifies if it starts with a digit and contains a
+/// dot (so `2.1.128`, `0.0.0-dev`, `v1.2` all match) — we skip leading
+/// `v`/`V` so the returned string is the version proper. Returns the
+/// raw token (e.g. `2.1.128` or `0.0.0-dev`) or `None` if nothing
+/// matched, in which case the UI shows no version badge.
+///
+/// Real-world inputs we've seen:
+///   `kiro-cli-chat 0.0.0-dev`
+///   `claude: info: builder-mcp setup: stamp_exists\n2.1.128 (Claude Code)`
+fn extract_version(output: &str) -> Option<String> {
+    for line in output.lines() {
+        for raw in line.split_whitespace() {
+            let token = raw.trim_start_matches(['v', 'V']);
+            if token.contains('.') && token.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+                return Some(token.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Status of `npm` on the user's machine — informs whether the
@@ -434,7 +533,9 @@ fn install_acp_wrapper_sync(package: &str) -> Result<String, AppError> {
 
 #[cfg(test)]
 mod tests {
+    use super::{dedupe_shim_candidates, extract_version};
     use crate::agent_presets::{detection_hints, AgentKind, ALLOWED_WRAPPER_NPM_PACKAGES};
+    use std::path::PathBuf;
 
     #[test]
     fn detection_hints_include_bare_claude_with_wrapper() {
@@ -487,5 +588,72 @@ mod tests {
             !ALLOWED_WRAPPER_NPM_PACKAGES.contains(&""),
             "allowlist must reject empty package names"
         );
+    }
+
+    #[test]
+    fn extract_version_picks_first_dotted_digit_token() {
+        // The bug we're fixing: whitespace-splitting the first line of
+        // `kiro-cli --version` returned "kiro-cli-chat" as the version.
+        assert_eq!(
+            extract_version("kiro-cli-chat 0.0.0-dev"),
+            Some("0.0.0-dev".to_string()),
+        );
+        // Claude prints diagnostics to a leading line and the version
+        // is on its own line, with the actual number followed by a
+        // human label in parens. We want only the version.
+        assert_eq!(
+            extract_version("claude: info: builder-mcp setup: stamp_exists\n2.1.128 (Claude Code)"),
+            Some("2.1.128".to_string()),
+        );
+        // `v`-prefixed versions are common (semver tooling, Go, …) —
+        // strip the prefix so the badge shows the version proper.
+        assert_eq!(extract_version("foo v1.2.3"), Some("1.2.3".to_string()));
+        // Bare digit-only strings without a dot aren't semver-shaped
+        // and are usually exit codes or year-stamps — skip.
+        assert_eq!(extract_version("build 12345"), None);
+        assert_eq!(extract_version(""), None);
+    }
+
+    #[test]
+    fn dedupe_shim_candidates_collapses_npm_pair_keeping_cmd() {
+        // npm `-g` on Windows installs a Unix script (no extension)
+        // alongside a `.cmd` shim in the same directory. `where`
+        // returns both, so without dedup the user sees two cards.
+        // Both files exist, but `.cmd` is the one Windows knows how
+        // to run via `Command::new`.
+        let inputs = vec![
+            PathBuf::from(r"C:\Users\me\AppData\Roaming\npm\claude-code-acp"),
+            PathBuf::from(r"C:\Users\me\AppData\Roaming\npm\claude-code-acp.cmd"),
+        ];
+        let out = dedupe_shim_candidates(inputs);
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0],
+            PathBuf::from(r"C:\Users\me\AppData\Roaming\npm\claude-code-acp.cmd"),
+            ".cmd should win over the no-extension shim"
+        );
+    }
+
+    #[test]
+    fn dedupe_shim_candidates_keeps_distinct_installs() {
+        // Two genuinely different installs must NOT collapse — same
+        // stem in different directories is a real "user has two
+        // copies" case (Toolbox vs. local install). Preserve both.
+        let inputs = vec![
+            PathBuf::from(r"C:\Users\me\AppData\Local\Toolbox\bin\kiro-cli.exe"),
+            PathBuf::from(r"C:\Users\me\AppData\Local\kiro-cli\kiro-cli.exe"),
+        ];
+        let out = dedupe_shim_candidates(inputs.clone());
+        assert_eq!(out, inputs);
+    }
+
+    #[test]
+    fn dedupe_shim_candidates_prefers_exe_over_cmd() {
+        let inputs = vec![
+            PathBuf::from(r"C:\foo\agent.cmd"),
+            PathBuf::from(r"C:\foo\agent.exe"),
+        ];
+        let out = dedupe_shim_candidates(inputs);
+        assert_eq!(out, vec![PathBuf::from(r"C:\foo\agent.exe")]);
     }
 }
