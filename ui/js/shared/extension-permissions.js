@@ -40,6 +40,15 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     open_path: 'shell',
     launch_app_by_name: 'shell',
 
+    // --- oauth: loopback HTTP listener for OAuth callbacks ----------------
+    // Spawning a local HTTP server (even bound to 127.0.0.1) is a distinct
+    // primitive from making outbound network calls — it lets the extension
+    // receive a redirect from the user's browser. Gating it under its own
+    // capability surfaces it explicitly at install time.
+    oauth_loopback_start: 'oauth',
+    oauth_loopback_await: 'oauth',
+    oauth_loopback_cancel: 'oauth',
+
     // --- network: outbound HTTP from the Rust runtime (CORS-bypassing) -----
     // These commands fire HTTP GETs from the Rust process, NOT the
     // sandboxed webview. They bypass CORS, send no `Origin` header
@@ -316,6 +325,12 @@ export const CAPABILITIES = Object.freeze({
         label: 'Network access',
         description:
             'Fetch URLs from outside your browser sandbox (e.g. link previews, favicons). Can reach sites your browser would refuse, including internal/intranet pages and sites that block cross-origin requests.',
+    },
+    oauth: {
+        icon: '🔐',
+        label: 'OAuth sign-in',
+        description:
+            'Open a one-shot loopback listener (http://127.0.0.1:<port>/...) so a third-party service like Spotify or GitHub can redirect back with a sign-in code. Only listens on this machine; the port closes as soon as the redirect arrives.',
     },
     filesystem: { icon: '📂', label: 'Filesystem', description: 'Scan folders and search files.' },
     window: {
