@@ -2067,6 +2067,27 @@ body.light-theme .conn-row {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
+    align-items: center;
+}
+.conn-duplicate-btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    line-height: 1;
+    background: transparent;
+    color: var(--kage-text-secondary, #938f9b);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+}
+body.light-theme .conn-duplicate-btn {
+    border-color: rgba(0, 0, 0, 0.15);
+}
+.conn-duplicate-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--kage-text-primary, #f0eef5);
+}
+body.light-theme .conn-duplicate-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
 }
 .conn-active-dot {
     display: inline-block;

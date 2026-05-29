@@ -321,6 +321,8 @@ export class ConnectionSettingsModule extends SettingsModule {
                             : `<button type="button" class="setting-btn-secondary conn-set-active-btn" data-id="${escape(c.id)}">Make active</button>`
                     }
                     <button type="button" class="setting-btn-secondary conn-edit-btn" data-id="${escape(c.id)}">Edit</button>
+                    <button type="button" class="conn-duplicate-btn" data-id="${escape(c.id)}"
+                            title="Duplicate this connection" aria-label="Duplicate this connection">⎘</button>
                     ${
                         canDelete
                             ? `<button type="button" class="setting-btn-secondary conn-delete-btn" data-id="${escape(c.id)}">Delete</button>`
@@ -428,6 +430,11 @@ export class ConnectionSettingsModule extends SettingsModule {
                 } else {
                     this._enterEdit(conn, { isNew: false });
                 }
+            });
+        });
+        document.querySelectorAll('.conn-duplicate-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                this._duplicateConnection(btn.getAttribute('data-id'));
             });
         });
         document.querySelectorAll('.conn-delete-btn').forEach((btn) => {
@@ -1064,5 +1071,31 @@ export class ConnectionSettingsModule extends SettingsModule {
         this._connections = this._connections.filter((c) => c.id !== id);
         this._issues.delete(id);
         this._renderRoot();
+    }
+
+    /**
+     * Open the editor with a deep-copied draft of `id`. The draft gets
+     * a fresh uuid + "Copy of …" name; nothing is added to the saved
+     * list until the user hits Save in the editor (the standard new-
+     * draft contract). Routes Ollama-shaped connections to the wizard
+     * sub-view since the raw spawn-command form can't read the
+     * `ollama_settings` block back out.
+     */
+    _duplicateConnection(id) {
+        const original = this._connections.find((c) => c.id === id);
+        if (!original) return;
+        const api = this._api();
+        // Structured-clone the whole record so nested `mode` /
+        // `ollama_settings` objects don't share references with the
+        // saved entry — edits to the draft must not mutate the
+        // original until Save commits them.
+        const draft = JSON.parse(JSON.stringify(original));
+        draft.id = api?.uuidLite ? api.uuidLite() : `c-${Date.now()}`;
+        draft.name = `Copy of ${original.name || 'connection'}`;
+        if (original.preset_id === 'ollama') {
+            this._enterOllamaEdit(draft, { isNew: true });
+        } else {
+            this._enterEdit(draft, { isNew: true });
+        }
     }
 }
