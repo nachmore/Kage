@@ -1080,7 +1080,7 @@ function renderHtmlPreview(codeBlock, pre) {
     header.className = 'diagram-header';
     const label = document.createElement('span');
     label.className = 'diagram-label';
-    label.textContent = 'HTML Preview';
+    label.textContent = t('shared.markdown.diagram.html');
 
     const actions = document.createElement('div');
     actions.className = 'diagram-actions';
@@ -1167,7 +1167,7 @@ function renderMarkdownPreview(codeBlock, pre, streaming) {
     header.className = 'diagram-header';
     const label = document.createElement('span');
     label.className = 'diagram-label';
-    label.textContent = 'Markdown';
+    label.textContent = t('shared.markdown.diagram.markdown');
 
     const actions = document.createElement('div');
     actions.className = 'diagram-actions';
@@ -1425,7 +1425,7 @@ function renderSvgPreview(codeBlock, pre) {
     header.className = 'diagram-header';
     const label = document.createElement('span');
     label.className = 'diagram-label';
-    label.textContent = 'SVG';
+    label.textContent = t('shared.markdown.diagram.svg');
 
     const actions = document.createElement('div');
     actions.className = 'diagram-actions';
@@ -1535,7 +1535,7 @@ function renderMathPreview(codeBlock, pre) {
     header.className = 'diagram-header';
     const label = document.createElement('span');
     label.className = 'diagram-label';
-    label.textContent = 'Math';
+    label.textContent = t('shared.markdown.diagram.math');
 
     const actions = document.createElement('div');
     actions.className = 'diagram-actions';
@@ -1619,7 +1619,7 @@ function renderJsonTree(codeBlock, pre, language) {
     header.className = 'diagram-header';
     const label = document.createElement('span');
     label.className = 'diagram-label';
-    label.textContent = 'JSON';
+    label.textContent = t('shared.markdown.diagram.json');
 
     const actions = document.createElement('div');
     actions.className = 'diagram-actions';
@@ -1799,7 +1799,7 @@ function runCodeInSandbox(code, wrapper, button) {
 
     const outputHeader = document.createElement('div');
     outputHeader.className = 'try-output-header';
-    outputHeader.innerHTML = '<span>Console Output</span>';
+    outputHeader.innerHTML = `<span>${t('shared.markdown.console_output')}</span>`;
     const closeBtn = document.createElement('button');
     closeBtn.className = 'try-output-close';
     closeBtn.textContent = '✕';
@@ -2056,7 +2056,7 @@ function openDiagramLightbox(svgEl) {
 
     const saveBtn = document.createElement('button');
     saveBtn.className = 'diagram-lightbox-btn';
-    saveBtn.textContent = 'Save';
+    saveBtn.textContent = t('shared.markdown.save_btn');
     saveBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         try {
@@ -2081,9 +2081,9 @@ function openDiagramLightbox(svgEl) {
                 a.click();
                 URL.revokeObjectURL(a.href);
             }
-            saveBtn.textContent = 'Saved!';
+            saveBtn.textContent = t('shared.markdown.save_btn.saved');
             setTimeout(() => {
-                saveBtn.textContent = 'Save';
+                saveBtn.textContent = t('shared.markdown.save_btn');
             }, 2000);
         } catch (err) {
             console.error('Lightbox save failed:', err);

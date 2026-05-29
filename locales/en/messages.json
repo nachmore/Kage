@@ -4085,6 +4085,92 @@
     "message": "Task plan",
     "description": "aria-label on the task-plan widget container"
   },
+  "shared.markdown.console_output": {
+    "message": "Console Output",
+    "description": "Header for the JavaScript Try-It console output panel"
+  },
+  "shared.markdown.diagram.html": {
+    "message": "HTML Preview",
+    "description": "Label on the HTML preview block"
+  },
+  "shared.markdown.diagram.markdown": {
+    "message": "Markdown",
+    "description": "Label on the rendered-markdown preview block"
+  },
+  "shared.markdown.diagram.svg": {
+    "message": "SVG",
+    "description": "Label on the rendered SVG preview block"
+  },
+  "shared.markdown.diagram.math": {
+    "message": "Math",
+    "description": "Label on the rendered LaTeX/math preview block"
+  },
+  "shared.markdown.diagram.json": {
+    "message": "JSON",
+    "description": "Label on the JSON preview block"
+  },
+  "shared.markdown.save_btn": {
+    "message": "Save",
+    "description": "Save button on a code-block download / save action"
+  },
+  "shared.markdown.save_btn.saved": {
+    "message": "Saved!",
+    "description": "Save button label briefly after saving succeeds"
+  },
+
+  "settings.speech.pocket.test_btn": {
+    "message": "🔊 Test Voice",
+    "description": "Default label for the Test Voice button"
+  },
+  "settings.speech.pocket.test.stopped": {
+    "message": "Stopped",
+    "description": "Status label after the user stops a Test Voice playback"
+  },
+  "settings.speech.pocket.add.loading": {
+    "message": "Loading...",
+    "description": "Add Voice button label while a download is in flight"
+  },
+  "settings.speech.pocket.add.downloading": {
+    "message": "⏳ Downloading...",
+    "description": "Status while a custom Pocket TTS voice file is downloading"
+  },
+  "settings.speech.pocket.add.success": {
+    "message": "✅ \"{name}\" added",
+    "description": "Status when a custom Pocket TTS voice has been imported successfully"
+  },
+  "settings.speech.pocket.add.failed_default": {
+    "message": "Failed",
+    "description": "Default error message when the load-voice endpoint returns no detail"
+  },
+  "settings.speech.pocket.add.btn": {
+    "message": "Add",
+    "description": "Default Add Voice button label"
+  },
+
+  "shared.prompt_form.default_title": {
+    "message": "Prompt",
+    "description": "Fallback title for a Quick-Command prompt form when the shortcut has no name"
+  },
+  "shared.prompt_form.subtitle.one": {
+    "message": "Fill in the missing value, then press Enter.",
+    "description": "Subtitle shown when exactly one slot is missing"
+  },
+  "shared.prompt_form.subtitle.many": {
+    "message": "Fill in the {count} missing values, then press Enter.",
+    "description": "Subtitle shown when multiple slots are missing"
+  },
+  "shared.prompt_form.optional_suffix": {
+    "message": "{name} (optional)",
+    "description": "Label format for optional placeholder slots"
+  },
+  "shared.prompt_form.send_btn": {
+    "message": "Send",
+    "description": "Submit button on the prompt form"
+  },
+  "shared.prompt_form.cancel_btn": {
+    "message": "Cancel",
+    "description": "Cancel button on the prompt form"
+  },
 
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",

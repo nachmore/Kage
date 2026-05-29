@@ -629,11 +629,11 @@ async function pocketTtsTest() {
         _pocketTtsTestAudio.pause();
         _pocketTtsTestAudio = null;
         if (btn) {
-            btn.textContent = '🔊 Test Voice';
+            btn.textContent = t('settings.speech.pocket.test_btn');
             btn.style.display = '';
         }
         if (spinner) spinner.style.display = 'none';
-        if (status) status.textContent = 'Stopped';
+        if (status) status.textContent = t('settings.speech.pocket.test.stopped');
         return;
     }
     if (btn) btn.style.display = 'none';
@@ -717,9 +717,9 @@ async function pocketTtsAddVoice() {
     }
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Loading...';
+        btn.textContent = t('settings.speech.pocket.add.loading');
     }
-    if (status) status.textContent = '⏳ Downloading...';
+    if (status) status.textContent = t('settings.speech.pocket.add.downloading');
     try {
         const config = await invoke('get_config');
         const port = config.pocket_tts?.port || 9877;
@@ -729,15 +729,17 @@ async function pocketTtsAddVoice() {
             body: JSON.stringify({ voice: voiceUrl }),
         });
         if (!resp.ok) {
-            const err = await resp.json().catch(() => ({ error: 'Failed' }));
-            throw new Error(err.error || 'Failed');
+            const fallback = t('settings.speech.pocket.add.failed_default');
+            const err = await resp.json().catch(() => ({ error: fallback }));
+            throw new Error(err.error || fallback);
         }
         await fetch(`http://127.0.0.1:${port}/export-voice`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ wav_path: voiceUrl, output_name: voiceName }),
         });
-        if (status) status.textContent = `✅ "${voiceName}" added`;
+        if (status)
+            status.textContent = t('settings.speech.pocket.add.success', { name: voiceName });
         if (urlInput) urlInput.value = '';
         if (nameInput) nameInput.value = '';
         const mod = getSettingsManager()?.modules?.find((m) => m.id === 'speech');
@@ -747,7 +749,7 @@ async function pocketTtsAddVoice() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Add';
+            btn.textContent = t('settings.speech.pocket.add.btn');
         }
     }
 }

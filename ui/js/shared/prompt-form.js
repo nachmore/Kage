@@ -22,6 +22,8 @@
  * data) so user-supplied placeholder names can't smuggle markup.
  */
 
+import { t } from './i18n.js';
+
 export function mountPromptForm(container, formCmd, callbacks = {}) {
     if (!container) throw new Error('mountPromptForm: container required');
     if (!formCmd || formCmd.type !== 'prompt_form') {
@@ -33,7 +35,10 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
 
     const title = document.createElement('div');
     title.className = 'prompt-form-title';
-    const shortcutName = formCmd.shortcut?.name || formCmd.shortcut?.shortcut || 'Prompt';
+    const shortcutName =
+        formCmd.shortcut?.name ||
+        formCmd.shortcut?.shortcut ||
+        t('shared.prompt_form.default_title');
     title.textContent = shortcutName;
     root.appendChild(title);
 
@@ -42,8 +47,8 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
     const missingCount = formCmd.missing.length;
     subtitle.textContent =
         missingCount === 1
-            ? 'Fill in the missing value, then press Enter.'
-            : `Fill in the ${missingCount} missing values, then press Enter.`;
+            ? t('shared.prompt_form.subtitle.one')
+            : t('shared.prompt_form.subtitle.many', { count: missingCount });
     root.appendChild(subtitle);
 
     const list = document.createElement('div');
@@ -56,7 +61,9 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
         row.className = 'prompt-form-row';
         const labelText = document.createElement('span');
         labelText.className = 'prompt-form-label';
-        labelText.textContent = slot.optional ? `${slot.name} (optional)` : slot.name;
+        labelText.textContent = slot.optional
+            ? t('shared.prompt_form.optional_suffix', { name: slot.name })
+            : slot.name;
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'setting-input prompt-form-input';
@@ -80,11 +87,11 @@ export function mountPromptForm(container, formCmd, callbacks = {}) {
     const submitBtn = document.createElement('button');
     submitBtn.type = 'button';
     submitBtn.className = 'setting-button';
-    submitBtn.textContent = 'Send';
+    submitBtn.textContent = t('shared.prompt_form.send_btn');
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'setting-button prompt-form-cancel';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.textContent = t('shared.prompt_form.cancel_btn');
     actions.appendChild(submitBtn);
     actions.appendChild(cancelBtn);
     root.appendChild(actions);

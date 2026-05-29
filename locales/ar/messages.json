@@ -3943,9 +3943,9 @@
   },
   "settings.speech.pocket.test_btn": {
     "message": "🔊 اختبار الصوت",
-    "description": "Test button",
+    "description": "Default label for the Test Voice button",
     "_machine_translated": true,
-    "_source_hash": "65c5468d278eaba7"
+    "_source_hash": "a2e048f0dbafbcc6"
   },
   "settings.speech.pocket.test_generating": {
     "message": "⏳ جارٍ الإنشاء…",
@@ -7018,5 +7018,125 @@
     "description": "aria-label on the task-plan widget container",
     "_machine_translated": true,
     "_source_hash": "3f69b36a93ba629f"
+  },
+  "shared.markdown.console_output": {
+    "message": "مخرجات وحدة التحكم",
+    "description": "Header for the JavaScript Try-It console output panel",
+    "_machine_translated": true,
+    "_source_hash": "51f6f6a28000db8a"
+  },
+  "shared.markdown.diagram.html": {
+    "message": "معاينة HTML",
+    "description": "Label on the HTML preview block",
+    "_machine_translated": true,
+    "_source_hash": "e11c26345405a4a4"
+  },
+  "shared.markdown.diagram.markdown": {
+    "message": "Markdown",
+    "description": "Label on the rendered-markdown preview block",
+    "_machine_translated": true,
+    "_source_hash": "f97474f85897fa5c"
+  },
+  "shared.markdown.diagram.svg": {
+    "message": "SVG",
+    "description": "Label on the rendered SVG preview block",
+    "_machine_translated": true,
+    "_source_hash": "093a0575d6e46684"
+  },
+  "shared.markdown.diagram.math": {
+    "message": "رياضيات",
+    "description": "Label on the rendered LaTeX/math preview block",
+    "_machine_translated": true,
+    "_source_hash": "7884a3f490a116a1"
+  },
+  "shared.markdown.diagram.json": {
+    "message": "JSON",
+    "description": "Label on the JSON preview block",
+    "_machine_translated": true,
+    "_source_hash": "d64c465b8fbb43f0"
+  },
+  "shared.markdown.save_btn": {
+    "message": "حفظ",
+    "description": "Save button on a code-block download / save action",
+    "_machine_translated": true,
+    "_source_hash": "05c8e401d355e3a0"
+  },
+  "shared.markdown.save_btn.saved": {
+    "message": "تم الحفظ!",
+    "description": "Save button label briefly after saving succeeds",
+    "_machine_translated": true,
+    "_source_hash": "50cd83faf83dfc1a"
+  },
+  "settings.speech.pocket.test.stopped": {
+    "message": "متوقف",
+    "description": "Status label after the user stops a Test Voice playback",
+    "_machine_translated": true,
+    "_source_hash": "b7f5ced9acfc4799"
+  },
+  "settings.speech.pocket.add.loading": {
+    "message": "جارٍ التحميل...",
+    "description": "Add Voice button label while a download is in flight",
+    "_machine_translated": true,
+    "_source_hash": "26017cbb463e06bc"
+  },
+  "settings.speech.pocket.add.downloading": {
+    "message": "⏳ جارٍ التنزيل...",
+    "description": "Status while a custom Pocket TTS voice file is downloading",
+    "_machine_translated": true,
+    "_source_hash": "5529b906b0d0e182"
+  },
+  "settings.speech.pocket.add.success": {
+    "message": "✅ تمت إضافة \"{name}\"",
+    "description": "Status when a custom Pocket TTS voice has been imported successfully",
+    "_machine_translated": true,
+    "_source_hash": "b1a1d0150fd40d51"
+  },
+  "settings.speech.pocket.add.failed_default": {
+    "message": "فشل",
+    "description": "Default error message when the load-voice endpoint returns no detail",
+    "_machine_translated": true,
+    "_source_hash": "352615145081115d"
+  },
+  "settings.speech.pocket.add.btn": {
+    "message": "إضافة",
+    "description": "Default Add Voice button label",
+    "_machine_translated": true,
+    "_source_hash": "6ba65bd782711501"
+  },
+  "shared.prompt_form.default_title": {
+    "message": "موجّه",
+    "description": "Fallback title for a Quick-Command prompt form when the shortcut has no name",
+    "_machine_translated": true,
+    "_source_hash": "3bff1d5f481dc38c"
+  },
+  "shared.prompt_form.subtitle.one": {
+    "message": "املأ القيمة المفقودة، ثم اضغط Enter.",
+    "description": "Subtitle shown when exactly one slot is missing",
+    "_machine_translated": true,
+    "_source_hash": "86329a9a327b717e"
+  },
+  "shared.prompt_form.subtitle.many": {
+    "message": "املأ القيم المفقودة البالغ عددها {count}، ثم اضغط Enter.",
+    "description": "Subtitle shown when multiple slots are missing",
+    "_machine_translated": true,
+    "_source_hash": "d000e559236e9f4e"
+  },
+  "shared.prompt_form.optional_suffix": {
+    "message": "{name} (اختياري)",
+    "description": "Label format for optional placeholder slots",
+    "_machine_translated": true,
+    "_source_hash": "16bb0958d695c7b3"
+  },
+  "shared.prompt_form.send_btn": {
+    "message": "إرسال",
+    "description": "Submit button on the prompt form",
+    "_machine_translated": true,
+    "_source_hash": "5c3c289838836000"
+  },
+  "shared.prompt_form.cancel_btn": {
+    "message": "إلغاء",
+    "description": "Cancel button on the prompt form",
+    "_machine_translated": true,
+    "_source_hash": "e3991a4f43232010"
   }
 }
