@@ -187,6 +187,7 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     detect_agents: null,
     list_agent_presets: null,
     validate_agent_connection: null,
+    probe_connection_version: null,
     check_npm_available: null,
     install_acp_wrapper: null,
     agent_session_providers: null,

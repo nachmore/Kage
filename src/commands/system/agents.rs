@@ -253,36 +253,26 @@ pub(crate) fn detect_agents_sync() -> Vec<DetectedAgent> {
                 }
 
                 // Try to capture a version string. Skipped when the
-                // preset declares no version_args (some adapters don't
-                // implement --version).
-                //
-                // CLIs vary wildly in --version output:
-                //   `kiro-cli --version` → "kiro-cli-chat 0.0.0-dev"
-                //   `claude --version`   → multi-line, version on its
-                //                          own line "2.1.128 (Claude Code)"
-                // Whitespace-splitting the first line picked up
-                // "kiro-cli-chat" as the version. We extract the first
-                // token that looks like a version (digit-led, contains
-                // a dot) instead. Some CLIs print to stderr, so merge
-                // both streams before parsing.
-                let version = if hint.version_args.is_empty() {
+                // preset declares no version_args. If the primary probe
+                // returns nothing (e.g. claude-code-acp prints empty),
+                // fall back to the hint's `fallback_version_probe` —
+                // for the wrapper that's `claude` on PATH, which
+                // surfaces the underlying CLI version.
+                let mut version = if hint.version_args.is_empty() {
                     None
                 } else {
-                    let mut version_cmd = std::process::Command::new(&path);
-                    version_cmd.args(hint.version_args);
-                    // CREATE_NO_WINDOW: see comment above on the
-                    // where/which call.
-                    crate::os::configure_no_window(&mut version_cmd);
-                    version_cmd.output().ok().and_then(|o| {
-                        if !o.status.success() {
-                            return None;
-                        }
-                        let mut combined = String::from_utf8_lossy(&o.stdout).into_owned();
-                        combined.push('\n');
-                        combined.push_str(&String::from_utf8_lossy(&o.stderr));
-                        extract_version(&combined)
-                    })
+                    run_version_probe(path.as_os_str(), hint.version_args)
                 };
+                if version.is_none() {
+                    if let Some(fb) = hint.fallback_version_probe {
+                        if let Some(fb_path) = resolve_binary_path(fb) {
+                            version = run_version_probe(
+                                std::ffi::OsStr::new(&fb_path),
+                                hint.version_args,
+                            );
+                        }
+                    }
+                }
 
                 // For wrapper-needed hints (e.g. bare `claude`), the
                 // saved spawn command should target the wrapper binary
@@ -387,6 +377,32 @@ fn dedupe_shim_candidates(paths: Vec<std::path::PathBuf>) -> Vec<std::path::Path
         }
     }
     out
+}
+
+/// Run `<binary> <args>` and parse a version-shaped token out of the
+/// combined stdout+stderr. Centralised so the detector and the
+/// "probe a saved connection" command behave identically.
+///
+/// CLIs vary in --version output:
+///   `kiro-cli --version`        → "kiro-cli-chat 2.5.0"
+///   `claude --version`          → multi-line, version on its own line
+///                                  "2.1.128 (Claude Code)"
+///   `claude-code-acp --version` → empty (no output, exit 0)
+fn run_version_probe(binary: &std::ffi::OsStr, args: &[&str]) -> Option<String> {
+    let mut cmd = std::process::Command::new(binary);
+    cmd.args(args);
+    // CREATE_NO_WINDOW: GUI subsystem processes spawning console
+    // children inherit no console — Windows allocates a fresh one for
+    // the child unless we suppress it, which flashes a DOS window.
+    crate::os::configure_no_window(&mut cmd);
+    let out = cmd.output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let mut combined = String::from_utf8_lossy(&out.stdout).into_owned();
+    combined.push('\n');
+    combined.push_str(&String::from_utf8_lossy(&out.stderr));
+    extract_version(&combined)
 }
 
 /// Pull the first version-shaped token out of a CLI's `--version`
@@ -531,11 +547,107 @@ fn install_acp_wrapper_sync(package: &str) -> Result<String, AppError> {
     Ok(combined.trim().to_string())
 }
 
+/// Probe the version of a saved connection's binary. Used by the
+/// settings UI to render a version badge alongside saved connections
+/// (the detection cache only covers binaries the detector saw, not
+/// arbitrary spawn commands the user typed by hand).
+///
+/// Strategy mirrors `detect_agents_sync`: parse the first whitespace-
+/// separated token of `spawn_command` as the binary, run the preset's
+/// `version_args` against it, and on empty output try the preset's
+/// `fallback_version_probe`. If the spawn command points at a binary
+/// the detector recognises but no preset is given, we still try a
+/// best-effort `--version` so the user gets a badge.
+///
+/// Returns `Ok(None)` (not an error) when nothing useful comes back —
+/// the UI shows no badge in that case rather than an error.
+#[tauri::command]
+pub async fn probe_connection_version(
+    spawn_command: String,
+    preset_id: Option<String>,
+) -> Result<Option<String>, AppError> {
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        probe_connection_version_sync(&spawn_command, preset_id.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task error: {}", e))?)
+}
+
+fn probe_connection_version_sync(spawn_command: &str, preset_id: Option<&str>) -> Option<String> {
+    let trimmed = spawn_command.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let token = trimmed.split_whitespace().next()?;
+    // The binary token may be a bare name (rely on PATH) or an absolute
+    // path. `resolve_binary_path` handles both.
+    let resolved = resolve_binary_path(token)?;
+
+    // If we know the preset, use its hint for version_args + fallback.
+    // Otherwise probe with a generic `--version`, which is the
+    // overwhelming majority of CLIs.
+    let (args, fallback) = preset_id
+        .and_then(crate::agent_presets::AgentKind::from_id)
+        .and_then(|kind| {
+            crate::agent_presets::detection_hints()
+                .iter()
+                .find(|h| h.kind == kind)
+                .map(|h| (h.version_args, h.fallback_version_probe))
+        })
+        .unwrap_or((&["--version"][..], None));
+
+    if args.is_empty() {
+        return None;
+    }
+
+    if let Some(v) = run_version_probe(std::ffi::OsStr::new(&resolved), args) {
+        return Some(v);
+    }
+    if let Some(fb) = fallback {
+        if let Some(fb_path) = resolve_binary_path(fb) {
+            return run_version_probe(std::ffi::OsStr::new(&fb_path), args);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::{dedupe_shim_candidates, extract_version};
     use crate::agent_presets::{detection_hints, AgentKind, ALLOWED_WRAPPER_NPM_PACKAGES};
     use std::path::PathBuf;
+
+    #[test]
+    fn claude_code_acp_hint_falls_back_to_claude_for_version() {
+        // claude-code-acp prints nothing for `--version` today; without
+        // the fallback the wrapper card would never show a version
+        // even though the bare claude CLI right next to it prints a
+        // perfectly good one.
+        let hints = detection_hints();
+        let wrapper = hints
+            .iter()
+            .find(|h| {
+                h.kind == AgentKind::ClaudeCode && h.binary_names.contains(&"claude-code-acp")
+            })
+            .expect("claude-code-acp hint missing");
+        assert_eq!(wrapper.fallback_version_probe, Some("claude"));
+    }
+
+    #[test]
+    fn bare_claude_hint_runs_version_probe() {
+        // Wrapper-needed cards are still informative when they show
+        // which Claude install Kage will end up wrapping. Skipping the
+        // probe here was the bug.
+        let hints = detection_hints();
+        let bare = hints
+            .iter()
+            .find(|h| h.kind == AgentKind::ClaudeCode && h.binary_names == ["claude"])
+            .expect("bare-claude hint missing");
+        assert!(
+            !bare.version_args.is_empty(),
+            "bare-claude hint should run a version probe so the card shows the underlying version"
+        );
+    }
 
     #[test]
     fn detection_hints_include_bare_claude_with_wrapper() {

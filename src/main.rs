@@ -705,6 +705,7 @@ async fn run() {
             commands::detect_agents,
             commands::list_agent_presets,
             commands::validate_agent_connection,
+            commands::probe_connection_version,
             commands::check_npm_available,
             commands::install_acp_wrapper,
             commands::get_startup_enabled,

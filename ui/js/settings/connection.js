@@ -1,6 +1,15 @@
 import { SettingsModule } from './base.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
 import { escapeAttr, formatBytes } from '../shared/tool-utils.js';
+
+// Lucide-style inline SVGs for the icon-only row actions. Matches the
+// chat session list (`kd-action-btn`) so users see one consistent
+// button shape across the app, instead of a mix of unicode glyphs (the
+// monograph ⎘ is unreadable in many fonts) and text labels.
+const ICON_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`;
+const ICON_DUPLICATE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const ICON_DELETE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+
 /**
  * Connection Settings Module
  *
@@ -36,6 +45,9 @@ export class ConnectionSettingsModule extends SettingsModule {
         this._detectLoading = true;
         // Cached validation results: id -> { ok, issues, resolved_path }
         this._issues = new Map();
+        // Cached version probes: id -> string ("0.0.0-dev", "2.5.0", …).
+        // Only populated for connections whose binary actually replied.
+        this._versions = new Map();
         // Master-detail mode: 'list' or 'edit'.
         this._view = 'list';
         // The connection currently being edited. When entering edit
@@ -97,6 +109,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         this._editing = null;
         this._renderRoot();
         this._kickValidation();
+        this._kickVersionProbe();
         this._kickDetect();
         this._kickPresetLoad();
     }
@@ -301,6 +314,10 @@ export class ConnectionSettingsModule extends SettingsModule {
         const presetBadge = c.preset_id
             ? `<span class="conn-preset-badge">${escape(c.preset_id)}</span>`
             : '';
+        const version = this._versions.get(c.id);
+        const versionBadge = version
+            ? `<span class="conn-version-badge">${escape(version)}</span>`
+            : '';
         const canDelete = !active && this._connections.length > 1;
         return `
             <div class="conn-row${active ? ' conn-row-active' : ''}" data-id="${escape(c.id)}">
@@ -309,6 +326,7 @@ export class ConnectionSettingsModule extends SettingsModule {
                         ${active ? '<span class="conn-active-dot" title="Active"></span>' : ''}
                         <span class="conn-row-title">${escape(c.name)}</span>
                         ${presetBadge}
+                        ${versionBadge}
                         ${issueBadge}
                         ${active ? '<span class="conn-active-label">Active</span>' : ''}
                     </div>
@@ -320,12 +338,20 @@ export class ConnectionSettingsModule extends SettingsModule {
                             ? ''
                             : `<button type="button" class="setting-btn-secondary conn-set-active-btn" data-id="${escape(c.id)}">Make active</button>`
                     }
-                    <button type="button" class="setting-btn-secondary conn-edit-btn" data-id="${escape(c.id)}">Edit</button>
-                    <button type="button" class="conn-duplicate-btn" data-id="${escape(c.id)}"
-                            title="Duplicate this connection" aria-label="Duplicate this connection">⎘</button>
+                    <button type="button" class="conn-icon-btn conn-edit-btn" data-id="${escape(c.id)}"
+                            title="Edit this connection" aria-label="Edit this connection">
+                        ${ICON_EDIT}
+                    </button>
+                    <button type="button" class="conn-icon-btn conn-duplicate-btn" data-id="${escape(c.id)}"
+                            title="Duplicate this connection" aria-label="Duplicate this connection">
+                        ${ICON_DUPLICATE}
+                    </button>
                     ${
                         canDelete
-                            ? `<button type="button" class="setting-btn-secondary conn-delete-btn" data-id="${escape(c.id)}">Delete</button>`
+                            ? `<button type="button" class="conn-icon-btn conn-delete-btn" data-id="${escape(c.id)}"
+                                    title="Delete this connection" aria-label="Delete this connection">
+                                ${ICON_DELETE}
+                            </button>`
                             : ''
                     }
                 </div>
@@ -337,7 +363,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         const escape = api?.escapeHtml || ((s) => s);
         const detail = d.path || d.spawn_command || '';
         const versionBadge = d.version
-            ? `<span class="conn-version-badge">${escape(d.version.split(/\s+/)[0] || d.version)}</span>`
+            ? `<span class="conn-version-badge">${escape(d.version)}</span>`
             : '';
         // Wrapper-needed entries (bare `claude`) get a different action
         // — they can't be added as a saved connection until the wrapper
@@ -638,6 +664,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             }
         }
         this._validateOne(merged.id);
+        this._probeVersionOne(merged.id);
         this._editing = null;
         this._editingIsNew = false;
         this._view = 'list';
@@ -1002,6 +1029,7 @@ export class ConnectionSettingsModule extends SettingsModule {
             }
         }
         this._validateOne(merged.id);
+        this._probeVersionOne(merged.id);
         this._editing = null;
         this._editingIsNew = false;
         this._view = 'list';
@@ -1038,6 +1066,36 @@ export class ConnectionSettingsModule extends SettingsModule {
         const result = await api.validateMode(conn.mode);
         this._issues.set(id, result);
         if (this._view === 'list') this._renderRoot();
+    }
+
+    /** Probe a version string for every local saved connection. Remote
+     * connections are skipped — there's no local binary to query. */
+    _kickVersionProbe() {
+        this._connections
+            .filter((c) => c.mode?.type === 'local')
+            .forEach((c) => this._probeVersionOne(c.id));
+    }
+
+    async _probeVersionOne(id) {
+        const conn = this._connections.find((c) => c.id === id);
+        if (!conn || conn.mode?.type !== 'local') return;
+        const cmd = (conn.mode.spawn_command || '').trim();
+        if (!cmd) return;
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+        let version = null;
+        try {
+            version = await invoke('probe_connection_version', {
+                spawnCommand: cmd,
+                presetId: conn.preset_id || null,
+            });
+        } catch (e) {
+            console.warn('probe_connection_version failed:', e);
+        }
+        if (version) {
+            this._versions.set(id, version);
+            if (this._view === 'list') this._renderRoot();
+        }
     }
 
     async _kickDetect() {

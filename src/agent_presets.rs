@@ -162,6 +162,13 @@ pub struct DetectionHint {
     /// Args used to print a version string. Empty means "skip the
     /// version probe".
     pub version_args: &'static [&'static str],
+    /// Fallback used when the primary version probe yields nothing —
+    /// e.g. `claude-code-acp --version` prints an empty string, but the
+    /// underlying `claude` CLI does report a usable version. When set,
+    /// the detector resolves this binary on PATH and runs the same
+    /// `version_args` against it. `None` for binaries whose own
+    /// `--version` is reliable.
+    pub fallback_version_probe: Option<&'static str>,
     /// When set, finding this binary doesn't yield a directly-usable
     /// agent — it indicates the underlying CLI is installed but needs
     /// an ACP wrapper from npm before Kage can talk to it. The detector
@@ -180,6 +187,7 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             binary_names: &["kiro-cli"],
             acp_args: &["acp"],
             version_args: &["--version"],
+            fallback_version_probe: None,
             wrapper_npm_package: None,
         },
         DetectionHint {
@@ -189,6 +197,10 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             binary_names: &["claude-code-acp", "claude-agent-acp"],
             acp_args: &[],
             version_args: &["--version"],
+            // The wrapper itself prints nothing for `--version` today,
+            // but it's useful to surface the underlying Claude version
+            // so users can tell which install they're looking at.
+            fallback_version_probe: Some("claude"),
             wrapper_npm_package: None,
         },
         // Bare Anthropic `claude` CLI — not ACP itself. We surface this
@@ -200,10 +212,11 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             kind: AgentKind::ClaudeCode,
             binary_names: &["claude"],
             acp_args: &[],
-            // Skip version probe — `claude --version` would work but we
-            // don't display it for wrapper-needed entries (the message
-            // is "install the wrapper", not "you have v1.2.3").
-            version_args: &[],
+            // The version is informative even on wrapper-needed cards
+            // — it tells the user which Claude install Kage will end
+            // up wrapping.
+            version_args: &["--version"],
+            fallback_version_probe: None,
             wrapper_npm_package: Some("@zed-industries/claude-code-acp"),
         },
         DetectionHint {
@@ -211,6 +224,7 @@ pub fn detection_hints() -> &'static [DetectionHint] {
             binary_names: &["codex-acp"],
             acp_args: &[],
             version_args: &["--version"],
+            fallback_version_probe: None,
             wrapper_npm_package: None,
         },
     ]

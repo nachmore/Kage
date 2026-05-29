@@ -2069,25 +2069,37 @@ body.light-theme .conn-row {
     flex-shrink: 0;
     align-items: center;
 }
-.conn-duplicate-btn {
-    padding: 4px 8px;
-    font-size: 14px;
-    line-height: 1;
+/* Icon-only row buttons (Edit / Duplicate / Delete). Square-ish so the
+   SVG centers, and identical to the chat-session list's kd-action-btn
+   so the visual language is consistent. */
+.conn-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: transparent;
     color: var(--kage-text-secondary, #938f9b);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
     cursor: pointer;
 }
-body.light-theme .conn-duplicate-btn {
+body.light-theme .conn-icon-btn {
     border-color: rgba(0, 0, 0, 0.15);
 }
-.conn-duplicate-btn:hover {
+.conn-icon-btn:hover {
     background: rgba(255, 255, 255, 0.06);
     color: var(--kage-text-primary, #f0eef5);
 }
-body.light-theme .conn-duplicate-btn:hover {
+body.light-theme .conn-icon-btn:hover {
     background: rgba(0, 0, 0, 0.04);
+}
+/* Delete is destructive — red hover hint matches other delete actions
+   in the app (chat session delete, etc.). */
+.conn-icon-btn.conn-delete-btn:hover {
+    color: #ff8a8a;
+    border-color: rgba(255, 138, 138, 0.4);
 }
 .conn-active-dot {
     display: inline-block;
