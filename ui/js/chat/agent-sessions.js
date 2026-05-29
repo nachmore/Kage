@@ -1,4 +1,5 @@
 import { errMessage } from '../shared/error-message.js';
+import { t } from '../shared/i18n.js';
 import { renderMarkdown } from '../shared/markdown.js';
 import { mascotHTML } from '../shared/mascot.js';
 
@@ -65,7 +66,7 @@ export class AgentSessionViewer {
                     if (dividerTarget) {
                         const divider = document.createElement('div');
                         divider.className = 'kd-new-divider';
-                        divider.textContent = '● New';
+                        divider.textContent = t('chat.session_list.new_divider');
                         dividerTarget.before(divider);
                         const observer = new IntersectionObserver(
                             (entries) => {
@@ -154,7 +155,7 @@ export class AgentSessionViewer {
         const searchQuery = (this.elements.sessionSearch?.value || '').toLowerCase().trim();
 
         if (this.sessions.length === 0) {
-            list.innerHTML = '<div class="session-list-empty">No external sessions found</div>';
+            list.innerHTML = `<div class="session-list-empty">${t('chat.session_list.no_external')}</div>`;
             return;
         }
 
@@ -163,7 +164,7 @@ export class AgentSessionViewer {
             : this.sessions;
 
         if (filtered.length === 0) {
-            list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
+            list.innerHTML = `<div class="session-list-empty">${t('chat.session_list.no_matches')}</div>`;
             return;
         }
 
@@ -190,14 +191,14 @@ export class AgentSessionViewer {
                 <div class="kd-session-actions">
                     ${
                         filePath
-                            ? `<button class="kd-action-btn kd-folder-btn" title="Open folder">
+                            ? `<button class="kd-action-btn kd-folder-btn" title="${t('chat.session.kd_action.open_folder_title')}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
                     </button>`
                             : ''
                     }
                     ${
                         s.provider_id === 'kage-desktop' && filePath.endsWith('.json')
-                            ? `<button class="kd-action-btn kd-delete-btn" title="Delete">
+                            ? `<button class="kd-action-btn kd-delete-btn" title="${t('chat.session.kd_action.delete_title')}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                     </button>`
                             : ''
@@ -244,7 +245,7 @@ export class AgentSessionViewer {
                 deleteBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     const fp = item.dataset.filepath;
-                    if (!fp || !confirm('Delete this session?')) return;
+                    if (!fp || !confirm(t('chat.session.kd_action.delete_confirm'))) return;
                     try {
                         await this.invoke('kage_desktop_delete_session', { filePath: fp });
                         item.remove();
@@ -267,7 +268,7 @@ export class AgentSessionViewer {
 
         this._stopPolling();
 
-        area.innerHTML = '<div class="kd-loading">Loading session...</div>';
+        area.innerHTML = `<div class="kd-loading">${t('chat.session.kd_loading')}</div>`;
 
         const inputContainer = document.querySelector('.chat-input-container');
         if (inputContainer) inputContainer.style.display = 'none';
@@ -345,7 +346,7 @@ export class AgentSessionViewer {
                 el.innerHTML = `<details class="kd-tool-details">
                     <summary class="kd-tool-summary">
                         🔧 Tool output
-                        <button class="kd-tool-copy-btn" title="Copy">
+                        <button class="kd-tool-copy-btn" title="${t('chat.session.kd_tool_copy_title')}">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                         </button>
                     </summary>

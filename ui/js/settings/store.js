@@ -1,11 +1,12 @@
 import { SettingsModule } from './base.js';
 import { registerSettingsActions } from './module-registry.js';
+import { t } from '../shared/i18n.js';
 /**
  * Store Settings Module — auto-update, primary store URL, and additional store sources.
  */
 export class StoreSettingsModule extends SettingsModule {
     constructor() {
-        super('store', 'Extension Store', '🛍️');
+        super('store', t('settings.store.title'), '🛍️');
         this._sources = [];
     }
 
@@ -15,37 +16,37 @@ export class StoreSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 <div class="setting-row">
-                    <button class="setting-button" id="openStoreBtn" style="font-size:12px;">🛍️ Open Extension Store</button>
+                    <button class="setting-button" id="openStoreBtn" style="font-size:12px;">${t('settings.store.open_btn')}</button>
                 </div>
 
-                <div class="setting-section-label">Updates</div>
+                <div class="setting-section-label">${t('settings.store.updates.section')}</div>
 
                 ${this.createCheckboxRow(
-                    'Auto-Update Extensions',
-                    'Automatically check for and install extension updates.',
+                    t('settings.store.auto_update.label'),
+                    t('settings.store.auto_update.description'),
                     'autoUpdateExtensions',
                     false
                 )}
 
                 <div class="setting-row" style="margin-top: 4px;">
-                    <button class="setting-button" id="checkUpdatesBtn" style="font-size:12px;">🔄 Update All</button>
+                    <button class="setting-button" id="checkUpdatesBtn" style="font-size:12px;">${t('settings.store.update_all_btn')}</button>
                     <span id="updateCheckStatus" style="font-size:12px;color:var(--kage-text-muted);margin-left:8px;"></span>
                 </div>
 
-                <div class="setting-section-label">Store URL</div>
+                <div class="setting-section-label">${t('settings.store.url.section')}</div>
 
                 ${this.createControlRow(
-                    'Primary Store URL',
-                    'Main store URL for browsing and installing extensions. Leave empty for the default store.',
+                    t('settings.store.url.label'),
+                    t('settings.store.url.description'),
                     '<input type="text" class="setting-input" id="storeUrl" placeholder="https://your-store.example.com">'
                 )}
 
-                <div class="setting-section-label">Additional Store Sources</div>
+                <div class="setting-section-label">${t('settings.store.sources.section')}</div>
                 <p style="font-size: 12px; color: var(--kage-text-muted); margin: 4px 0 12px; line-height: 1.4;">
-                    Add extra stores (e.g. an internal company store). Items from all enabled sources are merged in the store browser.
+                    ${t('settings.store.sources.description')}
                 </p>
                 <div id="storeSources"></div>
-                <button class="setting-button" id="addSourceBtn" style="font-size:12px;margin-top:8px;">+ Add Source</button>
+                <button class="setting-button" id="addSourceBtn" style="font-size:12px;margin-top:8px;">${t('settings.store.sources.add_btn')}</button>
             </div>
         `;
     }
@@ -92,17 +93,19 @@ export class StoreSettingsModule extends SettingsModule {
 
         document.getElementById('checkUpdatesBtn')?.addEventListener('click', async () => {
             const status = document.getElementById('updateCheckStatus');
-            if (status) status.textContent = 'Checking...';
+            if (status) status.textContent = t('settings.store.update_check.checking');
             try {
                 const invoke = window.__TAURI__?.core?.invoke;
                 if (!invoke) return;
                 const result = await invoke('check_extension_updates');
                 if (status) {
                     if (result.updated > 0) {
-                        status.textContent = `✓ Updated ${result.updated} extension${result.updated > 1 ? 's' : ''}`;
+                        status.textContent = t('settings.store.update_check.updated', {
+                            count: result.updated,
+                        });
                         status.style.color = 'var(--kage-accent)';
                     } else {
-                        status.textContent = '✓ All extensions up to date';
+                        status.textContent = t('settings.store.update_check.up_to_date');
                         status.style.color = 'var(--kage-accent)';
                     }
                     setTimeout(() => {
@@ -111,7 +114,9 @@ export class StoreSettingsModule extends SettingsModule {
                 }
             } catch (e) {
                 if (status) {
-                    status.textContent = '✗ ' + e;
+                    status.textContent = t('settings.store.update_check.failed', {
+                        reason: String(e),
+                    });
                     status.style.color = '#e55';
                     setTimeout(() => {
                         if (status) status.textContent = '';
@@ -124,12 +129,14 @@ export class StoreSettingsModule extends SettingsModule {
     _renderSources() {
         const container = document.getElementById('storeSources');
         if (!container) return;
+        const enabledTitle = t('settings.store.sources.row.enabled_title');
+        const namePlaceholder = t('settings.store.sources.row.name_placeholder');
         container.innerHTML = this._sources
             .map(
                 (s, _i) => `
             <div class="store-source-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-                <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="Enable/disable this source">
-                <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="Name" style="width:120px;">
+                <input type="checkbox" class="source-enabled" ${s.enabled ? 'checked' : ''} title="${enabledTitle}">
+                <input type="text" class="setting-input source-name" value="${this._esc(s.name)}" placeholder="${namePlaceholder}" style="width:120px;">
                 <input type="text" class="setting-input source-url" value="${this._esc(s.url)}" placeholder="https://store.example.com" style="flex:1;">
                 <button class="setting-button" style="font-size:11px;padding:4px 8px;" data-action="store.removeSourceRow">✕</button>
             </div>

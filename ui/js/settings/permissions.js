@@ -1,5 +1,6 @@
 import { SettingsModule } from './base.js';
 import { renderAllInto } from '../shared/mac-permissions.js';
+import { t } from '../shared/i18n.js';
 /**
  * macOS Permissions Settings Module.
  *
@@ -15,7 +16,7 @@ import { renderAllInto } from '../shared/mac-permissions.js';
  */
 export class MacPermissionsSettingsModule extends SettingsModule {
     constructor() {
-        super('mac-permissions', 'macOS Permissions', '\uF8FF');
+        super('mac-permissions', t('settings.mac_permissions.title'), '');
     }
 
     render() {
@@ -24,16 +25,13 @@ export class MacPermissionsSettingsModule extends SettingsModule {
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                 <div class="setting-description" style="margin-bottom: 16px;">
-                    Kage uses three macOS privacy permissions to do its job. macOS prompts
-                    for each one the first time Kage needs it — click the buttons below to
-                    open the right pane in System Settings and grant access.
+                    ${t('settings.mac_permissions.description')}
                 </div>
 
                 <div id="macPermCards"></div>
 
                 <div class="mac-perm-note">
-                    After toggling a permission, you may need to restart Kage for the
-                    change to take effect.
+                    ${t('settings.mac_permissions.restart_note')}
                 </div>
             </div>
         `;

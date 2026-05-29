@@ -1,11 +1,12 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 /**
  * Model Settings Module
  * Allows selecting a default model for new sessions.
  */
 export class ModelSettingsModule extends SettingsModule {
     constructor() {
-        super('model', 'Model', '🧠');
+        super('model', t('settings.model.title'), '🧠');
         this.models = [];
     }
 
@@ -14,17 +15,17 @@ export class ModelSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
                 <div class="setting-row">
-                    <div class="setting-label">Default Model</div>
-                    <div class="setting-description">Select the default model used conversations — you can change your model on the fly in the chat sessions (>chats) experience.</div>
+                    <div class="setting-label">${t('settings.model.default.label')}</div>
+                    <div class="setting-description">${t('settings.model.default.description')}</div>
                     <div class="setting-control">
                         <select id="defaultModelSelect" class="setting-select">
-                            <option value="">Loading models...</option>
+                            <option value="">${t('settings.model.default.loading')}</option>
                         </select>
                     </div>
                 </div>
                 <div class="setting-row">
-                    <div class="setting-label">Auto-Compact Threshold</div>
-                    <div class="setting-description">Automatically compact the conversation when context usage reaches this percentage. Set to 0 to disable.</div>
+                    <div class="setting-label">${t('settings.model.auto_compact.label')}</div>
+                    <div class="setting-description">${t('settings.model.auto_compact.description')}</div>
                     <div class="setting-control" style="display:flex;align-items:center;gap:8px;">
                         <input type="range" id="autoCompactThreshold" min="0" max="100" step="5" class="setting-range" style="flex:1">
                         <span id="autoCompactThresholdValue" style="min-width:36px;text-align:right;font-size:13px;color:#9ca3af;">90%</span>
@@ -41,7 +42,7 @@ export class ModelSettingsModule extends SettingsModule {
         if (slider && label) {
             slider.addEventListener('input', () => {
                 const v = parseInt(slider.value, 10);
-                label.textContent = v === 0 ? 'Off' : v + '%';
+                label.textContent = v === 0 ? t('settings.model.auto_compact.off') : v + '%';
             });
         }
     }
@@ -65,7 +66,7 @@ export class ModelSettingsModule extends SettingsModule {
         if (!select) return;
 
         if (this.models.length === 0) {
-            select.innerHTML = '<option value="">No models available yet</option>';
+            select.innerHTML = `<option value="">${t('settings.model.default.empty')}</option>`;
             return;
         }
 
@@ -92,7 +93,9 @@ export class ModelSettingsModule extends SettingsModule {
         const slider = document.getElementById('autoCompactThreshold');
         const label = document.getElementById('autoCompactThresholdValue');
         if (slider) slider.value = threshold;
-        if (label) label.textContent = threshold === 0 ? 'Off' : threshold + '%';
+        if (label)
+            label.textContent =
+                threshold === 0 ? t('settings.model.auto_compact.off') : threshold + '%';
     }
 
     save(config) {

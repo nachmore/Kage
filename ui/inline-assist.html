@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inline Assist</title>
+    <title data-i18n="inline_assist.window_title">Inline Assist</title>
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
     <link rel="stylesheet" href="css/shared-rtl.css">
     <style>
@@ -147,18 +147,18 @@
 </head>
 <body>
     <div class="layout" id="layout">
-        <div class="icon-bubble" id="iconBubble" title="Open full chat">
+        <div class="icon-bubble" id="iconBubble" data-i18n-title="inline_assist.bubble.title" title="Open full chat">
             <div id="inlineAssistMascot"></div>
         </div>
         <div class="panel" id="panel">
             <div class="actions" id="actions"></div>
             <div class="custom-input-row" id="customRow">
                 <span class="icon">✨</span>
-                <input class="custom-input" id="customInput" placeholder="Ask anything..." autocomplete="off" spellcheck="false">
+                <input class="custom-input" id="customInput" placeholder="Ask anything..." data-i18n-placeholder="inline_assist.custom_input.placeholder" autocomplete="off" spellcheck="false">
             </div>
             <div class="status-bar" id="statusBar">
                 <div class="spinner"></div>
-                <span id="statusText">Thinking...</span>
+                <span id="statusText" data-i18n="inline_assist.thinking">Thinking...</span>
             </div>
         </div>
     </div>

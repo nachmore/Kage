@@ -1432,5 +1432,917 @@
     "description": "Placeholder when the changelog request fails",
     "_machine_translated": true,
     "_source_hash": "398cd16e63a3c677"
+  },
+  "settings.mac_permissions.title": {
+    "message": "macOS の権限",
+    "description": "Settings header — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "f206c674359a01db"
+  },
+  "settings.mac_permissions.description": {
+    "message": "Kage は動作のために 3 つの macOS プライバシー権限を使用します。macOS は Kage が初めて必要とする際にそれぞれを確認します。下のボタンをクリックすると、システム設定の該当パネルが開き、アクセスを許可できます。",
+    "description": "Section description for the mac-permissions pane",
+    "_machine_translated": true,
+    "_source_hash": "02c73decdf72615a"
+  },
+  "settings.mac_permissions.restart_note": {
+    "message": "権限を切り替えた後、変更を反映するには Kage の再起動が必要な場合があります。",
+    "description": "Footer note shown beneath the permission cards",
+    "_machine_translated": true,
+    "_source_hash": "fe0c1dcfb98283bd"
+  },
+  "settings.hotkey.title": {
+    "message": "ホットキーとショートカット",
+    "description": "Settings header — global hotkey + shortcut reference",
+    "_machine_translated": true,
+    "_source_hash": "2ec0b6588ae5168f"
+  },
+  "settings.hotkey.global.label": {
+    "message": "グローバルホットキー",
+    "description": "Label for the main summon hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "89c033d06a17ad4b"
+  },
+  "settings.hotkey.global.description": {
+    "message": "どこからでも Kage を呼び出すショートカットです。",
+    "description": "Helper text for the global hotkey",
+    "_machine_translated": true,
+    "_source_hash": "a7280f0695ae4b0f"
+  },
+  "settings.hotkey.voice.label": {
+    "message": "音声入力ホットキー",
+    "description": "Label for the voice-input hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "5e760ec0e1f78b62"
+  },
+  "settings.hotkey.voice.description": {
+    "message": "マイクが起動した状態で Kage を呼び出します。無効にするには空欄のままにしてください。",
+    "description": "Helper text for the voice-input hotkey",
+    "_machine_translated": true,
+    "_source_hash": "e2fd9653abbd7f8a"
+  },
+  "settings.hotkey.clipboard.label": {
+    "message": "クリップボード履歴ホットキー",
+    "description": "Label for the clipboard-history hotkey picker (Windows-only)",
+    "_machine_translated": true,
+    "_source_hash": "7340b9ef2c47ee2b"
+  },
+  "settings.hotkey.clipboard.description": {
+    "message": "クリップボード履歴を直接開きます。無効にするには空欄のままにしてください。",
+    "description": "Helper text for the clipboard-history hotkey",
+    "_machine_translated": true,
+    "_source_hash": "25a222fe2cb08c46"
+  },
+  "settings.hotkey.inline_assist.label": {
+    "message": "インラインアシストホットキー",
+    "description": "Label for the inline-assist hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "ea1a795e3c4fbcdc"
+  },
+  "settings.hotkey.inline_assist.description": {
+    "message": "選択したテキストに対してインライン AI アシストを起動します。無効にするには空欄のままにしてください。",
+    "description": "Helper text for the inline-assist hotkey",
+    "_machine_translated": true,
+    "_source_hash": "6d7e52b74edefc9e"
+  },
+  "settings.hotkey.shortcuts.section": {
+    "message": "キーボードショートカット",
+    "description": "Subsection header for the shortcut reference table",
+    "_machine_translated": true,
+    "_source_hash": "b41e301919aa201a"
+  },
+  "settings.hotkey.shortcut.new_session.action": {
+    "message": "新しいセッション",
+    "description": "Shortcut reference — Ctrl+N",
+    "_machine_translated": true,
+    "_source_hash": "c14fc6982253c097"
+  },
+  "settings.hotkey.shortcut.close_window.action": {
+    "message": "ウィンドウを閉じる / 隠す",
+    "description": "Shortcut reference — Ctrl+W",
+    "_machine_translated": true,
+    "_source_hash": "c4ccf437050b0b55"
+  },
+  "settings.hotkey.shortcut.open_settings.action": {
+    "message": "設定を開く",
+    "description": "Shortcut reference — Ctrl+,",
+    "_machine_translated": true,
+    "_source_hash": "59b29da0ceff7cfc"
+  },
+  "settings.hotkey.shortcut.expand_chat.action": {
+    "message": "フルチャットに展開",
+    "description": "Shortcut reference — Ctrl+E",
+    "_machine_translated": true,
+    "_source_hash": "3ed53842587b4093"
+  },
+  "settings.hotkey.shortcut.clear.action": {
+    "message": "クリア / リセット",
+    "description": "Shortcut reference — Ctrl+L",
+    "_machine_translated": true,
+    "_source_hash": "2a529c94b8ad58f7"
+  },
+  "settings.hotkey.shortcut.copy_response.action": {
+    "message": "最後の応答をコピー",
+    "description": "Shortcut reference — Ctrl+Shift+C",
+    "_machine_translated": true,
+    "_source_hash": "48e694bd66cc2e2c"
+  },
+  "settings.hotkey.shortcut.send_bypass.action": {
+    "message": "エージェントに送信（候補をスキップ）",
+    "description": "Shortcut reference — Ctrl+Enter",
+    "_machine_translated": true,
+    "_source_hash": "9628dd61bd33950b"
+  },
+  "settings.hotkey.shortcut.escape.action": {
+    "message": "生成を停止 / ウィンドウを隠す",
+    "description": "Shortcut reference — Escape",
+    "_machine_translated": true,
+    "_source_hash": "2daf342650426a0e"
+  },
+  "settings.hotkey.shortcut.send.action": {
+    "message": "メッセージを送信",
+    "description": "Shortcut reference — Enter",
+    "_machine_translated": true,
+    "_source_hash": "c4899c984136fe23"
+  },
+  "settings.hotkey.shortcut.newline.action": {
+    "message": "改行",
+    "description": "Shortcut reference — Shift+Enter",
+    "_machine_translated": true,
+    "_source_hash": "f18f3e095ad2d88b"
+  },
+  "settings.hotkey.shortcut.clipboard_history.action": {
+    "message": "クリップボード履歴",
+    "description": "Shortcut reference — >cb",
+    "_machine_translated": true,
+    "_source_hash": "a17088827fdf73ab"
+  },
+  "settings.hotkey.scope.launcher": {
+    "message": "ランチャー",
+    "description": "Shortcut scope label — applies in the launcher",
+    "_machine_translated": true,
+    "_source_hash": "c4ccb73c46eec1a3"
+  },
+  "settings.hotkey.scope.chat_window": {
+    "message": "チャットウィンドウ",
+    "description": "Shortcut scope label — applies in chat windows",
+    "_machine_translated": true,
+    "_source_hash": "54d904eef112c7e7"
+  },
+  "settings.hotkey.scope.all_windows": {
+    "message": "すべてのウィンドウ",
+    "description": "Shortcut scope label — applies anywhere",
+    "_machine_translated": true,
+    "_source_hash": "8971321d8f40d9cd"
+  },
+  "settings.hotkey.scope.launcher_chat": {
+    "message": "ランチャーとチャット",
+    "description": "Shortcut scope label — applies in launcher and chat",
+    "_machine_translated": true,
+    "_source_hash": "0bbbbf9f0d3a5cad"
+  },
+  "settings.hotkey.scope.all": {
+    "message": "すべて",
+    "description": "Shortcut scope label — applies in any context",
+    "_machine_translated": true,
+    "_source_hash": "319ab7e77fdfa28a"
+  },
+  "settings.store.title": {
+    "message": "拡張機能ストア",
+    "description": "Settings header — extension store configuration",
+    "_machine_translated": true,
+    "_source_hash": "95e820228a5db8f7"
+  },
+  "settings.store.open_btn": {
+    "message": "🛍️ 拡張機能ストアを開く",
+    "description": "Button that opens the store window",
+    "_machine_translated": true,
+    "_source_hash": "d5d0ff17eadc92d8"
+  },
+  "settings.store.updates.section": {
+    "message": "アップデート",
+    "description": "Subsection header for auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "0462336bbe946426"
+  },
+  "settings.store.auto_update.label": {
+    "message": "拡張機能を自動アップデート",
+    "description": "Toggle: automatically install extension updates",
+    "_machine_translated": true,
+    "_source_hash": "415f86ade884e288"
+  },
+  "settings.store.auto_update.description": {
+    "message": "拡張機能のアップデートを自動的に確認してインストールします。",
+    "description": "Helper text for the auto-update toggle",
+    "_machine_translated": true,
+    "_source_hash": "63cb1d92bfafdf64"
+  },
+  "settings.store.update_all_btn": {
+    "message": "🔄 すべてアップデート",
+    "description": "Button that checks for and installs all extension updates",
+    "_machine_translated": true,
+    "_source_hash": "164adb9609fc73d0"
+  },
+  "settings.store.update_check.checking": {
+    "message": "確認中…",
+    "description": "Status while the extension-update check is running",
+    "_machine_translated": true,
+    "_source_hash": "505c00fe8fcaa49f"
+  },
+  "settings.store.update_check.up_to_date": {
+    "message": "✓ すべての拡張機能は最新です",
+    "description": "Status when no updates are available",
+    "_machine_translated": true,
+    "_source_hash": "b150fcca169e15de"
+  },
+  "settings.store.update_check.updated": {
+    "message": "{count, plural, other {✓ # 個の拡張機能をアップデートしました}}",
+    "description": "Status after extensions update — pluralised count",
+    "_machine_translated": true,
+    "_source_hash": "39caa6fd0996b52f"
+  },
+  "settings.store.update_check.failed": {
+    "message": "✗ {reason}",
+    "description": "Status when the update check fails",
+    "_machine_translated": true,
+    "_source_hash": "e3074ace5af2e9f1"
+  },
+  "settings.store.url.section": {
+    "message": "ストア URL",
+    "description": "Subsection header for the primary store URL",
+    "_machine_translated": true,
+    "_source_hash": "870bd6a0dc11ddf1"
+  },
+  "settings.store.url.label": {
+    "message": "プライマリストア URL",
+    "description": "Label for the primary store URL field",
+    "_machine_translated": true,
+    "_source_hash": "668e3e8e1c2fc617"
+  },
+  "settings.store.url.description": {
+    "message": "拡張機能の閲覧とインストールに使用するメインのストア URL です。既定のストアを使用する場合は空欄のままにしてください。",
+    "description": "Helper text for the primary store URL",
+    "_machine_translated": true,
+    "_source_hash": "28c4396136219523"
+  },
+  "settings.store.sources.section": {
+    "message": "追加のストアソース",
+    "description": "Subsection header for extra store sources",
+    "_machine_translated": true,
+    "_source_hash": "d4b06d445c8bb534"
+  },
+  "settings.store.sources.description": {
+    "message": "追加のストア（例：社内ストア）を登録できます。有効なすべてのソースの項目がストアブラウザーで統合表示されます。",
+    "description": "Helper text under the additional sources list",
+    "_machine_translated": true,
+    "_source_hash": "9e092328e75862b8"
+  },
+  "settings.store.sources.add_btn": {
+    "message": "+ ソースを追加",
+    "description": "Button that adds an empty source row",
+    "_machine_translated": true,
+    "_source_hash": "fd2d5841505d4374"
+  },
+  "settings.store.sources.row.name_placeholder": {
+    "message": "名前",
+    "description": "Placeholder for the source name input",
+    "_machine_translated": true,
+    "_source_hash": "b6370f3e3ad90304"
+  },
+  "settings.store.sources.row.enabled_title": {
+    "message": "このソースを有効／無効にする",
+    "description": "Tooltip on the per-source enabled toggle",
+    "_machine_translated": true,
+    "_source_hash": "0ef53cb1b287720f"
+  },
+  "settings.integration.title": {
+    "message": "システム統合",
+    "description": "Settings header — system integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "75424bc8f72e4186"
+  },
+  "settings.integration.behavior.section": {
+    "message": "動作",
+    "description": "Subsection header for behavior toggles",
+    "_machine_translated": true,
+    "_source_hash": "975cf2f82ef228ed"
+  },
+  "settings.integration.capture_selection.label": {
+    "message": "選択中のテキストを取り込む",
+    "description": "Toggle: copy selected text on hotkey",
+    "_machine_translated": true,
+    "_source_hash": "4d62c271787c76eb"
+  },
+  "settings.integration.capture_selection.description": {
+    "message": "ホットキーを押したときにアクティブウィンドウから選択中のテキストを取得します（{shortcut} を使用）。ターミナルアプリや他のプログラムと干渉する場合は無効にしてください。",
+    "description": "Helper text — {shortcut} is the platform copy shortcut (Cmd+C / Ctrl+C)",
+    "_machine_translated": true,
+    "_source_hash": "722a58946ff8805d"
+  },
+  "settings.integration.blocklist.label": {
+    "message": "これらのアプリでは自動コピーしない",
+    "description": "Label for the per-app capture-selection blocklist",
+    "_machine_translated": true,
+    "_source_hash": "3aee789ffde6f791"
+  },
+  "settings.integration.blocklist.description": {
+    "message": "1 行につき 1 つのプロセス名を入力してください。これらのアプリがフォーカスされているとき、Kage は {shortcut} を送信しません。ターミナルではこのキーシーケンスが「中断」を意味し、実行中のコマンドをキャンセルしてしまうため便利です。一致は大文字小文字を区別せず、末尾の「.exe」は省略可能です。空にするとブロックリストを完全に無効化します。",
+    "description": "Helper text for the blocklist; {shortcut} is platform copy shortcut",
+    "_machine_translated": true,
+    "_source_hash": "af15df7911d3aa21"
+  },
+  "settings.integration.show_notifications.label": {
+    "message": "通知を表示",
+    "description": "Toggle: show OS notifications on response completion",
+    "_machine_translated": true,
+    "_source_hash": "8687e2369ef606b8"
+  },
+  "settings.integration.show_notifications.description": {
+    "message": "ウィンドウが非表示のときに応答が完了したら、システム通知を表示します。",
+    "description": "Helper text for the show-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "03777f35b1d3755b"
+  },
+  "settings.integration.screen_context.label": {
+    "message": "画面コンテキスト認識",
+    "description": "Toggle: include source app + title in messages",
+    "_machine_translated": true,
+    "_source_hash": "b8c80a7a1373b917"
+  },
+  "settings.integration.screen_context.description": {
+    "message": "メッセージの送信時にソースアプリケーション名とウィンドウタイトルを含め、Kage が何を見ていたかを把握できるようにします。",
+    "description": "Helper text for the screen-context toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bbea6ce7cdc8375"
+  },
+  "settings.integration.test_notification.btn": {
+    "message": "通知をテスト",
+    "description": "Button: send a test OS notification",
+    "_machine_translated": true,
+    "_source_hash": "c27d749b2cb30c29"
+  },
+  "settings.integration.test_notification.no_plugin": {
+    "message": "❌ 通知プラグインを利用できません。",
+    "description": "Status when the Tauri notification plugin isn't loaded",
+    "_machine_translated": true,
+    "_source_hash": "e495e19c6c4be31e"
+  },
+  "settings.integration.test_notification.body": {
+    "message": "通知は正常に動作しています！",
+    "description": "Body text of the test notification",
+    "_machine_translated": true,
+    "_source_hash": "771fb884b27284e9"
+  },
+  "settings.integration.test_notification.sent": {
+    "message": "✅ 通知を送信しました！",
+    "description": "Status after the test notification is dispatched",
+    "_machine_translated": true,
+    "_source_hash": "1ddb3bd55e8c2af0"
+  },
+  "settings.integration.test_notification.denied": {
+    "message": "❌ 権限が拒否されました。OS の通知設定を確認してください。",
+    "description": "Status when OS-level notification permission is not granted",
+    "_machine_translated": true,
+    "_source_hash": "8fab178c784ed052"
+  },
+  "settings.integration.test_notification.error_label": {
+    "message": "エラー",
+    "description": "errLabel prefix for the test-notification failure path",
+    "_machine_translated": true,
+    "_source_hash": "c2bfd7bb5ac7780e"
+  },
+  "settings.integration.directories.section": {
+    "message": "クイックディレクトリアクセス",
+    "description": "Subsection header for the directory reference table",
+    "_machine_translated": true,
+    "_source_hash": "9b76ab7e3b03e9ab"
+  },
+  "settings.integration.directories.description": {
+    "message": "ランチャーでこれらのキーワードのいずれかを入力するとフォルダーが開きます。前方一致も機能します。例えば「down」で Downloads が開きます。",
+    "description": "Helper text under the directory reference table",
+    "_machine_translated": true,
+    "_source_hash": "892655ce64923b46"
+  },
+  "settings.integration.directories.col.keyword": {
+    "message": "キーワード",
+    "description": "Table column header — directory keyword",
+    "_machine_translated": true,
+    "_source_hash": "03dcf77a6a2f916e"
+  },
+  "settings.integration.directories.col.aliases": {
+    "message": "エイリアス",
+    "description": "Table column header — alternate names",
+    "_machine_translated": true,
+    "_source_hash": "00e7596d56679975"
+  },
+  "settings.integration.directories.col.path": {
+    "message": "パス",
+    "description": "Table column header — resolved filesystem path",
+    "_machine_translated": true,
+    "_source_hash": "149c5257cc3034e8"
+  },
+  "settings.integration.directories.path_unavailable": {
+    "message": "利用できません",
+    "description": "Placeholder when a directory can't be resolved on this system",
+    "_machine_translated": true,
+    "_source_hash": "51fdc4b5dcade66d"
+  },
+  "floating.expand_chat_title": {
+    "message": "フルチャットを開く",
+    "description": "Tooltip on the expand-to-chat button",
+    "_machine_translated": true,
+    "_source_hash": "0e3dd3f2c875ef93"
+  },
+  "floating.copy_btn_title": {
+    "message": "コピー",
+    "description": "Tooltip on the copy-response button",
+    "_machine_translated": true,
+    "_source_hash": "2eaf58964b4f08b2"
+  },
+  "floating.speak_btn_title": {
+    "message": "読み上げ",
+    "description": "Tooltip on the TTS button",
+    "_machine_translated": true,
+    "_source_hash": "27a37f823ca41e1e"
+  },
+  "floating.input.placeholder": {
+    "message": "何でも聞いてください…",
+    "description": "Placeholder shown in the launcher input box",
+    "_machine_translated": true,
+    "_source_hash": "3fda9b46e3348d63"
+  },
+  "floating.stop_btn_title": {
+    "message": "生成を停止 (Esc)",
+    "description": "Tooltip on the stop-generation button",
+    "_machine_translated": true,
+    "_source_hash": "04aa8185c8664348"
+  },
+  "floating.speech_btn_title": {
+    "message": "音声入力",
+    "description": "Tooltip on the speech-to-text button",
+    "_machine_translated": true,
+    "_source_hash": "753c000de91f8232"
+  },
+  "floating.attach_file_title": {
+    "message": "ファイルを添付",
+    "description": "Tooltip on the attach-file toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "7964bdd5aa4c4b75"
+  },
+  "floating.attach_image_title": {
+    "message": "画像を添付",
+    "description": "Tooltip on the attach-image toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "3e8d50e0477d5260"
+  },
+  "floating.context_indicator_title": {
+    "message": "コンテキスト使用量",
+    "description": "Tooltip on the context-usage ring indicator",
+    "_machine_translated": true,
+    "_source_hash": "d04eb469abe6d5b0"
+  },
+  "floating.model_selector_title": {
+    "message": "設定でモデルを変更",
+    "description": "Tooltip on the model name button",
+    "_machine_translated": true,
+    "_source_hash": "bbe1fad66a59d72d"
+  },
+  "floating.app_mode_chip_title": {
+    "message": "クリックでこのメッセージのみ無効化",
+    "description": "Tooltip on the active app-mode chip",
+    "_machine_translated": true,
+    "_source_hash": "be73d01d1500d68d"
+  },
+  "floating.use_selection_label": {
+    "message": "📋 選択したテキストを含める",
+    "description": "Checkbox label for including selected text in the prompt",
+    "_machine_translated": true,
+    "_source_hash": "25c7c57acc179469"
+  },
+  "floating.offline_message": {
+    "message": "インターネット未接続 — ローカル機能は引き続き利用できます",
+    "description": "Banner shown when network connectivity is lost",
+    "_machine_translated": true,
+    "_source_hash": "22b7e837fef382ca"
+  },
+  "permission.dialog.title": {
+    "message": "ツールの許可が必要です",
+    "description": "Header on the tool permission modal",
+    "_machine_translated": true,
+    "_source_hash": "936054d981906526"
+  },
+  "permission.dialog.body": {
+    "message": "AIアシスタントがこのツールを使用しようとしています。許可しますか？",
+    "description": "Body text on the tool permission modal",
+    "_machine_translated": true,
+    "_source_hash": "65b49f9a2b2554fc"
+  },
+  "permission.dialog.warning": {
+    "message": "信頼できるツールのみ許可してください",
+    "description": "Warning shown beside a caution icon",
+    "_machine_translated": true,
+    "_source_hash": "4a3016b8d2d6a68e"
+  },
+  "permission.dialog.deny": {
+    "message": "拒否",
+    "description": "Primary deny button",
+    "_machine_translated": true,
+    "_source_hash": "e28f57fd96e043d0"
+  },
+  "permission.dialog.deny_menu_title": {
+    "message": "その他のオプション",
+    "description": "Tooltip on the dropdown chevron next to Deny",
+    "_machine_translated": true,
+    "_source_hash": "94f0ab867d312d53"
+  },
+  "permission.dialog.deny_always": {
+    "message": "常に拒否",
+    "description": "Persistent-deny option in the deny dropdown",
+    "_machine_translated": true,
+    "_source_hash": "3b4eade9efaabd59"
+  },
+  "permission.dialog.allow": {
+    "message": "許可",
+    "description": "Primary allow button",
+    "_machine_translated": true,
+    "_source_hash": "2c681dbefa3c0373"
+  },
+  "permission.dialog.allow_menu_title": {
+    "message": "その他のオプション",
+    "description": "Tooltip on the dropdown chevron next to Allow",
+    "_machine_translated": true,
+    "_source_hash": "bf0a96522d10230f"
+  },
+  "permission.dialog.allow_24h": {
+    "message": "24時間許可",
+    "description": "24-hour allow option in the allow dropdown",
+    "_machine_translated": true,
+    "_source_hash": "8efb2f8ac756b6c3"
+  },
+  "permission.dialog.allow_always": {
+    "message": "常に許可",
+    "description": "Persistent allow option in the allow dropdown",
+    "_machine_translated": true,
+    "_source_hash": "8b4ac4498377ab3c"
+  },
+  "inline_assist.window_title": {
+    "message": "インラインアシスト",
+    "description": "Window title for the inline-assist popup",
+    "_machine_translated": true,
+    "_source_hash": "ff52b5467c8de6ec"
+  },
+  "inline_assist.bubble.title": {
+    "message": "フルチャットを開く",
+    "description": "Tooltip on the inline-assist mascot bubble",
+    "_machine_translated": true,
+    "_source_hash": "18ef44067db3ec93"
+  },
+  "inline_assist.custom_input.placeholder": {
+    "message": "何でも質問してください…",
+    "description": "Placeholder in the inline-assist custom prompt input",
+    "_machine_translated": true,
+    "_source_hash": "3ebad280f0ddac0e"
+  },
+  "inline_assist.thinking": {
+    "message": "考え中…",
+    "description": "Status bar text while the agent is generating an inline-assist reply",
+    "_machine_translated": true,
+    "_source_hash": "888dd33e108efe77"
+  },
+  "settings.model.title": {
+    "message": "モデル",
+    "description": "Settings header — model selection",
+    "_machine_translated": true,
+    "_source_hash": "b23b8e98530dc781"
+  },
+  "settings.model.default.label": {
+    "message": "デフォルトモデル",
+    "description": "Default model dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "9b5f89310b254253"
+  },
+  "settings.model.default.description": {
+    "message": "会話で使用するデフォルトのモデルを選択します。チャットセッション（>chats）ではその場でモデルを変更できます。",
+    "description": "Helper text for the default model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "01867acd95749fb0"
+  },
+  "settings.model.default.loading": {
+    "message": "モデルを読み込み中…",
+    "description": "Placeholder option while the model list loads",
+    "_machine_translated": true,
+    "_source_hash": "0a80c02207ade79c"
+  },
+  "settings.model.default.empty": {
+    "message": "利用可能なモデルがまだありません",
+    "description": "Placeholder option when the agent reports no models",
+    "_machine_translated": true,
+    "_source_hash": "321890ad6c6f6aaf"
+  },
+  "settings.model.auto_compact.label": {
+    "message": "自動コンパクトのしきい値",
+    "description": "Auto-compact slider label",
+    "_machine_translated": true,
+    "_source_hash": "4f5167e2aae8cb3f"
+  },
+  "settings.model.auto_compact.description": {
+    "message": "コンテキスト使用率がこの割合に達したときに、会話を自動的にコンパクトします。0 に設定すると無効になります。",
+    "description": "Helper text for the auto-compact slider",
+    "_machine_translated": true,
+    "_source_hash": "20e9883f9e9496b2"
+  },
+  "settings.model.auto_compact.off": {
+    "message": "オフ",
+    "description": "Slider value display when threshold is 0",
+    "_machine_translated": true,
+    "_source_hash": "9e23d78d3fadce06"
+  },
+  "chat.window_title": {
+    "message": "Kage",
+    "description": "Window title for the chat window",
+    "_machine_translated": true,
+    "_source_hash": "ac5e28e78efc7f2b"
+  },
+  "chat.sidebar.toggle_title": {
+    "message": "サイドバーを切り替え",
+    "description": "Tooltip on the sidebar toggle button",
+    "_machine_translated": true,
+    "_source_hash": "c51957f8bab57aac"
+  },
+  "chat.sidebar.show_title": {
+    "message": "サイドバーを表示",
+    "description": "Tooltip on the collapsed-sidebar toggle button",
+    "_machine_translated": true,
+    "_source_hash": "3ded87c8eaf44469"
+  },
+  "chat.sidebar.new_chat": {
+    "message": "新しいチャット",
+    "description": "Button: start a new chat session in the current window",
+    "_machine_translated": true,
+    "_source_hash": "efe09ba4a3dff6c1"
+  },
+  "chat.sidebar.new_window_title": {
+    "message": "新しいチャットウィンドウ (Ctrl+Shift+N)",
+    "description": "Tooltip on the new-window button",
+    "_machine_translated": true,
+    "_source_hash": "0179422eccf853ad"
+  },
+  "chat.sidebar.settings_title": {
+    "message": "設定",
+    "description": "Tooltip on the settings button",
+    "_machine_translated": true,
+    "_source_hash": "1be51853e4d3f4a3"
+  },
+  "chat.sidebar.search.placeholder": {
+    "message": "セッションを検索…",
+    "description": "Placeholder for the session-search input",
+    "_machine_translated": true,
+    "_source_hash": "cbc0607c4ecd4ffe"
+  },
+  "chat.sidebar.source.kage": {
+    "message": "Kage",
+    "description": "Tab: show Kage-managed sessions",
+    "_machine_translated": true,
+    "_source_hash": "d8839a546a7b52a2"
+  },
+  "chat.sidebar.source.other_agents": {
+    "message": "その他のエージェント",
+    "description": "Tab: show sessions from other agents (Claude Code, Kage Desktop, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "c481304f3a1897a0"
+  },
+  "chat.sidebar.empty": {
+    "message": "セッションはまだありません",
+    "description": "Empty-state shown when no sessions exist",
+    "_machine_translated": true,
+    "_source_hash": "19fa1b221061ca96"
+  },
+  "chat.header.default_title": {
+    "message": "新しいチャット",
+    "description": "Default title shown for a fresh, unnamed session",
+    "_machine_translated": true,
+    "_source_hash": "87afc51678de3378"
+  },
+  "chat.header.title_rename_hint": {
+    "message": "ダブルクリックで名前を変更",
+    "description": "Tooltip on the chat title encouraging rename",
+    "_machine_translated": true,
+    "_source_hash": "655531c1d9092a5b"
+  },
+  "chat.header.export_title": {
+    "message": "このチャットを Markdown としてエクスポート",
+    "description": "Tooltip / aria-label on the export button",
+    "_machine_translated": true,
+    "_source_hash": "bcbc7a1fd6462e20"
+  },
+  "chat.header.connection_checking": {
+    "message": "確認中…",
+    "description": "Connection status text while checking",
+    "_machine_translated": true,
+    "_source_hash": "eefeee9ba6772c4a"
+  },
+  "chat.placeholder.start_conversation": {
+    "message": "Kage との会話を始めましょう…",
+    "description": "Placeholder shown in an empty messages area",
+    "_machine_translated": true,
+    "_source_hash": "42d13f359981f7e4"
+  },
+  "chat.input.placeholder": {
+    "message": "メッセージを入力…",
+    "description": "Placeholder for the chat input textarea",
+    "_machine_translated": true,
+    "_source_hash": "723ac08595f53f6b"
+  },
+  "chat.send_btn_title": {
+    "message": "メッセージを送信",
+    "description": "Tooltip / aria-label on the send button",
+    "_machine_translated": true,
+    "_source_hash": "459e7179546d27a4"
+  },
+  "chat.toolbar.speech_btn_title": {
+    "message": "音声入力",
+    "description": "Tooltip on the speech toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "76008440d4481038"
+  },
+  "chat.toolbar.attach_file_title": {
+    "message": "ファイルを添付（内容はテキストとして送信されます）",
+    "description": "Tooltip on the attach-file toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "39f964e265b8b301"
+  },
+  "chat.toolbar.attach_image_title": {
+    "message": "画像を添付",
+    "description": "Tooltip on the attach-image toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "3e8d50e0477d5260"
+  },
+  "chat.toolbar.context_indicator_title": {
+    "message": "コンテキスト使用率 {percent}%",
+    "description": "Tooltip on the context-usage ring indicator",
+    "_machine_translated": true,
+    "_source_hash": "92b123770abcb945"
+  },
+  "chat.toolbar.model_selector_title": {
+    "message": "モデルを選択",
+    "description": "Tooltip on the model selector button",
+    "_machine_translated": true,
+    "_source_hash": "97b093503b628b4b"
+  },
+  "chat.toolbar.model_loading": {
+    "message": "読み込み中…",
+    "description": "Placeholder while the active model name resolves",
+    "_machine_translated": true,
+    "_source_hash": "3cf7fe6aad35456b"
+  },
+  "chat.lightbox.alt": {
+    "message": "拡大表示",
+    "description": "Alt text for the image lightbox",
+    "_machine_translated": true,
+    "_source_hash": "ad20f655cf725d1a"
+  },
+  "chat.session_list.no_matches": {
+    "message": "一致するセッションはありません",
+    "description": "Empty state shown when search filters every session out",
+    "_machine_translated": true,
+    "_source_hash": "3d0f5d544d802d39"
+  },
+  "chat.session.new_dot_title": {
+    "message": "新しいセッション",
+    "description": "Tooltip on the unread/new-session indicator dot",
+    "_machine_translated": true,
+    "_source_hash": "bd6eadb6e1ac8c72"
+  },
+  "chat.session.action.rename_title": {
+    "message": "名前を変更",
+    "description": "Tooltip on the per-session rename button",
+    "_machine_translated": true,
+    "_source_hash": "427a3db11a6266e3"
+  },
+  "chat.session.action.reveal_title": {
+    "message": "ファイルを表示",
+    "description": "Tooltip on the per-session reveal-in-file-manager button",
+    "_machine_translated": true,
+    "_source_hash": "dd02c4ca3ed80dfa"
+  },
+  "chat.session.action.delete_title": {
+    "message": "削除",
+    "description": "Tooltip on the per-session delete button",
+    "_machine_translated": true,
+    "_source_hash": "07d5dce8507fed69"
+  },
+  "chat.message.action.copy": {
+    "message": "コピー",
+    "description": "Tooltip on the per-message copy button",
+    "_machine_translated": true,
+    "_source_hash": "518834cca2fda2ff"
+  },
+  "chat.message.action.speak": {
+    "message": "読み上げ",
+    "description": "Tooltip on the per-message TTS button",
+    "_machine_translated": true,
+    "_source_hash": "3c1966b24753d1fc"
+  },
+  "chat.message.action.translate": {
+    "message": "翻訳",
+    "description": "Tooltip on the per-message translate button",
+    "_machine_translated": true,
+    "_source_hash": "8c4dbf46c9940b0a"
+  },
+  "chat.send_btn.send_title": {
+    "message": "メッセージを送信",
+    "description": "Send button tooltip when ready to send",
+    "_machine_translated": true,
+    "_source_hash": "492aa4d7b7cc79f8"
+  },
+  "chat.send_btn.stop_title": {
+    "message": "生成を停止 (Esc)",
+    "description": "Send button tooltip when generation is in flight",
+    "_machine_translated": true,
+    "_source_hash": "09598f6e18d2f914"
+  },
+  "chat.connection.offline": {
+    "message": "オフライン",
+    "description": "Connection status — no network",
+    "_machine_translated": true,
+    "_source_hash": "288e9c34c370e26b"
+  },
+  "chat.connection.connected": {
+    "message": "接続済み",
+    "description": "Connection status — agent reachable",
+    "_machine_translated": true,
+    "_source_hash": "e6d6c2b6aecc9e11"
+  },
+  "chat.connection.disconnected": {
+    "message": "切断されています",
+    "description": "Connection status — not connected to agent",
+    "_machine_translated": true,
+    "_source_hash": "c145021debf1fbee"
+  },
+  "chat.compacting.in_progress": {
+    "message": "コンテキストを圧縮中…",
+    "description": "Notice shown while the conversation is being compacted",
+    "_machine_translated": true,
+    "_source_hash": "ffb77b7923fa11cd"
+  },
+  "chat.model.no_models": {
+    "message": "モデルがありません",
+    "description": "Selector label when the agent reports zero models",
+    "_machine_translated": true,
+    "_source_hash": "f83212032b109db9"
+  },
+  "chat.model.unavailable": {
+    "message": "利用不可",
+    "description": "Selector label when models can't be queried",
+    "_machine_translated": true,
+    "_source_hash": "fb746439a6882598"
+  },
+  "chat.dismiss_title": {
+    "message": "閉じる",
+    "description": "Tooltip on the close (✕) button",
+    "_machine_translated": true,
+    "_source_hash": "d37b67427502c24a"
+  },
+  "chat.session_list.new_divider": {
+    "message": "● 新着",
+    "description": "Divider label between previously-seen and newly-discovered sessions",
+    "_machine_translated": true,
+    "_source_hash": "2bf9564dd560ef4b"
+  },
+  "chat.session_list.no_external": {
+    "message": "外部セッションが見つかりません",
+    "description": "Empty state when no other-agent sessions exist",
+    "_machine_translated": true,
+    "_source_hash": "a99b44171e07b5d7"
+  },
+  "chat.session.kd_action.open_folder_title": {
+    "message": "フォルダを開く",
+    "description": "Tooltip on the per-session 'reveal containing folder' button (Other Agents tab)",
+    "_machine_translated": true,
+    "_source_hash": "c15dcbda1f9dea07"
+  },
+  "chat.session.kd_action.delete_title": {
+    "message": "削除",
+    "description": "Tooltip on the delete button in the Other Agents tab",
+    "_machine_translated": true,
+    "_source_hash": "3d197bc755377544"
+  },
+  "chat.session.kd_action.delete_confirm": {
+    "message": "このセッションを削除しますか？",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "767c7bea7fd60d02"
+  },
+  "chat.session.kd_loading": {
+    "message": "セッションを読み込み中…",
+    "description": "Placeholder while a session's history loads",
+    "_machine_translated": true,
+    "_source_hash": "35c7372188258169"
+  },
+  "chat.session.kd_tool_copy_title": {
+    "message": "コピー",
+    "description": "Tooltip on the copy button inside an Other-Agent session view",
+    "_machine_translated": true,
+    "_source_hash": "2b83ddd1a3d1d5e9"
   }
 }

@@ -43,7 +43,7 @@
                     <span class="floating-banner-text" id="bannerText"></span>
                     <span class="floating-banner-action" id="bannerAction"></span>
                 </div>
-                <button class="expand-btn" id="expandBtn" title="Open full chat">
+                <button class="expand-btn" id="expandBtn" data-i18n-title="floating.expand_chat_title" title="Open full chat">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 3 21 3 21 9"/>
                         <polyline points="9 21 3 21 3 15"/>
@@ -53,10 +53,10 @@
                 </button>
                 <div class="response-text" id="responseText" dir="auto"></div>
                 <div class="floating-response-actions" id="floatingResponseActions" style="display:none">
-                    <button class="msg-action-btn" id="floatingCopyBtn" title="Copy">
+                    <button class="msg-action-btn" id="floatingCopyBtn" data-i18n-title="floating.copy_btn_title" title="Copy">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
-                    <button class="msg-action-btn" id="floatingSpeakBtn" title="Read aloud" style="display:none">
+                    <button class="msg-action-btn" id="floatingSpeakBtn" data-i18n-title="floating.speak_btn_title" title="Read aloud" style="display:none">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                     </button>
                 </div>
@@ -64,14 +64,14 @@
             <div class="quick-actions-container" id="responseActionsContainer" style="display:none"></div>
             <div id="offlineBar" class="extension-bar offline-bar" style="display:none">
                 <span class="extension-bar-icon">📡</span>
-                <span class="extension-bar-text" style="flex:1;font-size:12px">No internet — local features still work</span>
+                <span class="extension-bar-text" style="flex:1;font-size:12px" data-i18n="floating.offline_message">No internet — local features still work</span>
             </div>
             <!-- Extension widget slots: managed by ExtensionManager. -->
             <div id="extWidgetSlotBottom" class="ext-widget-slot ext-widget-slot-bottom"></div>
             <div id="extWidgetSlotStatus" class="ext-widget-slot ext-widget-slot-status"></div>
             <div class="input-container">
                 <div class="attachment-preview-strip" id="attachmentPreviews"></div>
-                <div class="app-mode-chip" id="appModeChip" style="display:none" title="Click to disable for this message">
+                <div class="app-mode-chip" id="appModeChip" style="display:none" data-i18n-title="floating.app_mode_chip_title" title="Click to disable for this message">
                     <span class="app-mode-chip-icon">🎯</span>
                     <span class="app-mode-chip-label" id="appModeChipLabel"></span>
                     <span class="app-mode-chip-dismiss">✕</span>
@@ -79,14 +79,15 @@
                 <div class="selection-indicator" id="selectionIndicator" style="display:none">
                     <label class="selection-checkbox">
                         <input type="checkbox" id="useSelectionCheckbox" checked>
-                        <span class="selection-label">📋 Include selected text</span>
+                        <span class="selection-label" data-i18n="floating.use_selection_label">📋 Include selected text</span>
                     </label>
                     <div class="quick-actions-container" id="quickActionsContainer"></div>
                 </div>
-                <textarea 
-                    class="input-box" 
-                    id="promptInput" 
+                <textarea
+                    class="input-box"
+                    id="promptInput"
                     placeholder="Ask me anything..."
+                    data-i18n-placeholder="floating.input.placeholder"
                     rows="1"
                     dir="auto"
                 ></textarea>
@@ -94,10 +95,10 @@
                     <div class="datetime-time" id="datetimeTime"></div>
                     <div class="datetime-date" id="datetimeDate"></div>
                 </div>
-                <button class="floating-stop-btn" id="floatingStopBtn" style="display:none" title="Stop generating (Esc)">
+                <button class="floating-stop-btn" id="floatingStopBtn" style="display:none" data-i18n-title="floating.stop_btn_title" title="Stop generating (Esc)">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                 </button>
-                <button class="speech-btn" id="speechBtn" style="display:none" title="Voice input">
+                <button class="speech-btn" id="speechBtn" style="display:none" data-i18n-title="floating.speech_btn_title" title="Voice input">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                 </button>
                 <div class="speech-wave" id="speechWave" style="display:none">
@@ -110,20 +111,20 @@
             </div>
             <div class="floating-toolbar" id="floatingToolbar" style="display:none">
                 <div class="floating-toolbar-left">
-                    <button class="floating-toolbar-btn" id="floatingAttachFileBtn" title="Attach file">
+                    <button class="floating-toolbar-btn" id="floatingAttachFileBtn" data-i18n-title="floating.attach_file_title" title="Attach file">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
                     </button>
-                    <button class="floating-toolbar-btn" id="floatingAttachImageBtn" title="Attach image">
+                    <button class="floating-toolbar-btn" id="floatingAttachImageBtn" data-i18n-title="floating.attach_image_title" title="Attach image">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                     </button>
                     <div class="floating-toolbar-ext" id="floatingToolbarExt"></div>
                 </div>
                 <div class="floating-toolbar-right">
-                    <span class="floating-context-indicator" id="floatingContextIndicator" title="Context usage">
+                    <span class="floating-context-indicator" id="floatingContextIndicator" data-i18n-title="floating.context_indicator_title" title="Context usage">
                         <canvas id="floatingContextRing" width="16" height="16"></canvas>
                         <span id="floatingContextPercent">--%</span>
                     </span>
-                    <button class="floating-model-selector" id="floatingModelSelector" title="Change model in settings">
+                    <button class="floating-model-selector" id="floatingModelSelector" data-i18n-title="floating.model_selector_title" title="Change model in settings">
                         <span id="floatingModelName">...</span>
                     </button>
                 </div>
@@ -138,33 +139,33 @@
     <div class="permission-modal-overlay" id="permissionModal" style="display: none;">
         <div class="permission-modal">
             <div class="permission-header">
-                <h3>Tool Permission Required</h3>
+                <h3 data-i18n="permission.dialog.title">Tool Permission Required</h3>
             </div>
             <div class="permission-body">
                 <div class="permission-tool-name" id="permissionToolName"></div>
                 <p class="permission-tool-title" id="permissionToolTitle"></p>
-                <p class="permission-description">The AI assistant wants to use this tool. Do you want to allow it?</p>
+                <p class="permission-description" data-i18n="permission.dialog.body">The AI assistant wants to use this tool. Do you want to allow it?</p>
                 <div class="permission-warning">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v5h1v-5h-1zm0 6v1h1v-1h-1z"/>
                     </svg>
-                    <span>Only approve tools you trust</span>
+                    <span data-i18n="permission.dialog.warning">Only approve tools you trust</span>
                 </div>
             </div>
             <div class="permission-actions">
                 <div class="permission-deny-group">
-                    <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
-                    <button class="permission-btn permission-btn-deny-menu" id="permissionDenyMenu" title="More options">▾</button>
+                    <button class="permission-btn permission-btn-deny" id="permissionDeny" data-i18n="permission.dialog.deny">Deny</button>
+                    <button class="permission-btn permission-btn-deny-menu" id="permissionDenyMenu" data-i18n-title="permission.dialog.deny_menu_title" title="More options">▾</button>
                     <div class="permission-deny-dropdown" id="permissionDenyDropdown" style="display:none;">
-                        <button class="permission-dropdown-item permission-dropdown-deny" id="permissionDenyAlways">Always deny</button>
+                        <button class="permission-dropdown-item permission-dropdown-deny" id="permissionDenyAlways" data-i18n="permission.dialog.deny_always">Always deny</button>
                     </div>
                 </div>
                 <div class="permission-allow-group">
-                    <button class="permission-btn permission-btn-allow" id="permissionAllow">Allow</button>
-                    <button class="permission-btn permission-btn-allow-menu" id="permissionAllowMenu" title="More options">▾</button>
+                    <button class="permission-btn permission-btn-allow" id="permissionAllow" data-i18n="permission.dialog.allow">Allow</button>
+                    <button class="permission-btn permission-btn-allow-menu" id="permissionAllowMenu" data-i18n-title="permission.dialog.allow_menu_title" title="More options">▾</button>
                     <div class="permission-allow-dropdown" id="permissionAllowDropdown" style="display:none;">
-                        <button class="permission-dropdown-item" id="permissionAllow24h">Allow for 24 hours</button>
-                        <button class="permission-dropdown-item" id="permissionAllowAlways">Always allow</button>
+                        <button class="permission-dropdown-item" id="permissionAllow24h" data-i18n="permission.dialog.allow_24h">Allow for 24 hours</button>
+                        <button class="permission-dropdown-item" id="permissionAllowAlways" data-i18n="permission.dialog.allow_always">Always allow</button>
                     </div>
                 </div>
             </div>

@@ -747,6 +747,623 @@
     "description": "Placeholder when the changelog request fails"
   },
 
+  "settings.mac_permissions.title": {
+    "message": "macOS Permissions",
+    "description": "Settings header — macOS-only privacy permissions"
+  },
+  "settings.mac_permissions.description": {
+    "message": "Kage uses three macOS privacy permissions to do its job. macOS prompts for each one the first time Kage needs it — click the buttons below to open the right pane in System Settings and grant access.",
+    "description": "Section description for the mac-permissions pane"
+  },
+  "settings.mac_permissions.restart_note": {
+    "message": "After toggling a permission, you may need to restart Kage for the change to take effect.",
+    "description": "Footer note shown beneath the permission cards"
+  },
+
+  "settings.hotkey.title": {
+    "message": "Hotkey & Shortcuts",
+    "description": "Settings header — global hotkey + shortcut reference"
+  },
+  "settings.hotkey.global.label": {
+    "message": "Global Hotkey",
+    "description": "Label for the main summon hotkey picker"
+  },
+  "settings.hotkey.global.description": {
+    "message": "The shortcut to summon Kage from anywhere.",
+    "description": "Helper text for the global hotkey"
+  },
+  "settings.hotkey.voice.label": {
+    "message": "Voice Input Hotkey",
+    "description": "Label for the voice-input hotkey picker"
+  },
+  "settings.hotkey.voice.description": {
+    "message": "Summon Kage with the microphone already listening. Leave empty to disable.",
+    "description": "Helper text for the voice-input hotkey"
+  },
+  "settings.hotkey.clipboard.label": {
+    "message": "Clipboard History Hotkey",
+    "description": "Label for the clipboard-history hotkey picker (Windows-only)"
+  },
+  "settings.hotkey.clipboard.description": {
+    "message": "Open clipboard history directly. Leave empty to disable.",
+    "description": "Helper text for the clipboard-history hotkey"
+  },
+  "settings.hotkey.inline_assist.label": {
+    "message": "Inline Assist Hotkey",
+    "description": "Label for the inline-assist hotkey picker"
+  },
+  "settings.hotkey.inline_assist.description": {
+    "message": "Trigger inline AI assist on selected text. Leave empty to disable.",
+    "description": "Helper text for the inline-assist hotkey"
+  },
+  "settings.hotkey.shortcuts.section": {
+    "message": "Keyboard Shortcuts",
+    "description": "Subsection header for the shortcut reference table"
+  },
+  "settings.hotkey.shortcut.new_session.action": {
+    "message": "New session",
+    "description": "Shortcut reference — Ctrl+N"
+  },
+  "settings.hotkey.shortcut.close_window.action": {
+    "message": "Close / hide window",
+    "description": "Shortcut reference — Ctrl+W"
+  },
+  "settings.hotkey.shortcut.open_settings.action": {
+    "message": "Open settings",
+    "description": "Shortcut reference — Ctrl+,"
+  },
+  "settings.hotkey.shortcut.expand_chat.action": {
+    "message": "Expand to full chat",
+    "description": "Shortcut reference — Ctrl+E"
+  },
+  "settings.hotkey.shortcut.clear.action": {
+    "message": "Clear / reset",
+    "description": "Shortcut reference — Ctrl+L"
+  },
+  "settings.hotkey.shortcut.copy_response.action": {
+    "message": "Copy last response",
+    "description": "Shortcut reference — Ctrl+Shift+C"
+  },
+  "settings.hotkey.shortcut.send_bypass.action": {
+    "message": "Send to agent (bypass suggestions)",
+    "description": "Shortcut reference — Ctrl+Enter"
+  },
+  "settings.hotkey.shortcut.escape.action": {
+    "message": "Stop generating / Hide window",
+    "description": "Shortcut reference — Escape"
+  },
+  "settings.hotkey.shortcut.send.action": {
+    "message": "Send message",
+    "description": "Shortcut reference — Enter"
+  },
+  "settings.hotkey.shortcut.newline.action": {
+    "message": "New line",
+    "description": "Shortcut reference — Shift+Enter"
+  },
+  "settings.hotkey.shortcut.clipboard_history.action": {
+    "message": "Clipboard history",
+    "description": "Shortcut reference — >cb"
+  },
+  "settings.hotkey.scope.launcher": {
+    "message": "Launcher",
+    "description": "Shortcut scope label — applies in the launcher"
+  },
+  "settings.hotkey.scope.chat_window": {
+    "message": "Chat window",
+    "description": "Shortcut scope label — applies in chat windows"
+  },
+  "settings.hotkey.scope.all_windows": {
+    "message": "All windows",
+    "description": "Shortcut scope label — applies anywhere"
+  },
+  "settings.hotkey.scope.launcher_chat": {
+    "message": "Launcher & Chat",
+    "description": "Shortcut scope label — applies in launcher and chat"
+  },
+  "settings.hotkey.scope.all": {
+    "message": "All",
+    "description": "Shortcut scope label — applies in any context"
+  },
+
+  "settings.store.title": {
+    "message": "Extension Store",
+    "description": "Settings header — extension store configuration"
+  },
+  "settings.store.open_btn": {
+    "message": "🛍️ Open Extension Store",
+    "description": "Button that opens the store window"
+  },
+  "settings.store.updates.section": {
+    "message": "Updates",
+    "description": "Subsection header for auto-update settings"
+  },
+  "settings.store.auto_update.label": {
+    "message": "Auto-Update Extensions",
+    "description": "Toggle: automatically install extension updates"
+  },
+  "settings.store.auto_update.description": {
+    "message": "Automatically check for and install extension updates.",
+    "description": "Helper text for the auto-update toggle"
+  },
+  "settings.store.update_all_btn": {
+    "message": "🔄 Update All",
+    "description": "Button that checks for and installs all extension updates"
+  },
+  "settings.store.update_check.checking": {
+    "message": "Checking…",
+    "description": "Status while the extension-update check is running"
+  },
+  "settings.store.update_check.up_to_date": {
+    "message": "✓ All extensions up to date",
+    "description": "Status when no updates are available"
+  },
+  "settings.store.update_check.updated": {
+    "message": "{count, plural, one {✓ Updated 1 extension} other {✓ Updated # extensions}}",
+    "description": "Status after extensions update — pluralised count"
+  },
+  "settings.store.update_check.failed": {
+    "message": "✗ {reason}",
+    "description": "Status when the update check fails"
+  },
+  "settings.store.url.section": {
+    "message": "Store URL",
+    "description": "Subsection header for the primary store URL"
+  },
+  "settings.store.url.label": {
+    "message": "Primary Store URL",
+    "description": "Label for the primary store URL field"
+  },
+  "settings.store.url.description": {
+    "message": "Main store URL for browsing and installing extensions. Leave empty for the default store.",
+    "description": "Helper text for the primary store URL"
+  },
+  "settings.store.sources.section": {
+    "message": "Additional Store Sources",
+    "description": "Subsection header for extra store sources"
+  },
+  "settings.store.sources.description": {
+    "message": "Add extra stores (e.g. an internal company store). Items from all enabled sources are merged in the store browser.",
+    "description": "Helper text under the additional sources list"
+  },
+  "settings.store.sources.add_btn": {
+    "message": "+ Add Source",
+    "description": "Button that adds an empty source row"
+  },
+  "settings.store.sources.row.name_placeholder": {
+    "message": "Name",
+    "description": "Placeholder for the source name input"
+  },
+  "settings.store.sources.row.enabled_title": {
+    "message": "Enable/disable this source",
+    "description": "Tooltip on the per-source enabled toggle"
+  },
+
+  "settings.integration.title": {
+    "message": "System Integration",
+    "description": "Settings header — system integration toggles"
+  },
+  "settings.integration.behavior.section": {
+    "message": "Behavior",
+    "description": "Subsection header for behavior toggles"
+  },
+  "settings.integration.capture_selection.label": {
+    "message": "Capture selected text",
+    "description": "Toggle: copy selected text on hotkey"
+  },
+  "settings.integration.capture_selection.description": {
+    "message": "Grab selected text from the active window when the hotkey is pressed (uses {shortcut}). Disable if this interferes with terminal apps or other programs.",
+    "description": "Helper text — {shortcut} is the platform copy shortcut (Cmd+C / Ctrl+C)"
+  },
+  "settings.integration.blocklist.label": {
+    "message": "Don't auto-copy in these apps",
+    "description": "Label for the per-app capture-selection blocklist"
+  },
+  "settings.integration.blocklist.description": {
+    "message": "One process name per line. When these apps are focused, Kage won't inject {shortcut} — useful for terminals where that sequence means \"interrupt\" and can cancel in-progress commands. Matching is case-insensitive; a trailing \".exe\" is optional. Clear to disable the blocklist entirely.",
+    "description": "Helper text for the blocklist; {shortcut} is platform copy shortcut"
+  },
+  "settings.integration.show_notifications.label": {
+    "message": "Show notifications",
+    "description": "Toggle: show OS notifications on response completion"
+  },
+  "settings.integration.show_notifications.description": {
+    "message": "Show a system notification when a response completes while the window is hidden.",
+    "description": "Helper text for the show-notifications toggle"
+  },
+  "settings.integration.screen_context.label": {
+    "message": "Screen context awareness",
+    "description": "Toggle: include source app + title in messages"
+  },
+  "settings.integration.screen_context.description": {
+    "message": "Include the source application name and window title when sending messages, so Kage knows what you were looking at.",
+    "description": "Helper text for the screen-context toggle"
+  },
+  "settings.integration.test_notification.btn": {
+    "message": "Test Notification",
+    "description": "Button: send a test OS notification"
+  },
+  "settings.integration.test_notification.no_plugin": {
+    "message": "❌ Notification plugin not available.",
+    "description": "Status when the Tauri notification plugin isn't loaded"
+  },
+  "settings.integration.test_notification.body": {
+    "message": "Notifications are working!",
+    "description": "Body text of the test notification"
+  },
+  "settings.integration.test_notification.sent": {
+    "message": "✅ Notification sent!",
+    "description": "Status after the test notification is dispatched"
+  },
+  "settings.integration.test_notification.denied": {
+    "message": "❌ Permission denied. Check your OS notification settings.",
+    "description": "Status when OS-level notification permission is not granted"
+  },
+  "settings.integration.test_notification.error_label": {
+    "message": "Error",
+    "description": "errLabel prefix for the test-notification failure path"
+  },
+  "settings.integration.directories.section": {
+    "message": "Quick Directory Access",
+    "description": "Subsection header for the directory reference table"
+  },
+  "settings.integration.directories.description": {
+    "message": "Type any of these keywords in the Launcher to open the folder. Prefix matching works too — e.g. \"down\" opens Downloads.",
+    "description": "Helper text under the directory reference table"
+  },
+  "settings.integration.directories.col.keyword": {
+    "message": "Keyword",
+    "description": "Table column header — directory keyword"
+  },
+  "settings.integration.directories.col.aliases": {
+    "message": "Aliases",
+    "description": "Table column header — alternate names"
+  },
+  "settings.integration.directories.col.path": {
+    "message": "Path",
+    "description": "Table column header — resolved filesystem path"
+  },
+  "settings.integration.directories.path_unavailable": {
+    "message": "not available",
+    "description": "Placeholder when a directory can't be resolved on this system"
+  },
+
+  "floating.expand_chat_title": {
+    "message": "Open full chat",
+    "description": "Tooltip on the expand-to-chat button"
+  },
+  "floating.copy_btn_title": {
+    "message": "Copy",
+    "description": "Tooltip on the copy-response button"
+  },
+  "floating.speak_btn_title": {
+    "message": "Read aloud",
+    "description": "Tooltip on the TTS button"
+  },
+  "floating.input.placeholder": {
+    "message": "Ask me anything…",
+    "description": "Placeholder shown in the launcher input box"
+  },
+  "floating.stop_btn_title": {
+    "message": "Stop generating (Esc)",
+    "description": "Tooltip on the stop-generation button"
+  },
+  "floating.speech_btn_title": {
+    "message": "Voice input",
+    "description": "Tooltip on the speech-to-text button"
+  },
+  "floating.attach_file_title": {
+    "message": "Attach file",
+    "description": "Tooltip on the attach-file toolbar button"
+  },
+  "floating.attach_image_title": {
+    "message": "Attach image",
+    "description": "Tooltip on the attach-image toolbar button"
+  },
+  "floating.context_indicator_title": {
+    "message": "Context usage",
+    "description": "Tooltip on the context-usage ring indicator"
+  },
+  "floating.model_selector_title": {
+    "message": "Change model in settings",
+    "description": "Tooltip on the model name button"
+  },
+  "floating.app_mode_chip_title": {
+    "message": "Click to disable for this message",
+    "description": "Tooltip on the active app-mode chip"
+  },
+  "floating.use_selection_label": {
+    "message": "📋 Include selected text",
+    "description": "Checkbox label for including selected text in the prompt"
+  },
+  "floating.offline_message": {
+    "message": "No internet — local features still work",
+    "description": "Banner shown when network connectivity is lost"
+  },
+
+  "permission.dialog.title": {
+    "message": "Tool Permission Required",
+    "description": "Header on the tool permission modal"
+  },
+  "permission.dialog.body": {
+    "message": "The AI assistant wants to use this tool. Do you want to allow it?",
+    "description": "Body text on the tool permission modal"
+  },
+  "permission.dialog.warning": {
+    "message": "Only approve tools you trust",
+    "description": "Warning shown beside a caution icon"
+  },
+  "permission.dialog.deny": {
+    "message": "Deny",
+    "description": "Primary deny button"
+  },
+  "permission.dialog.deny_menu_title": {
+    "message": "More options",
+    "description": "Tooltip on the dropdown chevron next to Deny"
+  },
+  "permission.dialog.deny_always": {
+    "message": "Always deny",
+    "description": "Persistent-deny option in the deny dropdown"
+  },
+  "permission.dialog.allow": {
+    "message": "Allow",
+    "description": "Primary allow button"
+  },
+  "permission.dialog.allow_menu_title": {
+    "message": "More options",
+    "description": "Tooltip on the dropdown chevron next to Allow"
+  },
+  "permission.dialog.allow_24h": {
+    "message": "Allow for 24 hours",
+    "description": "24-hour allow option in the allow dropdown"
+  },
+  "permission.dialog.allow_always": {
+    "message": "Always allow",
+    "description": "Persistent allow option in the allow dropdown"
+  },
+
+  "inline_assist.window_title": {
+    "message": "Inline Assist",
+    "description": "Window title for the inline-assist popup"
+  },
+  "inline_assist.bubble.title": {
+    "message": "Open full chat",
+    "description": "Tooltip on the inline-assist mascot bubble"
+  },
+  "inline_assist.custom_input.placeholder": {
+    "message": "Ask anything…",
+    "description": "Placeholder in the inline-assist custom prompt input"
+  },
+  "inline_assist.thinking": {
+    "message": "Thinking…",
+    "description": "Status bar text while the agent is generating an inline-assist reply"
+  },
+
+  "settings.model.title": {
+    "message": "Model",
+    "description": "Settings header — model selection"
+  },
+  "settings.model.default.label": {
+    "message": "Default Model",
+    "description": "Default model dropdown label"
+  },
+  "settings.model.default.description": {
+    "message": "Select the default model used in conversations — you can change your model on the fly in the chat sessions (>chats) experience.",
+    "description": "Helper text for the default model dropdown"
+  },
+  "settings.model.default.loading": {
+    "message": "Loading models…",
+    "description": "Placeholder option while the model list loads"
+  },
+  "settings.model.default.empty": {
+    "message": "No models available yet",
+    "description": "Placeholder option when the agent reports no models"
+  },
+  "settings.model.auto_compact.label": {
+    "message": "Auto-Compact Threshold",
+    "description": "Auto-compact slider label"
+  },
+  "settings.model.auto_compact.description": {
+    "message": "Automatically compact the conversation when context usage reaches this percentage. Set to 0 to disable.",
+    "description": "Helper text for the auto-compact slider"
+  },
+  "settings.model.auto_compact.off": {
+    "message": "Off",
+    "description": "Slider value display when threshold is 0"
+  },
+
+  "chat.window_title": {
+    "message": "Kage",
+    "description": "Window title for the chat window"
+  },
+  "chat.sidebar.toggle_title": {
+    "message": "Toggle sidebar",
+    "description": "Tooltip on the sidebar toggle button"
+  },
+  "chat.sidebar.show_title": {
+    "message": "Show sidebar",
+    "description": "Tooltip on the collapsed-sidebar toggle button"
+  },
+  "chat.sidebar.new_chat": {
+    "message": "New Chat",
+    "description": "Button: start a new chat session in the current window"
+  },
+  "chat.sidebar.new_window_title": {
+    "message": "New Chat Window (Ctrl+Shift+N)",
+    "description": "Tooltip on the new-window button"
+  },
+  "chat.sidebar.settings_title": {
+    "message": "Settings",
+    "description": "Tooltip on the settings button"
+  },
+  "chat.sidebar.search.placeholder": {
+    "message": "Search sessions…",
+    "description": "Placeholder for the session-search input"
+  },
+  "chat.sidebar.source.kage": {
+    "message": "Kage",
+    "description": "Tab: show Kage-managed sessions"
+  },
+  "chat.sidebar.source.other_agents": {
+    "message": "Other Agents",
+    "description": "Tab: show sessions from other agents (Claude Code, Kage Desktop, etc.)"
+  },
+  "chat.sidebar.empty": {
+    "message": "No sessions yet",
+    "description": "Empty-state shown when no sessions exist"
+  },
+  "chat.header.default_title": {
+    "message": "New Chat",
+    "description": "Default title shown for a fresh, unnamed session"
+  },
+  "chat.header.title_rename_hint": {
+    "message": "Double-click to rename",
+    "description": "Tooltip on the chat title encouraging rename"
+  },
+  "chat.header.export_title": {
+    "message": "Export this chat as Markdown",
+    "description": "Tooltip / aria-label on the export button"
+  },
+  "chat.header.connection_checking": {
+    "message": "Checking…",
+    "description": "Connection status text while checking"
+  },
+  "chat.placeholder.start_conversation": {
+    "message": "Start a conversation with Kage…",
+    "description": "Placeholder shown in an empty messages area"
+  },
+  "chat.input.placeholder": {
+    "message": "Type your message…",
+    "description": "Placeholder for the chat input textarea"
+  },
+  "chat.send_btn_title": {
+    "message": "Send message",
+    "description": "Tooltip / aria-label on the send button"
+  },
+  "chat.toolbar.speech_btn_title": {
+    "message": "Voice input",
+    "description": "Tooltip on the speech toolbar button"
+  },
+  "chat.toolbar.attach_file_title": {
+    "message": "Attach file (contents sent as text)",
+    "description": "Tooltip on the attach-file toolbar button"
+  },
+  "chat.toolbar.attach_image_title": {
+    "message": "Attach image",
+    "description": "Tooltip on the attach-image toolbar button"
+  },
+  "chat.toolbar.context_indicator_title": {
+    "message": "{percent}% context used",
+    "description": "Tooltip on the context-usage ring indicator"
+  },
+  "chat.toolbar.model_selector_title": {
+    "message": "Select model",
+    "description": "Tooltip on the model selector button"
+  },
+  "chat.toolbar.model_loading": {
+    "message": "Loading…",
+    "description": "Placeholder while the active model name resolves"
+  },
+  "chat.lightbox.alt": {
+    "message": "Zoomed view",
+    "description": "Alt text for the image lightbox"
+  },
+  "chat.session_list.no_matches": {
+    "message": "No matching sessions",
+    "description": "Empty state shown when search filters every session out"
+  },
+  "chat.session.new_dot_title": {
+    "message": "New session",
+    "description": "Tooltip on the unread/new-session indicator dot"
+  },
+  "chat.session.action.rename_title": {
+    "message": "Rename",
+    "description": "Tooltip on the per-session rename button"
+  },
+  "chat.session.action.reveal_title": {
+    "message": "Show file",
+    "description": "Tooltip on the per-session reveal-in-file-manager button"
+  },
+  "chat.session.action.delete_title": {
+    "message": "Delete",
+    "description": "Tooltip on the per-session delete button"
+  },
+  "chat.message.action.copy": {
+    "message": "Copy",
+    "description": "Tooltip on the per-message copy button"
+  },
+  "chat.message.action.speak": {
+    "message": "Read aloud",
+    "description": "Tooltip on the per-message TTS button"
+  },
+  "chat.message.action.translate": {
+    "message": "Translate",
+    "description": "Tooltip on the per-message translate button"
+  },
+  "chat.send_btn.send_title": {
+    "message": "Send message",
+    "description": "Send button tooltip when ready to send"
+  },
+  "chat.send_btn.stop_title": {
+    "message": "Stop generating (Esc)",
+    "description": "Send button tooltip when generation is in flight"
+  },
+  "chat.connection.offline": {
+    "message": "Offline",
+    "description": "Connection status — no network"
+  },
+  "chat.connection.connected": {
+    "message": "Connected",
+    "description": "Connection status — agent reachable"
+  },
+  "chat.connection.disconnected": {
+    "message": "Disconnected",
+    "description": "Connection status — not connected to agent"
+  },
+  "chat.compacting.in_progress": {
+    "message": "Compacting context…",
+    "description": "Notice shown while the conversation is being compacted"
+  },
+  "chat.model.no_models": {
+    "message": "No models",
+    "description": "Selector label when the agent reports zero models"
+  },
+  "chat.model.unavailable": {
+    "message": "Unavailable",
+    "description": "Selector label when models can't be queried"
+  },
+  "chat.dismiss_title": {
+    "message": "Dismiss",
+    "description": "Tooltip on the close (✕) button"
+  },
+  "chat.session_list.new_divider": {
+    "message": "● New",
+    "description": "Divider label between previously-seen and newly-discovered sessions"
+  },
+  "chat.session_list.no_external": {
+    "message": "No external sessions found",
+    "description": "Empty state when no other-agent sessions exist"
+  },
+  "chat.session.kd_action.open_folder_title": {
+    "message": "Open folder",
+    "description": "Tooltip on the per-session 'reveal containing folder' button (Other Agents tab)"
+  },
+  "chat.session.kd_action.delete_title": {
+    "message": "Delete",
+    "description": "Tooltip on the delete button in the Other Agents tab"
+  },
+  "chat.session.kd_action.delete_confirm": {
+    "message": "Delete this session?",
+    "description": "confirm() text before deleting a session"
+  },
+  "chat.session.kd_loading": {
+    "message": "Loading session…",
+    "description": "Placeholder while a session's history loads"
+  },
+  "chat.session.kd_tool_copy_title": {
+    "message": "Copy",
+    "description": "Tooltip on the copy button inside an Other-Agent session view"
+  },
+
   "common.ok": {
     "message": "OK",
     "description": "Generic acknowledgement button"

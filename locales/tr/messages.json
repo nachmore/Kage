@@ -1432,5 +1432,917 @@
     "description": "Placeholder when the changelog request fails",
     "_machine_translated": true,
     "_source_hash": "398cd16e63a3c677"
+  },
+  "settings.mac_permissions.title": {
+    "message": "macOS izinleri",
+    "description": "Settings header — macOS-only privacy permissions",
+    "_machine_translated": true,
+    "_source_hash": "f206c674359a01db"
+  },
+  "settings.mac_permissions.description": {
+    "message": "Kage, işini yapmak için üç macOS gizlilik iznini kullanır. macOS, Kage'in her birine ilk ihtiyaç duyduğunda izin ister; aşağıdaki düğmelere tıklayarak Sistem Ayarları'nda doğru bölmeyi açın ve erişim verin.",
+    "description": "Section description for the mac-permissions pane",
+    "_machine_translated": true,
+    "_source_hash": "02c73decdf72615a"
+  },
+  "settings.mac_permissions.restart_note": {
+    "message": "Bir izni değiştirdikten sonra, değişikliğin etkili olması için Kage'i yeniden başlatmanız gerekebilir.",
+    "description": "Footer note shown beneath the permission cards",
+    "_machine_translated": true,
+    "_source_hash": "fe0c1dcfb98283bd"
+  },
+  "settings.hotkey.title": {
+    "message": "Kısayol tuşları",
+    "description": "Settings header — global hotkey + shortcut reference",
+    "_machine_translated": true,
+    "_source_hash": "2ec0b6588ae5168f"
+  },
+  "settings.hotkey.global.label": {
+    "message": "Genel kısayol tuşu",
+    "description": "Label for the main summon hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "89c033d06a17ad4b"
+  },
+  "settings.hotkey.global.description": {
+    "message": "Kage'i her yerden çağırmak için kısayol.",
+    "description": "Helper text for the global hotkey",
+    "_machine_translated": true,
+    "_source_hash": "a7280f0695ae4b0f"
+  },
+  "settings.hotkey.voice.label": {
+    "message": "Sesli giriş kısayol tuşu",
+    "description": "Label for the voice-input hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "5e760ec0e1f78b62"
+  },
+  "settings.hotkey.voice.description": {
+    "message": "Kage'i mikrofon zaten dinleme modundayken çağırın. Devre dışı bırakmak için boş bırakın.",
+    "description": "Helper text for the voice-input hotkey",
+    "_machine_translated": true,
+    "_source_hash": "e2fd9653abbd7f8a"
+  },
+  "settings.hotkey.clipboard.label": {
+    "message": "Pano geçmişi kısayol tuşu",
+    "description": "Label for the clipboard-history hotkey picker (Windows-only)",
+    "_machine_translated": true,
+    "_source_hash": "7340b9ef2c47ee2b"
+  },
+  "settings.hotkey.clipboard.description": {
+    "message": "Pano geçmişini doğrudan açın. Devre dışı bırakmak için boş bırakın.",
+    "description": "Helper text for the clipboard-history hotkey",
+    "_machine_translated": true,
+    "_source_hash": "25a222fe2cb08c46"
+  },
+  "settings.hotkey.inline_assist.label": {
+    "message": "Satır içi yardım kısayol tuşu",
+    "description": "Label for the inline-assist hotkey picker",
+    "_machine_translated": true,
+    "_source_hash": "ea1a795e3c4fbcdc"
+  },
+  "settings.hotkey.inline_assist.description": {
+    "message": "Seçili metin üzerinde satır içi yapay zeka yardımını tetikleyin. Devre dışı bırakmak için boş bırakın.",
+    "description": "Helper text for the inline-assist hotkey",
+    "_machine_translated": true,
+    "_source_hash": "6d7e52b74edefc9e"
+  },
+  "settings.hotkey.shortcuts.section": {
+    "message": "Klavye kısayolları",
+    "description": "Subsection header for the shortcut reference table",
+    "_machine_translated": true,
+    "_source_hash": "b41e301919aa201a"
+  },
+  "settings.hotkey.shortcut.new_session.action": {
+    "message": "Yeni oturum",
+    "description": "Shortcut reference — Ctrl+N",
+    "_machine_translated": true,
+    "_source_hash": "c14fc6982253c097"
+  },
+  "settings.hotkey.shortcut.close_window.action": {
+    "message": "Pencereyi kapat / gizle",
+    "description": "Shortcut reference — Ctrl+W",
+    "_machine_translated": true,
+    "_source_hash": "c4ccf437050b0b55"
+  },
+  "settings.hotkey.shortcut.open_settings.action": {
+    "message": "Ayarları aç",
+    "description": "Shortcut reference — Ctrl+,",
+    "_machine_translated": true,
+    "_source_hash": "59b29da0ceff7cfc"
+  },
+  "settings.hotkey.shortcut.expand_chat.action": {
+    "message": "Tam sohbete genişlet",
+    "description": "Shortcut reference — Ctrl+E",
+    "_machine_translated": true,
+    "_source_hash": "3ed53842587b4093"
+  },
+  "settings.hotkey.shortcut.clear.action": {
+    "message": "Temizle / sıfırla",
+    "description": "Shortcut reference — Ctrl+L",
+    "_machine_translated": true,
+    "_source_hash": "2a529c94b8ad58f7"
+  },
+  "settings.hotkey.shortcut.copy_response.action": {
+    "message": "Son yanıtı kopyala",
+    "description": "Shortcut reference — Ctrl+Shift+C",
+    "_machine_translated": true,
+    "_source_hash": "48e694bd66cc2e2c"
+  },
+  "settings.hotkey.shortcut.send_bypass.action": {
+    "message": "Aracıya gönder (önerileri atla)",
+    "description": "Shortcut reference — Ctrl+Enter",
+    "_machine_translated": true,
+    "_source_hash": "9628dd61bd33950b"
+  },
+  "settings.hotkey.shortcut.escape.action": {
+    "message": "Üretmeyi durdur / pencereyi gizle",
+    "description": "Shortcut reference — Escape",
+    "_machine_translated": true,
+    "_source_hash": "2daf342650426a0e"
+  },
+  "settings.hotkey.shortcut.send.action": {
+    "message": "Mesaj gönder",
+    "description": "Shortcut reference — Enter",
+    "_machine_translated": true,
+    "_source_hash": "c4899c984136fe23"
+  },
+  "settings.hotkey.shortcut.newline.action": {
+    "message": "Yeni satır",
+    "description": "Shortcut reference — Shift+Enter",
+    "_machine_translated": true,
+    "_source_hash": "f18f3e095ad2d88b"
+  },
+  "settings.hotkey.shortcut.clipboard_history.action": {
+    "message": "Pano geçmişi",
+    "description": "Shortcut reference — >cb",
+    "_machine_translated": true,
+    "_source_hash": "a17088827fdf73ab"
+  },
+  "settings.hotkey.scope.launcher": {
+    "message": "Başlatıcı",
+    "description": "Shortcut scope label — applies in the launcher",
+    "_machine_translated": true,
+    "_source_hash": "c4ccb73c46eec1a3"
+  },
+  "settings.hotkey.scope.chat_window": {
+    "message": "Sohbet penceresi",
+    "description": "Shortcut scope label — applies in chat windows",
+    "_machine_translated": true,
+    "_source_hash": "54d904eef112c7e7"
+  },
+  "settings.hotkey.scope.all_windows": {
+    "message": "Tüm pencereler",
+    "description": "Shortcut scope label — applies anywhere",
+    "_machine_translated": true,
+    "_source_hash": "8971321d8f40d9cd"
+  },
+  "settings.hotkey.scope.launcher_chat": {
+    "message": "Başlatıcı ve sohbet",
+    "description": "Shortcut scope label — applies in launcher and chat",
+    "_machine_translated": true,
+    "_source_hash": "0bbbbf9f0d3a5cad"
+  },
+  "settings.hotkey.scope.all": {
+    "message": "Tümü",
+    "description": "Shortcut scope label — applies in any context",
+    "_machine_translated": true,
+    "_source_hash": "319ab7e77fdfa28a"
+  },
+  "settings.store.title": {
+    "message": "Eklenti Mağazası",
+    "description": "Settings header — extension store configuration",
+    "_machine_translated": true,
+    "_source_hash": "95e820228a5db8f7"
+  },
+  "settings.store.open_btn": {
+    "message": "🛍️ Eklenti mağazasını aç",
+    "description": "Button that opens the store window",
+    "_machine_translated": true,
+    "_source_hash": "d5d0ff17eadc92d8"
+  },
+  "settings.store.updates.section": {
+    "message": "Güncellemeler",
+    "description": "Subsection header for auto-update settings",
+    "_machine_translated": true,
+    "_source_hash": "0462336bbe946426"
+  },
+  "settings.store.auto_update.label": {
+    "message": "Eklentileri otomatik güncelle",
+    "description": "Toggle: automatically install extension updates",
+    "_machine_translated": true,
+    "_source_hash": "415f86ade884e288"
+  },
+  "settings.store.auto_update.description": {
+    "message": "Eklenti güncellemelerini otomatik olarak denetle ve yükle.",
+    "description": "Helper text for the auto-update toggle",
+    "_machine_translated": true,
+    "_source_hash": "63cb1d92bfafdf64"
+  },
+  "settings.store.update_all_btn": {
+    "message": "🔄 Tümünü güncelle",
+    "description": "Button that checks for and installs all extension updates",
+    "_machine_translated": true,
+    "_source_hash": "164adb9609fc73d0"
+  },
+  "settings.store.update_check.checking": {
+    "message": "Denetleniyor…",
+    "description": "Status while the extension-update check is running",
+    "_machine_translated": true,
+    "_source_hash": "505c00fe8fcaa49f"
+  },
+  "settings.store.update_check.up_to_date": {
+    "message": "✓ Tüm eklentiler güncel",
+    "description": "Status when no updates are available",
+    "_machine_translated": true,
+    "_source_hash": "b150fcca169e15de"
+  },
+  "settings.store.update_check.updated": {
+    "message": "{count, plural, one {✓ 1 eklenti güncellendi} other {✓ # eklenti güncellendi}}",
+    "description": "Status after extensions update — pluralised count",
+    "_machine_translated": true,
+    "_source_hash": "39caa6fd0996b52f"
+  },
+  "settings.store.update_check.failed": {
+    "message": "✗ {reason}",
+    "description": "Status when the update check fails",
+    "_machine_translated": true,
+    "_source_hash": "e3074ace5af2e9f1"
+  },
+  "settings.store.url.section": {
+    "message": "Mağaza URL'si",
+    "description": "Subsection header for the primary store URL",
+    "_machine_translated": true,
+    "_source_hash": "870bd6a0dc11ddf1"
+  },
+  "settings.store.url.label": {
+    "message": "Birincil mağaza URL'si",
+    "description": "Label for the primary store URL field",
+    "_machine_translated": true,
+    "_source_hash": "668e3e8e1c2fc617"
+  },
+  "settings.store.url.description": {
+    "message": "Eklentilere göz atmak ve yüklemek için ana mağaza URL'si. Varsayılan mağaza için boş bırakın.",
+    "description": "Helper text for the primary store URL",
+    "_machine_translated": true,
+    "_source_hash": "28c4396136219523"
+  },
+  "settings.store.sources.section": {
+    "message": "Ek mağaza kaynakları",
+    "description": "Subsection header for extra store sources",
+    "_machine_translated": true,
+    "_source_hash": "d4b06d445c8bb534"
+  },
+  "settings.store.sources.description": {
+    "message": "Ek mağazalar ekleyin (ör. dahili bir şirket mağazası). Etkinleştirilmiş tüm kaynaklardaki öğeler mağaza tarayıcısında birleştirilir.",
+    "description": "Helper text under the additional sources list",
+    "_machine_translated": true,
+    "_source_hash": "9e092328e75862b8"
+  },
+  "settings.store.sources.add_btn": {
+    "message": "+ Kaynak ekle",
+    "description": "Button that adds an empty source row",
+    "_machine_translated": true,
+    "_source_hash": "fd2d5841505d4374"
+  },
+  "settings.store.sources.row.name_placeholder": {
+    "message": "Ad",
+    "description": "Placeholder for the source name input",
+    "_machine_translated": true,
+    "_source_hash": "b6370f3e3ad90304"
+  },
+  "settings.store.sources.row.enabled_title": {
+    "message": "Bu kaynağı etkinleştir/devre dışı bırak",
+    "description": "Tooltip on the per-source enabled toggle",
+    "_machine_translated": true,
+    "_source_hash": "0ef53cb1b287720f"
+  },
+  "settings.integration.title": {
+    "message": "Sistem Entegrasyonu",
+    "description": "Settings header — system integration toggles",
+    "_machine_translated": true,
+    "_source_hash": "75424bc8f72e4186"
+  },
+  "settings.integration.behavior.section": {
+    "message": "Davranış",
+    "description": "Subsection header for behavior toggles",
+    "_machine_translated": true,
+    "_source_hash": "975cf2f82ef228ed"
+  },
+  "settings.integration.capture_selection.label": {
+    "message": "Seçili metni yakala",
+    "description": "Toggle: copy selected text on hotkey",
+    "_machine_translated": true,
+    "_source_hash": "4d62c271787c76eb"
+  },
+  "settings.integration.capture_selection.description": {
+    "message": "Kısayola basıldığında etkin pencereden seçili metni alın ({shortcut} kullanır). Bu, terminal uygulamalarına veya diğer programlara müdahale ediyorsa devre dışı bırakın.",
+    "description": "Helper text — {shortcut} is the platform copy shortcut (Cmd+C / Ctrl+C)",
+    "_machine_translated": true,
+    "_source_hash": "722a58946ff8805d"
+  },
+  "settings.integration.blocklist.label": {
+    "message": "Bu uygulamalarda otomatik kopyalama yapma",
+    "description": "Label for the per-app capture-selection blocklist",
+    "_machine_translated": true,
+    "_source_hash": "3aee789ffde6f791"
+  },
+  "settings.integration.blocklist.description": {
+    "message": "Her satıra bir işlem adı. Bu uygulamalar odakta olduğunda Kage {shortcut} göndermez — bu dizinin \"kesme\" anlamına geldiği ve devam eden komutları iptal edebileceği terminallerde kullanışlıdır. Eşleştirme büyük/küçük harfe duyarlı değildir; sondaki \".exe\" isteğe bağlıdır. Engelleme listesini tamamen devre dışı bırakmak için temizleyin.",
+    "description": "Helper text for the blocklist; {shortcut} is platform copy shortcut",
+    "_machine_translated": true,
+    "_source_hash": "af15df7911d3aa21"
+  },
+  "settings.integration.show_notifications.label": {
+    "message": "Bildirimleri göster",
+    "description": "Toggle: show OS notifications on response completion",
+    "_machine_translated": true,
+    "_source_hash": "8687e2369ef606b8"
+  },
+  "settings.integration.show_notifications.description": {
+    "message": "Pencere gizliyken bir yanıt tamamlandığında sistem bildirimi göster.",
+    "description": "Helper text for the show-notifications toggle",
+    "_machine_translated": true,
+    "_source_hash": "03777f35b1d3755b"
+  },
+  "settings.integration.screen_context.label": {
+    "message": "Ekran bağlamı farkındalığı",
+    "description": "Toggle: include source app + title in messages",
+    "_machine_translated": true,
+    "_source_hash": "b8c80a7a1373b917"
+  },
+  "settings.integration.screen_context.description": {
+    "message": "Mesaj gönderirken kaynak uygulama adını ve pencere başlığını dahil et, böylece Kage neye baktığınızı bilsin.",
+    "description": "Helper text for the screen-context toggle",
+    "_machine_translated": true,
+    "_source_hash": "1bbea6ce7cdc8375"
+  },
+  "settings.integration.test_notification.btn": {
+    "message": "Bildirimi test et",
+    "description": "Button: send a test OS notification",
+    "_machine_translated": true,
+    "_source_hash": "c27d749b2cb30c29"
+  },
+  "settings.integration.test_notification.no_plugin": {
+    "message": "❌ Bildirim eklentisi mevcut değil.",
+    "description": "Status when the Tauri notification plugin isn't loaded",
+    "_machine_translated": true,
+    "_source_hash": "e495e19c6c4be31e"
+  },
+  "settings.integration.test_notification.body": {
+    "message": "Bildirimler çalışıyor!",
+    "description": "Body text of the test notification",
+    "_machine_translated": true,
+    "_source_hash": "771fb884b27284e9"
+  },
+  "settings.integration.test_notification.sent": {
+    "message": "✅ Bildirim gönderildi!",
+    "description": "Status after the test notification is dispatched",
+    "_machine_translated": true,
+    "_source_hash": "1ddb3bd55e8c2af0"
+  },
+  "settings.integration.test_notification.denied": {
+    "message": "❌ İzin reddedildi. İşletim sisteminizin bildirim ayarlarını kontrol edin.",
+    "description": "Status when OS-level notification permission is not granted",
+    "_machine_translated": true,
+    "_source_hash": "8fab178c784ed052"
+  },
+  "settings.integration.test_notification.error_label": {
+    "message": "Hata",
+    "description": "errLabel prefix for the test-notification failure path",
+    "_machine_translated": true,
+    "_source_hash": "c2bfd7bb5ac7780e"
+  },
+  "settings.integration.directories.section": {
+    "message": "Hızlı dizin erişimi",
+    "description": "Subsection header for the directory reference table",
+    "_machine_translated": true,
+    "_source_hash": "9b76ab7e3b03e9ab"
+  },
+  "settings.integration.directories.description": {
+    "message": "Klasörü açmak için Başlatıcı'ya bu anahtar kelimelerden herhangi birini yazın. Önek eşleştirmesi de çalışır — örn. \"down\" İndirilenleri açar.",
+    "description": "Helper text under the directory reference table",
+    "_machine_translated": true,
+    "_source_hash": "892655ce64923b46"
+  },
+  "settings.integration.directories.col.keyword": {
+    "message": "Anahtar kelime",
+    "description": "Table column header — directory keyword",
+    "_machine_translated": true,
+    "_source_hash": "03dcf77a6a2f916e"
+  },
+  "settings.integration.directories.col.aliases": {
+    "message": "Takma adlar",
+    "description": "Table column header — alternate names",
+    "_machine_translated": true,
+    "_source_hash": "00e7596d56679975"
+  },
+  "settings.integration.directories.col.path": {
+    "message": "Yol",
+    "description": "Table column header — resolved filesystem path",
+    "_machine_translated": true,
+    "_source_hash": "149c5257cc3034e8"
+  },
+  "settings.integration.directories.path_unavailable": {
+    "message": "kullanılamıyor",
+    "description": "Placeholder when a directory can't be resolved on this system",
+    "_machine_translated": true,
+    "_source_hash": "51fdc4b5dcade66d"
+  },
+  "floating.expand_chat_title": {
+    "message": "Tam sohbeti aç",
+    "description": "Tooltip on the expand-to-chat button",
+    "_machine_translated": true,
+    "_source_hash": "0e3dd3f2c875ef93"
+  },
+  "floating.copy_btn_title": {
+    "message": "Kopyala",
+    "description": "Tooltip on the copy-response button",
+    "_machine_translated": true,
+    "_source_hash": "2eaf58964b4f08b2"
+  },
+  "floating.speak_btn_title": {
+    "message": "Sesli oku",
+    "description": "Tooltip on the TTS button",
+    "_machine_translated": true,
+    "_source_hash": "27a37f823ca41e1e"
+  },
+  "floating.input.placeholder": {
+    "message": "Bana her şeyi sorabilirsiniz…",
+    "description": "Placeholder shown in the launcher input box",
+    "_machine_translated": true,
+    "_source_hash": "3fda9b46e3348d63"
+  },
+  "floating.stop_btn_title": {
+    "message": "Üretmeyi durdur (Esc)",
+    "description": "Tooltip on the stop-generation button",
+    "_machine_translated": true,
+    "_source_hash": "04aa8185c8664348"
+  },
+  "floating.speech_btn_title": {
+    "message": "Sesli giriş",
+    "description": "Tooltip on the speech-to-text button",
+    "_machine_translated": true,
+    "_source_hash": "753c000de91f8232"
+  },
+  "floating.attach_file_title": {
+    "message": "Dosya ekle",
+    "description": "Tooltip on the attach-file toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "7964bdd5aa4c4b75"
+  },
+  "floating.attach_image_title": {
+    "message": "Görsel ekle",
+    "description": "Tooltip on the attach-image toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "3e8d50e0477d5260"
+  },
+  "floating.context_indicator_title": {
+    "message": "Bağlam kullanımı",
+    "description": "Tooltip on the context-usage ring indicator",
+    "_machine_translated": true,
+    "_source_hash": "d04eb469abe6d5b0"
+  },
+  "floating.model_selector_title": {
+    "message": "Modeli ayarlardan değiştir",
+    "description": "Tooltip on the model name button",
+    "_machine_translated": true,
+    "_source_hash": "bbe1fad66a59d72d"
+  },
+  "floating.app_mode_chip_title": {
+    "message": "Bu mesaj için devre dışı bırakmak üzere tıklayın",
+    "description": "Tooltip on the active app-mode chip",
+    "_machine_translated": true,
+    "_source_hash": "be73d01d1500d68d"
+  },
+  "floating.use_selection_label": {
+    "message": "📋 Seçili metni dahil et",
+    "description": "Checkbox label for including selected text in the prompt",
+    "_machine_translated": true,
+    "_source_hash": "25c7c57acc179469"
+  },
+  "floating.offline_message": {
+    "message": "İnternet yok — yerel özellikler çalışmaya devam ediyor",
+    "description": "Banner shown when network connectivity is lost",
+    "_machine_translated": true,
+    "_source_hash": "22b7e837fef382ca"
+  },
+  "permission.dialog.title": {
+    "message": "Araç izni gerekli",
+    "description": "Header on the tool permission modal",
+    "_machine_translated": true,
+    "_source_hash": "936054d981906526"
+  },
+  "permission.dialog.body": {
+    "message": "AI asistanı bu aracı kullanmak istiyor. İzin vermek ister misiniz?",
+    "description": "Body text on the tool permission modal",
+    "_machine_translated": true,
+    "_source_hash": "65b49f9a2b2554fc"
+  },
+  "permission.dialog.warning": {
+    "message": "Yalnızca güvendiğiniz araçları onaylayın",
+    "description": "Warning shown beside a caution icon",
+    "_machine_translated": true,
+    "_source_hash": "4a3016b8d2d6a68e"
+  },
+  "permission.dialog.deny": {
+    "message": "Reddet",
+    "description": "Primary deny button",
+    "_machine_translated": true,
+    "_source_hash": "e28f57fd96e043d0"
+  },
+  "permission.dialog.deny_menu_title": {
+    "message": "Diğer seçenekler",
+    "description": "Tooltip on the dropdown chevron next to Deny",
+    "_machine_translated": true,
+    "_source_hash": "94f0ab867d312d53"
+  },
+  "permission.dialog.deny_always": {
+    "message": "Her zaman reddet",
+    "description": "Persistent-deny option in the deny dropdown",
+    "_machine_translated": true,
+    "_source_hash": "3b4eade9efaabd59"
+  },
+  "permission.dialog.allow": {
+    "message": "İzin ver",
+    "description": "Primary allow button",
+    "_machine_translated": true,
+    "_source_hash": "2c681dbefa3c0373"
+  },
+  "permission.dialog.allow_menu_title": {
+    "message": "Diğer seçenekler",
+    "description": "Tooltip on the dropdown chevron next to Allow",
+    "_machine_translated": true,
+    "_source_hash": "bf0a96522d10230f"
+  },
+  "permission.dialog.allow_24h": {
+    "message": "24 saat boyunca izin ver",
+    "description": "24-hour allow option in the allow dropdown",
+    "_machine_translated": true,
+    "_source_hash": "8efb2f8ac756b6c3"
+  },
+  "permission.dialog.allow_always": {
+    "message": "Her zaman izin ver",
+    "description": "Persistent allow option in the allow dropdown",
+    "_machine_translated": true,
+    "_source_hash": "8b4ac4498377ab3c"
+  },
+  "inline_assist.window_title": {
+    "message": "Satır içi asistan",
+    "description": "Window title for the inline-assist popup",
+    "_machine_translated": true,
+    "_source_hash": "ff52b5467c8de6ec"
+  },
+  "inline_assist.bubble.title": {
+    "message": "Tam sohbeti aç",
+    "description": "Tooltip on the inline-assist mascot bubble",
+    "_machine_translated": true,
+    "_source_hash": "18ef44067db3ec93"
+  },
+  "inline_assist.custom_input.placeholder": {
+    "message": "Bir şey sorun…",
+    "description": "Placeholder in the inline-assist custom prompt input",
+    "_machine_translated": true,
+    "_source_hash": "3ebad280f0ddac0e"
+  },
+  "inline_assist.thinking": {
+    "message": "Düşünülüyor…",
+    "description": "Status bar text while the agent is generating an inline-assist reply",
+    "_machine_translated": true,
+    "_source_hash": "888dd33e108efe77"
+  },
+  "settings.model.title": {
+    "message": "Model",
+    "description": "Settings header — model selection",
+    "_machine_translated": true,
+    "_source_hash": "b23b8e98530dc781"
+  },
+  "settings.model.default.label": {
+    "message": "Varsayılan model",
+    "description": "Default model dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "9b5f89310b254253"
+  },
+  "settings.model.default.description": {
+    "message": "Konuşmalarda kullanılacak varsayılan modeli seçin — sohbet oturumları (>chats) deneyiminde modelinizi anında değiştirebilirsiniz.",
+    "description": "Helper text for the default model dropdown",
+    "_machine_translated": true,
+    "_source_hash": "01867acd95749fb0"
+  },
+  "settings.model.default.loading": {
+    "message": "Modeller yükleniyor…",
+    "description": "Placeholder option while the model list loads",
+    "_machine_translated": true,
+    "_source_hash": "0a80c02207ade79c"
+  },
+  "settings.model.default.empty": {
+    "message": "Henüz kullanılabilir model yok",
+    "description": "Placeholder option when the agent reports no models",
+    "_machine_translated": true,
+    "_source_hash": "321890ad6c6f6aaf"
+  },
+  "settings.model.auto_compact.label": {
+    "message": "Otomatik sıkıştırma eşiği",
+    "description": "Auto-compact slider label",
+    "_machine_translated": true,
+    "_source_hash": "4f5167e2aae8cb3f"
+  },
+  "settings.model.auto_compact.description": {
+    "message": "Bağlam kullanımı bu yüzdeye ulaştığında konuşmayı otomatik olarak sıkıştırır. Devre dışı bırakmak için 0 olarak ayarlayın.",
+    "description": "Helper text for the auto-compact slider",
+    "_machine_translated": true,
+    "_source_hash": "20e9883f9e9496b2"
+  },
+  "settings.model.auto_compact.off": {
+    "message": "Kapalı",
+    "description": "Slider value display when threshold is 0",
+    "_machine_translated": true,
+    "_source_hash": "9e23d78d3fadce06"
+  },
+  "chat.window_title": {
+    "message": "Kage",
+    "description": "Window title for the chat window",
+    "_machine_translated": true,
+    "_source_hash": "ac5e28e78efc7f2b"
+  },
+  "chat.sidebar.toggle_title": {
+    "message": "Kenar çubuğunu aç/kapat",
+    "description": "Tooltip on the sidebar toggle button",
+    "_machine_translated": true,
+    "_source_hash": "c51957f8bab57aac"
+  },
+  "chat.sidebar.show_title": {
+    "message": "Kenar çubuğunu göster",
+    "description": "Tooltip on the collapsed-sidebar toggle button",
+    "_machine_translated": true,
+    "_source_hash": "3ded87c8eaf44469"
+  },
+  "chat.sidebar.new_chat": {
+    "message": "Yeni sohbet",
+    "description": "Button: start a new chat session in the current window",
+    "_machine_translated": true,
+    "_source_hash": "efe09ba4a3dff6c1"
+  },
+  "chat.sidebar.new_window_title": {
+    "message": "Yeni sohbet penceresi (Ctrl+Shift+N)",
+    "description": "Tooltip on the new-window button",
+    "_machine_translated": true,
+    "_source_hash": "0179422eccf853ad"
+  },
+  "chat.sidebar.settings_title": {
+    "message": "Ayarlar",
+    "description": "Tooltip on the settings button",
+    "_machine_translated": true,
+    "_source_hash": "1be51853e4d3f4a3"
+  },
+  "chat.sidebar.search.placeholder": {
+    "message": "Oturumlarda ara…",
+    "description": "Placeholder for the session-search input",
+    "_machine_translated": true,
+    "_source_hash": "cbc0607c4ecd4ffe"
+  },
+  "chat.sidebar.source.kage": {
+    "message": "Kage",
+    "description": "Tab: show Kage-managed sessions",
+    "_machine_translated": true,
+    "_source_hash": "d8839a546a7b52a2"
+  },
+  "chat.sidebar.source.other_agents": {
+    "message": "Diğer aracılar",
+    "description": "Tab: show sessions from other agents (Claude Code, Kage Desktop, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "c481304f3a1897a0"
+  },
+  "chat.sidebar.empty": {
+    "message": "Henüz oturum yok",
+    "description": "Empty-state shown when no sessions exist",
+    "_machine_translated": true,
+    "_source_hash": "19fa1b221061ca96"
+  },
+  "chat.header.default_title": {
+    "message": "Yeni sohbet",
+    "description": "Default title shown for a fresh, unnamed session",
+    "_machine_translated": true,
+    "_source_hash": "87afc51678de3378"
+  },
+  "chat.header.title_rename_hint": {
+    "message": "Yeniden adlandırmak için çift tıklayın",
+    "description": "Tooltip on the chat title encouraging rename",
+    "_machine_translated": true,
+    "_source_hash": "655531c1d9092a5b"
+  },
+  "chat.header.export_title": {
+    "message": "Bu sohbeti Markdown olarak dışa aktar",
+    "description": "Tooltip / aria-label on the export button",
+    "_machine_translated": true,
+    "_source_hash": "bcbc7a1fd6462e20"
+  },
+  "chat.header.connection_checking": {
+    "message": "Denetleniyor…",
+    "description": "Connection status text while checking",
+    "_machine_translated": true,
+    "_source_hash": "eefeee9ba6772c4a"
+  },
+  "chat.placeholder.start_conversation": {
+    "message": "Kage ile sohbete başlayın…",
+    "description": "Placeholder shown in an empty messages area",
+    "_machine_translated": true,
+    "_source_hash": "42d13f359981f7e4"
+  },
+  "chat.input.placeholder": {
+    "message": "Mesajınızı yazın…",
+    "description": "Placeholder for the chat input textarea",
+    "_machine_translated": true,
+    "_source_hash": "723ac08595f53f6b"
+  },
+  "chat.send_btn_title": {
+    "message": "Mesaj gönder",
+    "description": "Tooltip / aria-label on the send button",
+    "_machine_translated": true,
+    "_source_hash": "459e7179546d27a4"
+  },
+  "chat.toolbar.speech_btn_title": {
+    "message": "Sesli giriş",
+    "description": "Tooltip on the speech toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "76008440d4481038"
+  },
+  "chat.toolbar.attach_file_title": {
+    "message": "Dosya ekle (içerik metin olarak gönderilir)",
+    "description": "Tooltip on the attach-file toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "39f964e265b8b301"
+  },
+  "chat.toolbar.attach_image_title": {
+    "message": "Görsel ekle",
+    "description": "Tooltip on the attach-image toolbar button",
+    "_machine_translated": true,
+    "_source_hash": "3e8d50e0477d5260"
+  },
+  "chat.toolbar.context_indicator_title": {
+    "message": "%{percent} bağlam kullanıldı",
+    "description": "Tooltip on the context-usage ring indicator",
+    "_machine_translated": true,
+    "_source_hash": "92b123770abcb945"
+  },
+  "chat.toolbar.model_selector_title": {
+    "message": "Model seç",
+    "description": "Tooltip on the model selector button",
+    "_machine_translated": true,
+    "_source_hash": "97b093503b628b4b"
+  },
+  "chat.toolbar.model_loading": {
+    "message": "Yükleniyor…",
+    "description": "Placeholder while the active model name resolves",
+    "_machine_translated": true,
+    "_source_hash": "3cf7fe6aad35456b"
+  },
+  "chat.lightbox.alt": {
+    "message": "Yakınlaştırılmış görünüm",
+    "description": "Alt text for the image lightbox",
+    "_machine_translated": true,
+    "_source_hash": "ad20f655cf725d1a"
+  },
+  "chat.session_list.no_matches": {
+    "message": "Eşleşen oturum yok",
+    "description": "Empty state shown when search filters every session out",
+    "_machine_translated": true,
+    "_source_hash": "3d0f5d544d802d39"
+  },
+  "chat.session.new_dot_title": {
+    "message": "Yeni oturum",
+    "description": "Tooltip on the unread/new-session indicator dot",
+    "_machine_translated": true,
+    "_source_hash": "bd6eadb6e1ac8c72"
+  },
+  "chat.session.action.rename_title": {
+    "message": "Yeniden adlandır",
+    "description": "Tooltip on the per-session rename button",
+    "_machine_translated": true,
+    "_source_hash": "427a3db11a6266e3"
+  },
+  "chat.session.action.reveal_title": {
+    "message": "Dosyayı göster",
+    "description": "Tooltip on the per-session reveal-in-file-manager button",
+    "_machine_translated": true,
+    "_source_hash": "dd02c4ca3ed80dfa"
+  },
+  "chat.session.action.delete_title": {
+    "message": "Sil",
+    "description": "Tooltip on the per-session delete button",
+    "_machine_translated": true,
+    "_source_hash": "07d5dce8507fed69"
+  },
+  "chat.message.action.copy": {
+    "message": "Kopyala",
+    "description": "Tooltip on the per-message copy button",
+    "_machine_translated": true,
+    "_source_hash": "518834cca2fda2ff"
+  },
+  "chat.message.action.speak": {
+    "message": "Sesli oku",
+    "description": "Tooltip on the per-message TTS button",
+    "_machine_translated": true,
+    "_source_hash": "3c1966b24753d1fc"
+  },
+  "chat.message.action.translate": {
+    "message": "Çevir",
+    "description": "Tooltip on the per-message translate button",
+    "_machine_translated": true,
+    "_source_hash": "8c4dbf46c9940b0a"
+  },
+  "chat.send_btn.send_title": {
+    "message": "Mesajı gönder",
+    "description": "Send button tooltip when ready to send",
+    "_machine_translated": true,
+    "_source_hash": "492aa4d7b7cc79f8"
+  },
+  "chat.send_btn.stop_title": {
+    "message": "Üretmeyi durdur (Esc)",
+    "description": "Send button tooltip when generation is in flight",
+    "_machine_translated": true,
+    "_source_hash": "09598f6e18d2f914"
+  },
+  "chat.connection.offline": {
+    "message": "Çevrimdışı",
+    "description": "Connection status — no network",
+    "_machine_translated": true,
+    "_source_hash": "288e9c34c370e26b"
+  },
+  "chat.connection.connected": {
+    "message": "Bağlı",
+    "description": "Connection status — agent reachable",
+    "_machine_translated": true,
+    "_source_hash": "e6d6c2b6aecc9e11"
+  },
+  "chat.connection.disconnected": {
+    "message": "Bağlantı kesildi",
+    "description": "Connection status — not connected to agent",
+    "_machine_translated": true,
+    "_source_hash": "c145021debf1fbee"
+  },
+  "chat.compacting.in_progress": {
+    "message": "Bağlam sıkıştırılıyor…",
+    "description": "Notice shown while the conversation is being compacted",
+    "_machine_translated": true,
+    "_source_hash": "ffb77b7923fa11cd"
+  },
+  "chat.model.no_models": {
+    "message": "Model yok",
+    "description": "Selector label when the agent reports zero models",
+    "_machine_translated": true,
+    "_source_hash": "f83212032b109db9"
+  },
+  "chat.model.unavailable": {
+    "message": "Kullanılamıyor",
+    "description": "Selector label when models can't be queried",
+    "_machine_translated": true,
+    "_source_hash": "fb746439a6882598"
+  },
+  "chat.dismiss_title": {
+    "message": "Kapat",
+    "description": "Tooltip on the close (✕) button",
+    "_machine_translated": true,
+    "_source_hash": "d37b67427502c24a"
+  },
+  "chat.session_list.new_divider": {
+    "message": "● Yeni",
+    "description": "Divider label between previously-seen and newly-discovered sessions",
+    "_machine_translated": true,
+    "_source_hash": "2bf9564dd560ef4b"
+  },
+  "chat.session_list.no_external": {
+    "message": "Harici oturum bulunamadı",
+    "description": "Empty state when no other-agent sessions exist",
+    "_machine_translated": true,
+    "_source_hash": "a99b44171e07b5d7"
+  },
+  "chat.session.kd_action.open_folder_title": {
+    "message": "Klasörü aç",
+    "description": "Tooltip on the per-session 'reveal containing folder' button (Other Agents tab)",
+    "_machine_translated": true,
+    "_source_hash": "c15dcbda1f9dea07"
+  },
+  "chat.session.kd_action.delete_title": {
+    "message": "Sil",
+    "description": "Tooltip on the delete button in the Other Agents tab",
+    "_machine_translated": true,
+    "_source_hash": "3d197bc755377544"
+  },
+  "chat.session.kd_action.delete_confirm": {
+    "message": "Bu oturum silinsin mi?",
+    "description": "confirm() text before deleting a session",
+    "_machine_translated": true,
+    "_source_hash": "767c7bea7fd60d02"
+  },
+  "chat.session.kd_loading": {
+    "message": "Oturum yükleniyor…",
+    "description": "Placeholder while a session's history loads",
+    "_machine_translated": true,
+    "_source_hash": "35c7372188258169"
+  },
+  "chat.session.kd_tool_copy_title": {
+    "message": "Kopyala",
+    "description": "Tooltip on the copy button inside an Other-Agent session view",
+    "_machine_translated": true,
+    "_source_hash": "2b83ddd1a3d1d5e9"
   }
 }

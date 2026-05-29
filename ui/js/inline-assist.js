@@ -8,6 +8,7 @@ import { createMascot } from './shared/mascot.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 import { EVT } from './shared/events.js';
 import { WINDOW } from './shared/window-labels.js';
+import { initI18n, applyStaticTranslations } from './shared/i18n.js';
 
 console.log(
     '[inline-assist] Module loaded, classifyText:',
@@ -21,6 +22,15 @@ console.log(
     const { listen, emit } = window.__TAURI__.event;
     const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
     const LogicalSize = window.__TAURI__.dpi.LogicalSize;
+
+    // Load i18n catalog before any rendering so the static markup +
+    // any future t() calls see real translations rather than literal keys.
+    try {
+        await initI18n(invoke);
+    } catch (e) {
+        console.warn('[inline-assist] i18n init failed', e);
+    }
+    applyStaticTranslations(document);
 
     // Apply theme via the shared ES module (loaded directly here, no global shim).
     initThemeListener();

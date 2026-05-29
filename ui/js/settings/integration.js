@@ -1,5 +1,6 @@
 import { errLabel } from '../shared/error-message.js';
 import { isMac } from '../shared/shortcuts.js';
+import { t } from '../shared/i18n.js';
 import { SettingsModule } from './base.js';
 import { getSystemIcon } from './system.js';
 /**
@@ -7,7 +8,7 @@ import { getSystemIcon } from './system.js';
  */
 export class IntegrationSettingsModule extends SettingsModule {
     constructor() {
-        super('integration', 'System Integration', getSystemIcon());
+        super('integration', t('settings.integration.title'), getSystemIcon());
         this.bindFields([
             {
                 id: 'captureSelection',
@@ -31,51 +32,54 @@ export class IntegrationSettingsModule extends SettingsModule {
     }
 
     render() {
+        const copyShortcut = isMac() ? 'Cmd+C' : 'Ctrl+C';
         return `
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                <div class="setting-section-label">Behavior</div>
+                <div class="setting-section-label">${t('settings.integration.behavior.section')}</div>
 
                 ${this.createCheckboxRow(
-                    'Capture selected text',
-                    `Grab selected text from the active window when the hotkey is pressed (uses ${isMac() ? 'Cmd+C' : 'Ctrl+C'}). Disable if this interferes with terminal apps or other programs.`,
+                    t('settings.integration.capture_selection.label'),
+                    t('settings.integration.capture_selection.description', {
+                        shortcut: copyShortcut,
+                    }),
                     'captureSelection',
                     true
                 )}
 
                 ${this.createControlRow(
-                    "Don't auto-copy in these apps",
-                    `One process name per line. When these apps are focused, Kage won't inject ${isMac() ? 'Cmd+C' : 'Ctrl+C'} — useful for terminals where that sequence means "interrupt" and can cancel in-progress commands. Matching is case-insensitive; a trailing ".exe" is optional. Clear to disable the blocklist entirely.`,
+                    t('settings.integration.blocklist.label'),
+                    t('settings.integration.blocklist.description', { shortcut: copyShortcut }),
                     `<textarea id="captureSelectionBlocklist" rows="6" class="setting-input" spellcheck="false" style="font-family: var(--kage-font-mono, monospace); width: 100%; resize: vertical;"></textarea>`
                 )}
 
                 ${this.createCheckboxRow(
-                    'Show notifications',
-                    'Show a system notification when a response completes while the window is hidden.',
+                    t('settings.integration.show_notifications.label'),
+                    t('settings.integration.show_notifications.description'),
                     'showNotifications',
                     true
                 )}
 
                 ${this.createCheckboxRow(
-                    'Screen context awareness',
-                    'Include the source application name and window title when sending messages, so Kage knows what you were looking at.',
+                    t('settings.integration.screen_context.label'),
+                    t('settings.integration.screen_context.description'),
                     'screenContext',
                     true
                 )}
 
                 <div class="setting-row" style="padding-left: 28px;">
-                    <button class="setting-button" id="testNotificationBtn">Test Notification</button>
+                    <button class="setting-button" id="testNotificationBtn">${t('settings.integration.test_notification.btn')}</button>
                     <span class="setting-description" id="notificationStatus" style="margin-left: 8px;"></span>
                 </div>
 
-                <div class="setting-section-label">Quick Directory Access</div>
+                <div class="setting-section-label">${t('settings.integration.directories.section')}</div>
 
                 <div class="setting-row">
-                    <div class="setting-description">Type any of these keywords in the Launcher to open the folder. Prefix matching works too — e.g. "down" opens Downloads.</div>
+                    <div class="setting-description">${t('settings.integration.directories.description')}</div>
                 </div>
                 <table class="dir-reference-table">
-                    <thead><tr><th>Keyword</th><th>Aliases</th><th>Path</th></tr></thead>
+                    <thead><tr><th>${t('settings.integration.directories.col.keyword')}</th><th>${t('settings.integration.directories.col.aliases')}</th><th>${t('settings.integration.directories.col.path')}</th></tr></thead>
                     <tbody id="dirReferenceBody"></tbody>
                 </table>
 
@@ -102,10 +106,11 @@ export class IntegrationSettingsModule extends SettingsModule {
                 const dirs = await invoke('resolve_directories');
                 const tbody = document.getElementById('dirReferenceBody');
                 if (tbody) {
+                    const unavailable = t('settings.integration.directories.path_unavailable');
                     tbody.innerHTML = dirs
                         .map(
                             (d) =>
-                                `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || '<span style="color:var(--kage-text-muted)">not available</span>'}</td></tr>`
+                                `<tr><td><code>${d.keyword}</code></td><td>${d.aliases}</td><td>${d.path || `<span style="color:var(--kage-text-muted)">${unavailable}</span>`}</td></tr>`
                         )
                         .join('');
                 }
@@ -119,7 +124,7 @@ export class IntegrationSettingsModule extends SettingsModule {
             try {
                 const notif = window.__TAURI__?.notification;
                 if (!notif) {
-                    statusEl.textContent = '❌ Notification plugin not available.';
+                    statusEl.textContent = t('settings.integration.test_notification.no_plugin');
                     return;
                 }
                 let granted = await notif.isPermissionGranted();
@@ -128,14 +133,17 @@ export class IntegrationSettingsModule extends SettingsModule {
                     granted = perm === 'granted';
                 }
                 if (granted) {
-                    notif.sendNotification({ title: 'Kage', body: 'Notifications are working!' });
-                    statusEl.textContent = '✅ Notification sent!';
+                    notif.sendNotification({
+                        title: 'Kage',
+                        body: t('settings.integration.test_notification.body'),
+                    });
+                    statusEl.textContent = t('settings.integration.test_notification.sent');
                 } else {
-                    statusEl.textContent =
-                        '❌ Permission denied. Check your OS notification settings.';
+                    statusEl.textContent = t('settings.integration.test_notification.denied');
                 }
             } catch (e) {
-                statusEl.textContent = '❌ ' + errLabel('Error', e);
+                statusEl.textContent =
+                    '❌ ' + errLabel(t('settings.integration.test_notification.error_label'), e);
             }
         });
     }

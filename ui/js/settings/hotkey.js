@@ -1,11 +1,12 @@
 import { SettingsModule } from './base.js';
 import { isWindows, platformKeyLabel } from '../shared/shortcuts.js';
+import { t } from '../shared/i18n.js';
 /**
  * Hotkey & Shortcuts Settings Module - uses shared HotkeyPicker component
  */
 export class HotkeySettingsModule extends SettingsModule {
     constructor() {
-        super('hotkey', 'Hotkey & Shortcuts', '\u{1F3B9}');
+        super('hotkey', t('settings.hotkey.title'), '\u{1F3B9}');
         this._picker = null;
         this._cbPicker = null;
         this._iaPicker = null;
@@ -19,13 +20,17 @@ export class HotkeySettingsModule extends SettingsModule {
         const showClipboardHistory = isWindows() ?? false;
         const clipboardHotkeyRow = showClipboardHistory
             ? this.createControlRow(
-                  'Clipboard History Hotkey',
-                  'Open clipboard history directly. Leave empty to disable.',
+                  t('settings.hotkey.clipboard.label'),
+                  t('settings.hotkey.clipboard.description'),
                   '<div id="settingsClipboardHotkeyPicker"></div>'
               )
             : '';
         const clipboardShortcutRef = showClipboardHistory
-            ? this.shortcutRow('>cb', 'Clipboard history', 'Launcher')
+            ? this.shortcutRow(
+                  '>cb',
+                  t('settings.hotkey.shortcut.clipboard_history.action'),
+                  t('settings.hotkey.scope.launcher')
+              )
             : '';
 
         return (
@@ -38,45 +43,75 @@ export class HotkeySettingsModule extends SettingsModule {
             this.title +
             '</h2>' +
             this.createControlRow(
-                'Global Hotkey',
-                'The shortcut to summon Kage from anywhere.',
+                t('settings.hotkey.global.label'),
+                t('settings.hotkey.global.description'),
                 '<div id="settingsHotkeyPicker"></div>'
             ) +
             this.createControlRow(
-                'Voice Input Hotkey',
-                'summon Kage with the microphone already listening. Leave empty to disable.',
+                t('settings.hotkey.voice.label'),
+                t('settings.hotkey.voice.description'),
                 '<div id="settingsVoiceHotkeyPicker"></div>'
             ) +
             clipboardHotkeyRow +
             this.createControlRow(
-                'Inline Assist Hotkey',
-                'Trigger inline AI assist on selected text. Leave empty to disable.',
+                t('settings.hotkey.inline_assist.label'),
+                t('settings.hotkey.inline_assist.description'),
                 '<div id="settingsInlineAssistHotkeyPicker"></div>'
             ) +
-            '<div class="setting-section-label">Keyboard Shortcuts</div>' +
+            '<div class="setting-section-label">' +
+            t('settings.hotkey.shortcuts.section') +
+            '</div>' +
             '<div class="shortcuts-reference">' +
-            this.shortcutRow(platformKeyLabel('Ctrl+N'), 'New session', 'Chat window') +
-            this.shortcutRow(platformKeyLabel('Ctrl+W'), 'Close / hide window', 'All windows') +
-            this.shortcutRow(platformKeyLabel('Ctrl+,'), 'Open settings', 'Launcher & Chat') +
-            this.shortcutRow(platformKeyLabel('Ctrl+E'), 'Expand to full chat', 'Launcher') +
-            this.shortcutRow(platformKeyLabel('Ctrl+L'), 'Clear / reset', 'Launcher') +
+            this.shortcutRow(
+                platformKeyLabel('Ctrl+N'),
+                t('settings.hotkey.shortcut.new_session.action'),
+                t('settings.hotkey.scope.chat_window')
+            ) +
+            this.shortcutRow(
+                platformKeyLabel('Ctrl+W'),
+                t('settings.hotkey.shortcut.close_window.action'),
+                t('settings.hotkey.scope.all_windows')
+            ) +
+            this.shortcutRow(
+                platformKeyLabel('Ctrl+,'),
+                t('settings.hotkey.shortcut.open_settings.action'),
+                t('settings.hotkey.scope.launcher_chat')
+            ) +
+            this.shortcutRow(
+                platformKeyLabel('Ctrl+E'),
+                t('settings.hotkey.shortcut.expand_chat.action'),
+                t('settings.hotkey.scope.launcher')
+            ) +
+            this.shortcutRow(
+                platformKeyLabel('Ctrl+L'),
+                t('settings.hotkey.shortcut.clear.action'),
+                t('settings.hotkey.scope.launcher')
+            ) +
             this.shortcutRow(
                 platformKeyLabel('Ctrl+Shift+C'),
-                'Copy last response',
-                'Launcher & Chat'
+                t('settings.hotkey.shortcut.copy_response.action'),
+                t('settings.hotkey.scope.launcher_chat')
             ) +
             this.shortcutRow(
                 platformKeyLabel('Ctrl+Enter'),
-                'Send to agent (bypass suggestions)',
-                'Launcher'
+                t('settings.hotkey.shortcut.send_bypass.action'),
+                t('settings.hotkey.scope.launcher')
             ) +
             this.shortcutRow(
                 platformKeyLabel('Escape'),
-                'Stop generating / Hide window',
-                'Launcher'
+                t('settings.hotkey.shortcut.escape.action'),
+                t('settings.hotkey.scope.launcher')
             ) +
-            this.shortcutRow(platformKeyLabel('Enter'), 'Send message', 'All') +
-            this.shortcutRow(platformKeyLabel('Shift+Enter'), 'New line', 'All') +
+            this.shortcutRow(
+                platformKeyLabel('Enter'),
+                t('settings.hotkey.shortcut.send.action'),
+                t('settings.hotkey.scope.all')
+            ) +
+            this.shortcutRow(
+                platformKeyLabel('Shift+Enter'),
+                t('settings.hotkey.shortcut.newline.action'),
+                t('settings.hotkey.scope.all')
+            ) +
             clipboardShortcutRef +
             '</div></div>'
         );

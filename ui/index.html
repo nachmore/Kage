@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kage</title>
+    <title data-i18n="chat.window_title">Kage</title>
 
     <!-- Vendored Dependencies -->
     <link rel="stylesheet" href="vendor/lib/prism-themes/prism-okaidia.min.css">
@@ -29,7 +29,7 @@
             <div class="sidebar-header">
                 <div class="sidebar-logo" id="sidebarMascot"></div>
                 <span class="sidebar-title">Kage</span>
-                <button class="sidebar-toggle-btn" id="sidebarToggleBtn" title="Toggle sidebar">
+                <button class="sidebar-toggle-btn" id="sidebarToggleBtn" data-i18n-title="chat.sidebar.toggle_title" title="Toggle sidebar">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
             </div>
@@ -40,15 +40,15 @@
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
                     </svg>
-                    New Chat
+                    <span data-i18n="chat.sidebar.new_chat">New Chat</span>
                 </button>
-                <button class="new-window-btn" id="newWindowBtn" title="New Chat Window (Ctrl+Shift+N)">
+                <button class="new-window-btn" id="newWindowBtn" data-i18n-title="chat.sidebar.new_window_title" title="New Chat Window (Ctrl+Shift+N)">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="14" height="14" rx="2"/>
                         <path d="M8 8h13v13H8z"/>
                     </svg>
                 </button>
-                <button class="new-window-btn" id="settingsBtn" title="Settings">
+                <button class="new-window-btn" id="settingsBtn" data-i18n-title="chat.sidebar.settings_title" title="Settings">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -57,39 +57,39 @@
             </div>
 
             <div class="session-search-container">
-                <input type="text" class="session-search" id="sessionSearch" placeholder="Search sessions..." spellcheck="false">
+                <input type="text" class="session-search" id="sessionSearch" placeholder="Search sessions..." data-i18n-placeholder="chat.sidebar.search.placeholder" spellcheck="false">
             </div>
 
             <div class="session-source-toggle" id="sessionSourceToggle" style="display:none">
-                <button class="source-toggle-btn active" data-source="kage">Kage</button>
-                <button class="source-toggle-btn" data-source="desktop">Other Agents</button>
+                <button class="source-toggle-btn active" data-source="kage" data-i18n="chat.sidebar.source.kage">Kage</button>
+                <button class="source-toggle-btn" data-source="desktop" data-i18n="chat.sidebar.source.other_agents">Other Agents</button>
             </div>
 
             <div class="session-list" id="sessionList">
-                <div class="session-list-empty">No sessions yet</div>
+                <div class="session-list-empty" data-i18n="chat.sidebar.empty">No sessions yet</div>
             </div>
         </div>
 
         <!-- Main Chat -->
         <div class="chat-main" style="position: relative;">
             <div class="chat-header">
-                <button class="sidebar-toggle-btn sidebar-toggle-collapsed" id="sidebarToggleBtnCollapsed" title="Show sidebar" style="display:none">
+                <button class="sidebar-toggle-btn sidebar-toggle-collapsed" id="sidebarToggleBtnCollapsed" data-i18n-title="chat.sidebar.show_title" title="Show sidebar" style="display:none">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                 </button>
                 <div class="chat-header-title-group">
-                    <span class="chat-header-title" id="chatHeaderTitle" title="Double-click to rename">New Chat</span>
+                    <span class="chat-header-title" id="chatHeaderTitle" data-i18n-title="chat.header.title_rename_hint" title="Double-click to rename" data-i18n="chat.header.default_title">New Chat</span>
                     <input class="chat-header-title-input" id="chatHeaderTitleInput" style="display: none;" maxlength="80">
                 </div>
-                <button class="chat-header-action" id="chatExportBtn" title="Export this chat as Markdown" aria-label="Export this chat as Markdown">
+                <button class="chat-header-action" id="chatExportBtn" data-i18n-title="chat.header.export_title" title="Export this chat as Markdown" data-i18n-aria-label="chat.header.export_title" aria-label="Export this chat as Markdown">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </button>
-                <span class="chat-header-status" id="connectionStatus">Checking...</span>
+                <span class="chat-header-status" id="connectionStatus" data-i18n="chat.header.connection_checking">Checking...</span>
             </div>
 
             <div id="errorContainer"></div>
 
             <div class="messages-area" id="messagesArea">
-                <div class="message-placeholder">Start a conversation with Kage...</div>
+                <div class="message-placeholder" data-i18n="chat.placeholder.start_conversation">Start a conversation with Kage...</div>
             </div>
 
             <div class="chat-input-container">
@@ -100,17 +100,18 @@
                         class="chat-input"
                         id="chatInput"
                         placeholder="Type your message..."
+                        data-i18n-placeholder="chat.input.placeholder"
                         rows="1"
                         dir="auto"
                     ></textarea>
-                    <button class="chat-send-btn" id="sendBtn" aria-label="Send message" title="Send message">
+                    <button class="chat-send-btn" id="sendBtn" data-i18n-aria-label="chat.send_btn_title" aria-label="Send message" data-i18n-title="chat.send_btn_title" title="Send message">
                         <svg class="send-icon" width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M13.854 7.14576L8.85401 2.14576C8.65901 1.95076 8.34201 1.95076 8.14701 2.14576L3.14601 7.14576C2.95101 7.34076 2.95101 7.65776 3.14601 7.85276C3.34101 8.04776 3.65801 8.04776 3.85301 7.85276L7.99901 3.70676V13.4998C7.99901 13.7758 8.22301 13.9998 8.49901 13.9998C8.77501 13.9998 8.99901 13.7758 8.99901 13.4998V3.70676L13.145 7.85276C13.243 7.95076 13.371 7.99876 13.499 7.99876C13.627 7.99876 13.755 7.94976 13.853 7.85276C14.048 7.65776 14.048 7.34076 13.853 7.14576H13.854Z"/></svg>
                         <svg class="stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                     </button>
                 </div>
                 <div class="chat-toolbar">
                     <div class="chat-toolbar-left">
-                        <button class="chat-toolbar-btn speech-btn" id="chatSpeechBtn" style="display:none" title="Voice input">
+                        <button class="chat-toolbar-btn speech-btn" id="chatSpeechBtn" style="display:none" data-i18n-title="chat.toolbar.speech_btn_title" title="Voice input">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
                         </button>
                         <div class="speech-wave chat-speech-wave" id="chatSpeechWave" style="display:none">
@@ -120,20 +121,20 @@
                             <div class="speech-wave-bar"></div>
                             <div class="speech-wave-bar"></div>
                         </div>
-                        <button class="chat-toolbar-btn" id="attachFileBtn" title="Attach file (contents sent as text)">
+                        <button class="chat-toolbar-btn" id="attachFileBtn" data-i18n-title="chat.toolbar.attach_file_title" title="Attach file (contents sent as text)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
                         </button>
-                        <button class="chat-toolbar-btn" id="attachImageBtn" title="Attach image">
+                        <button class="chat-toolbar-btn" id="attachImageBtn" data-i18n-title="chat.toolbar.attach_image_title" title="Attach image">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         </button>
                     </div>
                     <div class="chat-toolbar-right">
-                        <span class="chat-context-indicator" id="contextIndicator" title="0% context used">
+                        <span class="chat-context-indicator" id="contextIndicator" data-i18n-title="chat.toolbar.context_indicator_title" data-i18n-args='{"percent":0}' title="0% context used">
                             <canvas id="contextRing" width="16" height="16"></canvas>
                             <span id="contextPercent">--%</span>
                         </span>
-                        <button class="chat-model-selector" id="modelSelector" title="Select model">
-                            <span id="modelName">Loading...</span>
+                        <button class="chat-model-selector" id="modelSelector" data-i18n-title="chat.toolbar.model_selector_title" title="Select model">
+                            <span id="modelName" data-i18n="chat.toolbar.model_loading">Loading...</span>
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
                         <div class="chat-model-dropdown" id="modelDropdown" style="display:none"></div>
@@ -145,40 +146,42 @@
 
             <!-- Image lightbox overlay -->
             <div class="image-lightbox" id="imageLightbox" style="display: none;">
-                <img class="image-lightbox-img" id="lightboxImg" alt="Zoomed view">
+                <img class="image-lightbox-img" id="lightboxImg" data-i18n-alt="chat.lightbox.alt" alt="Zoomed view">
             </div>
 
-            <!-- Permission Modal — scoped to chat-main, not the whole window -->
+            <!-- Permission Modal — scoped to chat-main, not the whole window.
+                 Reuses the same i18n keys as the floating window's modal so
+                 the two surfaces stay in lock-step word-for-word. -->
             <div class="permission-modal-overlay chat-scoped" id="permissionModal" style="display: none;" data-session-id="">
                 <div class="permission-modal">
                     <div class="permission-header">
-                        <h3>Tool Permission Required</h3>
+                        <h3 data-i18n="permission.dialog.title">Tool Permission Required</h3>
                     </div>
                     <div class="permission-body">
                         <div class="permission-tool-name" id="permissionToolName"></div>
                         <p class="permission-tool-title" id="permissionToolTitle"></p>
-                        <p class="permission-description">The AI wants to use this tool. Do you want to allow it?</p>
+                        <p class="permission-description" data-i18n="permission.dialog.body">The AI wants to use this tool. Do you want to allow it?</p>
                         <div class="permission-warning">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                                 <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v5h1v-5h-1zm0 6v1h1v-1h-1z"/>
                             </svg>
-                            <span>Only approve tools you trust</span>
+                            <span data-i18n="permission.dialog.warning">Only approve tools you trust</span>
                         </div>
                     </div>
                     <div class="permission-actions">
                         <div class="permission-deny-group">
-                            <button class="permission-btn permission-btn-deny" id="permissionDeny">Deny</button>
-                            <button class="permission-btn permission-btn-deny-menu" id="permissionDenyMenu" title="More options">▾</button>
+                            <button class="permission-btn permission-btn-deny" id="permissionDeny" data-i18n="permission.dialog.deny">Deny</button>
+                            <button class="permission-btn permission-btn-deny-menu" id="permissionDenyMenu" data-i18n-title="permission.dialog.deny_menu_title" title="More options">▾</button>
                             <div class="permission-deny-dropdown" id="permissionDenyDropdown" style="display:none;">
-                                <button class="permission-dropdown-item permission-dropdown-deny" id="permissionDenyAlways">Always deny</button>
+                                <button class="permission-dropdown-item permission-dropdown-deny" id="permissionDenyAlways" data-i18n="permission.dialog.deny_always">Always deny</button>
                             </div>
                         </div>
                         <div class="permission-allow-group">
-                            <button class="permission-btn permission-btn-allow" id="permissionAllow">Allow</button>
-                            <button class="permission-btn permission-btn-allow-menu" id="permissionAllowMenu" title="More options">▾</button>
+                            <button class="permission-btn permission-btn-allow" id="permissionAllow" data-i18n="permission.dialog.allow">Allow</button>
+                            <button class="permission-btn permission-btn-allow-menu" id="permissionAllowMenu" data-i18n-title="permission.dialog.allow_menu_title" title="More options">▾</button>
                             <div class="permission-allow-dropdown" id="permissionAllowDropdown" style="display:none;">
-                                <button class="permission-dropdown-item" id="permissionAllow24h">Allow for 24 hours</button>
-                                <button class="permission-dropdown-item" id="permissionAllowAlways">Always allow</button>
+                                <button class="permission-dropdown-item" id="permissionAllow24h" data-i18n="permission.dialog.allow_24h">Allow for 24 hours</button>
+                                <button class="permission-dropdown-item" id="permissionAllowAlways" data-i18n="permission.dialog.allow_always">Always allow</button>
                             </div>
                         </div>
                     </div>

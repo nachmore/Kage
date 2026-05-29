@@ -19,6 +19,7 @@ import { escapeHtml, stripKageTags } from '../shared/tool-utils.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW, isChatLabel } from '../shared/window-labels.js';
 import { errLabel } from '../shared/error-message.js';
+import { t } from '../shared/i18n.js';
 import { mascotHTML } from '../shared/mascot.js';
 import {
     isOnline,
@@ -1211,7 +1212,7 @@ export class ChatApp {
 
         if (this.sessions.length === 0) {
             if (this._loadingMore) return; // Still loading — don't show empty state
-            list.innerHTML = '<div class="session-list-empty">No sessions yet</div>';
+            list.innerHTML = `<div class="session-list-empty">${t('chat.sidebar.empty')}</div>`;
             return;
         }
 
@@ -1244,7 +1245,7 @@ export class ChatApp {
                 }
                 return;
             }
-            list.innerHTML = '<div class="session-list-empty">No matching sessions</div>';
+            list.innerHTML = `<div class="session-list-empty">${t('chat.session_list.no_matches')}</div>`;
             return;
         }
 
@@ -1314,7 +1315,7 @@ export class ChatApp {
 
                 const titleEl = item.querySelector('.session-item-title');
                 const newDot = isNew
-                    ? '<span class="session-new-dot" title="New session">●</span>'
+                    ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
                     : '';
                 const badges =
                     isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
@@ -1375,7 +1376,9 @@ export class ChatApp {
             'session-item' + (isActive ? ' active' : '') + (isNew ? ' session-new' : '');
         item.dataset.sessionId = session.session_id;
 
-        const newDot = isNew ? '<span class="session-new-dot" title="New session">●</span>' : '';
+        const newDot = isNew
+            ? `<span class="session-new-dot" title="${t('chat.session.new_dot_title')}">●</span>`
+            : '';
         const badges =
             isCurrent || isFloating ? '<span class="session-current-badge">●</span>' : '';
         const dateSuffix =
@@ -1389,13 +1392,13 @@ export class ChatApp {
                     <div class="session-item-date">${dateStr}${dateSuffix}</div>
                 </div>
                 <div class="session-item-actions">
-                    <button class="session-action-btn session-action-edit" title="Rename">
+                    <button class="session-action-btn session-action-edit" title="${t('chat.session.action.rename_title')}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                     </button>
-                    <button class="session-action-btn session-action-reveal" title="Show file">
+                    <button class="session-action-btn session-action-reveal" title="${t('chat.session.action.reveal_title')}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
                     </button>
-                    <button class="session-action-btn session-action-delete" title="Delete">
+                    <button class="session-action-btn session-action-delete" title="${t('chat.session.action.delete_title')}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                     </button>
                 </div>
@@ -1655,9 +1658,8 @@ export class ChatApp {
         this.toolSources = [];
         this.toolUsages = [];
         this._toolCallIds = new Set();
-        this.elements.messagesArea.innerHTML =
-            '<div class="message-placeholder">Start a conversation with Kage...</div>';
-        this.elements.chatHeaderTitle.textContent = 'New Chat';
+        this.elements.messagesArea.innerHTML = `<div class="message-placeholder">${t('chat.placeholder.start_conversation')}</div>`;
+        this.elements.chatHeaderTitle.textContent = t('chat.header.default_title');
         this.elements.chatInput.focus();
 
         try {
@@ -2034,13 +2036,13 @@ export class ChatApp {
             const actions = document.createElement('div');
             actions.className = 'message-actions';
             actions.innerHTML = `
-                <button class="msg-action-btn" data-action="copy" title="Copy">
+                <button class="msg-action-btn" data-action="copy" title="${t('chat.message.action.copy')}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
-                <button class="msg-action-btn" data-action="speak" title="Read aloud" style="display:${this._showSpeakBtn ? '' : 'none'}">
+                <button class="msg-action-btn" data-action="speak" title="${t('chat.message.action.speak')}" style="display:${this._showSpeakBtn ? '' : 'none'}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                 </button>
-                <button class="msg-action-btn" data-action="translate" title="Translate" style="display:${this._showTranslateBtn ? '' : 'none'}">
+                <button class="msg-action-btn" data-action="translate" title="${t('chat.message.action.translate')}" style="display:${this._showTranslateBtn ? '' : 'none'}">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
                 </button>
                 <span class="msg-timestamp"></span>
@@ -2176,14 +2178,14 @@ export class ChatApp {
             btn.classList.add('stop-mode');
             btn.disabled = false;
             btn.setAttribute('aria-label', 'Stop generating');
-            btn.title = 'Stop generating (Esc)';
+            btn.title = t('chat.send_btn.stop_title');
             if (sendIcon) sendIcon.style.display = 'none';
             if (stopIcon) stopIcon.style.display = '';
         } else {
             btn.classList.remove('stop-mode');
             btn.disabled = false;
             btn.setAttribute('aria-label', 'Send message');
-            btn.title = 'Send message';
+            btn.title = t('chat.send_btn.send_title');
             if (sendIcon) sendIcon.style.display = '';
             if (stopIcon) stopIcon.style.display = 'none';
         }
@@ -2223,13 +2225,13 @@ export class ChatApp {
     updateConnectionStatus() {
         const el = this.elements.connectionStatus;
         if (!isOnline()) {
-            el.textContent = 'Offline';
+            el.textContent = t('chat.connection.offline');
             el.className = 'chat-header-status disconnected';
         } else if (this.isConnected) {
-            el.textContent = 'Connected';
+            el.textContent = t('chat.connection.connected');
             el.className = 'chat-header-status connected';
         } else {
-            el.textContent = 'Disconnected';
+            el.textContent = t('chat.connection.disconnected');
             el.className = 'chat-header-status disconnected';
         }
     }
@@ -2877,7 +2879,7 @@ export class ChatApp {
             this.elements.messagesArea.appendChild(notice);
         }
         notice.classList.remove('compacting-done');
-        notice.innerHTML = '<span class="compacting-spinner"></span> Compacting context...';
+        notice.innerHTML = `<span class="compacting-spinner"></span> ${t('chat.compacting.in_progress')}`;
         notice.style.display = '';
         this.scrollToBottom();
     }
@@ -2903,11 +2905,11 @@ export class ChatApp {
                 this.elements.modelName.textContent = current.name || current.modelId || 'Unknown';
                 this.currentModelId = current.modelId;
             } else {
-                this.elements.modelName.textContent = 'No models';
+                this.elements.modelName.textContent = t('chat.model.no_models');
             }
         } catch (e) {
             console.log('[MODELS] Failed to load models:', e);
-            this.elements.modelName.textContent = 'Unavailable';
+            this.elements.modelName.textContent = t('chat.model.unavailable');
         }
     }
 
@@ -3084,7 +3086,7 @@ export class ChatApp {
             const close = document.createElement('button');
             close.className = 'ext-ephemeral-close';
             close.textContent = '✕';
-            close.title = 'Dismiss';
+            close.title = t('chat.dismiss_title');
             close.addEventListener('click', () => bubble.remove());
             header.appendChild(close);
             bubble.appendChild(header);
