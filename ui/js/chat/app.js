@@ -916,7 +916,7 @@ export class ChatApp {
             if (status === 'started') {
                 this.showCompactingNotice();
             } else if (status === 'completed') {
-                this.hideCompactingNotice('Context compacted successfully');
+                this.hideCompactingNotice(t('chat.compaction.completed'));
                 // Compaction is fully done — release the auto-compact
                 // gate so the next *changed* metric can trigger another
                 // round if needed. Set after hideCompactingNotice so the

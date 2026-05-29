@@ -4252,6 +4252,220 @@
     "message": "✓ {parts}{exported_at}.",
     "description": "Final summary status line after a successful import"
   },
+  "settings.about.log_buffer.range_error": {
+    "message": "Log buffer size must be between 100 and 50,000",
+    "description": "Validation error when log buffer size is out of range"
+  },
+  "settings.about.backup.passphrase_required": {
+    "message": "Enter a passphrase first.",
+    "description": "Error when user clicks Encrypted Export without a passphrase"
+  },
+  "settings.about.backup.save_dialog_cancelled": {
+    "message": "Save dialog cancelled: {message}",
+    "description": "Status when the OS save dialog throws"
+  },
+  "settings.about.backup.open_dialog_cancelled": {
+    "message": "Open dialog cancelled: {message}",
+    "description": "Status when the OS open dialog throws"
+  },
+
+  "settings.assistant.quick_actions.section": {
+    "message": "Quick Actions",
+    "description": "Section heading: quick actions"
+  },
+  "settings.assistant.quick_actions.show_responses.label": {
+    "message": "Show quick actions on responses",
+    "description": "Toggle: show post-response action chips"
+  },
+  "settings.assistant.quick_actions.show_responses.description": {
+    "message": "Show context-aware action chips after agent responses.",
+    "description": "Helper for show-on-responses toggle"
+  },
+  "settings.assistant.quick_actions.show_selection.label": {
+    "message": "Show quick actions on selected text",
+    "description": "Toggle: show pre-summon action chips for selected text"
+  },
+  "settings.assistant.quick_actions.show_selection.description": {
+    "message": "When you summon Kage with text selected, show smart action chips (Summarize, Translate, Explain code, etc.) based on the content type.",
+    "description": "Helper for show-on-selection toggle"
+  },
+  "settings.assistant.quick_actions.translate_lang.label": {
+    "message": "Translate language",
+    "description": "Label for the Translate-action target language input"
+  },
+  "settings.assistant.quick_actions.translate_lang.fallback_description": {
+    "message": "Default target language for the Translate action. Leave empty to use the system default.",
+    "description": "Description shown when the system default language can't be detected"
+  },
+  "settings.assistant.quick_actions.translate_lang.placeholder": {
+    "message": "e.g., English, Spanish, Japanese",
+    "description": "Placeholder for the Translate language input"
+  },
+  "settings.assistant.quick_actions.custom.label": {
+    "message": "Custom actions",
+    "description": "Label for the custom-actions section"
+  },
+  "settings.assistant.quick_actions.custom.description_html": {
+    "message": "Add your own quick actions. Use <code>{text}</code> in the prompt as a placeholder for the selected text.",
+    "description": "Helper for the custom-actions section (HTML allowed; the <code> contains a literal {text} token)"
+  },
+  "settings.assistant.quick_actions.custom.add_btn": {
+    "message": "+ Add Action",
+    "description": "Button: add a new custom action"
+  },
+  "settings.assistant.app_modes.editor.back_btn": {
+    "message": "‹ Back",
+    "description": "Back button on the App Modes editor"
+  },
+  "settings.assistant.app_modes.editor.title": {
+    "message": "🎯 App Modes",
+    "description": "Header on the App Modes editor"
+  },
+  "settings.assistant.app_modes.editor.intro_html": {
+    "message": "Each rule fires when its <code>Executable</code> matches the foreground app at summon time. Match is whole-token, case-insensitive, and ignores <code>.exe</code>, so <code>Code</code> matches <code>Code.exe</code> on Windows, <code>Visual Studio Code</code> on macOS, and <code>code</code> on Linux.",
+    "description": "Intro paragraph on the App Modes editor (HTML allowed)"
+  },
+  "settings.assistant.app_modes.editor.tip_html": {
+    "message": "<strong>Steering tip:</strong> short, imperative instructions work best. \"Be concise. Prefer code blocks.\" not \"Please consider…\". The cap is {max} characters per rule.",
+    "description": "Tip line on the App Modes editor (HTML allowed)"
+  },
+  "settings.assistant.app_modes.editor.add_btn": {
+    "message": "+ Add App Mode",
+    "description": "Button: add a new App Mode rule"
+  },
+  "settings.assistant.app_modes.editor.add_suggested_btn": {
+    "message": "+ Add suggested",
+    "description": "Button: drop in curated starter App Mode rules"
+  },
+  "settings.assistant.app_modes.editor.save_btn": {
+    "message": "Save",
+    "description": "Button: save the App Modes editor"
+  },
+  "settings.assistant.app_modes.editor.cancel_btn": {
+    "message": "Cancel",
+    "description": "Button: cancel the App Modes editor"
+  },
+  "settings.assistant.app_modes.row.name_placeholder": {
+    "message": "Friendly name (e.g. VS Code)",
+    "description": "Placeholder for the per-rule friendly-name input"
+  },
+  "settings.assistant.app_modes.row.exe_placeholder": {
+    "message": "Executable (e.g. Code)",
+    "description": "Placeholder for the per-rule executable input"
+  },
+  "settings.assistant.app_modes.row.enabled_label": {
+    "message": "on",
+    "description": "Tiny label next to the per-rule enabled checkbox"
+  },
+  "settings.assistant.app_modes.row.steering_placeholder": {
+    "message": "Steering — short imperative instructions, e.g. \"Be concise. Prefer code blocks.\"",
+    "description": "Placeholder for the per-rule steering textarea"
+  },
+  "settings.assistant.editor.import_btn": {
+    "message": "Import…",
+    "description": "Button: import a steering doc from disk"
+  },
+  "settings.assistant.editor.reveal_btn": {
+    "message": "Reveal in file explorer",
+    "description": "Button: reveal the steering doc in the OS file explorer"
+  },
+  "settings.assistant.editor.save_btn": {
+    "message": "Save",
+    "description": "Button: save the steering editor"
+  },
+  "settings.assistant.editor.cancel_btn": {
+    "message": "Cancel",
+    "description": "Button: cancel the steering editor"
+  },
+  "settings.assistant.editor.title.auto": {
+    "message": "Learned Preferences",
+    "description": "Title of the steering editor in 'auto' mode"
+  },
+  "settings.assistant.editor.title.user": {
+    "message": "Custom steering document",
+    "description": "Title of the steering editor in 'user' mode"
+  },
+  "settings.assistant.editor.subtitle.auto": {
+    "message": "Edit, reorder, or remove what Kage has learned about you. Saved changes apply to new chats.",
+    "description": "Subtitle of the auto-mode editor"
+  },
+  "settings.assistant.editor.subtitle.user": {
+    "message": "Your persistent instructions to Kage. Edited line by line.",
+    "description": "Subtitle of the user-mode editor"
+  },
+  "settings.assistant.editor.status.loading": {
+    "message": "Loading…",
+    "description": "Status while reading a steering doc from disk"
+  },
+  "settings.assistant.editor.status.read_failed": {
+    "message": "Failed to read: {message}",
+    "description": "Status when the read fails"
+  },
+  "settings.assistant.editor.status.saving": {
+    "message": "Saving…",
+    "description": "Status while saving"
+  },
+  "settings.assistant.editor.status.saved": {
+    "message": "Saved.",
+    "description": "Status after a successful save"
+  },
+  "settings.assistant.editor.status.save_failed": {
+    "message": "Failed to save: {message}",
+    "description": "Status when save fails"
+  },
+  "settings.assistant.editor.status.import_cancelled": {
+    "message": "Import cancelled: {message}",
+    "description": "Status when the import dialog is cancelled or throws"
+  },
+  "settings.assistant.editor.status.importing": {
+    "message": "Importing…",
+    "description": "Status while reading the imported file"
+  },
+  "settings.assistant.editor.status.imported": {
+    "message": "Imported. Click Save to keep these lines.",
+    "description": "Status after a successful import"
+  },
+  "settings.assistant.editor.status.import_failed": {
+    "message": "Import failed: {message}",
+    "description": "Status when the import call fails"
+  },
+  "settings.assistant.editor.status.reveal_failed": {
+    "message": "Could not open file location: {message}",
+    "description": "Status when the reveal-in-explorer call fails"
+  },
+  "settings.assistant.editor.path_label": {
+    "message": "Saved at: {path}",
+    "description": "Path display under the editor header"
+  },
+  "settings.assistant.editor.no_file_yet": {
+    "message": "No file yet — start typing to create one.",
+    "description": "Status hint when the steering doc doesn't exist on disk"
+  },
+  "settings.assistant.editor.empty_hint.auto": {
+    "message": "Nothing learned yet — chat with Kage and your preferences will start to appear here.",
+    "description": "Empty hint for the auto editor"
+  },
+  "settings.assistant.editor.empty_hint.user": {
+    "message": "Empty — start with a line, then Save.",
+    "description": "Empty hint for the user editor"
+  },
+  "settings.assistant.editor.row_placeholder.auto": {
+    "message": "Preference or fact",
+    "description": "Per-row placeholder for the auto editor"
+  },
+  "settings.assistant.editor.row_placeholder.user": {
+    "message": "Instruction",
+    "description": "Per-row placeholder for the user editor"
+  },
+  "settings.assistant.editor.unknown_error": {
+    "message": "Unknown error",
+    "description": "Fallback when an error has no message"
+  },
+
+  "chat.compaction.completed": {
+    "message": "Context compacted successfully",
+    "description": "Notice shown after a context compaction completes"
+  },
 
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",

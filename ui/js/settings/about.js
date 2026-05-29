@@ -512,7 +512,7 @@ export class AboutSettingsModule extends SettingsModule {
         if (input) {
             const val = parseInt(input.value, 10);
             if (Number.isNaN(val) || val < 100 || val > 50000) {
-                return { valid: false, error: 'Log buffer size must be between 100 and 50,000' };
+                return { valid: false, error: t('settings.about.log_buffer.range_error') };
             }
         }
         return { valid: true };
@@ -572,7 +572,7 @@ export class AboutSettingsModule extends SettingsModule {
             const pw = document.getElementById('backupPassphrase')?.value || '';
             const pw2 = document.getElementById('backupPassphraseConfirm')?.value || '';
             if (!pw) {
-                this._setBackupStatus('Enter a passphrase first.', 'error');
+                this._setBackupStatus(t('settings.about.backup.passphrase_required'), 'error');
                 return;
             }
             if (pw !== pw2) {
@@ -601,7 +601,10 @@ export class AboutSettingsModule extends SettingsModule {
                 ],
             });
         } catch (e) {
-            this._setBackupStatus('Save dialog cancelled: ' + this._formatError(e), 'error');
+            this._setBackupStatus(
+                t('settings.about.backup.save_dialog_cancelled', { message: this._formatError(e) }),
+                'error'
+            );
             return;
         }
         if (!target) return; // user cancelled
@@ -640,7 +643,10 @@ export class AboutSettingsModule extends SettingsModule {
                 ],
             });
         } catch (e) {
-            this._setBackupStatus('Open dialog cancelled: ' + this._formatError(e), 'error');
+            this._setBackupStatus(
+                t('settings.about.backup.open_dialog_cancelled', { message: this._formatError(e) }),
+                'error'
+            );
             return;
         }
         if (!chosen || typeof chosen !== 'string') return;

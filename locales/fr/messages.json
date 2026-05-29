@@ -7360,5 +7360,323 @@
     "description": "Final summary status line after a successful import",
     "_machine_translated": true,
     "_source_hash": "9224ab580ae90046"
+  },
+  "settings.about.log_buffer.range_error": {
+    "message": "La taille du tampon de journal doit être comprise entre 100 et 50 000",
+    "description": "Validation error when log buffer size is out of range",
+    "_machine_translated": true,
+    "_source_hash": "4924e83e0f6f2103"
+  },
+  "settings.about.backup.passphrase_required": {
+    "message": "Saisissez d'abord une phrase secrète.",
+    "description": "Error when user clicks Encrypted Export without a passphrase",
+    "_machine_translated": true,
+    "_source_hash": "f1cc5ed982adcb48"
+  },
+  "settings.about.backup.save_dialog_cancelled": {
+    "message": "Boîte de dialogue d'enregistrement annulée : {message}",
+    "description": "Status when the OS save dialog throws",
+    "_machine_translated": true,
+    "_source_hash": "efc9fdb89927db3a"
+  },
+  "settings.about.backup.open_dialog_cancelled": {
+    "message": "Boîte de dialogue d'ouverture annulée : {message}",
+    "description": "Status when the OS open dialog throws",
+    "_machine_translated": true,
+    "_source_hash": "cfb99f475f262dd6"
+  },
+  "settings.assistant.quick_actions.section": {
+    "message": "Actions rapides",
+    "description": "Section heading: quick actions",
+    "_machine_translated": true,
+    "_source_hash": "dc536b2bb676eb7f"
+  },
+  "settings.assistant.quick_actions.show_responses.label": {
+    "message": "Afficher les actions rapides sur les réponses",
+    "description": "Toggle: show post-response action chips",
+    "_machine_translated": true,
+    "_source_hash": "4321c9121f79c31c"
+  },
+  "settings.assistant.quick_actions.show_responses.description": {
+    "message": "Afficher des puces d'action contextuelles après les réponses de l'agent.",
+    "description": "Helper for show-on-responses toggle",
+    "_machine_translated": true,
+    "_source_hash": "834a9d187fa9d62a"
+  },
+  "settings.assistant.quick_actions.show_selection.label": {
+    "message": "Afficher les actions rapides sur le texte sélectionné",
+    "description": "Toggle: show pre-summon action chips for selected text",
+    "_machine_translated": true,
+    "_source_hash": "5910a61bf6999417"
+  },
+  "settings.assistant.quick_actions.show_selection.description": {
+    "message": "Lorsque vous invoquez Kage avec du texte sélectionné, affichez des puces d'action intelligentes (Résumer, Traduire, Expliquer le code, etc.) selon le type de contenu.",
+    "description": "Helper for show-on-selection toggle",
+    "_machine_translated": true,
+    "_source_hash": "e5f9d55a56538e7c"
+  },
+  "settings.assistant.quick_actions.translate_lang.label": {
+    "message": "Langue de traduction",
+    "description": "Label for the Translate-action target language input",
+    "_machine_translated": true,
+    "_source_hash": "2144a31380eb4b06"
+  },
+  "settings.assistant.quick_actions.translate_lang.fallback_description": {
+    "message": "Langue cible par défaut pour l'action Traduire. Laissez vide pour utiliser la valeur par défaut du système.",
+    "description": "Description shown when the system default language can't be detected",
+    "_machine_translated": true,
+    "_source_hash": "1a8ea95a066ae2bb"
+  },
+  "settings.assistant.quick_actions.translate_lang.placeholder": {
+    "message": "p. ex. anglais, espagnol, japonais",
+    "description": "Placeholder for the Translate language input",
+    "_machine_translated": true,
+    "_source_hash": "e27d668e2ca2f20a"
+  },
+  "settings.assistant.quick_actions.custom.label": {
+    "message": "Actions personnalisées",
+    "description": "Label for the custom-actions section",
+    "_machine_translated": true,
+    "_source_hash": "9a887eba37737d0f"
+  },
+  "settings.assistant.quick_actions.custom.description_html": {
+    "message": "Ajoutez vos propres actions rapides. Utilisez <code>{text}</code> dans l'invite comme espace réservé pour le texte sélectionné.",
+    "description": "Helper for the custom-actions section (HTML allowed; the <code> contains a literal {text} token)",
+    "_machine_translated": true,
+    "_source_hash": "9ce6a3e32ec0e52e"
+  },
+  "settings.assistant.quick_actions.custom.add_btn": {
+    "message": "+ Ajouter une action",
+    "description": "Button: add a new custom action",
+    "_machine_translated": true,
+    "_source_hash": "4832f2fafda8f9d2"
+  },
+  "settings.assistant.app_modes.editor.back_btn": {
+    "message": "‹ Retour",
+    "description": "Back button on the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "5404eaff0b3bfd44"
+  },
+  "settings.assistant.app_modes.editor.title": {
+    "message": "🎯 Modes d'application",
+    "description": "Header on the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "8f134c4a43312811"
+  },
+  "settings.assistant.app_modes.editor.intro_html": {
+    "message": "Chaque règle se déclenche lorsque son <code>Exécutable</code> correspond à l'application au premier plan au moment de l'invocation. La correspondance porte sur le jeton complet, ne tient pas compte de la casse et ignore <code>.exe</code> ; ainsi, <code>Code</code> correspond à <code>Code.exe</code> sur Windows, <code>Visual Studio Code</code> sur macOS et <code>code</code> sur Linux.",
+    "description": "Intro paragraph on the App Modes editor (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "71b41bc04364c515"
+  },
+  "settings.assistant.app_modes.editor.tip_html": {
+    "message": "<strong>Astuce d'orientation :</strong> les instructions courtes et impératives fonctionnent le mieux. « Soyez concis. Privilégiez les blocs de code. » plutôt que « Veuillez envisager… ». La limite est de {max} caractères par règle.",
+    "description": "Tip line on the App Modes editor (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "2828f1ef53ccd7c1"
+  },
+  "settings.assistant.app_modes.editor.add_btn": {
+    "message": "+ Ajouter un mode d'application",
+    "description": "Button: add a new App Mode rule",
+    "_machine_translated": true,
+    "_source_hash": "0808862ad5a2e23b"
+  },
+  "settings.assistant.app_modes.editor.add_suggested_btn": {
+    "message": "+ Ajouter une suggestion",
+    "description": "Button: drop in curated starter App Mode rules",
+    "_machine_translated": true,
+    "_source_hash": "96ff2e6689813713"
+  },
+  "settings.assistant.app_modes.editor.save_btn": {
+    "message": "Enregistrer",
+    "description": "Button: save the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "1deda989a5b7374e"
+  },
+  "settings.assistant.app_modes.editor.cancel_btn": {
+    "message": "Annuler",
+    "description": "Button: cancel the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "f1cf0e2c742cea3e"
+  },
+  "settings.assistant.app_modes.row.name_placeholder": {
+    "message": "Nom convivial (p. ex. VS Code)",
+    "description": "Placeholder for the per-rule friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "a77b8ac73e12df19"
+  },
+  "settings.assistant.app_modes.row.exe_placeholder": {
+    "message": "Exécutable (p. ex. Code)",
+    "description": "Placeholder for the per-rule executable input",
+    "_machine_translated": true,
+    "_source_hash": "aa6b145b401cab8a"
+  },
+  "settings.assistant.app_modes.row.enabled_label": {
+    "message": "activé",
+    "description": "Tiny label next to the per-rule enabled checkbox",
+    "_machine_translated": true,
+    "_source_hash": "a45c1d75596fd337"
+  },
+  "settings.assistant.app_modes.row.steering_placeholder": {
+    "message": "Pilotage — courtes instructions impératives, par ex. « Sois concis. Préfère les blocs de code. »",
+    "description": "Placeholder for the per-rule steering textarea",
+    "_machine_translated": true,
+    "_source_hash": "f0e586d7d2f9e16d"
+  },
+  "settings.assistant.editor.import_btn": {
+    "message": "Importer…",
+    "description": "Button: import a steering doc from disk",
+    "_machine_translated": true,
+    "_source_hash": "482786c4374e6239"
+  },
+  "settings.assistant.editor.reveal_btn": {
+    "message": "Afficher dans l'explorateur de fichiers",
+    "description": "Button: reveal the steering doc in the OS file explorer",
+    "_machine_translated": true,
+    "_source_hash": "87aa80b3b15ed99d"
+  },
+  "settings.assistant.editor.save_btn": {
+    "message": "Enregistrer",
+    "description": "Button: save the steering editor",
+    "_machine_translated": true,
+    "_source_hash": "428061672ebc51fe"
+  },
+  "settings.assistant.editor.cancel_btn": {
+    "message": "Annuler",
+    "description": "Button: cancel the steering editor",
+    "_machine_translated": true,
+    "_source_hash": "ca42e028590f873d"
+  },
+  "settings.assistant.editor.title.auto": {
+    "message": "Préférences apprises",
+    "description": "Title of the steering editor in 'auto' mode",
+    "_machine_translated": true,
+    "_source_hash": "3336ab6b19989e2d"
+  },
+  "settings.assistant.editor.title.user": {
+    "message": "Document de pilotage personnalisé",
+    "description": "Title of the steering editor in 'user' mode",
+    "_machine_translated": true,
+    "_source_hash": "0a9b34a4209358d6"
+  },
+  "settings.assistant.editor.subtitle.auto": {
+    "message": "Modifiez, réorganisez ou supprimez ce que Kage a appris sur vous. Les modifications enregistrées s'appliquent aux nouvelles conversations.",
+    "description": "Subtitle of the auto-mode editor",
+    "_machine_translated": true,
+    "_source_hash": "743abb318fab716f"
+  },
+  "settings.assistant.editor.subtitle.user": {
+    "message": "Vos instructions permanentes pour Kage. Modifiées ligne par ligne.",
+    "description": "Subtitle of the user-mode editor",
+    "_machine_translated": true,
+    "_source_hash": "d01caf9f4698b109"
+  },
+  "settings.assistant.editor.status.loading": {
+    "message": "Chargement…",
+    "description": "Status while reading a steering doc from disk",
+    "_machine_translated": true,
+    "_source_hash": "707241097dbf9ef5"
+  },
+  "settings.assistant.editor.status.read_failed": {
+    "message": "Échec de la lecture : {message}",
+    "description": "Status when the read fails",
+    "_machine_translated": true,
+    "_source_hash": "6a6498a640afe48c"
+  },
+  "settings.assistant.editor.status.saving": {
+    "message": "Enregistrement…",
+    "description": "Status while saving",
+    "_machine_translated": true,
+    "_source_hash": "4a1d8b280484c683"
+  },
+  "settings.assistant.editor.status.saved": {
+    "message": "Enregistré.",
+    "description": "Status after a successful save",
+    "_machine_translated": true,
+    "_source_hash": "533b4813fb2f23e8"
+  },
+  "settings.assistant.editor.status.save_failed": {
+    "message": "Échec de l'enregistrement : {message}",
+    "description": "Status when save fails",
+    "_machine_translated": true,
+    "_source_hash": "2fced04ec9ddec0e"
+  },
+  "settings.assistant.editor.status.import_cancelled": {
+    "message": "Import annulé : {message}",
+    "description": "Status when the import dialog is cancelled or throws",
+    "_machine_translated": true,
+    "_source_hash": "7a40a06aed2acdad"
+  },
+  "settings.assistant.editor.status.importing": {
+    "message": "Import en cours…",
+    "description": "Status while reading the imported file",
+    "_machine_translated": true,
+    "_source_hash": "5334fd6fd61a5e7f"
+  },
+  "settings.assistant.editor.status.imported": {
+    "message": "Importé. Cliquez sur Enregistrer pour conserver ces lignes.",
+    "description": "Status after a successful import",
+    "_machine_translated": true,
+    "_source_hash": "3e146c42b8b8538f"
+  },
+  "settings.assistant.editor.status.import_failed": {
+    "message": "Échec de l'import : {message}",
+    "description": "Status when the import call fails",
+    "_machine_translated": true,
+    "_source_hash": "57c7534e92d54bde"
+  },
+  "settings.assistant.editor.status.reveal_failed": {
+    "message": "Impossible d'ouvrir l'emplacement du fichier : {message}",
+    "description": "Status when the reveal-in-explorer call fails",
+    "_machine_translated": true,
+    "_source_hash": "d79ae9958cb2491c"
+  },
+  "settings.assistant.editor.path_label": {
+    "message": "Enregistré à : {path}",
+    "description": "Path display under the editor header",
+    "_machine_translated": true,
+    "_source_hash": "8f748ec3206d482f"
+  },
+  "settings.assistant.editor.no_file_yet": {
+    "message": "Aucun fichier pour l'instant — commencez à taper pour en créer un.",
+    "description": "Status hint when the steering doc doesn't exist on disk",
+    "_machine_translated": true,
+    "_source_hash": "99cef7301201643e"
+  },
+  "settings.assistant.editor.empty_hint.auto": {
+    "message": "Rien appris pour l'instant — discutez avec Kage et vos préférences commenceront à apparaître ici.",
+    "description": "Empty hint for the auto editor",
+    "_machine_translated": true,
+    "_source_hash": "93719c880acd4205"
+  },
+  "settings.assistant.editor.empty_hint.user": {
+    "message": "Vide — commencez par une ligne, puis Enregistrer.",
+    "description": "Empty hint for the user editor",
+    "_machine_translated": true,
+    "_source_hash": "a49a94ea3d3b86c2"
+  },
+  "settings.assistant.editor.row_placeholder.auto": {
+    "message": "Préférence ou information",
+    "description": "Per-row placeholder for the auto editor",
+    "_machine_translated": true,
+    "_source_hash": "ef358e22e0012d7a"
+  },
+  "settings.assistant.editor.row_placeholder.user": {
+    "message": "Instruction",
+    "description": "Per-row placeholder for the user editor",
+    "_machine_translated": true,
+    "_source_hash": "ed668a13c5e6fd8a"
+  },
+  "settings.assistant.editor.unknown_error": {
+    "message": "Erreur inconnue",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "chat.compaction.completed": {
+    "message": "Contexte compacté avec succès",
+    "description": "Notice shown after a context compaction completes",
+    "_machine_translated": true,
+    "_source_hash": "5fab54213b093d0a"
   }
 }

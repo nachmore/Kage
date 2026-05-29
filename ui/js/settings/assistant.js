@@ -1,5 +1,6 @@
 import { createLineEditor } from '../shared/line-editor.js';
 import { t } from '../shared/i18n.js';
+import { escapeAttr } from '../shared/tool-utils.js';
 import { registerSettingsActions } from './module-registry.js';
 import { SettingsModule } from './base.js';
 
@@ -100,78 +101,76 @@ export class AssistantSettingsModule extends SettingsModule {
                         </div>
                     </div>
 
-                    <div class="setting-section-label">Quick Actions</div>
+                    <div class="setting-section-label">${t('settings.assistant.quick_actions.section')}</div>
 
                     ${this.createCheckboxRow(
-                        'Show quick actions on responses',
-                        'Show context-aware action chips after agent responses.',
+                        t('settings.assistant.quick_actions.show_responses.label'),
+                        t('settings.assistant.quick_actions.show_responses.description'),
                         'showResponseActions',
                         true
                     )}
 
                     ${this.createCheckboxRow(
-                        'Show quick actions on selected text',
-                        'When you summon Kage with text selected, show smart action chips (Summarize, Translate, Explain code, etc.) based on the content type.',
+                        t('settings.assistant.quick_actions.show_selection.label'),
+                        t('settings.assistant.quick_actions.show_selection.description'),
                         'quickActionsEnabled',
                         true
                     )}
 
                     <div class="setting-row">
-                        <div class="setting-label">Translate language</div>
-                        <div class="setting-description" id="translateLanguageDesc">Default target language for the Translate action. Leave empty to use the system default.</div>
+                        <div class="setting-label">${t('settings.assistant.quick_actions.translate_lang.label')}</div>
+                        <div class="setting-description" id="translateLanguageDesc">${t('settings.assistant.quick_actions.translate_lang.fallback_description')}</div>
                         <div class="setting-control">
-                            <input type="text" class="setting-input" id="translateLanguage" placeholder="e.g., English, Spanish, Japanese" style="max-width: 250px;">
+                            <input type="text" class="setting-input" id="translateLanguage" placeholder="${t('settings.assistant.quick_actions.translate_lang.placeholder')}" style="max-width: 250px;">
                         </div>
                     </div>
 
                     <div class="setting-row">
-                        <div class="setting-label">Custom actions</div>
-                        <div class="setting-description">Add your own quick actions. Use <code>{text}</code> in the prompt as a placeholder for the selected text.</div>
+                        <div class="setting-label">${t('settings.assistant.quick_actions.custom.label')}</div>
+                        <div class="setting-description">${t('settings.assistant.quick_actions.custom.description_html')}</div>
                         <div id="customActionsContainer" style="margin-top: 8px;"></div>
-                        <button class="setting-button" id="addCustomActionBtn" style="margin-top: 8px;">+ Add Action</button>
+                        <button class="setting-button" id="addCustomActionBtn" style="margin-top: 8px;">${t('settings.assistant.quick_actions.custom.add_btn')}</button>
                     </div>
                 </div>
 
                 <div id="personalization-app-modes" hidden>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">‹ Back</button>
-                        <h2 class="settings-section-header" style="margin:0;flex:1;">🎯 App Modes</h2>
+                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">${t('settings.assistant.app_modes.editor.back_btn')}</button>
+                        <h2 class="settings-section-header" style="margin:0;flex:1;">${t('settings.assistant.app_modes.editor.title')}</h2>
                     </div>
                     <div class="setting-description" style="margin-bottom:8px;">
-                        Each rule fires when its <code>Executable</code> matches the foreground app at summon time.
-                        Match is whole-token, case-insensitive, and ignores <code>.exe</code>, so <code>Code</code> matches
-                        <code>Code.exe</code> on Windows, <code>Visual Studio Code</code> on macOS, and <code>code</code> on Linux.
+                        ${t('settings.assistant.app_modes.editor.intro_html')}
                     </div>
                     <div class="setting-description" style="margin-bottom:12px;font-size:11px;opacity:0.75;">
-                        <strong>Steering tip:</strong> short, imperative instructions work best. "Be concise. Prefer code blocks." not "Please consider…". The cap is ${500} characters per rule.
+                        ${t('settings.assistant.app_modes.editor.tip_html', { max: AssistantSettingsModule.APP_MODE_STEERING_MAX })}
                     </div>
                     <div id="appModesContainer" style="display:flex;flex-direction:column;gap:10px;"></div>
                     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                        <button class="setting-button" data-action="addAppMode">+ Add App Mode</button>
-                        <button class="setting-button" data-action="addSuggestedAppModes" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);" title="${t('settings.assistant.app_modes.add_suggested.title')}">+ Add suggested</button>
+                        <button class="setting-button" data-action="addAppMode">${t('settings.assistant.app_modes.editor.add_btn')}</button>
+                        <button class="setting-button" data-action="addSuggestedAppModes" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);" title="${t('settings.assistant.app_modes.add_suggested.title')}">${t('settings.assistant.app_modes.editor.add_suggested_btn')}</button>
                     </div>
                     <div style="display:flex;gap:8px;margin-top:14px;">
-                        <button class="setting-button" data-action="saveAppModes">Save</button>
-                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">Cancel</button>
+                        <button class="setting-button" data-action="saveAppModes">${t('settings.assistant.app_modes.editor.save_btn')}</button>
+                        <button class="setting-button" data-action="closeAppModesEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">${t('settings.assistant.app_modes.editor.cancel_btn')}</button>
                     </div>
                     <div id="appModesStatus" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
                 </div>
 
                 <div id="personalization-editor" hidden>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                        <button class="setting-button" data-action="closeSteeringEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">‹ Back</button>
+                        <button class="setting-button" data-action="closeSteeringEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">${t('settings.assistant.app_modes.editor.back_btn')}</button>
                         <h2 class="settings-section-header" id="personalization-editor-title" style="margin:0;flex:1;"></h2>
                     </div>
                     <div class="setting-description" id="personalization-editor-subtitle" style="margin-bottom:6px;"></div>
                     <div class="setting-description" id="personalization-editor-path" style="font-size:11px;opacity:0.75;margin-bottom:8px;word-break:break-all;"></div>
                     <div id="personalization-editor-actions" style="display:flex;gap:8px;margin-bottom:10px;">
-                        <button class="setting-button" data-action="importSteering" id="personalization-editor-importBtn" style="display:none;">Import…</button>
-                        <button class="setting-button" data-action="revealSteering" id="personalization-editor-revealBtn" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">Reveal in file explorer</button>
+                        <button class="setting-button" data-action="importSteering" id="personalization-editor-importBtn" style="display:none;">${t('settings.assistant.editor.import_btn')}</button>
+                        <button class="setting-button" data-action="revealSteering" id="personalization-editor-revealBtn" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">${t('settings.assistant.editor.reveal_btn')}</button>
                     </div>
                     <div id="personalization-editor-mount"></div>
                     <div style="display:flex;gap:8px;margin-top:12px;">
-                        <button class="setting-button" data-action="saveSteering">Save</button>
-                        <button class="setting-button" data-action="closeSteeringEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">Cancel</button>
+                        <button class="setting-button" data-action="saveSteering">${t('settings.assistant.editor.save_btn')}</button>
+                        <button class="setting-button" data-action="closeSteeringEditor" style="background:transparent;color:var(--kage-text-secondary);border:1px solid var(--kage-border);">${t('settings.assistant.editor.cancel_btn')}</button>
                     </div>
                     <div id="personalization-editor-status" class="setting-description" style="margin-top:8px;min-height:1em;"></div>
                 </div>
@@ -307,35 +306,46 @@ export class AssistantSettingsModule extends SettingsModule {
         // auto-generated doc would just be overwritten on the next
         // generation cycle.
         if (titleEl) {
-            titleEl.textContent =
-                kind === 'auto' ? 'Learned Preferences' : 'Custom steering document';
+            titleEl.textContent = t(
+                kind === 'auto'
+                    ? 'settings.assistant.editor.title.auto'
+                    : 'settings.assistant.editor.title.user'
+            );
         }
         if (subtitle) {
-            subtitle.textContent =
+            subtitle.textContent = t(
                 kind === 'auto'
-                    ? 'Edit, reorder, or remove what Kage has learned about you. Saved changes apply to new chats.'
-                    : 'Your persistent instructions to Kage. Edited line by line.';
+                    ? 'settings.assistant.editor.subtitle.auto'
+                    : 'settings.assistant.editor.subtitle.user'
+            );
         }
         if (importBtn) {
             importBtn.style.display = kind === 'user' ? '' : 'none';
         }
 
-        this._setStatus('Loading…');
+        this._setStatus(t('settings.assistant.editor.status.loading'));
         let result;
         try {
             result = await window.__TAURI__.core.invoke('read_steering_lines', { kind });
         } catch (error) {
-            this._setStatus('Failed to read: ' + this._formatError(error), 'error');
+            this._setStatus(
+                t('settings.assistant.editor.status.read_failed', {
+                    message: this._formatError(error),
+                }),
+                'error'
+            );
             // Still flip to the editor view so the user can hit Back.
             if (main) main.hidden = true;
             editor.hidden = false;
             return;
         }
         this._editingPath = result?.path || '';
-        if (pathEl) pathEl.textContent = this._editingPath ? 'Saved at: ' + this._editingPath : '';
-        this._setStatus(
-            result?.exists === false ? 'No file yet — start typing to create one.' : ''
-        );
+        if (pathEl) {
+            pathEl.textContent = this._editingPath
+                ? t('settings.assistant.editor.path_label', { path: this._editingPath })
+                : '';
+        }
+        this._setStatus(result?.exists === false ? t('settings.assistant.editor.no_file_yet') : '');
 
         if (this._editor) {
             try {
@@ -344,11 +354,16 @@ export class AssistantSettingsModule extends SettingsModule {
         }
         this._editor = createLineEditor(mount, {
             lines: Array.isArray(result?.lines) ? result.lines : [],
-            emptyHint:
+            emptyHint: t(
                 kind === 'auto'
-                    ? 'Nothing learned yet — chat with Kage and your preferences will start to appear here.'
-                    : 'Empty — start with a line, then Save.',
-            rowPlaceholder: kind === 'auto' ? 'Preference or fact' : 'Instruction',
+                    ? 'settings.assistant.editor.empty_hint.auto'
+                    : 'settings.assistant.editor.empty_hint.user'
+            ),
+            rowPlaceholder: t(
+                kind === 'auto'
+                    ? 'settings.assistant.editor.row_placeholder.auto'
+                    : 'settings.assistant.editor.row_placeholder.user'
+            ),
         });
 
         if (main) main.hidden = true;
@@ -374,15 +389,20 @@ export class AssistantSettingsModule extends SettingsModule {
                 return acc;
             }, []);
 
-        this._setStatus('Saving…');
+        this._setStatus(t('settings.assistant.editor.status.saving'));
         try {
             await window.__TAURI__.core.invoke('write_steering_lines', {
                 kind: this._editingKind,
                 lines,
             });
-            this._setStatus('Saved.', 'success');
+            this._setStatus(t('settings.assistant.editor.status.saved'), 'success');
         } catch (error) {
-            this._setStatus('Failed to save: ' + this._formatError(error), 'error');
+            this._setStatus(
+                t('settings.assistant.editor.status.save_failed', {
+                    message: this._formatError(error),
+                }),
+                'error'
+            );
         }
     }
 
@@ -399,20 +419,30 @@ export class AssistantSettingsModule extends SettingsModule {
                 ],
             });
         } catch (error) {
-            this._setStatus('Import cancelled: ' + this._formatError(error), 'error');
+            this._setStatus(
+                t('settings.assistant.editor.status.import_cancelled', {
+                    message: this._formatError(error),
+                }),
+                'error'
+            );
             return;
         }
         if (!chosen || typeof chosen !== 'string') return;
 
-        this._setStatus('Importing…');
+        this._setStatus(t('settings.assistant.editor.status.importing'));
         try {
             const lines = await window.__TAURI__.core.invoke('import_steering_lines', {
                 path: chosen,
             });
             this._editor.setLines(Array.isArray(lines) ? lines : []);
-            this._setStatus('Imported. Click Save to keep these lines.', 'success');
+            this._setStatus(t('settings.assistant.editor.status.imported'), 'success');
         } catch (error) {
-            this._setStatus('Import failed: ' + this._formatError(error), 'error');
+            this._setStatus(
+                t('settings.assistant.editor.status.import_failed', {
+                    message: this._formatError(error),
+                }),
+                'error'
+            );
         }
     }
 
@@ -421,7 +451,12 @@ export class AssistantSettingsModule extends SettingsModule {
         try {
             await window.__TAURI__.core.invoke('open_path', { path: this._editingPath });
         } catch (error) {
-            this._setStatus('Could not open file location: ' + this._formatError(error), 'error');
+            this._setStatus(
+                t('settings.assistant.editor.status.reveal_failed', {
+                    message: this._formatError(error),
+                }),
+                'error'
+            );
         }
     }
 
@@ -433,7 +468,7 @@ export class AssistantSettingsModule extends SettingsModule {
     }
 
     _formatError(e) {
-        if (!e) return 'Unknown error';
+        if (!e) return t('settings.assistant.editor.unknown_error');
         if (typeof e === 'string') return e;
         if (e instanceof Error) return e.message || String(e);
         if (typeof e === 'object') {
@@ -508,17 +543,17 @@ export class AssistantSettingsModule extends SettingsModule {
         const enabledChecked = rule?.enabled === false ? '' : ' checked';
         row.innerHTML = `
             <div style="display:flex;gap:8px;align-items:center;">
-                <input type="text" class="setting-input am-name" placeholder="Friendly name (e.g. VS Code)" value="${nameVal}" style="flex:1;">
-                <input type="text" class="setting-input am-exe" placeholder="Executable (e.g. Code)" value="${exeVal}" style="flex:1;">
+                <input type="text" class="setting-input am-name" placeholder="${t('settings.assistant.app_modes.row.name_placeholder')}" value="${nameVal}" style="flex:1;">
+                <input type="text" class="setting-input am-exe" placeholder="${t('settings.assistant.app_modes.row.exe_placeholder')}" value="${exeVal}" style="flex:1;">
                 <label class="kage-checkbox" title="${t('settings.assistant.app_modes.enable_rule.title')}" style="margin-left:4px;">
                     <input type="checkbox" class="am-enabled"${enabledChecked}>
-                    <span style="font-size:11px;">on</span>
+                    <span style="font-size:11px;">${t('settings.assistant.app_modes.row.enabled_label')}</span>
                 </label>
                 <button class="setting-button am-remove icon-button-danger" type="button" title="${t('settings.assistant.app_modes.remove.title')}" aria-label="${t('settings.assistant.app_modes.remove.title')}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 </button>
             </div>
-            <textarea class="setting-input am-steering" rows="3" placeholder="Steering — short imperative instructions, e.g. &quot;Be concise. Prefer code blocks.&quot;"></textarea>
+            <textarea class="setting-input am-steering" rows="3" placeholder="${escapeAttr(t('settings.assistant.app_modes.row.steering_placeholder'))}"></textarea>
             <div class="setting-description am-counter" style="font-size:11px;text-align:right;margin:0;"></div>
         `;
         const ta = row.querySelector('.am-steering');

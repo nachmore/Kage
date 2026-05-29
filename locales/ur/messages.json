@@ -7360,5 +7360,323 @@
     "description": "Final summary status line after a successful import",
     "_machine_translated": true,
     "_source_hash": "9224ab580ae90046"
+  },
+  "settings.about.log_buffer.range_error": {
+    "message": "لاگ بفر سائز 100 اور 50,000 کے درمیان ہونا چاہیے",
+    "description": "Validation error when log buffer size is out of range",
+    "_machine_translated": true,
+    "_source_hash": "4924e83e0f6f2103"
+  },
+  "settings.about.backup.passphrase_required": {
+    "message": "پہلے پاس فریز درج کریں۔",
+    "description": "Error when user clicks Encrypted Export without a passphrase",
+    "_machine_translated": true,
+    "_source_hash": "f1cc5ed982adcb48"
+  },
+  "settings.about.backup.save_dialog_cancelled": {
+    "message": "محفوظ کرنے کا ڈائیلاگ منسوخ کر دیا گیا: {message}",
+    "description": "Status when the OS save dialog throws",
+    "_machine_translated": true,
+    "_source_hash": "efc9fdb89927db3a"
+  },
+  "settings.about.backup.open_dialog_cancelled": {
+    "message": "کھولنے کا ڈائیلاگ منسوخ کر دیا گیا: {message}",
+    "description": "Status when the OS open dialog throws",
+    "_machine_translated": true,
+    "_source_hash": "cfb99f475f262dd6"
+  },
+  "settings.assistant.quick_actions.section": {
+    "message": "فوری اقدامات",
+    "description": "Section heading: quick actions",
+    "_machine_translated": true,
+    "_source_hash": "dc536b2bb676eb7f"
+  },
+  "settings.assistant.quick_actions.show_responses.label": {
+    "message": "جوابات پر فوری اقدامات دکھائیں",
+    "description": "Toggle: show post-response action chips",
+    "_machine_translated": true,
+    "_source_hash": "4321c9121f79c31c"
+  },
+  "settings.assistant.quick_actions.show_responses.description": {
+    "message": "ایجنٹ کے جوابات کے بعد سیاق و سباق سے آگاہ ایکشن چپس دکھائیں۔",
+    "description": "Helper for show-on-responses toggle",
+    "_machine_translated": true,
+    "_source_hash": "834a9d187fa9d62a"
+  },
+  "settings.assistant.quick_actions.show_selection.label": {
+    "message": "منتخب متن پر فوری اقدامات دکھائیں",
+    "description": "Toggle: show pre-summon action chips for selected text",
+    "_machine_translated": true,
+    "_source_hash": "5910a61bf6999417"
+  },
+  "settings.assistant.quick_actions.show_selection.description": {
+    "message": "جب آپ متن منتخب کر کے Kage کو طلب کریں، تو مواد کی قسم کی بنیاد پر سمارٹ ایکشن چپس (خلاصہ، ترجمہ، کوڈ کی وضاحت وغیرہ) دکھائیں۔",
+    "description": "Helper for show-on-selection toggle",
+    "_machine_translated": true,
+    "_source_hash": "e5f9d55a56538e7c"
+  },
+  "settings.assistant.quick_actions.translate_lang.label": {
+    "message": "ترجمے کی زبان",
+    "description": "Label for the Translate-action target language input",
+    "_machine_translated": true,
+    "_source_hash": "2144a31380eb4b06"
+  },
+  "settings.assistant.quick_actions.translate_lang.fallback_description": {
+    "message": "ترجمہ ایکشن کے لیے ڈیفالٹ ہدف زبان۔ سسٹم ڈیفالٹ استعمال کرنے کے لیے خالی چھوڑ دیں۔",
+    "description": "Description shown when the system default language can't be detected",
+    "_machine_translated": true,
+    "_source_hash": "1a8ea95a066ae2bb"
+  },
+  "settings.assistant.quick_actions.translate_lang.placeholder": {
+    "message": "مثلاً، انگریزی، ہسپانوی، جاپانی",
+    "description": "Placeholder for the Translate language input",
+    "_machine_translated": true,
+    "_source_hash": "e27d668e2ca2f20a"
+  },
+  "settings.assistant.quick_actions.custom.label": {
+    "message": "حسب ضرورت اقدامات",
+    "description": "Label for the custom-actions section",
+    "_machine_translated": true,
+    "_source_hash": "9a887eba37737d0f"
+  },
+  "settings.assistant.quick_actions.custom.description_html": {
+    "message": "اپنے فوری اقدامات شامل کریں۔ منتخب متن کے لیے بطور پلیس ہولڈر پرامپٹ میں <code>{text}</code> استعمال کریں۔",
+    "description": "Helper for the custom-actions section (HTML allowed; the <code> contains a literal {text} token)",
+    "_machine_translated": true,
+    "_source_hash": "9ce6a3e32ec0e52e"
+  },
+  "settings.assistant.quick_actions.custom.add_btn": {
+    "message": "+ ایکشن شامل کریں",
+    "description": "Button: add a new custom action",
+    "_machine_translated": true,
+    "_source_hash": "4832f2fafda8f9d2"
+  },
+  "settings.assistant.app_modes.editor.back_btn": {
+    "message": "‹ واپس",
+    "description": "Back button on the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "5404eaff0b3bfd44"
+  },
+  "settings.assistant.app_modes.editor.title": {
+    "message": "🎯 ایپ موڈز",
+    "description": "Header on the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "8f134c4a43312811"
+  },
+  "settings.assistant.app_modes.editor.intro_html": {
+    "message": "ہر قاعدہ اس وقت چلتا ہے جب اس کا <code>Executable</code> طلب کے وقت فورگراؤنڈ ایپ سے میل کھاتا ہے۔ میچ مکمل ٹوکن، حروف کی حساسیت سے بے نیاز ہوتا ہے، اور <code>.exe</code> کو نظرانداز کرتا ہے، چنانچہ <code>Code</code> Windows پر <code>Code.exe</code> سے، macOS پر <code>Visual Studio Code</code> سے، اور Linux پر <code>code</code> سے میچ کرتا ہے۔",
+    "description": "Intro paragraph on the App Modes editor (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "71b41bc04364c515"
+  },
+  "settings.assistant.app_modes.editor.tip_html": {
+    "message": "<strong>رہنمائی کا مشورہ:</strong> مختصر، حکمیہ ہدایات بہترین کام کرتی ہیں۔ ”مختصر رہیں۔ کوڈ بلاکس کو ترجیح دیں۔“ نہ کہ ”براہ کرم غور کریں…“۔ فی قاعدہ حد {max} حروف ہے۔",
+    "description": "Tip line on the App Modes editor (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "2828f1ef53ccd7c1"
+  },
+  "settings.assistant.app_modes.editor.add_btn": {
+    "message": "+ ایپ موڈ شامل کریں",
+    "description": "Button: add a new App Mode rule",
+    "_machine_translated": true,
+    "_source_hash": "0808862ad5a2e23b"
+  },
+  "settings.assistant.app_modes.editor.add_suggested_btn": {
+    "message": "+ تجویز کردہ شامل کریں",
+    "description": "Button: drop in curated starter App Mode rules",
+    "_machine_translated": true,
+    "_source_hash": "96ff2e6689813713"
+  },
+  "settings.assistant.app_modes.editor.save_btn": {
+    "message": "محفوظ کریں",
+    "description": "Button: save the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "1deda989a5b7374e"
+  },
+  "settings.assistant.app_modes.editor.cancel_btn": {
+    "message": "منسوخ کریں",
+    "description": "Button: cancel the App Modes editor",
+    "_machine_translated": true,
+    "_source_hash": "f1cf0e2c742cea3e"
+  },
+  "settings.assistant.app_modes.row.name_placeholder": {
+    "message": "دوستانہ نام (مثلاً VS Code)",
+    "description": "Placeholder for the per-rule friendly-name input",
+    "_machine_translated": true,
+    "_source_hash": "a77b8ac73e12df19"
+  },
+  "settings.assistant.app_modes.row.exe_placeholder": {
+    "message": "Executable (مثلاً Code)",
+    "description": "Placeholder for the per-rule executable input",
+    "_machine_translated": true,
+    "_source_hash": "aa6b145b401cab8a"
+  },
+  "settings.assistant.app_modes.row.enabled_label": {
+    "message": "آن",
+    "description": "Tiny label next to the per-rule enabled checkbox",
+    "_machine_translated": true,
+    "_source_hash": "a45c1d75596fd337"
+  },
+  "settings.assistant.app_modes.row.steering_placeholder": {
+    "message": "اسٹیئرنگ — مختصر امری ہدایات، مثلاً \"مختصر رہیں۔ کوڈ بلاکس کو ترجیح دیں۔\"",
+    "description": "Placeholder for the per-rule steering textarea",
+    "_machine_translated": true,
+    "_source_hash": "f0e586d7d2f9e16d"
+  },
+  "settings.assistant.editor.import_btn": {
+    "message": "درآمد کریں…",
+    "description": "Button: import a steering doc from disk",
+    "_machine_translated": true,
+    "_source_hash": "482786c4374e6239"
+  },
+  "settings.assistant.editor.reveal_btn": {
+    "message": "فائل ایکسپلورر میں دکھائیں",
+    "description": "Button: reveal the steering doc in the OS file explorer",
+    "_machine_translated": true,
+    "_source_hash": "87aa80b3b15ed99d"
+  },
+  "settings.assistant.editor.save_btn": {
+    "message": "محفوظ کریں",
+    "description": "Button: save the steering editor",
+    "_machine_translated": true,
+    "_source_hash": "428061672ebc51fe"
+  },
+  "settings.assistant.editor.cancel_btn": {
+    "message": "منسوخ کریں",
+    "description": "Button: cancel the steering editor",
+    "_machine_translated": true,
+    "_source_hash": "ca42e028590f873d"
+  },
+  "settings.assistant.editor.title.auto": {
+    "message": "سیکھی گئی ترجیحات",
+    "description": "Title of the steering editor in 'auto' mode",
+    "_machine_translated": true,
+    "_source_hash": "3336ab6b19989e2d"
+  },
+  "settings.assistant.editor.title.user": {
+    "message": "حسبِ ضرورت اسٹیئرنگ دستاویز",
+    "description": "Title of the steering editor in 'user' mode",
+    "_machine_translated": true,
+    "_source_hash": "0a9b34a4209358d6"
+  },
+  "settings.assistant.editor.subtitle.auto": {
+    "message": "Kage نے آپ کے بارے میں جو کچھ سیکھا ہے اسے ترمیم، ترتیب یا حذف کریں۔ محفوظ تبدیلیاں نئی چیٹس پر لاگو ہوں گی۔",
+    "description": "Subtitle of the auto-mode editor",
+    "_machine_translated": true,
+    "_source_hash": "743abb318fab716f"
+  },
+  "settings.assistant.editor.subtitle.user": {
+    "message": "Kage کے لیے آپ کی مستقل ہدایات۔ سطر بہ سطر ترمیم شدہ۔",
+    "description": "Subtitle of the user-mode editor",
+    "_machine_translated": true,
+    "_source_hash": "d01caf9f4698b109"
+  },
+  "settings.assistant.editor.status.loading": {
+    "message": "لوڈ ہو رہا ہے…",
+    "description": "Status while reading a steering doc from disk",
+    "_machine_translated": true,
+    "_source_hash": "707241097dbf9ef5"
+  },
+  "settings.assistant.editor.status.read_failed": {
+    "message": "پڑھنے میں ناکامی: {message}",
+    "description": "Status when the read fails",
+    "_machine_translated": true,
+    "_source_hash": "6a6498a640afe48c"
+  },
+  "settings.assistant.editor.status.saving": {
+    "message": "محفوظ کیا جا رہا ہے…",
+    "description": "Status while saving",
+    "_machine_translated": true,
+    "_source_hash": "4a1d8b280484c683"
+  },
+  "settings.assistant.editor.status.saved": {
+    "message": "محفوظ ہو گیا۔",
+    "description": "Status after a successful save",
+    "_machine_translated": true,
+    "_source_hash": "533b4813fb2f23e8"
+  },
+  "settings.assistant.editor.status.save_failed": {
+    "message": "محفوظ کرنے میں ناکامی: {message}",
+    "description": "Status when save fails",
+    "_machine_translated": true,
+    "_source_hash": "2fced04ec9ddec0e"
+  },
+  "settings.assistant.editor.status.import_cancelled": {
+    "message": "درآمد منسوخ ہوئی: {message}",
+    "description": "Status when the import dialog is cancelled or throws",
+    "_machine_translated": true,
+    "_source_hash": "7a40a06aed2acdad"
+  },
+  "settings.assistant.editor.status.importing": {
+    "message": "درآمد ہو رہی ہے…",
+    "description": "Status while reading the imported file",
+    "_machine_translated": true,
+    "_source_hash": "5334fd6fd61a5e7f"
+  },
+  "settings.assistant.editor.status.imported": {
+    "message": "درآمد ہو گئی۔ ان سطور کو رکھنے کے لیے محفوظ کریں پر کلک کریں۔",
+    "description": "Status after a successful import",
+    "_machine_translated": true,
+    "_source_hash": "3e146c42b8b8538f"
+  },
+  "settings.assistant.editor.status.import_failed": {
+    "message": "درآمد ناکام ہوئی: {message}",
+    "description": "Status when the import call fails",
+    "_machine_translated": true,
+    "_source_hash": "57c7534e92d54bde"
+  },
+  "settings.assistant.editor.status.reveal_failed": {
+    "message": "فائل کا مقام نہیں کھل سکا: {message}",
+    "description": "Status when the reveal-in-explorer call fails",
+    "_machine_translated": true,
+    "_source_hash": "d79ae9958cb2491c"
+  },
+  "settings.assistant.editor.path_label": {
+    "message": "یہاں محفوظ ہے: {path}",
+    "description": "Path display under the editor header",
+    "_machine_translated": true,
+    "_source_hash": "8f748ec3206d482f"
+  },
+  "settings.assistant.editor.no_file_yet": {
+    "message": "ابھی کوئی فائل نہیں — لکھنا شروع کریں تاکہ بن جائے۔",
+    "description": "Status hint when the steering doc doesn't exist on disk",
+    "_machine_translated": true,
+    "_source_hash": "99cef7301201643e"
+  },
+  "settings.assistant.editor.empty_hint.auto": {
+    "message": "ابھی کچھ نہیں سیکھا — Kage سے بات کریں اور آپ کی ترجیحات یہاں ظاہر ہونا شروع ہو جائیں گی۔",
+    "description": "Empty hint for the auto editor",
+    "_machine_translated": true,
+    "_source_hash": "93719c880acd4205"
+  },
+  "settings.assistant.editor.empty_hint.user": {
+    "message": "خالی ہے — ایک سطر سے شروع کریں، پھر محفوظ کریں۔",
+    "description": "Empty hint for the user editor",
+    "_machine_translated": true,
+    "_source_hash": "a49a94ea3d3b86c2"
+  },
+  "settings.assistant.editor.row_placeholder.auto": {
+    "message": "ترجیح یا حقیقت",
+    "description": "Per-row placeholder for the auto editor",
+    "_machine_translated": true,
+    "_source_hash": "ef358e22e0012d7a"
+  },
+  "settings.assistant.editor.row_placeholder.user": {
+    "message": "ہدایت",
+    "description": "Per-row placeholder for the user editor",
+    "_machine_translated": true,
+    "_source_hash": "ed668a13c5e6fd8a"
+  },
+  "settings.assistant.editor.unknown_error": {
+    "message": "نامعلوم خرابی",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "chat.compaction.completed": {
+    "message": "سیاق کامیابی سے مختصر کر دیا گیا",
+    "description": "Notice shown after a context compaction completes",
+    "_machine_translated": true,
+    "_source_hash": "5fab54213b093d0a"
   }
 }
