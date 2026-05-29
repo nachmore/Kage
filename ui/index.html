@@ -80,10 +80,12 @@
                     <span class="chat-header-title" id="chatHeaderTitle" data-i18n-title="chat.header.title_rename_hint" title="Double-click to rename" data-i18n="chat.header.default_title">New Chat</span>
                     <input class="chat-header-title-input" id="chatHeaderTitleInput" style="display: none;" maxlength="80">
                 </div>
-                <button class="chat-header-action" id="chatExportBtn" data-i18n-title="chat.header.export_title" title="Export this chat as Markdown" data-i18n-aria-label="chat.header.export_title" aria-label="Export this chat as Markdown">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                </button>
-                <span class="chat-header-status" id="connectionStatus" data-i18n="chat.header.connection_checking">Checking...</span>
+                <div class="chat-header-trailing">
+                    <button class="chat-header-action" id="chatExportBtn" data-i18n-title="chat.header.export_title" title="Export this chat as Markdown" data-i18n-aria-label="chat.header.export_title" aria-label="Export this chat as Markdown">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </button>
+                    <span class="chat-header-status" id="connectionStatus" data-i18n="chat.header.connection_checking">Checking...</span>
+                </div>
             </div>
 
             <div id="errorContainer"></div>

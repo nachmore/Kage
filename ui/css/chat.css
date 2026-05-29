@@ -938,6 +938,21 @@ body.light-theme .steering-ack {
     align-items: center;
     gap: 4px;
     min-width: 0;
+    /* Take all available space so the trailing group lands hard-right.
+       Without this, justify-content: space-between still works but the
+       sidebar-toggle button (when visible) pushes the title oddly. */
+    flex: 1;
+    margin-right: 12px;
+}
+/* Right-edge cluster for actions + status. Previously the export button
+   sat between the title and the status, which planted it awkwardly in
+   the middle. Grouping it with the status here pins both to the right
+   end of the header where chrome controls naturally live. */
+.chat-header-trailing {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 .chat-header-title-group .chat-header-title {
     overflow: hidden;
