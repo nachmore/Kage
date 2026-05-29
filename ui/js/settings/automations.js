@@ -5,36 +5,52 @@ import { t, tHtml } from '../shared/i18n.js';
 /**
  * Automations Settings Module — collapsed/expanded card UI for automation rules.
  */
-const TRANSFORMS = [
-    { value: 'uppercase', label: 'UPPERCASE' },
-    { value: 'lowercase', label: 'lowercase' },
-    { value: 'trim', label: 'Trim whitespace' },
-    { value: 'sort_lines', label: 'Sort lines' },
-    { value: 'reverse_lines', label: 'Reverse lines' },
-    { value: 'remove_blank_lines', label: 'Remove blank lines' },
-    { value: 'unique_lines', label: 'Unique lines' },
-    { value: 'number_lines', label: 'Number lines' },
-    { value: 'count_words', label: 'Count words' },
-    { value: 'count_lines', label: 'Count lines' },
-    { value: 'count_chars', label: 'Count characters' },
-    { value: 'base64_encode', label: 'Base64 encode' },
-    { value: 'base64_decode', label: 'Base64 decode' },
+// Values are stable identifiers; labels resolve through i18n at render
+// time so a language switch updates the dropdowns without a reload.
+const TRANSFORM_VALUES = [
+    'uppercase',
+    'lowercase',
+    'trim',
+    'sort_lines',
+    'reverse_lines',
+    'remove_blank_lines',
+    'unique_lines',
+    'number_lines',
+    'count_words',
+    'count_lines',
+    'count_chars',
+    'base64_encode',
+    'base64_decode',
 ];
-const SCHEDULE_MODES = [
-    { value: 'hourly', label: '🕐 Hourly' },
-    { value: 'daily', label: '📅 Daily' },
-    { value: 'monthly', label: '🗓️ Monthly' },
-    { value: 'yearly', label: '📆 Yearly' },
+const SCHEDULE_MODE_VALUES = ['hourly', 'daily', 'monthly', 'yearly'];
+const DAY_OF_WEEK_VALUES = [
+    { value: '1', key: 'mon' },
+    { value: '2', key: 'tue' },
+    { value: '3', key: 'wed' },
+    { value: '4', key: 'thu' },
+    { value: '5', key: 'fri' },
+    { value: '6', key: 'sat' },
+    { value: '7', key: 'sun' },
 ];
-const DAYS_OF_WEEK = [
-    { value: '1', label: 'Mon' },
-    { value: '2', label: 'Tue' },
-    { value: '3', label: 'Wed' },
-    { value: '4', label: 'Thu' },
-    { value: '5', label: 'Fri' },
-    { value: '6', label: 'Sat' },
-    { value: '7', label: 'Sun' },
-];
+
+function transforms() {
+    return TRANSFORM_VALUES.map((value) => ({
+        value,
+        label: t(`settings.automations.transform.${value}`),
+    }));
+}
+function scheduleModes() {
+    return SCHEDULE_MODE_VALUES.map((value) => ({
+        value,
+        label: t(`settings.automations.schedule.${value}`),
+    }));
+}
+function daysOfWeek() {
+    return DAY_OF_WEEK_VALUES.map((d) => ({
+        value: d.value,
+        label: t(`settings.automations.day.${d.key}`),
+    }));
+}
 
 export class AutomationsSettingsModule extends SettingsModule {
     constructor() {
@@ -777,10 +793,12 @@ export class AutomationsSettingsModule extends SettingsModule {
     }
     _scheduleConfigHtml(trigger) {
         const p = this._parseScheduleInterval(trigger.interval);
-        const modeOpts = SCHEDULE_MODES.map(
-            (m) =>
-                `<option value="${m.value}"${p.mode === m.value ? ' selected' : ''}>${m.label}</option>`
-        ).join('');
+        const modeOpts = scheduleModes()
+            .map(
+                (m) =>
+                    `<option value="${m.value}"${p.mode === m.value ? ' selected' : ''}>${m.label}</option>`
+            )
+            .join('');
         let d = '';
         if (p.mode === 'hourly') {
             const ho = [1, 2, 3, 4, 6, 8, 12]
@@ -791,10 +809,12 @@ export class AutomationsSettingsModule extends SettingsModule {
                 .join('');
             d = `<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><select class="sched-hours">${ho}</select><span style="font-size:12px;color:var(--kage-text)">at minute</span><input type="number" class="sched-minute" min="0" max="59" value="${p.minute}" style="width:60px;"></div>`;
         } else if (p.mode === 'daily') {
-            const db = DAYS_OF_WEEK.map(
-                (dw) =>
-                    `<button type="button" class="sched-day-btn${p.days.length === 0 || p.days.includes(dw.value) ? ' active' : ''}" data-day="${dw.value}">${dw.label}</button>`
-            ).join('');
+            const db = daysOfWeek()
+                .map(
+                    (dw) =>
+                        `<button type="button" class="sched-day-btn${p.days.length === 0 || p.days.includes(dw.value) ? ' active' : ''}" data-day="${dw.value}">${dw.label}</button>`
+                )
+                .join('');
             d = `<div style="margin-top:6px;"><div style="display:flex;gap:4px;margin-bottom:6px;">${db}</div><div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--kage-text)">at</span><input type="time" class="sched-time" value="${p.time}" style="width:120px;"></div></div>`;
         } else if (p.mode === 'monthly') {
             const oo = ['1st', '2nd', '3rd', '4th', 'last']
@@ -803,10 +823,12 @@ export class AutomationsSettingsModule extends SettingsModule {
                         `<option value="${o}"${p.weekOrdinal === o ? ' selected' : ''}>${o}</option>`
                 )
                 .join('');
-            const dwo = DAYS_OF_WEEK.map(
-                (dw) =>
-                    `<option value="${dw.value}"${p.weekDay === dw.value ? ' selected' : ''}>${dw.label}</option>`
-            ).join('');
+            const dwo = daysOfWeek()
+                .map(
+                    (dw) =>
+                        `<option value="${dw.value}"${p.weekDay === dw.value ? ' selected' : ''}>${dw.label}</option>`
+                )
+                .join('');
             const dn = Array.from({ length: 31 }, (_, j) => j + 1)
                 .map(
                     (n) =>
@@ -881,16 +903,18 @@ export class AutomationsSettingsModule extends SettingsModule {
                 this._esc(step.replace) +
                 '" placeholder="Replace with"></div>';
         else if (t === 'transform') {
-            const xo = TRANSFORMS.map(
-                (x) =>
-                    '<option value="' +
-                    x.value +
-                    '"' +
-                    (step.transform === x.value ? ' selected' : '') +
-                    '>' +
-                    x.label +
-                    '</option>'
-            ).join('');
+            const xo = transforms()
+                .map(
+                    (x) =>
+                        '<option value="' +
+                        x.value +
+                        '"' +
+                        (step.transform === x.value ? ' selected' : '') +
+                        '>' +
+                        x.label +
+                        '</option>'
+                )
+                .join('');
             fields = '<select class="step-transform">' + xo + '</select>';
         } else if (t === 'condition')
             fields =

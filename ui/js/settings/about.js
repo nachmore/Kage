@@ -664,15 +664,15 @@ export class AboutSettingsModule extends SettingsModule {
         try {
             const { ask } = window.__TAURI__.dialog || {};
             if (typeof ask === 'function') {
-                const ok = await ask(
-                    'Import will replace your current Kage config (window positions, install ID, and OS startup setting are kept local).\n\nContinue?',
-                    { title: 'Import backup', kind: 'warning' }
-                );
+                const ok = await ask(t('settings.about.dialog.import.message'), {
+                    title: t('settings.about.dialog.import.title'),
+                    kind: 'warning',
+                });
                 if (!ok) return;
             }
         } catch {}
 
-        this._setBackupStatus('Importing…');
+        this._setBackupStatus(t('settings.about.import.importing'));
         let summary;
         try {
             summary = await invoke('import_config_bundle', {
@@ -680,28 +680,41 @@ export class AboutSettingsModule extends SettingsModule {
                 passphrase,
             });
         } catch (e) {
-            this._setBackupStatus('Import failed: ' + this._formatError(e), 'error');
+            this._setBackupStatus(
+                t('settings.about.import.failed', { message: this._formatError(e) }),
+                'error'
+            );
             return;
         }
 
         const parts = [];
-        parts.push(`Restored ${summary.shortcuts} shortcut${summary.shortcuts === 1 ? '' : 's'}`);
-        parts.push(
-            `${summary.extensions} extension data file${summary.extensions === 1 ? '' : 's'}`
-        );
+        parts.push(t('settings.about.import.summary.shortcuts', { count: summary.shortcuts }));
+        parts.push(t('settings.about.import.summary.extensions', { count: summary.extensions }));
         if (summary.steering_bytes > 0) {
-            parts.push(`${formatBytes(summary.steering_bytes)} of steering`);
+            parts.push(
+                t('settings.about.import.summary.steering', {
+                    size: formatBytes(summary.steering_bytes),
+                })
+            );
         }
-        const exportedAt = summary.exported_at ? ` (exported ${summary.exported_at})` : '';
-        this._setBackupStatus(`✓ ${parts.join(', ')}${exportedAt}.`, 'success');
+        const exportedAt = summary.exported_at
+            ? t('settings.about.import.summary.exported_at', { date: summary.exported_at })
+            : '';
+        this._setBackupStatus(
+            t('settings.about.import.success', {
+                parts: parts.join(', '),
+                exported_at: exportedAt,
+            }),
+            'success'
+        );
 
         try {
             const { ask } = window.__TAURI__.dialog || {};
             if (typeof ask === 'function') {
-                const restart = await ask(
-                    'Some changes only take effect on restart (agent connection, hotkeys, theme). Restart Kage now?',
-                    { title: 'Restart required', kind: 'info' }
-                );
+                const restart = await ask(t('settings.about.dialog.restart.message'), {
+                    title: t('settings.about.dialog.restart.title'),
+                    kind: 'info',
+                });
                 if (restart) await invoke('restart_app');
             }
         } catch {

@@ -7138,5 +7138,227 @@
     "description": "Cancel button on the prompt form",
     "_machine_translated": true,
     "_source_hash": "e3991a4f43232010"
+  },
+  "settings.automations.transform.uppercase": {
+    "message": "CHỮ HOA",
+    "description": "Transform option: uppercase",
+    "_machine_translated": true,
+    "_source_hash": "1e85ec0180bf61b8"
+  },
+  "settings.automations.transform.lowercase": {
+    "message": "chữ thường",
+    "description": "Transform option: lowercase",
+    "_machine_translated": true,
+    "_source_hash": "3c467aba3fc018ed"
+  },
+  "settings.automations.transform.trim": {
+    "message": "Cắt khoảng trắng",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "e57ace814ca10cb8"
+  },
+  "settings.automations.transform.sort_lines": {
+    "message": "Sắp xếp dòng",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "1304d09bfd27aab6"
+  },
+  "settings.automations.transform.reverse_lines": {
+    "message": "Đảo ngược dòng",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "0fa2f7e6e292cce6"
+  },
+  "settings.automations.transform.remove_blank_lines": {
+    "message": "Xoá dòng trống",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "16f71007003f64a5"
+  },
+  "settings.automations.transform.unique_lines": {
+    "message": "Dòng duy nhất",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "0b6a3f8367d2e8d2"
+  },
+  "settings.automations.transform.number_lines": {
+    "message": "Đánh số dòng",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "6b3e2c153622dc1a"
+  },
+  "settings.automations.transform.count_words": {
+    "message": "Đếm từ",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "c2006e1c3e40d3d6"
+  },
+  "settings.automations.transform.count_lines": {
+    "message": "Đếm dòng",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "846723e8f87dda93"
+  },
+  "settings.automations.transform.count_chars": {
+    "message": "Đếm ký tự",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "db0e6442fb9ded43"
+  },
+  "settings.automations.transform.base64_encode": {
+    "message": "Mã hoá Base64",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "d6c12f7dd4044bcf"
+  },
+  "settings.automations.transform.base64_decode": {
+    "message": "Giải mã Base64",
+    "description": "Transform option",
+    "_machine_translated": true,
+    "_source_hash": "70a55e33eeee273e"
+  },
+  "settings.automations.schedule.hourly": {
+    "message": "🕐 Hàng giờ",
+    "description": "Schedule mode option",
+    "_machine_translated": true,
+    "_source_hash": "f116b623622b17b8"
+  },
+  "settings.automations.schedule.daily": {
+    "message": "📅 Hàng ngày",
+    "description": "Schedule mode option",
+    "_machine_translated": true,
+    "_source_hash": "810bcf855c776157"
+  },
+  "settings.automations.schedule.monthly": {
+    "message": "🗓️ Hàng tháng",
+    "description": "Schedule mode option",
+    "_machine_translated": true,
+    "_source_hash": "effd290f5ccbd0e4"
+  },
+  "settings.automations.schedule.yearly": {
+    "message": "📆 Hàng năm",
+    "description": "Schedule mode option",
+    "_machine_translated": true,
+    "_source_hash": "d295664f63c2495d"
+  },
+  "settings.automations.day.mon": {
+    "message": "T2",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "07c0ad5006447ecd"
+  },
+  "settings.automations.day.tue": {
+    "message": "T3",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "42fab73704bf9d0a"
+  },
+  "settings.automations.day.wed": {
+    "message": "T4",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "0d8cb9990f9c3090"
+  },
+  "settings.automations.day.thu": {
+    "message": "T5",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "f9dbbe5af4e34592"
+  },
+  "settings.automations.day.fri": {
+    "message": "T6",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "e6689b0dc0f9ffaa"
+  },
+  "settings.automations.day.sat": {
+    "message": "T7",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "0bc245d4bdd8c392"
+  },
+  "settings.automations.day.sun": {
+    "message": "CN",
+    "description": "Day of week abbreviation",
+    "_machine_translated": true,
+    "_source_hash": "19fbb3830c9dc829"
+  },
+  "inline_assist.suggestion.summarize": {
+    "message": "Tóm tắt trang",
+    "description": "Inline-assist suggestion: ask the agent to summarize the visible page",
+    "_machine_translated": true,
+    "_source_hash": "fb379c6a32540357"
+  },
+  "inline_assist.suggestion.help_app": {
+    "message": "Trợ giúp với ứng dụng này",
+    "description": "Inline-assist suggestion: ask the agent to help with the focused app",
+    "_machine_translated": true,
+    "_source_hash": "ba7a4357879bf4ed"
+  },
+  "settings.about.dialog.import.title": {
+    "message": "Nhập bản sao lưu",
+    "description": "Title of the import-backup confirmation dialog",
+    "_machine_translated": true,
+    "_source_hash": "837a1c3c864a7dda"
+  },
+  "settings.about.dialog.restart.title": {
+    "message": "Cần khởi động lại",
+    "description": "Title of the restart-after-import dialog",
+    "_machine_translated": true,
+    "_source_hash": "f0a3eb503050f83a"
+  },
+  "settings.about.dialog.import.message": {
+    "message": "Việc nhập sẽ thay thế cấu hình Kage hiện tại của bạn (vị trí cửa sổ, ID cài đặt và cài đặt khởi động cùng hệ điều hành sẽ được giữ lại cục bộ).\n\nTiếp tục?",
+    "description": "Body of the import confirmation dialog",
+    "_machine_translated": true,
+    "_source_hash": "2f754269a541af14"
+  },
+  "settings.about.dialog.restart.message": {
+    "message": "Một số thay đổi chỉ có hiệu lực sau khi khởi động lại (kết nối agent, phím tắt, giao diện). Khởi động lại Kage ngay?",
+    "description": "Body of the restart-after-import dialog",
+    "_machine_translated": true,
+    "_source_hash": "dcedcfe5ce23a8b1"
+  },
+  "settings.about.import.importing": {
+    "message": "Đang nhập…",
+    "description": "Status while a backup is being imported",
+    "_machine_translated": true,
+    "_source_hash": "50e70a39f223d6b0"
+  },
+  "settings.about.import.failed": {
+    "message": "Nhập thất bại: {message}",
+    "description": "Status when a backup import fails",
+    "_machine_translated": true,
+    "_source_hash": "bae86416729b49e8"
+  },
+  "settings.about.import.summary.shortcuts": {
+    "message": "{count, plural, other {Đã khôi phục # phím tắt}}",
+    "description": "Summary fragment: restored shortcuts count",
+    "_machine_translated": true,
+    "_source_hash": "e499444dbb19dc93"
+  },
+  "settings.about.import.summary.extensions": {
+    "message": "{count, plural, other {# tệp dữ liệu tiện ích mở rộng}}",
+    "description": "Summary fragment: extension data file count",
+    "_machine_translated": true,
+    "_source_hash": "45e76ae815395991"
+  },
+  "settings.about.import.summary.steering": {
+    "message": "{size} dữ liệu điều hướng",
+    "description": "Summary fragment: total steering bytes restored",
+    "_machine_translated": true,
+    "_source_hash": "5f31cfbfb2549571"
+  },
+  "settings.about.import.summary.exported_at": {
+    "message": " (đã xuất {date})",
+    "description": "Suffix appended to the summary line when exported_at is known",
+    "_machine_translated": true,
+    "_source_hash": "684fc9a448f3ed74"
+  },
+  "settings.about.import.success": {
+    "message": "✓ {parts}{exported_at}.",
+    "description": "Final summary status line after a successful import",
+    "_machine_translated": true,
+    "_source_hash": "9224ab580ae90046"
   }
 }

@@ -4172,6 +4172,87 @@
     "description": "Cancel button on the prompt form"
   },
 
+  "settings.automations.transform.uppercase": { "message": "UPPERCASE", "description": "Transform option: uppercase" },
+  "settings.automations.transform.lowercase": { "message": "lowercase", "description": "Transform option: lowercase" },
+  "settings.automations.transform.trim": { "message": "Trim whitespace", "description": "Transform option" },
+  "settings.automations.transform.sort_lines": { "message": "Sort lines", "description": "Transform option" },
+  "settings.automations.transform.reverse_lines": { "message": "Reverse lines", "description": "Transform option" },
+  "settings.automations.transform.remove_blank_lines": { "message": "Remove blank lines", "description": "Transform option" },
+  "settings.automations.transform.unique_lines": { "message": "Unique lines", "description": "Transform option" },
+  "settings.automations.transform.number_lines": { "message": "Number lines", "description": "Transform option" },
+  "settings.automations.transform.count_words": { "message": "Count words", "description": "Transform option" },
+  "settings.automations.transform.count_lines": { "message": "Count lines", "description": "Transform option" },
+  "settings.automations.transform.count_chars": { "message": "Count characters", "description": "Transform option" },
+  "settings.automations.transform.base64_encode": { "message": "Base64 encode", "description": "Transform option" },
+  "settings.automations.transform.base64_decode": { "message": "Base64 decode", "description": "Transform option" },
+
+  "settings.automations.schedule.hourly": { "message": "🕐 Hourly", "description": "Schedule mode option" },
+  "settings.automations.schedule.daily": { "message": "📅 Daily", "description": "Schedule mode option" },
+  "settings.automations.schedule.monthly": { "message": "🗓️ Monthly", "description": "Schedule mode option" },
+  "settings.automations.schedule.yearly": { "message": "📆 Yearly", "description": "Schedule mode option" },
+
+  "settings.automations.day.mon": { "message": "Mon", "description": "Day of week abbreviation" },
+  "settings.automations.day.tue": { "message": "Tue", "description": "Day of week abbreviation" },
+  "settings.automations.day.wed": { "message": "Wed", "description": "Day of week abbreviation" },
+  "settings.automations.day.thu": { "message": "Thu", "description": "Day of week abbreviation" },
+  "settings.automations.day.fri": { "message": "Fri", "description": "Day of week abbreviation" },
+  "settings.automations.day.sat": { "message": "Sat", "description": "Day of week abbreviation" },
+  "settings.automations.day.sun": { "message": "Sun", "description": "Day of week abbreviation" },
+
+  "inline_assist.suggestion.summarize": {
+    "message": "Summarize page",
+    "description": "Inline-assist suggestion: ask the agent to summarize the visible page"
+  },
+  "inline_assist.suggestion.help_app": {
+    "message": "Help with this app",
+    "description": "Inline-assist suggestion: ask the agent to help with the focused app"
+  },
+
+  "settings.about.dialog.import.title": {
+    "message": "Import backup",
+    "description": "Title of the import-backup confirmation dialog"
+  },
+  "settings.about.dialog.restart.title": {
+    "message": "Restart required",
+    "description": "Title of the restart-after-import dialog"
+  },
+  "settings.about.dialog.import.message": {
+    "message": "Import will replace your current Kage config (window positions, install ID, and OS startup setting are kept local).\n\nContinue?",
+    "description": "Body of the import confirmation dialog"
+  },
+  "settings.about.dialog.restart.message": {
+    "message": "Some changes only take effect on restart (agent connection, hotkeys, theme). Restart Kage now?",
+    "description": "Body of the restart-after-import dialog"
+  },
+  "settings.about.import.importing": {
+    "message": "Importing…",
+    "description": "Status while a backup is being imported"
+  },
+  "settings.about.import.failed": {
+    "message": "Import failed: {message}",
+    "description": "Status when a backup import fails"
+  },
+  "settings.about.import.summary.shortcuts": {
+    "message": "{count, plural, one {Restored 1 shortcut} other {Restored # shortcuts}}",
+    "description": "Summary fragment: restored shortcuts count"
+  },
+  "settings.about.import.summary.extensions": {
+    "message": "{count, plural, one {1 extension data file} other {# extension data files}}",
+    "description": "Summary fragment: extension data file count"
+  },
+  "settings.about.import.summary.steering": {
+    "message": "{size} of steering",
+    "description": "Summary fragment: total steering bytes restored"
+  },
+  "settings.about.import.summary.exported_at": {
+    "message": " (exported {date})",
+    "description": "Suffix appended to the summary line when exported_at is known"
+  },
+  "settings.about.import.success": {
+    "message": "✓ {parts}{exported_at}.",
+    "description": "Final summary status line after a successful import"
+  },
+
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",
     "description": "Tooltip on the hotkey picker's keycap display"

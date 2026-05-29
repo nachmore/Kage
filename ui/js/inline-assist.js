@@ -8,7 +8,7 @@ import { createMascot } from './shared/mascot.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
 import { EVT } from './shared/events.js';
 import { WINDOW } from './shared/window-labels.js';
-import { initI18n, applyStaticTranslations } from './shared/i18n.js';
+import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 
 console.log(
     '[inline-assist] Module loaded, classifyText:',
@@ -153,13 +153,13 @@ console.log(
         if (!selectedText.trim()) {
             actionItems = [
                 {
-                    label: 'Summarize page',
+                    label: t('inline_assist.suggestion.summarize'),
                     icon: '📝',
                     prompt: "Summarize what I'm currently looking at.",
                     mode: 'inform',
                 },
                 {
-                    label: 'Help with this app',
+                    label: t('inline_assist.suggestion.help_app'),
                     icon: '💡',
                     prompt: "Give me tips for what I'm currently doing.",
                     mode: 'inform',
