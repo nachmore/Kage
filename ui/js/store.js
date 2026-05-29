@@ -13,7 +13,7 @@
  */
 
 import { errLabel, errMessage } from './shared/error-message.js';
-import { initI18n, applyStaticTranslations } from './shared/i18n.js';
+import { initI18n, applyStaticTranslations, t } from './shared/i18n.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
@@ -498,7 +498,7 @@ async function reinstallItem(id) {
 }
 
 async function uninstallItem(id, kind) {
-    if (!confirm(`Uninstall "${id}"?`)) return;
+    if (!confirm(t('store.uninstall.confirm', { id }))) return;
     const invoke = window.__TAURI__.core.invoke;
     setCardBusy(id, 'Removing…');
     try {

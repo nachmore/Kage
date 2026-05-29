@@ -6580,5 +6580,275 @@
     "description": "Button label that deep-links to System Settings → Privacy",
     "_machine_translated": true,
     "_source_hash": "94e2b0b26c74ff31"
+  },
+  "settings.shortcuts.import.invalid_format": {
+    "message": "Ongeldig formaat.",
+    "description": "alert() shown when the chosen import file isn't a JSON array",
+    "_machine_translated": true,
+    "_source_hash": "91b2d1de3754130d"
+  },
+  "settings.shortcuts.import.parse_failed": {
+    "message": "Parsen mislukt: {message}",
+    "description": "alert() shown when the chosen import file fails to JSON-parse",
+    "_machine_translated": true,
+    "_source_hash": "f85423769ca76d01"
+  },
+  "settings.manager.cap.clipboard.label": {
+    "message": "Klembord",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "d1537b2748595789"
+  },
+  "settings.manager.cap.clipboard.desc": {
+    "message": "Inhoud en geschiedenis van klembord lezen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "993fc85130fbc71d"
+  },
+  "settings.manager.cap.filesystem.label": {
+    "message": "Bestandssysteem",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "0cc8639b946b17b6"
+  },
+  "settings.manager.cap.filesystem.desc": {
+    "message": "Mappen scannen en bestanden zoeken",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "ca8f5fc31092fc74"
+  },
+  "settings.manager.cap.window.label": {
+    "message": "Venster",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3bad8cafcd4df725"
+  },
+  "settings.manager.cap.window.desc": {
+    "message": "Kage-vensters van grootte veranderen en verplaatsen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "9fc963044ccb4ca1"
+  },
+  "settings.manager.cap.windows.label": {
+    "message": "Open vensters",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "8d26a20170cd36a5"
+  },
+  "settings.manager.cap.windows.desc": {
+    "message": "Vensters van andere apps weergeven en focussen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "927f8ee2880021fa"
+  },
+  "settings.manager.cap.notifications.label": {
+    "message": "Notificaties",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3f821e25089b49ed"
+  },
+  "settings.manager.cap.notifications.desc": {
+    "message": "Systeemmeldingen tonen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "b67d4eeb8987f695"
+  },
+  "settings.manager.cap.calendar.label": {
+    "message": "Agenda",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "ee86d394ff44ef44"
+  },
+  "settings.manager.cap.calendar.desc": {
+    "message": "Agenda-afspraken lezen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "33004bf5e5b073bf"
+  },
+  "settings.manager.cap.session.label": {
+    "message": "Sessies",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "104f1f2cc62886b1"
+  },
+  "settings.manager.cap.session.desc": {
+    "message": "Chatsessies weergeven en lezen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "eae3dbcc8bb286e2"
+  },
+  "settings.manager.cap.agent.label": {
+    "message": "Agent",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "263c007bf840d6d3"
+  },
+  "settings.manager.cap.agent.desc": {
+    "message": "Berichten naar de AI-agent sturen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "5e900e70b8cf39a1"
+  },
+  "settings.manager.cap.activity.label": {
+    "message": "Activiteit",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2195c69f2c03ab1d"
+  },
+  "settings.manager.cap.activity.desc": {
+    "message": "Statistieken over app-gebruik lezen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "6a80b6727a12257b"
+  },
+  "settings.manager.cap.signals.desc": {
+    "message": "Signalen uitzenden die automatiseringen kunnen activeren",
+    "description": "Capability badge tooltip for the signals capability",
+    "_machine_translated": true,
+    "_source_hash": "1ad086a92c7939ef"
+  },
+  "settings.manager.cap.tts.label": {
+    "message": "TTS",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "829bf7952c524055"
+  },
+  "settings.manager.cap.tts.desc": {
+    "message": "Tekst-naar-spraak gebruiken",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "523aa8e8bdff7b05"
+  },
+  "settings.manager.cap.storage.label": {
+    "message": "Opslag",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "22abd011b4928a17"
+  },
+  "settings.manager.cap.storage.desc": {
+    "message": "Eigen sandbox-data en -configuratie lezen/schrijven",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "dd805976c57d47d7"
+  },
+  "settings.manager.cap.shell.label": {
+    "message": "Shell",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "4d17844356d054ed"
+  },
+  "settings.manager.cap.shell.desc": {
+    "message": "URL's, paden en apps extern openen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "202db98f367bf719"
+  },
+  "settings.manager.cap.automation.label": {
+    "message": "Automatisering",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "02c4a84bd849ce2c"
+  },
+  "settings.manager.cap.automation.desc": {
+    "message": "Signalen uitzenden die automatiseringen kunnen activeren",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "fee6e120d0f6e648"
+  },
+  "settings.manager.cap.legacy_warning": {
+    "message": "⚠ Extensiemanifest declareert geen 'permissions' — wordt uitgevoerd met standaardset. Vraag de auteur om dit op te geven.",
+    "description": "Banner shown when an extension manifest predates the permissions field",
+    "_machine_translated": true,
+    "_source_hash": "f17fb1e700702441"
+  },
+  "settings.manager.module_must_extend": {
+    "message": "Module moet SettingsModule of SandboxedExtensionSettingsModule uitbreiden",
+    "description": "Internal error when a registered settings module isn't of the expected type",
+    "_machine_translated": true,
+    "_source_hash": "b501ddf1a5cb1473"
+  },
+  "settings.manager.validation.module_label": {
+    "message": "[{title}] {error}",
+    "description": "Status banner format combining a module title with its validation error",
+    "_machine_translated": true,
+    "_source_hash": "db3f16b6c5ecd50a"
+  },
+  "settings.manager.cap.unknown.desc": {
+    "message": "Onbekende mogelijkheid",
+    "description": "Fallback description for unrecognised capability codes",
+    "_machine_translated": true,
+    "_source_hash": "9919895b41c053b7"
+  },
+  "settings.manager.cap.none": {
+    "message": "🔒 Geen mogelijkheden",
+    "description": "Capabilities row label when an extension requests none",
+    "_machine_translated": true,
+    "_source_hash": "ed6fc560f81fbc9b"
+  },
+  "settings.manager.cap.none.title": {
+    "message": "Deze extensie heeft geen mogelijkheden aangevraagd",
+    "description": "Tooltip for the no-capabilities row",
+    "_machine_translated": true,
+    "_source_hash": "19206a1e5aaa7ca6"
+  },
+  "settings.manager.error.failed_load": {
+    "message": "Kan instellingen niet laden",
+    "description": "errLabel passed when loading settings throws",
+    "_machine_translated": true,
+    "_source_hash": "d92ce9458551acc1"
+  },
+  "settings.manager.error.validation_failed": {
+    "message": "Validatie mislukt",
+    "description": "Fallback when a module's validate() returns no error message",
+    "_machine_translated": true,
+    "_source_hash": "4f92f2b69999b403"
+  },
+  "settings.manager.status.saved_restart_needed": {
+    "message": "Instellingen opgeslagen. Herstart vereist voor verbindingswijzigingen.",
+    "description": "Status banner when a save succeeded but requires a restart",
+    "_machine_translated": true,
+    "_source_hash": "cb3492630a83c547"
+  },
+  "settings.manager.dialog.restart.message": {
+    "message": "Verbindingsinstellingen gewijzigd. De app moet opnieuw starten om deze wijzigingen toe te passen.\n\nNu opnieuw starten?",
+    "description": "Tauri ask() dialog body",
+    "_machine_translated": true,
+    "_source_hash": "cf5d009e6005e55c"
+  },
+  "settings.manager.dialog.restart.title": {
+    "message": "Herstart vereist",
+    "description": "Tauri ask() dialog title",
+    "_machine_translated": true,
+    "_source_hash": "8dff29c692cb8e36"
+  },
+  "settings.manager.dialog.restart.fallback": {
+    "message": "Verbindingsinstellingen gewijzigd. Nu opnieuw starten?",
+    "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
+    "_machine_translated": true,
+    "_source_hash": "03eaa996fdface54"
+  },
+  "settings.manager.status.saved": {
+    "message": "Instellingen opgeslagen! Alle wijzigingen zijn direct van kracht.",
+    "description": "Status banner after a successful save with no restart needed",
+    "_machine_translated": true,
+    "_source_hash": "887374b73e22123c"
+  },
+  "settings.manager.status.save_failed": {
+    "message": "Opslaan mislukt: {message}",
+    "description": "Status banner when save_config throws",
+    "_machine_translated": true,
+    "_source_hash": "7c0dfff352cfcd92"
+  },
+  "settings.manager.status.unknown_error": {
+    "message": "Onbekende fout",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "store.uninstall.confirm": {
+    "message": "\"{id}\" verwijderen?",
+    "description": "confirm() prompt before uninstalling an extension",
+    "_machine_translated": true,
+    "_source_hash": "8c9098802c436605"
   }
 }

@@ -912,13 +912,13 @@ export class ShortcutsSettingsModule extends SettingsModule {
                 try {
                     const imported = JSON.parse(ev.target.result);
                     if (!Array.isArray(imported)) {
-                        alert('Invalid format.');
+                        alert(t('settings.shortcuts.import.invalid_format'));
                         return;
                     }
                     this.shortcuts = imported;
                     this.renderShortcutsList();
                 } catch (err) {
-                    alert('Failed to parse: ' + err.message);
+                    alert(t('settings.shortcuts.import.parse_failed', { message: err.message }));
                 }
             };
             reader.readAsText(file);

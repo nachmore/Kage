@@ -8,47 +8,52 @@ import { ExtensionSandboxPool } from '../shared/extension-sandbox-host.js';
 import { normalizePermissions } from '../shared/extension-permissions.js';
 import { renderSchema } from '../shared/settings-renderer.js';
 import { escapeAttr, escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 import { SettingsModule } from './base.js';
 import { registerSettingsActions, setSettingsManager } from './module-registry.js';
 
-// Capability → (icon, description) used to render permission badges on
-// extension settings pages. Keep in sync with ui/js/shared/extension-permissions.js.
-const CAPABILITY_INFO = Object.freeze({
-    storage: { icon: '💾', label: 'Storage', desc: 'Read/write its own sandboxed data and config' },
-    clipboard: { icon: '📋', label: 'Clipboard', desc: 'Read clipboard contents and history' },
-    shell: { icon: '🌐', label: 'Shell', desc: 'Open URLs, paths, and apps externally' },
-    filesystem: { icon: '📂', label: 'Filesystem', desc: 'Scan folders and search files' },
-    window: { icon: '🪟', label: 'Window', desc: 'Resize and reposition Kage windows' },
-    windows: { icon: '🧿', label: 'Open windows', desc: "List and focus other apps' windows" },
-    notifications: { icon: '🔔', label: 'Notifications', desc: 'Show system notifications' },
-    calendar: { icon: '📅', label: 'Calendar', desc: 'Read calendar events' },
-    session: { icon: '💬', label: 'Sessions', desc: 'List and read chat sessions' },
-    agent: { icon: '🤖', label: 'Agent', desc: 'Send messages to the AI agent' },
-    activity: { icon: '📊', label: 'Activity', desc: 'Read app usage statistics' },
-    automation: {
-        icon: '⚡',
-        label: 'Automation',
-        desc: 'Emit signals that can trigger automations',
-    },
-    tts: { icon: '🔈', label: 'TTS', desc: 'Use text-to-speech' },
+// Capability → icon. Labels and descriptions resolve through i18n at
+// render time so language switches reflect immediately. Keep in sync with
+// ui/js/shared/extension-permissions.js.
+const CAPABILITY_ICONS = Object.freeze({
+    storage: '💾',
+    clipboard: '📋',
+    shell: '🌐',
+    filesystem: '📂',
+    window: '🪟',
+    windows: '🧿',
+    notifications: '🔔',
+    calendar: '📅',
+    session: '💬',
+    agent: '🤖',
+    activity: '📊',
+    automation: '⚡',
+    tts: '🔈',
 });
+
+function capabilityLabel(cap) {
+    return CAPABILITY_ICONS[cap] ? t(`settings.manager.cap.${cap}.label`) : cap;
+}
+function capabilityDesc(cap) {
+    return CAPABILITY_ICONS[cap]
+        ? t(`settings.manager.cap.${cap}.desc`)
+        : t('settings.manager.cap.unknown.desc');
+}
 
 function renderCapabilityBadges(capabilities, legacy) {
     if (!Array.isArray(capabilities) || capabilities.length === 0) {
-        return '<div class="ext-capabilities ext-capabilities-none" title="This extension requested no capabilities">🔒 No capabilities</div>';
+        return `<div class="ext-capabilities ext-capabilities-none" title="${escapeAttr(t('settings.manager.cap.none.title'))}">${t('settings.manager.cap.none')}</div>`;
     }
     const pills = capabilities
         .map((cap) => {
-            const info = CAPABILITY_INFO[cap] || {
-                icon: '❓',
-                label: cap,
-                desc: 'Unknown capability',
-            };
-            return `<span class="ext-capability-pill" title="${escapeAttr(info.desc)}">${info.icon} ${escapeHtml(info.label)}</span>`;
+            const icon = CAPABILITY_ICONS[cap] || '❓';
+            const label = capabilityLabel(cap);
+            const desc = capabilityDesc(cap);
+            return `<span class="ext-capability-pill" title="${escapeAttr(desc)}">${icon} ${escapeHtml(label)}</span>`;
         })
         .join('');
     const legacyBanner = legacy
-        ? `<div class="ext-capabilities-legacy">⚠ Extension manifest does not declare 'permissions' — running with default set. Ask the author to specify.</div>`
+        ? `<div class="ext-capabilities-legacy">${t('settings.manager.cap.legacy_warning')}</div>`
         : '';
     return `<div class="ext-capabilities">${pills}</div>${legacyBanner}`;
 }
@@ -348,7 +353,7 @@ export class SettingsManager {
                 }
             });
         } catch (error) {
-            this.showStatus(errLabel('Failed to load settings', error), 'error');
+            this.showStatus(errLabel(t('settings.manager.error.failed_load'), error), 'error');
             throw error;
         }
     }
@@ -371,7 +376,11 @@ export class SettingsManager {
                 }
                 if (!validation.valid) {
                     this.showStatus(
-                        `[${module.title}] ${validation.error || 'Validation failed'}`,
+                        t('settings.manager.validation.module_label', {
+                            title: module.title,
+                            error:
+                                validation.error || t('settings.manager.error.validation_failed'),
+                        }),
                         'error'
                     );
                     return false;
@@ -412,27 +421,21 @@ export class SettingsManager {
                 this.modules.forEach((m) => {
                     m._needsRestart = false;
                 });
-                this.showStatus(
-                    'Settings saved. Restart required for connection changes.',
-                    'success'
-                );
+                this.showStatus(t('settings.manager.status.saved_restart_needed'), 'success');
                 // Use setTimeout to let the status message render before showing dialog
                 setTimeout(async () => {
                     try {
                         const { ask } = window.__TAURI__.dialog;
-                        const restart = await ask(
-                            'Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?',
-                            {
-                                title: 'Restart Required',
-                                kind: 'info',
-                            }
-                        );
+                        const restart = await ask(t('settings.manager.dialog.restart.message'), {
+                            title: t('settings.manager.dialog.restart.title'),
+                            kind: 'info',
+                        });
                         if (restart) {
                             this.invoke('restart_app');
                         }
                     } catch {
                         // Fallback to native confirm if Tauri dialog not available
-                        if (confirm('Connection settings changed. Restart now?')) {
+                        if (confirm(t('settings.manager.dialog.restart.fallback'))) {
                             this.invoke('restart_app');
                         }
                     }
@@ -440,7 +443,7 @@ export class SettingsManager {
                 return true;
             }
 
-            this.showStatus('Settings saved! All changes apply immediately.', 'success');
+            this.showStatus(t('settings.manager.status.saved'), 'success');
             return true;
         } catch (error) {
             console.error('[Settings] Save failed:', error);
@@ -450,8 +453,8 @@ export class SettingsManager {
                     : error?.message ||
                       error?.toString() ||
                       JSON.stringify(error) ||
-                      'Unknown error';
-            this.showStatus('Failed to save: ' + msg, 'error');
+                      t('settings.manager.status.unknown_error');
+            this.showStatus(t('settings.manager.status.save_failed', { message: msg }), 'error');
             return false;
         }
     }

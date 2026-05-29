@@ -6580,5 +6580,275 @@
     "description": "Button label that deep-links to System Settings → Privacy",
     "_machine_translated": true,
     "_source_hash": "94e2b0b26c74ff31"
+  },
+  "settings.shortcuts.import.invalid_format": {
+    "message": "Ungültiges Format.",
+    "description": "alert() shown when the chosen import file isn't a JSON array",
+    "_machine_translated": true,
+    "_source_hash": "91b2d1de3754130d"
+  },
+  "settings.shortcuts.import.parse_failed": {
+    "message": "Parsen fehlgeschlagen: {message}",
+    "description": "alert() shown when the chosen import file fails to JSON-parse",
+    "_machine_translated": true,
+    "_source_hash": "f85423769ca76d01"
+  },
+  "settings.manager.cap.clipboard.label": {
+    "message": "Zwischenablage",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "d1537b2748595789"
+  },
+  "settings.manager.cap.clipboard.desc": {
+    "message": "Inhalt und Verlauf der Zwischenablage lesen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "993fc85130fbc71d"
+  },
+  "settings.manager.cap.filesystem.label": {
+    "message": "Dateisystem",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "0cc8639b946b17b6"
+  },
+  "settings.manager.cap.filesystem.desc": {
+    "message": "Ordner durchsuchen und Dateien finden",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "ca8f5fc31092fc74"
+  },
+  "settings.manager.cap.window.label": {
+    "message": "Fenster",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3bad8cafcd4df725"
+  },
+  "settings.manager.cap.window.desc": {
+    "message": "Kage-Fenster vergrößern und verschieben",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "9fc963044ccb4ca1"
+  },
+  "settings.manager.cap.windows.label": {
+    "message": "Offene Fenster",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "8d26a20170cd36a5"
+  },
+  "settings.manager.cap.windows.desc": {
+    "message": "Fenster anderer Apps auflisten und fokussieren",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "927f8ee2880021fa"
+  },
+  "settings.manager.cap.notifications.label": {
+    "message": "Benachrichtigungen",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3f821e25089b49ed"
+  },
+  "settings.manager.cap.notifications.desc": {
+    "message": "Systembenachrichtigungen anzeigen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "b67d4eeb8987f695"
+  },
+  "settings.manager.cap.calendar.label": {
+    "message": "Kalender",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "ee86d394ff44ef44"
+  },
+  "settings.manager.cap.calendar.desc": {
+    "message": "Kalenderereignisse lesen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "33004bf5e5b073bf"
+  },
+  "settings.manager.cap.session.label": {
+    "message": "Sitzungen",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "104f1f2cc62886b1"
+  },
+  "settings.manager.cap.session.desc": {
+    "message": "Chat-Sitzungen auflisten und lesen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "eae3dbcc8bb286e2"
+  },
+  "settings.manager.cap.agent.label": {
+    "message": "Agent",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "263c007bf840d6d3"
+  },
+  "settings.manager.cap.agent.desc": {
+    "message": "Nachrichten an den KI-Agenten senden",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "5e900e70b8cf39a1"
+  },
+  "settings.manager.cap.activity.label": {
+    "message": "Aktivität",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2195c69f2c03ab1d"
+  },
+  "settings.manager.cap.activity.desc": {
+    "message": "App-Nutzungsstatistiken lesen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "6a80b6727a12257b"
+  },
+  "settings.manager.cap.signals.desc": {
+    "message": "Signale auslösen, die Automatisierungen starten können",
+    "description": "Capability badge tooltip for the signals capability",
+    "_machine_translated": true,
+    "_source_hash": "1ad086a92c7939ef"
+  },
+  "settings.manager.cap.tts.label": {
+    "message": "TTS",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "829bf7952c524055"
+  },
+  "settings.manager.cap.tts.desc": {
+    "message": "Text-to-Speech verwenden",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "523aa8e8bdff7b05"
+  },
+  "settings.manager.cap.storage.label": {
+    "message": "Speicher",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "22abd011b4928a17"
+  },
+  "settings.manager.cap.storage.desc": {
+    "message": "Eigene Sandbox-Daten und Konfiguration lesen/schreiben",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "dd805976c57d47d7"
+  },
+  "settings.manager.cap.shell.label": {
+    "message": "Shell",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "4d17844356d054ed"
+  },
+  "settings.manager.cap.shell.desc": {
+    "message": "URLs, Pfade und Apps extern öffnen",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "202db98f367bf719"
+  },
+  "settings.manager.cap.automation.label": {
+    "message": "Automatisierung",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "02c4a84bd849ce2c"
+  },
+  "settings.manager.cap.automation.desc": {
+    "message": "Signale ausgeben, die Automatisierungen auslösen können",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "fee6e120d0f6e648"
+  },
+  "settings.manager.cap.legacy_warning": {
+    "message": "⚠ Erweiterungsmanifest deklariert keine 'permissions' – Ausführung mit Standardberechtigungen. Bitten Sie den Autor, diese anzugeben.",
+    "description": "Banner shown when an extension manifest predates the permissions field",
+    "_machine_translated": true,
+    "_source_hash": "f17fb1e700702441"
+  },
+  "settings.manager.module_must_extend": {
+    "message": "Modul muss SettingsModule oder SandboxedExtensionSettingsModule erweitern",
+    "description": "Internal error when a registered settings module isn't of the expected type",
+    "_machine_translated": true,
+    "_source_hash": "b501ddf1a5cb1473"
+  },
+  "settings.manager.validation.module_label": {
+    "message": "[{title}] {error}",
+    "description": "Status banner format combining a module title with its validation error",
+    "_machine_translated": true,
+    "_source_hash": "db3f16b6c5ecd50a"
+  },
+  "settings.manager.cap.unknown.desc": {
+    "message": "Unbekannte Berechtigung",
+    "description": "Fallback description for unrecognised capability codes",
+    "_machine_translated": true,
+    "_source_hash": "9919895b41c053b7"
+  },
+  "settings.manager.cap.none": {
+    "message": "🔒 Keine Berechtigungen",
+    "description": "Capabilities row label when an extension requests none",
+    "_machine_translated": true,
+    "_source_hash": "ed6fc560f81fbc9b"
+  },
+  "settings.manager.cap.none.title": {
+    "message": "Diese Erweiterung hat keine Berechtigungen angefordert",
+    "description": "Tooltip for the no-capabilities row",
+    "_machine_translated": true,
+    "_source_hash": "19206a1e5aaa7ca6"
+  },
+  "settings.manager.error.failed_load": {
+    "message": "Einstellungen konnten nicht geladen werden",
+    "description": "errLabel passed when loading settings throws",
+    "_machine_translated": true,
+    "_source_hash": "d92ce9458551acc1"
+  },
+  "settings.manager.error.validation_failed": {
+    "message": "Validierung fehlgeschlagen",
+    "description": "Fallback when a module's validate() returns no error message",
+    "_machine_translated": true,
+    "_source_hash": "4f92f2b69999b403"
+  },
+  "settings.manager.status.saved_restart_needed": {
+    "message": "Einstellungen gespeichert. Für Verbindungsänderungen ist ein Neustart erforderlich.",
+    "description": "Status banner when a save succeeded but requires a restart",
+    "_machine_translated": true,
+    "_source_hash": "cb3492630a83c547"
+  },
+  "settings.manager.dialog.restart.message": {
+    "message": "Verbindungseinstellungen wurden geändert. Die App muss neu gestartet werden, um diese Änderungen anzuwenden.\n\nJetzt neu starten?",
+    "description": "Tauri ask() dialog body",
+    "_machine_translated": true,
+    "_source_hash": "cf5d009e6005e55c"
+  },
+  "settings.manager.dialog.restart.title": {
+    "message": "Neustart erforderlich",
+    "description": "Tauri ask() dialog title",
+    "_machine_translated": true,
+    "_source_hash": "8dff29c692cb8e36"
+  },
+  "settings.manager.dialog.restart.fallback": {
+    "message": "Verbindungseinstellungen wurden geändert. Jetzt neu starten?",
+    "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
+    "_machine_translated": true,
+    "_source_hash": "03eaa996fdface54"
+  },
+  "settings.manager.status.saved": {
+    "message": "Einstellungen gespeichert! Alle Änderungen werden sofort übernommen.",
+    "description": "Status banner after a successful save with no restart needed",
+    "_machine_translated": true,
+    "_source_hash": "887374b73e22123c"
+  },
+  "settings.manager.status.save_failed": {
+    "message": "Speichern fehlgeschlagen: {message}",
+    "description": "Status banner when save_config throws",
+    "_machine_translated": true,
+    "_source_hash": "7c0dfff352cfcd92"
+  },
+  "settings.manager.status.unknown_error": {
+    "message": "Unbekannter Fehler",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "store.uninstall.confirm": {
+    "message": "„{id}\" deinstallieren?",
+    "description": "confirm() prompt before uninstalling an extension",
+    "_machine_translated": true,
+    "_source_hash": "8c9098802c436605"
   }
 }

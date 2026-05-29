@@ -3869,6 +3869,104 @@
     "message": "Failed to list Ollama models: {message}",
     "description": "Returned when /api/tags fails on the user-supplied Ollama daemon"
   },
+  "settings.shortcuts.import.invalid_format": {
+    "message": "Invalid format.",
+    "description": "alert() shown when the chosen import file isn't a JSON array"
+  },
+  "settings.shortcuts.import.parse_failed": {
+    "message": "Failed to parse: {message}",
+    "description": "alert() shown when the chosen import file fails to JSON-parse"
+  },
+
+  "settings.manager.cap.clipboard.label": { "message": "Clipboard", "description": "Capability badge label" },
+  "settings.manager.cap.clipboard.desc": { "message": "Read clipboard contents and history", "description": "Capability badge tooltip" },
+  "settings.manager.cap.filesystem.label": { "message": "Filesystem", "description": "Capability badge label" },
+  "settings.manager.cap.filesystem.desc": { "message": "Scan folders and search files", "description": "Capability badge tooltip" },
+  "settings.manager.cap.window.label": { "message": "Window", "description": "Capability badge label" },
+  "settings.manager.cap.window.desc": { "message": "Resize and reposition Kage windows", "description": "Capability badge tooltip" },
+  "settings.manager.cap.windows.label": { "message": "Open windows", "description": "Capability badge label" },
+  "settings.manager.cap.windows.desc": { "message": "List and focus other apps' windows", "description": "Capability badge tooltip" },
+  "settings.manager.cap.notifications.label": { "message": "Notifications", "description": "Capability badge label" },
+  "settings.manager.cap.notifications.desc": { "message": "Show system notifications", "description": "Capability badge tooltip" },
+  "settings.manager.cap.calendar.label": { "message": "Calendar", "description": "Capability badge label" },
+  "settings.manager.cap.calendar.desc": { "message": "Read calendar events", "description": "Capability badge tooltip" },
+  "settings.manager.cap.session.label": { "message": "Sessions", "description": "Capability badge label" },
+  "settings.manager.cap.session.desc": { "message": "List and read chat sessions", "description": "Capability badge tooltip" },
+  "settings.manager.cap.agent.label": { "message": "Agent", "description": "Capability badge label" },
+  "settings.manager.cap.agent.desc": { "message": "Send messages to the AI agent", "description": "Capability badge tooltip" },
+  "settings.manager.cap.activity.label": { "message": "Activity", "description": "Capability badge label" },
+  "settings.manager.cap.activity.desc": { "message": "Read app usage statistics", "description": "Capability badge tooltip" },
+  "settings.manager.cap.signals.desc": { "message": "Emit signals that can trigger automations", "description": "Capability badge tooltip for the signals capability" },
+  "settings.manager.cap.tts.label": { "message": "TTS", "description": "Capability badge label" },
+  "settings.manager.cap.tts.desc": { "message": "Use text-to-speech", "description": "Capability badge tooltip" },
+  "settings.manager.cap.storage.label": { "message": "Storage", "description": "Capability badge label" },
+  "settings.manager.cap.storage.desc": { "message": "Read/write its own sandboxed data and config", "description": "Capability badge tooltip" },
+  "settings.manager.cap.shell.label": { "message": "Shell", "description": "Capability badge label" },
+  "settings.manager.cap.shell.desc": { "message": "Open URLs, paths, and apps externally", "description": "Capability badge tooltip" },
+  "settings.manager.cap.automation.label": { "message": "Automation", "description": "Capability badge label" },
+  "settings.manager.cap.automation.desc": { "message": "Emit signals that can trigger automations", "description": "Capability badge tooltip" },
+  "settings.manager.cap.legacy_warning": {
+    "message": "⚠ Extension manifest does not declare 'permissions' — running with default set. Ask the author to specify.",
+    "description": "Banner shown when an extension manifest predates the permissions field"
+  },
+  "settings.manager.module_must_extend": {
+    "message": "Module must extend SettingsModule or SandboxedExtensionSettingsModule",
+    "description": "Internal error when a registered settings module isn't of the expected type"
+  },
+  "settings.manager.validation.module_label": {
+    "message": "[{title}] {error}",
+    "description": "Status banner format combining a module title with its validation error"
+  },
+  "settings.manager.cap.unknown.desc": { "message": "Unknown capability", "description": "Fallback description for unrecognised capability codes" },
+  "settings.manager.cap.none": {
+    "message": "🔒 No capabilities",
+    "description": "Capabilities row label when an extension requests none"
+  },
+  "settings.manager.cap.none.title": {
+    "message": "This extension requested no capabilities",
+    "description": "Tooltip for the no-capabilities row"
+  },
+  "settings.manager.error.failed_load": {
+    "message": "Failed to load settings",
+    "description": "errLabel passed when loading settings throws"
+  },
+  "settings.manager.error.validation_failed": {
+    "message": "Validation failed",
+    "description": "Fallback when a module's validate() returns no error message"
+  },
+  "settings.manager.status.saved_restart_needed": {
+    "message": "Settings saved. Restart required for connection changes.",
+    "description": "Status banner when a save succeeded but requires a restart"
+  },
+  "settings.manager.dialog.restart.message": {
+    "message": "Connection settings changed. The app needs to restart to apply these changes.\n\nRestart now?",
+    "description": "Tauri ask() dialog body"
+  },
+  "settings.manager.dialog.restart.title": {
+    "message": "Restart Required",
+    "description": "Tauri ask() dialog title"
+  },
+  "settings.manager.dialog.restart.fallback": {
+    "message": "Connection settings changed. Restart now?",
+    "description": "Native confirm() fallback when the Tauri dialog plugin isn't available"
+  },
+  "settings.manager.status.saved": {
+    "message": "Settings saved! All changes apply immediately.",
+    "description": "Status banner after a successful save with no restart needed"
+  },
+  "settings.manager.status.save_failed": {
+    "message": "Failed to save: {message}",
+    "description": "Status banner when save_config throws"
+  },
+  "settings.manager.status.unknown_error": {
+    "message": "Unknown error",
+    "description": "Fallback when an error has no message"
+  },
+
+  "store.uninstall.confirm": {
+    "message": "Uninstall \"{id}\"?",
+    "description": "confirm() prompt before uninstalling an extension"
+  },
 
   "shared.hotkey_picker.click_title": {
     "message": "Click to change hotkey",

@@ -6580,5 +6580,275 @@
     "description": "Button label that deep-links to System Settings → Privacy",
     "_machine_translated": true,
     "_source_hash": "94e2b0b26c74ff31"
+  },
+  "settings.shortcuts.import.invalid_format": {
+    "message": "قالب نامعتبر است.",
+    "description": "alert() shown when the chosen import file isn't a JSON array",
+    "_machine_translated": true,
+    "_source_hash": "91b2d1de3754130d"
+  },
+  "settings.shortcuts.import.parse_failed": {
+    "message": "تجزیه ناموفق بود: {message}",
+    "description": "alert() shown when the chosen import file fails to JSON-parse",
+    "_machine_translated": true,
+    "_source_hash": "f85423769ca76d01"
+  },
+  "settings.manager.cap.clipboard.label": {
+    "message": "کلیپ‌بورد",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "d1537b2748595789"
+  },
+  "settings.manager.cap.clipboard.desc": {
+    "message": "خواندن محتوا و تاریخچهٔ کلیپ‌بورد",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "993fc85130fbc71d"
+  },
+  "settings.manager.cap.filesystem.label": {
+    "message": "سیستم فایل",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "0cc8639b946b17b6"
+  },
+  "settings.manager.cap.filesystem.desc": {
+    "message": "پویش پوشه‌ها و جست‌وجوی فایل‌ها",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "ca8f5fc31092fc74"
+  },
+  "settings.manager.cap.window.label": {
+    "message": "پنجره",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3bad8cafcd4df725"
+  },
+  "settings.manager.cap.window.desc": {
+    "message": "تغییر اندازه و جابه‌جایی پنجره‌های Kage",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "9fc963044ccb4ca1"
+  },
+  "settings.manager.cap.windows.label": {
+    "message": "پنجره‌های باز",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "8d26a20170cd36a5"
+  },
+  "settings.manager.cap.windows.desc": {
+    "message": "فهرست کردن و فعال‌سازی پنجره‌های سایر برنامه‌ها",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "927f8ee2880021fa"
+  },
+  "settings.manager.cap.notifications.label": {
+    "message": "اعلان‌ها",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "3f821e25089b49ed"
+  },
+  "settings.manager.cap.notifications.desc": {
+    "message": "نمایش اعلان‌های سیستم",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "b67d4eeb8987f695"
+  },
+  "settings.manager.cap.calendar.label": {
+    "message": "تقویم",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "ee86d394ff44ef44"
+  },
+  "settings.manager.cap.calendar.desc": {
+    "message": "خواندن رویدادهای تقویم",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "33004bf5e5b073bf"
+  },
+  "settings.manager.cap.session.label": {
+    "message": "نشست‌ها",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "104f1f2cc62886b1"
+  },
+  "settings.manager.cap.session.desc": {
+    "message": "فهرست کردن و خواندن نشست‌های گفت‌وگو",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "eae3dbcc8bb286e2"
+  },
+  "settings.manager.cap.agent.label": {
+    "message": "عامل",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "263c007bf840d6d3"
+  },
+  "settings.manager.cap.agent.desc": {
+    "message": "ارسال پیام به عامل هوش مصنوعی",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "5e900e70b8cf39a1"
+  },
+  "settings.manager.cap.activity.label": {
+    "message": "فعالیت",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2195c69f2c03ab1d"
+  },
+  "settings.manager.cap.activity.desc": {
+    "message": "خواندن آمار استفاده از برنامه",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "6a80b6727a12257b"
+  },
+  "settings.manager.cap.signals.desc": {
+    "message": "ارسال سیگنال‌هایی که می‌توانند خودکارسازی‌ها را آغاز کنند",
+    "description": "Capability badge tooltip for the signals capability",
+    "_machine_translated": true,
+    "_source_hash": "1ad086a92c7939ef"
+  },
+  "settings.manager.cap.tts.label": {
+    "message": "TTS",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "829bf7952c524055"
+  },
+  "settings.manager.cap.tts.desc": {
+    "message": "استفاده از تبدیل متن به گفتار",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "523aa8e8bdff7b05"
+  },
+  "settings.manager.cap.storage.label": {
+    "message": "ذخیره‌سازی",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "22abd011b4928a17"
+  },
+  "settings.manager.cap.storage.desc": {
+    "message": "خواندن/نوشتن داده و پیکربندی ایزوله‌شدهٔ خودش",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "dd805976c57d47d7"
+  },
+  "settings.manager.cap.shell.label": {
+    "message": "پوسته",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "4d17844356d054ed"
+  },
+  "settings.manager.cap.shell.desc": {
+    "message": "باز کردن URLها، مسیرها و برنامه‌ها به‌صورت خارجی",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "202db98f367bf719"
+  },
+  "settings.manager.cap.automation.label": {
+    "message": "خودکارسازی",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "02c4a84bd849ce2c"
+  },
+  "settings.manager.cap.automation.desc": {
+    "message": "ارسال سیگنال‌هایی که می‌توانند خودکارسازی‌ها را فعال کنند",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "fee6e120d0f6e648"
+  },
+  "settings.manager.cap.legacy_warning": {
+    "message": "⚠ مانیفست افزونه فیلد 'permissions' را اعلام نکرده است — با مجموعهٔ پیش‌فرض اجرا می‌شود. از سازنده بخواهید آن را مشخص کند.",
+    "description": "Banner shown when an extension manifest predates the permissions field",
+    "_machine_translated": true,
+    "_source_hash": "f17fb1e700702441"
+  },
+  "settings.manager.module_must_extend": {
+    "message": "ماژول باید SettingsModule یا SandboxedExtensionSettingsModule را گسترش دهد",
+    "description": "Internal error when a registered settings module isn't of the expected type",
+    "_machine_translated": true,
+    "_source_hash": "b501ddf1a5cb1473"
+  },
+  "settings.manager.validation.module_label": {
+    "message": "[{title}] {error}",
+    "description": "Status banner format combining a module title with its validation error",
+    "_machine_translated": true,
+    "_source_hash": "db3f16b6c5ecd50a"
+  },
+  "settings.manager.cap.unknown.desc": {
+    "message": "قابلیت ناشناخته",
+    "description": "Fallback description for unrecognised capability codes",
+    "_machine_translated": true,
+    "_source_hash": "9919895b41c053b7"
+  },
+  "settings.manager.cap.none": {
+    "message": "🔒 بدون قابلیت",
+    "description": "Capabilities row label when an extension requests none",
+    "_machine_translated": true,
+    "_source_hash": "ed6fc560f81fbc9b"
+  },
+  "settings.manager.cap.none.title": {
+    "message": "این افزونه هیچ قابلیتی درخواست نکرده است",
+    "description": "Tooltip for the no-capabilities row",
+    "_machine_translated": true,
+    "_source_hash": "19206a1e5aaa7ca6"
+  },
+  "settings.manager.error.failed_load": {
+    "message": "بارگذاری تنظیمات ناموفق بود",
+    "description": "errLabel passed when loading settings throws",
+    "_machine_translated": true,
+    "_source_hash": "d92ce9458551acc1"
+  },
+  "settings.manager.error.validation_failed": {
+    "message": "اعتبارسنجی ناموفق بود",
+    "description": "Fallback when a module's validate() returns no error message",
+    "_machine_translated": true,
+    "_source_hash": "4f92f2b69999b403"
+  },
+  "settings.manager.status.saved_restart_needed": {
+    "message": "تنظیمات ذخیره شد. برای تغییرات اتصال راه‌اندازی مجدد لازم است.",
+    "description": "Status banner when a save succeeded but requires a restart",
+    "_machine_translated": true,
+    "_source_hash": "cb3492630a83c547"
+  },
+  "settings.manager.dialog.restart.message": {
+    "message": "تنظیمات اتصال تغییر کرد. برنامه برای اعمال این تغییرات باید راه‌اندازی مجدد شود.\n\nاکنون راه‌اندازی مجدد شود؟",
+    "description": "Tauri ask() dialog body",
+    "_machine_translated": true,
+    "_source_hash": "cf5d009e6005e55c"
+  },
+  "settings.manager.dialog.restart.title": {
+    "message": "راه‌اندازی مجدد لازم است",
+    "description": "Tauri ask() dialog title",
+    "_machine_translated": true,
+    "_source_hash": "8dff29c692cb8e36"
+  },
+  "settings.manager.dialog.restart.fallback": {
+    "message": "تنظیمات اتصال تغییر کرد. اکنون راه‌اندازی مجدد شود؟",
+    "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
+    "_machine_translated": true,
+    "_source_hash": "03eaa996fdface54"
+  },
+  "settings.manager.status.saved": {
+    "message": "تنظیمات ذخیره شد! همهٔ تغییرات بلافاصله اعمال می‌شوند.",
+    "description": "Status banner after a successful save with no restart needed",
+    "_machine_translated": true,
+    "_source_hash": "887374b73e22123c"
+  },
+  "settings.manager.status.save_failed": {
+    "message": "ذخیره ناموفق بود: {message}",
+    "description": "Status banner when save_config throws",
+    "_machine_translated": true,
+    "_source_hash": "7c0dfff352cfcd92"
+  },
+  "settings.manager.status.unknown_error": {
+    "message": "خطای ناشناخته",
+    "description": "Fallback when an error has no message",
+    "_machine_translated": true,
+    "_source_hash": "3390fb4776e3a2e5"
+  },
+  "store.uninstall.confirm": {
+    "message": "حذف نصب «{id}»؟",
+    "description": "confirm() prompt before uninstalling an extension",
+    "_machine_translated": true,
+    "_source_hash": "8c9098802c436605"
   }
 }
