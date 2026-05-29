@@ -2782,5 +2782,1421 @@
     "description": "Tooltip on the per-tool remove button",
     "_machine_translated": true,
     "_source_hash": "310c8caf4846272c"
+  },
+  "settings.shortcuts.title": {
+    "message": "কমান্ড ও প্রম্পট",
+    "description": "Settings header — quick commands & saved prompts",
+    "_machine_translated": true,
+    "_source_hash": "cc301d7980f152f9"
+  },
+  "settings.shortcuts.section.label": {
+    "message": "কুইক কমান্ড ও সংরক্ষিত প্রম্পট",
+    "description": "Subsection label above the description",
+    "_machine_translated": true,
+    "_source_hash": "98f4698dbee70e37"
+  },
+  "settings.shortcuts.description_html": {
+    "message": "প্রোগ্রাম চালান, URL খুলুন, এজেন্টে প্রম্পট টেমপ্লেট পাঠান, অথবা কাস্টম স্ক্রিপ্ট চালান। সব আর্গুমেন্টের জন্য <code>{*}</code>, পজিশনালের জন্য <code>{0}</code>/<code>{1}</code>, অথবা নামযুক্ত প্যারামিটারের জন্য <code>{name}</code> ব্যবহার করুন (মান না দিয়ে ট্রিগার চালালে সেগুলো পূরণ করার জন্য একটি ছোট ফর্ম আসবে)।",
+    "description": "Helper text for the shortcuts pane (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "4005b95f4c7861f4"
+  },
+  "settings.shortcuts.action.add": {
+    "message": "+ যোগ করুন",
+    "description": "Button: open the new-shortcut dialog",
+    "_machine_translated": true,
+    "_source_hash": "e9e560eab093224e"
+  },
+  "settings.shortcuts.action.store": {
+    "message": "🛍️ স্টোর",
+    "description": "Button: browse the command-pack store",
+    "_machine_translated": true,
+    "_source_hash": "58bd90b36075d706"
+  },
+  "settings.shortcuts.action.export": {
+    "message": "এক্সপোর্ট",
+    "description": "Button: export shortcuts to a file",
+    "_machine_translated": true,
+    "_source_hash": "831c7194749ea752"
+  },
+  "settings.shortcuts.action.import": {
+    "message": "ইম্পোর্ট",
+    "description": "Button: import shortcuts from a file",
+    "_machine_translated": true,
+    "_source_hash": "2fc00b2c5b80ccf9"
+  },
+  "settings.shortcuts.export_note_html": {
+    "message": "এখানে এক্সপোর্ট / ইম্পোর্ট শুধু আপনার কুইক কমান্ড ও প্রম্পট কভার করে। মেশিনগুলোর মধ্যে সবকিছু (কনফিগ, স্টিয়ারিং, এক্সটেনশন) সরাতে, <a href=\"#\" data-action=\"shortcuts.openFullBackup\">About → Backup & restore</a> দেখুন।",
+    "description": "Footer note pointing at the full backup flow (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "cb86c85a53b9e3be"
+  },
+  "settings.shortcuts.dialog.add_title": {
+    "message": "শর্টকাট যোগ করুন",
+    "description": "Dialog header — add mode",
+    "_machine_translated": true,
+    "_source_hash": "c8791c1c2209d345"
+  },
+  "settings.shortcuts.dialog.edit_title": {
+    "message": "শর্টকাট সম্পাদনা করুন",
+    "description": "Dialog header — edit mode",
+    "_machine_translated": true,
+    "_source_hash": "48304f3608417861"
+  },
+  "settings.shortcuts.dialog.name.label": {
+    "message": "নাম / বিবরণ",
+    "description": "Field label",
+    "_machine_translated": true,
+    "_source_hash": "480f384a8c1d6e86"
+  },
+  "settings.shortcuts.dialog.name.placeholder": {
+    "message": "যেমন, VSCode খুলুন",
+    "description": "Placeholder for the name field",
+    "_machine_translated": true,
+    "_source_hash": "18f75665a6a45c95"
+  },
+  "settings.shortcuts.dialog.trigger.label": {
+    "message": "ট্রিগার শব্দ",
+    "description": "Field label",
+    "_machine_translated": true,
+    "_source_hash": "f9f2ebbc9aa59e92"
+  },
+  "settings.shortcuts.dialog.trigger.placeholder": {
+    "message": "যেমন, code",
+    "description": "Placeholder for the trigger field",
+    "_machine_translated": true,
+    "_source_hash": "4f5d2dfec326129d"
+  },
+  "settings.shortcuts.dialog.icon.label": {
+    "message": "আইকন (ঐচ্ছিক)",
+    "description": "Field label for the icon picker row",
+    "_machine_translated": true,
+    "_source_hash": "b689778243a8c9ce"
+  },
+  "settings.shortcuts.dialog.icon.placeholder": {
+    "message": "⚡",
+    "description": "Placeholder emoji for the icon-emoji input",
+    "_machine_translated": true,
+    "_source_hash": "d1861e9cb668392b"
+  },
+  "settings.shortcuts.dialog.icon.image_btn": {
+    "message": "📁 ছবি",
+    "description": "Button to pick an image as icon",
+    "_machine_translated": true,
+    "_source_hash": "983e3850c5fd344a"
+  },
+  "settings.shortcuts.dialog.icon.favicon_btn": {
+    "message": "🌐 ফেভিকন ব্যবহার করুন",
+    "description": "Button to fetch a favicon as icon",
+    "_machine_translated": true,
+    "_source_hash": "07fd53d7caa6ae8a"
+  },
+  "settings.shortcuts.dialog.icon.help": {
+    "message": "ইমোজি, ছবি ফাইল, অথবা ক্লিপবোর্ড থেকে ছবি পেস্ট করুন",
+    "description": "Helper text under the icon picker",
+    "_machine_translated": true,
+    "_source_hash": "ba0706de04b4ecf4"
+  },
+  "settings.shortcuts.dialog.action_type.label": {
+    "message": "অ্যাকশনের ধরন",
+    "description": "Action-type dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "b0af918651bf069a"
+  },
+  "settings.shortcuts.dialog.action_type.run_program": {
+    "message": "▶️ প্রোগ্রাম চালান",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "7aff3f4cb59ad479"
+  },
+  "settings.shortcuts.dialog.action_type.open_url": {
+    "message": "🌐 URL খুলুন",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "86542ef3b4d8424a"
+  },
+  "settings.shortcuts.dialog.action_type.prompt": {
+    "message": "💬 এজেন্টে প্রম্পট পাঠান",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "7d78935e85a905af"
+  },
+  "settings.shortcuts.dialog.action_type.script": {
+    "message": "📜 স্ক্রিপ্ট চালান",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "c384ccd36855721f"
+  },
+  "settings.shortcuts.dialog.run.path.label": {
+    "message": "এক্সিকিউটেবল পাথ",
+    "description": "Run-program path field label",
+    "_machine_translated": true,
+    "_source_hash": "4793d87c5048b510"
+  },
+  "settings.shortcuts.dialog.run.work_dir.label": {
+    "message": "ওয়ার্কিং ডিরেক্টরি (ঐচ্ছিক)",
+    "description": "Run-program working-directory field label",
+    "_machine_translated": true,
+    "_source_hash": "9485b46617c95d93"
+  },
+  "settings.shortcuts.dialog.run.work_dir.placeholder": {
+    "message": "যেমন, C:\\Projects",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "c9007a39d3a2d6ee"
+  },
+  "settings.shortcuts.dialog.run.args.label": {
+    "message": "আর্গুমেন্ট (ঐচ্ছিক)",
+    "description": "Run-program args field label",
+    "_machine_translated": true,
+    "_source_hash": "e5f9baf2a1dc948a"
+  },
+  "settings.shortcuts.dialog.run.args.placeholder": {
+    "message": "যেমন, --send {1} --to {0} বা {*}",
+    "description": "Placeholder for the args field",
+    "_machine_translated": true,
+    "_source_hash": "6526cecabb61e66d"
+  },
+  "settings.shortcuts.dialog.run.args.help": {
+    "message": "সব আর্গুমেন্টের জন্য {*}, অথবা নির্দিষ্ট আর্গুমেন্টের জন্য {0}, {1} ইত্যাদি ব্যবহার করুন",
+    "description": "Helper text for the args field",
+    "_machine_translated": true,
+    "_source_hash": "2b889f0cf8acd02f"
+  },
+  "settings.shortcuts.dialog.url.label": {
+    "message": "URL টেমপ্লেট",
+    "description": "Open-URL field label",
+    "_machine_translated": true,
+    "_source_hash": "ed36c9a2f9843875"
+  },
+  "settings.shortcuts.dialog.url.placeholder": {
+    "message": "যেমন, https://google.com/search?q={*}",
+    "description": "Placeholder for the URL field",
+    "_machine_translated": true,
+    "_source_hash": "f1a30e62b6cfe353"
+  },
+  "settings.shortcuts.dialog.url.help": {
+    "message": "URL-এ সব আর্গুমেন্টের জন্য {*}, অথবা নির্দিষ্ট আর্গুমেন্টের জন্য {0}, {1} ইত্যাদি ব্যবহার করুন",
+    "description": "Helper text for the URL field",
+    "_machine_translated": true,
+    "_source_hash": "56ce8251f528313b"
+  },
+  "settings.shortcuts.dialog.prompt.label": {
+    "message": "প্রম্পট টেমপ্লেট",
+    "description": "Prompt-template field label",
+    "_machine_translated": true,
+    "_source_hash": "b9223bcef96b4aca"
+  },
+  "settings.shortcuts.dialog.prompt.placeholder": {
+    "message": "যেমন, {lang}-এ অনুবাদ করুন: {*}",
+    "description": "Placeholder for the prompt template",
+    "_machine_translated": true,
+    "_source_hash": "4ccd0c44ccdd8c54"
+  },
+  "settings.shortcuts.dialog.prompt.help_html": {
+    "message": "<code>{*}</code> = সব আর্গুমেন্ট · <code>{0}</code>, <code>{1}</code> = পজিশনাল · <code>{name}</code> = নামযুক্ত (পূরণ না হলে ফর্ম দেখাবে) · <code>{selection}</code> = নির্বাচিত টেক্সট।",
+    "description": "Helper text for the prompt template (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "3b71abb4a3e88c53"
+  },
+  "settings.shortcuts.dialog.script.action.label": {
+    "message": "স্ক্রিপ্ট অ্যাকশন",
+    "description": "Script-action dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "277973102a1d539d"
+  },
+  "settings.shortcuts.dialog.script.action.text": {
+    "message": "📝 ফলাফল দেখান",
+    "description": "Script action — show output",
+    "_machine_translated": true,
+    "_source_hash": "7569eebd7e4fb8c9"
+  },
+  "settings.shortcuts.dialog.script.action.prompt": {
+    "message": "💬 এজেন্টে পাঠান",
+    "description": "Script action — send to agent",
+    "_machine_translated": true,
+    "_source_hash": "bb49cc17b8065af4"
+  },
+  "settings.shortcuts.dialog.script.action.open_url": {
+    "message": "🌐 URL হিসেবে খুলুন",
+    "description": "Script action — treat output as URL",
+    "_machine_translated": true,
+    "_source_hash": "7fbdd472bbd91978"
+  },
+  "settings.shortcuts.dialog.script.action.run_program": {
+    "message": "▶️ কমান্ড হিসেবে চালান",
+    "description": "Script action — run output as command",
+    "_machine_translated": true,
+    "_source_hash": "59739243103ce35f"
+  },
+  "settings.shortcuts.dialog.script.action.help": {
+    "message": "আপনার স্ক্রিপ্ট থেকে ফেরত আসা স্ট্রিং নিয়ে কী করতে হবে",
+    "description": "Helper for the script-action dropdown",
+    "_machine_translated": true,
+    "_source_hash": "60efef7d56e334fd"
+  },
+  "settings.shortcuts.dialog.script.ai.label": {
+    "message": "✨ স্ক্রিপ্ট লিখতে বা আপডেট করতে Kage-কে বলুন",
+    "description": "Label for the AI script generator",
+    "_machine_translated": true,
+    "_source_hash": "451578931b222c7f"
+  },
+  "settings.shortcuts.dialog.script.ai.placeholder": {
+    "message": "যেমন, একটি Jira টিকেট URL পার্স করে টিকেট ID ফেরত দিন",
+    "description": "Placeholder for the AI prompt input",
+    "_machine_translated": true,
+    "_source_hash": "677253c3c747e7cf"
+  },
+  "settings.shortcuts.dialog.script.ai.generate": {
+    "message": "তৈরি করুন",
+    "description": "Generate button",
+    "_machine_translated": true,
+    "_source_hash": "e92ddc15a02576a8"
+  },
+  "settings.shortcuts.dialog.script.ai.undo": {
+    "message": "পূর্বাবস্থায় ফেরান",
+    "description": "Undo button after a generate",
+    "_machine_translated": true,
+    "_source_hash": "51baade18c94aaca"
+  },
+  "settings.shortcuts.dialog.script.body.label": {
+    "message": "স্ক্রিপ্ট বডি",
+    "description": "Script body textarea label",
+    "_machine_translated": true,
+    "_source_hash": "0a649daa5906d9dc"
+  },
+  "settings.shortcuts.dialog.script.body.placeholder": {
+    "message": "// আর্গুমেন্টগুলো ...args হিসেবে পাস হয়\n// একটি স্ট্রিং ফেরত দিন (অথবা Run as Command-এর জন্য অ্যারে)\nconst query = args.join(' ');\nreturn 'Processed: ' + query;",
+    "description": "Code-style placeholder shown in the script body editor",
+    "_machine_translated": true,
+    "_source_hash": "5e40a3c7b4191896"
+  },
+  "settings.shortcuts.dialog.script.body.help_html": {
+    "message": "JavaScript ফাংশন বডি। আর্গুমেন্ট <code>...args</code> হিসেবে গ্রহণ করে। Display/Agent/URL অ্যাকশনের জন্য একটি স্ট্রিং ফেরত দিন, অথবা Run as Command-এর জন্য একটি অ্যারে <code>[cmd, workDir, ...args]</code>।",
+    "description": "Helper for the script body field (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1c1423e17a3aed59"
+  },
+  "settings.shortcuts.dialog.test.toggle": {
+    "message": "পরীক্ষা",
+    "description": "Toggle label for the test section",
+    "_machine_translated": true,
+    "_source_hash": "e7b2812d38a04bc8"
+  },
+  "settings.shortcuts.dialog.test.placeholder": {
+    "message": "টেস্ট আর্গুমেন্ট লিখুন…",
+    "description": "Placeholder for the test args input",
+    "_machine_translated": true,
+    "_source_hash": "82a06f106d64bc21"
+  },
+  "settings.shortcuts.dialog.test.run": {
+    "message": "▶ চালান",
+    "description": "Run button in the test section",
+    "_machine_translated": true,
+    "_source_hash": "1123e5147afef28d"
+  },
+  "settings.shortcuts.dialog.cancel": {
+    "message": "বাতিল",
+    "description": "Dialog cancel button",
+    "_machine_translated": true,
+    "_source_hash": "e4ac535834786545"
+  },
+  "settings.shortcuts.dialog.save": {
+    "message": "সংরক্ষণ",
+    "description": "Dialog save button",
+    "_machine_translated": true,
+    "_source_hash": "325b95560d59c8f2"
+  },
+  "settings.shortcuts.list.empty": {
+    "message": "এখনও কোনো শর্টকাট নেই। একটি তৈরি করতে + যোগ করুন ক্লিক করুন।",
+    "description": "Empty state for the shortcuts list",
+    "_machine_translated": true,
+    "_source_hash": "6b7f424283eeb37d"
+  },
+  "settings.shortcuts.list.action.edit": {
+    "message": "সম্পাদনা",
+    "description": "Per-shortcut edit button",
+    "_machine_translated": true,
+    "_source_hash": "bfdcabc9dbaebba4"
+  },
+  "settings.shortcuts.list.action.delete": {
+    "message": "মুছুন",
+    "description": "Per-shortcut delete button",
+    "_machine_translated": true,
+    "_source_hash": "b1a8ab4f907e65cf"
+  },
+  "settings.shortcuts.list.delete_confirm": {
+    "message": "\"{name}\" শর্টকাটটি মুছবেন?",
+    "description": "Confirm dialog before deleting a shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d26988eb94b9cc15"
+  },
+  "settings.shortcuts.alert.name_required": {
+    "message": "নাম এবং ট্রিগার শব্দ আবশ্যক।",
+    "description": "alert() shown when required fields are empty",
+    "_machine_translated": true,
+    "_source_hash": "7fa229e9612963a5"
+  },
+  "settings.shortcuts.alert.duplicate_trigger": {
+    "message": "ট্রিগার \"{trigger}\" ইতিমধ্যে অন্য একটি শর্টকাটে ব্যবহৃত হচ্ছে।",
+    "description": "alert() shown on duplicate triggers",
+    "_machine_translated": true,
+    "_source_hash": "dc5e76ad6ae46e73"
+  },
+  "settings.shortcuts.alert.icon_too_large": {
+    "message": "আইকন ছবিটি অবশ্যই 64KB-এর কম হতে হবে",
+    "description": "alert() shown when an uploaded icon exceeds the size cap",
+    "_machine_translated": true,
+    "_source_hash": "e5f935305d09664b"
+  },
+  "settings.shortcuts.alert.url_first": {
+    "message": "প্রথমে একটি URL লিখুন",
+    "description": "alert() shown when the user clicks Use Favicon without a URL",
+    "_machine_translated": true,
+    "_source_hash": "e8cff203922230b5"
+  },
+  "settings.shortcuts.alert.no_favicon": {
+    "message": "এই URL-এর জন্য favicon আনা যায়নি",
+    "description": "alert() shown when favicon fetch fails",
+    "_machine_translated": true,
+    "_source_hash": "96db0030017818dc"
+  },
+  "settings.shortcuts.list.empty_full": {
+    "message": "কোনো শর্টকাট কনফিগার করা হয়নি। একটি তৈরি করতে \"শর্টকাট যোগ করুন\" ক্লিক করুন।",
+    "description": "Full empty-state copy for the shortcuts list",
+    "_machine_translated": true,
+    "_source_hash": "38a8f950043fbf47"
+  },
+  "settings.shortcuts.detail.type": {
+    "message": "ধরন:",
+    "description": "Detail row label — action type",
+    "_machine_translated": true,
+    "_source_hash": "0f8321232d481fef"
+  },
+  "settings.shortcuts.detail.url": {
+    "message": "URL:",
+    "description": "Detail row label — URL template",
+    "_machine_translated": true,
+    "_source_hash": "7803aa1cb0ceea4c"
+  },
+  "settings.shortcuts.detail.prompt": {
+    "message": "প্রম্পট:",
+    "description": "Detail row label — prompt template",
+    "_machine_translated": true,
+    "_source_hash": "0e65e4ffce9f20d3"
+  },
+  "settings.shortcuts.detail.action": {
+    "message": "অ্যাকশন:",
+    "description": "Detail row label — script action",
+    "_machine_translated": true,
+    "_source_hash": "83cdf74433ffbbcb"
+  },
+  "settings.shortcuts.detail.script": {
+    "message": "স্ক্রিপ্ট:",
+    "description": "Detail row label — script body preview",
+    "_machine_translated": true,
+    "_source_hash": "a438bb588cba912d"
+  },
+  "settings.shortcuts.detail.path": {
+    "message": "পাথ:",
+    "description": "Detail row label — executable path",
+    "_machine_translated": true,
+    "_source_hash": "8794734609f6aeee"
+  },
+  "settings.shortcuts.detail.dir": {
+    "message": "ডিরেক্টরি:",
+    "description": "Detail row label — working directory",
+    "_machine_translated": true,
+    "_source_hash": "852170dc03fabe2e"
+  },
+  "settings.shortcuts.detail.args": {
+    "message": "আর্গুমেন্ট:",
+    "description": "Detail row label — arguments",
+    "_machine_translated": true,
+    "_source_hash": "4788e464b471cdc9"
+  },
+  "settings.shortcuts.action_label.run_program": {
+    "message": "▶️ প্রোগ্রাম চালান",
+    "description": "Action-type label shown in the list (matches dropdown)",
+    "_machine_translated": true,
+    "_source_hash": "84dad3584fee2697"
+  },
+  "settings.shortcuts.action_label.open_url": {
+    "message": "🌐 URL খুলুন",
+    "description": "Action-type label shown in the list (matches dropdown)",
+    "_machine_translated": true,
+    "_source_hash": "c3ad63f4a2adc684"
+  },
+  "settings.shortcuts.action_label.prompt": {
+    "message": "💬 প্রম্পট",
+    "description": "Action-type label shown in the list",
+    "_machine_translated": true,
+    "_source_hash": "4fdc7d867b29d6fc"
+  },
+  "settings.shortcuts.action_label.script": {
+    "message": "📜 স্ক্রিপ্ট",
+    "description": "Action-type label shown in the list",
+    "_machine_translated": true,
+    "_source_hash": "07f816cccfd5e0d0"
+  },
+  "settings.shortcuts.script_label.text": {
+    "message": "📝 প্রদর্শন",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "10df8c524d4b6821"
+  },
+  "settings.shortcuts.script_label.prompt": {
+    "message": "💬 এজেন্ট",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "3ac7aef6ed098ad3"
+  },
+  "settings.shortcuts.script_label.open_url": {
+    "message": "🌐 URL",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "9778ccc32e5c2b99"
+  },
+  "settings.shortcuts.script_label.run_program": {
+    "message": "▶️ চালান",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "e84b329835a9eead"
+  },
+  "settings.shortcuts.script_label.default": {
+    "message": "প্রদর্শন",
+    "description": "Fallback script-action label",
+    "_machine_translated": true,
+    "_source_hash": "d7202a69ac45796a"
+  },
+  "settings.shortcuts.favicon_fetching": {
+    "message": "⏳ আনা হচ্ছে…",
+    "description": "Button text while a favicon fetch is in flight",
+    "_machine_translated": true,
+    "_source_hash": "45da88fb75f343d6"
+  },
+  "settings.shortcuts.alert.url_required": {
+    "message": "URL প্রয়োজন।",
+    "description": "alert() shown when saving an Open URL shortcut without a URL",
+    "_machine_translated": true,
+    "_source_hash": "ed8a6793a849958f"
+  },
+  "settings.shortcuts.alert.prompt_required": {
+    "message": "প্রম্পট টেমপ্লেট প্রয়োজন।",
+    "description": "alert() shown when saving a Prompt shortcut without text",
+    "_machine_translated": true,
+    "_source_hash": "4eebf6417f52e620"
+  },
+  "settings.shortcuts.alert.script_required": {
+    "message": "স্ক্রিপ্ট বডি প্রয়োজন।",
+    "description": "alert() shown when saving a Script shortcut without code",
+    "_machine_translated": true,
+    "_source_hash": "f2173ce056339186"
+  },
+  "settings.shortcuts.alert.script_syntax_error": {
+    "message": "স্ক্রিপ্ট সিনট্যাক্স ত্রুটি: {reason}",
+    "description": "alert() shown when the script body fails to parse",
+    "_machine_translated": true,
+    "_source_hash": "ea4f0877698666fd"
+  },
+  "settings.shortcuts.alert.path_required": {
+    "message": "এক্সিকিউটেবল পাথ প্রয়োজন।",
+    "description": "alert() shown when saving a Run Program shortcut without a path",
+    "_machine_translated": true,
+    "_source_hash": "e0de0e56ae9c2a7e"
+  },
+  "settings.shortcuts.delete_confirm": {
+    "message": "এই শর্টকাটটি মুছবেন?",
+    "description": "Confirmation dialog before deleting a shortcut",
+    "_machine_translated": true,
+    "_source_hash": "f45b25897716f2a3"
+  },
+  "settings.about.title": {
+    "message": "Kage সম্পর্কে",
+    "description": "Settings header — about/version page",
+    "_machine_translated": true,
+    "_source_hash": "f03c1b1a9c22a54c"
+  },
+  "settings.about.version_loading": {
+    "message": "লোড হচ্ছে…",
+    "description": "Placeholder while the version string loads",
+    "_machine_translated": true,
+    "_source_hash": "be68313f99d0e685"
+  },
+  "settings.about.version_format": {
+    "message": "v{version}",
+    "description": "Version display format",
+    "_machine_translated": true,
+    "_source_hash": "531ac31598e44ff1"
+  },
+  "settings.about.info.loading": {
+    "message": "লোড হচ্ছে…",
+    "description": "Placeholder for the about-info table while it loads",
+    "_machine_translated": true,
+    "_source_hash": "6411e5751394b9f3"
+  },
+  "settings.about.info.author_label": {
+    "message": "লেখক",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "b185e5a71c7676fe"
+  },
+  "settings.about.info.repository_label": {
+    "message": "রিপোজিটরি",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "438873c57d55dede"
+  },
+  "settings.about.info.license_label": {
+    "message": "লাইসেন্স",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "15d167fee13fe3b7"
+  },
+  "settings.about.info.copyright_label": {
+    "message": "কপিরাইট",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "626d779c6f84bbcc"
+  },
+  "settings.about.info.copyright_value": {
+    "message": "© 2025 {authors}",
+    "description": "Copyright row content",
+    "_machine_translated": true,
+    "_source_hash": "1bd3e526b387071e"
+  },
+  "settings.about.info.copyright_default_authors": {
+    "message": "Kage টিম",
+    "description": "Fallback for authors when none are configured",
+    "_machine_translated": true,
+    "_source_hash": "d6dd49f9cfd57310"
+  },
+  "settings.about.action.show_welcome": {
+    "message": "স্বাগত স্ক্রিন দেখান",
+    "description": "Button: re-open the welcome wizard",
+    "_machine_translated": true,
+    "_source_hash": "0bfeb2c73d530550"
+  },
+  "settings.about.action.open_config": {
+    "message": "কনফিগ ফোল্ডার খুলুন",
+    "description": "Button: open the OS file manager at the config dir",
+    "_machine_translated": true,
+    "_source_hash": "9e9e93b633a0a255"
+  },
+  "settings.about.action.send_feedback": {
+    "message": "প্রতিক্রিয়া পাঠান",
+    "description": "Button: open a bug report URL",
+    "_machine_translated": true,
+    "_source_hash": "490c678a1f25d700"
+  },
+  "settings.about.backup.title": {
+    "message": "💾 ব্যাকআপ ও পুনরুদ্ধার",
+    "description": "Collapsible section header",
+    "_machine_translated": true,
+    "_source_hash": "8522d8e532e1e1fb"
+  },
+  "settings.about.backup.description": {
+    "message": "আপনার Kage সেটআপ এক মেশিন থেকে অন্য মেশিনে সরান। ব্যাকআপে কনফিগ, সংরক্ষিত প্রম্পট ও শর্টকাট, কাস্টম এবং শেখা স্টিয়ারিং, এবং এক্সটেনশন ডেটা অন্তর্ভুক্ত থাকে। পাসফ্রেজ দিয়ে এনক্রিপশন ঐচ্ছিক, তবে ফাইলটি যদি আপনার মেশিন থেকে বের হয় তাহলে এটি প্রস্তাবিত।",
+    "description": "Body text in the backup section",
+    "_machine_translated": true,
+    "_source_hash": "e4dbe7e1d6ab2e28"
+  },
+  "settings.about.backup.export.label": {
+    "message": "এক্সপোর্ট",
+    "description": "Subsection label for export controls",
+    "_machine_translated": true,
+    "_source_hash": "df01bf7467258888"
+  },
+  "settings.about.backup.encrypt_toggle": {
+    "message": "পাসফ্রেজ দিয়ে এনক্রিপ্ট করুন (Argon2id কী ডেরিভেশন সহ AES-256-GCM)।",
+    "description": "Helper next to the encryption toggle",
+    "_machine_translated": true,
+    "_source_hash": "5c348b02467e7b48"
+  },
+  "settings.about.backup.passphrase.placeholder": {
+    "message": "পাসফ্রেজ",
+    "description": "Placeholder for the passphrase input",
+    "_machine_translated": true,
+    "_source_hash": "fde81cc8e6ec39fc"
+  },
+  "settings.about.backup.passphrase.confirm_placeholder": {
+    "message": "পাসফ্রেজ নিশ্চিত করুন",
+    "description": "Placeholder for the confirm-passphrase input",
+    "_machine_translated": true,
+    "_source_hash": "818eab806f9df8ca"
+  },
+  "settings.about.backup.passphrase.note": {
+    "message": "মনে রাখার মতো কিছু বেছে নিন। কোনো পুনরুদ্ধার নেই — পাসফ্রেজ হারালে ফাইলটি পঠনযোগ্য থাকবে না।",
+    "description": "Helper text under the passphrase fields",
+    "_machine_translated": true,
+    "_source_hash": "04b2fbd556fad12e"
+  },
+  "settings.about.backup.export_btn": {
+    "message": "এক্সপোর্ট…",
+    "description": "Button to start the export",
+    "_machine_translated": true,
+    "_source_hash": "b252d34fb2e51527"
+  },
+  "settings.about.backup.import.label": {
+    "message": "ইম্পোর্ট",
+    "description": "Subsection label for import controls",
+    "_machine_translated": true,
+    "_source_hash": "ff9ad6961f6ebcf3"
+  },
+  "settings.about.backup.import.description": {
+    "message": "পূর্বে এক্সপোর্ট করা একটি <code>.kage</code> বা <code>.kage.enc</code> ফাইল বেছে নিন। ইম্পোর্ট আপনার বর্তমান কনফিগ প্রতিস্থাপন করে — আপনার মেশিনের উইন্ডোর অবস্থান, টেলিমেট্রি ইনস্টল ID, এবং OS স্টার্টআপ সেটিং স্থানীয়ভাবে রাখা হয়।",
+    "description": "Helper text for import (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "736c5b1684c03868"
+  },
+  "settings.about.backup.import_btn": {
+    "message": "ইম্পোর্ট…",
+    "description": "Button to start the import",
+    "_machine_translated": true,
+    "_source_hash": "3f782ef0fd86b0ea"
+  },
+  "settings.about.logging.title": {
+    "message": "📋 লগিং",
+    "description": "Logging section header (collapsible)",
+    "_machine_translated": true,
+    "_source_hash": "ae8714ea95039680"
+  },
+  "settings.about.logging.buffer_size.label": {
+    "message": "লগ বাফার সাইজ",
+    "description": "Buffer-size field label",
+    "_machine_translated": true,
+    "_source_hash": "06cc74b08f8567d8"
+  },
+  "settings.about.logging.buffer_size.description": {
+    "message": "সর্বাধিক কতগুলি লগ এন্ট্রি রাখা হবে (সংরক্ষণ প্রয়োজন)",
+    "description": "Helper text for buffer size",
+    "_machine_translated": true,
+    "_source_hash": "450c62f8a27cd7cf"
+  },
+  "settings.about.logging.verbose.label": {
+    "message": "সব বার্তা লগ করুন",
+    "description": "Toggle: capture info-level frontend logs",
+    "_machine_translated": true,
+    "_source_hash": "a0e8f00c94852879"
+  },
+  "settings.about.logging.verbose.description": {
+    "message": "শুধু সতর্কতা ও ত্রুটি নয়, তথ্যমূলক বার্তাও অন্তর্ভুক্ত করুন। দ্রষ্টব্য: যদি আপনার এক্সটেনশনগুলি প্রচুর বার্তা লগ করে, তাহলে এটি Kage-কে ধীরগতির করে দিতে পারে।",
+    "description": "Helper text for the verbose-logging toggle",
+    "_machine_translated": true,
+    "_source_hash": "cabe92b866813fd3"
+  },
+  "settings.about.logging.filter.all_levels": {
+    "message": "সব স্তর",
+    "description": "Log filter — all levels",
+    "_machine_translated": true,
+    "_source_hash": "26c8ad0b21a80b27"
+  },
+  "settings.about.logging.filter.debug": {
+    "message": "ডিবাগ",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "af2016c8f1218fb0"
+  },
+  "settings.about.logging.filter.info": {
+    "message": "তথ্য",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "ea3e085e08e1bc6e"
+  },
+  "settings.about.logging.filter.warn": {
+    "message": "সতর্কতা",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "9f0f83fb03b63e93"
+  },
+  "settings.about.logging.filter.error": {
+    "message": "ত্রুটি",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "d2e2397d1a65216c"
+  },
+  "settings.about.logging.filter.all_sources": {
+    "message": "সব উৎস",
+    "description": "Log filter — all sources",
+    "_machine_translated": true,
+    "_source_hash": "39c548ff7fca2317"
+  },
+  "settings.about.logging.refresh": {
+    "message": "রিফ্রেশ",
+    "description": "Button: reload log entries",
+    "_machine_translated": true,
+    "_source_hash": "a75b9e8363f295d3"
+  },
+  "settings.about.logging.clear": {
+    "message": "লগ মুছুন",
+    "description": "Button: empty the log file",
+    "_machine_translated": true,
+    "_source_hash": "6255ff29f331c1e7"
+  },
+  "settings.about.logging.open_folder": {
+    "message": "লগ ফোল্ডার খুলুন",
+    "description": "Button: open the log directory in the OS file manager",
+    "_machine_translated": true,
+    "_source_hash": "14179ecf491d82de"
+  },
+  "settings.about.logging.empty": {
+    "message": "লগ এন্ট্রি লোড করতে প্রসারিত করুন…",
+    "description": "Placeholder while the log viewer is collapsed",
+    "_machine_translated": true,
+    "_source_hash": "d0f9929a6b218d03"
+  },
+  "settings.about.logging.loading": {
+    "message": "লোড হচ্ছে…",
+    "description": "Placeholder while logs are fetching",
+    "_machine_translated": true,
+    "_source_hash": "9528b276118924b2"
+  },
+  "settings.about.logging.load_failed": {
+    "message": "লগ লোড করতে ব্যর্থ",
+    "description": "Placeholder when log fetch fails",
+    "_machine_translated": true,
+    "_source_hash": "bbc705641afedf0c"
+  },
+  "settings.about.logging.no_entries": {
+    "message": "কোনো লগ এন্ট্রি নেই",
+    "description": "Empty state when no logs match",
+    "_machine_translated": true,
+    "_source_hash": "b5885d1dcbd31794"
+  },
+  "settings.about.logging.no_entries_filtered": {
+    "message": "ফিল্টারের সাথে মিলে এমন কোনো লগ এন্ট্রি নেই",
+    "description": "Empty state when filters exclude every entry",
+    "_machine_translated": true,
+    "_source_hash": "1a8889a16e2dbbbf"
+  },
+  "settings.speech.title": {
+    "message": "স্পিচ",
+    "description": "Settings header — speech-input and read-back",
+    "_machine_translated": true,
+    "_source_hash": "213cb5961df62065"
+  },
+  "settings.speech.voice_input.section": {
+    "message": "ভয়েস ইনপুট",
+    "description": "Subsection header for voice input settings",
+    "_machine_translated": true,
+    "_source_hash": "c67ba2144cd8089b"
+  },
+  "settings.speech.show_button.label": {
+    "message": "স্পিচ বোতাম দেখান",
+    "description": "Toggle: show the microphone button",
+    "_machine_translated": true,
+    "_source_hash": "5a9e652b91a4bbb4"
+  },
+  "settings.speech.show_button.description": {
+    "message": "স্পিচ-টু-টেক্সট ব্যবহার করে ভয়েস ইনপুটের জন্য একটি মাইক্রোফোন বোতাম প্রদর্শন করুন।",
+    "description": "Helper text for the speech-button toggle",
+    "_machine_translated": true,
+    "_source_hash": "cb0102ae09642ada"
+  },
+  "settings.speech.silence.label": {
+    "message": "স্বয়ংক্রিয়-জমার নীরবতার বিলম্ব",
+    "description": "Slider label for the silence-submit timeout",
+    "_machine_translated": true,
+    "_source_hash": "34d7a8d8ebdb368b"
+  },
+  "settings.speech.silence.description": {
+    "message": "এত সেকেন্ড নীরবতার পরে স্বয়ংক্রিয়ভাবে বার্তা পাঠান। নিষ্ক্রিয় করতে 0 সেট করুন।",
+    "description": "Helper text for the silence-submit slider",
+    "_machine_translated": true,
+    "_source_hash": "a92f1330fcd19fd0"
+  },
+  "settings.speech.agent_voice.section": {
+    "message": "এজেন্ট ভয়েস",
+    "description": "Subsection header for read-back / TTS settings",
+    "_machine_translated": true,
+    "_source_hash": "e5e9b144726ef914"
+  },
+  "settings.speech.read_back.label": {
+    "message": "এজেন্টের প্রতিক্রিয়া পড়ে শোনান",
+    "description": "Toggle: read agent responses aloud",
+    "_machine_translated": true,
+    "_source_hash": "e8616c96e55ab6cb"
+  },
+  "settings.speech.read_back.description": {
+    "message": "ভয়েস ইনপুট ব্যবহার করা হলে এজেন্টের প্রতিক্রিয়া পড়ে শোনাতে টেক্সট-টু-স্পিচ ব্যবহার করুন।",
+    "description": "Helper text for the read-back toggle",
+    "_machine_translated": true,
+    "_source_hash": "a8c0a36ff0d246c5"
+  },
+  "settings.speech.tts_engine.label": {
+    "message": "TTS ইঞ্জিন",
+    "description": "Engine selector label",
+    "_machine_translated": true,
+    "_source_hash": "4459007d8fea9343"
+  },
+  "settings.speech.tts_engine.description": {
+    "message": "কোন ইঞ্জিন প্রতিক্রিয়া পড়ে শোনাবে তা বেছে নিন।",
+    "description": "Helper text for the engine selector",
+    "_machine_translated": true,
+    "_source_hash": "5780e7e0c7b90e68"
+  },
+  "settings.speech.tts_engine.system": {
+    "message": "সিস্টেম (ব্রাউজার)",
+    "description": "TTS engine option — use the browser's speechSynthesis",
+    "_machine_translated": true,
+    "_source_hash": "a9db63843da7c823"
+  },
+  "settings.speech.tts_engine.pocket": {
+    "message": "Pocket TTS (লোকাল AI)",
+    "description": "TTS engine option — use the local pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "fde6fdc20e417e8d"
+  },
+  "settings.speech.system_voice.label": {
+    "message": "সিস্টেম ভয়েস",
+    "description": "System-voice dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1703800c5dad8904"
+  },
+  "settings.speech.system_voice.description": {
+    "message": "প্রতিক্রিয়া পড়ে শোনানোর জন্য ব্যবহৃত ব্রাউজার ভয়েস নির্বাচন করুন।",
+    "description": "Helper for the system voice selector",
+    "_machine_translated": true,
+    "_source_hash": "4ccdde14d9da34dc"
+  },
+  "settings.speech.system_voice.default": {
+    "message": "সিস্টেম ডিফল্ট",
+    "description": "Placeholder dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "a6b6cfa2aa7f56e5"
+  },
+  "settings.speech.pocket.checking": {
+    "message": "যাচাই করা হচ্ছে…",
+    "description": "Status while pocket-tts environment is being detected",
+    "_machine_translated": true,
+    "_source_hash": "198da66852e043fd"
+  },
+  "settings.speech.pocket.setup_collapse": {
+    "message": "▼ সেটআপ",
+    "description": "Setup section toggle (collapsed)",
+    "_machine_translated": true,
+    "_source_hash": "6a22af114f641902"
+  },
+  "settings.speech.pocket.setup_expand": {
+    "message": "▲ সেটআপ",
+    "description": "Setup section toggle (expanded)",
+    "_machine_translated": true,
+    "_source_hash": "efd05fa35790d2ac"
+  },
+  "settings.speech.pocket.python.label": {
+    "message": "Python",
+    "description": "Step header for Python detection",
+    "_machine_translated": true,
+    "_source_hash": "0cbb0fe52394df3d"
+  },
+  "settings.speech.pocket.python.not_found_html": {
+    "message": "❌ Python 3 পাওয়া যায়নি। <a href=\"https://www.python.org/downloads/\" target=\"_blank\">Python ডাউনলোড করুন</a>",
+    "description": "Status when Python isn't installed (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "e8b68bfff16b2558"
+  },
+  "settings.speech.pocket.python.required": {
+    "message": "❌ Python 3.10+ প্রয়োজন",
+    "description": "Status when Python is too old",
+    "_machine_translated": true,
+    "_source_hash": "513bed27221e2c89"
+  },
+  "settings.speech.pocket.install.label": {
+    "message": "pocket-tts ইনস্টল করুন",
+    "description": "Step header for pocket-tts install",
+    "_machine_translated": true,
+    "_source_hash": "8367ef46bbc54189"
+  },
+  "settings.speech.pocket.install.description": {
+    "message": "Python প্যাকেজ ইনস্টল করে (প্রথম ব্যবহারে ~400MB মডেল ডাউনলোড)।",
+    "description": "Helper text under the install step",
+    "_machine_translated": true,
+    "_source_hash": "09be2ecdd82e71ea"
+  },
+  "settings.speech.pocket.install.button": {
+    "message": "ইনস্টল করুন",
+    "description": "Install button",
+    "_machine_translated": true,
+    "_source_hash": "59f4825e7cd178e6"
+  },
+  "settings.speech.pocket.install.cancel": {
+    "message": "✕ বাতিল করুন",
+    "description": "Cancel button while install is running",
+    "_machine_translated": true,
+    "_source_hash": "ba95730f66c5c4b9"
+  },
+  "settings.speech.pocket.install.cancelling": {
+    "message": "বাতিল করা হচ্ছে…",
+    "description": "Status while cancelling an in-flight install",
+    "_machine_translated": true,
+    "_source_hash": "d515d43217d0529c"
+  },
+  "settings.speech.pocket.install.installing": {
+    "message": "ইনস্টল হচ্ছে…",
+    "description": "Status while installing",
+    "_machine_translated": true,
+    "_source_hash": "aecc02786c0f5fc8"
+  },
+  "settings.speech.pocket.install.installed": {
+    "message": "✅ ইনস্টল হয়েছে",
+    "description": "Status after a successful install",
+    "_machine_translated": true,
+    "_source_hash": "8eaa10b3bff44100"
+  },
+  "settings.speech.pocket.install.not_installed": {
+    "message": "ইনস্টল করা নেই",
+    "description": "Sub-status when no install is detected",
+    "_machine_translated": true,
+    "_source_hash": "54c988c2c6f7e2cf"
+  },
+  "settings.speech.pocket.install.banner_not_installed": {
+    "message": "📦 ইনস্টল করা নেই — নিচে সেটআপ প্রসারিত করুন",
+    "description": "Top-level banner when pocket-tts isn't installed",
+    "_machine_translated": true,
+    "_source_hash": "4eb51df63fd3d031"
+  },
+  "settings.speech.pocket.install.failed_default": {
+    "message": "ব্যর্থ",
+    "description": "Generic failure label when no specific error message is available",
+    "_machine_translated": true,
+    "_source_hash": "6060bf45ee886514"
+  },
+  "settings.speech.pocket.install.error_prefix": {
+    "message": "❌ {reason}",
+    "description": "Error status with the underlying reason",
+    "_machine_translated": true,
+    "_source_hash": "09cb2274ec3abd1d"
+  },
+  "settings.speech.pocket.install.retry": {
+    "message": "আবার চেষ্টা করুন",
+    "description": "Retry button after a failed install",
+    "_machine_translated": true,
+    "_source_hash": "650ecfdcb9450dc5"
+  },
+  "settings.speech.pocket.install.reinstall": {
+    "message": "পুনরায় ইনস্টল করুন",
+    "description": "Reinstall button shown after a successful install",
+    "_machine_translated": true,
+    "_source_hash": "27b2feda9feb5942"
+  },
+  "settings.speech.pocket.server.label": {
+    "message": "সার্ভার",
+    "description": "Step header for the pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "d6135181c2b7a6ae"
+  },
+  "settings.speech.pocket.server.description": {
+    "message": "মডেল লোড করতে প্রথমবার শুরুতে প্রায় ১০-৩০ সেকেন্ড সময় লাগে।",
+    "description": "Helper text for server section",
+    "_machine_translated": true,
+    "_source_hash": "a9aaef8e313fe5b6"
+  },
+  "settings.speech.pocket.server.start": {
+    "message": "সার্ভার চালু করুন",
+    "description": "Start button",
+    "_machine_translated": true,
+    "_source_hash": "947965607b70b286"
+  },
+  "settings.speech.pocket.server.stop": {
+    "message": "সার্ভার বন্ধ করুন",
+    "description": "Stop button when server is running",
+    "_machine_translated": true,
+    "_source_hash": "96c3992f9f027e23"
+  },
+  "settings.speech.pocket.server.starting": {
+    "message": "চালু হচ্ছে…",
+    "description": "Server transition state",
+    "_machine_translated": true,
+    "_source_hash": "6ecd764b3a34a87e"
+  },
+  "settings.speech.pocket.server.stopping": {
+    "message": "বন্ধ হচ্ছে…",
+    "description": "Server transition state",
+    "_machine_translated": true,
+    "_source_hash": "1b63c4b68eca9d4c"
+  },
+  "settings.speech.pocket.server.running": {
+    "message": "✅ চলছে",
+    "description": "Server status — running",
+    "_machine_translated": true,
+    "_source_hash": "b3a4b99929836819"
+  },
+  "settings.speech.pocket.server.stopped": {
+    "message": "⏹ বন্ধ",
+    "description": "Server status — stopped",
+    "_machine_translated": true,
+    "_source_hash": "02ebaaff1def8a98"
+  },
+  "settings.speech.pocket.banner.ready": {
+    "message": "✅ প্রস্তুত",
+    "description": "Top-level banner when pocket-tts is fully ready",
+    "_machine_translated": true,
+    "_source_hash": "17080238fef0c372"
+  },
+  "settings.speech.pocket.banner.server_stopped": {
+    "message": "⏹ সার্ভার বন্ধ",
+    "description": "Top-level banner when the server isn't running",
+    "_machine_translated": true,
+    "_source_hash": "a21a11fb9da5185e"
+  },
+  "settings.speech.pocket.voice_gen.section": {
+    "message": "ভয়েস ও জেনারেশন",
+    "description": "Subsection header for voice and generation parameters",
+    "_machine_translated": true,
+    "_source_hash": "ce74e67424371e4a"
+  },
+  "settings.speech.pocket.custom.section": {
+    "message": "কাস্টম ভয়েস",
+    "description": "Subsection header for custom voice management",
+    "_machine_translated": true,
+    "_source_hash": "45b46f2e0adf02b8"
+  },
+  "settings.speech.pocket.custom.help_html": {
+    "message": "একটি <a href=\"https://huggingface.co/kyutai/tts-voices\" target=\"_blank\">HuggingFace ভয়েস URL</a> অথবা .wav ফাইলের HTTP URL পেস্ট করুন।",
+    "description": "Helper text under the custom-voice add row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "80b6662bde247350"
+  },
+  "settings.speech.pocket.custom.url_placeholder": {
+    "message": "hf://kyutai/tts-voices/...",
+    "description": "Placeholder for the voice URL field",
+    "_machine_translated": true,
+    "_source_hash": "aecf68ae701693f9"
+  },
+  "settings.speech.pocket.custom.name_placeholder": {
+    "message": "নাম",
+    "description": "Placeholder for the voice display-name field",
+    "_machine_translated": true,
+    "_source_hash": "fda0d7fab3a92393"
+  },
+  "settings.speech.pocket.custom.add_btn": {
+    "message": "যোগ করুন",
+    "description": "Add button",
+    "_machine_translated": true,
+    "_source_hash": "46a23cd2088a685e"
+  },
+  "settings.speech.pocket.custom.local_help": {
+    "message": "অথবা সরাসরি ভয়েস ফোল্ডারে .wav ফাইল রাখুন (৫-২০ সেকেন্ডের পরিষ্কার অডিও সবচেয়ে ভালো কাজ করে)।",
+    "description": "Helper for the local voices fallback",
+    "_machine_translated": true,
+    "_source_hash": "6b30b26e4ed04249"
+  },
+  "settings.speech.pocket.custom.open_dir": {
+    "message": "ভয়েস ফোল্ডার খুলুন",
+    "description": "Button to open the voices directory in OS file manager",
+    "_machine_translated": true,
+    "_source_hash": "e978977a5f673074"
+  },
+  "settings.speech.pocket.advanced.section": {
+    "message": "উন্নত",
+    "description": "Advanced subsection header",
+    "_machine_translated": true,
+    "_source_hash": "a00b15d13b9ddd12"
+  },
+  "settings.speech.pocket.auto_start.label": {
+    "message": "সার্ভার স্বয়ংক্রিয় চালু",
+    "description": "Toggle: pre-start the pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "ce652d26679bac34"
+  },
+  "settings.speech.pocket.auto_start.description": {
+    "message": "দ্রুত প্রথম স্পিচের জন্য Kage চালু হলে Pocket TTS সার্ভার আগে থেকে চালু করুন। বন্ধ থাকলে, প্রথম ব্যবহারে সার্ভার স্বয়ংক্রিয়ভাবে চালু হয় (সামান্য বিলম্বে)।",
+    "description": "Helper for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "8d7180881c96ae2a"
+  },
+  "settings.speech.pocket.voice.label": {
+    "message": "ভয়েস",
+    "description": "Voice selector label",
+    "_machine_translated": true,
+    "_source_hash": "b10e53818a281efc"
+  },
+  "settings.speech.pocket.voice.description": {
+    "message": "বিল্ট-ইন ভয়েসগুলো ইংরেজিতে। URL বা ভয়েস ফোল্ডারের মাধ্যমে কাস্টম ভয়েস যোগ করুন।",
+    "description": "Helper text for the voice selector",
+    "_machine_translated": true,
+    "_source_hash": "42a822a3325f5297"
+  },
+  "settings.speech.pocket.temp.label": {
+    "message": "টেম্পারেচার",
+    "description": "Temperature slider label",
+    "_machine_translated": true,
+    "_source_hash": "d55d4497bcedb928"
+  },
+  "settings.speech.pocket.temp.description": {
+    "message": "কম = সামঞ্জস্যপূর্ণ, বেশি = অভিব্যক্তিপূর্ণ। ডিফল্ট: 0.7।",
+    "description": "Helper for the temperature slider",
+    "_machine_translated": true,
+    "_source_hash": "f4a698b547f4d512"
+  },
+  "settings.speech.pocket.eos.label": {
+    "message": "EOS থ্রেশহোল্ড",
+    "description": "EOS threshold slider label",
+    "_machine_translated": true,
+    "_source_hash": "1a5f18c2ce56f3e9"
+  },
+  "settings.speech.pocket.eos.description": {
+    "message": "কম = আগেভাগে থামার সম্ভাবনা কম। ডিফল্ট: -4.0।",
+    "description": "Helper for the EOS slider",
+    "_machine_translated": true,
+    "_source_hash": "fb3596af2106e50c"
+  },
+  "settings.speech.pocket.test_btn": {
+    "message": "🔊 ভয়েস পরীক্ষা করুন",
+    "description": "Test button",
+    "_machine_translated": true,
+    "_source_hash": "65c5468d278eaba7"
+  },
+  "settings.speech.pocket.test_generating": {
+    "message": "⏳ তৈরি হচ্ছে…",
+    "description": "Spinner label while a test is generating",
+    "_machine_translated": true,
+    "_source_hash": "dc5b83041ef6a0a4"
+  },
+  "settings.speech.pocket.port.label": {
+    "message": "পোর্ট",
+    "description": "Port input label (Advanced)",
+    "_machine_translated": true,
+    "_source_hash": "fa1173e64e448bb4"
+  },
+  "settings.speech.pocket.port.description": {
+    "message": "Pocket TTS HTTP সার্ভার যে TCP পোর্টে শোনে। পরিবর্তনের পর সার্ভার রিস্টার্ট করুন।",
+    "description": "Helper for the port field",
+    "_machine_translated": true,
+    "_source_hash": "4982f6f181ea8933"
+  },
+  "settings.automations.title": {
+    "message": "অটোমেশন",
+    "description": "Settings header — automations / macro chains",
+    "_machine_translated": true,
+    "_source_hash": "62aa09100eb6adfc"
+  },
+  "settings.automations.description": {
+    "message": "ট্রান্সফর্মেশনগুলিকে অটোমেটেড অ্যাকশনে চেইন করুন। ম্যানুয়ালি, শিডিউল অনুযায়ী, বা এক্সটেনশনের সিগন্যালের প্রতিক্রিয়ায় ট্রিগার করুন।",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "9b0ef0230408ee14"
+  },
+  "settings.automations.power.section": {
+    "message": "পাওয়ার",
+    "description": "Subsection header for power-aware settings",
+    "_machine_translated": true,
+    "_source_hash": "9046b575f090e647"
+  },
+  "settings.automations.list.section": {
+    "message": "অটোমেশন",
+    "description": "Subsection header for the automation list",
+    "_machine_translated": true,
+    "_source_hash": "b8df76aec4da442e"
+  },
+  "settings.automations.add_btn": {
+    "message": "+ অটোমেশন যোগ করুন",
+    "description": "Button to add a new automation",
+    "_machine_translated": true,
+    "_source_hash": "82fa7158d2ef9f18"
+  },
+  "settings.automations.default_name": {
+    "message": "নতুন অটোমেশন",
+    "description": "Default name for a freshly-added automation",
+    "_machine_translated": true,
+    "_source_hash": "3b1cf407613cb98a"
+  },
+  "settings.automations.power_mode.label": {
+    "message": "পাওয়ার মোড",
+    "description": "Power-mode dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "eb80fb1f1c31f5a3"
+  },
+  "settings.automations.power_mode.description": {
+    "message": "ব্যাটারি পাওয়ারে অটোমেশন কীভাবে আচরণ করবে তা নিয়ন্ত্রণ করে।",
+    "description": "Helper text for the power-mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5076cd909f720563"
+  },
+  "settings.automations.power_mode.auto": {
+    "message": "🔋 অটো (ব্যাটারি শনাক্ত করুন)",
+    "description": "Power-mode option — auto",
+    "_machine_translated": true,
+    "_source_hash": "47271b36cd514b8f"
+  },
+  "settings.automations.power_mode.full": {
+    "message": "⚡ সর্বদা পূর্ণ গতি",
+    "description": "Power-mode option — always full",
+    "_machine_translated": true,
+    "_source_hash": "16f06c1a9dce9b08"
+  },
+  "settings.automations.power_mode.saving": {
+    "message": "🪫 সর্বদা পাওয়ার সেভিং",
+    "description": "Power-mode option — always saving",
+    "_machine_translated": true,
+    "_source_hash": "b222190e3d04c706"
+  },
+  "settings.automations.power_mode.detail_html": {
+    "message": "ব্যাটারিতে, শিডিউলগুলি <strong>{battery}×</strong> ধীরে চলে। কম ব্যাটারিতে, <strong>{low}×</strong> ধীরে।",
+    "description": "Detail line shown when power mode is auto (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "53689ad710fae8fe"
+  },
+  "settings.automations.validate.empty_name": {
+    "message": "অটোমেশনের নাম খালি রাখা যাবে না।",
+    "description": "Validation error: an automation has a blank name",
+    "_machine_translated": true,
+    "_source_hash": "d11f930744ac680b"
+  },
+  "settings.automations.validate.no_steps": {
+    "message": "\"{name}\"-এর জন্য অন্তত একটি ধাপ প্রয়োজন।",
+    "description": "Validation error: automation has zero steps",
+    "_machine_translated": true,
+    "_source_hash": "d873cf6a923acd4a"
+  },
+  "settings.automations.trigger.manual": {
+    "message": "🖱️ ম্যানুয়াল",
+    "description": "Trigger badge — manual only",
+    "_machine_translated": true,
+    "_source_hash": "d2de639f4c56fc9f"
+  },
+  "settings.assistant.learn.label": {
+    "message": "আমার পছন্দ শিখুন",
+    "description": "Toggle: enable auto-steering",
+    "_machine_translated": true,
+    "_source_hash": "9d1c611ade3c6551"
+  },
+  "settings.assistant.learn.description": {
+    "message": "Kage-কে আপনার কথোপকথন থেকে আপনার পছন্দ শিখতে এবং সেশনগুলির মধ্যে মনে রাখতে দিন। এটি কী শিখেছে তা আপনি যেকোনো সময় দেখতে ও সম্পাদনা করতে পারবেন। এই ডেটা আপনার মেশিনেই থাকে এবং শুধুমাত্র আপনার নির্বাচিত এজেন্টের সাথে শেয়ার করা হয়।",
+    "description": "Helper for the learn-preferences toggle",
+    "_machine_translated": true,
+    "_source_hash": "3ce0cc657125e7b4"
+  },
+  "settings.assistant.learn.view_btn": {
+    "message": "শেখা পছন্দগুলি দেখুন",
+    "description": "Button to open the learned-preferences editor",
+    "_machine_translated": true,
+    "_source_hash": "a609f21f31a36378"
+  },
+  "settings.assistant.custom_steering.label": {
+    "message": "কাস্টম স্টিয়ারিং ডকুমেন্ট",
+    "description": "Section label for the user-authored steering doc",
+    "_machine_translated": true,
+    "_source_hash": "7daf1f434b200a44"
+  },
+  "settings.assistant.custom_steering.description": {
+    "message": "আপনার নিজস্ব স্থায়ী নির্দেশনা যোগ করুন। লাইন অনুযায়ী সম্পাদিত — পুনর্বিন্যাস, যোগ বা বুলেট মুছে ফেলুন। সর্বদা শেখা পছন্দগুলির সাথে অন্তর্ভুক্ত এবং Kage দ্বারা কখনও পরিবর্তিত হয় না।",
+    "description": "Helper text for the custom-steering section",
+    "_machine_translated": true,
+    "_source_hash": "a0881eae9dee074e"
+  },
+  "settings.assistant.custom_steering.edit_btn": {
+    "message": "কাস্টম স্টিয়ারিং সম্পাদনা করুন",
+    "description": "Button to open the user-steering editor",
+    "_machine_translated": true,
+    "_source_hash": "bf848eb02d4cc950"
+  },
+  "settings.assistant.app_modes.label": {
+    "message": "অ্যাপ মোড",
+    "description": "Section label for per-app steering",
+    "_machine_translated": true,
+    "_source_hash": "1fa94d023f38c11b"
+  },
+  "settings.assistant.app_modes.description": {
+    "message": "প্রতি-অ্যাপ স্টিয়ারিং — সংক্ষিপ্ত নির্দেশনা যা Kage শুধুমাত্র একটি নির্দিষ্ট অ্যাপ্লিকেশন থেকে সমন করার সময় আপনার প্রম্পটে যুক্ত করবে। প্রতি নিয়মে ~১২৫ টোকেনে সীমাবদ্ধ যাতে এটি আপনার কনটেক্সট বড় না করে।",
+    "description": "Helper for app modes section",
+    "_machine_translated": true,
+    "_source_hash": "1c613c2f3e11270c"
+  },
+  "settings.assistant.app_modes.manage_btn": {
+    "message": "অ্যাপ মোড পরিচালনা করুন",
+    "description": "Button to open the app-modes editor",
+    "_machine_translated": true,
+    "_source_hash": "c8072214966b5228"
+  },
+  "context_menu.cut": {
+    "message": "কাট",
+    "description": "Context menu — cut selected text",
+    "_machine_translated": true,
+    "_source_hash": "67f953a50161b12e"
+  },
+  "context_menu.copy": {
+    "message": "কপি",
+    "description": "Context menu — copy selected text",
+    "_machine_translated": true,
+    "_source_hash": "7e73e41c3b8d08e9"
+  },
+  "context_menu.paste": {
+    "message": "পেস্ট",
+    "description": "Context menu — paste from clipboard",
+    "_machine_translated": true,
+    "_source_hash": "9b4c98d0d40f356d"
+  },
+  "context_menu.settings": {
+    "message": "সেটিংস",
+    "description": "Context menu — open settings",
+    "_machine_translated": true,
+    "_source_hash": "d62a42775dba19e5"
+  },
+  "context_menu.close": {
+    "message": "বন্ধ করুন",
+    "description": "Context menu — close current window",
+    "_machine_translated": true,
+    "_source_hash": "86ad33a0e2044207"
+  },
+  "context_menu.inspect": {
+    "message": "ইন্সপেক্ট",
+    "description": "Context menu — open devtools (dev mode only)",
+    "_machine_translated": true,
+    "_source_hash": "aa8f98b70d331111"
+  },
+  "store.window_title": {
+    "message": "এক্সটেনশন স্টোর",
+    "description": "Title bar of the extension store window",
+    "_machine_translated": true,
+    "_source_hash": "07fc51ba9350028b"
+  },
+  "store.header_title": {
+    "message": "🛍️ এক্সটেনশন স্টোর",
+    "description": "Header title in the store window",
+    "_machine_translated": true,
+    "_source_hash": "ba05f6989308547e"
+  },
+  "store.header.settings_title": {
+    "message": "স্টোর সেটিংস",
+    "description": "Tooltip on the store-settings gear button",
+    "_machine_translated": true,
+    "_source_hash": "2c77a80142d6412b"
+  },
+  "store.tab.extensions": {
+    "message": "এক্সটেনশন",
+    "description": "Tab label — extensions",
+    "_machine_translated": true,
+    "_source_hash": "3a4a463c13d6d848"
+  },
+  "store.tab.themes": {
+    "message": "থিম",
+    "description": "Tab label — themes",
+    "_machine_translated": true,
+    "_source_hash": "55cdd4c544c082d9"
+  },
+  "store.tab.commands": {
+    "message": "কুইক কমান্ড",
+    "description": "Tab label — quick commands",
+    "_machine_translated": true,
+    "_source_hash": "61b7ca5cd6bdada1"
+  },
+  "store.search.placeholder": {
+    "message": "সার্চ করুন…",
+    "description": "Placeholder for the store search input",
+    "_machine_translated": true,
+    "_source_hash": "146a55c1b743ce12"
+  },
+  "store.source.all": {
+    "message": "সব সোর্স",
+    "description": "Source filter — show items from every source",
+    "_machine_translated": true,
+    "_source_hash": "f3eddff948c4963d"
+  },
+  "store.filter.installed_only": {
+    "message": "শুধু ইনস্টল করা",
+    "description": "Filter button — show only installed extensions",
+    "_machine_translated": true,
+    "_source_hash": "d87b8ef505f77e45"
   }
 }

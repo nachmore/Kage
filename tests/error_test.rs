@@ -158,16 +158,25 @@ fn switching_locale_changes_serialised_message_but_not_key() {
     let en_json = serde_json::to_value(&err).unwrap();
     assert_eq!(en_json["message"], "Not connected");
     assert_eq!(en_json["key"], "errors.connection.not_connected");
+    let en_message = en_json["message"].as_str().unwrap().to_string();
 
-    // Switch to a non-existent language — falls back to English. We don't
-    // ship non-EN catalogs at this point in the test setup; once we do, this
-    // test should land on a real translation. The point here is that `key`
-    // must NOT change, only `message` should.
+    // Switch to Japanese. JA ships a real catalog, so `message` MUST change
+    // to a localised string while `key` stays stable. The exact JA wording
+    // can drift across translate.py runs, so we assert the contract — not
+    // a specific translation.
     kage::i18n::set_language("ja");
     let ja_json = serde_json::to_value(&err).unwrap();
     assert_eq!(ja_json["key"], "errors.connection.not_connected");
-    // ja → falls back to en (no JA catalog yet).
-    assert_eq!(ja_json["message"], "Not connected");
+    let ja_message = ja_json["message"].as_str().unwrap();
+    assert!(
+        !ja_message.is_empty(),
+        "JA message should be a non-empty string, got {ja_message:?}"
+    );
+    assert_ne!(
+        ja_message, en_message,
+        "JA message should differ from EN — if they're the same it means \
+         the JA catalog wasn't loaded correctly"
+    );
     // restore
     kage::i18n::set_language("en");
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extension Store</title>
+    <title data-i18n="store.window_title">Extension Store</title>
     <link rel="stylesheet" href="css/shared-kage-tokens.css">
     <link rel="stylesheet" href="css/shared-kage-controls.css">
     <link rel="stylesheet" href="css/shared-components.css">
@@ -307,20 +307,20 @@
 <body>
     <div class="store-container">
         <div class="store-header">
-            <h1>🛍️ Extension Store</h1>
-            <button class="store-header-settings" onclick="window.__kageStore.openSettings('store')" title="Store settings">⚙️</button>
+            <h1 data-i18n="store.header_title">🛍️ Extension Store</h1>
+            <button class="store-header-settings" onclick="window.__kageStore.openSettings('store')" data-i18n-title="store.header.settings_title" title="Store settings">⚙️</button>
         </div>
         <div class="store-tabs">
-            <div class="store-tab active" data-tab="extensions" onclick="window.__kageStore.switchTab('extensions')">Extensions</div>
-            <div class="store-tab" data-tab="themes" onclick="window.__kageStore.switchTab('themes')">Themes</div>
-            <div class="store-tab" data-tab="commands" onclick="window.__kageStore.switchTab('commands')">Quick Commands</div>
+            <div class="store-tab active" data-tab="extensions" onclick="window.__kageStore.switchTab('extensions')" data-i18n="store.tab.extensions">Extensions</div>
+            <div class="store-tab" data-tab="themes" onclick="window.__kageStore.switchTab('themes')" data-i18n="store.tab.themes">Themes</div>
+            <div class="store-tab" data-tab="commands" onclick="window.__kageStore.switchTab('commands')" data-i18n="store.tab.commands">Quick Commands</div>
         </div>
         <div class="store-toolbar">
-            <input type="text" id="storeSearch" placeholder="Search..." oninput="window.__kageStore.onSearch()">
+            <input type="text" id="storeSearch" placeholder="Search..." data-i18n-placeholder="store.search.placeholder" oninput="window.__kageStore.onSearch()">
             <select class="store-source-select" id="sourceFilter" onchange="window.__kageStore.renderTab()" style="display:none">
-                <option value="">All Sources</option>
+                <option value="" data-i18n="store.source.all">All Sources</option>
             </select>
-            <button class="store-filter-btn" id="installedFilter" onclick="window.__kageStore.toggleInstalledFilter()">Installed only</button>
+            <button class="store-filter-btn" id="installedFilter" onclick="window.__kageStore.toggleInstalledFilter()" data-i18n="store.filter.installed_only">Installed only</button>
         </div>
         <div class="store-content" id="storeContent"></div>
     </div>

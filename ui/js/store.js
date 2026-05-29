@@ -13,6 +13,7 @@
  */
 
 import { errLabel, errMessage } from './shared/error-message.js';
+import { initI18n, applyStaticTranslations } from './shared/i18n.js';
 import { showPermissionPrompt } from './shared/permission-prompt.js';
 import { cmdOrCtrlPressed } from './shared/shortcuts.js';
 import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme.js';
@@ -31,6 +32,13 @@ function waitForTauri(cb) {
 
 async function init() {
     const invoke = window.__TAURI__.core.invoke;
+
+    try {
+        await initI18n(invoke);
+    } catch (e) {
+        console.warn('[store] i18n init failed', e);
+    }
+    applyStaticTranslations(document);
 
     // Check dev mode
     try {

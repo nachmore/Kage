@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import * as agentConnectionsApi from '../shared/agent-connections.js';
 import { escapeAttr, formatBytes } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 
 // Lucide-style inline SVGs for the icon-only row actions. Matches the
 // chat session list (`kd-action-btn`) so users see one consistent
@@ -37,7 +38,7 @@ export class ConnectionSettingsModule extends SettingsModule {
         // sidebar label are user-facing and renamed to "Agents" —
         // since this page now also owns the Ollama wizard, "Agent
         // Connection" understated what's here.
-        super('connection', 'Agents', '🤖');
+        super('connection', t('settings.sidebar.agents'), '🤖');
         this._connections = [];
         this._activeId = '';
         this._presets = [];

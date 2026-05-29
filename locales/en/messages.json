@@ -1658,6 +1658,957 @@
     "description": "Tooltip on the per-tool remove button"
   },
 
+  "settings.shortcuts.title": {
+    "message": "Commands & Prompts",
+    "description": "Settings header — quick commands & saved prompts"
+  },
+  "settings.shortcuts.section.label": {
+    "message": "Quick Commands & saved prompts",
+    "description": "Subsection label above the description"
+  },
+  "settings.shortcuts.description_html": {
+    "message": "Run programs, open URLs, send prompt templates to the agent, or execute custom scripts. Use <code>{*}</code> for all arguments, <code>{0}</code>/<code>{1}</code> for positional, or <code>{name}</code> for named parameters (a small form pops up to fill them in if you run the trigger without supplying values).",
+    "description": "Helper text for the shortcuts pane (HTML allowed)"
+  },
+  "settings.shortcuts.action.add": {
+    "message": "+ Add",
+    "description": "Button: open the new-shortcut dialog"
+  },
+  "settings.shortcuts.action.store": {
+    "message": "🛍️ Store",
+    "description": "Button: browse the command-pack store"
+  },
+  "settings.shortcuts.action.export": {
+    "message": "Export",
+    "description": "Button: export shortcuts to a file"
+  },
+  "settings.shortcuts.action.import": {
+    "message": "Import",
+    "description": "Button: import shortcuts from a file"
+  },
+  "settings.shortcuts.export_note_html": {
+    "message": "Export / Import here only covers your Quick Commands & Prompts. To move everything (config, steering, extensions) between machines, see <a href=\"#\" data-action=\"shortcuts.openFullBackup\">About → Backup & restore</a>.",
+    "description": "Footer note pointing at the full backup flow (HTML allowed)"
+  },
+  "settings.shortcuts.dialog.add_title": {
+    "message": "Add Shortcut",
+    "description": "Dialog header — add mode"
+  },
+  "settings.shortcuts.dialog.edit_title": {
+    "message": "Edit Shortcut",
+    "description": "Dialog header — edit mode"
+  },
+  "settings.shortcuts.dialog.name.label": {
+    "message": "Name / Description",
+    "description": "Field label"
+  },
+  "settings.shortcuts.dialog.name.placeholder": {
+    "message": "e.g., Open VSCode",
+    "description": "Placeholder for the name field"
+  },
+  "settings.shortcuts.dialog.trigger.label": {
+    "message": "Trigger Word",
+    "description": "Field label"
+  },
+  "settings.shortcuts.dialog.trigger.placeholder": {
+    "message": "e.g., code",
+    "description": "Placeholder for the trigger field"
+  },
+  "settings.shortcuts.dialog.icon.label": {
+    "message": "Icon (optional)",
+    "description": "Field label for the icon picker row"
+  },
+  "settings.shortcuts.dialog.icon.placeholder": {
+    "message": "⚡",
+    "description": "Placeholder emoji for the icon-emoji input"
+  },
+  "settings.shortcuts.dialog.icon.image_btn": {
+    "message": "📁 Image",
+    "description": "Button to pick an image as icon"
+  },
+  "settings.shortcuts.dialog.icon.favicon_btn": {
+    "message": "🌐 Use Favicon",
+    "description": "Button to fetch a favicon as icon"
+  },
+  "settings.shortcuts.dialog.icon.help": {
+    "message": "Emoji, image file, or paste an image from clipboard",
+    "description": "Helper text under the icon picker"
+  },
+  "settings.shortcuts.dialog.action_type.label": {
+    "message": "Action Type",
+    "description": "Action-type dropdown label"
+  },
+  "settings.shortcuts.dialog.action_type.run_program": {
+    "message": "▶️ Run Program",
+    "description": "Action-type option"
+  },
+  "settings.shortcuts.dialog.action_type.open_url": {
+    "message": "🌐 Open URL",
+    "description": "Action-type option"
+  },
+  "settings.shortcuts.dialog.action_type.prompt": {
+    "message": "💬 Send Prompt to Agent",
+    "description": "Action-type option"
+  },
+  "settings.shortcuts.dialog.action_type.script": {
+    "message": "📜 Run Script",
+    "description": "Action-type option"
+  },
+  "settings.shortcuts.dialog.run.path.label": {
+    "message": "Executable Path",
+    "description": "Run-program path field label"
+  },
+  "settings.shortcuts.dialog.run.work_dir.label": {
+    "message": "Working Directory (optional)",
+    "description": "Run-program working-directory field label"
+  },
+  "settings.shortcuts.dialog.run.work_dir.placeholder": {
+    "message": "e.g., C:\\Projects",
+    "description": "Placeholder for the working-directory field"
+  },
+  "settings.shortcuts.dialog.run.args.label": {
+    "message": "Arguments (optional)",
+    "description": "Run-program args field label"
+  },
+  "settings.shortcuts.dialog.run.args.placeholder": {
+    "message": "e.g., --send {1} --to {0} or {*}",
+    "description": "Placeholder for the args field"
+  },
+  "settings.shortcuts.dialog.run.args.help": {
+    "message": "Use {*} for all arguments, or {0}, {1}, etc. for specific arguments",
+    "description": "Helper text for the args field"
+  },
+  "settings.shortcuts.dialog.url.label": {
+    "message": "URL Template",
+    "description": "Open-URL field label"
+  },
+  "settings.shortcuts.dialog.url.placeholder": {
+    "message": "e.g., https://google.com/search?q={*}",
+    "description": "Placeholder for the URL field"
+  },
+  "settings.shortcuts.dialog.url.help": {
+    "message": "Use {*} for all arguments, or {0}, {1}, etc. for specific arguments in the URL",
+    "description": "Helper text for the URL field"
+  },
+  "settings.shortcuts.dialog.prompt.label": {
+    "message": "Prompt Template",
+    "description": "Prompt-template field label"
+  },
+  "settings.shortcuts.dialog.prompt.placeholder": {
+    "message": "e.g., Translate to {lang}: {*}",
+    "description": "Placeholder for the prompt template"
+  },
+  "settings.shortcuts.dialog.prompt.help_html": {
+    "message": "<code>{*}</code> = all arguments · <code>{0}</code>, <code>{1}</code> = positional · <code>{name}</code> = named (form pops up if not filled) · <code>{selection}</code> = selected text.",
+    "description": "Helper text for the prompt template (HTML allowed)"
+  },
+  "settings.shortcuts.dialog.script.action.label": {
+    "message": "Script Action",
+    "description": "Script-action dropdown label"
+  },
+  "settings.shortcuts.dialog.script.action.text": {
+    "message": "📝 Display Result",
+    "description": "Script action — show output"
+  },
+  "settings.shortcuts.dialog.script.action.prompt": {
+    "message": "💬 Send to Agent",
+    "description": "Script action — send to agent"
+  },
+  "settings.shortcuts.dialog.script.action.open_url": {
+    "message": "🌐 Open as URL",
+    "description": "Script action — treat output as URL"
+  },
+  "settings.shortcuts.dialog.script.action.run_program": {
+    "message": "▶️ Run as Command",
+    "description": "Script action — run output as command"
+  },
+  "settings.shortcuts.dialog.script.action.help": {
+    "message": "What to do with the string returned by your script",
+    "description": "Helper for the script-action dropdown"
+  },
+  "settings.shortcuts.dialog.script.ai.label": {
+    "message": "✨ Ask Kage to write or update the script",
+    "description": "Label for the AI script generator"
+  },
+  "settings.shortcuts.dialog.script.ai.placeholder": {
+    "message": "e.g., Parse a Jira ticket URL and return the ticket ID",
+    "description": "Placeholder for the AI prompt input"
+  },
+  "settings.shortcuts.dialog.script.ai.generate": {
+    "message": "Generate",
+    "description": "Generate button"
+  },
+  "settings.shortcuts.dialog.script.ai.undo": {
+    "message": "Undo",
+    "description": "Undo button after a generate"
+  },
+  "settings.shortcuts.dialog.script.body.label": {
+    "message": "Script Body",
+    "description": "Script body textarea label"
+  },
+  "settings.shortcuts.dialog.script.body.placeholder": {
+    "message": "// Arguments are passed as ...args\n// Return a string (or array for Run as Command)\nconst query = args.join(' ');\nreturn 'Processed: ' + query;",
+    "description": "Code-style placeholder shown in the script body editor"
+  },
+  "settings.shortcuts.dialog.script.body.help_html": {
+    "message": "JavaScript function body. Receives arguments as <code>...args</code>. Return a string for Display/Agent/URL actions, or an array <code>[cmd, workDir, ...args]</code> for Run as Command.",
+    "description": "Helper for the script body field (HTML allowed)"
+  },
+  "settings.shortcuts.dialog.test.toggle": {
+    "message": "Test",
+    "description": "Toggle label for the test section"
+  },
+  "settings.shortcuts.dialog.test.placeholder": {
+    "message": "Enter test arguments…",
+    "description": "Placeholder for the test args input"
+  },
+  "settings.shortcuts.dialog.test.run": {
+    "message": "▶ Run",
+    "description": "Run button in the test section"
+  },
+  "settings.shortcuts.dialog.cancel": {
+    "message": "Cancel",
+    "description": "Dialog cancel button"
+  },
+  "settings.shortcuts.dialog.save": {
+    "message": "Save",
+    "description": "Dialog save button"
+  },
+  "settings.shortcuts.list.empty": {
+    "message": "No shortcuts yet. Click + Add to create one.",
+    "description": "Empty state for the shortcuts list"
+  },
+  "settings.shortcuts.list.action.edit": {
+    "message": "Edit",
+    "description": "Per-shortcut edit button"
+  },
+  "settings.shortcuts.list.action.delete": {
+    "message": "Delete",
+    "description": "Per-shortcut delete button"
+  },
+  "settings.shortcuts.list.delete_confirm": {
+    "message": "Delete shortcut \"{name}\"?",
+    "description": "Confirm dialog before deleting a shortcut"
+  },
+  "settings.shortcuts.alert.name_required": {
+    "message": "Name and Trigger Word are required.",
+    "description": "alert() shown when required fields are empty"
+  },
+  "settings.shortcuts.alert.duplicate_trigger": {
+    "message": "Trigger \"{trigger}\" is already used by another shortcut.",
+    "description": "alert() shown on duplicate triggers"
+  },
+  "settings.shortcuts.alert.icon_too_large": {
+    "message": "Icon image must be under 64KB",
+    "description": "alert() shown when an uploaded icon exceeds the size cap"
+  },
+  "settings.shortcuts.alert.url_first": {
+    "message": "Enter a URL first",
+    "description": "alert() shown when the user clicks Use Favicon without a URL"
+  },
+  "settings.shortcuts.alert.no_favicon": {
+    "message": "Could not fetch favicon for this URL",
+    "description": "alert() shown when favicon fetch fails"
+  },
+  "settings.shortcuts.list.empty_full": {
+    "message": "No shortcuts configured. Click \"Add Shortcut\" to create one.",
+    "description": "Full empty-state copy for the shortcuts list"
+  },
+  "settings.shortcuts.detail.type": {
+    "message": "Type:",
+    "description": "Detail row label — action type"
+  },
+  "settings.shortcuts.detail.url": {
+    "message": "URL:",
+    "description": "Detail row label — URL template"
+  },
+  "settings.shortcuts.detail.prompt": {
+    "message": "Prompt:",
+    "description": "Detail row label — prompt template"
+  },
+  "settings.shortcuts.detail.action": {
+    "message": "Action:",
+    "description": "Detail row label — script action"
+  },
+  "settings.shortcuts.detail.script": {
+    "message": "Script:",
+    "description": "Detail row label — script body preview"
+  },
+  "settings.shortcuts.detail.path": {
+    "message": "Path:",
+    "description": "Detail row label — executable path"
+  },
+  "settings.shortcuts.detail.dir": {
+    "message": "Dir:",
+    "description": "Detail row label — working directory"
+  },
+  "settings.shortcuts.detail.args": {
+    "message": "Args:",
+    "description": "Detail row label — arguments"
+  },
+  "settings.shortcuts.action_label.run_program": {
+    "message": "▶️ Run Program",
+    "description": "Action-type label shown in the list (matches dropdown)"
+  },
+  "settings.shortcuts.action_label.open_url": {
+    "message": "🌐 Open URL",
+    "description": "Action-type label shown in the list (matches dropdown)"
+  },
+  "settings.shortcuts.action_label.prompt": {
+    "message": "💬 Prompt",
+    "description": "Action-type label shown in the list"
+  },
+  "settings.shortcuts.action_label.script": {
+    "message": "📜 Script",
+    "description": "Action-type label shown in the list"
+  },
+  "settings.shortcuts.script_label.text": {
+    "message": "📝 Display",
+    "description": "Script-action label in the list"
+  },
+  "settings.shortcuts.script_label.prompt": {
+    "message": "💬 Agent",
+    "description": "Script-action label in the list"
+  },
+  "settings.shortcuts.script_label.open_url": {
+    "message": "🌐 URL",
+    "description": "Script-action label in the list"
+  },
+  "settings.shortcuts.script_label.run_program": {
+    "message": "▶️ Run",
+    "description": "Script-action label in the list"
+  },
+  "settings.shortcuts.script_label.default": {
+    "message": "Display",
+    "description": "Fallback script-action label"
+  },
+  "settings.shortcuts.favicon_fetching": {
+    "message": "⏳ Fetching…",
+    "description": "Button text while a favicon fetch is in flight"
+  },
+  "settings.shortcuts.alert.url_required": {
+    "message": "URL is required.",
+    "description": "alert() shown when saving an Open URL shortcut without a URL"
+  },
+  "settings.shortcuts.alert.prompt_required": {
+    "message": "Prompt template is required.",
+    "description": "alert() shown when saving a Prompt shortcut without text"
+  },
+  "settings.shortcuts.alert.script_required": {
+    "message": "Script body is required.",
+    "description": "alert() shown when saving a Script shortcut without code"
+  },
+  "settings.shortcuts.alert.script_syntax_error": {
+    "message": "Script syntax error: {reason}",
+    "description": "alert() shown when the script body fails to parse"
+  },
+  "settings.shortcuts.alert.path_required": {
+    "message": "Executable Path is required.",
+    "description": "alert() shown when saving a Run Program shortcut without a path"
+  },
+  "settings.shortcuts.delete_confirm": {
+    "message": "Delete this shortcut?",
+    "description": "Confirmation dialog before deleting a shortcut"
+  },
+
+  "settings.about.title": {
+    "message": "About Kage",
+    "description": "Settings header — about/version page"
+  },
+  "settings.about.version_loading": {
+    "message": "loading…",
+    "description": "Placeholder while the version string loads"
+  },
+  "settings.about.version_format": {
+    "message": "v{version}",
+    "description": "Version display format"
+  },
+  "settings.about.info.loading": {
+    "message": "Loading…",
+    "description": "Placeholder for the about-info table while it loads"
+  },
+  "settings.about.info.author_label": {
+    "message": "Author",
+    "description": "Info table row label"
+  },
+  "settings.about.info.repository_label": {
+    "message": "Repository",
+    "description": "Info table row label"
+  },
+  "settings.about.info.license_label": {
+    "message": "License",
+    "description": "Info table row label"
+  },
+  "settings.about.info.copyright_label": {
+    "message": "Copyright",
+    "description": "Info table row label"
+  },
+  "settings.about.info.copyright_value": {
+    "message": "© 2025 {authors}",
+    "description": "Copyright row content"
+  },
+  "settings.about.info.copyright_default_authors": {
+    "message": "Kage Team",
+    "description": "Fallback for authors when none are configured"
+  },
+  "settings.about.action.show_welcome": {
+    "message": "Show Welcome Screen",
+    "description": "Button: re-open the welcome wizard"
+  },
+  "settings.about.action.open_config": {
+    "message": "Open Config Folder",
+    "description": "Button: open the OS file manager at the config dir"
+  },
+  "settings.about.action.send_feedback": {
+    "message": "Send Feedback",
+    "description": "Button: open a bug report URL"
+  },
+  "settings.about.backup.title": {
+    "message": "💾 Backup & restore",
+    "description": "Collapsible section header"
+  },
+  "settings.about.backup.description": {
+    "message": "Move your Kage setup between machines. The backup includes config, saved prompts & shortcuts, custom and learned steering, and extension data. Encryption with a passphrase is optional but recommended if the file will leave your machine.",
+    "description": "Body text in the backup section"
+  },
+  "settings.about.backup.export.label": {
+    "message": "Export",
+    "description": "Subsection label for export controls"
+  },
+  "settings.about.backup.encrypt_toggle": {
+    "message": "Encrypt with a passphrase (AES-256-GCM with Argon2id key derivation).",
+    "description": "Helper next to the encryption toggle"
+  },
+  "settings.about.backup.passphrase.placeholder": {
+    "message": "Passphrase",
+    "description": "Placeholder for the passphrase input"
+  },
+  "settings.about.backup.passphrase.confirm_placeholder": {
+    "message": "Confirm passphrase",
+    "description": "Placeholder for the confirm-passphrase input"
+  },
+  "settings.about.backup.passphrase.note": {
+    "message": "Pick something memorable. There's no recovery — lose the passphrase and the file is unreadable.",
+    "description": "Helper text under the passphrase fields"
+  },
+  "settings.about.backup.export_btn": {
+    "message": "Export…",
+    "description": "Button to start the export"
+  },
+  "settings.about.backup.import.label": {
+    "message": "Import",
+    "description": "Subsection label for import controls"
+  },
+  "settings.about.backup.import.description": {
+    "message": "Pick a previously exported <code>.kage</code> or <code>.kage.enc</code> file. Imports replace your current config — your machine's window positions, telemetry install ID, and OS startup setting are kept local.",
+    "description": "Helper text for import (HTML allowed)"
+  },
+  "settings.about.backup.import_btn": {
+    "message": "Import…",
+    "description": "Button to start the import"
+  },
+  "settings.about.logging.title": {
+    "message": "📋 Logging",
+    "description": "Logging section header (collapsible)"
+  },
+  "settings.about.logging.buffer_size.label": {
+    "message": "Log Buffer Size",
+    "description": "Buffer-size field label"
+  },
+  "settings.about.logging.buffer_size.description": {
+    "message": "Maximum number of log entries to keep (requires save)",
+    "description": "Helper text for buffer size"
+  },
+  "settings.about.logging.verbose.label": {
+    "message": "Log all messages",
+    "description": "Toggle: capture info-level frontend logs"
+  },
+  "settings.about.logging.verbose.description": {
+    "message": "Include informational messages, not just warnings and errors. Note: this can make Kage run slower if you have extensions that log a lot of messages.",
+    "description": "Helper text for the verbose-logging toggle"
+  },
+  "settings.about.logging.filter.all_levels": {
+    "message": "All levels",
+    "description": "Log filter — all levels"
+  },
+  "settings.about.logging.filter.debug": {
+    "message": "Debug",
+    "description": "Log filter level"
+  },
+  "settings.about.logging.filter.info": {
+    "message": "Info",
+    "description": "Log filter level"
+  },
+  "settings.about.logging.filter.warn": {
+    "message": "Warn",
+    "description": "Log filter level"
+  },
+  "settings.about.logging.filter.error": {
+    "message": "Error",
+    "description": "Log filter level"
+  },
+  "settings.about.logging.filter.all_sources": {
+    "message": "All sources",
+    "description": "Log filter — all sources"
+  },
+  "settings.about.logging.refresh": {
+    "message": "Refresh",
+    "description": "Button: reload log entries"
+  },
+  "settings.about.logging.clear": {
+    "message": "Clear Logs",
+    "description": "Button: empty the log file"
+  },
+  "settings.about.logging.open_folder": {
+    "message": "Open Logs Folder",
+    "description": "Button: open the log directory in the OS file manager"
+  },
+  "settings.about.logging.empty": {
+    "message": "Expand to load log entries…",
+    "description": "Placeholder while the log viewer is collapsed"
+  },
+  "settings.about.logging.loading": {
+    "message": "Loading…",
+    "description": "Placeholder while logs are fetching"
+  },
+  "settings.about.logging.load_failed": {
+    "message": "Failed to load logs",
+    "description": "Placeholder when log fetch fails"
+  },
+  "settings.about.logging.no_entries": {
+    "message": "No log entries",
+    "description": "Empty state when no logs match"
+  },
+  "settings.about.logging.no_entries_filtered": {
+    "message": "No log entries matching filters",
+    "description": "Empty state when filters exclude every entry"
+  },
+
+  "settings.speech.title": {
+    "message": "Speech",
+    "description": "Settings header — speech-input and read-back"
+  },
+  "settings.speech.voice_input.section": {
+    "message": "Voice Input",
+    "description": "Subsection header for voice input settings"
+  },
+  "settings.speech.show_button.label": {
+    "message": "Show Speech Button",
+    "description": "Toggle: show the microphone button"
+  },
+  "settings.speech.show_button.description": {
+    "message": "Display a microphone button for voice input using speech-to-text.",
+    "description": "Helper text for the speech-button toggle"
+  },
+  "settings.speech.silence.label": {
+    "message": "Auto-Submit Silence Delay",
+    "description": "Slider label for the silence-submit timeout"
+  },
+  "settings.speech.silence.description": {
+    "message": "Automatically send the message after this many seconds of silence. Set to 0 to disable.",
+    "description": "Helper text for the silence-submit slider"
+  },
+  "settings.speech.agent_voice.section": {
+    "message": "Agent Voice",
+    "description": "Subsection header for read-back / TTS settings"
+  },
+  "settings.speech.read_back.label": {
+    "message": "Read Back Agent Responses",
+    "description": "Toggle: read agent responses aloud"
+  },
+  "settings.speech.read_back.description": {
+    "message": "Use text-to-speech to read agent responses aloud when voice input was used.",
+    "description": "Helper text for the read-back toggle"
+  },
+  "settings.speech.tts_engine.label": {
+    "message": "TTS Engine",
+    "description": "Engine selector label"
+  },
+  "settings.speech.tts_engine.description": {
+    "message": "Choose which engine reads back responses.",
+    "description": "Helper text for the engine selector"
+  },
+  "settings.speech.tts_engine.system": {
+    "message": "System (Browser)",
+    "description": "TTS engine option — use the browser's speechSynthesis"
+  },
+  "settings.speech.tts_engine.pocket": {
+    "message": "Pocket TTS (Local AI)",
+    "description": "TTS engine option — use the local pocket-tts server"
+  },
+  "settings.speech.system_voice.label": {
+    "message": "System Voice",
+    "description": "System-voice dropdown label"
+  },
+  "settings.speech.system_voice.description": {
+    "message": "Select the browser voice used for reading back responses.",
+    "description": "Helper for the system voice selector"
+  },
+  "settings.speech.system_voice.default": {
+    "message": "System Default",
+    "description": "Placeholder dropdown option"
+  },
+  "settings.speech.pocket.checking": {
+    "message": "Checking…",
+    "description": "Status while pocket-tts environment is being detected"
+  },
+  "settings.speech.pocket.setup_collapse": {
+    "message": "▼ Setup",
+    "description": "Setup section toggle (collapsed)"
+  },
+  "settings.speech.pocket.setup_expand": {
+    "message": "▲ Setup",
+    "description": "Setup section toggle (expanded)"
+  },
+  "settings.speech.pocket.python.label": {
+    "message": "Python",
+    "description": "Step header for Python detection"
+  },
+  "settings.speech.pocket.python.not_found_html": {
+    "message": "❌ Python 3 not found. <a href=\"https://www.python.org/downloads/\" target=\"_blank\">Download Python</a>",
+    "description": "Status when Python isn't installed (HTML allowed)"
+  },
+  "settings.speech.pocket.python.required": {
+    "message": "❌ Python 3.10+ required",
+    "description": "Status when Python is too old"
+  },
+  "settings.speech.pocket.install.label": {
+    "message": "Install pocket-tts",
+    "description": "Step header for pocket-tts install"
+  },
+  "settings.speech.pocket.install.description": {
+    "message": "Installs the Python package (~400MB model download on first use).",
+    "description": "Helper text under the install step"
+  },
+  "settings.speech.pocket.install.button": {
+    "message": "Install",
+    "description": "Install button"
+  },
+  "settings.speech.pocket.install.cancel": {
+    "message": "✕ Cancel",
+    "description": "Cancel button while install is running"
+  },
+  "settings.speech.pocket.install.cancelling": {
+    "message": "Cancelling…",
+    "description": "Status while cancelling an in-flight install"
+  },
+  "settings.speech.pocket.install.installing": {
+    "message": "Installing…",
+    "description": "Status while installing"
+  },
+  "settings.speech.pocket.install.installed": {
+    "message": "✅ Installed",
+    "description": "Status after a successful install"
+  },
+  "settings.speech.pocket.install.not_installed": {
+    "message": "Not installed",
+    "description": "Sub-status when no install is detected"
+  },
+  "settings.speech.pocket.install.banner_not_installed": {
+    "message": "📦 Not installed — expand setup below",
+    "description": "Top-level banner when pocket-tts isn't installed"
+  },
+  "settings.speech.pocket.install.failed_default": {
+    "message": "Failed",
+    "description": "Generic failure label when no specific error message is available"
+  },
+  "settings.speech.pocket.install.error_prefix": {
+    "message": "❌ {reason}",
+    "description": "Error status with the underlying reason"
+  },
+  "settings.speech.pocket.install.retry": {
+    "message": "Retry",
+    "description": "Retry button after a failed install"
+  },
+  "settings.speech.pocket.install.reinstall": {
+    "message": "Reinstall",
+    "description": "Reinstall button shown after a successful install"
+  },
+  "settings.speech.pocket.server.label": {
+    "message": "Server",
+    "description": "Step header for the pocket-tts server"
+  },
+  "settings.speech.pocket.server.description": {
+    "message": "First start takes ~10-30s to load the model.",
+    "description": "Helper text for server section"
+  },
+  "settings.speech.pocket.server.start": {
+    "message": "Start Server",
+    "description": "Start button"
+  },
+  "settings.speech.pocket.server.stop": {
+    "message": "Stop Server",
+    "description": "Stop button when server is running"
+  },
+  "settings.speech.pocket.server.starting": {
+    "message": "Starting…",
+    "description": "Server transition state"
+  },
+  "settings.speech.pocket.server.stopping": {
+    "message": "Stopping…",
+    "description": "Server transition state"
+  },
+  "settings.speech.pocket.server.running": {
+    "message": "✅ Running",
+    "description": "Server status — running"
+  },
+  "settings.speech.pocket.server.stopped": {
+    "message": "⏹ Stopped",
+    "description": "Server status — stopped"
+  },
+  "settings.speech.pocket.banner.ready": {
+    "message": "✅ Ready",
+    "description": "Top-level banner when pocket-tts is fully ready"
+  },
+  "settings.speech.pocket.banner.server_stopped": {
+    "message": "⏹ Server stopped",
+    "description": "Top-level banner when the server isn't running"
+  },
+  "settings.speech.pocket.voice_gen.section": {
+    "message": "Voice & Generation",
+    "description": "Subsection header for voice and generation parameters"
+  },
+  "settings.speech.pocket.custom.section": {
+    "message": "Custom Voices",
+    "description": "Subsection header for custom voice management"
+  },
+  "settings.speech.pocket.custom.help_html": {
+    "message": "Paste a <a href=\"https://huggingface.co/kyutai/tts-voices\" target=\"_blank\">HuggingFace voice URL</a> or HTTP URL to a .wav file.",
+    "description": "Helper text under the custom-voice add row (HTML allowed)"
+  },
+  "settings.speech.pocket.custom.url_placeholder": {
+    "message": "hf://kyutai/tts-voices/...",
+    "description": "Placeholder for the voice URL field"
+  },
+  "settings.speech.pocket.custom.name_placeholder": {
+    "message": "Name",
+    "description": "Placeholder for the voice display-name field"
+  },
+  "settings.speech.pocket.custom.add_btn": {
+    "message": "Add",
+    "description": "Add button"
+  },
+  "settings.speech.pocket.custom.local_help": {
+    "message": "Or place .wav files directly in the voices folder (5-20s clean audio works best).",
+    "description": "Helper for the local voices fallback"
+  },
+  "settings.speech.pocket.custom.open_dir": {
+    "message": "Open Voices Folder",
+    "description": "Button to open the voices directory in OS file manager"
+  },
+  "settings.speech.pocket.advanced.section": {
+    "message": "Advanced",
+    "description": "Advanced subsection header"
+  },
+  "settings.speech.pocket.auto_start.label": {
+    "message": "Auto-Start Server",
+    "description": "Toggle: pre-start the pocket-tts server"
+  },
+  "settings.speech.pocket.auto_start.description": {
+    "message": "Pre-start the Pocket TTS server when Kage launches for faster first speech. If off, the server starts automatically on first use (with a brief delay).",
+    "description": "Helper for the auto-start toggle"
+  },
+  "settings.speech.pocket.voice.label": {
+    "message": "Voice",
+    "description": "Voice selector label"
+  },
+  "settings.speech.pocket.voice.description": {
+    "message": "Built-in voices are English. Add custom voices via URL or the voices folder.",
+    "description": "Helper text for the voice selector"
+  },
+  "settings.speech.pocket.temp.label": {
+    "message": "Temperature",
+    "description": "Temperature slider label"
+  },
+  "settings.speech.pocket.temp.description": {
+    "message": "Lower = consistent, higher = expressive. Default: 0.7.",
+    "description": "Helper for the temperature slider"
+  },
+  "settings.speech.pocket.eos.label": {
+    "message": "EOS Threshold",
+    "description": "EOS threshold slider label"
+  },
+  "settings.speech.pocket.eos.description": {
+    "message": "Lower = less likely to stop early. Default: -4.0.",
+    "description": "Helper for the EOS slider"
+  },
+  "settings.speech.pocket.test_btn": {
+    "message": "🔊 Test Voice",
+    "description": "Test button"
+  },
+  "settings.speech.pocket.test_generating": {
+    "message": "⏳ Generating…",
+    "description": "Spinner label while a test is generating"
+  },
+  "settings.speech.pocket.port.label": {
+    "message": "Port",
+    "description": "Port input label (Advanced)"
+  },
+  "settings.speech.pocket.port.description": {
+    "message": "TCP port the Pocket TTS HTTP server listens on. Restart the server after changing.",
+    "description": "Helper for the port field"
+  },
+
+  "settings.automations.title": {
+    "message": "Automations",
+    "description": "Settings header — automations / macro chains"
+  },
+  "settings.automations.description": {
+    "message": "Chain transformations into automated actions. Trigger them manually, on a schedule, or in response to signals from extensions.",
+    "description": "Top-of-pane description"
+  },
+  "settings.automations.power.section": {
+    "message": "Power",
+    "description": "Subsection header for power-aware settings"
+  },
+  "settings.automations.list.section": {
+    "message": "Automations",
+    "description": "Subsection header for the automation list"
+  },
+  "settings.automations.add_btn": {
+    "message": "+ Add Automation",
+    "description": "Button to add a new automation"
+  },
+  "settings.automations.default_name": {
+    "message": "New Automation",
+    "description": "Default name for a freshly-added automation"
+  },
+  "settings.automations.power_mode.label": {
+    "message": "Power Mode",
+    "description": "Power-mode dropdown label"
+  },
+  "settings.automations.power_mode.description": {
+    "message": "Controls how automations behave on battery power.",
+    "description": "Helper text for the power-mode dropdown"
+  },
+  "settings.automations.power_mode.auto": {
+    "message": "🔋 Auto (detect battery)",
+    "description": "Power-mode option — auto"
+  },
+  "settings.automations.power_mode.full": {
+    "message": "⚡ Always full speed",
+    "description": "Power-mode option — always full"
+  },
+  "settings.automations.power_mode.saving": {
+    "message": "🪫 Always power saving",
+    "description": "Power-mode option — always saving"
+  },
+  "settings.automations.power_mode.detail_html": {
+    "message": "On battery, schedules run <strong>{battery}×</strong> slower. On low battery, <strong>{low}×</strong> slower.",
+    "description": "Detail line shown when power mode is auto (HTML allowed)"
+  },
+  "settings.automations.validate.empty_name": {
+    "message": "Automation name cannot be empty.",
+    "description": "Validation error: an automation has a blank name"
+  },
+  "settings.automations.validate.no_steps": {
+    "message": "\"{name}\" needs at least one step.",
+    "description": "Validation error: automation has zero steps"
+  },
+  "settings.automations.trigger.manual": {
+    "message": "🖱️ Manual",
+    "description": "Trigger badge — manual only"
+  },
+
+  "settings.assistant.learn.label": {
+    "message": "Learn my preferences",
+    "description": "Toggle: enable auto-steering"
+  },
+  "settings.assistant.learn.description": {
+    "message": "Let Kage learn your preferences from conversations and remember them across sessions. You can view and edit what it learns at any time. This data stays on your machine and is only shared with your chosen agent.",
+    "description": "Helper for the learn-preferences toggle"
+  },
+  "settings.assistant.learn.view_btn": {
+    "message": "View Learned Preferences",
+    "description": "Button to open the learned-preferences editor"
+  },
+  "settings.assistant.custom_steering.label": {
+    "message": "Custom steering document",
+    "description": "Section label for the user-authored steering doc"
+  },
+  "settings.assistant.custom_steering.description": {
+    "message": "Add your own persistent instructions. Edited line by line — reorder, add, or delete bullets. Always included alongside learned preferences and never modified by Kage.",
+    "description": "Helper text for the custom-steering section"
+  },
+  "settings.assistant.custom_steering.edit_btn": {
+    "message": "Edit custom steering",
+    "description": "Button to open the user-steering editor"
+  },
+  "settings.assistant.app_modes.label": {
+    "message": "App Modes",
+    "description": "Section label for per-app steering"
+  },
+  "settings.assistant.app_modes.description": {
+    "message": "Per-app steering — short instructions Kage will append to your prompt only when you summon it from a specific application. Capped at ~125 tokens per rule so it doesn't bloat your context.",
+    "description": "Helper for app modes section"
+  },
+  "settings.assistant.app_modes.manage_btn": {
+    "message": "Manage App Modes",
+    "description": "Button to open the app-modes editor"
+  },
+
+  "context_menu.cut": {
+    "message": "Cut",
+    "description": "Context menu — cut selected text"
+  },
+  "context_menu.copy": {
+    "message": "Copy",
+    "description": "Context menu — copy selected text"
+  },
+  "context_menu.paste": {
+    "message": "Paste",
+    "description": "Context menu — paste from clipboard"
+  },
+  "context_menu.settings": {
+    "message": "Settings",
+    "description": "Context menu — open settings"
+  },
+  "context_menu.close": {
+    "message": "Close",
+    "description": "Context menu — close current window"
+  },
+  "context_menu.inspect": {
+    "message": "Inspect",
+    "description": "Context menu — open devtools (dev mode only)"
+  },
+
+  "store.window_title": {
+    "message": "Extension Store",
+    "description": "Title bar of the extension store window"
+  },
+  "store.header_title": {
+    "message": "🛍️ Extension Store",
+    "description": "Header title in the store window"
+  },
+  "store.header.settings_title": {
+    "message": "Store settings",
+    "description": "Tooltip on the store-settings gear button"
+  },
+  "store.tab.extensions": {
+    "message": "Extensions",
+    "description": "Tab label — extensions"
+  },
+  "store.tab.themes": {
+    "message": "Themes",
+    "description": "Tab label — themes"
+  },
+  "store.tab.commands": {
+    "message": "Quick Commands",
+    "description": "Tab label — quick commands"
+  },
+  "store.search.placeholder": {
+    "message": "Search…",
+    "description": "Placeholder for the store search input"
+  },
+  "store.source.all": {
+    "message": "All Sources",
+    "description": "Source filter — show items from every source"
+  },
+  "store.filter.installed_only": {
+    "message": "Installed only",
+    "description": "Filter button — show only installed extensions"
+  },
+
   "common.ok": {
     "message": "OK",
     "description": "Generic acknowledgement button"

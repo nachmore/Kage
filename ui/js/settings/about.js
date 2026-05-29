@@ -1,4 +1,5 @@
 import { errMessage } from '../shared/error-message.js';
+import { t } from '../shared/i18n.js';
 import { formatBytes } from '../shared/tool-utils.js';
 import { SettingsModule } from './base.js';
 /**
@@ -7,7 +8,7 @@ import { SettingsModule } from './base.js';
  */
 export class AboutSettingsModule extends SettingsModule {
     constructor() {
-        super('about', 'About Kage', 'ℹ️');
+        super('about', t('settings.about.title'), 'ℹ️');
         this._logExpanded = false;
         this._logEntries = [];
         this._filterLevel = 'all';
@@ -23,18 +24,18 @@ export class AboutSettingsModule extends SettingsModule {
                         <div class="about-logo" id="aboutMascot"></div>
                         <div>
                             <div class="about-app-name">Kage</div>
-                            <div class="about-version" id="aboutVersion">loading...</div>
+                            <div class="about-version" id="aboutVersion">${t('settings.about.version_loading')}</div>
                             <div class="about-homepage" id="aboutHomepage"></div>
                         </div>
                     </div>
                     <div class="about-description" id="aboutDescription"></div>
                     <div class="about-info" id="aboutInfo">
-                        <div class="about-row"><span class="about-label">Loading...</span></div>
+                        <div class="about-row"><span class="about-label">${t('settings.about.info.loading')}</span></div>
                     </div>
                     <div class="about-actions">
-                        <button class="setting-button" id="showWelcomeBtn">Show Welcome Screen</button>
-                        <button class="setting-button" id="openConfigFolderBtn" style="margin-left:8px;">Open Config Folder</button>
-                        <button class="setting-button" id="sendFeedbackBtn" style="margin-left:8px;">Send Feedback</button>
+                        <button class="setting-button" id="showWelcomeBtn">${t('settings.about.action.show_welcome')}</button>
+                        <button class="setting-button" id="openConfigFolderBtn" style="margin-left:8px;">${t('settings.about.action.open_config')}</button>
+                        <button class="setting-button" id="sendFeedbackBtn" style="margin-left:8px;">${t('settings.about.action.send_feedback')}</button>
                     </div>
                 </div>
 
@@ -42,39 +43,36 @@ export class AboutSettingsModule extends SettingsModule {
                 <div class="about-logging-section">
                     <div class="about-logging-header" id="backupToggle">
                         <span class="about-logging-arrow" id="backupArrow">▶</span>
-                        <span>💾 Backup &amp; restore</span>
+                        <span>${t('settings.about.backup.title')}</span>
                     </div>
                     <div class="about-logging-body" id="backupBody" style="display:none;">
                         <div class="setting-description" style="margin-bottom:12px;">
-                            Move your Kage setup between machines. The backup includes config,
-                            saved prompts &amp; shortcuts, custom and learned steering, and extension
-                            data. Encryption with a passphrase is optional but recommended if the
-                            file will leave your machine.
+                            ${t('settings.about.backup.description')}
                         </div>
 
                         <div class="setting-row">
-                            <div class="setting-label">Export</div>
+                            <div class="setting-label">${t('settings.about.backup.export.label')}</div>
                             <div class="setting-checkbox-row">
                                 <label class="kage-checkbox">
                                     <input type="checkbox" id="backupEncryptToggle">
                                 </label>
-                                <div class="setting-description">Encrypt with a passphrase (AES-256-GCM with Argon2id key derivation).</div>
+                                <div class="setting-description">${t('settings.about.backup.encrypt_toggle')}</div>
                             </div>
                             <div id="backupPassphraseRow" style="display:none;margin-top:8px;">
-                                <input type="password" id="backupPassphrase" class="setting-input" placeholder="Passphrase" autocomplete="new-password" style="margin-bottom:6px;">
-                                <input type="password" id="backupPassphraseConfirm" class="setting-input" placeholder="Confirm passphrase" autocomplete="new-password">
-                                <div class="setting-description" style="margin-top:4px;font-size:11px;">Pick something memorable. There's no recovery — lose the passphrase and the file is unreadable.</div>
+                                <input type="password" id="backupPassphrase" class="setting-input" placeholder="${t('settings.about.backup.passphrase.placeholder')}" autocomplete="new-password" style="margin-bottom:6px;">
+                                <input type="password" id="backupPassphraseConfirm" class="setting-input" placeholder="${t('settings.about.backup.passphrase.confirm_placeholder')}" autocomplete="new-password">
+                                <div class="setting-description" style="margin-top:4px;font-size:11px;">${t('settings.about.backup.passphrase.note')}</div>
                             </div>
                             <div class="setting-control" style="margin-top:8px;">
-                                <button class="setting-button" id="backupExportBtn">Export…</button>
+                                <button class="setting-button" id="backupExportBtn">${t('settings.about.backup.export_btn')}</button>
                             </div>
                         </div>
 
                         <div class="setting-row">
-                            <div class="setting-label">Import</div>
-                            <div class="setting-description">Pick a previously exported <code>.kage</code> or <code>.kage.enc</code> file. Imports replace your current config — your machine's window positions, telemetry install ID, and OS startup setting are kept local.</div>
+                            <div class="setting-label">${t('settings.about.backup.import.label')}</div>
+                            <div class="setting-description">${t('settings.about.backup.import.description')}</div>
                             <div class="setting-control" style="margin-top:8px;">
-                                <button class="setting-button" id="backupImportBtn">Import…</button>
+                                <button class="setting-button" id="backupImportBtn">${t('settings.about.backup.import_btn')}</button>
                             </div>
                         </div>
 
@@ -86,43 +84,43 @@ export class AboutSettingsModule extends SettingsModule {
                 <div class="about-logging-section">
                     <div class="about-logging-header" id="loggingToggle">
                         <span class="about-logging-arrow" id="loggingArrow">▶</span>
-                        <span>📋 Logging</span>
+                        <span>${t('settings.about.logging.title')}</span>
                     </div>
                     <div class="about-logging-body" id="loggingBody" style="display:none;">
                         <div class="setting-row">
-                            <div class="setting-label">Log Buffer Size</div>
-                            <div class="setting-description">Maximum number of log entries to keep (requires save)</div>
+                            <div class="setting-label">${t('settings.about.logging.buffer_size.label')}</div>
+                            <div class="setting-description">${t('settings.about.logging.buffer_size.description')}</div>
                             <div class="setting-control">
                                 <input type="number" id="logBufferSize" class="setting-input" min="100" max="50000" step="100" style="width:120px;">
                             </div>
                         </div>
                         <div class="setting-row">
-                            <div class="setting-label">Log all messages</div>
+                            <div class="setting-label">${t('settings.about.logging.verbose.label')}</div>
                             <div class="setting-checkbox-row">
                                 <label class="kage-checkbox">
                                     <input type="checkbox" id="verboseFrontendLogging">
                                 </label>
-                                <div class="setting-description">Include informational messages, not just warnings and errors. Note: this can make Kage run slower if you have extensions that log a lot of messages.</div>
+                                <div class="setting-description">${t('settings.about.logging.verbose.description')}</div>
                             </div>
                         </div>
                         <div class="about-log-toolbar">
                             <select id="logFilterLevel" class="setting-input" style="width:auto;min-width:90px;">
-                                <option value="all">All levels</option>
-                                <option value="debug">Debug</option>
-                                <option value="info">Info</option>
-                                <option value="warn">Warn</option>
-                                <option value="error">Error</option>
+                                <option value="all">${t('settings.about.logging.filter.all_levels')}</option>
+                                <option value="debug">${t('settings.about.logging.filter.debug')}</option>
+                                <option value="info">${t('settings.about.logging.filter.info')}</option>
+                                <option value="warn">${t('settings.about.logging.filter.warn')}</option>
+                                <option value="error">${t('settings.about.logging.filter.error')}</option>
                             </select>
                             <select id="logFilterSource" class="setting-input" style="width:auto;min-width:120px;">
-                                <option value="all">All sources</option>
+                                <option value="all">${t('settings.about.logging.filter.all_sources')}</option>
                             </select>
                             <div style="flex:1;"></div>
-                            <button class="setting-button" id="logRefreshBtn">Refresh</button>
-                            <button class="setting-button" id="logClearBtn">Clear Logs</button>
-                            <button class="setting-button" id="logOpenFolderBtn">Open Logs Folder</button>
+                            <button class="setting-button" id="logRefreshBtn">${t('settings.about.logging.refresh')}</button>
+                            <button class="setting-button" id="logClearBtn">${t('settings.about.logging.clear')}</button>
+                            <button class="setting-button" id="logOpenFolderBtn">${t('settings.about.logging.open_folder')}</button>
                         </div>
                         <div class="about-log-viewer" id="logViewer">
-                            <div class="about-log-empty">Expand to load log entries...</div>
+                            <div class="about-log-empty">${t('settings.about.logging.empty')}</div>
                         </div>
                     </div>
                 </div>
@@ -197,7 +195,10 @@ export class AboutSettingsModule extends SettingsModule {
         // Load app info
         try {
             const info = await window.__TAURI__.core.invoke('get_app_info');
-            document.getElementById('aboutVersion').textContent = 'v' + info.version;
+            document.getElementById('aboutVersion').textContent = t(
+                'settings.about.version_format',
+                { version: info.version }
+            );
             const hpEl = document.getElementById('aboutHomepage');
             if (hpEl && info.homepage) {
                 hpEl.innerHTML =
@@ -208,11 +209,12 @@ export class AboutSettingsModule extends SettingsModule {
             const infoEl = document.getElementById('aboutInfo');
             if (infoEl) {
                 const rows = [];
-                if (info.authors) rows.push(this.infoRow('Author', info.authors));
+                if (info.authors)
+                    rows.push(this.infoRow(t('settings.about.info.author_label'), info.authors));
                 if (info.repository && info.repository !== 'TBD')
                     rows.push(
                         this.infoRow(
-                            'Repository',
+                            t('settings.about.info.repository_label'),
                             '<a href="' +
                                 info.repository +
                                 '" target="_blank">' +
@@ -220,8 +222,17 @@ export class AboutSettingsModule extends SettingsModule {
                                 '</a>'
                         )
                     );
-                if (info.license) rows.push(this.infoRow('License', info.license));
-                rows.push(this.infoRow('Copyright', '© 2025 ' + (info.authors || 'Kage Team')));
+                if (info.license)
+                    rows.push(this.infoRow(t('settings.about.info.license_label'), info.license));
+                rows.push(
+                    this.infoRow(
+                        t('settings.about.info.copyright_label'),
+                        t('settings.about.info.copyright_value', {
+                            authors:
+                                info.authors || t('settings.about.info.copyright_default_authors'),
+                        })
+                    )
+                );
                 infoEl.innerHTML = rows.join('');
             }
             // Wire Send Feedback once we know the version + issues URL.
@@ -386,13 +397,13 @@ export class AboutSettingsModule extends SettingsModule {
     async _loadLogs() {
         const viewer = document.getElementById('logViewer');
         if (!viewer) return;
-        viewer.innerHTML = '<div class="about-log-empty">Loading...</div>';
+        viewer.innerHTML = `<div class="about-log-empty">${t('settings.about.logging.loading')}</div>`;
         try {
             this._logEntries = await window.__TAURI__.core.invoke('app_log_get_entries');
             this._populateSourceFilter();
             this._renderLogEntries();
         } catch (_e) {
-            viewer.innerHTML = '<div class="about-log-empty">Failed to load logs</div>';
+            viewer.innerHTML = `<div class="about-log-empty">${t('settings.about.logging.load_failed')}</div>`;
         }
     }
 
@@ -401,8 +412,9 @@ export class AboutSettingsModule extends SettingsModule {
         if (!select) return;
         const sources = [...new Set(this._logEntries.map((e) => e.source))].sort();
         const current = select.value;
+        const allSourcesLabel = t('settings.about.logging.filter.all_sources');
         select.innerHTML =
-            '<option value="all">All sources</option>' +
+            `<option value="all">${allSourcesLabel}</option>` +
             sources
                 .map(
                     (s) =>
@@ -426,12 +438,11 @@ export class AboutSettingsModule extends SettingsModule {
         if (this._filterSource !== 'all')
             entries = entries.filter((e) => e.source === this._filterSource);
         if (entries.length === 0) {
-            viewer.innerHTML =
-                '<div class="about-log-empty">No log entries' +
-                (this._filterLevel !== 'all' || this._filterSource !== 'all'
-                    ? ' matching filters'
-                    : '') +
-                '</div>';
+            const filtered = this._filterLevel !== 'all' || this._filterSource !== 'all';
+            const emptyText = filtered
+                ? t('settings.about.logging.no_entries_filtered')
+                : t('settings.about.logging.no_entries');
+            viewer.innerHTML = `<div class="about-log-empty">${emptyText}</div>`;
             return;
         }
         viewer.innerHTML = entries

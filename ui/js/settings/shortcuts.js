@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { summarizeNamedPlaceholders } from '../shared/shortcuts.js';
 import { escapeHtml } from '../shared/tool-utils.js';
+import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
@@ -17,37 +18,32 @@ import { errLabel } from '../shared/error-message.js';
  */
 export class ShortcutsSettingsModule extends SettingsModule {
     constructor() {
-        super('shortcuts', 'Commands & Prompts', '⚡');
+        super('shortcuts', t('settings.shortcuts.title'), '⚡');
         this.shortcuts = [];
         this.editingIndex = -1;
     }
 
     render() {
         return `
-            <div class="settings-section-header">${this.icon} Commands &amp; Prompts</div>
+            <div class="settings-section-header">${this.icon} ${t('settings.shortcuts.title')}</div>
 
             <div class="setting-row">
                 <div class="setting-label-container">
-                    <div class="setting-label">Quick Commands &amp; saved prompts</div>
+                    <div class="setting-label">${t('settings.shortcuts.section.label')}</div>
                     <div class="setting-description">
-                        Run programs, open URLs, send prompt templates to the agent, or execute custom scripts.
-                        Use <code>{*}</code> for all arguments, <code>{0}</code>/<code>{1}</code> for positional,
-                        or <code>{name}</code> for named parameters (a small form pops up to fill them in if you
-                        run the trigger without supplying values).
+                        ${t('settings.shortcuts.description_html')}
                     </div>
                 </div>
             </div>
 
             <div class="shortcuts-actions">
-                <button class="setting-button" data-action="shortcuts.showAddDialog">+ Add</button>
-                <button class="setting-button" data-action="shortcuts.openCommandsStore">🛍️ Store</button>
-                <button class="setting-button" data-action="shortcuts.exportShortcuts">Export</button>
-                <button class="setting-button" data-action="shortcuts.importShortcuts">Import</button>
+                <button class="setting-button" data-action="shortcuts.showAddDialog">${t('settings.shortcuts.action.add')}</button>
+                <button class="setting-button" data-action="shortcuts.openCommandsStore">${t('settings.shortcuts.action.store')}</button>
+                <button class="setting-button" data-action="shortcuts.exportShortcuts">${t('settings.shortcuts.action.export')}</button>
+                <button class="setting-button" data-action="shortcuts.importShortcuts">${t('settings.shortcuts.action.import')}</button>
             </div>
             <div class="setting-description" style="font-size:11px;margin-top:6px;">
-                Export / Import here only covers your Quick Commands &amp; Prompts. To move
-                everything (config, steering, extensions) between machines, see
-                <a href="#" data-action="shortcuts.openFullBackup">About → Backup &amp; restore</a>.
+                ${t('settings.shortcuts.export_note_html')}
             </div>
 
             <div class="shortcuts-list" id="shortcutsList"></div>
@@ -56,66 +52,66 @@ export class ShortcutsSettingsModule extends SettingsModule {
             <div id="shortcutDialog" class="shortcut-dialog" style="display: none;">
                 <div class="shortcut-dialog-content">
                     <div class="shortcut-dialog-header">
-                        <h3 id="dialogTitle">Add Shortcut</h3>
+                        <h3 id="dialogTitle">${t('settings.shortcuts.dialog.add_title')}</h3>
                         <button class="dialog-close-btn" data-action="shortcuts.closeDialog">×</button>
                     </div>
                     <div class="shortcut-dialog-body">
                         <div class="dialog-field">
-                            <label>Name / Description</label>
-                            <input type="text" id="shortcutName" class="setting-input" placeholder="e.g., Open VSCode">
+                            <label>${t('settings.shortcuts.dialog.name.label')}</label>
+                            <input type="text" id="shortcutName" class="setting-input" placeholder="${t('settings.shortcuts.dialog.name.placeholder')}">
                         </div>
                         <div class="dialog-field">
-                            <label>Trigger Word</label>
-                            <input type="text" id="shortcutTrigger" class="setting-input" placeholder="e.g., code">
+                            <label>${t('settings.shortcuts.dialog.trigger.label')}</label>
+                            <input type="text" id="shortcutTrigger" class="setting-input" placeholder="${t('settings.shortcuts.dialog.trigger.placeholder')}">
                         </div>
                         <div class="dialog-field">
-                            <label>Icon (optional)</label>
+                            <label>${t('settings.shortcuts.dialog.icon.label')}</label>
                             <div style="display:flex;gap:8px;align-items:center;">
                                 <div id="shortcutIconPreview" class="shortcut-icon-preview">⚡</div>
-                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="⚡" maxlength="4">
-                                <button class="setting-button" data-action="shortcuts.openIconFilePicker">📁 Image</button>
-                                <button class="setting-button" id="shortcutFaviconBtn" style="display:none" data-action="shortcuts.fetchFavicon">🌐 Use Favicon</button>
+                                <input type="text" id="shortcutIconEmoji" class="setting-input" style="width:60px;text-align:center;" placeholder="${t('settings.shortcuts.dialog.icon.placeholder')}" maxlength="4">
+                                <button class="setting-button" data-action="shortcuts.openIconFilePicker">${t('settings.shortcuts.dialog.icon.image_btn')}</button>
+                                <button class="setting-button" id="shortcutFaviconBtn" style="display:none" data-action="shortcuts.fetchFavicon">${t('settings.shortcuts.dialog.icon.favicon_btn')}</button>
                                 <button class="setting-button" id="shortcutIconClear" style="display:none" data-action="shortcuts.clearIcon">✕</button>
                                 <input type="file" id="shortcutIconFile" accept="image/png,image/jpeg,image/x-icon,image/vnd.microsoft.icon,.ico,.png,.jpg,.jpeg" style="display:none">
                             </div>
-                            <div style="font-size:11px;color:var(--kage-text-muted);margin-top:4px;">Emoji, image file, or paste an image from clipboard</div>
+                            <div style="font-size:11px;color:var(--kage-text-muted);margin-top:4px;">${t('settings.shortcuts.dialog.icon.help')}</div>
                         </div>
                         <div class="dialog-field">
-                            <label>Action Type</label>
+                            <label>${t('settings.shortcuts.dialog.action_type.label')}</label>
                             <select id="shortcutActionType" class="setting-select" data-action-change="shortcuts.onActionTypeChange">
-                                <option value="run_program">▶️ Run Program</option>
-                                <option value="open_url">🌐 Open URL</option>
-                                <option value="prompt">💬 Send Prompt to Agent</option>
-                                <option value="script">📜 Run Script</option>
+                                <option value="run_program">${t('settings.shortcuts.dialog.action_type.run_program')}</option>
+                                <option value="open_url">${t('settings.shortcuts.dialog.action_type.open_url')}</option>
+                                <option value="prompt">${t('settings.shortcuts.dialog.action_type.prompt')}</option>
+                                <option value="script">${t('settings.shortcuts.dialog.action_type.script')}</option>
                             </select>
                         </div>
-                        
+
                         <!-- Run Program Fields -->
                         <div id="runProgramFields">
                             <div class="dialog-field">
-                                <label>Executable Path</label>
+                                <label>${t('settings.shortcuts.dialog.run.path.label')}</label>
                                 <input type="text" id="shortcutPath" class="setting-input" placeholder="e.g., C:\\Program Files\\VSCode\\code.exe">
                             </div>
                             <div class="dialog-field">
-                                <label>Working Directory (optional)</label>
-                                <input type="text" id="shortcutWorkDir" class="setting-input" placeholder="e.g., C:\\Projects">
+                                <label>${t('settings.shortcuts.dialog.run.work_dir.label')}</label>
+                                <input type="text" id="shortcutWorkDir" class="setting-input" placeholder="${t('settings.shortcuts.dialog.run.work_dir.placeholder')}">
                             </div>
                             <div class="dialog-field">
-                                <label>Arguments (optional)</label>
-                                <input type="text" id="shortcutArgs" class="setting-input" placeholder="e.g., --send {1} --to {0} or {*}">
+                                <label>${t('settings.shortcuts.dialog.run.args.label')}</label>
+                                <input type="text" id="shortcutArgs" class="setting-input" placeholder="${t('settings.shortcuts.dialog.run.args.placeholder')}">
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    Use {*} for all arguments, or {0}, {1}, etc. for specific arguments
+                                    ${t('settings.shortcuts.dialog.run.args.help')}
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Open URL Fields -->
                         <div id="openUrlFields" style="display: none;">
                             <div class="dialog-field">
-                                <label>URL Template</label>
-                                <input type="text" id="shortcutUrl" class="setting-input" placeholder="e.g., https://google.com/search?q={*}">
+                                <label>${t('settings.shortcuts.dialog.url.label')}</label>
+                                <input type="text" id="shortcutUrl" class="setting-input" placeholder="${t('settings.shortcuts.dialog.url.placeholder')}">
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    Use {*} for all arguments, or {0}, {1}, etc. for specific arguments in the URL
+                                    ${t('settings.shortcuts.dialog.url.help')}
                                 </div>
                             </div>
                         </div>
@@ -123,11 +119,10 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         <!-- Prompt Fields -->
                         <div id="promptFields" style="display: none;">
                             <div class="dialog-field">
-                                <label>Prompt Template</label>
-                                <textarea id="shortcutPrompt" class="setting-input" rows="3" placeholder="e.g., Translate to {lang}: {*}"></textarea>
+                                <label>${t('settings.shortcuts.dialog.prompt.label')}</label>
+                                <textarea id="shortcutPrompt" class="setting-input" rows="3" placeholder="${t('settings.shortcuts.dialog.prompt.placeholder')}"></textarea>
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    <code>{*}</code> = all arguments · <code>{0}</code>, <code>{1}</code> = positional ·
-                                    <code>{name}</code> = named (form pops up if not filled) · <code>{selection}</code> = selected text.
+                                    ${t('settings.shortcuts.dialog.prompt.help_html')}
                                 </div>
                                 <div id="shortcutPromptPlaceholders" class="prompt-placeholder-chips" style="margin-top:6px;display:none;"></div>
                             </div>
@@ -136,57 +131,56 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         <!-- Script Fields -->
                         <div id="scriptFields" style="display: none;">
                             <div class="dialog-field">
-                                <label>Script Action</label>
+                                <label>${t('settings.shortcuts.dialog.script.action.label')}</label>
                                 <select id="shortcutScriptAction" class="setting-select">
-                                    <option value="text">📝 Display Result</option>
-                                    <option value="prompt">💬 Send to Agent</option>
-                                    <option value="open_url">🌐 Open as URL</option>
-                                    <option value="run_program">▶️ Run as Command</option>
+                                    <option value="text">${t('settings.shortcuts.dialog.script.action.text')}</option>
+                                    <option value="prompt">${t('settings.shortcuts.dialog.script.action.prompt')}</option>
+                                    <option value="open_url">${t('settings.shortcuts.dialog.script.action.open_url')}</option>
+                                    <option value="run_program">${t('settings.shortcuts.dialog.script.action.run_program')}</option>
                                 </select>
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    What to do with the string returned by your script
+                                    ${t('settings.shortcuts.dialog.script.action.help')}
                                 </div>
                             </div>
                             <div class="dialog-field">
-                                <label>✨ Ask Kage to write or update the script</label>
+                                <label>${t('settings.shortcuts.dialog.script.ai.label')}</label>
                                 <div class="ai-prompt-row">
-                                    <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="e.g., Parse a Jira ticket URL and return the ticket ID">
-                                    <button class="setting-button" id="scriptAiBtn" data-action="shortcuts.generateScript">Generate</button>
-                                    <button class="setting-button" id="scriptAiUndo" data-action="shortcuts.undoGenerate" style="display:none">Undo</button>
+                                    <input type="text" id="scriptAiPrompt" class="setting-input" placeholder="${t('settings.shortcuts.dialog.script.ai.placeholder')}">
+                                    <button class="setting-button" id="scriptAiBtn" data-action="shortcuts.generateScript">${t('settings.shortcuts.dialog.script.ai.generate')}</button>
+                                    <button class="setting-button" id="scriptAiUndo" data-action="shortcuts.undoGenerate" style="display:none">${t('settings.shortcuts.dialog.script.ai.undo')}</button>
                                 </div>
                                 <div id="scriptAiStatus" class="setting-description" style="margin-top: 4px;"></div>
                             </div>
                             <div class="dialog-field">
-                                <label>Script Body</label>
+                                <label>${t('settings.shortcuts.dialog.script.body.label')}</label>
                                 <div class="script-editor-container">
                                     <pre class="script-highlight" aria-hidden="true"><code class="language-javascript" id="shortcutScriptHighlight"></code></pre>
                                     <textarea id="shortcutScript" class="setting-input script-editor" rows="8" spellcheck="false" wrap="off"
-                                        placeholder="// Arguments are passed as ...args&#10;// Return a string (or array for Run as Command)&#10;const query = args.join(' ');&#10;return 'Processed: ' + query;"></textarea>
+                                        placeholder="${escapeHtml(t('settings.shortcuts.dialog.script.body.placeholder'))}"></textarea>
                                 </div>
                                 <div class="setting-description" style="margin-top: 4px;">
-                                    JavaScript function body. Receives arguments as <code>...args</code>.
-                                    Return a string for Display/Agent/URL actions, or an array <code>[cmd, workDir, ...args]</code> for Run as Command.
+                                    ${t('settings.shortcuts.dialog.script.body.help_html')}
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="shortcut-test-section">
                         <div class="shortcut-test-header" data-action="shortcuts.toggleTestSection">
-                            <span id="shortcutTestToggle">▶</span> Test
+                            <span id="shortcutTestToggle">▶</span> ${t('settings.shortcuts.dialog.test.toggle')}
                         </div>
                         <div id="shortcutTestBody" style="display:none;">
                             <div class="dialog-field" style="margin-bottom:8px;">
                                 <div style="display:flex;gap:8px;">
-                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="Enter test arguments..." style="flex:1;">
-                                    <button class="setting-button" data-action="shortcuts.runTest">▶ Run</button>
+                                    <input type="text" id="shortcutTestArgs" class="setting-input" placeholder="${t('settings.shortcuts.dialog.test.placeholder')}" style="flex:1;">
+                                    <button class="setting-button" data-action="shortcuts.runTest">${t('settings.shortcuts.dialog.test.run')}</button>
                                 </div>
                             </div>
                             <pre id="shortcutTestOutput" class="shortcut-test-output" style="display:none;"></pre>
                         </div>
                     </div>
                     <div class="shortcut-dialog-footer">
-                        <button class="setting-button" data-action="shortcuts.closeDialog">Cancel</button>
-                        <button class="setting-button" data-action="shortcuts.saveShortcut">Save</button>
+                        <button class="setting-button" data-action="shortcuts.closeDialog">${t('settings.shortcuts.dialog.cancel')}</button>
+                        <button class="setting-button" data-action="shortcuts.saveShortcut">${t('settings.shortcuts.dialog.save')}</button>
                     </div>
                 </div>
             </div>
@@ -327,43 +321,51 @@ export class ShortcutsSettingsModule extends SettingsModule {
         if (!listEl) return;
 
         if (this.shortcuts.length === 0) {
-            listEl.innerHTML =
-                '<div class="shortcuts-empty">No shortcuts configured. Click "Add Shortcut" to create one.</div>';
+            listEl.innerHTML = `<div class="shortcuts-empty">${t('settings.shortcuts.list.empty_full')}</div>`;
             return;
         }
 
         const actionLabels = {
-            run_program: '▶️ Run Program',
-            open_url: '🌐 Open URL',
-            prompt: '💬 Prompt',
-            script: '📜 Script',
+            run_program: t('settings.shortcuts.action_label.run_program'),
+            open_url: t('settings.shortcuts.action_label.open_url'),
+            prompt: t('settings.shortcuts.action_label.prompt'),
+            script: t('settings.shortcuts.action_label.script'),
         };
+        const detailType = t('settings.shortcuts.detail.type');
+        const detailUrl = t('settings.shortcuts.detail.url');
+        const detailPrompt = t('settings.shortcuts.detail.prompt');
+        const detailAction = t('settings.shortcuts.detail.action');
+        const detailScript = t('settings.shortcuts.detail.script');
+        const detailPath = t('settings.shortcuts.detail.path');
+        const detailDir = t('settings.shortcuts.detail.dir');
+        const detailArgs = t('settings.shortcuts.detail.args');
 
         listEl.innerHTML = this.shortcuts
             .map((s, index) => {
                 const at = s.action_type || 'run_program';
                 const label = actionLabels[at] || at;
-                let details = `<div><strong>Type:</strong> ${label}</div>`;
+                let details = `<div><strong>${detailType}</strong> ${label}</div>`;
 
                 if (at === 'open_url') {
-                    details += `<div><strong>URL:</strong> ${escapeHtml(s.url || '')}</div>`;
+                    details += `<div><strong>${detailUrl}</strong> ${escapeHtml(s.url || '')}</div>`;
                 } else if (at === 'prompt') {
-                    details += `<div><strong>Prompt:</strong> ${escapeHtml(s.prompt || '')}</div>`;
+                    details += `<div><strong>${detailPrompt}</strong> ${escapeHtml(s.prompt || '')}</div>`;
                 } else if (at === 'script') {
                     const saLabels = {
-                        text: '📝 Display',
-                        prompt: '💬 Agent',
-                        open_url: '🌐 URL',
-                        run_program: '▶️ Run',
+                        text: t('settings.shortcuts.script_label.text'),
+                        prompt: t('settings.shortcuts.script_label.prompt'),
+                        open_url: t('settings.shortcuts.script_label.open_url'),
+                        run_program: t('settings.shortcuts.script_label.run_program'),
                     };
-                    details += `<div><strong>Action:</strong> ${saLabels[s.script_action] || 'Display'}</div>`;
-                    details += `<div><strong>Script:</strong> <code>${escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
+                    const fallback = t('settings.shortcuts.script_label.default');
+                    details += `<div><strong>${detailAction}</strong> ${saLabels[s.script_action] || fallback}</div>`;
+                    details += `<div><strong>${detailScript}</strong> <code>${escapeHtml((s.script || '').substring(0, 60))}${(s.script || '').length > 60 ? '...' : ''}</code></div>`;
                 } else {
-                    details += `<div><strong>Path:</strong> ${escapeHtml(s.path || '')}</div>`;
+                    details += `<div><strong>${detailPath}</strong> ${escapeHtml(s.path || '')}</div>`;
                     if (s.working_directory)
-                        details += `<div><strong>Dir:</strong> ${escapeHtml(s.working_directory)}</div>`;
+                        details += `<div><strong>${detailDir}</strong> ${escapeHtml(s.working_directory)}</div>`;
                     if (s.arguments)
-                        details += `<div><strong>Args:</strong> ${escapeHtml(s.arguments)}</div>`;
+                        details += `<div><strong>${detailArgs}</strong> ${escapeHtml(s.arguments)}</div>`;
                 }
 
                 let iconHtml;
@@ -386,8 +388,8 @@ export class ShortcutsSettingsModule extends SettingsModule {
                         </div>
                     </div>
                     <div class="shortcut-actions">
-                        <button class="shortcut-action-btn" data-action="shortcuts.editShortcut" data-arg="${index}">Edit</button>
-                        <button class="shortcut-action-btn delete" data-action="shortcuts.deleteShortcut" data-arg="${index}">Delete</button>
+                        <button class="shortcut-action-btn" data-action="shortcuts.editShortcut" data-arg="${index}">${t('settings.shortcuts.list.action.edit')}</button>
+                        <button class="shortcut-action-btn delete" data-action="shortcuts.deleteShortcut" data-arg="${index}">${t('settings.shortcuts.list.action.delete')}</button>
                     </div>
                 </div>`;
             })
@@ -396,7 +398,9 @@ export class ShortcutsSettingsModule extends SettingsModule {
 
     showAddDialog() {
         this.editingIndex = -1;
-        document.getElementById('dialogTitle').textContent = 'Add Shortcut';
+        document.getElementById('dialogTitle').textContent = t(
+            'settings.shortcuts.dialog.add_title'
+        );
         document.getElementById('shortcutName').value = '';
         document.getElementById('shortcutTrigger').value = '';
         document.getElementById('shortcutActionType').value = 'run_program';
@@ -422,7 +426,9 @@ export class ShortcutsSettingsModule extends SettingsModule {
     editShortcut(index) {
         this.editingIndex = index;
         const s = this.shortcuts[index];
-        document.getElementById('dialogTitle').textContent = 'Edit Shortcut';
+        document.getElementById('dialogTitle').textContent = t(
+            'settings.shortcuts.dialog.edit_title'
+        );
         document.getElementById('shortcutName').value = s.name;
         document.getElementById('shortcutTrigger').value = s.shortcut;
         document.getElementById('shortcutActionType').value = s.action_type || 'run_program';
@@ -532,7 +538,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
         if (!file) return;
         // Limit to 64KB
         if (file.size > 65536) {
-            alert('Icon image must be under 64KB');
+            alert(t('settings.shortcuts.alert.icon_too_large'));
             return;
         }
         const reader = new FileReader();
@@ -549,13 +555,13 @@ export class ShortcutsSettingsModule extends SettingsModule {
         const urlInput = document.getElementById('shortcutUrl');
         const url = urlInput?.value?.trim();
         if (!url) {
-            alert('Enter a URL first');
+            alert(t('settings.shortcuts.alert.url_first'));
             return;
         }
 
         const btn = document.getElementById('shortcutFaviconBtn');
         const origText = btn?.textContent;
-        if (btn) btn.textContent = '⏳ Fetching...';
+        if (btn) btn.textContent = t('settings.shortcuts.favicon_fetching');
 
         try {
             const invoke = window.__TAURI__.core.invoke;
@@ -563,7 +569,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
             this._setIconPreview(dataUri);
         } catch (e) {
             console.warn('Favicon fetch failed:', e);
-            alert('Could not fetch favicon for this URL');
+            alert(t('settings.shortcuts.alert.no_favicon'));
         } finally {
             if (btn) btn.textContent = origText;
         }
@@ -817,7 +823,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
         const actionType = document.getElementById('shortcutActionType').value;
 
         if (!name || !trigger) {
-            alert('Name and Trigger Word are required.');
+            alert(t('settings.shortcuts.alert.name_required'));
             return;
         }
 
@@ -827,21 +833,21 @@ export class ShortcutsSettingsModule extends SettingsModule {
         if (actionType === 'open_url') {
             const url = document.getElementById('shortcutUrl').value.trim();
             if (!url) {
-                alert('URL is required.');
+                alert(t('settings.shortcuts.alert.url_required'));
                 return;
             }
             shortcut.url = url;
         } else if (actionType === 'prompt') {
             const prompt = document.getElementById('shortcutPrompt').value.trim();
             if (!prompt) {
-                alert('Prompt template is required.');
+                alert(t('settings.shortcuts.alert.prompt_required'));
                 return;
             }
             shortcut.prompt = prompt;
         } else if (actionType === 'script') {
             const script = document.getElementById('shortcutScript').value.trim();
             if (!script) {
-                alert('Script body is required.');
+                alert(t('settings.shortcuts.alert.script_required'));
                 return;
             }
             shortcut.script = script;
@@ -850,13 +856,13 @@ export class ShortcutsSettingsModule extends SettingsModule {
             try {
                 new Function('...args', script);
             } catch (e) {
-                alert('Script syntax error: ' + e.message);
+                alert(t('settings.shortcuts.alert.script_syntax_error', { reason: e.message }));
                 return;
             }
         } else {
             const path = document.getElementById('shortcutPath').value.trim();
             if (!path) {
-                alert('Executable Path is required.');
+                alert(t('settings.shortcuts.alert.path_required'));
                 return;
             }
             shortcut.path = path;
@@ -876,7 +882,7 @@ export class ShortcutsSettingsModule extends SettingsModule {
     }
 
     deleteShortcut(index) {
-        if (confirm('Delete this shortcut?')) {
+        if (confirm(t('settings.shortcuts.delete_confirm'))) {
             this.shortcuts.splice(index, 1);
             this.renderShortcutsList();
         }

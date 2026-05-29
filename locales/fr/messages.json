@@ -2782,5 +2782,1421 @@
     "description": "Tooltip on the per-tool remove button",
     "_machine_translated": true,
     "_source_hash": "310c8caf4846272c"
+  },
+  "settings.shortcuts.title": {
+    "message": "Commandes et invites",
+    "description": "Settings header — quick commands & saved prompts",
+    "_machine_translated": true,
+    "_source_hash": "cc301d7980f152f9"
+  },
+  "settings.shortcuts.section.label": {
+    "message": "Commandes rapides et invites enregistrées",
+    "description": "Subsection label above the description",
+    "_machine_translated": true,
+    "_source_hash": "98f4698dbee70e37"
+  },
+  "settings.shortcuts.description_html": {
+    "message": "Lancez des programmes, ouvrez des URL, envoyez des modèles d'invite à l'agent ou exécutez des scripts personnalisés. Utilisez <code>{*}</code> pour tous les arguments, <code>{0}</code>/<code>{1}</code> pour les arguments positionnels, ou <code>{name}</code> pour les paramètres nommés (un petit formulaire apparaît pour les renseigner si vous lancez le déclencheur sans fournir de valeurs).",
+    "description": "Helper text for the shortcuts pane (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "4005b95f4c7861f4"
+  },
+  "settings.shortcuts.action.add": {
+    "message": "+ Ajouter",
+    "description": "Button: open the new-shortcut dialog",
+    "_machine_translated": true,
+    "_source_hash": "e9e560eab093224e"
+  },
+  "settings.shortcuts.action.store": {
+    "message": "🛍️ Boutique",
+    "description": "Button: browse the command-pack store",
+    "_machine_translated": true,
+    "_source_hash": "58bd90b36075d706"
+  },
+  "settings.shortcuts.action.export": {
+    "message": "Exporter",
+    "description": "Button: export shortcuts to a file",
+    "_machine_translated": true,
+    "_source_hash": "831c7194749ea752"
+  },
+  "settings.shortcuts.action.import": {
+    "message": "Importer",
+    "description": "Button: import shortcuts from a file",
+    "_machine_translated": true,
+    "_source_hash": "2fc00b2c5b80ccf9"
+  },
+  "settings.shortcuts.export_note_html": {
+    "message": "L'export / import ici ne couvre que vos commandes rapides et invites. Pour transférer tout (configuration, pilotage, extensions) entre machines, voir <a href=\"#\" data-action=\"shortcuts.openFullBackup\">À propos → Sauvegarde et restauration</a>.",
+    "description": "Footer note pointing at the full backup flow (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "cb86c85a53b9e3be"
+  },
+  "settings.shortcuts.dialog.add_title": {
+    "message": "Ajouter un raccourci",
+    "description": "Dialog header — add mode",
+    "_machine_translated": true,
+    "_source_hash": "c8791c1c2209d345"
+  },
+  "settings.shortcuts.dialog.edit_title": {
+    "message": "Modifier le raccourci",
+    "description": "Dialog header — edit mode",
+    "_machine_translated": true,
+    "_source_hash": "48304f3608417861"
+  },
+  "settings.shortcuts.dialog.name.label": {
+    "message": "Nom / Description",
+    "description": "Field label",
+    "_machine_translated": true,
+    "_source_hash": "480f384a8c1d6e86"
+  },
+  "settings.shortcuts.dialog.name.placeholder": {
+    "message": "ex. : Ouvrir VSCode",
+    "description": "Placeholder for the name field",
+    "_machine_translated": true,
+    "_source_hash": "18f75665a6a45c95"
+  },
+  "settings.shortcuts.dialog.trigger.label": {
+    "message": "Mot déclencheur",
+    "description": "Field label",
+    "_machine_translated": true,
+    "_source_hash": "f9f2ebbc9aa59e92"
+  },
+  "settings.shortcuts.dialog.trigger.placeholder": {
+    "message": "ex. : code",
+    "description": "Placeholder for the trigger field",
+    "_machine_translated": true,
+    "_source_hash": "4f5d2dfec326129d"
+  },
+  "settings.shortcuts.dialog.icon.label": {
+    "message": "Icône (facultatif)",
+    "description": "Field label for the icon picker row",
+    "_machine_translated": true,
+    "_source_hash": "b689778243a8c9ce"
+  },
+  "settings.shortcuts.dialog.icon.placeholder": {
+    "message": "⚡",
+    "description": "Placeholder emoji for the icon-emoji input",
+    "_machine_translated": true,
+    "_source_hash": "d1861e9cb668392b"
+  },
+  "settings.shortcuts.dialog.icon.image_btn": {
+    "message": "📁 Image",
+    "description": "Button to pick an image as icon",
+    "_machine_translated": true,
+    "_source_hash": "983e3850c5fd344a"
+  },
+  "settings.shortcuts.dialog.icon.favicon_btn": {
+    "message": "🌐 Utiliser le favicon",
+    "description": "Button to fetch a favicon as icon",
+    "_machine_translated": true,
+    "_source_hash": "07fd53d7caa6ae8a"
+  },
+  "settings.shortcuts.dialog.icon.help": {
+    "message": "Emoji, fichier image, ou coller une image depuis le presse-papiers",
+    "description": "Helper text under the icon picker",
+    "_machine_translated": true,
+    "_source_hash": "ba0706de04b4ecf4"
+  },
+  "settings.shortcuts.dialog.action_type.label": {
+    "message": "Type d'action",
+    "description": "Action-type dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "b0af918651bf069a"
+  },
+  "settings.shortcuts.dialog.action_type.run_program": {
+    "message": "▶️ Exécuter un programme",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "7aff3f4cb59ad479"
+  },
+  "settings.shortcuts.dialog.action_type.open_url": {
+    "message": "🌐 Ouvrir une URL",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "86542ef3b4d8424a"
+  },
+  "settings.shortcuts.dialog.action_type.prompt": {
+    "message": "💬 Envoyer une invite à l'agent",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "7d78935e85a905af"
+  },
+  "settings.shortcuts.dialog.action_type.script": {
+    "message": "📜 Exécuter un script",
+    "description": "Action-type option",
+    "_machine_translated": true,
+    "_source_hash": "c384ccd36855721f"
+  },
+  "settings.shortcuts.dialog.run.path.label": {
+    "message": "Chemin de l'exécutable",
+    "description": "Run-program path field label",
+    "_machine_translated": true,
+    "_source_hash": "4793d87c5048b510"
+  },
+  "settings.shortcuts.dialog.run.work_dir.label": {
+    "message": "Répertoire de travail (facultatif)",
+    "description": "Run-program working-directory field label",
+    "_machine_translated": true,
+    "_source_hash": "9485b46617c95d93"
+  },
+  "settings.shortcuts.dialog.run.work_dir.placeholder": {
+    "message": "ex. : C:\\Projets",
+    "description": "Placeholder for the working-directory field",
+    "_machine_translated": true,
+    "_source_hash": "c9007a39d3a2d6ee"
+  },
+  "settings.shortcuts.dialog.run.args.label": {
+    "message": "Arguments (facultatif)",
+    "description": "Run-program args field label",
+    "_machine_translated": true,
+    "_source_hash": "e5f9baf2a1dc948a"
+  },
+  "settings.shortcuts.dialog.run.args.placeholder": {
+    "message": "ex. : --send {1} --to {0} ou {*}",
+    "description": "Placeholder for the args field",
+    "_machine_translated": true,
+    "_source_hash": "6526cecabb61e66d"
+  },
+  "settings.shortcuts.dialog.run.args.help": {
+    "message": "Utilisez {*} pour tous les arguments, ou {0}, {1}, etc. pour des arguments spécifiques",
+    "description": "Helper text for the args field",
+    "_machine_translated": true,
+    "_source_hash": "2b889f0cf8acd02f"
+  },
+  "settings.shortcuts.dialog.url.label": {
+    "message": "Modèle d'URL",
+    "description": "Open-URL field label",
+    "_machine_translated": true,
+    "_source_hash": "ed36c9a2f9843875"
+  },
+  "settings.shortcuts.dialog.url.placeholder": {
+    "message": "ex. : https://google.com/search?q={*}",
+    "description": "Placeholder for the URL field",
+    "_machine_translated": true,
+    "_source_hash": "f1a30e62b6cfe353"
+  },
+  "settings.shortcuts.dialog.url.help": {
+    "message": "Utilisez {*} pour tous les arguments, ou {0}, {1}, etc. pour des arguments spécifiques dans l'URL",
+    "description": "Helper text for the URL field",
+    "_machine_translated": true,
+    "_source_hash": "56ce8251f528313b"
+  },
+  "settings.shortcuts.dialog.prompt.label": {
+    "message": "Modèle de prompt",
+    "description": "Prompt-template field label",
+    "_machine_translated": true,
+    "_source_hash": "b9223bcef96b4aca"
+  },
+  "settings.shortcuts.dialog.prompt.placeholder": {
+    "message": "ex. : Traduire en {lang} : {*}",
+    "description": "Placeholder for the prompt template",
+    "_machine_translated": true,
+    "_source_hash": "4ccd0c44ccdd8c54"
+  },
+  "settings.shortcuts.dialog.prompt.help_html": {
+    "message": "<code>{*}</code> = tous les arguments · <code>{0}</code>, <code>{1}</code> = positionnels · <code>{name}</code> = nommés (un formulaire s'affiche s'ils ne sont pas renseignés) · <code>{selection}</code> = texte sélectionné.",
+    "description": "Helper text for the prompt template (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "3b71abb4a3e88c53"
+  },
+  "settings.shortcuts.dialog.script.action.label": {
+    "message": "Action du script",
+    "description": "Script-action dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "277973102a1d539d"
+  },
+  "settings.shortcuts.dialog.script.action.text": {
+    "message": "📝 Afficher le résultat",
+    "description": "Script action — show output",
+    "_machine_translated": true,
+    "_source_hash": "7569eebd7e4fb8c9"
+  },
+  "settings.shortcuts.dialog.script.action.prompt": {
+    "message": "💬 Envoyer à l'agent",
+    "description": "Script action — send to agent",
+    "_machine_translated": true,
+    "_source_hash": "bb49cc17b8065af4"
+  },
+  "settings.shortcuts.dialog.script.action.open_url": {
+    "message": "🌐 Ouvrir comme URL",
+    "description": "Script action — treat output as URL",
+    "_machine_translated": true,
+    "_source_hash": "7fbdd472bbd91978"
+  },
+  "settings.shortcuts.dialog.script.action.run_program": {
+    "message": "▶️ Exécuter comme commande",
+    "description": "Script action — run output as command",
+    "_machine_translated": true,
+    "_source_hash": "59739243103ce35f"
+  },
+  "settings.shortcuts.dialog.script.action.help": {
+    "message": "Que faire de la chaîne renvoyée par votre script",
+    "description": "Helper for the script-action dropdown",
+    "_machine_translated": true,
+    "_source_hash": "60efef7d56e334fd"
+  },
+  "settings.shortcuts.dialog.script.ai.label": {
+    "message": "✨ Demander à Kage d'écrire ou de mettre à jour le script",
+    "description": "Label for the AI script generator",
+    "_machine_translated": true,
+    "_source_hash": "451578931b222c7f"
+  },
+  "settings.shortcuts.dialog.script.ai.placeholder": {
+    "message": "ex. : Analyser une URL de ticket Jira et renvoyer l'ID du ticket",
+    "description": "Placeholder for the AI prompt input",
+    "_machine_translated": true,
+    "_source_hash": "677253c3c747e7cf"
+  },
+  "settings.shortcuts.dialog.script.ai.generate": {
+    "message": "Générer",
+    "description": "Generate button",
+    "_machine_translated": true,
+    "_source_hash": "e92ddc15a02576a8"
+  },
+  "settings.shortcuts.dialog.script.ai.undo": {
+    "message": "Annuler",
+    "description": "Undo button after a generate",
+    "_machine_translated": true,
+    "_source_hash": "51baade18c94aaca"
+  },
+  "settings.shortcuts.dialog.script.body.label": {
+    "message": "Corps du script",
+    "description": "Script body textarea label",
+    "_machine_translated": true,
+    "_source_hash": "0a649daa5906d9dc"
+  },
+  "settings.shortcuts.dialog.script.body.placeholder": {
+    "message": "// Les arguments sont passés via ...args\n// Renvoyer une chaîne (ou un tableau pour Exécuter comme commande)\nconst query = args.join(' ');\nreturn 'Traité : ' + query;",
+    "description": "Code-style placeholder shown in the script body editor",
+    "_machine_translated": true,
+    "_source_hash": "5e40a3c7b4191896"
+  },
+  "settings.shortcuts.dialog.script.body.help_html": {
+    "message": "Corps de fonction JavaScript. Reçoit les arguments via <code>...args</code>. Renvoyez une chaîne pour les actions Affichage/Agent/URL, ou un tableau <code>[cmd, workDir, ...args]</code> pour Exécuter comme commande.",
+    "description": "Helper for the script body field (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "1c1423e17a3aed59"
+  },
+  "settings.shortcuts.dialog.test.toggle": {
+    "message": "Tester",
+    "description": "Toggle label for the test section",
+    "_machine_translated": true,
+    "_source_hash": "e7b2812d38a04bc8"
+  },
+  "settings.shortcuts.dialog.test.placeholder": {
+    "message": "Saisir les arguments de test…",
+    "description": "Placeholder for the test args input",
+    "_machine_translated": true,
+    "_source_hash": "82a06f106d64bc21"
+  },
+  "settings.shortcuts.dialog.test.run": {
+    "message": "▶ Exécuter",
+    "description": "Run button in the test section",
+    "_machine_translated": true,
+    "_source_hash": "1123e5147afef28d"
+  },
+  "settings.shortcuts.dialog.cancel": {
+    "message": "Annuler",
+    "description": "Dialog cancel button",
+    "_machine_translated": true,
+    "_source_hash": "e4ac535834786545"
+  },
+  "settings.shortcuts.dialog.save": {
+    "message": "Enregistrer",
+    "description": "Dialog save button",
+    "_machine_translated": true,
+    "_source_hash": "325b95560d59c8f2"
+  },
+  "settings.shortcuts.list.empty": {
+    "message": "Aucun raccourci pour le moment. Cliquez sur + Ajouter pour en créer un.",
+    "description": "Empty state for the shortcuts list",
+    "_machine_translated": true,
+    "_source_hash": "6b7f424283eeb37d"
+  },
+  "settings.shortcuts.list.action.edit": {
+    "message": "Modifier",
+    "description": "Per-shortcut edit button",
+    "_machine_translated": true,
+    "_source_hash": "bfdcabc9dbaebba4"
+  },
+  "settings.shortcuts.list.action.delete": {
+    "message": "Supprimer",
+    "description": "Per-shortcut delete button",
+    "_machine_translated": true,
+    "_source_hash": "b1a8ab4f907e65cf"
+  },
+  "settings.shortcuts.list.delete_confirm": {
+    "message": "Supprimer le raccourci « {name} » ?",
+    "description": "Confirm dialog before deleting a shortcut",
+    "_machine_translated": true,
+    "_source_hash": "d26988eb94b9cc15"
+  },
+  "settings.shortcuts.alert.name_required": {
+    "message": "Le nom et le mot déclencheur sont obligatoires.",
+    "description": "alert() shown when required fields are empty",
+    "_machine_translated": true,
+    "_source_hash": "7fa229e9612963a5"
+  },
+  "settings.shortcuts.alert.duplicate_trigger": {
+    "message": "Le déclencheur « {trigger} » est déjà utilisé par un autre raccourci.",
+    "description": "alert() shown on duplicate triggers",
+    "_machine_translated": true,
+    "_source_hash": "dc5e76ad6ae46e73"
+  },
+  "settings.shortcuts.alert.icon_too_large": {
+    "message": "L'image de l'icône doit faire moins de 64 Ko",
+    "description": "alert() shown when an uploaded icon exceeds the size cap",
+    "_machine_translated": true,
+    "_source_hash": "e5f935305d09664b"
+  },
+  "settings.shortcuts.alert.url_first": {
+    "message": "Saisissez d'abord une URL",
+    "description": "alert() shown when the user clicks Use Favicon without a URL",
+    "_machine_translated": true,
+    "_source_hash": "e8cff203922230b5"
+  },
+  "settings.shortcuts.alert.no_favicon": {
+    "message": "Impossible de récupérer le favicon pour cette URL",
+    "description": "alert() shown when favicon fetch fails",
+    "_machine_translated": true,
+    "_source_hash": "96db0030017818dc"
+  },
+  "settings.shortcuts.list.empty_full": {
+    "message": "Aucun raccourci configuré. Cliquez sur « Ajouter un raccourci » pour en créer un.",
+    "description": "Full empty-state copy for the shortcuts list",
+    "_machine_translated": true,
+    "_source_hash": "38a8f950043fbf47"
+  },
+  "settings.shortcuts.detail.type": {
+    "message": "Type :",
+    "description": "Detail row label — action type",
+    "_machine_translated": true,
+    "_source_hash": "0f8321232d481fef"
+  },
+  "settings.shortcuts.detail.url": {
+    "message": "URL :",
+    "description": "Detail row label — URL template",
+    "_machine_translated": true,
+    "_source_hash": "7803aa1cb0ceea4c"
+  },
+  "settings.shortcuts.detail.prompt": {
+    "message": "Invite :",
+    "description": "Detail row label — prompt template",
+    "_machine_translated": true,
+    "_source_hash": "0e65e4ffce9f20d3"
+  },
+  "settings.shortcuts.detail.action": {
+    "message": "Action :",
+    "description": "Detail row label — script action",
+    "_machine_translated": true,
+    "_source_hash": "83cdf74433ffbbcb"
+  },
+  "settings.shortcuts.detail.script": {
+    "message": "Script :",
+    "description": "Detail row label — script body preview",
+    "_machine_translated": true,
+    "_source_hash": "a438bb588cba912d"
+  },
+  "settings.shortcuts.detail.path": {
+    "message": "Chemin :",
+    "description": "Detail row label — executable path",
+    "_machine_translated": true,
+    "_source_hash": "8794734609f6aeee"
+  },
+  "settings.shortcuts.detail.dir": {
+    "message": "Rép. :",
+    "description": "Detail row label — working directory",
+    "_machine_translated": true,
+    "_source_hash": "852170dc03fabe2e"
+  },
+  "settings.shortcuts.detail.args": {
+    "message": "Args :",
+    "description": "Detail row label — arguments",
+    "_machine_translated": true,
+    "_source_hash": "4788e464b471cdc9"
+  },
+  "settings.shortcuts.action_label.run_program": {
+    "message": "▶️ Exécuter un programme",
+    "description": "Action-type label shown in the list (matches dropdown)",
+    "_machine_translated": true,
+    "_source_hash": "84dad3584fee2697"
+  },
+  "settings.shortcuts.action_label.open_url": {
+    "message": "🌐 Ouvrir une URL",
+    "description": "Action-type label shown in the list (matches dropdown)",
+    "_machine_translated": true,
+    "_source_hash": "c3ad63f4a2adc684"
+  },
+  "settings.shortcuts.action_label.prompt": {
+    "message": "💬 Invite",
+    "description": "Action-type label shown in the list",
+    "_machine_translated": true,
+    "_source_hash": "4fdc7d867b29d6fc"
+  },
+  "settings.shortcuts.action_label.script": {
+    "message": "📜 Script",
+    "description": "Action-type label shown in the list",
+    "_machine_translated": true,
+    "_source_hash": "07f816cccfd5e0d0"
+  },
+  "settings.shortcuts.script_label.text": {
+    "message": "📝 Affichage",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "10df8c524d4b6821"
+  },
+  "settings.shortcuts.script_label.prompt": {
+    "message": "💬 Agent",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "3ac7aef6ed098ad3"
+  },
+  "settings.shortcuts.script_label.open_url": {
+    "message": "🌐 URL",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "9778ccc32e5c2b99"
+  },
+  "settings.shortcuts.script_label.run_program": {
+    "message": "▶️ Exécuter",
+    "description": "Script-action label in the list",
+    "_machine_translated": true,
+    "_source_hash": "e84b329835a9eead"
+  },
+  "settings.shortcuts.script_label.default": {
+    "message": "Affichage",
+    "description": "Fallback script-action label",
+    "_machine_translated": true,
+    "_source_hash": "d7202a69ac45796a"
+  },
+  "settings.shortcuts.favicon_fetching": {
+    "message": "⏳ Récupération…",
+    "description": "Button text while a favicon fetch is in flight",
+    "_machine_translated": true,
+    "_source_hash": "45da88fb75f343d6"
+  },
+  "settings.shortcuts.alert.url_required": {
+    "message": "L’URL est requise.",
+    "description": "alert() shown when saving an Open URL shortcut without a URL",
+    "_machine_translated": true,
+    "_source_hash": "ed8a6793a849958f"
+  },
+  "settings.shortcuts.alert.prompt_required": {
+    "message": "Le modèle d’invite est requis.",
+    "description": "alert() shown when saving a Prompt shortcut without text",
+    "_machine_translated": true,
+    "_source_hash": "4eebf6417f52e620"
+  },
+  "settings.shortcuts.alert.script_required": {
+    "message": "Le corps du script est requis.",
+    "description": "alert() shown when saving a Script shortcut without code",
+    "_machine_translated": true,
+    "_source_hash": "f2173ce056339186"
+  },
+  "settings.shortcuts.alert.script_syntax_error": {
+    "message": "Erreur de syntaxe du script : {reason}",
+    "description": "alert() shown when the script body fails to parse",
+    "_machine_translated": true,
+    "_source_hash": "ea4f0877698666fd"
+  },
+  "settings.shortcuts.alert.path_required": {
+    "message": "Le chemin de l’exécutable est requis.",
+    "description": "alert() shown when saving a Run Program shortcut without a path",
+    "_machine_translated": true,
+    "_source_hash": "e0de0e56ae9c2a7e"
+  },
+  "settings.shortcuts.delete_confirm": {
+    "message": "Supprimer ce raccourci ?",
+    "description": "Confirmation dialog before deleting a shortcut",
+    "_machine_translated": true,
+    "_source_hash": "f45b25897716f2a3"
+  },
+  "settings.about.title": {
+    "message": "À propos de Kage",
+    "description": "Settings header — about/version page",
+    "_machine_translated": true,
+    "_source_hash": "f03c1b1a9c22a54c"
+  },
+  "settings.about.version_loading": {
+    "message": "chargement…",
+    "description": "Placeholder while the version string loads",
+    "_machine_translated": true,
+    "_source_hash": "be68313f99d0e685"
+  },
+  "settings.about.version_format": {
+    "message": "v{version}",
+    "description": "Version display format",
+    "_machine_translated": true,
+    "_source_hash": "531ac31598e44ff1"
+  },
+  "settings.about.info.loading": {
+    "message": "Chargement…",
+    "description": "Placeholder for the about-info table while it loads",
+    "_machine_translated": true,
+    "_source_hash": "6411e5751394b9f3"
+  },
+  "settings.about.info.author_label": {
+    "message": "Auteur",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "b185e5a71c7676fe"
+  },
+  "settings.about.info.repository_label": {
+    "message": "Dépôt",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "438873c57d55dede"
+  },
+  "settings.about.info.license_label": {
+    "message": "Licence",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "15d167fee13fe3b7"
+  },
+  "settings.about.info.copyright_label": {
+    "message": "Copyright",
+    "description": "Info table row label",
+    "_machine_translated": true,
+    "_source_hash": "626d779c6f84bbcc"
+  },
+  "settings.about.info.copyright_value": {
+    "message": "© 2025 {authors}",
+    "description": "Copyright row content",
+    "_machine_translated": true,
+    "_source_hash": "1bd3e526b387071e"
+  },
+  "settings.about.info.copyright_default_authors": {
+    "message": "Équipe Kage",
+    "description": "Fallback for authors when none are configured",
+    "_machine_translated": true,
+    "_source_hash": "d6dd49f9cfd57310"
+  },
+  "settings.about.action.show_welcome": {
+    "message": "Afficher l'écran d'accueil",
+    "description": "Button: re-open the welcome wizard",
+    "_machine_translated": true,
+    "_source_hash": "0bfeb2c73d530550"
+  },
+  "settings.about.action.open_config": {
+    "message": "Ouvrir le dossier de configuration",
+    "description": "Button: open the OS file manager at the config dir",
+    "_machine_translated": true,
+    "_source_hash": "9e9e93b633a0a255"
+  },
+  "settings.about.action.send_feedback": {
+    "message": "Envoyer un commentaire",
+    "description": "Button: open a bug report URL",
+    "_machine_translated": true,
+    "_source_hash": "490c678a1f25d700"
+  },
+  "settings.about.backup.title": {
+    "message": "💾 Sauvegarde et restauration",
+    "description": "Collapsible section header",
+    "_machine_translated": true,
+    "_source_hash": "8522d8e532e1e1fb"
+  },
+  "settings.about.backup.description": {
+    "message": "Transférez votre configuration Kage d'une machine à l'autre. La sauvegarde inclut la configuration, les invites et raccourcis enregistrés, le pilotage personnalisé et appris, ainsi que les données d'extension. Le chiffrement par phrase de passe est facultatif, mais recommandé si le fichier doit quitter votre machine.",
+    "description": "Body text in the backup section",
+    "_machine_translated": true,
+    "_source_hash": "e4dbe7e1d6ab2e28"
+  },
+  "settings.about.backup.export.label": {
+    "message": "Exporter",
+    "description": "Subsection label for export controls",
+    "_machine_translated": true,
+    "_source_hash": "df01bf7467258888"
+  },
+  "settings.about.backup.encrypt_toggle": {
+    "message": "Chiffrer avec une phrase de passe (AES-256-GCM avec dérivation de clé Argon2id).",
+    "description": "Helper next to the encryption toggle",
+    "_machine_translated": true,
+    "_source_hash": "5c348b02467e7b48"
+  },
+  "settings.about.backup.passphrase.placeholder": {
+    "message": "Phrase de passe",
+    "description": "Placeholder for the passphrase input",
+    "_machine_translated": true,
+    "_source_hash": "fde81cc8e6ec39fc"
+  },
+  "settings.about.backup.passphrase.confirm_placeholder": {
+    "message": "Confirmer la phrase de passe",
+    "description": "Placeholder for the confirm-passphrase input",
+    "_machine_translated": true,
+    "_source_hash": "818eab806f9df8ca"
+  },
+  "settings.about.backup.passphrase.note": {
+    "message": "Choisissez quelque chose de mémorable. Aucune récupération n'est possible — si vous perdez la phrase de passe, le fichier sera illisible.",
+    "description": "Helper text under the passphrase fields",
+    "_machine_translated": true,
+    "_source_hash": "04b2fbd556fad12e"
+  },
+  "settings.about.backup.export_btn": {
+    "message": "Exporter…",
+    "description": "Button to start the export",
+    "_machine_translated": true,
+    "_source_hash": "b252d34fb2e51527"
+  },
+  "settings.about.backup.import.label": {
+    "message": "Importer",
+    "description": "Subsection label for import controls",
+    "_machine_translated": true,
+    "_source_hash": "ff9ad6961f6ebcf3"
+  },
+  "settings.about.backup.import.description": {
+    "message": "Choisissez un fichier <code>.kage</code> ou <code>.kage.enc</code> précédemment exporté. Les imports remplacent votre configuration actuelle — les positions des fenêtres, l'ID d'installation de télémétrie et le réglage de démarrage du système d'exploitation de votre machine restent locaux.",
+    "description": "Helper text for import (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "736c5b1684c03868"
+  },
+  "settings.about.backup.import_btn": {
+    "message": "Importer…",
+    "description": "Button to start the import",
+    "_machine_translated": true,
+    "_source_hash": "3f782ef0fd86b0ea"
+  },
+  "settings.about.logging.title": {
+    "message": "📋 Journalisation",
+    "description": "Logging section header (collapsible)",
+    "_machine_translated": true,
+    "_source_hash": "ae8714ea95039680"
+  },
+  "settings.about.logging.buffer_size.label": {
+    "message": "Taille du tampon de journaux",
+    "description": "Buffer-size field label",
+    "_machine_translated": true,
+    "_source_hash": "06cc74b08f8567d8"
+  },
+  "settings.about.logging.buffer_size.description": {
+    "message": "Nombre maximal d'entrées de journal à conserver (nécessite un enregistrement)",
+    "description": "Helper text for buffer size",
+    "_machine_translated": true,
+    "_source_hash": "450c62f8a27cd7cf"
+  },
+  "settings.about.logging.verbose.label": {
+    "message": "Journaliser tous les messages",
+    "description": "Toggle: capture info-level frontend logs",
+    "_machine_translated": true,
+    "_source_hash": "a0e8f00c94852879"
+  },
+  "settings.about.logging.verbose.description": {
+    "message": "Inclure les messages d'information, pas seulement les avertissements et les erreurs. Remarque : cela peut ralentir Kage si vous avez des extensions qui journalisent beaucoup de messages.",
+    "description": "Helper text for the verbose-logging toggle",
+    "_machine_translated": true,
+    "_source_hash": "cabe92b866813fd3"
+  },
+  "settings.about.logging.filter.all_levels": {
+    "message": "Tous les niveaux",
+    "description": "Log filter — all levels",
+    "_machine_translated": true,
+    "_source_hash": "26c8ad0b21a80b27"
+  },
+  "settings.about.logging.filter.debug": {
+    "message": "Débogage",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "af2016c8f1218fb0"
+  },
+  "settings.about.logging.filter.info": {
+    "message": "Info",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "ea3e085e08e1bc6e"
+  },
+  "settings.about.logging.filter.warn": {
+    "message": "Avertissement",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "9f0f83fb03b63e93"
+  },
+  "settings.about.logging.filter.error": {
+    "message": "Erreur",
+    "description": "Log filter level",
+    "_machine_translated": true,
+    "_source_hash": "d2e2397d1a65216c"
+  },
+  "settings.about.logging.filter.all_sources": {
+    "message": "Toutes les sources",
+    "description": "Log filter — all sources",
+    "_machine_translated": true,
+    "_source_hash": "39c548ff7fca2317"
+  },
+  "settings.about.logging.refresh": {
+    "message": "Actualiser",
+    "description": "Button: reload log entries",
+    "_machine_translated": true,
+    "_source_hash": "a75b9e8363f295d3"
+  },
+  "settings.about.logging.clear": {
+    "message": "Effacer les journaux",
+    "description": "Button: empty the log file",
+    "_machine_translated": true,
+    "_source_hash": "6255ff29f331c1e7"
+  },
+  "settings.about.logging.open_folder": {
+    "message": "Ouvrir le dossier des journaux",
+    "description": "Button: open the log directory in the OS file manager",
+    "_machine_translated": true,
+    "_source_hash": "14179ecf491d82de"
+  },
+  "settings.about.logging.empty": {
+    "message": "Développer pour charger les entrées de journal…",
+    "description": "Placeholder while the log viewer is collapsed",
+    "_machine_translated": true,
+    "_source_hash": "d0f9929a6b218d03"
+  },
+  "settings.about.logging.loading": {
+    "message": "Chargement…",
+    "description": "Placeholder while logs are fetching",
+    "_machine_translated": true,
+    "_source_hash": "9528b276118924b2"
+  },
+  "settings.about.logging.load_failed": {
+    "message": "Échec du chargement des journaux",
+    "description": "Placeholder when log fetch fails",
+    "_machine_translated": true,
+    "_source_hash": "bbc705641afedf0c"
+  },
+  "settings.about.logging.no_entries": {
+    "message": "Aucune entrée de journal",
+    "description": "Empty state when no logs match",
+    "_machine_translated": true,
+    "_source_hash": "b5885d1dcbd31794"
+  },
+  "settings.about.logging.no_entries_filtered": {
+    "message": "Aucune entrée de journal correspondant aux filtres",
+    "description": "Empty state when filters exclude every entry",
+    "_machine_translated": true,
+    "_source_hash": "1a8889a16e2dbbbf"
+  },
+  "settings.speech.title": {
+    "message": "Voix",
+    "description": "Settings header — speech-input and read-back",
+    "_machine_translated": true,
+    "_source_hash": "213cb5961df62065"
+  },
+  "settings.speech.voice_input.section": {
+    "message": "Entrée vocale",
+    "description": "Subsection header for voice input settings",
+    "_machine_translated": true,
+    "_source_hash": "c67ba2144cd8089b"
+  },
+  "settings.speech.show_button.label": {
+    "message": "Afficher le bouton vocal",
+    "description": "Toggle: show the microphone button",
+    "_machine_translated": true,
+    "_source_hash": "5a9e652b91a4bbb4"
+  },
+  "settings.speech.show_button.description": {
+    "message": "Afficher un bouton de microphone pour la saisie vocale via la reconnaissance vocale.",
+    "description": "Helper text for the speech-button toggle",
+    "_machine_translated": true,
+    "_source_hash": "cb0102ae09642ada"
+  },
+  "settings.speech.silence.label": {
+    "message": "Délai de silence avant envoi automatique",
+    "description": "Slider label for the silence-submit timeout",
+    "_machine_translated": true,
+    "_source_hash": "34d7a8d8ebdb368b"
+  },
+  "settings.speech.silence.description": {
+    "message": "Envoyer automatiquement le message après ce nombre de secondes de silence. Définir sur 0 pour désactiver.",
+    "description": "Helper text for the silence-submit slider",
+    "_machine_translated": true,
+    "_source_hash": "a92f1330fcd19fd0"
+  },
+  "settings.speech.agent_voice.section": {
+    "message": "Voix de l'agent",
+    "description": "Subsection header for read-back / TTS settings",
+    "_machine_translated": true,
+    "_source_hash": "e5e9b144726ef914"
+  },
+  "settings.speech.read_back.label": {
+    "message": "Lire les réponses de l'agent",
+    "description": "Toggle: read agent responses aloud",
+    "_machine_translated": true,
+    "_source_hash": "e8616c96e55ab6cb"
+  },
+  "settings.speech.read_back.description": {
+    "message": "Utiliser la synthèse vocale pour lire les réponses de l'agent à voix haute lorsque la saisie vocale a été utilisée.",
+    "description": "Helper text for the read-back toggle",
+    "_machine_translated": true,
+    "_source_hash": "a8c0a36ff0d246c5"
+  },
+  "settings.speech.tts_engine.label": {
+    "message": "Moteur TTS",
+    "description": "Engine selector label",
+    "_machine_translated": true,
+    "_source_hash": "4459007d8fea9343"
+  },
+  "settings.speech.tts_engine.description": {
+    "message": "Choisissez le moteur qui lit les réponses.",
+    "description": "Helper text for the engine selector",
+    "_machine_translated": true,
+    "_source_hash": "5780e7e0c7b90e68"
+  },
+  "settings.speech.tts_engine.system": {
+    "message": "Système (navigateur)",
+    "description": "TTS engine option — use the browser's speechSynthesis",
+    "_machine_translated": true,
+    "_source_hash": "a9db63843da7c823"
+  },
+  "settings.speech.tts_engine.pocket": {
+    "message": "Pocket TTS (IA locale)",
+    "description": "TTS engine option — use the local pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "fde6fdc20e417e8d"
+  },
+  "settings.speech.system_voice.label": {
+    "message": "Voix système",
+    "description": "System-voice dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "1703800c5dad8904"
+  },
+  "settings.speech.system_voice.description": {
+    "message": "Sélectionnez la voix du navigateur utilisée pour lire les réponses.",
+    "description": "Helper for the system voice selector",
+    "_machine_translated": true,
+    "_source_hash": "4ccdde14d9da34dc"
+  },
+  "settings.speech.system_voice.default": {
+    "message": "Valeur par défaut du système",
+    "description": "Placeholder dropdown option",
+    "_machine_translated": true,
+    "_source_hash": "a6b6cfa2aa7f56e5"
+  },
+  "settings.speech.pocket.checking": {
+    "message": "Vérification…",
+    "description": "Status while pocket-tts environment is being detected",
+    "_machine_translated": true,
+    "_source_hash": "198da66852e043fd"
+  },
+  "settings.speech.pocket.setup_collapse": {
+    "message": "▼ Configuration",
+    "description": "Setup section toggle (collapsed)",
+    "_machine_translated": true,
+    "_source_hash": "6a22af114f641902"
+  },
+  "settings.speech.pocket.setup_expand": {
+    "message": "▲ Configuration",
+    "description": "Setup section toggle (expanded)",
+    "_machine_translated": true,
+    "_source_hash": "efd05fa35790d2ac"
+  },
+  "settings.speech.pocket.python.label": {
+    "message": "Python",
+    "description": "Step header for Python detection",
+    "_machine_translated": true,
+    "_source_hash": "0cbb0fe52394df3d"
+  },
+  "settings.speech.pocket.python.not_found_html": {
+    "message": "❌ Python 3 introuvable. <a href=\"https://www.python.org/downloads/\" target=\"_blank\">Télécharger Python</a>",
+    "description": "Status when Python isn't installed (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "e8b68bfff16b2558"
+  },
+  "settings.speech.pocket.python.required": {
+    "message": "❌ Python 3.10+ requis",
+    "description": "Status when Python is too old",
+    "_machine_translated": true,
+    "_source_hash": "513bed27221e2c89"
+  },
+  "settings.speech.pocket.install.label": {
+    "message": "Installer pocket-tts",
+    "description": "Step header for pocket-tts install",
+    "_machine_translated": true,
+    "_source_hash": "8367ef46bbc54189"
+  },
+  "settings.speech.pocket.install.description": {
+    "message": "Installe le paquet Python (téléchargement du modèle d'environ 400 Mo lors de la première utilisation).",
+    "description": "Helper text under the install step",
+    "_machine_translated": true,
+    "_source_hash": "09be2ecdd82e71ea"
+  },
+  "settings.speech.pocket.install.button": {
+    "message": "Installer",
+    "description": "Install button",
+    "_machine_translated": true,
+    "_source_hash": "59f4825e7cd178e6"
+  },
+  "settings.speech.pocket.install.cancel": {
+    "message": "✕ Annuler",
+    "description": "Cancel button while install is running",
+    "_machine_translated": true,
+    "_source_hash": "ba95730f66c5c4b9"
+  },
+  "settings.speech.pocket.install.cancelling": {
+    "message": "Annulation…",
+    "description": "Status while cancelling an in-flight install",
+    "_machine_translated": true,
+    "_source_hash": "d515d43217d0529c"
+  },
+  "settings.speech.pocket.install.installing": {
+    "message": "Installation…",
+    "description": "Status while installing",
+    "_machine_translated": true,
+    "_source_hash": "aecc02786c0f5fc8"
+  },
+  "settings.speech.pocket.install.installed": {
+    "message": "✅ Installé",
+    "description": "Status after a successful install",
+    "_machine_translated": true,
+    "_source_hash": "8eaa10b3bff44100"
+  },
+  "settings.speech.pocket.install.not_installed": {
+    "message": "Non installé",
+    "description": "Sub-status when no install is detected",
+    "_machine_translated": true,
+    "_source_hash": "54c988c2c6f7e2cf"
+  },
+  "settings.speech.pocket.install.banner_not_installed": {
+    "message": "📦 Non installé — développer la configuration ci-dessous",
+    "description": "Top-level banner when pocket-tts isn't installed",
+    "_machine_translated": true,
+    "_source_hash": "4eb51df63fd3d031"
+  },
+  "settings.speech.pocket.install.failed_default": {
+    "message": "Échec",
+    "description": "Generic failure label when no specific error message is available",
+    "_machine_translated": true,
+    "_source_hash": "6060bf45ee886514"
+  },
+  "settings.speech.pocket.install.error_prefix": {
+    "message": "❌ {reason}",
+    "description": "Error status with the underlying reason",
+    "_machine_translated": true,
+    "_source_hash": "09cb2274ec3abd1d"
+  },
+  "settings.speech.pocket.install.retry": {
+    "message": "Réessayer",
+    "description": "Retry button after a failed install",
+    "_machine_translated": true,
+    "_source_hash": "650ecfdcb9450dc5"
+  },
+  "settings.speech.pocket.install.reinstall": {
+    "message": "Réinstaller",
+    "description": "Reinstall button shown after a successful install",
+    "_machine_translated": true,
+    "_source_hash": "27b2feda9feb5942"
+  },
+  "settings.speech.pocket.server.label": {
+    "message": "Serveur",
+    "description": "Step header for the pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "d6135181c2b7a6ae"
+  },
+  "settings.speech.pocket.server.description": {
+    "message": "Le premier démarrage prend ~10-30 s pour charger le modèle.",
+    "description": "Helper text for server section",
+    "_machine_translated": true,
+    "_source_hash": "a9aaef8e313fe5b6"
+  },
+  "settings.speech.pocket.server.start": {
+    "message": "Démarrer le serveur",
+    "description": "Start button",
+    "_machine_translated": true,
+    "_source_hash": "947965607b70b286"
+  },
+  "settings.speech.pocket.server.stop": {
+    "message": "Arrêter le serveur",
+    "description": "Stop button when server is running",
+    "_machine_translated": true,
+    "_source_hash": "96c3992f9f027e23"
+  },
+  "settings.speech.pocket.server.starting": {
+    "message": "Démarrage…",
+    "description": "Server transition state",
+    "_machine_translated": true,
+    "_source_hash": "6ecd764b3a34a87e"
+  },
+  "settings.speech.pocket.server.stopping": {
+    "message": "Arrêt…",
+    "description": "Server transition state",
+    "_machine_translated": true,
+    "_source_hash": "1b63c4b68eca9d4c"
+  },
+  "settings.speech.pocket.server.running": {
+    "message": "✅ En cours d'exécution",
+    "description": "Server status — running",
+    "_machine_translated": true,
+    "_source_hash": "b3a4b99929836819"
+  },
+  "settings.speech.pocket.server.stopped": {
+    "message": "⏹ Arrêté",
+    "description": "Server status — stopped",
+    "_machine_translated": true,
+    "_source_hash": "02ebaaff1def8a98"
+  },
+  "settings.speech.pocket.banner.ready": {
+    "message": "✅ Prêt",
+    "description": "Top-level banner when pocket-tts is fully ready",
+    "_machine_translated": true,
+    "_source_hash": "17080238fef0c372"
+  },
+  "settings.speech.pocket.banner.server_stopped": {
+    "message": "⏹ Serveur arrêté",
+    "description": "Top-level banner when the server isn't running",
+    "_machine_translated": true,
+    "_source_hash": "a21a11fb9da5185e"
+  },
+  "settings.speech.pocket.voice_gen.section": {
+    "message": "Voix et génération",
+    "description": "Subsection header for voice and generation parameters",
+    "_machine_translated": true,
+    "_source_hash": "ce74e67424371e4a"
+  },
+  "settings.speech.pocket.custom.section": {
+    "message": "Voix personnalisées",
+    "description": "Subsection header for custom voice management",
+    "_machine_translated": true,
+    "_source_hash": "45b46f2e0adf02b8"
+  },
+  "settings.speech.pocket.custom.help_html": {
+    "message": "Collez une <a href=\"https://huggingface.co/kyutai/tts-voices\" target=\"_blank\">URL de voix HuggingFace</a> ou une URL HTTP vers un fichier .wav.",
+    "description": "Helper text under the custom-voice add row (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "80b6662bde247350"
+  },
+  "settings.speech.pocket.custom.url_placeholder": {
+    "message": "hf://kyutai/tts-voices/...",
+    "description": "Placeholder for the voice URL field",
+    "_machine_translated": true,
+    "_source_hash": "aecf68ae701693f9"
+  },
+  "settings.speech.pocket.custom.name_placeholder": {
+    "message": "Nom",
+    "description": "Placeholder for the voice display-name field",
+    "_machine_translated": true,
+    "_source_hash": "fda0d7fab3a92393"
+  },
+  "settings.speech.pocket.custom.add_btn": {
+    "message": "Ajouter",
+    "description": "Add button",
+    "_machine_translated": true,
+    "_source_hash": "46a23cd2088a685e"
+  },
+  "settings.speech.pocket.custom.local_help": {
+    "message": "Ou placez des fichiers .wav directement dans le dossier des voix (5-20 s d'audio propre fonctionnent le mieux).",
+    "description": "Helper for the local voices fallback",
+    "_machine_translated": true,
+    "_source_hash": "6b30b26e4ed04249"
+  },
+  "settings.speech.pocket.custom.open_dir": {
+    "message": "Ouvrir le dossier des voix",
+    "description": "Button to open the voices directory in OS file manager",
+    "_machine_translated": true,
+    "_source_hash": "e978977a5f673074"
+  },
+  "settings.speech.pocket.advanced.section": {
+    "message": "Avancé",
+    "description": "Advanced subsection header",
+    "_machine_translated": true,
+    "_source_hash": "a00b15d13b9ddd12"
+  },
+  "settings.speech.pocket.auto_start.label": {
+    "message": "Démarrage automatique du serveur",
+    "description": "Toggle: pre-start the pocket-tts server",
+    "_machine_translated": true,
+    "_source_hash": "ce652d26679bac34"
+  },
+  "settings.speech.pocket.auto_start.description": {
+    "message": "Pré-démarrer le serveur Pocket TTS au lancement de Kage pour une première synthèse vocale plus rapide. Si désactivé, le serveur démarre automatiquement à la première utilisation (avec un bref délai).",
+    "description": "Helper for the auto-start toggle",
+    "_machine_translated": true,
+    "_source_hash": "8d7180881c96ae2a"
+  },
+  "settings.speech.pocket.voice.label": {
+    "message": "Voix",
+    "description": "Voice selector label",
+    "_machine_translated": true,
+    "_source_hash": "b10e53818a281efc"
+  },
+  "settings.speech.pocket.voice.description": {
+    "message": "Les voix intégrées sont en anglais. Ajoutez des voix personnalisées via une URL ou le dossier des voix.",
+    "description": "Helper text for the voice selector",
+    "_machine_translated": true,
+    "_source_hash": "42a822a3325f5297"
+  },
+  "settings.speech.pocket.temp.label": {
+    "message": "Température",
+    "description": "Temperature slider label",
+    "_machine_translated": true,
+    "_source_hash": "d55d4497bcedb928"
+  },
+  "settings.speech.pocket.temp.description": {
+    "message": "Plus bas = cohérent, plus haut = expressif. Par défaut : 0.7.",
+    "description": "Helper for the temperature slider",
+    "_machine_translated": true,
+    "_source_hash": "f4a698b547f4d512"
+  },
+  "settings.speech.pocket.eos.label": {
+    "message": "Seuil EOS",
+    "description": "EOS threshold slider label",
+    "_machine_translated": true,
+    "_source_hash": "1a5f18c2ce56f3e9"
+  },
+  "settings.speech.pocket.eos.description": {
+    "message": "Plus bas = moins susceptible de s'arrêter trop tôt. Par défaut : -4.0.",
+    "description": "Helper for the EOS slider",
+    "_machine_translated": true,
+    "_source_hash": "fb3596af2106e50c"
+  },
+  "settings.speech.pocket.test_btn": {
+    "message": "🔊 Tester la voix",
+    "description": "Test button",
+    "_machine_translated": true,
+    "_source_hash": "65c5468d278eaba7"
+  },
+  "settings.speech.pocket.test_generating": {
+    "message": "⏳ Génération…",
+    "description": "Spinner label while a test is generating",
+    "_machine_translated": true,
+    "_source_hash": "dc5b83041ef6a0a4"
+  },
+  "settings.speech.pocket.port.label": {
+    "message": "Port",
+    "description": "Port input label (Advanced)",
+    "_machine_translated": true,
+    "_source_hash": "fa1173e64e448bb4"
+  },
+  "settings.speech.pocket.port.description": {
+    "message": "Port TCP sur lequel le serveur HTTP Pocket TTS écoute. Redémarrez le serveur après modification.",
+    "description": "Helper for the port field",
+    "_machine_translated": true,
+    "_source_hash": "4982f6f181ea8933"
+  },
+  "settings.automations.title": {
+    "message": "Automatisations",
+    "description": "Settings header — automations / macro chains",
+    "_machine_translated": true,
+    "_source_hash": "62aa09100eb6adfc"
+  },
+  "settings.automations.description": {
+    "message": "Enchaînez des transformations dans des actions automatisées. Déclenchez-les manuellement, selon une planification, ou en réponse à des signaux d'extensions.",
+    "description": "Top-of-pane description",
+    "_machine_translated": true,
+    "_source_hash": "9b0ef0230408ee14"
+  },
+  "settings.automations.power.section": {
+    "message": "Alimentation",
+    "description": "Subsection header for power-aware settings",
+    "_machine_translated": true,
+    "_source_hash": "9046b575f090e647"
+  },
+  "settings.automations.list.section": {
+    "message": "Automatisations",
+    "description": "Subsection header for the automation list",
+    "_machine_translated": true,
+    "_source_hash": "b8df76aec4da442e"
+  },
+  "settings.automations.add_btn": {
+    "message": "+ Ajouter une automatisation",
+    "description": "Button to add a new automation",
+    "_machine_translated": true,
+    "_source_hash": "82fa7158d2ef9f18"
+  },
+  "settings.automations.default_name": {
+    "message": "Nouvelle automatisation",
+    "description": "Default name for a freshly-added automation",
+    "_machine_translated": true,
+    "_source_hash": "3b1cf407613cb98a"
+  },
+  "settings.automations.power_mode.label": {
+    "message": "Mode d'alimentation",
+    "description": "Power-mode dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "eb80fb1f1c31f5a3"
+  },
+  "settings.automations.power_mode.description": {
+    "message": "Contrôle le comportement des automatisations sur batterie.",
+    "description": "Helper text for the power-mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "5076cd909f720563"
+  },
+  "settings.automations.power_mode.auto": {
+    "message": "🔋 Auto (détection de la batterie)",
+    "description": "Power-mode option — auto",
+    "_machine_translated": true,
+    "_source_hash": "47271b36cd514b8f"
+  },
+  "settings.automations.power_mode.full": {
+    "message": "⚡ Toujours à pleine vitesse",
+    "description": "Power-mode option — always full",
+    "_machine_translated": true,
+    "_source_hash": "16f06c1a9dce9b08"
+  },
+  "settings.automations.power_mode.saving": {
+    "message": "🪫 Toujours en économie d'énergie",
+    "description": "Power-mode option — always saving",
+    "_machine_translated": true,
+    "_source_hash": "b222190e3d04c706"
+  },
+  "settings.automations.power_mode.detail_html": {
+    "message": "Sur batterie, les planifications s'exécutent <strong>{battery}×</strong> plus lentement. Sur batterie faible, <strong>{low}×</strong> plus lentement.",
+    "description": "Detail line shown when power mode is auto (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "53689ad710fae8fe"
+  },
+  "settings.automations.validate.empty_name": {
+    "message": "Le nom de l'automatisation ne peut pas être vide.",
+    "description": "Validation error: an automation has a blank name",
+    "_machine_translated": true,
+    "_source_hash": "d11f930744ac680b"
+  },
+  "settings.automations.validate.no_steps": {
+    "message": "« {name} » nécessite au moins une étape.",
+    "description": "Validation error: automation has zero steps",
+    "_machine_translated": true,
+    "_source_hash": "d873cf6a923acd4a"
+  },
+  "settings.automations.trigger.manual": {
+    "message": "🖱️ Manuel",
+    "description": "Trigger badge — manual only",
+    "_machine_translated": true,
+    "_source_hash": "d2de639f4c56fc9f"
+  },
+  "settings.assistant.learn.label": {
+    "message": "Apprendre mes préférences",
+    "description": "Toggle: enable auto-steering",
+    "_machine_translated": true,
+    "_source_hash": "9d1c611ade3c6551"
+  },
+  "settings.assistant.learn.description": {
+    "message": "Laissez Kage apprendre vos préférences au fil des conversations et les mémoriser entre les sessions. Vous pouvez consulter et modifier ce qu'il apprend à tout moment. Ces données restent sur votre machine et ne sont partagées qu'avec l'agent que vous avez choisi.",
+    "description": "Helper for the learn-preferences toggle",
+    "_machine_translated": true,
+    "_source_hash": "3ce0cc657125e7b4"
+  },
+  "settings.assistant.learn.view_btn": {
+    "message": "Voir les préférences apprises",
+    "description": "Button to open the learned-preferences editor",
+    "_machine_translated": true,
+    "_source_hash": "a609f21f31a36378"
+  },
+  "settings.assistant.custom_steering.label": {
+    "message": "Document de pilotage personnalisé",
+    "description": "Section label for the user-authored steering doc",
+    "_machine_translated": true,
+    "_source_hash": "7daf1f434b200a44"
+  },
+  "settings.assistant.custom_steering.description": {
+    "message": "Ajoutez vos propres instructions persistantes. Modifiable ligne par ligne — réordonnez, ajoutez ou supprimez des puces. Toujours incluses aux côtés des préférences apprises et jamais modifiées par Kage.",
+    "description": "Helper text for the custom-steering section",
+    "_machine_translated": true,
+    "_source_hash": "a0881eae9dee074e"
+  },
+  "settings.assistant.custom_steering.edit_btn": {
+    "message": "Modifier le pilotage personnalisé",
+    "description": "Button to open the user-steering editor",
+    "_machine_translated": true,
+    "_source_hash": "bf848eb02d4cc950"
+  },
+  "settings.assistant.app_modes.label": {
+    "message": "Modes d'application",
+    "description": "Section label for per-app steering",
+    "_machine_translated": true,
+    "_source_hash": "1fa94d023f38c11b"
+  },
+  "settings.assistant.app_modes.description": {
+    "message": "Pilotage par application — courtes instructions que Kage ajoutera à votre invite uniquement lorsque vous l'invoquez depuis une application spécifique. Limité à environ 125 jetons par règle pour ne pas surcharger votre contexte.",
+    "description": "Helper for app modes section",
+    "_machine_translated": true,
+    "_source_hash": "1c613c2f3e11270c"
+  },
+  "settings.assistant.app_modes.manage_btn": {
+    "message": "Gérer les modes d'application",
+    "description": "Button to open the app-modes editor",
+    "_machine_translated": true,
+    "_source_hash": "c8072214966b5228"
+  },
+  "context_menu.cut": {
+    "message": "Couper",
+    "description": "Context menu — cut selected text",
+    "_machine_translated": true,
+    "_source_hash": "67f953a50161b12e"
+  },
+  "context_menu.copy": {
+    "message": "Copier",
+    "description": "Context menu — copy selected text",
+    "_machine_translated": true,
+    "_source_hash": "7e73e41c3b8d08e9"
+  },
+  "context_menu.paste": {
+    "message": "Coller",
+    "description": "Context menu — paste from clipboard",
+    "_machine_translated": true,
+    "_source_hash": "9b4c98d0d40f356d"
+  },
+  "context_menu.settings": {
+    "message": "Paramètres",
+    "description": "Context menu — open settings",
+    "_machine_translated": true,
+    "_source_hash": "d62a42775dba19e5"
+  },
+  "context_menu.close": {
+    "message": "Fermer",
+    "description": "Context menu — close current window",
+    "_machine_translated": true,
+    "_source_hash": "86ad33a0e2044207"
+  },
+  "context_menu.inspect": {
+    "message": "Inspecter",
+    "description": "Context menu — open devtools (dev mode only)",
+    "_machine_translated": true,
+    "_source_hash": "aa8f98b70d331111"
+  },
+  "store.window_title": {
+    "message": "Magasin d'extensions",
+    "description": "Title bar of the extension store window",
+    "_machine_translated": true,
+    "_source_hash": "07fc51ba9350028b"
+  },
+  "store.header_title": {
+    "message": "🛍️ Magasin d'extensions",
+    "description": "Header title in the store window",
+    "_machine_translated": true,
+    "_source_hash": "ba05f6989308547e"
+  },
+  "store.header.settings_title": {
+    "message": "Paramètres du magasin",
+    "description": "Tooltip on the store-settings gear button",
+    "_machine_translated": true,
+    "_source_hash": "2c77a80142d6412b"
+  },
+  "store.tab.extensions": {
+    "message": "Extensions",
+    "description": "Tab label — extensions",
+    "_machine_translated": true,
+    "_source_hash": "3a4a463c13d6d848"
+  },
+  "store.tab.themes": {
+    "message": "Thèmes",
+    "description": "Tab label — themes",
+    "_machine_translated": true,
+    "_source_hash": "55cdd4c544c082d9"
+  },
+  "store.tab.commands": {
+    "message": "Commandes rapides",
+    "description": "Tab label — quick commands",
+    "_machine_translated": true,
+    "_source_hash": "61b7ca5cd6bdada1"
+  },
+  "store.search.placeholder": {
+    "message": "Rechercher…",
+    "description": "Placeholder for the store search input",
+    "_machine_translated": true,
+    "_source_hash": "146a55c1b743ce12"
+  },
+  "store.source.all": {
+    "message": "Toutes les sources",
+    "description": "Source filter — show items from every source",
+    "_machine_translated": true,
+    "_source_hash": "f3eddff948c4963d"
+  },
+  "store.filter.installed_only": {
+    "message": "Installés uniquement",
+    "description": "Filter button — show only installed extensions",
+    "_machine_translated": true,
+    "_source_hash": "d87b8ef505f77e45"
   }
 }

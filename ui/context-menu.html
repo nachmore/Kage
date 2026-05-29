@@ -38,24 +38,28 @@
 </head>
 <body>
     <div class="menu" id="menu">
-        <div class="menu-item" data-action="cut">Cut</div>
-        <div class="menu-item" data-action="copy">Copy</div>
-        <div class="menu-item" data-action="paste">Paste</div>
+        <div class="menu-item" data-action="cut" data-i18n="context_menu.cut">Cut</div>
+        <div class="menu-item" data-action="copy" data-i18n="context_menu.copy">Copy</div>
+        <div class="menu-item" data-action="paste" data-i18n="context_menu.paste">Paste</div>
         <div class="menu-sep"></div>
-        <div class="menu-item" data-action="settings">Settings</div>
-        <div class="menu-item" data-action="close">Close</div>
+        <div class="menu-item" data-action="settings" data-i18n="context_menu.settings">Settings</div>
+        <div class="menu-item" data-action="close" data-i18n="context_menu.close">Close</div>
         <div class="menu-sep hidden" id="devSep"></div>
-        <div class="menu-item hidden" id="devInspect" data-action="inspect">Inspect</div>
+        <div class="menu-item hidden" id="devInspect" data-action="inspect" data-i18n="context_menu.inspect">Inspect</div>
     </div>
     <script type="module">
         import { applyTheme, initThemeListener, loadAndApplyTheme } from './js/shared/theme.js';
         import { EVT } from './js/shared/events.js';
+        import { initI18n, applyStaticTranslations } from './js/shared/i18n.js';
 
         (async function() {
             const { invoke } = window.__TAURI__.core;
             const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
             const LogicalSize = window.__TAURI__.dpi.LogicalSize;
             const { emit } = window.__TAURI__.event;
+
+            try { await initI18n(invoke); } catch (e) { console.warn('[context-menu] i18n init failed', e); }
+            applyStaticTranslations(document);
 
             initThemeListener();
             loadAndApplyTheme(invoke).catch(() => applyTheme('system'));

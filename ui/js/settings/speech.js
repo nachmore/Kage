@@ -1,4 +1,5 @@
 import { SettingsModule } from './base.js';
+import { t } from '../shared/i18n.js';
 import { getSettingsManager, registerSettingsActions } from './module-registry.js';
 /**
  * Unified Speech Settings Module
@@ -6,7 +7,7 @@ import { getSettingsManager, registerSettingsActions } from './module-registry.j
  */
 export class SpeechSettingsModule extends SettingsModule {
     constructor() {
-        super('speech', 'Speech', '🎙️');
+        super('speech', t('settings.speech.title'), '🎙️');
         this._pocketStatus = null;
     }
 
@@ -15,31 +16,31 @@ export class SpeechSettingsModule extends SettingsModule {
             <div class="settings-section" id="${this.id}-section">
                 <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
-                <div class="setting-section-label">Voice Input</div>
+                <div class="setting-section-label">${t('settings.speech.voice_input.section')}</div>
 
                 <!-- Voice Input -->
                 ${this.createCheckboxRow(
-                    'Show Speech Button',
-                    'Display a microphone button for voice input using speech-to-text.',
+                    t('settings.speech.show_button.label'),
+                    t('settings.speech.show_button.description'),
                     'showSpeechButton',
                     false
                 )}
 
                 <div id="speechSilenceRow">
                 ${this.createControlRow(
-                    'Auto-Submit Silence Delay',
-                    'Automatically send the message after this many seconds of silence. Set to 0 to disable.',
+                    t('settings.speech.silence.label'),
+                    t('settings.speech.silence.description'),
                     '<div class="range-container"><input type="range" class="range-slider" id="speechSilenceTimeout" min="0" max="5" step="0.5" value="2"><span class="range-value" id="speechSilenceValue">2.0s</span></div>'
                 )}
                 </div>
 
                 <!-- Read Back -->
-                <div class="setting-section-label">Agent Voice</div>
+                <div class="setting-section-label">${t('settings.speech.agent_voice.section')}</div>
 
                 <div id="speechReadBackRow">
                 ${this.createCheckboxRow(
-                    'Read Back Agent Responses',
-                    'Use text-to-speech to read agent responses aloud when voice input was used.',
+                    t('settings.speech.read_back.label'),
+                    t('settings.speech.read_back.description'),
                     'speechReadBack',
                     false
                 )}
@@ -48,18 +49,18 @@ export class SpeechSettingsModule extends SettingsModule {
                 <!-- TTS Engine -->
                 <div id="ttsEngineSection">
                 ${this.createControlRow(
-                    'TTS Engine',
-                    'Choose which engine reads back responses.',
-                    '<select class="setting-select" id="ttsEngine"><option value="system">System (Browser)</option><option value="pocket-tts">Pocket TTS (Local AI)</option></select>'
+                    t('settings.speech.tts_engine.label'),
+                    t('settings.speech.tts_engine.description'),
+                    `<select class="setting-select" id="ttsEngine"><option value="system">${t('settings.speech.tts_engine.system')}</option><option value="pocket-tts">${t('settings.speech.tts_engine.pocket')}</option></select>`
                 )}
                 </div>
 
                 <!-- System Voice (shown when engine = system) -->
                 <div id="systemVoiceSection">
                 ${this.createControlRow(
-                    'System Voice',
-                    'Select the browser voice used for reading back responses.',
-                    '<select class="setting-select" id="speechVoice"><option value="">System Default</option></select>'
+                    t('settings.speech.system_voice.label'),
+                    t('settings.speech.system_voice.description'),
+                    `<select class="setting-select" id="speechVoice"><option value="">${t('settings.speech.system_voice.default')}</option></select>`
                 )}
                 </div>
 
@@ -69,30 +70,30 @@ export class SpeechSettingsModule extends SettingsModule {
                     <!-- Status + Setup (collapsible) -->
                     <div id="pocketTtsSetupSection">
                         <div id="pocketTtsStatusBanner" class="setting-row" style="border-radius:8px;background:var(--kage-bg-secondary);margin-bottom:8px;cursor:pointer;" data-action="speech.togglePocketTtsSetup">
-                            <span id="pocketTtsStatusText" style="font-size:12px;">Checking...</span>
-                            <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kage-text-muted);">▼ Setup</span>
+                            <span id="pocketTtsStatusText" style="font-size:12px;">${t('settings.speech.pocket.checking')}</span>
+                            <span id="pocketTtsSetupToggle" style="float:right;font-size:11px;color:var(--kage-text-muted);">${t('settings.speech.pocket.setup_collapse')}</span>
                         </div>
                         <div id="pocketTtsSetupSteps" style="display:none;">
                             <div id="pocketTtsStep1" class="setting-row" style="display:none;">
-                                <div class="setting-label">Python</div>
+                                <div class="setting-label">${t('settings.speech.pocket.python.label')}</div>
                                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                    <span id="pocketTtsPythonStatus" style="font-size:12px;">Checking...</span>
+                                    <span id="pocketTtsPythonStatus" style="font-size:12px;">${t('settings.speech.pocket.checking')}</span>
                                 </div>
                             </div>
                             <div id="pocketTtsStep2" class="setting-row" style="display:none;">
-                                <div class="setting-label">Install pocket-tts</div>
-                                <div class="setting-description">Installs the Python package (~400MB model download on first use).</div>
+                                <div class="setting-label">${t('settings.speech.pocket.install.label')}</div>
+                                <div class="setting-description">${t('settings.speech.pocket.install.description')}</div>
                                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                    <button class="setting-button" id="pocketTtsInstallBtn" data-action="speech.pocketTtsInstall">Install</button>
+                                    <button class="setting-button" id="pocketTtsInstallBtn" data-action="speech.pocketTtsInstall">${t('settings.speech.pocket.install.button')}</button>
                                     <span id="pocketTtsInstallStatus" style="font-size:12px;"></span>
                                 </div>
                                 <pre id="pocketTtsInstallLog" style="display:none;font-size:11px;max-height:150px;overflow-y:auto;background:var(--kage-bg-tertiary);padding:8px;border-radius:6px;margin-top:8px;white-space:pre-wrap;word-break:break-all;"></pre>
                             </div>
                             <div id="pocketTtsStep3" class="setting-row" style="display:none;">
-                                <div class="setting-label">Server</div>
-                                <div class="setting-description">First start takes ~10-30s to load the model.</div>
+                                <div class="setting-label">${t('settings.speech.pocket.server.label')}</div>
+                                <div class="setting-description">${t('settings.speech.pocket.server.description')}</div>
                                 <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                    <button class="setting-button" id="pocketTtsStartBtn" data-action="speech.pocketTtsToggleServer">Start Server</button>
+                                    <button class="setting-button" id="pocketTtsStartBtn" data-action="speech.pocketTtsToggleServer">${t('settings.speech.pocket.server.start')}</button>
                                     <span id="pocketTtsServerStatus" style="font-size:12px;"></span>
                                 </div>
                             </div>
@@ -103,70 +104,70 @@ export class SpeechSettingsModule extends SettingsModule {
                     <div id="pocketTtsConfig" style="display:none;">
 
                         ${this.createCheckboxRow(
-                            'Auto-Start Server',
-                            'Pre-start the Pocket TTS server when Kage launches for faster first speech. If off, the server starts automatically on first use (with a brief delay).',
+                            t('settings.speech.pocket.auto_start.label'),
+                            t('settings.speech.pocket.auto_start.description'),
                             'pocketTtsAutoStart',
                             false
                         )}
 
                         <!-- Voice & Generation -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Voice & Generation</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">${t('settings.speech.pocket.voice_gen.section')}</div></div>
 
                         ${this.createControlRow(
-                            'Voice',
-                            'Built-in voices are English. Add custom voices via URL or the voices folder.',
+                            t('settings.speech.pocket.voice.label'),
+                            t('settings.speech.pocket.voice.description'),
                             '<select class="setting-select" id="pocketTtsVoice"></select>'
                         )}
 
                         ${this.createControlRow(
-                            'Temperature',
-                            'Lower = consistent, higher = expressive. Default: 0.7.',
+                            t('settings.speech.pocket.temp.label'),
+                            t('settings.speech.pocket.temp.description'),
                             '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsTemp" min="0.3" max="1.0" step="0.1" value="0.7"><span class="range-value" id="pocketTtsTempValue">0.7</span></div>'
                         )}
 
                         ${this.createControlRow(
-                            'EOS Threshold',
-                            'Lower = less likely to stop early. Default: -4.0.',
+                            t('settings.speech.pocket.eos.label'),
+                            t('settings.speech.pocket.eos.description'),
                             '<div class="range-container"><input type="range" class="range-slider" id="pocketTtsEos" min="-8.0" max="-1.0" step="0.5" value="-4.0"><span class="range-value" id="pocketTtsEosValue">-4.0</span></div>'
                         )}
 
                         <!-- Test -->
                         <div class="setting-row">
                             <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                <button class="setting-button" id="pocketTtsTestBtn" data-action="speech.pocketTtsTest">🔊 Test Voice</button>
-                                <span id="pocketTtsTestSpinner" style="display:none;font-size:12px;">⏳ Generating...</span>
+                                <button class="setting-button" id="pocketTtsTestBtn" data-action="speech.pocketTtsTest">${t('settings.speech.pocket.test_btn')}</button>
+                                <span id="pocketTtsTestSpinner" style="display:none;font-size:12px;">${t('settings.speech.pocket.test_generating')}</span>
                                 <span id="pocketTtsTestStatus" style="font-size:12px;"></span>
                             </div>
                         </div>
 
                         <!-- Custom Voices -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Custom Voices</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">${t('settings.speech.pocket.custom.section')}</div></div>
 
                         <div class="setting-row">
                             <div class="setting-description">
-                                Paste a <a href="https://huggingface.co/kyutai/tts-voices" target="_blank">HuggingFace voice URL</a> or HTTP URL to a .wav file.
+                                ${t('settings.speech.pocket.custom.help_html')}
                             </div>
                             <div class="setting-control" style="display:flex;gap:8px;align-items:center;">
-                                <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="hf://kyutai/tts-voices/..." style="flex:1;">
-                                <input type="text" class="setting-input" id="pocketTtsVoiceName" placeholder="Name" style="width:100px;">
-                                <button class="setting-button" id="pocketTtsAddVoiceBtn" data-action="speech.pocketTtsAddVoice">Add</button>
+                                <input type="text" class="setting-input" id="pocketTtsVoiceUrl" placeholder="${t('settings.speech.pocket.custom.url_placeholder')}" style="flex:1;">
+                                <input type="text" class="setting-input" id="pocketTtsVoiceName" placeholder="${t('settings.speech.pocket.custom.name_placeholder')}" style="width:100px;">
+                                <button class="setting-button" id="pocketTtsAddVoiceBtn" data-action="speech.pocketTtsAddVoice">${t('settings.speech.pocket.custom.add_btn')}</button>
                             </div>
                             <div id="pocketTtsAddVoiceStatus" style="font-size:12px;margin-top:4px;"></div>
                         </div>
 
                         <div class="setting-row">
-                            <div class="setting-description">Or place .wav files directly in the voices folder (5-20s clean audio works best).</div>
+                            <div class="setting-description">${t('settings.speech.pocket.custom.local_help')}</div>
                             <div class="setting-control">
-                                <button class="setting-button" data-action="speech.pocketTtsOpenVoicesDir">Open Voices Folder</button>
+                                <button class="setting-button" data-action="speech.pocketTtsOpenVoicesDir">${t('settings.speech.pocket.custom.open_dir')}</button>
                             </div>
                         </div>
 
                         <!-- Advanced -->
-                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">Advanced</div></div>
+                        <div class="setting-row"><div class="setting-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--kage-text-muted);margin-bottom:4px;">${t('settings.speech.pocket.advanced.section')}</div></div>
 
                         ${this.createControlRow(
-                            'Server Port',
-                            'Change only if 9877 conflicts with another service.',
+                            t('settings.speech.pocket.port.label'),
+                            t('settings.speech.pocket.port.description'),
                             '<input type="number" class="setting-input" id="pocketTtsPort" min="1024" max="65535" value="9877" style="width:100px;">'
                         )}
                     </div>
@@ -335,7 +336,7 @@ export class SpeechSettingsModule extends SettingsModule {
         const select = document.getElementById('speechVoice');
         if (!select) return;
         const voices = speechSynthesis.getVoices();
-        select.innerHTML = '<option value="">System Default</option>';
+        select.innerHTML = `<option value="">${t('settings.speech.system_voice.default')}</option>`;
         for (const voice of voices) {
             const opt = document.createElement('option');
             opt.value = voice.name;
@@ -376,15 +377,14 @@ export class SpeechSettingsModule extends SettingsModule {
 
         if (!s.python_found) {
             if (pythonStatus)
-                pythonStatus.innerHTML =
-                    '❌ Python 3 not found. <a href="https://www.python.org/downloads/" target="_blank">Download Python</a>';
-            if (statusText) statusText.innerHTML = '❌ Python 3.10+ required';
+                pythonStatus.innerHTML = t('settings.speech.pocket.python.not_found_html');
+            if (statusText) statusText.textContent = t('settings.speech.pocket.python.required');
             if (step2) step2.style.display = 'none';
             if (step3) step3.style.display = 'none';
             if (config) config.style.display = 'none';
             // Force setup open
             if (setupSteps) setupSteps.style.display = '';
-            if (setupToggle) setupToggle.textContent = '▲ Setup';
+            if (setupToggle) setupToggle.textContent = t('settings.speech.pocket.setup_expand');
             this._setStatusColor('error');
             return;
         }
@@ -392,47 +392,51 @@ export class SpeechSettingsModule extends SettingsModule {
         if (step2) step2.style.display = '';
 
         if (!s.installed) {
-            if (installStatus) installStatus.textContent = 'Not installed';
-            if (statusText) statusText.textContent = '📦 Not installed — expand setup below';
+            if (installStatus)
+                installStatus.textContent = t('settings.speech.pocket.install.not_installed');
+            if (statusText)
+                statusText.textContent = t('settings.speech.pocket.install.banner_not_installed');
             if (step3) step3.style.display = 'none';
             if (config) config.style.display = 'none';
             if (setupSteps) setupSteps.style.display = '';
-            if (setupToggle) setupToggle.textContent = '▲ Setup';
+            if (setupToggle) setupToggle.textContent = t('settings.speech.pocket.setup_expand');
             this._setStatusColor('info');
             return;
         }
 
-        if (installStatus) installStatus.textContent = '✅ Installed';
+        if (installStatus)
+            installStatus.textContent = t('settings.speech.pocket.install.installed');
         const installBtn = document.getElementById('pocketTtsInstallBtn');
         if (installBtn) {
-            installBtn.textContent = 'Reinstall';
+            installBtn.textContent = t('settings.speech.pocket.install.reinstall');
             installBtn.style.opacity = '0.7';
         }
         if (step3) step3.style.display = '';
         if (config) config.style.display = '';
 
         if (s.server_running) {
-            if (serverStatus) serverStatus.textContent = '✅ Running';
+            if (serverStatus) serverStatus.textContent = t('settings.speech.pocket.server.running');
             if (startBtn) {
-                startBtn.textContent = 'Stop Server';
+                startBtn.textContent = t('settings.speech.pocket.server.stop');
                 startBtn.style.background = '#c44';
             }
-            if (statusText) statusText.textContent = '✅ Ready';
+            if (statusText) statusText.textContent = t('settings.speech.pocket.banner.ready');
             this._setStatusColor('success');
             // Auto-collapse setup when everything is good
             if (setupSteps) setupSteps.style.display = 'none';
-            if (setupToggle) setupToggle.textContent = '▼ Setup';
+            if (setupToggle) setupToggle.textContent = t('settings.speech.pocket.setup_collapse');
         } else {
-            if (serverStatus) serverStatus.textContent = '⏹ Stopped';
+            if (serverStatus) serverStatus.textContent = t('settings.speech.pocket.server.stopped');
             if (startBtn) {
-                startBtn.textContent = 'Start Server';
+                startBtn.textContent = t('settings.speech.pocket.server.start');
                 startBtn.style.background = '';
             }
-            if (statusText) statusText.textContent = '⏹ Server stopped';
+            if (statusText)
+                statusText.textContent = t('settings.speech.pocket.banner.server_stopped');
             this._setStatusColor('info');
             // Show setup so user can start server
             if (setupSteps) setupSteps.style.display = '';
-            if (setupToggle) setupToggle.textContent = '▲ Setup';
+            if (setupToggle) setupToggle.textContent = t('settings.speech.pocket.setup_expand');
         }
     }
 
@@ -478,7 +482,10 @@ function togglePocketTtsSetup() {
     if (!steps) return;
     const visible = steps.style.display !== 'none';
     steps.style.display = visible ? 'none' : '';
-    if (toggle) toggle.textContent = visible ? '▼ Setup' : '▲ Setup';
+    if (toggle)
+        toggle.textContent = visible
+            ? t('settings.speech.pocket.setup_collapse')
+            : t('settings.speech.pocket.setup_expand');
 }
 
 const _pocketTtsInstallUnlisteners = [];
@@ -491,12 +498,12 @@ async function pocketTtsInstall() {
     const log = document.getElementById('pocketTtsInstallLog');
 
     if (btn) {
-        btn.textContent = '✕ Cancel';
+        btn.textContent = t('settings.speech.pocket.install.cancel');
         btn.style.background = '#c44';
         btn.style.color = 'white';
         btn.dataset.action = 'speech.pocketTtsCancelInstall';
     }
-    if (status) status.textContent = 'Installing...';
+    if (status) status.textContent = t('settings.speech.pocket.install.installing');
     if (log) {
         log.style.display = 'block';
         log.textContent = '$ pip install pocket-tts\n';
@@ -517,7 +524,7 @@ async function pocketTtsInstall() {
             _pocketTtsInstallUnlisteners.length = 0;
 
             if (data.success) {
-                if (status) status.textContent = '✅ Installed';
+                if (status) status.textContent = t('settings.speech.pocket.install.installed');
                 if (log) log.textContent += '\n✅ ' + data.message + '\n';
                 try {
                     const config = await invoke('get_config');
@@ -529,11 +536,17 @@ async function pocketTtsInstall() {
                     console.warn('[Speech] Config update failed:', e);
                 }
             } else {
-                if (status) status.textContent = '❌ ' + (data.message || 'Failed');
-                if (log) log.textContent += '\n❌ ' + data.message + '\n';
+                const reason = data.message || t('settings.speech.pocket.install.failed_default');
+                if (status)
+                    status.textContent = t('settings.speech.pocket.install.error_prefix', {
+                        reason,
+                    });
+                if (log) log.textContent += '\n❌ ' + reason + '\n';
             }
             if (btn) {
-                btn.textContent = data.success ? 'Reinstall' : 'Retry';
+                btn.textContent = data.success
+                    ? t('settings.speech.pocket.install.reinstall')
+                    : t('settings.speech.pocket.install.retry');
                 btn.style.background = '';
                 btn.style.color = '';
                 btn.dataset.action = 'speech.pocketTtsInstall';
@@ -550,9 +563,12 @@ async function pocketTtsInstall() {
     try {
         await invoke('pocket_tts_install');
     } catch (e) {
-        if (status) status.textContent = '❌ ' + e;
+        if (status)
+            status.textContent = t('settings.speech.pocket.install.error_prefix', {
+                reason: String(e),
+            });
         if (btn) {
-            btn.textContent = 'Retry';
+            btn.textContent = t('settings.speech.pocket.install.retry');
             btn.style.background = '';
             btn.style.color = '';
             btn.dataset.action = 'speech.pocketTtsInstall';
@@ -568,7 +584,7 @@ async function pocketTtsCancelInstall() {
     const btn = document.getElementById('pocketTtsInstallBtn');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Cancelling...';
+        btn.textContent = t('settings.speech.pocket.install.cancelling');
     }
     try {
         await invoke('pocket_tts_cancel_install');
@@ -586,15 +602,18 @@ async function pocketTtsToggleServer() {
     if (btn) btn.disabled = true;
     try {
         if (isRunning) {
-            if (status) status.textContent = 'Stopping...';
+            if (status) status.textContent = t('settings.speech.pocket.server.stopping');
             await invoke('pocket_tts_stop');
         } else {
-            if (status) status.textContent = 'Starting...';
-            if (btn) btn.textContent = 'Starting...';
+            if (status) status.textContent = t('settings.speech.pocket.server.starting');
+            if (btn) btn.textContent = t('settings.speech.pocket.server.starting');
             await invoke('pocket_tts_start');
         }
     } catch (e) {
-        if (status) status.textContent = '❌ ' + e;
+        if (status)
+            status.textContent = t('settings.speech.pocket.install.error_prefix', {
+                reason: String(e),
+            });
     }
     if (btn) btn.disabled = false;
     if (mod) mod._refreshPocketStatus();

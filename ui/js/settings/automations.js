@@ -1,6 +1,7 @@
 import { SettingsModule } from './base.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { t } from '../shared/i18n.js';
 /**
  * Automations Settings Module — collapsed/expanded card UI for automation rules.
  */
@@ -37,7 +38,7 @@ const DAYS_OF_WEEK = [
 
 export class AutomationsSettingsModule extends SettingsModule {
     constructor() {
-        super('macros', 'Automations', '🔄');
+        super('macros', t('settings.automations.title'), '🔄');
         this._automations = [];
         this._signals = [];
         this._expandedIndex = -1;
@@ -101,12 +102,20 @@ export class AutomationsSettingsModule extends SettingsModule {
             ' ' +
             this.title +
             '</h2>' +
-            '<div class="setting-description" style="margin-bottom:12px">Chain transformations into automated actions. Trigger them manually, on a schedule, or in response to signals from extensions.</div>' +
-            '<div class="setting-section-label">Power</div>' +
+            '<div class="setting-description" style="margin-bottom:12px">' +
+            t('settings.automations.description') +
+            '</div>' +
+            '<div class="setting-section-label">' +
+            t('settings.automations.power.section') +
+            '</div>' +
             '<div id="automationPowerSection"></div>' +
-            '<div class="setting-section-label">Automations</div>' +
+            '<div class="setting-section-label">' +
+            t('settings.automations.list.section') +
+            '</div>' +
             '<div id="automationsList" class="auto-list"></div>' +
-            '<button class="setting-button" id="addAutomationBtn" style="margin-top:8px">+ Add Automation</button>' +
+            '<button class="setting-button" id="addAutomationBtn" style="margin-top:8px">' +
+            t('settings.automations.add_btn') +
+            '</button>' +
             '<style>' +
             css +
             '</style>' +
@@ -116,7 +125,7 @@ export class AutomationsSettingsModule extends SettingsModule {
     async initialize() {
         document.getElementById('addAutomationBtn')?.addEventListener('click', () => {
             this._automations.push({
-                name: 'New Automation',
+                name: t('settings.automations.default_name'),
                 icon: '🔄',
                 steps: [
                     {
@@ -192,9 +201,12 @@ export class AutomationsSettingsModule extends SettingsModule {
         if (this._expandedIndex >= 0) this._syncExpandedFromDom();
         for (const m of this._automations) {
             if (!m.name.trim())
-                return { valid: false, message: 'Automation name cannot be empty.' };
+                return { valid: false, message: t('settings.automations.validate.empty_name') };
             if (m.steps.length === 0)
-                return { valid: false, message: '"' + m.name + '" needs at least one step.' };
+                return {
+                    valid: false,
+                    message: t('settings.automations.validate.no_steps', { name: m.name }),
+                };
         }
         return { valid: true };
     }
@@ -208,9 +220,9 @@ export class AutomationsSettingsModule extends SettingsModule {
         if (!container) return;
         const p = this._powerConfig;
         const modeOpts = [
-            ['auto', '🔋 Auto (detect battery)'],
-            ['full', '⚡ Always full speed'],
-            ['saving', '🪫 Always power saving'],
+            ['auto', t('settings.automations.power_mode.auto')],
+            ['full', t('settings.automations.power_mode.full')],
+            ['saving', t('settings.automations.power_mode.saving')],
         ]
             .map(
                 ([v, l]) =>
@@ -223,7 +235,11 @@ export class AutomationsSettingsModule extends SettingsModule {
                     '</option>'
             )
             .join('');
-        container.innerHTML = `<div class="setting-row"><div class="setting-label">Power Mode</div><div class="setting-description">Controls how automations behave on battery power.</div><select class="setting-select" id="automationPowerMode" style="max-width:280px;">${modeOpts}</select></div><div id="powerDetailsRow" style="${p.mode === 'auto' ? '' : 'display:none;'}"><div class="setting-row"><div class="setting-description">On battery, schedules run <strong>${p.battery_multiplier}×</strong> slower. On low battery, <strong>${p.low_battery_multiplier}×</strong> slower.</div></div></div>`;
+        const detailHtml = t('settings.automations.power_mode.detail_html', {
+            battery: p.battery_multiplier,
+            low: p.low_battery_multiplier,
+        });
+        container.innerHTML = `<div class="setting-row"><div class="setting-label">${t('settings.automations.power_mode.label')}</div><div class="setting-description">${t('settings.automations.power_mode.description')}</div><select class="setting-select" id="automationPowerMode" style="max-width:280px;">${modeOpts}</select></div><div id="powerDetailsRow" style="${p.mode === 'auto' ? '' : 'display:none;'}"><div class="setting-row"><div class="setting-description">${detailHtml}</div></div></div>`;
         document.getElementById('automationPowerMode')?.addEventListener('change', (e) => {
             this._powerConfig.mode = e.target.value;
             const d = document.getElementById('powerDetailsRow');
@@ -234,7 +250,7 @@ export class AutomationsSettingsModule extends SettingsModule {
 
     // ── Trigger description for collapsed view ──
     _triggerBadgeText(trigger) {
-        if (!trigger || trigger.type === 'manual') return '🖱️ Manual';
+        if (!trigger || trigger.type === 'manual') return t('settings.automations.trigger.manual');
         if (trigger.type === 'schedule') {
             const p = this._parseScheduleInterval(trigger.interval);
             if (p.mode === 'hourly') return `🕐 Every ${p.hours}h`;

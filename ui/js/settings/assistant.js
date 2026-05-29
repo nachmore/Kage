@@ -1,4 +1,5 @@
 import { createLineEditor } from '../shared/line-editor.js';
+import { t } from '../shared/i18n.js';
 import { registerSettingsActions } from './module-registry.js';
 import { SettingsModule } from './base.js';
 
@@ -22,7 +23,7 @@ import { SettingsModule } from './base.js';
  */
 export class AssistantSettingsModule extends SettingsModule {
     constructor() {
-        super('personalization', 'Personalization', '✨');
+        super('personalization', t('settings.sidebar.personalization'), '✨');
         // Active LineEditor controller, or null when on the main view.
         this._editor = null;
         // Steering kind currently being edited ('auto' | 'user').
@@ -70,31 +71,31 @@ export class AssistantSettingsModule extends SettingsModule {
                     <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
                     <div class="setting-row">
-                        <div class="setting-label">Learn my preferences</div>
+                        <div class="setting-label">${t('settings.assistant.learn.label')}</div>
                         <div class="setting-checkbox-row">
                             <label class="kage-checkbox">
                                 <input type="checkbox" id="autoSteeringEnabled">
                             </label>
-                            <div class="setting-description">Let Kage learn your preferences from conversations and remember them across sessions. You can view and edit what it learns at any time. This data stays on your machine and is only shared with your chosen agent.</div>
+                            <div class="setting-description">${t('settings.assistant.learn.description')}</div>
                         </div>
                         <div class="setting-control" style="margin-top: 8px;">
-                            <button class="setting-button" data-action="openSteeringEditor" data-arg="auto">View Learned Preferences</button>
+                            <button class="setting-button" data-action="openSteeringEditor" data-arg="auto">${t('settings.assistant.learn.view_btn')}</button>
                         </div>
                     </div>
 
                     <div class="setting-row">
-                        <div class="setting-label">Custom steering document</div>
-                        <div class="setting-description">Add your own persistent instructions. Edited line by line — reorder, add, or delete bullets. Always included alongside learned preferences and never modified by Kage.</div>
+                        <div class="setting-label">${t('settings.assistant.custom_steering.label')}</div>
+                        <div class="setting-description">${t('settings.assistant.custom_steering.description')}</div>
                         <div class="setting-control" style="margin-top: 8px; display:flex; gap:8px;">
-                            <button class="setting-button" data-action="openSteeringEditor" data-arg="user">Edit custom steering</button>
+                            <button class="setting-button" data-action="openSteeringEditor" data-arg="user">${t('settings.assistant.custom_steering.edit_btn')}</button>
                         </div>
                     </div>
 
                     <div class="setting-row">
-                        <div class="setting-label">App Modes</div>
-                        <div class="setting-description">Per-app steering — short instructions Kage will append to your prompt only when you summon it from a specific application. Capped at ~125 tokens per rule so it doesn't bloat your context.</div>
+                        <div class="setting-label">${t('settings.assistant.app_modes.label')}</div>
+                        <div class="setting-description">${t('settings.assistant.app_modes.description')}</div>
                         <div class="setting-control" style="margin-top: 8px; display:flex; gap:8px; align-items: center;">
-                            <button class="setting-button" data-action="openAppModesEditor">Manage App Modes</button>
+                            <button class="setting-button" data-action="openAppModesEditor">${t('settings.assistant.app_modes.manage_btn')}</button>
                             <span id="appModesSummary" class="setting-description" style="margin: 0;"></span>
                         </div>
                     </div>
