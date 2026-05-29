@@ -53,10 +53,12 @@ export async function checkOnline() {
 
     try {
         // Use a tiny fetch with a short timeout to test real connectivity.
-        // We hit a known always-available endpoint. The HEAD request is ~0 bytes.
+        // Cloudflare's connectivity-check endpoint is the standard choice —
+        // tiny payload, globally CDN-served, and Cloudflare is robust about
+        // not blocking unauthenticated HEADs from any origin.
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 2000);
-        await fetch('https://aws.amazon.com/favicon.ico', {
+        await fetch('https://www.cloudflare.com/cdn-cgi/trace', {
             method: 'HEAD',
             mode: 'no-cors',
             cache: 'no-store',

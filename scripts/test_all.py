@@ -33,6 +33,13 @@ if not os.path.isdir(os.path.join(js_dir, "node_modules")):
 
 run("JS Tests", ["npx", "vitest", "run"], cwd=js_dir)
 
+# i18n catalog drift. Hard-fails CI if a t!() / t() key is referenced from
+# source but missing in EN, or if a non-EN catalog drifts from EN. Fast —
+# pure-python source scan + JSON parse, no compilation.
+# See docs/I18N.md for what each failure mode means and how to fix it.
+run("i18n drift check", [sys.executable, "scripts/check_i18n.py"])
+run("i18n drift-check self-tests", [sys.executable, "scripts/test_check_i18n.py"])
+
 # Summary
 print()
 if failed:

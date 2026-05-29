@@ -133,9 +133,77 @@ Use `log::*` macros (`info!`, `warn!`, `error!`, `debug!`). Avoid `println!` out
 ## Conventions
 
 - **Build output**: when a build/test fails, read the **full** output, not just the last 30 lines. Errors and warnings can appear anywhere.
-- **Inclusive language**: don't use master/slave/whitelist/blacklist. See `~/.claude/rules/amazon-builder-context-do-not-delete.md` for the substitutions table.
+- **Inclusive language**: don't use master/slave/whitelist/blacklist; prefer primary/replica, allowlist/denylist, etc.
 - **Commits**: never commit unless the user explicitly says "commit". Don't commit on task completion or on "go ahead" / "do it".
 
+
+## Internationalisation (i18n)
+
+User-visible strings are localised across all three layers — Rust backend,
+frontend, and extension sandbox. **The full contract lives in `docs/I18N.md`** —
+read that before adding strings or tweaking the i18n machinery. The high-level
+rules every contributor needs to know:
+
+- **Logs stay English. Always.** `log::info!`/`warn!`/`error!`/`debug!`,
+  `println!`, `eprintln!`, `console.log` all emit English regardless of the
+  active locale. Reason: `app.jsonl` from a Japanese user must be searchable
+  from any developer's box.
+- **Rust user-facing strings** go through `t!("key.path", "name" => value)`
+  (macro in `src/i18n.rs`). Errors that bubble to the frontend use
+  `AppError::keyed(KIND, "errors.foo.bar", &[("name", &val)])`. The legacy
+  free-form constructors (`AppError::connection_lost(s)`, etc.) still work —
+  they route through the `errors.passthrough` template — but new code should
+  prefer `keyed`.
+- **Frontend strings** go through `t("key.path", { name: value })` from
+  `ui/js/shared/i18n.js`. Static HTML uses `data-i18n="key.path"` and
+  sister attribute variants (`-title`, `-placeholder`, `-aria-label`,
+  `-alt`, `-html`); call `applyStaticTranslations(root)` after the markup
+  is in the DOM.
+- **Catalog**: `locales/<code>/messages.json`. EN is canonical and
+  hand-authored; the other 30 are machine-translated by `scripts/translate.py`
+  (Claude-powered, per-entry `_source_hash` makes it idempotent). The Rust
+  binary embeds every catalog at compile time via `include_str!` in
+  `src/i18n.rs::embed_locales!` — adding a language is a one-line change
+  there plus a run of `translate.py`.
+- **Drift-check is a CI gate**: `scripts/check_i18n.py` (also runs from
+  `scripts/test_all.py`). Hard-fails on missing keys in EN, drift between
+  EN and any non-EN catalog (in either direction), and `{placeholder}`
+  drift. Stale EN keys → warning, not error.
+- **AppError translation happens at the serde boundary**, not in domain
+  code. `AppError` carries `(kind, key, params)`; its custom `Serialize`
+  renders `message` in the active locale at the moment Tauri serialises
+  it for the frontend. `Display` (used by logs) uses the EN catalog
+  unconditionally.
+- **Extension i18n**: each extension ships `_locales/<lang>/messages.json`
+  (Chrome convention). The sandbox host loads the matched catalog and an
+  EN fallback; the runtime exposes `context.i18n.t(key, vars)` to
+  extension code. `__MSG_key__` tokens in the manifest's `name` /
+  `description` are resolved before the manifest is shown to the user.
+  See `docs/I18N.md` § 6 for the authoring contract; `Kage-Extensions/extensions/hello-world/`
+  is the canonical reference.
+- **RTL**: when the active language is `ar`/`he`/`fa`/`ur`, the frontend sets
+  `<html dir="rtl">` and `body.classList.add('rtl')`. CSS rules in
+  `ui/css/shared-rtl.css` flip layout via `[dir=rtl]` selectors. Code,
+  URLs, hotkeys, and other inherently-LTR content should carry `dir="ltr"`
+  or `class="ltr"`. The existing `ui/js/shared/rtl.js` (per-input direction
+  detection) is orthogonal and remains in place.
+- **Language preference precedence**: `config.ui.language` (explicit
+  override in Settings → Appearance) → `sys-locale` (OS locale) → `en`.
+  Region tags strip down to language stems on miss.
+- **Settings → Language**: dropdown lives in `ui/js/settings/appearance.js`,
+  populated from `get_available_languages`. Selecting a language calls
+  `set_language` (Rust) which persists `config.ui.language`, calls
+  `i18n::set_language`, and broadcasts `config_updated` so every window
+  re-fetches the catalog and re-paints without a restart.
+
+Files engineers touch most often:
+- `locales/en/messages.json` — add new keys here first.
+- `src/i18n.rs` — Rust loader, `t!` macro.
+- `src/error.rs` — `AppError::keyed` is the i18n-native constructor.
+- `ui/js/shared/i18n.js` — frontend `t()`, ICU subset, static applier.
+- `scripts/check_i18n.py` — drift-check CI gate.
+- `scripts/translate.py` — Claude-powered seed/update.
+- `docs/I18N.md` — full contract.
 
 ## Telemetry
 
