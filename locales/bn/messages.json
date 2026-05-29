@@ -5086,5 +5086,491 @@
     "description": "Default option in the empty model dropdown",
     "_machine_translated": true,
     "_source_hash": "5686c4a3725114de"
+  },
+  "shared.agent.picker.aria_label": {
+    "message": "একটি এজেন্ট যোগ করুন",
+    "description": "ARIA label for the agent-type picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "f83f85395d2da2ef"
+  },
+  "shared.agent.picker.title": {
+    "message": "একটি এজেন্ট যোগ করুন",
+    "description": "Title shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "8fca9987899090d5"
+  },
+  "shared.agent.picker.description": {
+    "message": "আপনি কী ধরনের এজেন্ট যোগ করছেন?",
+    "description": "Subtitle shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "afa83953bf6c1c6d"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "স্বয়ংক্রিয় শনাক্তকরণ",
+    "description": "Picker option: scan the system for installed ACP agents",
+    "_machine_translated": true,
+    "_source_hash": "101cd8731437a96b"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "এই মেশিনে ইনস্টল করা এজেন্ট স্ক্যান করুন (Kiro, Claude, Codex)।",
+    "description": "Helper text for the auto-detect option",
+    "_machine_translated": true,
+    "_source_hash": "b9482cf2eef4d8ab"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama (লোকাল মডেল)",
+    "description": "Picker option: open the Ollama wizard",
+    "_machine_translated": true,
+    "_source_hash": "6dba0417a64d8c24"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "একটি লোকাল Ollama ডেমনে চলমান মডেল বেছে নিন। বিনামূল্যে, ব্যক্তিগত, কোনো API কী নেই।",
+    "description": "Helper text for the Ollama option",
+    "_machine_translated": true,
+    "_source_hash": "367f7c770f25e374"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "ACP-সামঞ্জস্যপূর্ণ এজেন্ট",
+    "description": "Picker option: configure a known ACP-compatible agent",
+    "_machine_translated": true,
+    "_source_hash": "bc240d064d5af15b"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Kiro, Claude Code, বা OpenAI Codex হাতে কনফিগার করুন।",
+    "description": "Helper text for the ACP preset option",
+    "_machine_translated": true,
+    "_source_hash": "6bda0009533cea34"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "কাস্টম",
+    "description": "Picker option: raw spawn command or remote TCP",
+    "_machine_translated": true,
+    "_source_hash": "25b512c35f2e2817"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "র spawn কমান্ড বা রিমোট TCP সংযোগ। উন্নত।",
+    "description": "Helper text for the custom option",
+    "_machine_translated": true,
+    "_source_hash": "218b600c696543d5"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "বাতিল",
+    "description": "Cancel button in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "cc27a75a4876bf67"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 এজেন্ট খোঁজা হচ্ছে…",
+    "description": "Status while auto-detection is running",
+    "_machine_translated": true,
+    "_source_hash": "fc36be3bc318bc94"
+  },
+  "shared.agent.detect.failed": {
+    "message": "এজেন্ট শনাক্ত করা যায়নি। নিচে ম্যানুয়ালি সংযোগ কনফিগার করুন।",
+    "description": "Status when detect_agents() throws",
+    "_machine_translated": true,
+    "_source_hash": "b3a6a463bf3799a0"
+  },
+  "shared.agent.detect.none": {
+    "message": "স্বয়ংক্রিয়ভাবে কোনো এজেন্ট পাওয়া যায়নি। আপনি একটি ইনস্টল করতে পারেন — Kiro CLI, Claude Code, বা OpenAI Codex — অথবা নিচে ম্যানুয়ালি সংযোগ কনফিগার করুন।",
+    "description": "Status when detection succeeds but finds nothing",
+    "_machine_translated": true,
+    "_source_hash": "22fcc7d9189efb3a"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} পাওয়া গেছে",
+    "description": "Header status on a detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "22ee990dab5bcb24"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "এই এজেন্ট ব্যবহার করুন",
+    "description": "Button to lock in a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "791fa0d9b92c171e"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "ব্যবহারের আগে সম্পাদনা করুন",
+    "description": "Tooltip on the pencil icon next to a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "0cb71b4e0cae4b0c"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "ম্যানুয়ালি কনফিগার করুন",
+    "description": "Link to fall through to manual configuration",
+    "_machine_translated": true,
+    "_source_hash": "6784e9dd86952858"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} পাওয়া গেছে — ACP র‍্যাপার প্রয়োজন",
+    "description": "Header status on a wrapper-needed detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "0ce00064dec1e58c"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage এজেন্টদের সাথে Agent Communication Protocol-এর মাধ্যমে কথা বলে। <code>{cli}</code> CLI-কে র‍্যাপ করতে npm-এর মাধ্যমে <code>{package}</code> ইনস্টল করুন।",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a3ee0c622c9ad25f"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed",
+    "_machine_translated": true,
+    "_source_hash": "6c0f262a0a96f6cd"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "ACP র‍্যাপার ইনস্টল করুন",
+    "description": "Button to trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "3c8d2bade9efd30a"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "npm পরীক্ষা করা হচ্ছে…",
+    "description": "Button label while checking npm availability",
+    "_machine_translated": true,
+    "_source_hash": "ac20d75e2d61c8fb"
+  },
+  "shared.agent.detect.installing": {
+    "message": "ইনস্টল হচ্ছে… (এক মিনিট লাগতে পারে)",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "bd34a7e750d74865"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">PATH-এ npm পাওয়া যায়নি। <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> থেকে Node.js ইনস্টল করুন, তারপর আবার ডিটেকশন চালান। অথবা টার্মিনালে ম্যানুয়ালি ইনস্টল করুন:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)",
+    "_machine_translated": true,
+    "_source_hash": "79ebb2b129b9bd8c"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">ইনস্টল ব্যর্থ হয়েছে: {message}। নিজে টার্মিনালে চালিয়ে দেখুন:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "567133ccd80a923c"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "ইনস্টল ব্যর্থ হয়েছে",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ র‍্যাপার ইনস্টল হয়েছে। রিফ্রেশ হচ্ছে…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6c26ace72c5f72f6"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "শনাক্ত করা এজেন্ট",
+    "description": "Fallback name for a detected agent that has no name",
+    "_machine_translated": true,
+    "_source_hash": "71847e5469418ae7"
+  },
+  "shared.agent.issue.empty": {
+    "message": "স্পন কমান্ড খালি।",
+    "description": "Issue description: spawn command field is blank",
+    "_machine_translated": true,
+    "_source_hash": "e460de2782ec7820"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "ডিস্ক বা PATH-এ বাইনারি পাওয়া যায়নি।",
+    "description": "Issue description: spawn command points at a non-existent binary",
+    "_machine_translated": true,
+    "_source_hash": "3f94a2322b4b68bd"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "হোস্ট খালি।",
+    "description": "Issue description: remote host field is blank",
+    "_machine_translated": true,
+    "_source_hash": "78f9e4abc8ff7c56"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "পোর্ট বৈধ নয়।",
+    "description": "Issue description: remote port is missing or out of range",
+    "_machine_translated": true,
+    "_source_hash": "05290a5ff9190746"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "সংযোগ যাচাই করা যায়নি।",
+    "description": "Issue description: validate_agent_connection threw",
+    "_machine_translated": true,
+    "_source_hash": "068fd04942922a76"
+  },
+  "shared.agent.form.name.label": {
+    "message": "নাম",
+    "description": "Label for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "aeb9460bc0c65185"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "আমার এজেন্ট",
+    "description": "Placeholder for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "b37c7ec1b3c79750"
+  },
+  "shared.agent.form.untitled": {
+    "message": "শিরোনামহীন",
+    "description": "Default name when the user submits the form without naming it",
+    "_machine_translated": true,
+    "_source_hash": "4fc0f3b0f33bc12f"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "সংযোগ মোড",
+    "description": "Label for the local/remote mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d2604cb8028f9e17"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "লোকাল — এই মেশিনে একটি প্রসেস স্পন করুন",
+    "description": "Mode option: local",
+    "_machine_translated": true,
+    "_source_hash": "bcc61a7d872f68dd"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "রিমোট — চলমান একটি সার্ভারে সংযোগ করুন",
+    "description": "Mode option: remote",
+    "_machine_translated": true,
+    "_source_hash": "464fceff436472af"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "স্পন কমান্ড",
+    "description": "Label for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "b6126155a3830c37"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "ACP সার্ভার শুরু করার সম্পূর্ণ কমান্ড, বাইনারির পাথ এবং যেকোনো আর্গুমেন্ট সহ।",
+    "description": "Helper for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "eb3b4601d730986d"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "যেমন, C:\\path\\to\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "bd0abd9cab8736e0"
+  },
+  "shared.agent.form.host.label": {
+    "message": "হোস্ট",
+    "description": "Label for the host input",
+    "_machine_translated": true,
+    "_source_hash": "b7b893ddfde65911"
+  },
+  "shared.agent.form.port.label": {
+    "message": "পোর্ট",
+    "description": "Label for the port input",
+    "_machine_translated": true,
+    "_source_hash": "38acd6c554f92a04"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "টাইমআউট (ms)",
+    "description": "Label for the timeout input",
+    "_machine_translated": true,
+    "_source_hash": "eaa3870a8d80b4fd"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "সেশন ডিরেক্টরি",
+    "description": "Label for the per-agent sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "1b144c1da7c590ae"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "এই এজেন্ট তার সেশন ফাইল কোথায় সংরক্ষণ করবে। এজেন্টের ডিফল্ট লোকেশন ব্যবহার করতে খালি রাখুন।",
+    "description": "Helper for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "d92056db46d80a45"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "স্বয়ংক্রিয় শনাক্তকরণ",
+    "description": "Placeholder for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "0286659982593a9e"
+  },
+  "command.settings.description": {
+    "message": "সেটিংস উইন্ডো খুলুন",
+    "description": ">settings command description",
+    "_machine_translated": true,
+    "_source_hash": "24adbdf5493407c9"
+  },
+  "command.quit.description": {
+    "message": "Kage বন্ধ করুন",
+    "description": ">quit command description",
+    "_machine_translated": true,
+    "_source_hash": "c6969762b8ab04e2"
+  },
+  "command.restart.description": {
+    "message": "Kage পুনরায় চালু করুন",
+    "description": ">restart command description",
+    "_machine_translated": true,
+    "_source_hash": "24aae0c65ddc6124"
+  },
+  "command.inspect.description": {
+    "message": "ডেভেলপার টুলস খুলুন",
+    "description": ">inspect command description",
+    "_machine_translated": true,
+    "_source_hash": "2c4e1d6fff0de19c"
+  },
+  "command.clear_ux.description": {
+    "message": "দৃশ্যমান প্রতিক্রিয়া মুছুন (কথোপকথনের ইতিহাস মুছবে না)",
+    "description": ">clear-ux command description",
+    "_machine_translated": true,
+    "_source_hash": "7bd348a460a0b41c"
+  },
+  "command.chats.description": {
+    "message": "সেশন সহ পূর্ণ চ্যাট খুলুন",
+    "description": ">chats command description",
+    "_machine_translated": true,
+    "_source_hash": "2ea46f4c116d9daa"
+  },
+  "command.session_id.description": {
+    "message": "বর্তমান ACP সেশন ID দেখান",
+    "description": ">session-id command description",
+    "_machine_translated": true,
+    "_source_hash": "d219237aa1065b17"
+  },
+  "command.session_id.no_session": {
+    "message": "কোনো সক্রিয় সেশন নেই",
+    "description": "Response when there's no active session for >session-id",
+    "_machine_translated": true,
+    "_source_hash": "376ddf82e9f1f70b"
+  },
+  "command.session_title.description": {
+    "message": "বর্তমান সেশনের নাম পরিবর্তন করুন (>session-title My Project Chat)",
+    "description": ">session-title command description",
+    "_machine_translated": true,
+    "_source_hash": "d2d472235a691df4"
+  },
+  "command.session_title.usage": {
+    "message": "ব্যবহার: >session-title New Session Name",
+    "description": "Response when >session-title is invoked without args",
+    "_machine_translated": true,
+    "_source_hash": "622d4417c04dbc0b"
+  },
+  "command.session_title.no_session": {
+    "message": "নাম পরিবর্তন করার জন্য কোনো সক্রিয় সেশন নেই",
+    "description": "Response when there's no active session to rename",
+    "_machine_translated": true,
+    "_source_hash": "62f54886d25e7b69"
+  },
+  "command.session_title.renamed": {
+    "message": "সেশনের নতুন নাম: {title}",
+    "description": "Response confirming a successful session rename",
+    "_machine_translated": true,
+    "_source_hash": "de7c5a1e8b7dc38d"
+  },
+  "command.store.description": {
+    "message": "এক্সটেনশন, থিম এবং কমান্ড প্যাক ব্রাউজ করুন",
+    "description": ">store command description",
+    "_machine_translated": true,
+    "_source_hash": "e843bed9e166800c"
+  },
+  "command.session_folder.description": {
+    "message": "ফাইল এক্সপ্লোরারে বর্তমান সেশন ফাইল খুলুন",
+    "description": ">session-folder command description",
+    "_machine_translated": true,
+    "_source_hash": "29e4a0fd10e0693f"
+  },
+  "command.session_folder.no_session": {
+    "message": "কোনো সক্রিয় সেশন নেই",
+    "description": "Response when there's no active session for >session-folder",
+    "_machine_translated": true,
+    "_source_hash": "d532d4e911ea8d42"
+  },
+  "command.find.description": {
+    "message": "নাম দিয়ে ফাইল খুঁজুন (যেমন >find report বা >find *.docx)",
+    "description": ">find command description",
+    "_machine_translated": true,
+    "_source_hash": "5c13db2e2fcd5646"
+  },
+  "command.clipboard.description": {
+    "message": "ক্লিপবোর্ড ইতিহাস ব্রাউজ করুন",
+    "description": ">clipboard / >cb command description",
+    "_machine_translated": true,
+    "_source_hash": "5c0a7e60e5cb1aa0"
+  },
+  "command.prompts.description": {
+    "message": "সংরক্ষিত প্রম্পট ব্রাউজ করুন (Prompt টাইপের Quick Commands)",
+    "description": ">prompts / >p command description",
+    "_machine_translated": true,
+    "_source_hash": "097ff79934d631db"
+  },
+  "command.logs.description": {
+    "message": "অ্যাপ্লিকেশন লগ দেখুন",
+    "description": ">logs command description",
+    "_machine_translated": true,
+    "_source_hash": "1a3231b3c4eba521"
+  },
+  "command.version.description": {
+    "message": "সংস্করণ, চ্যানেল দেখান এবং আপডেট চেক করুন",
+    "description": ">version command description",
+    "_machine_translated": true,
+    "_source_hash": "dbb240ef63b6e602"
+  },
+  "command.error.label": {
+    "message": "ত্রুটি",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure",
+    "_machine_translated": true,
+    "_source_hash": "e454f97d20e9771c"
+  },
+  "command.version.error_app_info": {
+    "message": "অ্যাপ তথ্য পড়তে ত্রুটি",
+    "description": "Error label when get_app_info fails in >version",
+    "_machine_translated": true,
+    "_source_hash": "badaa0985ed42220"
+  },
+  "command.version.checking": {
+    "message": "_আপডেট চেক করা হচ্ছে..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "f18c75968e8e2ddf"
+  },
+  "command.version.cta_floating": {
+    "message": "ইনস্টল করতে উপরের ব্যানারে ক্লিক করুন, অথবা আরও তথ্যের জন্য [Settings → Updates](kage:settings/updates) খুলুন।",
+    "description": "Call-to-action shown in floating window when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "4444e4f477ddeb2c"
+  },
+  "command.version.cta_chat": {
+    "message": "ইনস্টল করতে [Settings → Updates](kage:settings/updates) খুলুন।",
+    "description": "Call-to-action shown in chat when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fc31053c0e899d19"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **আপডেট উপলব্ধ: v{version}**",
+    "description": "Heading shown by >version when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fa014cfbcf423bac"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ আপনি সর্বশেষ সংস্করণে আছেন (v{version})।",
+    "description": "Status shown by >version when on the latest version",
+    "_machine_translated": true,
+    "_source_hash": "5bc47b83bd550185"
+  },
+  "command.version.check_failed": {
+    "message": "✕ আপডেট চেক ব্যর্থ হয়েছে: {message}",
+    "description": "Status shown by >version when the update check throws",
+    "_machine_translated": true,
+    "_source_hash": "16ad55e3106b2ae5"
+  },
+  "command.suggestions.send_hint": {
+    "message": "এজেন্টে পাঠাতে {key}",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)",
+    "_machine_translated": true,
+    "_source_hash": "a82a743fd50f5e8d"
+  },
+  "command.slash.no_options": {
+    "message": "কোনো বিকল্প উপলব্ধ নেই",
+    "description": "Response when a selection-type slash command returns nothing",
+    "_machine_translated": true,
+    "_source_hash": "2d3632cfca0f9b2c"
+  },
+  "command.slash.executed": {
+    "message": "কমান্ড সম্পাদিত হয়েছে",
+    "description": "Default response when a slash command succeeds with no message",
+    "_machine_translated": true,
+    "_source_hash": "736169e784b4207a"
   }
 }

@@ -5086,5 +5086,491 @@
     "description": "Default option in the empty model dropdown",
     "_machine_translated": true,
     "_source_hash": "5686c4a3725114de"
+  },
+  "shared.agent.picker.aria_label": {
+    "message": "Aggiungi un agente",
+    "description": "ARIA label for the agent-type picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "f83f85395d2da2ef"
+  },
+  "shared.agent.picker.title": {
+    "message": "Aggiungi un agente",
+    "description": "Title shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "8fca9987899090d5"
+  },
+  "shared.agent.picker.description": {
+    "message": "Che tipo di agente stai aggiungendo?",
+    "description": "Subtitle shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "afa83953bf6c1c6d"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "Rilevamento automatico",
+    "description": "Picker option: scan the system for installed ACP agents",
+    "_machine_translated": true,
+    "_source_hash": "101cd8731437a96b"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "Cerca agenti installati su questa macchina (Kiro, Claude, Codex).",
+    "description": "Helper text for the auto-detect option",
+    "_machine_translated": true,
+    "_source_hash": "b9482cf2eef4d8ab"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama (modello locale)",
+    "description": "Picker option: open the Ollama wizard",
+    "_machine_translated": true,
+    "_source_hash": "6dba0417a64d8c24"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "Scegli un modello in esecuzione su un daemon Ollama locale. Gratis, privato, senza API key.",
+    "description": "Helper text for the Ollama option",
+    "_machine_translated": true,
+    "_source_hash": "367f7c770f25e374"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "Agente compatibile ACP",
+    "description": "Picker option: configure a known ACP-compatible agent",
+    "_machine_translated": true,
+    "_source_hash": "bc240d064d5af15b"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Configura manualmente Kiro, Claude Code o OpenAI Codex.",
+    "description": "Helper text for the ACP preset option",
+    "_machine_translated": true,
+    "_source_hash": "6bda0009533cea34"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "Personalizzato",
+    "description": "Picker option: raw spawn command or remote TCP",
+    "_machine_translated": true,
+    "_source_hash": "25b512c35f2e2817"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "Comando spawn raw o connessione TCP remota. Avanzato.",
+    "description": "Helper text for the custom option",
+    "_machine_translated": true,
+    "_source_hash": "218b600c696543d5"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "Annulla",
+    "description": "Cancel button in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "cc27a75a4876bf67"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 Ricerca agenti in corso…",
+    "description": "Status while auto-detection is running",
+    "_machine_translated": true,
+    "_source_hash": "fc36be3bc318bc94"
+  },
+  "shared.agent.detect.failed": {
+    "message": "Impossibile rilevare gli agenti. Configura manualmente la connessione qui sotto.",
+    "description": "Status when detect_agents() throws",
+    "_machine_translated": true,
+    "_source_hash": "b3a6a463bf3799a0"
+  },
+  "shared.agent.detect.none": {
+    "message": "Nessun agente trovato automaticamente. Puoi installarne uno — Kiro CLI, Claude Code o OpenAI Codex — oppure configurare manualmente la connessione qui sotto.",
+    "description": "Status when detection succeeds but finds nothing",
+    "_machine_translated": true,
+    "_source_hash": "22fcc7d9189efb3a"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} trovato",
+    "description": "Header status on a detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "22ee990dab5bcb24"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "Usa questo agente",
+    "description": "Button to lock in a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "791fa0d9b92c171e"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "Modifica prima dell'uso",
+    "description": "Tooltip on the pencil icon next to a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "0cb71b4e0cae4b0c"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "Configura manualmente",
+    "description": "Link to fall through to manual configuration",
+    "_machine_translated": true,
+    "_source_hash": "6784e9dd86952858"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} trovato — richiede wrapper ACP",
+    "description": "Header status on a wrapper-needed detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "0ce00064dec1e58c"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage comunica con gli agenti tramite Agent Communication Protocol. Installa <code>{package}</code> via npm per integrare la CLI <code>{cli}</code>.",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a3ee0c622c9ad25f"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed",
+    "_machine_translated": true,
+    "_source_hash": "6c0f262a0a96f6cd"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "Installa wrapper ACP",
+    "description": "Button to trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "3c8d2bade9efd30a"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "Verifica npm…",
+    "description": "Button label while checking npm availability",
+    "_machine_translated": true,
+    "_source_hash": "ac20d75e2d61c8fb"
+  },
+  "shared.agent.detect.installing": {
+    "message": "Installazione… (può richiedere un minuto)",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "bd34a7e750d74865"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm non è stato trovato nel PATH. Installa Node.js da <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a>, poi riavvia il rilevamento. Oppure installa manualmente in un terminale:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)",
+    "_machine_translated": true,
+    "_source_hash": "79ebb2b129b9bd8c"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">Installazione non riuscita: {message}. Prova a eseguirla manualmente in un terminale:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "567133ccd80a923c"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "installazione non riuscita",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Wrapper installato. Aggiornamento in corso…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6c26ace72c5f72f6"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "Agente rilevato",
+    "description": "Fallback name for a detected agent that has no name",
+    "_machine_translated": true,
+    "_source_hash": "71847e5469418ae7"
+  },
+  "shared.agent.issue.empty": {
+    "message": "Il comando di spawn è vuoto.",
+    "description": "Issue description: spawn command field is blank",
+    "_machine_translated": true,
+    "_source_hash": "e460de2782ec7820"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "Binario non trovato sul disco o nel PATH.",
+    "description": "Issue description: spawn command points at a non-existent binary",
+    "_machine_translated": true,
+    "_source_hash": "3f94a2322b4b68bd"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "L'host è vuoto.",
+    "description": "Issue description: remote host field is blank",
+    "_machine_translated": true,
+    "_source_hash": "78f9e4abc8ff7c56"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "La porta non è valida.",
+    "description": "Issue description: remote port is missing or out of range",
+    "_machine_translated": true,
+    "_source_hash": "05290a5ff9190746"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "Impossibile validare la connessione.",
+    "description": "Issue description: validate_agent_connection threw",
+    "_machine_translated": true,
+    "_source_hash": "068fd04942922a76"
+  },
+  "shared.agent.form.name.label": {
+    "message": "Nome",
+    "description": "Label for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "aeb9460bc0c65185"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "Il mio agente",
+    "description": "Placeholder for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "b37c7ec1b3c79750"
+  },
+  "shared.agent.form.untitled": {
+    "message": "Senza titolo",
+    "description": "Default name when the user submits the form without naming it",
+    "_machine_translated": true,
+    "_source_hash": "4fc0f3b0f33bc12f"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "Modalità di connessione",
+    "description": "Label for the local/remote mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d2604cb8028f9e17"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "Locale — avvia un processo su questa macchina",
+    "description": "Mode option: local",
+    "_machine_translated": true,
+    "_source_hash": "bcc61a7d872f68dd"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "Remota — connettiti a un server in esecuzione",
+    "description": "Mode option: remote",
+    "_machine_translated": true,
+    "_source_hash": "464fceff436472af"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "Comando di spawn",
+    "description": "Label for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "b6126155a3830c37"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "Comando completo per avviare il server ACP, incluso il percorso del binario e gli eventuali argomenti.",
+    "description": "Helper for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "eb3b4601d730986d"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "es., C:\\path\\to\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "bd0abd9cab8736e0"
+  },
+  "shared.agent.form.host.label": {
+    "message": "Host",
+    "description": "Label for the host input",
+    "_machine_translated": true,
+    "_source_hash": "b7b893ddfde65911"
+  },
+  "shared.agent.form.port.label": {
+    "message": "Porta",
+    "description": "Label for the port input",
+    "_machine_translated": true,
+    "_source_hash": "38acd6c554f92a04"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "Timeout (ms)",
+    "description": "Label for the timeout input",
+    "_machine_translated": true,
+    "_source_hash": "eaa3870a8d80b4fd"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "Cartella delle sessioni",
+    "description": "Label for the per-agent sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "1b144c1da7c590ae"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "Dove questo agente memorizza i file delle sessioni. Lascia vuoto per usare la posizione predefinita dell'agente.",
+    "description": "Helper for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "d92056db46d80a45"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "Rilevamento automatico",
+    "description": "Placeholder for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "0286659982593a9e"
+  },
+  "command.settings.description": {
+    "message": "Apri la finestra delle impostazioni",
+    "description": ">settings command description",
+    "_machine_translated": true,
+    "_source_hash": "24adbdf5493407c9"
+  },
+  "command.quit.description": {
+    "message": "Esci da Kage",
+    "description": ">quit command description",
+    "_machine_translated": true,
+    "_source_hash": "c6969762b8ab04e2"
+  },
+  "command.restart.description": {
+    "message": "Riavvia Kage",
+    "description": ">restart command description",
+    "_machine_translated": true,
+    "_source_hash": "24aae0c65ddc6124"
+  },
+  "command.inspect.description": {
+    "message": "Apri gli strumenti per sviluppatori",
+    "description": ">inspect command description",
+    "_machine_translated": true,
+    "_source_hash": "2c4e1d6fff0de19c"
+  },
+  "command.clear_ux.description": {
+    "message": "Cancella la risposta visibile (non cancella la cronologia della conversazione)",
+    "description": ">clear-ux command description",
+    "_machine_translated": true,
+    "_source_hash": "7bd348a460a0b41c"
+  },
+  "command.chats.description": {
+    "message": "Apri la chat completa con le sessioni",
+    "description": ">chats command description",
+    "_machine_translated": true,
+    "_source_hash": "2ea46f4c116d9daa"
+  },
+  "command.session_id.description": {
+    "message": "Mostra l'ID della sessione ACP corrente",
+    "description": ">session-id command description",
+    "_machine_translated": true,
+    "_source_hash": "d219237aa1065b17"
+  },
+  "command.session_id.no_session": {
+    "message": "Nessuna sessione attiva",
+    "description": "Response when there's no active session for >session-id",
+    "_machine_translated": true,
+    "_source_hash": "376ddf82e9f1f70b"
+  },
+  "command.session_title.description": {
+    "message": "Rinomina la sessione corrente (>session-title Chat del mio progetto)",
+    "description": ">session-title command description",
+    "_machine_translated": true,
+    "_source_hash": "d2d472235a691df4"
+  },
+  "command.session_title.usage": {
+    "message": "Uso: >session-title Nuovo nome sessione",
+    "description": "Response when >session-title is invoked without args",
+    "_machine_translated": true,
+    "_source_hash": "622d4417c04dbc0b"
+  },
+  "command.session_title.no_session": {
+    "message": "Nessuna sessione attiva da rinominare",
+    "description": "Response when there's no active session to rename",
+    "_machine_translated": true,
+    "_source_hash": "62f54886d25e7b69"
+  },
+  "command.session_title.renamed": {
+    "message": "Sessione rinominata in: {title}",
+    "description": "Response confirming a successful session rename",
+    "_machine_translated": true,
+    "_source_hash": "de7c5a1e8b7dc38d"
+  },
+  "command.store.description": {
+    "message": "Sfoglia estensioni, temi e pacchetti di comandi",
+    "description": ">store command description",
+    "_machine_translated": true,
+    "_source_hash": "e843bed9e166800c"
+  },
+  "command.session_folder.description": {
+    "message": "Apri il file della sessione corrente nell'esplora file",
+    "description": ">session-folder command description",
+    "_machine_translated": true,
+    "_source_hash": "29e4a0fd10e0693f"
+  },
+  "command.session_folder.no_session": {
+    "message": "Nessuna sessione attiva",
+    "description": "Response when there's no active session for >session-folder",
+    "_machine_translated": true,
+    "_source_hash": "d532d4e911ea8d42"
+  },
+  "command.find.description": {
+    "message": "Cerca file per nome (es. >find report o >find *.docx)",
+    "description": ">find command description",
+    "_machine_translated": true,
+    "_source_hash": "5c13db2e2fcd5646"
+  },
+  "command.clipboard.description": {
+    "message": "Sfoglia la cronologia degli appunti",
+    "description": ">clipboard / >cb command description",
+    "_machine_translated": true,
+    "_source_hash": "5c0a7e60e5cb1aa0"
+  },
+  "command.prompts.description": {
+    "message": "Sfoglia i prompt salvati (Comandi rapidi di tipo Prompt)",
+    "description": ">prompts / >p command description",
+    "_machine_translated": true,
+    "_source_hash": "097ff79934d631db"
+  },
+  "command.logs.description": {
+    "message": "Visualizza i log dell'applicazione",
+    "description": ">logs command description",
+    "_machine_translated": true,
+    "_source_hash": "1a3231b3c4eba521"
+  },
+  "command.version.description": {
+    "message": "Mostra versione, canale e verifica aggiornamenti",
+    "description": ">version command description",
+    "_machine_translated": true,
+    "_source_hash": "dbb240ef63b6e602"
+  },
+  "command.error.label": {
+    "message": "Errore",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure",
+    "_machine_translated": true,
+    "_source_hash": "e454f97d20e9771c"
+  },
+  "command.version.error_app_info": {
+    "message": "Errore nella lettura delle informazioni dell'app",
+    "description": "Error label when get_app_info fails in >version",
+    "_machine_translated": true,
+    "_source_hash": "badaa0985ed42220"
+  },
+  "command.version.checking": {
+    "message": "_Verifica aggiornamenti in corso..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "f18c75968e8e2ddf"
+  },
+  "command.version.cta_floating": {
+    "message": "Fai clic sul banner in alto per installare, oppure apri [Impostazioni → Aggiornamenti](kage:settings/updates) per maggiori informazioni.",
+    "description": "Call-to-action shown in floating window when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "4444e4f477ddeb2c"
+  },
+  "command.version.cta_chat": {
+    "message": "Apri [Impostazioni → Aggiornamenti](kage:settings/updates) per installare.",
+    "description": "Call-to-action shown in chat when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fc31053c0e899d19"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **Aggiornamento disponibile: v{version}**",
+    "description": "Heading shown by >version when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fa014cfbcf423bac"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ Sei aggiornato (v{version}).",
+    "description": "Status shown by >version when on the latest version",
+    "_machine_translated": true,
+    "_source_hash": "5bc47b83bd550185"
+  },
+  "command.version.check_failed": {
+    "message": "✕ Controllo aggiornamenti non riuscito: {message}",
+    "description": "Status shown by >version when the update check throws",
+    "_machine_translated": true,
+    "_source_hash": "16ad55e3106b2ae5"
+  },
+  "command.suggestions.send_hint": {
+    "message": "{key} per inviare all'agente",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)",
+    "_machine_translated": true,
+    "_source_hash": "a82a743fd50f5e8d"
+  },
+  "command.slash.no_options": {
+    "message": "Nessuna opzione disponibile",
+    "description": "Response when a selection-type slash command returns nothing",
+    "_machine_translated": true,
+    "_source_hash": "2d3632cfca0f9b2c"
+  },
+  "command.slash.executed": {
+    "message": "Comando eseguito",
+    "description": "Default response when a slash command succeeds with no message",
+    "_machine_translated": true,
+    "_source_hash": "736169e784b4207a"
   }
 }

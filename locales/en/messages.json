@@ -3432,5 +3432,331 @@
   "welcome.macos.note_html": {
     "message": "It is fine to skip this step — you can revisit it any time from <strong>Settings → macOS Permissions</strong>.",
     "description": "Footer note on the macOS permissions step (HTML allowed)"
+  },
+
+  "shared.agent.picker.aria_label": {
+    "message": "Add an agent",
+    "description": "ARIA label for the agent-type picker dialog"
+  },
+  "shared.agent.picker.title": {
+    "message": "Add an agent",
+    "description": "Title shown in the agent-type picker"
+  },
+  "shared.agent.picker.description": {
+    "message": "What kind of agent are you adding?",
+    "description": "Subtitle shown in the agent-type picker"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "Auto-detect",
+    "description": "Picker option: scan the system for installed ACP agents"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "Scan this machine for installed agents (Kiro, Claude, Codex).",
+    "description": "Helper text for the auto-detect option"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama (local model)",
+    "description": "Picker option: open the Ollama wizard"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "Pick a model running on a local Ollama daemon. Free, private, no API key.",
+    "description": "Helper text for the Ollama option"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "ACP-compatible agent",
+    "description": "Picker option: configure a known ACP-compatible agent"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Wire up Kiro, Claude Code, or OpenAI Codex by hand.",
+    "description": "Helper text for the ACP preset option"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "Custom",
+    "description": "Picker option: raw spawn command or remote TCP"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "Raw spawn command or remote TCP connection. Advanced.",
+    "description": "Helper text for the custom option"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "Cancel",
+    "description": "Cancel button in the agent-type picker"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 Searching for agents…",
+    "description": "Status while auto-detection is running"
+  },
+  "shared.agent.detect.failed": {
+    "message": "Could not detect agents. Configure the connection manually below.",
+    "description": "Status when detect_agents() throws"
+  },
+  "shared.agent.detect.none": {
+    "message": "No agents found automatically. You can install one — Kiro CLI, Claude Code, or OpenAI Codex — or configure the connection manually below.",
+    "description": "Status when detection succeeds but finds nothing"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} found",
+    "description": "Header status on a detected-agent card"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "Use this agent",
+    "description": "Button to lock in a detected agent"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "Edit before using",
+    "description": "Tooltip on the pencil icon next to a detected agent"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "Configure manually",
+    "description": "Link to fall through to manual configuration"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} found — needs ACP wrapper",
+    "description": "Header status on a wrapper-needed detected-agent card"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage talks to agents over the Agent Communication Protocol. Install <code>{package}</code> via npm to wrap the <code>{cli}</code> CLI.",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "Install ACP wrapper",
+    "description": "Button to trigger the npm install for the ACP wrapper"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "Checking npm…",
+    "description": "Button label while checking npm availability"
+  },
+  "shared.agent.detect.installing": {
+    "message": "Installing… (can take a minute)",
+    "description": "Button label while npm install runs"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm wasn't found on PATH. Install Node.js from <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a>, then re-run detection. Or install manually in a terminal:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">Install failed: {message}. Try running it yourself in a terminal:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "install failed",
+    "description": "Default text when an install error has no message"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Wrapper installed. Refreshing…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "Detected agent",
+    "description": "Fallback name for a detected agent that has no name"
+  },
+  "shared.agent.issue.empty": {
+    "message": "Spawn command is empty.",
+    "description": "Issue description: spawn command field is blank"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "Binary not found on disk or PATH.",
+    "description": "Issue description: spawn command points at a non-existent binary"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "Host is empty.",
+    "description": "Issue description: remote host field is blank"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "Port is not valid.",
+    "description": "Issue description: remote port is missing or out of range"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "Could not validate connection.",
+    "description": "Issue description: validate_agent_connection threw"
+  },
+  "shared.agent.form.name.label": {
+    "message": "Name",
+    "description": "Label for the connection name input"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "My agent",
+    "description": "Placeholder for the connection name input"
+  },
+  "shared.agent.form.untitled": {
+    "message": "Untitled",
+    "description": "Default name when the user submits the form without naming it"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "Connection Mode",
+    "description": "Label for the local/remote mode dropdown"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "Local — spawn a process on this machine",
+    "description": "Mode option: local"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "Remote — connect to a running server",
+    "description": "Mode option: remote"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "Spawn Command",
+    "description": "Label for the spawn-command input"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "Full command to start the ACP server, including the path to the binary and any arguments.",
+    "description": "Helper for the spawn-command input"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "e.g., C:\\path\\to\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input"
+  },
+  "shared.agent.form.host.label": {
+    "message": "Host",
+    "description": "Label for the host input"
+  },
+  "shared.agent.form.port.label": {
+    "message": "Port",
+    "description": "Label for the port input"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "Timeout (ms)",
+    "description": "Label for the timeout input"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "Sessions directory",
+    "description": "Label for the per-agent sessions directory input"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "Where this agent stores its session files. Leave empty to use the agent's default location.",
+    "description": "Helper for the sessions directory input"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "Auto-detect",
+    "description": "Placeholder for the sessions directory input"
+  },
+
+  "command.settings.description": {
+    "message": "Open settings window",
+    "description": ">settings command description"
+  },
+  "command.quit.description": {
+    "message": "Quit Kage",
+    "description": ">quit command description"
+  },
+  "command.restart.description": {
+    "message": "Restart Kage",
+    "description": ">restart command description"
+  },
+  "command.inspect.description": {
+    "message": "Open developer tools",
+    "description": ">inspect command description"
+  },
+  "command.clear_ux.description": {
+    "message": "Clear the visible response (does not clear conversation history)",
+    "description": ">clear-ux command description"
+  },
+  "command.chats.description": {
+    "message": "Open full chat with sessions",
+    "description": ">chats command description"
+  },
+  "command.session_id.description": {
+    "message": "Show current ACP session ID",
+    "description": ">session-id command description"
+  },
+  "command.session_id.no_session": {
+    "message": "No active session",
+    "description": "Response when there's no active session for >session-id"
+  },
+  "command.session_title.description": {
+    "message": "Rename current session (>session-title My Project Chat)",
+    "description": ">session-title command description"
+  },
+  "command.session_title.usage": {
+    "message": "Usage: >session-title New Session Name",
+    "description": "Response when >session-title is invoked without args"
+  },
+  "command.session_title.no_session": {
+    "message": "No active session to rename",
+    "description": "Response when there's no active session to rename"
+  },
+  "command.session_title.renamed": {
+    "message": "Session renamed to: {title}",
+    "description": "Response confirming a successful session rename"
+  },
+  "command.store.description": {
+    "message": "Browse extensions, themes, and command packs",
+    "description": ">store command description"
+  },
+  "command.session_folder.description": {
+    "message": "Open current session file in file explorer",
+    "description": ">session-folder command description"
+  },
+  "command.session_folder.no_session": {
+    "message": "No active session",
+    "description": "Response when there's no active session for >session-folder"
+  },
+  "command.find.description": {
+    "message": "Search files by name (e.g. >find report or >find *.docx)",
+    "description": ">find command description"
+  },
+  "command.clipboard.description": {
+    "message": "Browse clipboard history",
+    "description": ">clipboard / >cb command description"
+  },
+  "command.prompts.description": {
+    "message": "Browse saved prompts (Quick Commands of type Prompt)",
+    "description": ">prompts / >p command description"
+  },
+  "command.logs.description": {
+    "message": "View application logs",
+    "description": ">logs command description"
+  },
+  "command.version.description": {
+    "message": "Show version, channel, and check for updates",
+    "description": ">version command description"
+  },
+  "command.error.label": {
+    "message": "Error",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure"
+  },
+  "command.version.error_app_info": {
+    "message": "Error reading app info",
+    "description": "Error label when get_app_info fails in >version"
+  },
+  "command.version.checking": {
+    "message": "_Checking for updates..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)"
+  },
+  "command.version.cta_floating": {
+    "message": "Click the banner above to install, or open [Settings → Updates](kage:settings/updates) for more info.",
+    "description": "Call-to-action shown in floating window when an update is available"
+  },
+  "command.version.cta_chat": {
+    "message": "Open [Settings → Updates](kage:settings/updates) to install.",
+    "description": "Call-to-action shown in chat when an update is available"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **Update available: v{version}**",
+    "description": "Heading shown by >version when an update is available"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ You're up to date (v{version}).",
+    "description": "Status shown by >version when on the latest version"
+  },
+  "command.version.check_failed": {
+    "message": "✕ Update check failed: {message}",
+    "description": "Status shown by >version when the update check throws"
+  },
+  "command.suggestions.send_hint": {
+    "message": "{key} to send to agent",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)"
+  },
+  "command.slash.no_options": {
+    "message": "No options available",
+    "description": "Response when a selection-type slash command returns nothing"
+  },
+  "command.slash.executed": {
+    "message": "Command executed",
+    "description": "Default response when a slash command succeeds with no message"
   }
 }

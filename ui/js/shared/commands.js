@@ -5,11 +5,17 @@
 import { platformKeyLabel } from './shortcuts.js';
 import { WINDOW } from './window-labels.js';
 import { errLabel } from './error-message.js';
+import { t } from './i18n.js';
 
+// Each entry's `description` is a getter so it resolves through the active
+// i18n catalog at the moment the launcher renders, not at module-import time
+// (which would freeze the EN strings into the binary).
 const LOCAL_COMMANDS = [
     {
         name: 'settings',
-        description: 'Open settings window',
+        get description() {
+            return t('command.settings.description');
+        },
         icon: '⚙️',
         execute: async (invoke, appWindow) => {
             await invoke('open_settings_window');
@@ -18,7 +24,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'quit',
-        description: 'Quit Kage',
+        get description() {
+            return t('command.quit.description');
+        },
         icon: '🚪',
         execute: async (invoke) => {
             await invoke('quit_app');
@@ -26,7 +34,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'restart',
-        description: 'Restart Kage',
+        get description() {
+            return t('command.restart.description');
+        },
         icon: '🔄',
         execute: async (invoke) => {
             await invoke('restart_app');
@@ -34,7 +44,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'inspect',
-        description: 'Open developer tools',
+        get description() {
+            return t('command.inspect.description');
+        },
         icon: '🔍',
         execute: async (invoke) => {
             await invoke('open_devtools');
@@ -42,7 +54,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'clear-ux',
-        description: 'Clear the visible response (does not clear conversation history)',
+        get description() {
+            return t('command.clear_ux.description');
+        },
         icon: '🧹',
         execute: async (_invoke, _appWindow) => {
             document.dispatchEvent(new CustomEvent('kage-clear'));
@@ -50,7 +64,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'chats',
-        description: 'Open full chat with sessions',
+        get description() {
+            return t('command.chats.description');
+        },
         icon: '💬',
         execute: async (invoke, appWindow) => {
             document.dispatchEvent(new CustomEvent('kage-clear'));
@@ -60,30 +76,36 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'session-id',
-        description: 'Show current ACP session ID',
+        get description() {
+            return t('command.session_id.description');
+        },
         icon: '🔑',
         execute: async (invoke) => {
             try {
                 const id = await invoke('get_window_session', { label: WINDOW.MAIN });
-                const text = id || 'No active session';
+                const text = id || t('command.session_id.no_session');
                 document.dispatchEvent(new CustomEvent('kage-show-response', { detail: text }));
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                    new CustomEvent('kage-show-response', {
+                        detail: errLabel(t('command.error.label'), e),
+                    })
                 );
             }
         },
     },
     {
         name: 'session-title',
-        description: 'Rename current session (>session-title My Project Chat)',
+        get description() {
+            return t('command.session_title.description');
+        },
         icon: '✏️',
         execute: async (invoke, _appWindow, args) => {
             const title = args?.trim();
             if (!title) {
                 document.dispatchEvent(
                     new CustomEvent('kage-show-response', {
-                        detail: 'Usage: >session-title New Session Name',
+                        detail: t('command.session_title.usage'),
                     })
                 );
                 return;
@@ -93,7 +115,7 @@ const LOCAL_COMMANDS = [
                 if (!sessionId) {
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', {
-                            detail: 'No active session to rename',
+                            detail: t('command.session_title.no_session'),
                         })
                     );
                     return;
@@ -101,19 +123,23 @@ const LOCAL_COMMANDS = [
                 await invoke('rename_session', { sessionId, title });
                 document.dispatchEvent(
                     new CustomEvent('kage-show-response', {
-                        detail: `Session renamed to: ${title}`,
+                        detail: t('command.session_title.renamed', { title }),
                     })
                 );
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                    new CustomEvent('kage-show-response', {
+                        detail: errLabel(t('command.error.label'), e),
+                    })
                 );
             }
         },
     },
     {
         name: 'store',
-        description: 'Browse extensions, themes, and command packs',
+        get description() {
+            return t('command.store.description');
+        },
         icon: '🛍️',
         execute: async (invoke, appWindow) => {
             await invoke('open_store_window');
@@ -122,28 +148,36 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'session-folder',
-        description: 'Open current session file in file explorer',
+        get description() {
+            return t('command.session_folder.description');
+        },
         icon: '📂',
         execute: async (invoke) => {
             try {
                 const sessionId = await invoke('get_window_session', { label: WINDOW.MAIN });
                 if (!sessionId) {
                     document.dispatchEvent(
-                        new CustomEvent('kage-show-response', { detail: 'No active session' })
+                        new CustomEvent('kage-show-response', {
+                            detail: t('command.session_folder.no_session'),
+                        })
                     );
                     return;
                 }
                 await invoke('reveal_session_file', { sessionId });
             } catch (e) {
                 document.dispatchEvent(
-                    new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                    new CustomEvent('kage-show-response', {
+                        detail: errLabel(t('command.error.label'), e),
+                    })
                 );
             }
         },
     },
     {
         name: 'find',
-        description: 'Search files by name (e.g. >find report or >find *.docx)',
+        get description() {
+            return t('command.find.description');
+        },
         icon: '🔎',
         execute: async () => {
             // No-op — file search is handled by the search engine when it sees ">find " prefix.
@@ -152,7 +186,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'clipboard',
-        description: 'Browse clipboard history',
+        get description() {
+            return t('command.clipboard.description');
+        },
         icon: '📋',
         aliases: ['cb'],
         execute: async () => {
@@ -165,7 +201,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'prompts',
-        description: 'Browse saved prompts (Quick Commands of type Prompt)',
+        get description() {
+            return t('command.prompts.description');
+        },
         icon: '💬',
         aliases: ['p'],
         execute: async () => {
@@ -185,7 +223,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'logs',
-        description: 'View application logs',
+        get description() {
+            return t('command.logs.description');
+        },
         icon: '📋',
         execute: async (invoke, appWindow) => {
             await invoke('open_settings_window', { section: 'about', subSection: 'logging' });
@@ -194,7 +234,9 @@ const LOCAL_COMMANDS = [
     },
     {
         name: 'version',
-        description: 'Show version, channel, and check for updates',
+        get description() {
+            return t('command.version.description');
+        },
         icon: 'ℹ️',
         execute: async (invoke, appWindow) => {
             const show = (text) =>
@@ -204,7 +246,7 @@ const LOCAL_COMMANDS = [
             try {
                 info = await invoke('get_app_info');
             } catch (e) {
-                show(errLabel('Error reading app info', e));
+                show(errLabel(t('command.version.error_app_info'), e));
                 return;
             }
             try {
@@ -215,7 +257,7 @@ const LOCAL_COMMANDS = [
             }
 
             const header = `**Kage v${info.version || '?'}**\n\n- Channel: \`${channel}\`\n\n`;
-            show(header + '_Checking for updates..._');
+            show(header + t('command.version.checking'));
 
             try {
                 const result = await invoke('check_for_update');
@@ -228,18 +270,27 @@ const LOCAL_COMMANDS = [
                     // listener) gets a direct settings link.
                     const inFloating = appWindow?.label === WINDOW.FLOATING;
                     const cta = inFloating
-                        ? 'Click the banner above to install, or open [Settings → Updates](kage:settings/updates) for more info.'
-                        : 'Open [Settings → Updates](kage:settings/updates) to install.';
-                    show(header + `⬆ **Update available: v${result.available_version}**\n\n` + cta);
+                        ? t('command.version.cta_floating')
+                        : t('command.version.cta_chat');
+                    show(
+                        header +
+                            t('command.version.update_available', {
+                                version: result.available_version,
+                            }) +
+                            '\n\n' +
+                            cta
+                    );
                 } else {
                     show(
                         header +
-                            `✓ You're up to date (v${result?.current_version || info.version || '?'}).`
+                            t('command.version.up_to_date', {
+                                version: result?.current_version || info.version || '?',
+                            })
                     );
                 }
             } catch (e) {
                 const msg = e && typeof e === 'object' ? e.message || JSON.stringify(e) : String(e);
-                show(header + `✕ Update check failed: ${msg}`);
+                show(header + t('command.version.check_failed', { message: msg }));
             }
         },
     },
@@ -365,13 +416,15 @@ export function matchSlashCommands(input) {
                         } else {
                             document.dispatchEvent(
                                 new CustomEvent('kage-show-response', {
-                                    detail: msg || 'No options available',
+                                    detail: msg || t('command.slash.no_options'),
                                 })
                             );
                         }
                     } catch (e) {
                         document.dispatchEvent(
-                            new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                            new CustomEvent('kage-show-response', {
+                                detail: errLabel(t('command.error.label'), e),
+                            })
                         );
                     }
                     return;
@@ -386,13 +439,17 @@ export function matchSlashCommands(input) {
                     });
                     const msg =
                         result?.message ||
-                        (result?.data ? JSON.stringify(result.data, null, 2) : 'Command executed');
+                        (result?.data
+                            ? JSON.stringify(result.data, null, 2)
+                            : t('command.slash.executed'));
                     document.dispatchEvent(
                         new CustomEvent('kage-show-response', { detail: result?.message || msg })
                     );
                 } catch (e) {
                     document.dispatchEvent(
-                        new CustomEvent('kage-show-response', { detail: errLabel('Error', e) })
+                        new CustomEvent('kage-show-response', {
+                            detail: errLabel(t('command.error.label'), e),
+                        })
                     );
                 }
             },
@@ -433,7 +490,8 @@ export function renderCommandSuggestions(
     if (showSendHint) {
         const hint = document.createElement('div');
         hint.className = 'suggestions-hint';
-        hint.innerHTML = `<span class="hint-key">${platformKeyLabel('Ctrl+Enter')}</span> to send to agent`;
+        const keyHtml = `<span class="hint-key">${platformKeyLabel('Ctrl+Enter')}</span>`;
+        hint.innerHTML = t('command.suggestions.send_hint', { key: keyHtml });
         container.appendChild(hint);
     }
 

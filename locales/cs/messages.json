@@ -5086,5 +5086,491 @@
     "description": "Default option in the empty model dropdown",
     "_machine_translated": true,
     "_source_hash": "5686c4a3725114de"
+  },
+  "shared.agent.picker.aria_label": {
+    "message": "Přidat agenta",
+    "description": "ARIA label for the agent-type picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "f83f85395d2da2ef"
+  },
+  "shared.agent.picker.title": {
+    "message": "Přidat agenta",
+    "description": "Title shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "8fca9987899090d5"
+  },
+  "shared.agent.picker.description": {
+    "message": "Jaký druh agenta přidáváte?",
+    "description": "Subtitle shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "afa83953bf6c1c6d"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "Automatická detekce",
+    "description": "Picker option: scan the system for installed ACP agents",
+    "_machine_translated": true,
+    "_source_hash": "101cd8731437a96b"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "Prohledat tento počítač na nainstalované agenty (Kiro, Claude, Codex).",
+    "description": "Helper text for the auto-detect option",
+    "_machine_translated": true,
+    "_source_hash": "b9482cf2eef4d8ab"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama (lokální model)",
+    "description": "Picker option: open the Ollama wizard",
+    "_machine_translated": true,
+    "_source_hash": "6dba0417a64d8c24"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "Vyberte model běžící na lokálním démonu Ollama. Zdarma, soukromé, bez API klíče.",
+    "description": "Helper text for the Ollama option",
+    "_machine_translated": true,
+    "_source_hash": "367f7c770f25e374"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "Agent kompatibilní s ACP",
+    "description": "Picker option: configure a known ACP-compatible agent",
+    "_machine_translated": true,
+    "_source_hash": "bc240d064d5af15b"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Ručně zapojit Kiro, Claude Code nebo OpenAI Codex.",
+    "description": "Helper text for the ACP preset option",
+    "_machine_translated": true,
+    "_source_hash": "6bda0009533cea34"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "Vlastní",
+    "description": "Picker option: raw spawn command or remote TCP",
+    "_machine_translated": true,
+    "_source_hash": "25b512c35f2e2817"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "Přímý spouštěcí příkaz nebo vzdálené TCP připojení. Pokročilé.",
+    "description": "Helper text for the custom option",
+    "_machine_translated": true,
+    "_source_hash": "218b600c696543d5"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "Zrušit",
+    "description": "Cancel button in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "cc27a75a4876bf67"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 Hledám agenty…",
+    "description": "Status while auto-detection is running",
+    "_machine_translated": true,
+    "_source_hash": "fc36be3bc318bc94"
+  },
+  "shared.agent.detect.failed": {
+    "message": "Agenty se nepodařilo detekovat. Nakonfigurujte připojení ručně níže.",
+    "description": "Status when detect_agents() throws",
+    "_machine_translated": true,
+    "_source_hash": "b3a6a463bf3799a0"
+  },
+  "shared.agent.detect.none": {
+    "message": "Automaticky nebyli nalezeni žádní agenti. Můžete nějakého nainstalovat — Kiro CLI, Claude Code nebo OpenAI Codex — nebo nakonfigurovat připojení ručně níže.",
+    "description": "Status when detection succeeds but finds nothing",
+    "_machine_translated": true,
+    "_source_hash": "22fcc7d9189efb3a"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} nalezen",
+    "description": "Header status on a detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "22ee990dab5bcb24"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "Použít tohoto agenta",
+    "description": "Button to lock in a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "791fa0d9b92c171e"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "Upravit před použitím",
+    "description": "Tooltip on the pencil icon next to a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "0cb71b4e0cae4b0c"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "Nakonfigurovat ručně",
+    "description": "Link to fall through to manual configuration",
+    "_machine_translated": true,
+    "_source_hash": "6784e9dd86952858"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} nalezen — vyžaduje ACP wrapper",
+    "description": "Header status on a wrapper-needed detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "0ce00064dec1e58c"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage komunikuje s agenty přes Agent Communication Protocol. Nainstalujte <code>{package}</code> přes npm a obalte CLI <code>{cli}</code>.",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a3ee0c622c9ad25f"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed",
+    "_machine_translated": true,
+    "_source_hash": "6c0f262a0a96f6cd"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "Nainstalovat ACP wrapper",
+    "description": "Button to trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "3c8d2bade9efd30a"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "Kontrola npm…",
+    "description": "Button label while checking npm availability",
+    "_machine_translated": true,
+    "_source_hash": "ac20d75e2d61c8fb"
+  },
+  "shared.agent.detect.installing": {
+    "message": "Instaluji… (může trvat minutu)",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "bd34a7e750d74865"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm nebyl nalezen v PATH. Nainstalujte Node.js z <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> a poté spusťte detekci znovu. Nebo jej nainstalujte ručně v terminálu:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)",
+    "_machine_translated": true,
+    "_source_hash": "79ebb2b129b9bd8c"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">Instalace selhala: {message}. Zkuste příkaz spustit ručně v terminálu:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "567133ccd80a923c"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "instalace selhala",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Wrapper nainstalován. Obnovuji…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6c26ace72c5f72f6"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "Zjištěný agent",
+    "description": "Fallback name for a detected agent that has no name",
+    "_machine_translated": true,
+    "_source_hash": "71847e5469418ae7"
+  },
+  "shared.agent.issue.empty": {
+    "message": "Příkaz pro spuštění je prázdný.",
+    "description": "Issue description: spawn command field is blank",
+    "_machine_translated": true,
+    "_source_hash": "e460de2782ec7820"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "Binární soubor nebyl nalezen na disku ani v PATH.",
+    "description": "Issue description: spawn command points at a non-existent binary",
+    "_machine_translated": true,
+    "_source_hash": "3f94a2322b4b68bd"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "Host je prázdný.",
+    "description": "Issue description: remote host field is blank",
+    "_machine_translated": true,
+    "_source_hash": "78f9e4abc8ff7c56"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "Port není platný.",
+    "description": "Issue description: remote port is missing or out of range",
+    "_machine_translated": true,
+    "_source_hash": "05290a5ff9190746"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "Připojení nebylo možné ověřit.",
+    "description": "Issue description: validate_agent_connection threw",
+    "_machine_translated": true,
+    "_source_hash": "068fd04942922a76"
+  },
+  "shared.agent.form.name.label": {
+    "message": "Název",
+    "description": "Label for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "aeb9460bc0c65185"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "Můj agent",
+    "description": "Placeholder for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "b37c7ec1b3c79750"
+  },
+  "shared.agent.form.untitled": {
+    "message": "Bez názvu",
+    "description": "Default name when the user submits the form without naming it",
+    "_machine_translated": true,
+    "_source_hash": "4fc0f3b0f33bc12f"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "Režim připojení",
+    "description": "Label for the local/remote mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d2604cb8028f9e17"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "Místní — spustit proces na tomto počítači",
+    "description": "Mode option: local",
+    "_machine_translated": true,
+    "_source_hash": "bcc61a7d872f68dd"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "Vzdálený — připojit se ke spuštěnému serveru",
+    "description": "Mode option: remote",
+    "_machine_translated": true,
+    "_source_hash": "464fceff436472af"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "Příkaz pro spuštění",
+    "description": "Label for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "b6126155a3830c37"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "Úplný příkaz pro spuštění ACP serveru, včetně cesty k binárnímu souboru a případných argumentů.",
+    "description": "Helper for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "eb3b4601d730986d"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "např. C:\\cesta\\k\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "bd0abd9cab8736e0"
+  },
+  "shared.agent.form.host.label": {
+    "message": "Host",
+    "description": "Label for the host input",
+    "_machine_translated": true,
+    "_source_hash": "b7b893ddfde65911"
+  },
+  "shared.agent.form.port.label": {
+    "message": "Port",
+    "description": "Label for the port input",
+    "_machine_translated": true,
+    "_source_hash": "38acd6c554f92a04"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "Časový limit (ms)",
+    "description": "Label for the timeout input",
+    "_machine_translated": true,
+    "_source_hash": "eaa3870a8d80b4fd"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "Adresář relací",
+    "description": "Label for the per-agent sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "1b144c1da7c590ae"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "Kam tento agent ukládá soubory svých relací. Ponechte prázdné pro výchozí umístění agenta.",
+    "description": "Helper for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "d92056db46d80a45"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "Automatická detekce",
+    "description": "Placeholder for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "0286659982593a9e"
+  },
+  "command.settings.description": {
+    "message": "Otevřít okno nastavení",
+    "description": ">settings command description",
+    "_machine_translated": true,
+    "_source_hash": "24adbdf5493407c9"
+  },
+  "command.quit.description": {
+    "message": "Ukončit Kage",
+    "description": ">quit command description",
+    "_machine_translated": true,
+    "_source_hash": "c6969762b8ab04e2"
+  },
+  "command.restart.description": {
+    "message": "Restartovat Kage",
+    "description": ">restart command description",
+    "_machine_translated": true,
+    "_source_hash": "24aae0c65ddc6124"
+  },
+  "command.inspect.description": {
+    "message": "Otevřít vývojářské nástroje",
+    "description": ">inspect command description",
+    "_machine_translated": true,
+    "_source_hash": "2c4e1d6fff0de19c"
+  },
+  "command.clear_ux.description": {
+    "message": "Vymazat zobrazenou odpověď (nemaže historii konverzace)",
+    "description": ">clear-ux command description",
+    "_machine_translated": true,
+    "_source_hash": "7bd348a460a0b41c"
+  },
+  "command.chats.description": {
+    "message": "Otevřít plný chat s relacemi",
+    "description": ">chats command description",
+    "_machine_translated": true,
+    "_source_hash": "2ea46f4c116d9daa"
+  },
+  "command.session_id.description": {
+    "message": "Zobrazit aktuální ACP session ID",
+    "description": ">session-id command description",
+    "_machine_translated": true,
+    "_source_hash": "d219237aa1065b17"
+  },
+  "command.session_id.no_session": {
+    "message": "Žádná aktivní relace",
+    "description": "Response when there's no active session for >session-id",
+    "_machine_translated": true,
+    "_source_hash": "376ddf82e9f1f70b"
+  },
+  "command.session_title.description": {
+    "message": "Přejmenovat aktuální relaci (>session-title Můj chat k projektu)",
+    "description": ">session-title command description",
+    "_machine_translated": true,
+    "_source_hash": "d2d472235a691df4"
+  },
+  "command.session_title.usage": {
+    "message": "Použití: >session-title Nový název relace",
+    "description": "Response when >session-title is invoked without args",
+    "_machine_translated": true,
+    "_source_hash": "622d4417c04dbc0b"
+  },
+  "command.session_title.no_session": {
+    "message": "Žádná aktivní relace k přejmenování",
+    "description": "Response when there's no active session to rename",
+    "_machine_translated": true,
+    "_source_hash": "62f54886d25e7b69"
+  },
+  "command.session_title.renamed": {
+    "message": "Relace přejmenována na: {title}",
+    "description": "Response confirming a successful session rename",
+    "_machine_translated": true,
+    "_source_hash": "de7c5a1e8b7dc38d"
+  },
+  "command.store.description": {
+    "message": "Procházet rozšíření, motivy a balíčky příkazů",
+    "description": ">store command description",
+    "_machine_translated": true,
+    "_source_hash": "e843bed9e166800c"
+  },
+  "command.session_folder.description": {
+    "message": "Otevřít soubor aktuální relace v průzkumníku souborů",
+    "description": ">session-folder command description",
+    "_machine_translated": true,
+    "_source_hash": "29e4a0fd10e0693f"
+  },
+  "command.session_folder.no_session": {
+    "message": "Žádná aktivní relace",
+    "description": "Response when there's no active session for >session-folder",
+    "_machine_translated": true,
+    "_source_hash": "d532d4e911ea8d42"
+  },
+  "command.find.description": {
+    "message": "Hledat soubory podle názvu (např. >find report nebo >find *.docx)",
+    "description": ">find command description",
+    "_machine_translated": true,
+    "_source_hash": "5c13db2e2fcd5646"
+  },
+  "command.clipboard.description": {
+    "message": "Procházet historii schránky",
+    "description": ">clipboard / >cb command description",
+    "_machine_translated": true,
+    "_source_hash": "5c0a7e60e5cb1aa0"
+  },
+  "command.prompts.description": {
+    "message": "Procházet uložené prompty (Rychlé příkazy typu Prompt)",
+    "description": ">prompts / >p command description",
+    "_machine_translated": true,
+    "_source_hash": "097ff79934d631db"
+  },
+  "command.logs.description": {
+    "message": "Zobrazit protokoly aplikace",
+    "description": ">logs command description",
+    "_machine_translated": true,
+    "_source_hash": "1a3231b3c4eba521"
+  },
+  "command.version.description": {
+    "message": "Zobrazit verzi, kanál a vyhledat aktualizace",
+    "description": ">version command description",
+    "_machine_translated": true,
+    "_source_hash": "dbb240ef63b6e602"
+  },
+  "command.error.label": {
+    "message": "Chyba",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure",
+    "_machine_translated": true,
+    "_source_hash": "e454f97d20e9771c"
+  },
+  "command.version.error_app_info": {
+    "message": "Chyba při čtení informací o aplikaci",
+    "description": "Error label when get_app_info fails in >version",
+    "_machine_translated": true,
+    "_source_hash": "badaa0985ed42220"
+  },
+  "command.version.checking": {
+    "message": "_Vyhledávání aktualizací..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "f18c75968e8e2ddf"
+  },
+  "command.version.cta_floating": {
+    "message": "Klikněte na banner výše pro instalaci nebo otevřete [Nastavení → Aktualizace](kage:settings/updates) pro více informací.",
+    "description": "Call-to-action shown in floating window when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "4444e4f477ddeb2c"
+  },
+  "command.version.cta_chat": {
+    "message": "Pro instalaci otevřete [Nastavení → Aktualizace](kage:settings/updates).",
+    "description": "Call-to-action shown in chat when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fc31053c0e899d19"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **Dostupná aktualizace: v{version}**",
+    "description": "Heading shown by >version when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fa014cfbcf423bac"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ Máte nejnovější verzi (v{version}).",
+    "description": "Status shown by >version when on the latest version",
+    "_machine_translated": true,
+    "_source_hash": "5bc47b83bd550185"
+  },
+  "command.version.check_failed": {
+    "message": "✕ Kontrola aktualizací selhala: {message}",
+    "description": "Status shown by >version when the update check throws",
+    "_machine_translated": true,
+    "_source_hash": "16ad55e3106b2ae5"
+  },
+  "command.suggestions.send_hint": {
+    "message": "{key} pro odeslání agentovi",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)",
+    "_machine_translated": true,
+    "_source_hash": "a82a743fd50f5e8d"
+  },
+  "command.slash.no_options": {
+    "message": "Žádné možnosti nejsou k dispozici",
+    "description": "Response when a selection-type slash command returns nothing",
+    "_machine_translated": true,
+    "_source_hash": "2d3632cfca0f9b2c"
+  },
+  "command.slash.executed": {
+    "message": "Příkaz proveden",
+    "description": "Default response when a slash command succeeds with no message",
+    "_machine_translated": true,
+    "_source_hash": "736169e784b4207a"
   }
 }

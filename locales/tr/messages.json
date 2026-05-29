@@ -5086,5 +5086,491 @@
     "description": "Default option in the empty model dropdown",
     "_machine_translated": true,
     "_source_hash": "5686c4a3725114de"
+  },
+  "shared.agent.picker.aria_label": {
+    "message": "Aracı ekle",
+    "description": "ARIA label for the agent-type picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "f83f85395d2da2ef"
+  },
+  "shared.agent.picker.title": {
+    "message": "Aracı ekle",
+    "description": "Title shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "8fca9987899090d5"
+  },
+  "shared.agent.picker.description": {
+    "message": "Ne tür bir aracı ekliyorsunuz?",
+    "description": "Subtitle shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "afa83953bf6c1c6d"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "Otomatik algıla",
+    "description": "Picker option: scan the system for installed ACP agents",
+    "_machine_translated": true,
+    "_source_hash": "101cd8731437a96b"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "Bu makinede yüklü aracıları tara (Kiro, Claude, Codex).",
+    "description": "Helper text for the auto-detect option",
+    "_machine_translated": true,
+    "_source_hash": "b9482cf2eef4d8ab"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama (yerel model)",
+    "description": "Picker option: open the Ollama wizard",
+    "_machine_translated": true,
+    "_source_hash": "6dba0417a64d8c24"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "Yerel bir Ollama arka plan hizmetinde çalışan bir model seçin. Ücretsiz, gizli, API anahtarı gerekmez.",
+    "description": "Helper text for the Ollama option",
+    "_machine_translated": true,
+    "_source_hash": "367f7c770f25e374"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "ACP uyumlu aracı",
+    "description": "Picker option: configure a known ACP-compatible agent",
+    "_machine_translated": true,
+    "_source_hash": "bc240d064d5af15b"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Kiro, Claude Code veya OpenAI Codex'i elle bağlayın.",
+    "description": "Helper text for the ACP preset option",
+    "_machine_translated": true,
+    "_source_hash": "6bda0009533cea34"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "Özel",
+    "description": "Picker option: raw spawn command or remote TCP",
+    "_machine_translated": true,
+    "_source_hash": "25b512c35f2e2817"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "Ham başlatma komutu veya uzak TCP bağlantısı. Gelişmiş.",
+    "description": "Helper text for the custom option",
+    "_machine_translated": true,
+    "_source_hash": "218b600c696543d5"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "İptal",
+    "description": "Cancel button in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "cc27a75a4876bf67"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 Aracılar aranıyor…",
+    "description": "Status while auto-detection is running",
+    "_machine_translated": true,
+    "_source_hash": "fc36be3bc318bc94"
+  },
+  "shared.agent.detect.failed": {
+    "message": "Aracılar algılanamadı. Bağlantıyı aşağıdan elle yapılandırın.",
+    "description": "Status when detect_agents() throws",
+    "_machine_translated": true,
+    "_source_hash": "b3a6a463bf3799a0"
+  },
+  "shared.agent.detect.none": {
+    "message": "Otomatik olarak aracı bulunamadı. Bir tane yükleyebilirsiniz — Kiro CLI, Claude Code veya OpenAI Codex — ya da bağlantıyı aşağıdan elle yapılandırabilirsiniz.",
+    "description": "Status when detection succeeds but finds nothing",
+    "_machine_translated": true,
+    "_source_hash": "22fcc7d9189efb3a"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} bulundu",
+    "description": "Header status on a detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "22ee990dab5bcb24"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "Bu aracıyı kullan",
+    "description": "Button to lock in a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "791fa0d9b92c171e"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "Kullanmadan önce düzenle",
+    "description": "Tooltip on the pencil icon next to a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "0cb71b4e0cae4b0c"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "Elle yapılandır",
+    "description": "Link to fall through to manual configuration",
+    "_machine_translated": true,
+    "_source_hash": "6784e9dd86952858"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} bulundu — ACP sarmalayıcısı gerekiyor",
+    "description": "Header status on a wrapper-needed detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "0ce00064dec1e58c"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage, aracılarla Agent Communication Protocol üzerinden konuşur. <code>{cli}</code> CLI'sini sarmalamak için <code>{package}</code> paketini npm ile yükleyin.",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a3ee0c622c9ad25f"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed",
+    "_machine_translated": true,
+    "_source_hash": "6c0f262a0a96f6cd"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "ACP sarmalayıcısını yükle",
+    "description": "Button to trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "3c8d2bade9efd30a"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "npm denetleniyor…",
+    "description": "Button label while checking npm availability",
+    "_machine_translated": true,
+    "_source_hash": "ac20d75e2d61c8fb"
+  },
+  "shared.agent.detect.installing": {
+    "message": "Yükleniyor… (bir dakika sürebilir)",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "bd34a7e750d74865"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">npm, PATH üzerinde bulunamadı. <a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> adresinden Node.js yükleyin, ardından algılamayı yeniden çalıştırın. Veya bir terminalde manuel olarak yükleyin:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)",
+    "_machine_translated": true,
+    "_source_hash": "79ebb2b129b9bd8c"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">Yükleme başarısız: {message}. Bir terminalde kendiniz çalıştırmayı deneyin:<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "567133ccd80a923c"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "yükleme başarısız",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ Sarmalayıcı yüklendi. Yenileniyor…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6c26ace72c5f72f6"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "Algılanan aracı",
+    "description": "Fallback name for a detected agent that has no name",
+    "_machine_translated": true,
+    "_source_hash": "71847e5469418ae7"
+  },
+  "shared.agent.issue.empty": {
+    "message": "Başlatma komutu boş.",
+    "description": "Issue description: spawn command field is blank",
+    "_machine_translated": true,
+    "_source_hash": "e460de2782ec7820"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "İkili dosya diskte veya PATH üzerinde bulunamadı.",
+    "description": "Issue description: spawn command points at a non-existent binary",
+    "_machine_translated": true,
+    "_source_hash": "3f94a2322b4b68bd"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "Ana bilgisayar boş.",
+    "description": "Issue description: remote host field is blank",
+    "_machine_translated": true,
+    "_source_hash": "78f9e4abc8ff7c56"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "Bağlantı noktası geçerli değil.",
+    "description": "Issue description: remote port is missing or out of range",
+    "_machine_translated": true,
+    "_source_hash": "05290a5ff9190746"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "Bağlantı doğrulanamadı.",
+    "description": "Issue description: validate_agent_connection threw",
+    "_machine_translated": true,
+    "_source_hash": "068fd04942922a76"
+  },
+  "shared.agent.form.name.label": {
+    "message": "Ad",
+    "description": "Label for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "aeb9460bc0c65185"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "Aracım",
+    "description": "Placeholder for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "b37c7ec1b3c79750"
+  },
+  "shared.agent.form.untitled": {
+    "message": "Adsız",
+    "description": "Default name when the user submits the form without naming it",
+    "_machine_translated": true,
+    "_source_hash": "4fc0f3b0f33bc12f"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "Bağlantı modu",
+    "description": "Label for the local/remote mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d2604cb8028f9e17"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "Yerel — bu makinede bir işlem başlat",
+    "description": "Mode option: local",
+    "_machine_translated": true,
+    "_source_hash": "bcc61a7d872f68dd"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "Uzak — çalışan bir sunucuya bağlan",
+    "description": "Mode option: remote",
+    "_machine_translated": true,
+    "_source_hash": "464fceff436472af"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "Başlatma komutu",
+    "description": "Label for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "b6126155a3830c37"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "İkili dosyanın yolu ve tüm argümanlar dahil olmak üzere ACP sunucusunu başlatmak için tam komut.",
+    "description": "Helper for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "eb3b4601d730986d"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "ör. C:\\path\\to\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "bd0abd9cab8736e0"
+  },
+  "shared.agent.form.host.label": {
+    "message": "Ana bilgisayar",
+    "description": "Label for the host input",
+    "_machine_translated": true,
+    "_source_hash": "b7b893ddfde65911"
+  },
+  "shared.agent.form.port.label": {
+    "message": "Bağlantı noktası",
+    "description": "Label for the port input",
+    "_machine_translated": true,
+    "_source_hash": "38acd6c554f92a04"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "Zaman aşımı (ms)",
+    "description": "Label for the timeout input",
+    "_machine_translated": true,
+    "_source_hash": "eaa3870a8d80b4fd"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "Oturum dizini",
+    "description": "Label for the per-agent sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "1b144c1da7c590ae"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "Bu aracının oturum dosyalarını sakladığı yer. Aracının varsayılan konumunu kullanmak için boş bırakın.",
+    "description": "Helper for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "d92056db46d80a45"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "Otomatik algıla",
+    "description": "Placeholder for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "0286659982593a9e"
+  },
+  "command.settings.description": {
+    "message": "Ayarlar penceresini aç",
+    "description": ">settings command description",
+    "_machine_translated": true,
+    "_source_hash": "24adbdf5493407c9"
+  },
+  "command.quit.description": {
+    "message": "Kage'den çık",
+    "description": ">quit command description",
+    "_machine_translated": true,
+    "_source_hash": "c6969762b8ab04e2"
+  },
+  "command.restart.description": {
+    "message": "Kage'i yeniden başlat",
+    "description": ">restart command description",
+    "_machine_translated": true,
+    "_source_hash": "24aae0c65ddc6124"
+  },
+  "command.inspect.description": {
+    "message": "Geliştirici araçlarını aç",
+    "description": ">inspect command description",
+    "_machine_translated": true,
+    "_source_hash": "2c4e1d6fff0de19c"
+  },
+  "command.clear_ux.description": {
+    "message": "Görünen yanıtı temizle (konuşma geçmişini temizlemez)",
+    "description": ">clear-ux command description",
+    "_machine_translated": true,
+    "_source_hash": "7bd348a460a0b41c"
+  },
+  "command.chats.description": {
+    "message": "Oturumlarla tam sohbeti aç",
+    "description": ">chats command description",
+    "_machine_translated": true,
+    "_source_hash": "2ea46f4c116d9daa"
+  },
+  "command.session_id.description": {
+    "message": "Geçerli ACP oturum ID'sini göster",
+    "description": ">session-id command description",
+    "_machine_translated": true,
+    "_source_hash": "d219237aa1065b17"
+  },
+  "command.session_id.no_session": {
+    "message": "Etkin oturum yok",
+    "description": "Response when there's no active session for >session-id",
+    "_machine_translated": true,
+    "_source_hash": "376ddf82e9f1f70b"
+  },
+  "command.session_title.description": {
+    "message": "Geçerli oturumu yeniden adlandır (>session-title Projem Sohbeti)",
+    "description": ">session-title command description",
+    "_machine_translated": true,
+    "_source_hash": "d2d472235a691df4"
+  },
+  "command.session_title.usage": {
+    "message": "Kullanım: >session-title Yeni Oturum Adı",
+    "description": "Response when >session-title is invoked without args",
+    "_machine_translated": true,
+    "_source_hash": "622d4417c04dbc0b"
+  },
+  "command.session_title.no_session": {
+    "message": "Yeniden adlandırılacak etkin oturum yok",
+    "description": "Response when there's no active session to rename",
+    "_machine_translated": true,
+    "_source_hash": "62f54886d25e7b69"
+  },
+  "command.session_title.renamed": {
+    "message": "Oturum şu şekilde yeniden adlandırıldı: {title}",
+    "description": "Response confirming a successful session rename",
+    "_machine_translated": true,
+    "_source_hash": "de7c5a1e8b7dc38d"
+  },
+  "command.store.description": {
+    "message": "Uzantılara, temalara ve komut paketlerine göz at",
+    "description": ">store command description",
+    "_machine_translated": true,
+    "_source_hash": "e843bed9e166800c"
+  },
+  "command.session_folder.description": {
+    "message": "Geçerli oturum dosyasını dosya gezgininde aç",
+    "description": ">session-folder command description",
+    "_machine_translated": true,
+    "_source_hash": "29e4a0fd10e0693f"
+  },
+  "command.session_folder.no_session": {
+    "message": "Etkin oturum yok",
+    "description": "Response when there's no active session for >session-folder",
+    "_machine_translated": true,
+    "_source_hash": "d532d4e911ea8d42"
+  },
+  "command.find.description": {
+    "message": "Dosyaları ada göre ara (ör. >find rapor veya >find *.docx)",
+    "description": ">find command description",
+    "_machine_translated": true,
+    "_source_hash": "5c13db2e2fcd5646"
+  },
+  "command.clipboard.description": {
+    "message": "Pano geçmişine göz at",
+    "description": ">clipboard / >cb command description",
+    "_machine_translated": true,
+    "_source_hash": "5c0a7e60e5cb1aa0"
+  },
+  "command.prompts.description": {
+    "message": "Kayıtlı istemlere göz at (Prompt türündeki Hızlı Komutlar)",
+    "description": ">prompts / >p command description",
+    "_machine_translated": true,
+    "_source_hash": "097ff79934d631db"
+  },
+  "command.logs.description": {
+    "message": "Uygulama günlüklerini görüntüle",
+    "description": ">logs command description",
+    "_machine_translated": true,
+    "_source_hash": "1a3231b3c4eba521"
+  },
+  "command.version.description": {
+    "message": "Sürümü, kanalı göster ve güncellemeleri denetle",
+    "description": ">version command description",
+    "_machine_translated": true,
+    "_source_hash": "dbb240ef63b6e602"
+  },
+  "command.error.label": {
+    "message": "Hata",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure",
+    "_machine_translated": true,
+    "_source_hash": "e454f97d20e9771c"
+  },
+  "command.version.error_app_info": {
+    "message": "Uygulama bilgisi okunurken hata",
+    "description": "Error label when get_app_info fails in >version",
+    "_machine_translated": true,
+    "_source_hash": "badaa0985ed42220"
+  },
+  "command.version.checking": {
+    "message": "_Güncellemeler denetleniyor..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "f18c75968e8e2ddf"
+  },
+  "command.version.cta_floating": {
+    "message": "Yüklemek için yukarıdaki afişe tıklayın veya daha fazla bilgi için [Ayarlar → Güncellemeler](kage:settings/updates) sayfasını açın.",
+    "description": "Call-to-action shown in floating window when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "4444e4f477ddeb2c"
+  },
+  "command.version.cta_chat": {
+    "message": "Yüklemek için [Ayarlar → Güncellemeler](kage:settings/updates) sayfasını açın.",
+    "description": "Call-to-action shown in chat when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fc31053c0e899d19"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **Güncelleme mevcut: v{version}**",
+    "description": "Heading shown by >version when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fa014cfbcf423bac"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ Güncelsiniz (v{version}).",
+    "description": "Status shown by >version when on the latest version",
+    "_machine_translated": true,
+    "_source_hash": "5bc47b83bd550185"
+  },
+  "command.version.check_failed": {
+    "message": "✕ Güncelleme kontrolü başarısız: {message}",
+    "description": "Status shown by >version when the update check throws",
+    "_machine_translated": true,
+    "_source_hash": "16ad55e3106b2ae5"
+  },
+  "command.suggestions.send_hint": {
+    "message": "Aracıya göndermek için {key}",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)",
+    "_machine_translated": true,
+    "_source_hash": "a82a743fd50f5e8d"
+  },
+  "command.slash.no_options": {
+    "message": "Kullanılabilir seçenek yok",
+    "description": "Response when a selection-type slash command returns nothing",
+    "_machine_translated": true,
+    "_source_hash": "2d3632cfca0f9b2c"
+  },
+  "command.slash.executed": {
+    "message": "Komut yürütüldü",
+    "description": "Default response when a slash command succeeds with no message",
+    "_machine_translated": true,
+    "_source_hash": "736169e784b4207a"
   }
 }

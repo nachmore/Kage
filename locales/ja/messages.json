@@ -5086,5 +5086,491 @@
     "description": "Default option in the empty model dropdown",
     "_machine_translated": true,
     "_source_hash": "5686c4a3725114de"
+  },
+  "shared.agent.picker.aria_label": {
+    "message": "エージェントを追加",
+    "description": "ARIA label for the agent-type picker dialog",
+    "_machine_translated": true,
+    "_source_hash": "f83f85395d2da2ef"
+  },
+  "shared.agent.picker.title": {
+    "message": "エージェントを追加",
+    "description": "Title shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "8fca9987899090d5"
+  },
+  "shared.agent.picker.description": {
+    "message": "どの種類のエージェントを追加しますか？",
+    "description": "Subtitle shown in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "afa83953bf6c1c6d"
+  },
+  "shared.agent.picker.detect.name": {
+    "message": "自動検出",
+    "description": "Picker option: scan the system for installed ACP agents",
+    "_machine_translated": true,
+    "_source_hash": "101cd8731437a96b"
+  },
+  "shared.agent.picker.detect.sub": {
+    "message": "このマシンにインストールされているエージェント（Kiro、Claude、Codex）をスキャンします。",
+    "description": "Helper text for the auto-detect option",
+    "_machine_translated": true,
+    "_source_hash": "b9482cf2eef4d8ab"
+  },
+  "shared.agent.picker.ollama.name": {
+    "message": "Ollama（ローカルモデル）",
+    "description": "Picker option: open the Ollama wizard",
+    "_machine_translated": true,
+    "_source_hash": "6dba0417a64d8c24"
+  },
+  "shared.agent.picker.ollama.sub": {
+    "message": "ローカルの Ollama デーモンで動作しているモデルを選択します。無料、プライベート、API キー不要。",
+    "description": "Helper text for the Ollama option",
+    "_machine_translated": true,
+    "_source_hash": "367f7c770f25e374"
+  },
+  "shared.agent.picker.acp_preset.name": {
+    "message": "ACP 対応エージェント",
+    "description": "Picker option: configure a known ACP-compatible agent",
+    "_machine_translated": true,
+    "_source_hash": "bc240d064d5af15b"
+  },
+  "shared.agent.picker.acp_preset.sub": {
+    "message": "Kiro、Claude Code、または OpenAI Codex を手動で接続します。",
+    "description": "Helper text for the ACP preset option",
+    "_machine_translated": true,
+    "_source_hash": "6bda0009533cea34"
+  },
+  "shared.agent.picker.custom.name": {
+    "message": "カスタム",
+    "description": "Picker option: raw spawn command or remote TCP",
+    "_machine_translated": true,
+    "_source_hash": "25b512c35f2e2817"
+  },
+  "shared.agent.picker.custom.sub": {
+    "message": "生の spawn コマンドまたはリモート TCP 接続。上級者向け。",
+    "description": "Helper text for the custom option",
+    "_machine_translated": true,
+    "_source_hash": "218b600c696543d5"
+  },
+  "shared.agent.picker.cancel": {
+    "message": "キャンセル",
+    "description": "Cancel button in the agent-type picker",
+    "_machine_translated": true,
+    "_source_hash": "cc27a75a4876bf67"
+  },
+  "shared.agent.detect.searching": {
+    "message": "🔍 エージェントを検索中…",
+    "description": "Status while auto-detection is running",
+    "_machine_translated": true,
+    "_source_hash": "fc36be3bc318bc94"
+  },
+  "shared.agent.detect.failed": {
+    "message": "エージェントを検出できませんでした。下から接続を手動で設定してください。",
+    "description": "Status when detect_agents() throws",
+    "_machine_translated": true,
+    "_source_hash": "b3a6a463bf3799a0"
+  },
+  "shared.agent.detect.none": {
+    "message": "エージェントを自動検出できませんでした。Kiro CLI、Claude Code、または OpenAI Codex のいずれかをインストールするか、下から接続を手動で設定してください。",
+    "description": "Status when detection succeeds but finds nothing",
+    "_machine_translated": true,
+    "_source_hash": "22fcc7d9189efb3a"
+  },
+  "shared.agent.detect.found_status": {
+    "message": "{name} を検出しました",
+    "description": "Header status on a detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "22ee990dab5bcb24"
+  },
+  "shared.agent.detect.use_btn": {
+    "message": "このエージェントを使用",
+    "description": "Button to lock in a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "791fa0d9b92c171e"
+  },
+  "shared.agent.detect.edit_title": {
+    "message": "使用前に編集",
+    "description": "Tooltip on the pencil icon next to a detected agent",
+    "_machine_translated": true,
+    "_source_hash": "0cb71b4e0cae4b0c"
+  },
+  "shared.agent.detect.manual_btn": {
+    "message": "手動で設定",
+    "description": "Link to fall through to manual configuration",
+    "_machine_translated": true,
+    "_source_hash": "6784e9dd86952858"
+  },
+  "shared.agent.detect.wrapper_status": {
+    "message": "{name} を検出しました — ACP ラッパーが必要です",
+    "description": "Header status on a wrapper-needed detected-agent card",
+    "_machine_translated": true,
+    "_source_hash": "0ce00064dec1e58c"
+  },
+  "shared.agent.detect.wrapper_hint_html": {
+    "message": "Kage は Agent Communication Protocol を介してエージェントと通信します。<code>{cli}</code> CLI をラップするには、npm 経由で <code>{package}</code> をインストールしてください。",
+    "description": "Helper text on a wrapper-needed card (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "a3ee0c622c9ad25f"
+  },
+  "shared.agent.detect.wrapper_default_cli": {
+    "message": "claude",
+    "description": "Default CLI name shown when the binary path can't be parsed",
+    "_machine_translated": true,
+    "_source_hash": "6c0f262a0a96f6cd"
+  },
+  "shared.agent.detect.wrapper_install_btn": {
+    "message": "ACP ラッパーをインストール",
+    "description": "Button to trigger the npm install for the ACP wrapper",
+    "_machine_translated": true,
+    "_source_hash": "3c8d2bade9efd30a"
+  },
+  "shared.agent.detect.checking_npm": {
+    "message": "npm を確認中…",
+    "description": "Button label while checking npm availability",
+    "_machine_translated": true,
+    "_source_hash": "ac20d75e2d61c8fb"
+  },
+  "shared.agent.detect.installing": {
+    "message": "インストール中…（1 分ほどかかる場合があります）",
+    "description": "Button label while npm install runs",
+    "_machine_translated": true,
+    "_source_hash": "bd34a7e750d74865"
+  },
+  "shared.agent.detect.no_npm_html": {
+    "message": "<div class=\"agent-install-error\">PATH に npm が見つかりませんでした。<a href=\"https://nodejs.org/\" target=\"_blank\" rel=\"noopener\">nodejs.org</a> から Node.js をインストールしてから、検出を再実行してください。または、ターミナルで手動でインストールしてください：<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when npm is missing (HTML allowed; cmd auto-escaped by tHtml)",
+    "_machine_translated": true,
+    "_source_hash": "79ebb2b129b9bd8c"
+  },
+  "shared.agent.detect.install_failed_html": {
+    "message": "<div class=\"agent-install-error\">インストールに失敗しました：{message}。ターミナルでご自身で実行してみてください：<pre class=\"agent-install-cmd\">{cmd}</pre></div>",
+    "description": "Inline error when wrapper install fails (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "567133ccd80a923c"
+  },
+  "shared.agent.detect.install_failed_default": {
+    "message": "インストールに失敗しました",
+    "description": "Default text when an install error has no message",
+    "_machine_translated": true,
+    "_source_hash": "c35530bdd2d29c87"
+  },
+  "shared.agent.detect.install_ok_html": {
+    "message": "<div class=\"agent-install-ok\">✅ ラッパーをインストールしました。更新中…</div>",
+    "description": "Inline message when wrapper install succeeds (HTML allowed)",
+    "_machine_translated": true,
+    "_source_hash": "6c26ace72c5f72f6"
+  },
+  "shared.agent.detect.default_name": {
+    "message": "検出されたエージェント",
+    "description": "Fallback name for a detected agent that has no name",
+    "_machine_translated": true,
+    "_source_hash": "71847e5469418ae7"
+  },
+  "shared.agent.issue.empty": {
+    "message": "起動コマンドが空です。",
+    "description": "Issue description: spawn command field is blank",
+    "_machine_translated": true,
+    "_source_hash": "e460de2782ec7820"
+  },
+  "shared.agent.issue.binary_not_found": {
+    "message": "ディスクまたは PATH 上にバイナリが見つかりません。",
+    "description": "Issue description: spawn command points at a non-existent binary",
+    "_machine_translated": true,
+    "_source_hash": "3f94a2322b4b68bd"
+  },
+  "shared.agent.issue.host_empty": {
+    "message": "ホストが空です。",
+    "description": "Issue description: remote host field is blank",
+    "_machine_translated": true,
+    "_source_hash": "78f9e4abc8ff7c56"
+  },
+  "shared.agent.issue.port_invalid": {
+    "message": "ポートが無効です。",
+    "description": "Issue description: remote port is missing or out of range",
+    "_machine_translated": true,
+    "_source_hash": "05290a5ff9190746"
+  },
+  "shared.agent.issue.validation_failed": {
+    "message": "接続を検証できませんでした。",
+    "description": "Issue description: validate_agent_connection threw",
+    "_machine_translated": true,
+    "_source_hash": "068fd04942922a76"
+  },
+  "shared.agent.form.name.label": {
+    "message": "名前",
+    "description": "Label for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "aeb9460bc0c65185"
+  },
+  "shared.agent.form.name.placeholder": {
+    "message": "マイエージェント",
+    "description": "Placeholder for the connection name input",
+    "_machine_translated": true,
+    "_source_hash": "b37c7ec1b3c79750"
+  },
+  "shared.agent.form.untitled": {
+    "message": "無題",
+    "description": "Default name when the user submits the form without naming it",
+    "_machine_translated": true,
+    "_source_hash": "4fc0f3b0f33bc12f"
+  },
+  "shared.agent.form.mode.label": {
+    "message": "接続モード",
+    "description": "Label for the local/remote mode dropdown",
+    "_machine_translated": true,
+    "_source_hash": "d2604cb8028f9e17"
+  },
+  "shared.agent.form.mode.local": {
+    "message": "ローカル — このマシンでプロセスを起動",
+    "description": "Mode option: local",
+    "_machine_translated": true,
+    "_source_hash": "bcc61a7d872f68dd"
+  },
+  "shared.agent.form.mode.remote": {
+    "message": "リモート — 実行中のサーバーに接続",
+    "description": "Mode option: remote",
+    "_machine_translated": true,
+    "_source_hash": "464fceff436472af"
+  },
+  "shared.agent.form.spawn.label": {
+    "message": "起動コマンド",
+    "description": "Label for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "b6126155a3830c37"
+  },
+  "shared.agent.form.spawn.description": {
+    "message": "ACP サーバーを起動する完全なコマンド（バイナリへのパスと任意の引数を含む）。",
+    "description": "Helper for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "eb3b4601d730986d"
+  },
+  "shared.agent.form.spawn.placeholder": {
+    "message": "例：C:\\path\\to\\agent.exe acp",
+    "description": "Placeholder for the spawn-command input",
+    "_machine_translated": true,
+    "_source_hash": "bd0abd9cab8736e0"
+  },
+  "shared.agent.form.host.label": {
+    "message": "ホスト",
+    "description": "Label for the host input",
+    "_machine_translated": true,
+    "_source_hash": "b7b893ddfde65911"
+  },
+  "shared.agent.form.port.label": {
+    "message": "ポート",
+    "description": "Label for the port input",
+    "_machine_translated": true,
+    "_source_hash": "38acd6c554f92a04"
+  },
+  "shared.agent.form.timeout.label": {
+    "message": "タイムアウト（ミリ秒）",
+    "description": "Label for the timeout input",
+    "_machine_translated": true,
+    "_source_hash": "eaa3870a8d80b4fd"
+  },
+  "shared.agent.form.sessions.label": {
+    "message": "セッションディレクトリ",
+    "description": "Label for the per-agent sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "1b144c1da7c590ae"
+  },
+  "shared.agent.form.sessions.description": {
+    "message": "このエージェントがセッションファイルを保存する場所。空欄のままにすると、エージェントの既定の場所が使用されます。",
+    "description": "Helper for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "d92056db46d80a45"
+  },
+  "shared.agent.form.sessions.placeholder": {
+    "message": "自動検出",
+    "description": "Placeholder for the sessions directory input",
+    "_machine_translated": true,
+    "_source_hash": "0286659982593a9e"
+  },
+  "command.settings.description": {
+    "message": "設定ウィンドウを開きます",
+    "description": ">settings command description",
+    "_machine_translated": true,
+    "_source_hash": "24adbdf5493407c9"
+  },
+  "command.quit.description": {
+    "message": "Kage を終了します",
+    "description": ">quit command description",
+    "_machine_translated": true,
+    "_source_hash": "c6969762b8ab04e2"
+  },
+  "command.restart.description": {
+    "message": "Kage を再起動します",
+    "description": ">restart command description",
+    "_machine_translated": true,
+    "_source_hash": "24aae0c65ddc6124"
+  },
+  "command.inspect.description": {
+    "message": "開発者ツールを開きます",
+    "description": ">inspect command description",
+    "_machine_translated": true,
+    "_source_hash": "2c4e1d6fff0de19c"
+  },
+  "command.clear_ux.description": {
+    "message": "表示中の応答をクリアします（会話履歴は消去されません）",
+    "description": ">clear-ux command description",
+    "_machine_translated": true,
+    "_source_hash": "7bd348a460a0b41c"
+  },
+  "command.chats.description": {
+    "message": "セッション付きのフルチャットを開きます",
+    "description": ">chats command description",
+    "_machine_translated": true,
+    "_source_hash": "2ea46f4c116d9daa"
+  },
+  "command.session_id.description": {
+    "message": "現在の ACP セッション ID を表示します",
+    "description": ">session-id command description",
+    "_machine_translated": true,
+    "_source_hash": "d219237aa1065b17"
+  },
+  "command.session_id.no_session": {
+    "message": "アクティブなセッションがありません",
+    "description": "Response when there's no active session for >session-id",
+    "_machine_translated": true,
+    "_source_hash": "376ddf82e9f1f70b"
+  },
+  "command.session_title.description": {
+    "message": "現在のセッション名を変更します（>session-title My Project Chat）",
+    "description": ">session-title command description",
+    "_machine_translated": true,
+    "_source_hash": "d2d472235a691df4"
+  },
+  "command.session_title.usage": {
+    "message": "使用方法: >session-title 新しいセッション名",
+    "description": "Response when >session-title is invoked without args",
+    "_machine_translated": true,
+    "_source_hash": "622d4417c04dbc0b"
+  },
+  "command.session_title.no_session": {
+    "message": "名前を変更するアクティブなセッションがありません",
+    "description": "Response when there's no active session to rename",
+    "_machine_translated": true,
+    "_source_hash": "62f54886d25e7b69"
+  },
+  "command.session_title.renamed": {
+    "message": "セッション名を変更しました: {title}",
+    "description": "Response confirming a successful session rename",
+    "_machine_translated": true,
+    "_source_hash": "de7c5a1e8b7dc38d"
+  },
+  "command.store.description": {
+    "message": "拡張機能、テーマ、コマンドパックを閲覧します",
+    "description": ">store command description",
+    "_machine_translated": true,
+    "_source_hash": "e843bed9e166800c"
+  },
+  "command.session_folder.description": {
+    "message": "現在のセッションファイルをファイルエクスプローラーで開きます",
+    "description": ">session-folder command description",
+    "_machine_translated": true,
+    "_source_hash": "29e4a0fd10e0693f"
+  },
+  "command.session_folder.no_session": {
+    "message": "アクティブなセッションがありません",
+    "description": "Response when there's no active session for >session-folder",
+    "_machine_translated": true,
+    "_source_hash": "d532d4e911ea8d42"
+  },
+  "command.find.description": {
+    "message": "名前でファイルを検索します（例: >find report または >find *.docx）",
+    "description": ">find command description",
+    "_machine_translated": true,
+    "_source_hash": "5c13db2e2fcd5646"
+  },
+  "command.clipboard.description": {
+    "message": "クリップボード履歴を閲覧します",
+    "description": ">clipboard / >cb command description",
+    "_machine_translated": true,
+    "_source_hash": "5c0a7e60e5cb1aa0"
+  },
+  "command.prompts.description": {
+    "message": "保存済みプロンプトを閲覧します（プロンプト形式のクイックコマンド）",
+    "description": ">prompts / >p command description",
+    "_machine_translated": true,
+    "_source_hash": "097ff79934d631db"
+  },
+  "command.logs.description": {
+    "message": "アプリケーションログを表示します",
+    "description": ">logs command description",
+    "_machine_translated": true,
+    "_source_hash": "1a3231b3c4eba521"
+  },
+  "command.version.description": {
+    "message": "バージョン、チャンネルを表示し、更新を確認します",
+    "description": ">version command description",
+    "_machine_translated": true,
+    "_source_hash": "dbb240ef63b6e602"
+  },
+  "command.error.label": {
+    "message": "エラー",
+    "description": "Generic 'Error' label used when a command's catch block reports a failure",
+    "_machine_translated": true,
+    "_source_hash": "e454f97d20e9771c"
+  },
+  "command.version.error_app_info": {
+    "message": "アプリ情報の読み取りエラー",
+    "description": "Error label when get_app_info fails in >version",
+    "_machine_translated": true,
+    "_source_hash": "badaa0985ed42220"
+  },
+  "command.version.checking": {
+    "message": "_更新を確認しています..._",
+    "description": "Status line shown while >version polls for updates (italic markdown)",
+    "_machine_translated": true,
+    "_source_hash": "f18c75968e8e2ddf"
+  },
+  "command.version.cta_floating": {
+    "message": "上のバナーをクリックしてインストールするか、[設定 → 更新](kage:settings/updates) を開いて詳細をご確認ください。",
+    "description": "Call-to-action shown in floating window when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "4444e4f477ddeb2c"
+  },
+  "command.version.cta_chat": {
+    "message": "[設定 → 更新](kage:settings/updates) を開いてインストールしてください。",
+    "description": "Call-to-action shown in chat when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fc31053c0e899d19"
+  },
+  "command.version.update_available": {
+    "message": "⬆ **アップデートあり: v{version}**",
+    "description": "Heading shown by >version when an update is available",
+    "_machine_translated": true,
+    "_source_hash": "fa014cfbcf423bac"
+  },
+  "command.version.up_to_date": {
+    "message": "✓ 最新バージョンです (v{version})。",
+    "description": "Status shown by >version when on the latest version",
+    "_machine_translated": true,
+    "_source_hash": "5bc47b83bd550185"
+  },
+  "command.version.check_failed": {
+    "message": "✕ アップデートの確認に失敗しました: {message}",
+    "description": "Status shown by >version when the update check throws",
+    "_machine_translated": true,
+    "_source_hash": "16ad55e3106b2ae5"
+  },
+  "command.suggestions.send_hint": {
+    "message": "{key} でエージェントに送信",
+    "description": "Hint shown at the bottom of command suggestions ({key} = e.g. Ctrl+Enter)",
+    "_machine_translated": true,
+    "_source_hash": "a82a743fd50f5e8d"
+  },
+  "command.slash.no_options": {
+    "message": "利用可能なオプションがありません",
+    "description": "Response when a selection-type slash command returns nothing",
+    "_machine_translated": true,
+    "_source_hash": "2d3632cfca0f9b2c"
+  },
+  "command.slash.executed": {
+    "message": "コマンドを実行しました",
+    "description": "Default response when a slash command succeeds with no message",
+    "_machine_translated": true,
+    "_source_hash": "736169e784b4207a"
   }
 }

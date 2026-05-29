@@ -16,6 +16,7 @@
  *   - `window.__TAURI__.core.invoke`
  */
 
+import { t, tHtml } from './i18n.js';
 import { escapeAttr, escapeHtml } from './tool-utils.js';
 
 /**
@@ -40,39 +41,39 @@ export function pickAgentType() {
         const overlay = document.createElement('div');
         overlay.className = 'agent-type-picker-overlay';
         overlay.innerHTML = `
-            <div class="agent-type-picker-box" role="dialog" aria-label="Add an agent">
-                <div class="agent-type-picker-title">Add an agent</div>
-                <div class="agent-type-picker-desc">What kind of agent are you adding?</div>
+            <div class="agent-type-picker-box" role="dialog" aria-label="${escapeAttr(t('shared.agent.picker.aria_label'))}">
+                <div class="agent-type-picker-title">${t('shared.agent.picker.title')}</div>
+                <div class="agent-type-picker-desc">${t('shared.agent.picker.description')}</div>
                 <button type="button" class="agent-type-card" data-kind="detect">
                     <span class="agent-type-icon">⚡</span>
                     <div class="agent-type-text">
-                        <div class="agent-type-name">Auto-detect</div>
-                        <div class="agent-type-sub">Scan this machine for installed agents (Kiro, Claude, Codex).</div>
+                        <div class="agent-type-name">${t('shared.agent.picker.detect.name')}</div>
+                        <div class="agent-type-sub">${t('shared.agent.picker.detect.sub')}</div>
                     </div>
                 </button>
                 <button type="button" class="agent-type-card" data-kind="ollama">
                     <span class="agent-type-icon">🦙</span>
                     <div class="agent-type-text">
-                        <div class="agent-type-name">Ollama (local model)</div>
-                        <div class="agent-type-sub">Pick a model running on a local Ollama daemon. Free, private, no API key.</div>
+                        <div class="agent-type-name">${t('shared.agent.picker.ollama.name')}</div>
+                        <div class="agent-type-sub">${t('shared.agent.picker.ollama.sub')}</div>
                     </div>
                 </button>
                 <button type="button" class="agent-type-card" data-kind="acp_preset">
                     <span class="agent-type-icon">🔌</span>
                     <div class="agent-type-text">
-                        <div class="agent-type-name">ACP-compatible agent</div>
-                        <div class="agent-type-sub">Wire up Kiro, Claude Code, or OpenAI Codex by hand.</div>
+                        <div class="agent-type-name">${t('shared.agent.picker.acp_preset.name')}</div>
+                        <div class="agent-type-sub">${t('shared.agent.picker.acp_preset.sub')}</div>
                     </div>
                 </button>
                 <button type="button" class="agent-type-card" data-kind="custom">
                     <span class="agent-type-icon">⚙️</span>
                     <div class="agent-type-text">
-                        <div class="agent-type-name">Custom</div>
-                        <div class="agent-type-sub">Raw spawn command or remote TCP connection. Advanced.</div>
+                        <div class="agent-type-name">${t('shared.agent.picker.custom.name')}</div>
+                        <div class="agent-type-sub">${t('shared.agent.picker.custom.sub')}</div>
                     </div>
                 </button>
                 <div class="agent-type-picker-actions">
-                    <button type="button" class="setting-button agent-type-cancel">Cancel</button>
+                    <button type="button" class="setting-button agent-type-cancel">${t('shared.agent.picker.cancel')}</button>
                 </div>
             </div>
         `;
@@ -163,24 +164,20 @@ export async function renderDetected(container, opts) {
     if (!container || !invoke) return [];
 
     container.innerHTML =
-        opts.searchingHtml || '<div class="agent-searching">🔍 Searching for agents…</div>';
+        opts.searchingHtml ||
+        `<div class="agent-searching">${t('shared.agent.detect.searching')}</div>`;
 
     let agents = [];
     try {
         agents = (await invoke('detect_agents')) || [];
     } catch (e) {
         console.warn('detect_agents failed:', e);
-        container.innerHTML =
-            '<div class="agent-not-found">Could not detect agents. Configure the connection manually below.</div>';
+        container.innerHTML = `<div class="agent-not-found">${t('shared.agent.detect.failed')}</div>`;
         return [];
     }
 
     if (!agents.length) {
-        container.innerHTML = `
-            <div class="agent-not-found">
-                No agents found automatically. You can install one — Kiro CLI, Claude Code, or OpenAI Codex —
-                or configure the connection manually below.
-            </div>`;
+        container.innerHTML = `<div class="agent-not-found">${t('shared.agent.detect.none')}</div>`;
         return [];
     }
 
@@ -199,18 +196,19 @@ export async function renderDetected(container, opts) {
             // Pencil sits next to "Use this agent". The two-button row
             // makes the "lock in vs. edit first" choice explicit; the
             // single-button original silently did both at once.
+            const editTitle = escapeAttr(t('shared.agent.detect.edit_title'));
             const editHtml = showEdit
-                ? `<button class="agent-edit-btn" data-idx="${i}" title="Edit before using" aria-label="Edit before using">✏️</button>`
+                ? `<button class="agent-edit-btn" data-idx="${i}" title="${editTitle}" aria-label="${editTitle}">✏️</button>`
                 : '';
             return `
                 <div class="agent-detected">
                     <div class="agent-detected-icon">✅</div>
-                    <div class="agent-detected-status">${escapeHtml(a.name)} found</div>
+                    <div class="agent-detected-status">${tHtml('shared.agent.detect.found_status', { name: a.name })}</div>
                     <div class="agent-detected-name">${escapeHtml(a.name)}</div>
                     <div class="agent-detected-path">${escapeHtml(a.path)}</div>
                     ${versionHtml}
                     <div class="agent-detected-actions">
-                        <button class="agent-use-btn" data-idx="${i}">Use this agent</button>
+                        <button class="agent-use-btn" data-idx="${i}">${t('shared.agent.detect.use_btn')}</button>
                         ${editHtml}
                     </div>
                 </div>`;
@@ -218,7 +216,7 @@ export async function renderDetected(container, opts) {
         .join('');
 
     const manualHtml = opts.onManual
-        ? `<button class="agent-manual-link" id="agentDetectShowManual">Configure manually</button>`
+        ? `<button class="agent-manual-link" id="agentDetectShowManual">${t('shared.agent.detect.manual_btn')}</button>`
         : '';
 
     container.innerHTML = cards + manualHtml;
@@ -262,19 +260,18 @@ export async function renderDetected(container, opts) {
 
 function _renderWrapperNeededCard(a, i) {
     const pkg = a.needs_wrapper_npm_package || '';
+    const cli = a.path.split(/[\\/]/).pop() || t('shared.agent.detect.wrapper_default_cli');
     return `
         <div class="agent-detected agent-detected-wrapper-needed" data-idx="${i}">
             <div class="agent-detected-icon">⚙️</div>
-            <div class="agent-detected-status">${escapeHtml(a.name)} found — needs ACP wrapper</div>
+            <div class="agent-detected-status">${tHtml('shared.agent.detect.wrapper_status', { name: a.name })}</div>
             <div class="agent-detected-name">${escapeHtml(a.name)}</div>
             <div class="agent-detected-path">${escapeHtml(a.path)}</div>
             <div class="agent-detected-version">
-                Kage talks to agents over the Agent Communication Protocol.
-                Install <code>${escapeHtml(pkg)}</code> via npm to wrap the
-                <code>${escapeHtml(a.path.split(/[\\/]/).pop() || 'claude')}</code> CLI.
+                ${tHtml('shared.agent.detect.wrapper_hint_html', { package: pkg, cli })}
             </div>
             <div class="agent-detected-actions">
-                <button class="agent-install-wrapper-btn" data-idx="${i}">Install ACP wrapper</button>
+                <button class="agent-install-wrapper-btn" data-idx="${i}">${t('shared.agent.detect.wrapper_install_btn')}</button>
             </div>
             <div class="agent-install-status" data-idx="${i}" aria-live="polite"></div>
         </div>`;
@@ -291,7 +288,7 @@ async function _handleInstallWrapper(container, agent, btn, opts) {
 
     btn.disabled = true;
     const originalLabel = btn.textContent;
-    btn.textContent = 'Checking npm…';
+    btn.textContent = t('shared.agent.detect.checking_npm');
     setStatus('');
 
     let npm;
@@ -306,17 +303,11 @@ async function _handleInstallWrapper(container, agent, btn, opts) {
         btn.disabled = false;
         btn.textContent = originalLabel;
         const cmd = `npm install -g ${agent.needs_wrapper_npm_package}`;
-        setStatus(`
-            <div class="agent-install-error">
-                npm wasn't found on PATH. Install Node.js from
-                <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a>,
-                then re-run detection. Or install manually in a terminal:
-                <pre class="agent-install-cmd">${escapeHtml(cmd)}</pre>
-            </div>`);
+        setStatus(tHtml('shared.agent.detect.no_npm_html', { cmd }));
         return;
     }
 
-    btn.textContent = 'Installing… (can take a minute)';
+    btn.textContent = t('shared.agent.detect.installing');
     try {
         await invoke('install_acp_wrapper', {
             package: agent.needs_wrapper_npm_package,
@@ -325,18 +316,15 @@ async function _handleInstallWrapper(container, agent, btn, opts) {
         console.warn('install_acp_wrapper failed:', e);
         btn.disabled = false;
         btn.textContent = originalLabel;
-        const msg = e?.message || (typeof e === 'string' ? e : 'install failed');
+        const msg =
+            e?.message ||
+            (typeof e === 'string' ? e : t('shared.agent.detect.install_failed_default'));
         const cmd = `npm install -g ${agent.needs_wrapper_npm_package}`;
-        setStatus(`
-            <div class="agent-install-error">
-                Install failed: ${escapeHtml(msg)}.
-                Try running it yourself in a terminal:
-                <pre class="agent-install-cmd">${escapeHtml(cmd)}</pre>
-            </div>`);
+        setStatus(tHtml('shared.agent.detect.install_failed_html', { message: msg, cmd }));
         return;
     }
 
-    setStatus('<div class="agent-install-ok">✅ Wrapper installed. Refreshing…</div>');
+    setStatus(tHtml('shared.agent.detect.install_ok_html'));
     // Re-run detection: the wrapper binary should now show up as a
     // ready-to-use entry, and the suppression filter on the backend
     // hides the now-redundant wrapper-needed entry.
@@ -350,7 +338,7 @@ async function _handleInstallWrapper(container, agent, btn, opts) {
 export function connectionFromDetected(agent) {
     return {
         id: uuidLite(),
-        name: agent.name || 'Detected agent',
+        name: agent.name || t('shared.agent.detect.default_name'),
         preset_id: agent.preset_id || null,
         mode: { type: 'local', spawn_command: agent.spawn_command },
         sessions_directory: null,
@@ -379,15 +367,15 @@ export async function validateMode(mode) {
 export function describeIssue(code) {
     switch (code) {
         case 'empty':
-            return 'Spawn command is empty.';
+            return t('shared.agent.issue.empty');
         case 'binary-not-found':
-            return 'Binary not found on disk or PATH.';
+            return t('shared.agent.issue.binary_not_found');
         case 'host-empty':
-            return 'Host is empty.';
+            return t('shared.agent.issue.host_empty');
         case 'port-invalid':
-            return 'Port is not valid.';
+            return t('shared.agent.issue.port_invalid');
         case 'validation-failed':
-            return 'Could not validate connection.';
+            return t('shared.agent.issue.validation_failed');
         default:
             return code;
     }
@@ -440,42 +428,42 @@ export function renderEditForm(connection, opts) {
 
     return `
         <div class="${wrap}">
-            <div class="${labelClass}">Name</div>
-            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Name" value="${escapeAttr(c.name || '')}" placeholder="My agent">${ctrlClose}
+            <div class="${labelClass}">${t('shared.agent.form.name.label')}</div>
+            ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Name" value="${escapeAttr(c.name || '')}" placeholder="${escapeAttr(t('shared.agent.form.name.placeholder'))}">${ctrlClose}
         </div>
 
         <div class="${wrap}">
-            <div class="${labelClass}">Connection Mode</div>
+            <div class="${labelClass}">${t('shared.agent.form.mode.label')}</div>
             ${ctrlOpen}<select class="setting-select" id="${prefix}Mode">
-                <option value="local"${isLocal ? ' selected' : ''}>Local — spawn a process on this machine</option>
-                <option value="remote"${!isLocal ? ' selected' : ''}>Remote — connect to a running server</option>
+                <option value="local"${isLocal ? ' selected' : ''}>${t('shared.agent.form.mode.local')}</option>
+                <option value="remote"${!isLocal ? ' selected' : ''}>${t('shared.agent.form.mode.remote')}</option>
             </select>${ctrlClose}
         </div>
 
         <div id="${prefix}LocalSettings" ${hidden(!isLocal)}>
             <div class="${wrap}">
-                <div class="${labelClass}">Spawn Command</div>
-                ${desc('Full command to start the ACP server, including the path to the binary and any arguments.')}
+                <div class="${labelClass}">${t('shared.agent.form.spawn.label')}</div>
+                ${desc(t('shared.agent.form.spawn.description'))}
                 ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SpawnCommand"
                     value="${escapeAttr(isLocal ? c.mode?.spawn_command || '' : '')}"
-                    placeholder="e.g., C:\\path\\to\\agent.exe acp">${ctrlClose}
+                    placeholder="${escapeAttr(t('shared.agent.form.spawn.placeholder'))}">${ctrlClose}
             </div>
         </div>
 
         <div id="${prefix}RemoteSettings" ${hidden(isLocal)}>
             <div class="${wrap}">
-                <div class="${labelClass}">Host</div>
+                <div class="${labelClass}">${t('shared.agent.form.host.label')}</div>
                 ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}Host"
                     value="${escapeAttr(!isLocal ? c.mode?.host || '127.0.0.1' : '127.0.0.1')}">${ctrlClose}
             </div>
             <div style="display:flex;gap:12px;">
                 <div class="${wrap}" style="flex:1;">
-                    <div class="${labelClass}">Port</div>
+                    <div class="${labelClass}">${t('shared.agent.form.port.label')}</div>
                     ${ctrlOpen}<input type="number" class="setting-input" id="${prefix}Port"
                         value="${!isLocal ? c.mode?.port || 8765 : 8765}">${ctrlClose}
                 </div>
                 <div class="${wrap}" style="flex:1;">
-                    <div class="${labelClass}">Timeout (ms)</div>
+                    <div class="${labelClass}">${t('shared.agent.form.timeout.label')}</div>
                     ${ctrlOpen}<input type="number" class="setting-input" id="${prefix}Timeout"
                         value="${!isLocal ? c.mode?.timeout_ms || 30000 : 30000}">${ctrlClose}
                 </div>
@@ -486,11 +474,11 @@ export function renderEditForm(connection, opts) {
             includeSessions
                 ? `
         <div class="${wrap}">
-            <div class="${labelClass}">Sessions directory</div>
-            ${desc(`Where this agent stores its session files. Leave empty to use the agent's default location.`)}
+            <div class="${labelClass}">${t('shared.agent.form.sessions.label')}</div>
+            ${desc(t('shared.agent.form.sessions.description'))}
             ${ctrlOpen}<input type="text" class="setting-input" id="${prefix}SessionsDir"
                 value="${escapeAttr(c.sessions_directory || '')}"
-                placeholder="Auto-detect">${ctrlClose}
+                placeholder="${escapeAttr(t('shared.agent.form.sessions.placeholder'))}">${ctrlClose}
         </div>`
                 : ''
         }
@@ -517,7 +505,8 @@ export function bindEditForm(prefix) {
 export function readEditForm(prefix, existing) {
     const sel = document.getElementById(`${prefix}Mode`);
     if (!sel) return null;
-    const name = document.getElementById(`${prefix}Name`)?.value?.trim() || 'Untitled';
+    const name =
+        document.getElementById(`${prefix}Name`)?.value?.trim() || t('shared.agent.form.untitled');
     const isLocal = sel.value === 'local';
     const mode = isLocal
         ? {
