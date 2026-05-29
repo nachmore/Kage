@@ -103,6 +103,12 @@ tauri-plugin-aptabase = "1.0"
 aes-gcm = "0.10"
 argon2 = "0.5"
 rand = "0.9"
+# Used for verifying the SHA-256 checksum of store-installed extension
+# zips against the value the catalog publishes. Both crates were already
+# transitive deps; making them direct surfaces them in `cargo tree` and
+# lets store_install_inner drop the heavyweight `ring` API.
+sha2 = "0.10"
+hex = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

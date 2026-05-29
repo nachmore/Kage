@@ -84,39 +84,44 @@ async function init() {
 async function refreshInstalled() {
     const invoke = window.__TAURI__.core.invoke;
     installedMap = new Map();
+    // Capture enough manifest fields up front to render meaningful cards
+    // when the store is offline. The store window's "browse online" view
+    // normally pulls these from the catalog; offline we synthesise rows
+    // from this same map so the user can still see what they have.
+    const captureManifest = (e, kind) => ({
+        version: e.manifest.version,
+        kind,
+        hasSettings: !!e.manifest.contributes?.settingsProvider,
+        name: e.manifest.name,
+        description: e.manifest.description || '',
+        icon: e.manifest.icon || '',
+        author: e.manifest.author || null,
+        permissions: Array.isArray(e.manifest.permissions) ? e.manifest.permissions : [],
+    });
     try {
         const exts = await invoke('list_extensions');
-        exts.forEach((e) =>
-            installedMap.set(e.manifest.id, {
-                version: e.manifest.version,
-                kind: 'extension',
-                hasSettings: !!e.manifest.contributes?.settingsProvider,
-            })
-        );
+        exts.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'extension')));
     } catch {}
     try {
         const themes = await invoke('list_themes');
-        themes.forEach((e) =>
-            installedMap.set(e.manifest.id, {
-                version: e.manifest.version,
-                kind: 'theme',
-                hasSettings: false,
-            })
-        );
+        themes.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'theme')));
     } catch {}
     try {
         const packs = await invoke('list_command_packs');
-        packs.forEach((e) =>
-            installedMap.set(e.manifest.id, {
-                version: e.manifest.version,
-                kind: 'commands',
-                hasSettings: false,
-            })
-        );
+        packs.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'commands')));
     } catch {}
     _bundledIds.forEach((id) => {
         if (!installedMap.has(id)) {
-            installedMap.set(id, { version: '0.0.0', kind: 'extension', hasSettings: false });
+            installedMap.set(id, {
+                version: '0.0.0',
+                kind: 'extension',
+                hasSettings: false,
+                name: id,
+                description: '',
+                icon: '',
+                author: null,
+                permissions: [],
+            });
         }
     });
 }
@@ -186,19 +191,59 @@ async function renderBrowse(container, type) {
         const sources = catalog.sources || [];
         updateSourceFilter(sources);
 
+        // Offline degradation. When every configured store source failed
+        // (typically: the user has no network), the backend returns
+        // `offline: true` with an empty items list. Fall back to showing
+        // the user's installed items by synthesising "catalog" rows from
+        // their on-disk extensions, and render a banner pointing them at
+        // the store when they reconnect.
+        let offlineBanner = '';
+        if (catalog.offline) {
+            offlineBanner = `<div class="store-offline-banner">
+                <span class="store-offline-banner-icon">📡</span>
+                <span class="store-offline-banner-text">
+                    Couldn't reach the extension store. Showing only what's
+                    already installed — browse the full catalog when you're
+                    back online.
+                </span>
+            </div>`;
+            // Synthesise catalog entries from the local installed items so
+            // users can still see, configure, and uninstall what they have.
+            const localItems = [];
+            for (const [id, info] of installedMap.entries()) {
+                if (info && info.kind === kind) {
+                    localItems.push({
+                        id,
+                        type: kind,
+                        name: info.name || id,
+                        version: info.version || '',
+                        author: info.author || null,
+                        description: info.description || '',
+                        icon: info.icon || '📦',
+                        permissions: info.permissions || [],
+                        tags: [],
+                        _local: true,
+                    });
+                }
+            }
+            items = localItems;
+        }
+
         if (showInstalledOnly) {
             items = items.filter((i) => installedMap.has(i.id));
         }
 
         if (items.length === 0) {
-            const msg = showInstalledOnly
-                ? `No installed ${type} found.`
-                : `No ${type} found in the store.`;
-            container.innerHTML = `<div class="store-empty"><div class="store-empty-icon">🔍</div>${msg}</div>`;
+            const msg = catalog.offline
+                ? `You don't have any ${type} installed yet, and the store can't be reached right now.`
+                : showInstalledOnly
+                  ? `No installed ${type} found.`
+                  : `No ${type} found in the store.`;
+            container.innerHTML = `${offlineBanner}<div class="store-empty"><div class="store-empty-icon">${catalog.offline ? '📡' : '🔍'}</div>${msg}</div>`;
             return;
         }
 
-        let html = '<div class="store-grid">';
+        let html = offlineBanner + '<div class="store-grid">';
         for (const item of items) {
             html += renderCard(item, kind);
         }

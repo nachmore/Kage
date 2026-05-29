@@ -344,26 +344,52 @@ pub async fn save_store_url(
 }
 
 // ---------------------------------------------------------------------------
-// Store API proxy (fetches from configured or default store URL)
+// Store API client (fetches from configured or default store URL)
 // ---------------------------------------------------------------------------
+//
+// Wire format (schema v1) — the store is plain static JSON files served
+// from `https://nachmore.github.io/Kage-Extensions/` (or any HTTPS host
+// matching the same layout):
+//
+//   GET <base>/catalog.json
+//     {
+//       "schemaVersion": 1,
+//       "generatedAt": "...",
+//       "items": [{
+//         "id", "type", "name", "version", "author", "description", "icon",
+//         "tags": [...], "permissions": [...],
+//         "downloadUrl": "packages/<id>-<version>.zip",   (relative to base)
+//         "detailUrl":   "detail/<id>.json",              (relative to base)
+//         "size", "sha256", "sourceHash", "updatedAt"
+//       }]
+//     }
+//
+//   GET <base>/detail/<id>.json   — same fields plus `manifest` and `readme`
+//   GET <base>/packages/<id>-<version>.zip
+//
+// Pagination is client-side: the catalog is small enough to fetch in one
+// shot, and a single round-trip is friendlier to GitHub Pages caching.
 
 /// Dev server URL used as default store in dev mode.
 const DEV_STORE_URL: &str = "http://localhost:1420";
 
+/// Default production store URL — the public Kage-Extensions catalog.
+const DEFAULT_STORE_URL: &str = "https://nachmore.github.io/Kage-Extensions";
+
 /// Request timeout for store API calls.
 const STORE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
-/// Resolve the store base URL: user-configured > dev default (in dev mode) > empty.
+/// Resolve the store base URL: user-configured > production default > dev default.
 fn resolve_store_url(config: &crate::config::Config, dev_mode: bool) -> String {
     if let Some(ref url) = config.store_url {
         if !url.is_empty() {
-            return url.clone();
+            return url.trim_end_matches('/').to_string();
         }
     }
     if dev_mode {
         return DEV_STORE_URL.to_string();
     }
-    String::new()
+    DEFAULT_STORE_URL.to_string()
 }
 
 /// Build a reqwest client with timeout.
@@ -372,6 +398,15 @@ fn store_client() -> Result<reqwest::Client, String> {
         .timeout(STORE_REQUEST_TIMEOUT)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))
+}
+
+/// Resolve a relative path inside the catalog (`packages/foo.zip`) to an
+/// absolute URL using the store base. Strips a leading slash so the
+/// result is always `<base>/<rel>` regardless of how the catalog quotes
+/// it.
+fn resolve_relative(base: &str, rel: &str) -> String {
+    let r = rel.trim_start_matches('/');
+    format!("{}/{}", base.trim_end_matches('/'), r)
 }
 
 #[tauri::command]
@@ -401,7 +436,7 @@ pub async fn store_get_catalog(
             && store_urls.len() < 3
             && extensions::validate_store_url(&s.url).is_ok()
         {
-            store_urls.push((s.name.clone(), s.url.clone()));
+            store_urls.push((s.name.clone(), s.url.trim_end_matches('/').to_string()));
         }
     }
 
@@ -410,33 +445,26 @@ pub async fn store_get_catalog(
         store_urls.retain(|(name, _)| name == src_filter);
     }
 
+    let source_names: Vec<String> = store_urls.iter().map(|(name, _)| name.clone()).collect();
+
     if store_urls.is_empty() {
         return Ok(serde_json::json!({
             "items": [],
             "total": 0,
             "page": 1,
             "pageSize": 20,
-            "sources": []
+            "sources": [],
+            "offline": false,
         }));
     }
 
-    // Fetch from all sources in parallel
     let client = store_client()?;
-    let source_names: Vec<String> = store_urls.iter().map(|(name, _)| name.clone()).collect();
-
     let mut handles = Vec::new();
-    for (name, base_url) in store_urls {
+    for (name, base_url) in &store_urls {
         let client = client.clone();
-        let mut url = format!("{}/store/catalog?page={}", base_url, page.unwrap_or(1));
-        if let Some(ref k) = kind {
-            url.push_str(&format!("&type={}", k));
-        }
-        if let Some(ref s) = search {
-            // Percent-encode the user-supplied search term so a query
-            // like `foo&bar` doesn't smuggle in extra params.
-            let encoded: String = url::form_urlencoded::byte_serialize(s.as_bytes()).collect();
-            url.push_str(&format!("&search={encoded}"));
-        }
+        let url = format!("{}/catalog.json", base_url);
+        let name = name.clone();
+        let base_url = base_url.clone();
         handles.push(tokio::spawn(async move {
             match client.get(&url).send().await {
                 Ok(resp) => match resp.json::<serde_json::Value>().await {
@@ -447,28 +475,55 @@ pub async fn store_get_catalog(
                                 let mut tagged = item.clone();
                                 if let Some(obj) = tagged.as_object_mut() {
                                     obj.insert("_source".to_string(), serde_json::json!(name));
+                                    // Resolve relative URLs to absolute so the
+                                    // frontend doesn't need to know the base.
+                                    if let Some(rel) = obj
+                                        .get("downloadUrl")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string())
+                                    {
+                                        if !rel.starts_with("http") {
+                                            obj.insert(
+                                                "downloadUrl".to_string(),
+                                                serde_json::json!(resolve_relative(
+                                                    &base_url, &rel
+                                                )),
+                                            );
+                                        }
+                                    }
                                 }
                                 items.push(tagged);
                             }
                         }
-                        items
+                        Ok(items)
                     }
-                    Err(_) => Vec::new(),
+                    Err(e) => Err(format!("Invalid catalog from {}: {}", name, e)),
                 },
-                Err(e) => {
-                    log::warn!("Failed to fetch from store '{}': {}", name, e);
-                    Vec::new()
-                }
+                Err(e) => Err(format!("Fetch failed from {}: {}", name, e)),
             }
         }));
     }
 
     let mut all_items: Vec<serde_json::Value> = Vec::new();
+    let mut errors = 0u32;
     for handle in handles {
-        if let Ok(items) = handle.await {
-            all_items.extend(items);
+        match handle.await {
+            Ok(Ok(items)) => all_items.extend(items),
+            Ok(Err(e)) => {
+                errors += 1;
+                log::warn!("{}", e);
+            }
+            Err(e) => {
+                errors += 1;
+                log::warn!("Catalog task failed: {}", e);
+            }
         }
     }
+
+    // If every source failed (typically: offline), surface that to the
+    // frontend so it can render its "browse online when connected" state
+    // instead of silently showing zero results.
+    let offline = errors > 0 && all_items.is_empty();
 
     // Deduplicate by ID (first source wins)
     let mut seen = std::collections::HashSet::new();
@@ -480,13 +535,58 @@ pub async fn store_get_catalog(
         }
     });
 
+    // Apply kind / search filters server-side so the existing JS UI keeps
+    // working unchanged. Pagination is also synthesised — there's no real
+    // paging on the static layout, but returning the same envelope shape
+    // means we don't have to touch the renderer.
+    if let Some(ref k) = kind {
+        all_items.retain(|item| item.get("type").and_then(|v| v.as_str()) == Some(k.as_str()));
+    }
+    if let Some(ref s) = search {
+        let q = s.to_lowercase();
+        all_items.retain(|item| {
+            let name = item
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let desc = item
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let tags = item
+                .get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .unwrap_or_default();
+            name.contains(&q) || desc.contains(&q) || tags.contains(&q)
+        });
+    }
+
     let total = all_items.len();
+    let page_size = 20usize;
+    let page = page.unwrap_or(1).max(1) as usize;
+    let start = (page - 1) * page_size;
+    let end = (start + page_size).min(total);
+    let paged: Vec<serde_json::Value> = if start < total {
+        all_items[start..end].to_vec()
+    } else {
+        Vec::new()
+    };
+
     Ok(serde_json::json!({
-        "items": all_items,
+        "items": paged,
         "total": total,
-        "page": page.unwrap_or(1),
-        "pageSize": 20,
-        "sources": source_names
+        "page": page,
+        "pageSize": page_size,
+        "sources": source_names,
+        "offline": offline,
     }))
 }
 
@@ -506,18 +606,35 @@ pub async fn store_get_detail(
     }
 
     extensions::validate_store_url(&base_url)?;
+    extensions::validate_extension_id(&id).map_err(|e| format!("Invalid id: {}", e))?;
 
-    let url = format!("{}/store/catalog/{}", base_url, id);
+    let url = format!("{}/detail/{}.json", base_url, id);
     let client = store_client()?;
     let resp = client
         .get(&url)
         .send()
         .await
         .map_err(|e| format!("Store request failed: {}", e))?;
-    let body = resp
+    let mut body = resp
         .json::<serde_json::Value>()
         .await
         .map_err(|e| format!("Invalid store response: {}", e))?;
+
+    // Resolve relative download URL the same way the catalog endpoint does.
+    if let Some(obj) = body.as_object_mut() {
+        if let Some(rel) = obj
+            .get("downloadUrl")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+        {
+            if !rel.starts_with("http") {
+                obj.insert(
+                    "downloadUrl".to_string(),
+                    serde_json::json!(resolve_relative(&base_url, &rel)),
+                );
+            }
+        }
+    }
     Ok(body)
 }
 
@@ -655,8 +772,8 @@ pub async fn check_extension_updates(
         return Ok(serde_json::json!({ "updated": 0, "checked": 0 }));
     }
 
-    // Fetch the full catalog (no type filter) to get all available versions
-    let url = format!("{}/store/catalog?page=1", base_url);
+    // Fetch the full catalog to get all available versions
+    let url = format!("{}/catalog.json", base_url);
     let client = store_client()?;
     let resp = client
         .get(&url)
@@ -740,12 +857,39 @@ async fn store_install_inner(
     app: &tauri::AppHandle,
     emit_changed: bool,
 ) -> Result<extensions::InstalledItem, String> {
-    let url = format!("{}/store/catalog/{}/download", base_url, id);
+    // Resolve the download URL by fetching this id's detail page first.
+    // We can't synthesise the zip URL from id alone because the package
+    // file name embeds the version (`<id>-<version>.zip`), and we want
+    // the published `sha256` for integrity verification.
+    let detail_url = format!("{}/detail/{}.json", base_url, id);
+    let client = store_client()?;
+    let detail: serde_json::Value = client
+        .get(&detail_url)
+        .send()
+        .await
+        .map_err(|e| format!("Detail fetch failed: {}", e))?
+        .json()
+        .await
+        .map_err(|e| format!("Invalid detail JSON: {}", e))?;
+
+    let download_rel = detail
+        .get("downloadUrl")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Detail response missing downloadUrl".to_string())?;
+    let download_url = if download_rel.starts_with("http") {
+        download_rel.to_string()
+    } else {
+        resolve_relative(base_url, download_rel)
+    };
+    let expected_sha = detail
+        .get("sha256")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     let zip_path = std::env::temp_dir().join(format!("kage-download-{}.zip", id));
 
-    let client = store_client()?;
     let resp = client
-        .get(&url)
+        .get(&download_url)
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
@@ -756,6 +900,22 @@ async fn store_install_inner(
 
     if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
         return Err("Invalid zip archive".into());
+    }
+
+    // Verify checksum if the catalog published one. A mismatch here means
+    // the catalog and the zip are out of sync — better to refuse the install
+    // than silently load tampered code.
+    if let Some(expected) = expected_sha {
+        use sha2::Digest;
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&bytes);
+        let actual = hex::encode(hasher.finalize());
+        if !actual.eq_ignore_ascii_case(&expected) {
+            return Err(format!(
+                "Checksum mismatch for '{}' (expected {}, got {})",
+                id, expected, actual
+            ));
+        }
     }
 
     std::fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save download: {}", e))?;
@@ -862,46 +1022,14 @@ pub async fn delete_extension_data(extension_id: String, key: String) -> Result<
 }
 
 // ---------------------------------------------------------------------------
-// Bundled package installation (for first-run wizard)
-// ---------------------------------------------------------------------------
-
-/// Resolve the path to the bundled store/packages directory.
-/// Checks dev path first (project root), then next to the executable (production).
-fn bundled_packages_dir() -> Option<std::path::PathBuf> {
-    // Dev mode: relative to project root
-    let dev_path = std::path::PathBuf::from("store/packages");
-    if dev_path.exists() {
-        return Some(dev_path);
-    }
-
-    // Production: next to the executable
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let bundled = exe_dir.join("store").join("packages");
-            if bundled.exists() {
-                return Some(bundled);
-            }
-            // One level up (some installer layouts)
-            if let Some(parent) = exe_dir.parent() {
-                let up_one = parent.join("store").join("packages");
-                if up_one.exists() {
-                    return Some(up_one);
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Install an extension from the bundled packages directory.
-/// Used by the first-run wizard to install recommended extensions without
-/// network access. Like `store_install`, this is a staged install: the
-/// caller must show the permission prompt and call
-/// `commit_extension_install` before the extension will load.
-// ---------------------------------------------------------------------------
 // First-run welcome: batch provisioning
 // ---------------------------------------------------------------------------
+// Non-bundled extensions selected on the welcome screen are pulled from the
+// configured store URL (production catalog by default). If the user is
+// offline at first launch, those installs will fail individually and be
+// reported in the WelcomeProvisionReport — bundled ones (code already in
+// the binary, just toggled on/off) still work, which is the right
+// degradation: the user can pick up the rest later from the store.
 
 #[derive(Debug, serde::Deserialize)]
 pub struct WelcomeExtensionDecision {
@@ -1074,10 +1202,16 @@ fn toggle_enabled_direct(
     Ok(())
 }
 
-/// Install + commit in one go, pulling caps from the on-disk manifest.
-/// The zip must live in `bundled_packages_dir()` (our trust boundary),
-/// and the capability list comes from the manifest — the renderer can
-/// only supply the id.
+/// Install + commit in one go for the welcome flow.
+///
+/// This used to read pre-bundled zips out of `store/packages/` next to
+/// the executable. With the move to a remote catalog
+/// (`https://nachmore.github.io/Kage-Extensions/`), the welcome flow
+/// fetches from the network like any other install. If the user is
+/// offline at first launch, individual installs fail and surface in the
+/// `WelcomeProvisionReport` — bundled-code extensions (math, calendar,
+/// window-walker) still toggle on cleanly because they don't need the
+/// network. The user can install the rest later from the store window.
 fn install_and_commit_direct(
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     app: &tauri::AppHandle,
@@ -1085,24 +1219,28 @@ fn install_and_commit_direct(
 ) -> Result<String, String> {
     extensions::validate_extension_id(id).map_err(|e| format!("Invalid extension id: {}", e))?;
 
-    let packages_dir =
-        bundled_packages_dir().ok_or_else(|| "Bundled packages directory not found".to_string())?;
+    // Resolve the store URL the same way the live install path does.
+    let (base_url, dev_mode) = {
+        let cfg = config.lock_or_recover();
+        let dev = std::env::var("KAGE_DEV").is_ok() || cfg!(debug_assertions);
+        (resolve_store_url(&cfg, dev), dev)
+    };
+    let _ = dev_mode; // currently unused beyond the resolve call above
+    if base_url.is_empty() {
+        return Err("No store URL configured".to_string());
+    }
+    extensions::validate_store_url(&base_url).map_err(|e| format!("Bad store URL: {}", e))?;
 
-    let candidates = vec![
-        packages_dir.join(format!("{}.zip", id)),
-        packages_dir.join(format!("{}-theme.zip", id)),
-    ];
-    let zip_path = candidates.into_iter().find(|p| p.exists()).ok_or_else(|| {
+    // Run the network install + extract on the runtime via block_on.
+    let runtime = tokio::runtime::Handle::try_current().map_err(|e| {
         format!(
-            "welcome_provision: '{}' is not a bundled package. The welcome flow only accepts \
-                 ids whose zip lives in the bundled packages directory. Non-bundled extensions \
-                 must go through store_install + commit_extension_install.",
-            id
+            "No tokio runtime available for welcome install of '{}': {}",
+            id, e
         )
     })?;
 
-    let item = extensions::install_from_zip(&zip_path)
-        .map_err(|e| format!("Failed to install bundled package '{}': {}", id, e))?;
+    // Fetch detail + zip + verify hash + extract.
+    let item = runtime.block_on(welcome_store_install(&base_url, id))?;
 
     let raw_perms: Vec<String> = item.manifest.permissions.clone().unwrap_or_default();
     let granted = extensions::normalize_permissions(&raw_perms, &item.manifest.id);
@@ -1129,7 +1267,7 @@ fn install_and_commit_direct(
         "extension_installed",
         Some(serde_json::json!({
             "extension_id": installed_id,
-            "source": "bundled_batch",
+            "source": "welcome_network",
         })),
     );
 
@@ -1138,6 +1276,71 @@ fn install_and_commit_direct(
     }
 
     Ok(installed_id)
+}
+
+/// Welcome-flow variant of the store install: fetches detail, downloads
+/// the zip, verifies the published sha256, and extracts. Doesn't touch
+/// the config — that's the caller's job (so we can fold the grant write
+/// into the same critical section as the enable flag).
+async fn welcome_store_install(
+    base_url: &str,
+    id: &str,
+) -> Result<extensions::InstalledItem, String> {
+    let client = store_client()?;
+    let detail_url = format!("{}/detail/{}.json", base_url, id);
+    let detail: serde_json::Value = client
+        .get(&detail_url)
+        .send()
+        .await
+        .map_err(|e| format!("Detail fetch failed: {}", e))?
+        .json()
+        .await
+        .map_err(|e| format!("Invalid detail JSON: {}", e))?;
+
+    let download_rel = detail
+        .get("downloadUrl")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Detail response missing downloadUrl".to_string())?;
+    let download_url = if download_rel.starts_with("http") {
+        download_rel.to_string()
+    } else {
+        resolve_relative(base_url, download_rel)
+    };
+    let expected_sha = detail
+        .get("sha256")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let bytes = client
+        .get(&download_url)
+        .send()
+        .await
+        .map_err(|e| format!("Download failed: {}", e))?
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed to read download: {}", e))?;
+    if bytes.len() < 4 || &bytes[0..4] != b"PK\x03\x04" {
+        return Err("Invalid zip archive".into());
+    }
+    if let Some(expected) = expected_sha {
+        use sha2::Digest;
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&bytes);
+        let actual = hex::encode(hasher.finalize());
+        if !actual.eq_ignore_ascii_case(&expected) {
+            return Err(format!(
+                "Checksum mismatch for '{}' (expected {}, got {})",
+                id, expected, actual
+            ));
+        }
+    }
+
+    let zip_path = std::env::temp_dir().join(format!("kage-welcome-{}.zip", id));
+    std::fs::write(&zip_path, &bytes).map_err(|e| format!("Failed to save download: {}", e))?;
+    let item = extensions::install_from_zip(&zip_path)
+        .map_err(|e| format!("Installation failed: {}", e))?;
+    let _ = std::fs::remove_file(&zip_path);
+    Ok(item)
 }
 
 // ---------------------------------------------------------------------------

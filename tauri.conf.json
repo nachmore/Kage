@@ -80,8 +80,7 @@
     ],
     "createUpdaterArtifacts": true,
     "resources": [
-      "pocket_tts/*",
-      "store/packages/*"
+      "pocket_tts/*"
     ],
     "icon": [
       "icons/32x32.png",

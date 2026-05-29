@@ -2,6 +2,22 @@
 
 This document describes how to create extensions for Kage. Extensions can add search providers (instant results in the floating window), settings pages, widget slots, and custom themes.
 
+> **Where extensions live**
+>
+> Built-in extensions (math, calendar, window-walker) ship inside the
+> Kage binary and live under [`ui/extensions/`](../ui/extensions). All
+> *installable* extensions and themes live in a separate repository,
+> [**Kage-Extensions**](https://github.com/nachmore/Kage-Extensions),
+> which CI builds and publishes to a static catalog at
+> <https://nachmore.github.io/Kage-Extensions/>. Kage's store window
+> reads that catalog by default.
+>
+> If you're adding a new community extension, fork Kage-Extensions and
+> follow the [`CONTRIBUTING.md`](https://github.com/nachmore/Kage-Extensions/blob/main/CONTRIBUTING.md)
+> there. This document is the authoritative spec for the manifest
+> format, capability list, and provider APIs — Kage-Extensions
+> references back here.
+
 ## Extension Types
 
 | Type | Description | Manifest `type` |

@@ -140,100 +140,72 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        """Handle GET requests — serve files or mock store API."""
-        if self.path.startswith("/store/"):
-            return self._handle_store_api()
+        """Handle GET requests — serve files, mock store, or fall through to ui/."""
+        if self.path == "/catalog.json" or self.path.startswith("/detail/") or self.path.startswith("/packages/"):
+            return self._serve_local_catalog()
         return super().do_GET()
 
-    def _handle_store_api(self):
-        """Mock store API for development."""
-        import json as _json
-        import urllib.parse
+    def _serve_local_catalog(self):
+        """Serve the Kage-Extensions repo's `dist/` output if it exists next door.
 
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        query = urllib.parse.parse_qs(parsed.query)
-
-        if path == "/store/catalog":
-            kind = query.get("type", [None])[0]
-            search = query.get("search", [None])[0]
-            items = MOCK_CATALOG
-            if kind:
-                items = [i for i in items if i["type"] == kind]
-            if search:
-                s = search.lower()
-                items = [i for i in items if s in i["name"].lower() or s in i.get("description", "").lower() or any(s in t for t in i.get("tags", []))]
-            body = _json.dumps({"items": items, "total": len(items), "page": 1, "pageSize": 20})
-            self._json_response(200, body)
-            return
-
-        if path.startswith("/store/catalog/"):
-            parts = path.rstrip("/").split("/")
-            # /store/catalog/<id>/download
-            if len(parts) >= 5 and parts[-1] == "download":
-                item_id = parts[-2]
-                return self._handle_download(item_id)
-            # /store/catalog/<id>
-            item_id = parts[-1]
-            item = next((i for i in MOCK_CATALOG if i["id"] == item_id), None)
-            if not item:
-                self._json_response(404, '{"error":"not found"}')
-                return
-            body = _json.dumps({**item, "readme": f"# {item['name']}\n\n{item.get('description','')}", "manifest": None, "size": 1024, "updatedAt": "2026-02-15T10:00:00Z"})
-            self._json_response(200, body)
-            return
-
-        self._json_response(404, '{"error":"not found"}')
-
-    def _handle_download(self, item_id):
-        """Serve a .zip package for the given item ID."""
-        store_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "store", "packages")
-        zip_path = os.path.join(store_dir, f"{item_id}.zip")
-        if not os.path.isfile(zip_path):
-            self._json_response(404, '{"error":"package not found"}')
-            return
-        try:
-            with open(zip_path, "rb") as f:
-                data = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/zip")
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Content-Disposition", f'attachment; filename="{item_id}.zip"')
+        In dev mode, the Rust client treats `http://localhost:1420` as the
+        store base. We don't ship a mock catalog any more — the production
+        flow is the static catalog at `https://nachmore.github.io/Kage-Extensions/`.
+        For local-only development of an extension you can run
+        `npm run build` inside `../Kage-Extensions` and the resulting
+        `dist/` directory is served through here at the same paths the
+        client would otherwise hit on Pages.
+        """
+        ext_dist = os.path.normpath(os.path.join(repo_root, "..", "Kage-Extensions", "dist"))
+        if not os.path.isdir(ext_dist):
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain")
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(data)
-        except Exception as e:
-            self._json_response(500, f'{{"error":"{e}"}}')
+            self.wfile.write(
+                b"No local catalog found. Either:\n"
+                b"  1) Clone Kage-Extensions next to Kage and run `npm run build`, or\n"
+                b"  2) Use the production catalog at https://nachmore.github.io/Kage-Extensions/\n"
+                b"     (Settings -> Store -> Custom store URL).\n"
+            )
+            return
 
-    def _json_response(self, code, body):
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json")
+        # Strip the leading slash and resolve safely under ext_dist.
+        safe_rel = self.path.lstrip("/")
+        target = os.path.normpath(os.path.join(ext_dist, safe_rel))
+        if not target.startswith(ext_dist + os.sep) and target != ext_dist:
+            self.send_response(403)
+            self.end_headers()
+            return
+        if not os.path.isfile(target):
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        # Pick a content type based on extension; only json + zip are expected here.
+        if target.endswith(".json"):
+            ctype = "application/json"
+        elif target.endswith(".zip"):
+            ctype = "application/zip"
+        else:
+            ctype = "application/octet-stream"
+
+        with open(target, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(body.encode())
+        self.wfile.write(data)
 
     def log_message(self, format, *args):
         # Only log non-200 responses to reduce noise
         if len(args) >= 2 and str(args[1]) == "200":
             return
         super().log_message(format, *args)
-
-
-# Mock store catalog data
-MOCK_CATALOG = [
-    {"id": "hello-world", "name": "Hello World", "type": "extension", "version": "1.0.0", "author": "kage", "description": "Sample extension — type 'test' or 'hello' to see a greeting. Great starting template.", "icon": "👋", "tags": ["sample", "template", "starter"]},
-    {"id": "link-preview", "name": "Link Preview", "type": "extension", "version": "1.0.1", "author": "kage", "description": "Inline preview cards for URLs in AI responses — shows title, description, and favicon.", "icon": "🔗", "tags": ["utility", "formatting", "links"]},
-    {"id": "color-picker", "name": "Color Picker", "type": "extension", "version": "1.0.0", "author": "kage", "description": "Detect and preview colors (hex, rgb, hsl, named) with format conversion.", "icon": "🎨", "tags": ["color", "design", "utility", "hex", "rgb"]},
-    {"id": "dev-tools", "name": "Developer Tools", "type": "extension", "version": "1.0.0", "author": "kage", "description": "UUID generation, base64 encode/decode, hashing, epoch conversion, JSON formatting.", "icon": "🔧", "tags": ["developer", "uuid", "base64", "hash", "json", "utility"]},
-    {"id": "timer", "name": "Timer & Stopwatch", "type": "extension", "version": "1.0.0", "author": "kage", "description": "Countdown timer and stopwatch with notification sounds.", "icon": "⏱️", "tags": ["timer", "stopwatch", "productivity", "pomodoro"]},
-    {"id": "todos", "name": "Todos & Reminders", "type": "extension", "version": "1.0.0", "author": "kage", "description": "Task manager with due dates, categories, priorities, and progress tracking. Type 'todo' for a summary, 'todo+ <task>' to add, 'todo+ <task> due:<date>' for a reminder with a due-date banner.", "icon": "✅", "tags": ["productivity", "tasks", "todo", "organizer", "reminders"]},
-    {"id": "dictionary", "name": "Dictionary", "type": "extension", "version": "1.7.2", "author": "kage", "description": "Look up word definitions, spelling corrections, and pronunciation. Supports 250+ languages via FreeDictionaryAPI.com.", "icon": "📖", "tags": ["dictionary", "spelling", "definitions", "language", "words", "translate"]},
-    {"id": "focus-tracker", "name": "Focus Tracker", "type": "extension", "version": "1.3.2", "author": "kage", "description": "Track app usage, context switches, and focus streaks. Get daily/weekly/monthly reports with AI insights.", "icon": "📊", "tags": ["focus", "productivity", "screen time", "activity", "tracker", "heatmap"]},
-    {"id": "nord-theme", "name": "Nord", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Arctic, north-bluish color palette. Clean and icy.", "icon": "❄️", "tags": ["dark", "light", "blue", "minimal"]},
-    {"id": "sunset-theme", "name": "Sunset", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Warm sunset colors — amber accents with deep twilight backgrounds.", "icon": "🌅", "tags": ["dark", "light", "warm", "orange"]},
-    {"id": "kiro-ish-theme", "name": "Kiro-ish", "type": "theme", "version": "1.0.0", "author": "kage", "description": "Teal-accented theme with cool, calming tones. Inspired by the Kiro mascot palette.", "icon": "🐱", "tags": ["dark", "light", "purple", "kiro", "teal"]},
-]
 
 
 class RobustHTTPServer(http.server.ThreadingHTTPServer):
