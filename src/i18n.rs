@@ -156,6 +156,13 @@ macro_rules! embed_locales {
 embed_locales!(
     // Canonical English. MUST come first — fallback chain depends on it.
     "en",
+    // CLDR top-30 languages plus the four RTL ones (ar, he, fa, ur).
+    // Catalogs under `locales/<code>/messages.json` are seeded by
+    // `scripts/translate.py` against the canonical English catalog and
+    // re-validated by `scripts/check_i18n.py` on every CI run, so adding
+    // a language here is paired one-for-one with the file under `locales/`.
+    "ar", "bn", "cs", "da", "de", "el", "es", "fa", "fi", "fr", "he", "hi", "hu", "id", "it", "ja",
+    "ko", "nl", "no", "pl", "pt", "ro", "ru", "sv", "th", "tr", "uk", "ur", "vi", "zh-CN", "zh-TW",
 );
 
 /// All catalogs successfully loaded at startup, keyed by language code.

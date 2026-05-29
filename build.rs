@@ -33,6 +33,7 @@ fn main() {
     println!("cargo:rerun-if-changed=capabilities/");
     println!("cargo:rerun-if-changed=icons/");
     println!("cargo:rerun-if-changed=src/builtin_steering.md");
+    println!("cargo:rerun-if-changed=locales/");
     println!("cargo:rerun-if-changed=pocket_tts/");
     println!("cargo:rerun-if-changed=Cargo.toml");
     println!("cargo:rerun-if-changed=src-tauri/macos/calendar-helper.swift");

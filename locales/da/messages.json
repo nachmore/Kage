@@ -1,0 +1,350 @@
+{
+  "_meta": {
+    "language": "da",
+    "name": "Dansk",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "errors.connection.lost": {
+    "message": "Forbindelsen blev afbrudt: {reason}",
+    "description": "ACP transport dropped while a request was in flight",
+    "_machine_translated": true,
+    "_source_hash": "f52ccc95c7e68b60"
+  },
+  "errors.connection.not_connected": {
+    "message": "Ikke forbundet",
+    "description": "User attempted an operation that requires an active ACP connection",
+    "_machine_translated": true,
+    "_source_hash": "bc0f8faf4c6758d9"
+  },
+  "errors.connection.reconnect_failed": {
+    "message": "Kunne ikke genoprette forbindelsen: {reason}",
+    "description": "Reconnect attempt to the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "295f21a439e81f65"
+  },
+  "errors.timeout.generic": {
+    "message": "Tidsfristen for svar udløb",
+    "description": "ACP request exceeded the configured timeout",
+    "_machine_translated": true,
+    "_source_hash": "7a5c6c0dfccfc3d8"
+  },
+  "errors.session.corrupted": {
+    "message": "Sessionen er beskadiget: {reason}",
+    "description": "Session file or in-memory state failed validation",
+    "_machine_translated": true,
+    "_source_hash": "bea6e5b8369f63f2"
+  },
+  "errors.session.create_failed": {
+    "message": "Kunne ikke oprette session: {reason}",
+    "description": "Initial session creation against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "33acf68c65c4f736"
+  },
+  "errors.session.load_failed": {
+    "message": "Kunne ikke indlæse session: {reason}",
+    "description": "Resuming a stored session against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "f790b193526fc833"
+  },
+  "errors.image.unsupported": {
+    "message": "Denne model understøtter ikke billedvedhæftninger",
+    "description": "User attached an image to a model whose backend can't accept them",
+    "_machine_translated": true,
+    "_source_hash": "1d4c95dc1c5bc705"
+  },
+  "errors.lock.acquire_failed": {
+    "message": "Intern lås kunne ikke erhverves",
+    "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic",
+    "_machine_translated": true,
+    "_source_hash": "5a9918e028c64a70"
+  },
+  "errors.serialize.failed": {
+    "message": "Kunne ikke serialisere data: {reason}",
+    "description": "JSON or other serialization failed at a command boundary",
+    "_machine_translated": true,
+    "_source_hash": "8281217df264ca48"
+  },
+  "errors.rate_limited.generic": {
+    "message": "Hastighedsgrænsen er overskredet. Vent venligst, og prøv igen.",
+    "description": "Upstream agent or model API returned a rate-limit error",
+    "_machine_translated": true,
+    "_source_hash": "fe01dcfb5c9c2b8c"
+  },
+  "errors.permission.response_failed": {
+    "message": "Kunne ikke sende tilladelsessvar: {reason}",
+    "description": "Frontend permission decision failed to round-trip to the agent",
+    "_machine_translated": true,
+    "_source_hash": "6baef077d99d0848"
+  },
+  "errors.command.failed": {
+    "message": "Kommandoen mislykkedes: {reason}",
+    "description": "Generic command execution failure shown to the user",
+    "_machine_translated": true,
+    "_source_hash": "6b4e8055bb18f063"
+  },
+  "errors.cancel.failed": {
+    "message": "Kunne ikke annullere: {reason}",
+    "description": "Canceling an in-flight ACP request failed",
+    "_machine_translated": true,
+    "_source_hash": "b28989886ea58543"
+  },
+  "errors.plan.invalid_json": {
+    "message": "Ugyldigt planformat",
+    "description": "Agent returned a plan that didn't match the expected JSON shape",
+    "_machine_translated": true,
+    "_source_hash": "5c0e86b92eafcd06"
+  },
+  "errors.plan.empty": {
+    "message": "Planen er tom",
+    "description": "Agent returned a plan with no steps",
+    "_machine_translated": true,
+    "_source_hash": "7ba05bed2163286c"
+  },
+  "errors.transport.tcp_in_local_mode": {
+    "message": "Kan ikke bruge TCP-transport i lokal tilstand",
+    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested",
+    "_machine_translated": true,
+    "_source_hash": "4110a6c3a160e092"
+  },
+  "errors.transport.empty_spawn_command": {
+    "message": "Startkommandoen er tom",
+    "description": "Local connection has no command to launch",
+    "_machine_translated": true,
+    "_source_hash": "7dec1ea1d3970f89"
+  },
+  "errors.transport.no_write_handle": {
+    "message": "Forbindelsen kan ikke skrives til",
+    "description": "Attempted to send on a half-closed transport",
+    "_machine_translated": true,
+    "_source_hash": "cf4b1b87eaef7167"
+  },
+  "errors.unknown": {
+    "message": "Ukendt fejl",
+    "description": "Fallback when an error has no message at all",
+    "_machine_translated": true,
+    "_source_hash": "936185c80dd2f5bf"
+  },
+  "errors.passthrough": {
+    "message": "{message}",
+    "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "bb33bbeabc01d538"
+  },
+  "errors.config.save_failed": {
+    "message": "Kunne ikke gemme indstillinger: {reason}",
+    "description": "Settings persistence to disk failed (permission, disk full, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "3b06cfa49431fc65"
+  },
+  "errors.config.load_failed": {
+    "message": "Kunne ikke indlæse indstillinger: {reason}",
+    "description": "Reading config.json from disk failed",
+    "_machine_translated": true,
+    "_source_hash": "795d13ab985ff3f9"
+  },
+  "errors.extension.invalid_id": {
+    "message": "Ugyldigt udvidelses-id: {reason}",
+    "description": "Extension id failed validation (used to prevent path injection)",
+    "_machine_translated": true,
+    "_source_hash": "55f1b82a9874915c"
+  },
+  "errors.extension.invalid_locale": {
+    "message": "Ugyldig sprogkode: {language}",
+    "description": "Language code failed validation when loading an extension's locale catalog",
+    "_machine_translated": true,
+    "_source_hash": "93813d15fe729438"
+  },
+  "errors.extension.invalid_kind": {
+    "message": "Ugyldig udvidelsestype: {reason}",
+    "description": "Extension kind (extension/theme/command-pack) failed validation",
+    "_machine_translated": true,
+    "_source_hash": "44291ab61cf25b92"
+  },
+  "errors.extension.dir_unavailable": {
+    "message": "Kunne ikke tilgå udvidelsesmappen: {reason}",
+    "description": "User extension dir lookup failed (config dir error)",
+    "_machine_translated": true,
+    "_source_hash": "fe1d9f4244a127e0"
+  },
+  "errors.extension.locale_read_failed": {
+    "message": "Kunne ikke læse udvidelsens sprogfil: {reason}",
+    "description": "Reading the matched _locales/<lang>/messages.json file failed",
+    "_machine_translated": true,
+    "_source_hash": "c37220d449371517"
+  },
+  "errors.extension.locale_parse_failed": {
+    "message": "Udvidelsens sprogfil er ugyldig ({language}): {reason}",
+    "description": "Extension's _locales/<lang>/messages.json had a JSON parse error",
+    "_machine_translated": true,
+    "_source_hash": "c193e24ab8dcd090"
+  },
+  "tray.show": {
+    "message": "Vis",
+    "description": "Tray menu — show the floating window",
+    "_machine_translated": true,
+    "_source_hash": "ec22b6beacdf1eb6"
+  },
+  "tray.new_chat": {
+    "message": "Nyt chatvindue",
+    "description": "Tray menu — open a new chat window",
+    "_machine_translated": true,
+    "_source_hash": "e6955c8ca783969f"
+  },
+  "tray.settings": {
+    "message": "Indstillinger",
+    "description": "Tray menu — open the settings window",
+    "_machine_translated": true,
+    "_source_hash": "d85b2926988e7846"
+  },
+  "tray.quit": {
+    "message": "Afslut",
+    "description": "Tray menu — exit the application",
+    "_machine_translated": true,
+    "_source_hash": "6a5d0ae05ac26e91"
+  },
+  "window.title.chat": {
+    "message": "Kage Chat",
+    "description": "Title bar for chat windows",
+    "_machine_translated": true,
+    "_source_hash": "770f4bf0a5aa1bad"
+  },
+  "window.title.settings": {
+    "message": "Indstillinger — Kage",
+    "description": "Title bar for the settings window",
+    "_machine_translated": true,
+    "_source_hash": "bd5d0b2d07c6f964"
+  },
+  "window.title.welcome": {
+    "message": "Velkommen til Kage",
+    "description": "Title bar for the welcome / first-run window",
+    "_machine_translated": true,
+    "_source_hash": "9328576f32069496"
+  },
+  "window.title.store": {
+    "message": "Udvidelsesbutik — Kage",
+    "description": "Title bar for the extension store window",
+    "_machine_translated": true,
+    "_source_hash": "060db905dc24b3ef"
+  },
+  "window.title.select_folder": {
+    "message": "Vælg mappe til organisering",
+    "description": "Title for the folder picker dialog opened by the organize-files tool",
+    "_machine_translated": true,
+    "_source_hash": "ef87885fa332cec9"
+  },
+  "settings.appearance.title": {
+    "message": "Udseende",
+    "description": "Settings sidebar — Appearance section header",
+    "_machine_translated": true,
+    "_source_hash": "a6c003ad4396ab95"
+  },
+  "settings.appearance.theme.label": {
+    "message": "Tema",
+    "description": "Settings — Theme dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "d6c580c54c73bdc2"
+  },
+  "settings.appearance.theme.description": {
+    "message": "Vælg dit foretrukne tema, eller følg systemindstillingerne.",
+    "description": "Settings — Theme dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "2c26918c09e3ee18"
+  },
+  "settings.appearance.theme.system": {
+    "message": "System",
+    "description": "Theme option — follow OS theme",
+    "_machine_translated": true,
+    "_source_hash": "a8a70fcbf7fe2239"
+  },
+  "settings.appearance.theme.light": {
+    "message": "Lyst",
+    "description": "Theme option — light mode",
+    "_machine_translated": true,
+    "_source_hash": "a7205b8dd0590bdd"
+  },
+  "settings.appearance.theme.dark": {
+    "message": "Mørkt",
+    "description": "Theme option — dark mode",
+    "_machine_translated": true,
+    "_source_hash": "5e2f6ac4b31926e9"
+  },
+  "settings.appearance.language.label": {
+    "message": "Sprog",
+    "description": "Settings — Language dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "77f56e9592a024c2"
+  },
+  "settings.appearance.language.description": {
+    "message": "Vælg visningssproget. En genstart kan være nødvendig for visse tekster.",
+    "description": "Settings — Language dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "8453e11132c2f99b"
+  },
+  "settings.appearance.language.system": {
+    "message": "Systemstandard ({detected})",
+    "description": "Language option — follow OS locale, with the detected language shown in parens",
+    "_machine_translated": true,
+    "_source_hash": "9d9a2c0d211df22a"
+  },
+  "settings.appearance.language.machine_translated_warning": {
+    "message": "Dette sprog er maskinoversat. Rapportér gerne fejl på vores GitHub-issues-side.",
+    "description": "Banner shown when the active language was filled in by the seed script",
+    "_machine_translated": true,
+    "_source_hash": "7db437e8e9ea0ff3"
+  },
+  "common.ok": {
+    "message": "OK",
+    "description": "Generic acknowledgement button",
+    "_machine_translated": true,
+    "_source_hash": "d064bc76429f1e4b"
+  },
+  "common.cancel": {
+    "message": "Annullér",
+    "description": "Generic cancel button",
+    "_machine_translated": true,
+    "_source_hash": "f7ac3b34f9386f35"
+  },
+  "common.save": {
+    "message": "Gem",
+    "description": "Generic save button",
+    "_machine_translated": true,
+    "_source_hash": "5d77a8c34bce200d"
+  },
+  "common.delete": {
+    "message": "Slet",
+    "description": "Generic delete button",
+    "_machine_translated": true,
+    "_source_hash": "9083bd75239570d8"
+  },
+  "common.confirm": {
+    "message": "Bekræft",
+    "description": "Generic confirmation button",
+    "_machine_translated": true,
+    "_source_hash": "3799d174b5f7073b"
+  },
+  "common.copy": {
+    "message": "Kopiér",
+    "description": "Generic copy button",
+    "_machine_translated": true,
+    "_source_hash": "83a9e1e531450a75"
+  },
+  "common.copied_to_clipboard": {
+    "message": "Kopieret til udklipsholder",
+    "description": "Toast shown after a copy action",
+    "_machine_translated": true,
+    "_source_hash": "b632c10267fc6164"
+  },
+  "common.unknown_error": {
+    "message": "Der opstod en ukendt fejl",
+    "description": "Generic fallback when no specific error is available",
+    "_machine_translated": true,
+    "_source_hash": "d75d4c3d358f4f4a"
+  },
+  "common.loading": {
+    "message": "Indlæser…",
+    "description": "Generic loading indicator label",
+    "_machine_translated": true,
+    "_source_hash": "f4206248605fb6be"
+  }
+}

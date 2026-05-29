@@ -1,0 +1,350 @@
+{
+  "_meta": {
+    "language": "fi",
+    "name": "Suomi",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "errors.connection.lost": {
+    "message": "Yhteys katkesi: {reason}",
+    "description": "ACP transport dropped while a request was in flight",
+    "_machine_translated": true,
+    "_source_hash": "f52ccc95c7e68b60"
+  },
+  "errors.connection.not_connected": {
+    "message": "Ei yhteyttä",
+    "description": "User attempted an operation that requires an active ACP connection",
+    "_machine_translated": true,
+    "_source_hash": "bc0f8faf4c6758d9"
+  },
+  "errors.connection.reconnect_failed": {
+    "message": "Uudelleenyhdistäminen epäonnistui: {reason}",
+    "description": "Reconnect attempt to the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "295f21a439e81f65"
+  },
+  "errors.timeout.generic": {
+    "message": "Vastauksen odottaminen aikakatkaistiin",
+    "description": "ACP request exceeded the configured timeout",
+    "_machine_translated": true,
+    "_source_hash": "7a5c6c0dfccfc3d8"
+  },
+  "errors.session.corrupted": {
+    "message": "Istunto on vioittunut: {reason}",
+    "description": "Session file or in-memory state failed validation",
+    "_machine_translated": true,
+    "_source_hash": "bea6e5b8369f63f2"
+  },
+  "errors.session.create_failed": {
+    "message": "Istunnon luominen epäonnistui: {reason}",
+    "description": "Initial session creation against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "33acf68c65c4f736"
+  },
+  "errors.session.load_failed": {
+    "message": "Istunnon lataaminen epäonnistui: {reason}",
+    "description": "Resuming a stored session against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "f790b193526fc833"
+  },
+  "errors.image.unsupported": {
+    "message": "Tämä malli ei tue kuvaliitteitä",
+    "description": "User attached an image to a model whose backend can't accept them",
+    "_machine_translated": true,
+    "_source_hash": "1d4c95dc1c5bc705"
+  },
+  "errors.lock.acquire_failed": {
+    "message": "Sisäisen lukon hankkiminen epäonnistui",
+    "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic",
+    "_machine_translated": true,
+    "_source_hash": "5a9918e028c64a70"
+  },
+  "errors.serialize.failed": {
+    "message": "Tietojen sarjallistaminen epäonnistui: {reason}",
+    "description": "JSON or other serialization failed at a command boundary",
+    "_machine_translated": true,
+    "_source_hash": "8281217df264ca48"
+  },
+  "errors.rate_limited.generic": {
+    "message": "Pyyntöraja ylittyi. Odota hetki ja yritä uudelleen.",
+    "description": "Upstream agent or model API returned a rate-limit error",
+    "_machine_translated": true,
+    "_source_hash": "fe01dcfb5c9c2b8c"
+  },
+  "errors.permission.response_failed": {
+    "message": "Lupavastauksen lähettäminen epäonnistui: {reason}",
+    "description": "Frontend permission decision failed to round-trip to the agent",
+    "_machine_translated": true,
+    "_source_hash": "6baef077d99d0848"
+  },
+  "errors.command.failed": {
+    "message": "Komento epäonnistui: {reason}",
+    "description": "Generic command execution failure shown to the user",
+    "_machine_translated": true,
+    "_source_hash": "6b4e8055bb18f063"
+  },
+  "errors.cancel.failed": {
+    "message": "Peruuttaminen epäonnistui: {reason}",
+    "description": "Canceling an in-flight ACP request failed",
+    "_machine_translated": true,
+    "_source_hash": "b28989886ea58543"
+  },
+  "errors.plan.invalid_json": {
+    "message": "Virheellinen suunnitelman muoto",
+    "description": "Agent returned a plan that didn't match the expected JSON shape",
+    "_machine_translated": true,
+    "_source_hash": "5c0e86b92eafcd06"
+  },
+  "errors.plan.empty": {
+    "message": "Suunnitelma on tyhjä",
+    "description": "Agent returned a plan with no steps",
+    "_machine_translated": true,
+    "_source_hash": "7ba05bed2163286c"
+  },
+  "errors.transport.tcp_in_local_mode": {
+    "message": "TCP-siirtoa ei voi käyttää paikallisessa tilassa",
+    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested",
+    "_machine_translated": true,
+    "_source_hash": "4110a6c3a160e092"
+  },
+  "errors.transport.empty_spawn_command": {
+    "message": "Käynnistyskomento on tyhjä",
+    "description": "Local connection has no command to launch",
+    "_machine_translated": true,
+    "_source_hash": "7dec1ea1d3970f89"
+  },
+  "errors.transport.no_write_handle": {
+    "message": "Yhteyteen ei voi kirjoittaa",
+    "description": "Attempted to send on a half-closed transport",
+    "_machine_translated": true,
+    "_source_hash": "cf4b1b87eaef7167"
+  },
+  "errors.unknown": {
+    "message": "Tuntematon virhe",
+    "description": "Fallback when an error has no message at all",
+    "_machine_translated": true,
+    "_source_hash": "936185c80dd2f5bf"
+  },
+  "errors.passthrough": {
+    "message": "{message}",
+    "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "bb33bbeabc01d538"
+  },
+  "errors.config.save_failed": {
+    "message": "Asetusten tallentaminen epäonnistui: {reason}",
+    "description": "Settings persistence to disk failed (permission, disk full, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "3b06cfa49431fc65"
+  },
+  "errors.config.load_failed": {
+    "message": "Asetusten lataaminen epäonnistui: {reason}",
+    "description": "Reading config.json from disk failed",
+    "_machine_translated": true,
+    "_source_hash": "795d13ab985ff3f9"
+  },
+  "errors.extension.invalid_id": {
+    "message": "Virheellinen laajennuksen ID: {reason}",
+    "description": "Extension id failed validation (used to prevent path injection)",
+    "_machine_translated": true,
+    "_source_hash": "55f1b82a9874915c"
+  },
+  "errors.extension.invalid_locale": {
+    "message": "Virheellinen kielikoodi: {language}",
+    "description": "Language code failed validation when loading an extension's locale catalog",
+    "_machine_translated": true,
+    "_source_hash": "93813d15fe729438"
+  },
+  "errors.extension.invalid_kind": {
+    "message": "Virheellinen laajennustyyppi: {reason}",
+    "description": "Extension kind (extension/theme/command-pack) failed validation",
+    "_machine_translated": true,
+    "_source_hash": "44291ab61cf25b92"
+  },
+  "errors.extension.dir_unavailable": {
+    "message": "Laajennushakemistoa ei voitu avata: {reason}",
+    "description": "User extension dir lookup failed (config dir error)",
+    "_machine_translated": true,
+    "_source_hash": "fe1d9f4244a127e0"
+  },
+  "errors.extension.locale_read_failed": {
+    "message": "Laajennuksen kielitiedostoa ei voitu lukea: {reason}",
+    "description": "Reading the matched _locales/<lang>/messages.json file failed",
+    "_machine_translated": true,
+    "_source_hash": "c37220d449371517"
+  },
+  "errors.extension.locale_parse_failed": {
+    "message": "Laajennuksen kielitiedosto on virheellinen ({language}): {reason}",
+    "description": "Extension's _locales/<lang>/messages.json had a JSON parse error",
+    "_machine_translated": true,
+    "_source_hash": "c193e24ab8dcd090"
+  },
+  "tray.show": {
+    "message": "Näytä",
+    "description": "Tray menu — show the floating window",
+    "_machine_translated": true,
+    "_source_hash": "ec22b6beacdf1eb6"
+  },
+  "tray.new_chat": {
+    "message": "Uusi keskusteluikkuna",
+    "description": "Tray menu — open a new chat window",
+    "_machine_translated": true,
+    "_source_hash": "e6955c8ca783969f"
+  },
+  "tray.settings": {
+    "message": "Asetukset",
+    "description": "Tray menu — open the settings window",
+    "_machine_translated": true,
+    "_source_hash": "d85b2926988e7846"
+  },
+  "tray.quit": {
+    "message": "Lopeta",
+    "description": "Tray menu — exit the application",
+    "_machine_translated": true,
+    "_source_hash": "6a5d0ae05ac26e91"
+  },
+  "window.title.chat": {
+    "message": "Kage-keskustelu",
+    "description": "Title bar for chat windows",
+    "_machine_translated": true,
+    "_source_hash": "770f4bf0a5aa1bad"
+  },
+  "window.title.settings": {
+    "message": "Asetukset — Kage",
+    "description": "Title bar for the settings window",
+    "_machine_translated": true,
+    "_source_hash": "bd5d0b2d07c6f964"
+  },
+  "window.title.welcome": {
+    "message": "Tervetuloa Kageen",
+    "description": "Title bar for the welcome / first-run window",
+    "_machine_translated": true,
+    "_source_hash": "9328576f32069496"
+  },
+  "window.title.store": {
+    "message": "Laajennuskauppa — Kage",
+    "description": "Title bar for the extension store window",
+    "_machine_translated": true,
+    "_source_hash": "060db905dc24b3ef"
+  },
+  "window.title.select_folder": {
+    "message": "Valitse järjestettävä kansio",
+    "description": "Title for the folder picker dialog opened by the organize-files tool",
+    "_machine_translated": true,
+    "_source_hash": "ef87885fa332cec9"
+  },
+  "settings.appearance.title": {
+    "message": "Ulkoasu",
+    "description": "Settings sidebar — Appearance section header",
+    "_machine_translated": true,
+    "_source_hash": "a6c003ad4396ab95"
+  },
+  "settings.appearance.theme.label": {
+    "message": "Teema",
+    "description": "Settings — Theme dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "d6c580c54c73bdc2"
+  },
+  "settings.appearance.theme.description": {
+    "message": "Valitse haluamasi teema tai noudata järjestelmän asetuksia.",
+    "description": "Settings — Theme dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "2c26918c09e3ee18"
+  },
+  "settings.appearance.theme.system": {
+    "message": "Järjestelmä",
+    "description": "Theme option — follow OS theme",
+    "_machine_translated": true,
+    "_source_hash": "a8a70fcbf7fe2239"
+  },
+  "settings.appearance.theme.light": {
+    "message": "Vaalea",
+    "description": "Theme option — light mode",
+    "_machine_translated": true,
+    "_source_hash": "a7205b8dd0590bdd"
+  },
+  "settings.appearance.theme.dark": {
+    "message": "Tumma",
+    "description": "Theme option — dark mode",
+    "_machine_translated": true,
+    "_source_hash": "5e2f6ac4b31926e9"
+  },
+  "settings.appearance.language.label": {
+    "message": "Kieli",
+    "description": "Settings — Language dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "77f56e9592a024c2"
+  },
+  "settings.appearance.language.description": {
+    "message": "Valitse näyttökieli. Joidenkin tekstien päivittyminen voi vaatia uudelleenkäynnistyksen.",
+    "description": "Settings — Language dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "8453e11132c2f99b"
+  },
+  "settings.appearance.language.system": {
+    "message": "Järjestelmän oletus ({detected})",
+    "description": "Language option — follow OS locale, with the detected language shown in parens",
+    "_machine_translated": true,
+    "_source_hash": "9d9a2c0d211df22a"
+  },
+  "settings.appearance.language.machine_translated_warning": {
+    "message": "Tämä kieli on konekäännetty. Ilmoita virheistä GitHub-issues-sivullamme.",
+    "description": "Banner shown when the active language was filled in by the seed script",
+    "_machine_translated": true,
+    "_source_hash": "7db437e8e9ea0ff3"
+  },
+  "common.ok": {
+    "message": "OK",
+    "description": "Generic acknowledgement button",
+    "_machine_translated": true,
+    "_source_hash": "d064bc76429f1e4b"
+  },
+  "common.cancel": {
+    "message": "Peruuta",
+    "description": "Generic cancel button",
+    "_machine_translated": true,
+    "_source_hash": "f7ac3b34f9386f35"
+  },
+  "common.save": {
+    "message": "Tallenna",
+    "description": "Generic save button",
+    "_machine_translated": true,
+    "_source_hash": "5d77a8c34bce200d"
+  },
+  "common.delete": {
+    "message": "Poista",
+    "description": "Generic delete button",
+    "_machine_translated": true,
+    "_source_hash": "9083bd75239570d8"
+  },
+  "common.confirm": {
+    "message": "Vahvista",
+    "description": "Generic confirmation button",
+    "_machine_translated": true,
+    "_source_hash": "3799d174b5f7073b"
+  },
+  "common.copy": {
+    "message": "Kopioi",
+    "description": "Generic copy button",
+    "_machine_translated": true,
+    "_source_hash": "83a9e1e531450a75"
+  },
+  "common.copied_to_clipboard": {
+    "message": "Kopioitu leikepöydälle",
+    "description": "Toast shown after a copy action",
+    "_machine_translated": true,
+    "_source_hash": "b632c10267fc6164"
+  },
+  "common.unknown_error": {
+    "message": "Tapahtui tuntematon virhe",
+    "description": "Generic fallback when no specific error is available",
+    "_machine_translated": true,
+    "_source_hash": "d75d4c3d358f4f4a"
+  },
+  "common.loading": {
+    "message": "Ladataan…",
+    "description": "Generic loading indicator label",
+    "_machine_translated": true,
+    "_source_hash": "f4206248605fb6be"
+  }
+}

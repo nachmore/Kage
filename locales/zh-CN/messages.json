@@ -1,0 +1,350 @@
+{
+  "_meta": {
+    "language": "zh-CN",
+    "name": "简体中文",
+    "rtl": false,
+    "machine_translated": true
+  },
+  "errors.connection.lost": {
+    "message": "连接已断开：{reason}",
+    "description": "ACP transport dropped while a request was in flight",
+    "_machine_translated": true,
+    "_source_hash": "f52ccc95c7e68b60"
+  },
+  "errors.connection.not_connected": {
+    "message": "未连接",
+    "description": "User attempted an operation that requires an active ACP connection",
+    "_machine_translated": true,
+    "_source_hash": "bc0f8faf4c6758d9"
+  },
+  "errors.connection.reconnect_failed": {
+    "message": "重新连接失败：{reason}",
+    "description": "Reconnect attempt to the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "295f21a439e81f65"
+  },
+  "errors.timeout.generic": {
+    "message": "等待响应超时",
+    "description": "ACP request exceeded the configured timeout",
+    "_machine_translated": true,
+    "_source_hash": "7a5c6c0dfccfc3d8"
+  },
+  "errors.session.corrupted": {
+    "message": "会话已损坏：{reason}",
+    "description": "Session file or in-memory state failed validation",
+    "_machine_translated": true,
+    "_source_hash": "bea6e5b8369f63f2"
+  },
+  "errors.session.create_failed": {
+    "message": "无法创建会话：{reason}",
+    "description": "Initial session creation against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "33acf68c65c4f736"
+  },
+  "errors.session.load_failed": {
+    "message": "无法加载会话：{reason}",
+    "description": "Resuming a stored session against the agent backend failed",
+    "_machine_translated": true,
+    "_source_hash": "f790b193526fc833"
+  },
+  "errors.image.unsupported": {
+    "message": "此模型不支持图片附件",
+    "description": "User attached an image to a model whose backend can't accept them",
+    "_machine_translated": true,
+    "_source_hash": "1d4c95dc1c5bc705"
+  },
+  "errors.lock.acquire_failed": {
+    "message": "无法获取内部锁",
+    "description": "Mutex/RwLock acquisition failed; usually indicates a poisoned lock from a prior panic",
+    "_machine_translated": true,
+    "_source_hash": "5a9918e028c64a70"
+  },
+  "errors.serialize.failed": {
+    "message": "无法序列化数据：{reason}",
+    "description": "JSON or other serialization failed at a command boundary",
+    "_machine_translated": true,
+    "_source_hash": "8281217df264ca48"
+  },
+  "errors.rate_limited.generic": {
+    "message": "已超出速率限制，请稍后重试。",
+    "description": "Upstream agent or model API returned a rate-limit error",
+    "_machine_translated": true,
+    "_source_hash": "fe01dcfb5c9c2b8c"
+  },
+  "errors.permission.response_failed": {
+    "message": "无法发送权限响应：{reason}",
+    "description": "Frontend permission decision failed to round-trip to the agent",
+    "_machine_translated": true,
+    "_source_hash": "6baef077d99d0848"
+  },
+  "errors.command.failed": {
+    "message": "命令失败：{reason}",
+    "description": "Generic command execution failure shown to the user",
+    "_machine_translated": true,
+    "_source_hash": "6b4e8055bb18f063"
+  },
+  "errors.cancel.failed": {
+    "message": "无法取消：{reason}",
+    "description": "Canceling an in-flight ACP request failed",
+    "_machine_translated": true,
+    "_source_hash": "b28989886ea58543"
+  },
+  "errors.plan.invalid_json": {
+    "message": "计划格式无效",
+    "description": "Agent returned a plan that didn't match the expected JSON shape",
+    "_machine_translated": true,
+    "_source_hash": "5c0e86b92eafcd06"
+  },
+  "errors.plan.empty": {
+    "message": "计划为空",
+    "description": "Agent returned a plan with no steps",
+    "_machine_translated": true,
+    "_source_hash": "7ba05bed2163286c"
+  },
+  "errors.transport.tcp_in_local_mode": {
+    "message": "本地模式下无法使用 TCP 传输",
+    "description": "Configuration mismatch — local spawn mode chosen but TCP transport requested",
+    "_machine_translated": true,
+    "_source_hash": "4110a6c3a160e092"
+  },
+  "errors.transport.empty_spawn_command": {
+    "message": "启动命令为空",
+    "description": "Local connection has no command to launch",
+    "_machine_translated": true,
+    "_source_hash": "7dec1ea1d3970f89"
+  },
+  "errors.transport.no_write_handle": {
+    "message": "连接不可写",
+    "description": "Attempted to send on a half-closed transport",
+    "_machine_translated": true,
+    "_source_hash": "cf4b1b87eaef7167"
+  },
+  "errors.unknown": {
+    "message": "未知错误",
+    "description": "Fallback when an error has no message at all",
+    "_machine_translated": true,
+    "_source_hash": "936185c80dd2f5bf"
+  },
+  "errors.passthrough": {
+    "message": "{message}",
+    "description": "Wrapper for free-form error text from upstream sources (agent, JSON-RPC). The framing stays translatable while the inner payload is verbatim.",
+    "_machine_translated": true,
+    "_source_hash": "bb33bbeabc01d538"
+  },
+  "errors.config.save_failed": {
+    "message": "无法保存设置：{reason}",
+    "description": "Settings persistence to disk failed (permission, disk full, etc.)",
+    "_machine_translated": true,
+    "_source_hash": "3b06cfa49431fc65"
+  },
+  "errors.config.load_failed": {
+    "message": "无法加载设置：{reason}",
+    "description": "Reading config.json from disk failed",
+    "_machine_translated": true,
+    "_source_hash": "795d13ab985ff3f9"
+  },
+  "errors.extension.invalid_id": {
+    "message": "扩展 ID 无效：{reason}",
+    "description": "Extension id failed validation (used to prevent path injection)",
+    "_machine_translated": true,
+    "_source_hash": "55f1b82a9874915c"
+  },
+  "errors.extension.invalid_locale": {
+    "message": "语言代码无效：{language}",
+    "description": "Language code failed validation when loading an extension's locale catalog",
+    "_machine_translated": true,
+    "_source_hash": "93813d15fe729438"
+  },
+  "errors.extension.invalid_kind": {
+    "message": "扩展类型无效：{reason}",
+    "description": "Extension kind (extension/theme/command-pack) failed validation",
+    "_machine_translated": true,
+    "_source_hash": "44291ab61cf25b92"
+  },
+  "errors.extension.dir_unavailable": {
+    "message": "无法访问扩展目录：{reason}",
+    "description": "User extension dir lookup failed (config dir error)",
+    "_machine_translated": true,
+    "_source_hash": "fe1d9f4244a127e0"
+  },
+  "errors.extension.locale_read_failed": {
+    "message": "无法读取扩展语言文件：{reason}",
+    "description": "Reading the matched _locales/<lang>/messages.json file failed",
+    "_machine_translated": true,
+    "_source_hash": "c37220d449371517"
+  },
+  "errors.extension.locale_parse_failed": {
+    "message": "扩展语言文件无效（{language}）：{reason}",
+    "description": "Extension's _locales/<lang>/messages.json had a JSON parse error",
+    "_machine_translated": true,
+    "_source_hash": "c193e24ab8dcd090"
+  },
+  "tray.show": {
+    "message": "显示",
+    "description": "Tray menu — show the floating window",
+    "_machine_translated": true,
+    "_source_hash": "ec22b6beacdf1eb6"
+  },
+  "tray.new_chat": {
+    "message": "新建聊天窗口",
+    "description": "Tray menu — open a new chat window",
+    "_machine_translated": true,
+    "_source_hash": "e6955c8ca783969f"
+  },
+  "tray.settings": {
+    "message": "设置",
+    "description": "Tray menu — open the settings window",
+    "_machine_translated": true,
+    "_source_hash": "d85b2926988e7846"
+  },
+  "tray.quit": {
+    "message": "退出",
+    "description": "Tray menu — exit the application",
+    "_machine_translated": true,
+    "_source_hash": "6a5d0ae05ac26e91"
+  },
+  "window.title.chat": {
+    "message": "Kage 聊天",
+    "description": "Title bar for chat windows",
+    "_machine_translated": true,
+    "_source_hash": "770f4bf0a5aa1bad"
+  },
+  "window.title.settings": {
+    "message": "设置 — Kage",
+    "description": "Title bar for the settings window",
+    "_machine_translated": true,
+    "_source_hash": "bd5d0b2d07c6f964"
+  },
+  "window.title.welcome": {
+    "message": "欢迎使用 Kage",
+    "description": "Title bar for the welcome / first-run window",
+    "_machine_translated": true,
+    "_source_hash": "9328576f32069496"
+  },
+  "window.title.store": {
+    "message": "扩展商店 — Kage",
+    "description": "Title bar for the extension store window",
+    "_machine_translated": true,
+    "_source_hash": "060db905dc24b3ef"
+  },
+  "window.title.select_folder": {
+    "message": "选择要整理的文件夹",
+    "description": "Title for the folder picker dialog opened by the organize-files tool",
+    "_machine_translated": true,
+    "_source_hash": "ef87885fa332cec9"
+  },
+  "settings.appearance.title": {
+    "message": "外观",
+    "description": "Settings sidebar — Appearance section header",
+    "_machine_translated": true,
+    "_source_hash": "a6c003ad4396ab95"
+  },
+  "settings.appearance.theme.label": {
+    "message": "主题",
+    "description": "Settings — Theme dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "d6c580c54c73bdc2"
+  },
+  "settings.appearance.theme.description": {
+    "message": "选择您偏好的主题或跟随系统设置。",
+    "description": "Settings — Theme dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "2c26918c09e3ee18"
+  },
+  "settings.appearance.theme.system": {
+    "message": "系统",
+    "description": "Theme option — follow OS theme",
+    "_machine_translated": true,
+    "_source_hash": "a8a70fcbf7fe2239"
+  },
+  "settings.appearance.theme.light": {
+    "message": "浅色",
+    "description": "Theme option — light mode",
+    "_machine_translated": true,
+    "_source_hash": "a7205b8dd0590bdd"
+  },
+  "settings.appearance.theme.dark": {
+    "message": "深色",
+    "description": "Theme option — dark mode",
+    "_machine_translated": true,
+    "_source_hash": "5e2f6ac4b31926e9"
+  },
+  "settings.appearance.language.label": {
+    "message": "语言",
+    "description": "Settings — Language dropdown label",
+    "_machine_translated": true,
+    "_source_hash": "77f56e9592a024c2"
+  },
+  "settings.appearance.language.description": {
+    "message": "选择显示语言。部分文本可能需要重启后才能生效。",
+    "description": "Settings — Language dropdown helper text",
+    "_machine_translated": true,
+    "_source_hash": "8453e11132c2f99b"
+  },
+  "settings.appearance.language.system": {
+    "message": "系统默认（{detected}）",
+    "description": "Language option — follow OS locale, with the detected language shown in parens",
+    "_machine_translated": true,
+    "_source_hash": "9d9a2c0d211df22a"
+  },
+  "settings.appearance.language.machine_translated_warning": {
+    "message": "此语言由机器翻译生成。如发现错误，请在我们的 GitHub issues 页面反馈。",
+    "description": "Banner shown when the active language was filled in by the seed script",
+    "_machine_translated": true,
+    "_source_hash": "7db437e8e9ea0ff3"
+  },
+  "common.ok": {
+    "message": "确定",
+    "description": "Generic acknowledgement button",
+    "_machine_translated": true,
+    "_source_hash": "d064bc76429f1e4b"
+  },
+  "common.cancel": {
+    "message": "取消",
+    "description": "Generic cancel button",
+    "_machine_translated": true,
+    "_source_hash": "f7ac3b34f9386f35"
+  },
+  "common.save": {
+    "message": "保存",
+    "description": "Generic save button",
+    "_machine_translated": true,
+    "_source_hash": "5d77a8c34bce200d"
+  },
+  "common.delete": {
+    "message": "删除",
+    "description": "Generic delete button",
+    "_machine_translated": true,
+    "_source_hash": "9083bd75239570d8"
+  },
+  "common.confirm": {
+    "message": "确认",
+    "description": "Generic confirmation button",
+    "_machine_translated": true,
+    "_source_hash": "3799d174b5f7073b"
+  },
+  "common.copy": {
+    "message": "复制",
+    "description": "Generic copy button",
+    "_machine_translated": true,
+    "_source_hash": "83a9e1e531450a75"
+  },
+  "common.copied_to_clipboard": {
+    "message": "已复制到剪贴板",
+    "description": "Toast shown after a copy action",
+    "_machine_translated": true,
+    "_source_hash": "b632c10267fc6164"
+  },
+  "common.unknown_error": {
+    "message": "发生未知错误",
+    "description": "Generic fallback when no specific error is available",
+    "_machine_translated": true,
+    "_source_hash": "d75d4c3d358f4f4a"
+  },
+  "common.loading": {
+    "message": "加载中…",
+    "description": "Generic loading indicator label",
+    "_machine_translated": true,
+    "_source_hash": "f4206248605fb6be"
+  }
+}

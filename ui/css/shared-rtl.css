@@ -25,7 +25,7 @@
 
 /* ===== Document base ====================================================== */
 
-html[dir='rtl'] body {
+html[dir="rtl"] body {
     /* Most layout flips come from the inherited `direction`. Setting a
        reasonable default font-feature for Arabic / Hebrew here would be a
        nice polish later — out of scope for the initial RTL pass. */
@@ -34,8 +34,8 @@ html[dir='rtl'] body {
 
 /* Anything with a `lang="en"` override stays LTR even inside an RTL page.
    Useful for command names, code, paths. */
-html[dir='rtl'] [lang='en'],
-html[dir='rtl'] [dir='ltr'] {
+html[dir="rtl"] [lang="en"],
+html[dir="rtl"] [dir="ltr"] {
     direction: ltr;
     text-align: left;
 }
@@ -45,26 +45,26 @@ html[dir='rtl'] [dir='ltr'] {
    left in LTR; for RTL it goes on the right. The main content pane mirrors
    accordingly. */
 
-html[dir='rtl'] .settings-sidebar {
+html[dir="rtl"] .settings-sidebar {
     border-right: none;
     border-left: 1px solid var(--kage-border);
 }
 
-html[dir='rtl'] .settings-content {
+html[dir="rtl"] .settings-content {
     /* Ensures the description blocks under each setting align properly. */
     text-align: right;
 }
 
-html[dir='rtl'] .settings-section-header,
-html[dir='rtl'] .setting-label,
-html[dir='rtl'] .setting-description {
+html[dir="rtl"] .settings-section-header,
+html[dir="rtl"] .setting-label,
+html[dir="rtl"] .setting-description {
     text-align: right;
 }
 
 /* Setting rows that pair label + control via flex flip naturally because
    `flex-direction: row` honours `direction: rtl`. Anything using absolute
    positioning needs an explicit override. */
-html[dir='rtl'] .setting-row .setting-control {
+html[dir="rtl"] .setting-row .setting-control {
     /* No-op today — recorded as a hook for components that pin their
        control with absolute positioning. Leave the rule even if empty so
        grep finds it next time we add a flexible rule here. */
@@ -73,7 +73,7 @@ html[dir='rtl'] .setting-row .setting-control {
 /* ===== Chat / Floating windows =========================================== */
 
 /* Mascot peeks from one side of the floating window; flip the side. */
-html[dir='rtl'] .mascot-container {
+html[dir="rtl"] .mascot-container {
     right: auto;
     left: 0;
 }
@@ -82,7 +82,7 @@ html[dir='rtl'] .mascot-container {
    easily flip them via transform without distorting their drop shadow, so
    we apply `transform: scaleX(-1)` only to elements explicitly marked for
    directional flipping. Add `data-flip-rtl="true"` to opt in. */
-html[dir='rtl'] [data-flip-rtl='true'] {
+html[dir="rtl"] [data-flip-rtl="true"] {
     transform: scaleX(-1);
 }
 
@@ -90,14 +90,14 @@ html[dir='rtl'] [data-flip-rtl='true'] {
 
 /* Padding/margin shortcuts: anywhere we used `padding-left: 28px;` or
    `padding-right: 28px;` for a list-bullet style indent, the side flips. */
-html[dir='rtl'] .indent-left,
-html[dir='rtl'] .indent-start {
+html[dir="rtl"] .indent-left,
+html[dir="rtl"] .indent-start {
     padding-left: 0;
     padding-right: 28px;
 }
 
 /* Help / status icons that sit at the start of a row need to swap sides. */
-html[dir='rtl'] .row-leading-icon {
+html[dir="rtl"] .row-leading-icon {
     margin-right: 0;
     margin-left: 8px;
 }
@@ -113,7 +113,7 @@ html[dir='rtl'] .row-leading-icon {
 /* The welcome flow has bespoke layout (centered column with progress dots).
    The dots' visual order should follow reading direction, so flip the
    container. */
-html[dir='rtl'] .welcome-progress {
+html[dir="rtl"] .welcome-progress {
     flex-direction: row-reverse;
 }
 
