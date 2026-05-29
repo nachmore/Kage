@@ -15,6 +15,7 @@ import { getConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { EVT } from '../shared/events.js';
 import { WINDOW } from '../shared/window-labels.js';
+import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
 
 const _t0 = performance.now();
 const _ts = (label) => console.log(`⏱ [${(performance.now() - _t0).toFixed(0)}ms] ${label}`);
@@ -31,6 +32,14 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         verboseLogs = !!cfg?.system?.verbose_frontend_logging;
     } catch {}
     interceptConsole(WINDOW.FLOATING, { verbose: verboseLogs });
+
+    try {
+        await initI18n(invoke);
+    } catch (e) {
+        console.warn('[floating] i18n init failed', e);
+    }
+    applyStaticTranslations(document);
+
     initMarkdown();
     initThemeListener();
     initLinkHandler(invoke);

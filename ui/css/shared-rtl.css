@@ -1,0 +1,131 @@
+/*
+ * Right-to-left language support.
+ *
+ * Loaded in every Kage window. The frontend i18n module sets `<html dir="rtl">`
+ * and `body.classList.add('rtl')` when the active language is RTL (currently:
+ * Arabic, Hebrew, Persian, Urdu). These rules then flip layout-affecting
+ * properties using the `[dir=rtl]` selector — directional logical properties
+ * would be cleaner but Tauri ships modern WebView2/WebKit so support is
+ * uniform. CSS logical-property rewrites can come later.
+ *
+ * Scope rule: only flip what *visibly* changes in RTL. Don't flip code
+ * blocks, scrollbar tracks, range sliders, or any element whose contents
+ * are inherently LTR (URLs, file paths, technical strings shown via
+ * `dir="ltr"` overrides). Window chrome icons (close/minimise on Windows,
+ * always on the right) stay put — the OS owns those, not us.
+ *
+ * RTL-incremental rule: NEVER hard-code `direction: rtl` on internal
+ * components. They inherit from the `<html dir>` attribute, so a textarea
+ * inside an LTR page that needs to display Arabic will pick that up via
+ * the existing per-input detector in `rtl.js` (which adds `.rtl` to the
+ * container). The two systems coexist:
+ *   - This file = whole-app direction (UI chrome).
+ *   - rtl.js    = per-input direction (typed content).
+ */
+
+/* ===== Document base ====================================================== */
+
+html[dir='rtl'] body {
+    /* Most layout flips come from the inherited `direction`. Setting a
+       reasonable default font-feature for Arabic / Hebrew here would be a
+       nice polish later — out of scope for the initial RTL pass. */
+    text-align: right;
+}
+
+/* Anything with a `lang="en"` override stays LTR even inside an RTL page.
+   Useful for command names, code, paths. */
+html[dir='rtl'] [lang='en'],
+html[dir='rtl'] [dir='ltr'] {
+    direction: ltr;
+    text-align: left;
+}
+
+/* ===== Settings sidebar / main pane ====================================== */
+/* The settings UI is the most layout-heavy surface. The sidebar is on the
+   left in LTR; for RTL it goes on the right. The main content pane mirrors
+   accordingly. */
+
+html[dir='rtl'] .settings-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--kage-border);
+}
+
+html[dir='rtl'] .settings-content {
+    /* Ensures the description blocks under each setting align properly. */
+    text-align: right;
+}
+
+html[dir='rtl'] .settings-section-header,
+html[dir='rtl'] .setting-label,
+html[dir='rtl'] .setting-description {
+    text-align: right;
+}
+
+/* Setting rows that pair label + control via flex flip naturally because
+   `flex-direction: row` honours `direction: rtl`. Anything using absolute
+   positioning needs an explicit override. */
+html[dir='rtl'] .setting-row .setting-control {
+    /* No-op today — recorded as a hook for components that pin their
+       control with absolute positioning. Leave the rule even if empty so
+       grep finds it next time we add a flexible rule here. */
+}
+
+/* ===== Chat / Floating windows =========================================== */
+
+/* Mascot peeks from one side of the floating window; flip the side. */
+html[dir='rtl'] .mascot-container {
+    right: auto;
+    left: 0;
+}
+
+/* Toolbar arrows: the existing icons point in the LTR direction. We can't
+   easily flip them via transform without distorting their drop shadow, so
+   we apply `transform: scaleX(-1)` only to elements explicitly marked for
+   directional flipping. Add `data-flip-rtl="true"` to opt in. */
+html[dir='rtl'] [data-flip-rtl='true'] {
+    transform: scaleX(-1);
+}
+
+/* ===== Common patterns =================================================== */
+
+/* Padding/margin shortcuts: anywhere we used `padding-left: 28px;` or
+   `padding-right: 28px;` for a list-bullet style indent, the side flips. */
+html[dir='rtl'] .indent-left,
+html[dir='rtl'] .indent-start {
+    padding-left: 0;
+    padding-right: 28px;
+}
+
+/* Help / status icons that sit at the start of a row need to swap sides. */
+html[dir='rtl'] .row-leading-icon {
+    margin-right: 0;
+    margin-left: 8px;
+}
+
+/* Numeric / monospace content stays LTR — phone numbers, hashes, version
+   strings, hotkey display. Mark with `class="ltr"` or `dir="ltr"`. */
+.ltr {
+    direction: ltr;
+    unicode-bidi: embed;
+}
+
+/* ===== Welcome flow ===================================================== */
+/* The welcome flow has bespoke layout (centered column with progress dots).
+   The dots' visual order should follow reading direction, so flip the
+   container. */
+html[dir='rtl'] .welcome-progress {
+    flex-direction: row-reverse;
+}
+
+/* ===== Extension store =================================================== */
+/* Extension cards have a thumbnail on one side and metadata on the other.
+   Flexbox handles the major layout; the filter / sort dropdowns also flip
+   automatically. The "Install" button alignment was right-aligned in LTR;
+   in RTL it should be left-aligned (the natural row-end). Flexbox covers
+   this. */
+
+/* ===== Floating launcher =============================================== */
+
+/* The launcher's input has a magnifier icon at the start; in LTR that's the
+   left edge, in RTL the right edge. The default is `direction: inherit`
+   so this is automatic. */

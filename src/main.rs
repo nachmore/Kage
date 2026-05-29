@@ -672,6 +672,9 @@ async fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::get_i18n_catalog,
+            commands::get_available_languages,
+            commands::set_language,
             commands::send_message_streaming,
             commands::check_connection,
             commands::open_chat_with_message,

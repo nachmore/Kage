@@ -1,11 +1,12 @@
 import { SettingsModule } from './base.js';
 import { applyTheme as kageApplyTheme, loadAndApplyTheme } from '../shared/theme.js';
+import { t, isMachineTranslated, activeLanguage } from '../shared/i18n.js';
 /**
  * Appearance Settings Module
  */
 export class AppearanceSettingsModule extends SettingsModule {
     constructor() {
-        super('appearance', 'Appearance', '🎨');
+        super('appearance', t('settings.appearance.title'), '🎨');
     }
 
     render() {
@@ -13,10 +14,22 @@ export class AppearanceSettingsModule extends SettingsModule {
                 <div class="settings-section" id="${this.id}-section">
                     <h2 class="settings-section-header">${this.icon} ${this.title}</h2>
 
+                    <!-- Language -->
+                    <div class="setting-row" id="languageSection">
+                        <div class="setting-label">${t('settings.appearance.language.label')}</div>
+                        <div class="setting-description">${t('settings.appearance.language.description')}</div>
+                        <select class="setting-select" id="language">
+                            <option value="">${t('settings.appearance.language.system', { detected: activeLanguage() })}</option>
+                        </select>
+                        <div id="languageMachineWarning" class="setting-description" style="display:none;color:var(--kage-text-muted);margin-top:6px;">
+                            ${t('settings.appearance.language.machine_translated_warning')}
+                        </div>
+                    </div>
+
                     <!-- Theme -->
                     <div class="setting-row" id="themeSection">
-                        <div class="setting-label">Theme</div>
-                        <div class="setting-description">Choose your preferred theme or follow system settings.</div>
+                        <div class="setting-label">${t('settings.appearance.theme.label')}</div>
+                        <div class="setting-description">${t('settings.appearance.theme.description')}</div>
                         <input type="hidden" id="theme" value="system">
                         <div id="themeList" class="theme-list-scroll" style="margin-top:8px;"></div>
                         <div style="margin-top:8px;">
@@ -135,6 +148,10 @@ export class AppearanceSettingsModule extends SettingsModule {
     load(config) {
         if (!config.ui) return;
 
+        // Populate language dropdown from the embedded catalog list and set
+        // the current selection. An empty value means "follow system locale".
+        this._populateLanguageDropdown(config.ui.language || '');
+
         const theme = document.getElementById('theme');
         const opacity = document.getElementById('opacity');
         const opacityValue = document.getElementById('opacityValue');
@@ -182,6 +199,24 @@ export class AppearanceSettingsModule extends SettingsModule {
 
     save(config) {
         config.ui = config.ui || {};
+        const langSel = document.getElementById('language');
+        if (langSel) {
+            const v = langSel.value;
+            // Empty string means "follow system" — store as null so a future
+            // system-locale change is still honoured. Anything else is a hard
+            // override the user explicitly picked.
+            config.ui.language = v || null;
+            // Ask the backend to switch locales immediately. The backend
+            // also persists this in config.ui.language and broadcasts
+            // config_updated, but we save explicitly here so the rest of
+            // the save() flow doesn't lose the value.
+            const invoke = window.__TAURI__?.core?.invoke;
+            if (invoke) {
+                invoke('set_language', { language: v || null }).catch((e) =>
+                    console.warn('set_language failed', e)
+                );
+            }
+        }
         config.ui.theme = document.getElementById('theme')?.value || 'system';
         config.ui.floating_window_opacity = parseFloat(
             document.getElementById('opacity')?.value ?? '1'
@@ -247,6 +282,41 @@ export class AppearanceSettingsModule extends SettingsModule {
                 window.__TAURI__.core.invoke('open_store_window', { tab: 'themes' });
             }
         });
+    }
+
+    async _populateLanguageDropdown(currentValue) {
+        const sel = document.getElementById('language');
+        if (!sel) return;
+        const invoke = window.__TAURI__?.core?.invoke;
+        if (!invoke) return;
+        try {
+            const langs = await invoke('get_available_languages');
+            // Keep the leading "System default" option (already in the
+            // markup) and append every shipped catalog. We don't sort — the
+            // backend already returns them in code-sorted order, which is
+            // close enough to alphabetical for an end-user dropdown.
+            sel.innerHTML = '';
+            const systemOpt = document.createElement('option');
+            systemOpt.value = '';
+            systemOpt.textContent = t('settings.appearance.language.system', {
+                detected: activeLanguage(),
+            });
+            sel.appendChild(systemOpt);
+            for (const l of langs) {
+                const opt = document.createElement('option');
+                opt.value = l.code;
+                opt.textContent = l.machine_translated ? `${l.name} (β)` : l.name;
+                sel.appendChild(opt);
+            }
+            sel.value = currentValue || '';
+            // Show the machine-translated warning when the *current* active
+            // language is machine-translated. Clearing the override so the
+            // user falls back to system is allowed; we don't gate on that.
+            const warn = document.getElementById('languageMachineWarning');
+            if (warn) warn.style.display = isMachineTranslated() ? '' : 'none';
+        } catch (e) {
+            console.warn('Failed to load language list:', e);
+        }
     }
 
     async loadInstalledThemes() {

@@ -16,6 +16,7 @@ import { interceptConsole, setVerboseConsoleCapture } from '../shared/kage-log.j
 import { getConfig } from '../shared/config-cache.js';
 import { trackEventOnce } from '../shared/telemetry.js';
 import { EVT } from '../shared/events.js';
+import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
 
 let app = null;
 
@@ -46,6 +47,16 @@ waitForTauri(async ({ invoke, appWindow, listen }) => {
         verboseLogs = !!cfg?.system?.verbose_frontend_logging;
     } catch {}
     interceptConsole('chat', { verbose: verboseLogs });
+
+    // Load the active locale's catalog before any rendering so `t()` calls
+    // in subsequent code see real translations rather than literal keys.
+    try {
+        await initI18n(invoke);
+    } catch (e) {
+        console.warn('[chat] i18n init failed', e);
+    }
+    applyStaticTranslations(document);
+
     initThemeListener();
     initLinkHandler(invoke);
     loadAndApplyTheme(invoke);

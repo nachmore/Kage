@@ -1,6 +1,7 @@
 pub mod agent_sessions;
 pub mod extensions;
 pub mod folder_tools;
+pub mod i18n;
 pub mod input;
 pub mod kage_desktop;
 pub mod messaging;
@@ -14,6 +15,7 @@ pub mod window;
 pub use agent_sessions::*;
 pub use extensions::*;
 pub use folder_tools::*;
+pub use i18n::*;
 pub use input::*;
 pub use kage_desktop::*;
 pub use messaging::*;

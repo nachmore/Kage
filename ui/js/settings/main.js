@@ -27,6 +27,7 @@ import { applyTheme, initThemeListener, loadAndApplyTheme } from '../shared/them
 import { cmdOrCtrlPressed } from '../shared/shortcuts.js';
 import { isMacOS } from '../shared/mac-permissions.js';
 import { EVT } from '../shared/events.js';
+import { initI18n, applyStaticTranslations } from '../shared/i18n.js';
 
 // First-party settings modules (registration order matches the sidebar
 // in settings.html — see the comments in that file for the contract).
@@ -167,11 +168,23 @@ document.addEventListener('keydown', (e) => {
 // --- Boot -------------------------------------------------------------------
 
 window.addEventListener('DOMContentLoaded', async () => {
+    const invoke = window.__TAURI__.core.invoke;
+
+    // Load the i18n catalog before constructing any settings module — modules
+    // call `t()` from their `render()` to build labels, and a missing
+    // catalog there would surface raw key paths in the UI for the duration
+    // of the first paint.
+    try {
+        await initI18n(invoke);
+    } catch (e) {
+        console.warn('[settings] i18n init failed; falling back to English literals', e);
+    }
+    // Translate any static `data-i18n*` markup in settings.html.
+    applyStaticTranslations(document);
+
     settingsManager = new SettingsManager();
     setManagerHandle(() => settingsManager);
     registerManagerActions();
-
-    const invoke = window.__TAURI__.core.invoke;
 
     // Register core modules (order matches sidebar)
     settingsManager.registerModule(new AppearanceSettingsModule());
