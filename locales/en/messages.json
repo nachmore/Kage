@@ -3950,6 +3950,14 @@
     "message": "Connection settings changed. Restart now?",
     "description": "Native confirm() fallback when the Tauri dialog plugin isn't available"
   },
+  "settings.manager.dialog.restart.now_btn": {
+    "message": "Restart now",
+    "description": "Button on the post-save restart banner that triggers an immediate restart"
+  },
+  "settings.manager.dialog.restart.later_btn": {
+    "message": "Later",
+    "description": "Button on the post-save restart banner that dismisses the banner without restarting"
+  },
   "settings.manager.status.saved": {
     "message": "Settings saved! All changes apply immediately.",
     "description": "Status banner after a successful save with no restart needed"

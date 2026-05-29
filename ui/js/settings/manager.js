@@ -421,25 +421,12 @@ export class SettingsManager {
                 this.modules.forEach((m) => {
                     m._needsRestart = false;
                 });
-                this.showStatus(t('settings.manager.status.saved_restart_needed'), 'success');
-                // Use setTimeout to let the status message render before showing dialog
-                setTimeout(async () => {
-                    try {
-                        const { ask } = window.__TAURI__.dialog;
-                        const restart = await ask(t('settings.manager.dialog.restart.message'), {
-                            title: t('settings.manager.dialog.restart.title'),
-                            kind: 'info',
-                        });
-                        if (restart) {
-                            this.invoke('restart_app');
-                        }
-                    } catch {
-                        // Fallback to native confirm if Tauri dialog not available
-                        if (confirm(t('settings.manager.dialog.restart.fallback'))) {
-                            this.invoke('restart_app');
-                        }
-                    }
-                }, 100);
+                // Inline banner with a "Restart now" button — no native
+                // dialog. Native dialogs steal focus, block the settings
+                // window, and feel alien on Windows; an inline banner keeps
+                // the user in the same surface and lets them keep
+                // adjusting other settings if they're not done.
+                this.showRestartPrompt();
                 return true;
             }
 
@@ -475,6 +462,46 @@ export class SettingsManager {
         setTimeout(() => {
             statusEl.style.display = 'none';
         }, 5000);
+    }
+
+    /**
+     * Render the post-save "restart required" banner. Persists until the
+     * user clicks Restart now or dismisses — auto-dismiss would lose the
+     * call to action.
+     */
+    showRestartPrompt() {
+        const statusEl = document.getElementById('statusMessage');
+        if (!statusEl) return;
+        // Build inline. Don't use innerHTML interpolation for the user-
+        // facing text — t() returns trusted catalog strings, but going
+        // through DOM API keeps the buttons properly wired.
+        statusEl.textContent = '';
+        statusEl.className = 'status-message restart-prompt';
+        statusEl.style.display = 'flex';
+
+        const message = document.createElement('span');
+        message.textContent = t('settings.manager.status.saved_restart_needed');
+        message.className = 'restart-prompt-text';
+
+        const restartBtn = document.createElement('button');
+        restartBtn.type = 'button';
+        restartBtn.className = 'restart-prompt-btn restart-prompt-btn-primary';
+        restartBtn.textContent = t('settings.manager.dialog.restart.now_btn');
+        restartBtn.addEventListener('click', () => {
+            this.invoke('restart_app');
+        });
+
+        const dismissBtn = document.createElement('button');
+        dismissBtn.type = 'button';
+        dismissBtn.className = 'restart-prompt-btn';
+        dismissBtn.textContent = t('settings.manager.dialog.restart.later_btn');
+        dismissBtn.addEventListener('click', () => {
+            statusEl.style.display = 'none';
+        });
+
+        statusEl.appendChild(message);
+        statusEl.appendChild(restartBtn);
+        statusEl.appendChild(dismissBtn);
     }
 
     /**

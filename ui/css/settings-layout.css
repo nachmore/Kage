@@ -219,6 +219,50 @@ body {
     color: #ffffff;
 }
 
+/* Restart-required banner — replaces the native ask() dialog. Lives in the
+   same #statusMessage slot but renders as a flex row with primary +
+   secondary actions so the user can either restart immediately or dismiss
+   and keep configuring. Pinned above the save bar so it doesn't get
+   covered by sticky section headers. */
+.status-message.restart-prompt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--kage-bg-elevated);
+    color: var(--kage-text);
+    border: 1px solid var(--kage-accent);
+    text-align: start;
+    position: fixed;
+    bottom: 60px;
+    left: 200px;
+    right: 20px;
+    z-index: 110;
+}
+.restart-prompt-text {
+    flex: 1;
+}
+.restart-prompt-btn {
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--kage-border);
+    background: transparent;
+    color: var(--kage-text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.restart-prompt-btn:hover {
+    background: var(--kage-bg-input);
+}
+.restart-prompt-btn-primary {
+    background: var(--kage-accent);
+    border-color: var(--kage-accent);
+    color: #ffffff;
+}
+.restart-prompt-btn-primary:hover {
+    background: var(--kage-accent-hover);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 10px;
