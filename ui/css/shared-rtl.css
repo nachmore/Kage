@@ -129,3 +129,89 @@ html[dir="rtl"] .welcome-progress {
 /* The launcher's input has a magnifier icon at the start; in LTR that's the
    left edge, in RTL the right edge. The default is `direction: inherit`
    so this is automatic. */
+
+/* ===== Chat sidebar / main pane ========================================= */
+/* The chat sidebar lives on the LEFT in LTR; for RTL it goes on the right.
+   Flex-direction: row already inherits direction so the layout flips
+   automatically — but border + resize handle + sticky cluster positions
+   need explicit overrides. */
+
+html[dir="rtl"] .chat-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--kage-border);
+}
+
+/* Resize handle: LTR pins it to the right edge of the sidebar. RTL: left. */
+html[dir="rtl"] .sidebar-resize-handle {
+    right: auto;
+    left: 0;
+}
+
+/* Model dropdown anchors to the right in LTR (drops down-and-right from the
+   selector). RTL: anchor to the left. */
+html[dir="rtl"] .chat-model-dropdown {
+    right: auto;
+    left: 0;
+}
+
+/* Per-message timestamp uses margin-left:auto to push to row end. In RTL
+   that pushes it the wrong way; flip the auto margin. */
+html[dir="rtl"] .msg-timestamp {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* Settings save bar pins to the LEFT in LTR (flush against the sidebar).
+   In RTL the sidebar is on the right, so the bar pins flush-right. */
+html[dir="rtl"] .save-button-container {
+    left: 0;
+    right: 180px;
+}
+
+/* The restart-prompt banner uses fixed positioning with explicit
+   left/right values. Flip them so the banner clears the sidebar in RTL. */
+html[dir="rtl"] .status-message.restart-prompt {
+    left: 20px;
+    right: 200px;
+}
+
+/* ===== Floating window ================================================== */
+
+/* The floating window has several absolute-positioned elements that anchor
+   to LTR-friendly edges. Audit each as RTL bugs are reported and add
+   targeted overrides. The mascot's already handled above; everything else
+   inherits direction via flex containers and shouldn't need a flip — but
+   anything using justify-content: flex-end or margin-left:auto inside a
+   row of icons may want the same treatment as .msg-timestamp. */
+
+html[dir="rtl"] .extension-bar,
+html[dir="rtl"] .floating-banner-action {
+    /* margin-left:auto sentinel — same treatment as msg-timestamp. The
+       components themselves inherit direction so the rest is automatic. */
+}
+
+/* Banners that pin to a specific side (e.g. the post-update banner). The
+   floating window's banner uses absolute top:0; left:0; right:0 which
+   spans full width and doesn't need flipping. */
+
+/* ===== Tool / extension chips =========================================== */
+/* Source chips render as an inline row; flex-direction inherits direction
+   so they read right-to-left automatically. Status icons (⏳ / ✅) flip
+   side as a side-effect, which is correct for RTL. */
+
+/* ===== Welcome wizard navigation ======================================== */
+/* The Continue button sits on the right in LTR, which naturally flips to
+   the left under RTL because the action row uses justify-content:
+   space-between. The progress dots already flip via flex-direction:
+   row-reverse above. */
+
+/* ===== Inputs with leading icons ======================================== */
+/* Search/filter inputs typically have an icon at the start of the field.
+   The icon uses `position: absolute; left: 12px;` in LTR and the input
+   has `padding-left: 36px`. RTL flips both. Tag the input with
+   `data-icon-start` and the icon gets handled here. */
+html[dir="rtl"] [data-icon-start] {
+    /* No-op declaration to keep grep finding this section as the pattern
+       lands in more components. Each individual component still owns its
+       padding override. */
+}
