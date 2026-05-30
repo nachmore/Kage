@@ -22,15 +22,20 @@ fn init_en() {
 #[test]
 fn keyed_construction_uses_real_key() {
     init_en();
+    // Uses `errors.connection.not_connected` — a stable, param-free key
+    // that's guaranteed to live in the EN catalog. The previous fixture
+    // (`errors.connection.lost`) was deleted as part of the unused-key
+    // sweep; the property we're locking down is unchanged: keyed
+    // construction stamps a real catalog key and resolves the localised
+    // message at lookup time.
     let err = AppError::keyed(
         ErrorKind::ConnectionLost,
-        "errors.connection.lost",
-        &[("reason", "socket closed")],
+        "errors.connection.not_connected",
+        &[],
     );
     assert!(matches!(err.kind, ErrorKind::ConnectionLost));
-    assert_eq!(err.key, "errors.connection.lost");
-    assert_eq!(err.params.get("reason").unwrap(), "socket closed");
-    assert_eq!(err.localised_message(), "Connection lost: socket closed");
+    assert_eq!(err.key, "errors.connection.not_connected");
+    assert_eq!(err.localised_message(), "Not connected");
 }
 
 #[test]
@@ -98,13 +103,13 @@ fn serialisation_contract_matches_frontend_expectations() {
     // exact-match assertions without depending on translated text.
     let err = AppError::keyed(
         ErrorKind::ConnectionLost,
-        "errors.connection.lost",
-        &[("reason", "disconnected")],
+        "errors.connection.not_connected",
+        &[],
     );
     let json = serde_json::to_value(&err).unwrap();
     assert_eq!(json["kind"], "connection_lost");
-    assert_eq!(json["key"], "errors.connection.lost");
-    assert_eq!(json["message"], "Connection lost: disconnected");
+    assert_eq!(json["key"], "errors.connection.not_connected");
+    assert_eq!(json["message"], "Not connected");
 }
 
 #[test]
