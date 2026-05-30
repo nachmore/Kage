@@ -6,7 +6,7 @@
 //!
 //! The boundary contract:
 //!   - kind: snake_case `ErrorKind` variant, stable wire format
-//!   - key: i18n key (e.g. `errors.connection.lost`) — also stable
+//!   - key: i18n key (e.g. `errors.connection.not_connected`) — also stable
 //!   - message: localised UI string, derived from key + active locale at serialise time
 //!
 //! Free-form errors (legacy `AppError::internal(s)` etc.) flow through the
