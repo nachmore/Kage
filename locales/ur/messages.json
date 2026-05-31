@@ -6570,16 +6570,16 @@
     "_source_hash": "4f92f2b69999b403"
   },
   "settings.manager.status.saved_restart_needed": {
-    "message": "ترتیبات محفوظ ہو گئیں۔ کنکشن کی تبدیلیوں کے لیے دوبارہ شروع کرنا ضروری ہے۔",
+    "message": "ترتیبات محفوظ ہو گئیں۔ کچھ تبدیلیاں لاگو کرنے کے لیے دوبارہ شروع کرنا ضروری ہے۔",
     "description": "Status banner when a save succeeded but requires a restart",
     "_machine_translated": true,
-    "_source_hash": "cb3492630a83c547"
+    "_source_hash": "b2c20941b036f0d8"
   },
   "settings.manager.dialog.restart.message": {
-    "message": "کنکشن کی ترتیبات تبدیل ہو گئیں۔ ان تبدیلیوں کو لاگو کرنے کے لیے ایپ کو دوبارہ شروع کرنا ضروری ہے۔\n\nابھی دوبارہ شروع کریں؟",
+    "message": "کچھ تبدیلیاں لاگو کرنے کے لیے دوبارہ شروع کرنا ضروری ہے۔\n\nابھی دوبارہ شروع کریں؟",
     "description": "Tauri ask() dialog body",
     "_machine_translated": true,
-    "_source_hash": "cf5d009e6005e55c"
+    "_source_hash": "0622c5ed7ab161d5"
   },
   "settings.manager.dialog.restart.title": {
     "message": "دوبارہ شروع کرنا ضروری ہے",
@@ -6588,10 +6588,10 @@
     "_source_hash": "8dff29c692cb8e36"
   },
   "settings.manager.dialog.restart.fallback": {
-    "message": "کنکشن کی ترتیبات تبدیل ہو گئیں۔ ابھی دوبارہ شروع کریں؟",
+    "message": "کچھ تبدیلیوں کے لیے دوبارہ شروع کرنا ضروری ہے۔ ابھی دوبارہ شروع کریں؟",
     "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
     "_machine_translated": true,
-    "_source_hash": "03eaa996fdface54"
+    "_source_hash": "e33c1bff6838c1fe"
   },
   "settings.manager.status.saved": {
     "message": "ترتیبات محفوظ ہو گئیں! تمام تبدیلیاں فوراً لاگو ہوتی ہیں۔",
@@ -7534,5 +7534,11 @@
     "description": "Button on the post-save restart banner that dismisses the banner without restarting",
     "_machine_translated": true,
     "_source_hash": "6dc710cede77c064"
+  },
+  "chat.sidebar.loading": {
+    "message": "سیشنز لوڈ ہو رہے ہیں…",
+    "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
+    "_machine_translated": true,
+    "_source_hash": "a79b07bd014f80ea"
   }
 }

@@ -66,7 +66,19 @@
             </div>
 
             <div class="session-list" id="sessionList">
-                <div class="session-list-empty" data-i18n="chat.sidebar.empty">No sessions yet</div>
+                <!-- Initial loading state — replaced by renderSessionList()
+                     once `list_sessions` resolves. Without this the
+                     static "No sessions yet" empty-state would briefly
+                     flash for a user who actually has dozens of
+                     sessions, which read as "your history was lost". -->
+                <div class="session-list-empty session-list-loading">
+                    <div class="session-list-loader">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                    </div>
+                    <div data-i18n="chat.sidebar.loading">Loading sessions…</div>
+                </div>
             </div>
         </div>
 

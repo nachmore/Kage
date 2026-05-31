@@ -6570,16 +6570,16 @@
     "_source_hash": "4f92f2b69999b403"
   },
   "settings.manager.status.saved_restart_needed": {
-    "message": "সেটিংস সংরক্ষিত হয়েছে। সংযোগ পরিবর্তনের জন্য পুনরায় চালু করা প্রয়োজন।",
+    "message": "সেটিংস সংরক্ষিত হয়েছে। কিছু পরিবর্তন প্রয়োগ করতে রিস্টার্ট প্রয়োজন।",
     "description": "Status banner when a save succeeded but requires a restart",
     "_machine_translated": true,
-    "_source_hash": "cb3492630a83c547"
+    "_source_hash": "b2c20941b036f0d8"
   },
   "settings.manager.dialog.restart.message": {
-    "message": "সংযোগ সেটিংস পরিবর্তিত হয়েছে। এই পরিবর্তনগুলি প্রয়োগ করতে অ্যাপটি পুনরায় চালু করতে হবে।\n\nএখনই পুনরায় চালু করবেন?",
+    "message": "কিছু পরিবর্তন প্রয়োগ করতে রিস্টার্ট প্রয়োজন।\n\nএখন রিস্টার্ট করবেন?",
     "description": "Tauri ask() dialog body",
     "_machine_translated": true,
-    "_source_hash": "cf5d009e6005e55c"
+    "_source_hash": "0622c5ed7ab161d5"
   },
   "settings.manager.dialog.restart.title": {
     "message": "পুনরায় চালু করা প্রয়োজন",
@@ -6588,10 +6588,10 @@
     "_source_hash": "8dff29c692cb8e36"
   },
   "settings.manager.dialog.restart.fallback": {
-    "message": "সংযোগ সেটিংস পরিবর্তিত হয়েছে। এখনই পুনরায় চালু করবেন?",
+    "message": "কিছু পরিবর্তনের জন্য রিস্টার্ট প্রয়োজন। এখন রিস্টার্ট করবেন?",
     "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
     "_machine_translated": true,
-    "_source_hash": "03eaa996fdface54"
+    "_source_hash": "e33c1bff6838c1fe"
   },
   "settings.manager.status.saved": {
     "message": "সেটিংস সংরক্ষিত হয়েছে! সব পরিবর্তন তৎক্ষণাৎ প্রয়োগ হবে।",
@@ -7534,5 +7534,11 @@
     "description": "Button on the post-save restart banner that dismisses the banner without restarting",
     "_machine_translated": true,
     "_source_hash": "6dc710cede77c064"
+  },
+  "chat.sidebar.loading": {
+    "message": "সেশন লোড হচ্ছে…",
+    "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
+    "_machine_translated": true,
+    "_source_hash": "a79b07bd014f80ea"
   }
 }

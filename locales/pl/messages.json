@@ -6570,16 +6570,16 @@
     "_source_hash": "4f92f2b69999b403"
   },
   "settings.manager.status.saved_restart_needed": {
-    "message": "Ustawienia zapisane. Wymagane ponowne uruchomienie, aby zastosować zmiany połączeń.",
+    "message": "Ustawienia zapisane. Wymagane ponowne uruchomienie, aby zastosować niektóre zmiany.",
     "description": "Status banner when a save succeeded but requires a restart",
     "_machine_translated": true,
-    "_source_hash": "cb3492630a83c547"
+    "_source_hash": "b2c20941b036f0d8"
   },
   "settings.manager.dialog.restart.message": {
-    "message": "Ustawienia połączeń zostały zmienione. Aby zastosować te zmiany, aplikacja musi zostać uruchomiona ponownie.\n\nUruchomić ponownie teraz?",
+    "message": "Niektóre zmiany wymagają ponownego uruchomienia, aby zostały zastosowane.\n\nUruchomić ponownie teraz?",
     "description": "Tauri ask() dialog body",
     "_machine_translated": true,
-    "_source_hash": "cf5d009e6005e55c"
+    "_source_hash": "0622c5ed7ab161d5"
   },
   "settings.manager.dialog.restart.title": {
     "message": "Wymagane ponowne uruchomienie",
@@ -6588,10 +6588,10 @@
     "_source_hash": "8dff29c692cb8e36"
   },
   "settings.manager.dialog.restart.fallback": {
-    "message": "Ustawienia połączeń zostały zmienione. Uruchomić ponownie teraz?",
+    "message": "Niektóre zmiany wymagają ponownego uruchomienia. Uruchomić ponownie teraz?",
     "description": "Native confirm() fallback when the Tauri dialog plugin isn't available",
     "_machine_translated": true,
-    "_source_hash": "03eaa996fdface54"
+    "_source_hash": "e33c1bff6838c1fe"
   },
   "settings.manager.status.saved": {
     "message": "Ustawienia zapisane! Wszystkie zmiany obowiązują natychmiast.",
@@ -7534,5 +7534,11 @@
     "description": "Button on the post-save restart banner that dismisses the banner without restarting",
     "_machine_translated": true,
     "_source_hash": "6dc710cede77c064"
+  },
+  "chat.sidebar.loading": {
+    "message": "Ładowanie sesji…",
+    "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
+    "_machine_translated": true,
+    "_source_hash": "a79b07bd014f80ea"
   }
 }

@@ -1081,6 +1081,10 @@
     "message": "No sessions yet",
     "description": "Empty-state shown when no sessions exist"
   },
+  "chat.sidebar.loading": {
+    "message": "Loading sessions…",
+    "description": "Initial-load state shown in the chat sidebar before list_sessions resolves"
+  },
   "chat.header.default_title": {
     "message": "New Chat",
     "description": "Default title shown for a fresh, unnamed session"
