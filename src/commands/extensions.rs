@@ -364,6 +364,19 @@ pub async fn uninstall_extension(
 
 #[tauri::command]
 pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Result<(), AppError> {
+    open_store_window_with_intent(app, tab, None).await
+}
+
+/// Same as `open_store_window` but with an optional install intent —
+/// when present, the URL gets `&install=<id>` appended so the store JS
+/// auto-prompts the install on boot. Used by the `kage://install/<id>`
+/// deep-link handler. Frontend callers stick to `open_store_window`
+/// without the third arg.
+pub async fn open_store_window_with_intent(
+    app: tauri::AppHandle,
+    tab: Option<String>,
+    install_id: Option<String>,
+) -> Result<(), AppError> {
     use tauri::WebviewWindowBuilder;
 
     // Telemetry early so we count "opened" even on the path where the
@@ -373,6 +386,21 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
         "store_opened",
         tab.as_deref().map(|t| serde_json::json!({ "tab": t })),
     );
+
+    // Sanitize the install id: only the alphabet our manifest validator
+    // allows. Belt-and-suspenders — the deep-link handler already
+    // checked, but we sanitise again at the JS-injection boundary.
+    let safe_install_id: Option<String> = install_id.and_then(|id| {
+        let s: String = id
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+            .collect();
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    });
 
     if let Some(w) = app.get_webview_window(window_labels::STORE) {
         let _ = w.show();
@@ -388,15 +416,40 @@ pub async fn open_store_window(app: tauri::AppHandle, tab: Option<String>) -> Re
             let js = format!("if(typeof switchTab==='function')switchTab('{}')", safe_tab);
             let _ = w.eval(&js);
         }
+        // For an already-open store, fire the install intent via JS
+        // eval too. The function is exposed by the store's boot path
+        // and handles the "we don't know about this id yet" case
+        // (e.g. the catalog hasn't reloaded since the deep link
+        // arrived) by deferring until next render.
+        if let Some(ref id) = safe_install_id {
+            let js = format!(
+                "if(typeof handleDeepLinkInstall==='function')handleDeepLinkInstall('{}')",
+                id
+            );
+            let _ = w.eval(&js);
+        }
         crate::setup::update_activation_policy(&app);
         return Ok(());
     }
 
-    // Build URL with tab query param so the page knows which tab to show on load
-    let url_str = match &tab {
-        Some(t) => format!("store.html?tab={}", t),
-        None => "store.html".to_string(),
-    };
+    // Build URL. Tab + install both flow through query params so the
+    // store window's bootstrap path picks them up before any event
+    // listener races. This avoids the "emit before listen" timing
+    // problem that biting us when we tried emitting an event right
+    // after window create.
+    let mut url_str = String::from("store.html");
+    let mut sep = '?';
+    if let Some(ref t) = tab {
+        url_str.push(sep);
+        url_str.push_str("tab=");
+        url_str.push_str(t);
+        sep = '&';
+    }
+    if let Some(ref id) = safe_install_id {
+        url_str.push(sep);
+        url_str.push_str("install=");
+        url_str.push_str(id);
+    }
 
     let w = WebviewWindowBuilder::new(
         &app,

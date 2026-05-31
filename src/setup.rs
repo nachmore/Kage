@@ -125,6 +125,148 @@ pub fn install_show_sessions_listener(app: &App) {
     });
 }
 
+/// Self-register the `kage://` URL scheme with the OS and route
+/// incoming deep links to the store window.
+///
+/// Two arrival paths funnel into the same handler:
+///   1. Cold launch — Kage wasn't running, the OS spawned us with the
+///      URL on argv. The deep-link plugin parses it; we read the
+///      result via `get_current()` here at setup time.
+///   2. Warm launch — Kage was already up, the OS forwarded the URL
+///      via single-instance (which has the `deep-link` feature flag,
+///      so the URL lands in the deep-link plugin's channel rather
+///      than just in argv). The plugin fires `deep-link://new-url`
+///      via `on_open_url`.
+///
+/// Both paths call `handle_deep_link_url`, which:
+///   - parses `kage://install/<id>`,
+///   - opens the store window,
+///   - emits `DEEP_LINK_INSTALL` with the id so the store JS can
+///     scroll to + auto-prompt the install.
+///
+/// `register_all()` is called at the top because it's cheap and
+/// idempotent. On Windows it writes HKCU keys pointing at this exe;
+/// re-running with a moved binary path keeps the registration in
+/// sync. On macOS the bundler handles registration via Info.plist
+/// so this is a no-op (the plugin's macOS impl is empty).
+pub fn install_deep_link_handler(app: &App) {
+    use tauri_plugin_deep_link::DeepLinkExt;
+
+    // Idempotent self-registration. If this fails (e.g. registry write
+    // denied on a locked-down corporate machine) we log and carry on —
+    // the user can still side-load extensions via the store window's
+    // .zip flow, just without the one-click web path.
+    let dl = app.deep_link();
+    if let Err(e) = dl.register_all() {
+        warn!("deep-link: failed to register `kage://` scheme: {e}");
+    }
+
+    // Cold-launch URLs. The plugin populated `current` from argv if
+    // the process started with one; an empty list is fine.
+    if let Ok(Some(urls)) = dl.get_current() {
+        for url in urls {
+            handle_deep_link_url(app.handle(), &url);
+        }
+    }
+
+    // Warm-launch URLs. Fires for every subsequent kage:// click.
+    let app_handle = app.handle().clone();
+    dl.on_open_url(move |event| {
+        for url in event.urls() {
+            handle_deep_link_url(&app_handle, &url);
+        }
+    });
+}
+
+/// Parse a `kage://...` URL and dispatch it. Today the only verb is
+/// `install`, so unknown shapes log + drop. Adding a new verb is a
+/// match arm here plus a frontend listener.
+fn handle_deep_link_url(app: &AppHandle, url: &url::Url) {
+    if url.scheme() != "kage" {
+        warn!("deep-link: ignoring unexpected scheme '{}'", url.scheme());
+        return;
+    }
+
+    // We accept both `kage://install/<id>` (host=install, path=/<id>)
+    // and `kage:install/<id>` (host empty, path=install/<id>) —
+    // browsers and OS handlers vary on how they parse non-standard
+    // schemes.
+    let host = url.host_str().unwrap_or("");
+    let path = url.path().trim_start_matches('/');
+    let (verb, rest) = if !host.is_empty() {
+        (host.to_string(), path.to_string())
+    } else {
+        // `kage:install/foo` → path is "install/foo"
+        let mut parts = path.splitn(2, '/');
+        let head = parts.next().unwrap_or("").to_string();
+        let tail = parts.next().unwrap_or("").to_string();
+        (head, tail)
+    };
+
+    match verb.as_str() {
+        "install" => {
+            // The id MUST match the validator's pattern
+            // (`^[a-z0-9][a-z0-9_-]{0,63}$`) to land as a real
+            // extension — anything outside that wouldn't survive the
+            // catalog build. Be defensive anyway and reject obvious
+            // junk so a malicious `kage://install/../../../etc/passwd`
+            // can't push surprising payloads at the frontend.
+            // No need to percent-decode: every char allowed in a valid
+            // extension id (lowercase alnum + `_-`) is already
+            // unreserved per RFC 3986, so it can't be encoded by a
+            // well-behaved client. If anything came through
+            // percent-encoded (e.g. an attacker wrote `%2e%2e` to mean
+            // `..`), the safety check below rejects it because `%`
+            // isn't in the allowed character set.
+            let id = rest;
+            if id.is_empty() || !is_safe_extension_id(&id) {
+                warn!("deep-link: install URL has invalid id '{}', ignoring", id);
+                return;
+            }
+            info!("deep-link: open store with install intent id='{}'", id);
+            // The intent rides on the URL query param
+            // (`store.html?tab=extensions&install=<id>`) for fresh
+            // window creates; for already-open windows the command
+            // does an eval_script call into the store's
+            // handleDeepLinkInstall function. Either way the
+            // store-side bootstrap reads the id and triggers the
+            // install — no emit/listen race.
+            let app_for_open = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = crate::commands::extensions::open_store_window_with_intent(
+                    app_for_open,
+                    Some("extensions".to_string()),
+                    Some(id),
+                )
+                .await
+                {
+                    warn!("deep-link: failed to open store window: {e}");
+                }
+            });
+        }
+        other => {
+            warn!("deep-link: unknown verb '{}' in URL '{}'", other, url);
+        }
+    }
+}
+
+/// Mirrors the validator pattern from Kage-Extensions
+/// (`^[a-z0-9][a-z0-9_-]{0,63}$`). We re-implement here rather than
+/// pulling regex in just for this one check because the rule is small
+/// and stable, and avoiding regex keeps cold-start cheap. Keep in sync
+/// if the catalog ever loosens its id rule.
+fn is_safe_extension_id(id: &str) -> bool {
+    if id.is_empty() || id.len() > 64 {
+        return false;
+    }
+    let mut chars = id.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphanumeric() {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 /// Install a focus listener on `main` so the
 /// `UiState.last_focused_chat` tracker stays accurate without each
 /// chat-* peer having to coordinate with main. `chat-<uuid>` peers

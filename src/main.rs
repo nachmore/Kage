@@ -371,7 +371,21 @@ async fn run() {
             use tauri::Emitter;
             info!("Second instance signaled via single-instance plugin");
             let _ = app.emit(events::SHOW_SESSIONS, ());
-        }));
+            // Note: when this second-instance launch was triggered by a
+            // `kage://...` deep link, the URL is in `_argv` and the
+            // single-instance plugin's `deep-link` feature flag forwards
+            // it to the deep-link plugin's `on_open_url` channel. We
+            // listen for that channel in src/setup.rs::install_deep_link_handler
+            // rather than re-deriving the URL from argv here.
+        }))
+        // Custom URL scheme handler for `kage://`. Registered after
+        // single-instance so the second-instance argv has already been
+        // forwarded into our channel. Self-registration on first launch
+        // (Windows: HKCU\Software\Classes\kage; macOS: handled by the
+        // bundler from CFBundleURLTypes; Linux: writes a .desktop file)
+        // happens via `register_all()` in setup.rs — the binary always
+        // knows its own path, which beats hand-coding it into NSIS.
+        .plugin(tauri_plugin_deep_link::init());
 
     // Aptabase plugin — only registered when a compile-time key was
     // provided (via APTABASE_KEY env var at build time). Without a key
@@ -621,6 +635,12 @@ async fn run() {
             // single-instance plugin's callback when a second process
             // launches; routed to the most-recently focused chat window.
             setup::install_show_sessions_listener(app);
+
+            // Self-register the kage:// URL scheme with the OS and
+            // listen for incoming kage://install/<id> deep links. Both
+            // the cold-launch case (`get_current()`) and the warm-launch
+            // case (`on_open_url`) route through the same handler.
+            setup::install_deep_link_handler(app);
 
             // Track focus on main so single-instance / show-sessions
             // routing has an accurate "most recent" target. Peer chat

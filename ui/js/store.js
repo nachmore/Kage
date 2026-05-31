@@ -62,6 +62,7 @@ async function init() {
     // Initial tab from URL param
     const urlParams = new URLSearchParams(window.location.search);
     const initialTab = urlParams.get('tab');
+    const installIntent = urlParams.get('install');
 
     await refreshInstalled();
 
@@ -78,6 +79,92 @@ async function init() {
     } else {
         renderTab();
     }
+
+    // Deep-link install intent. The Rust deep-link handler routes
+    // `kage://install/<id>` here via the URL query param. We wait for
+    // the initial render to settle before triggering, otherwise
+    // installFromStore tries to setCardBusy on a card that hasn't
+    // mounted yet. The render path is async (renderBrowse fetches the
+    // catalog), so we let one more microtask flush before kicking off.
+    if (installIntent) {
+        // requestAnimationFrame puts us after the next paint; the
+        // catalog fetch in renderBrowse is what we're waiting on but
+        // it's already in flight, and browsers schedule its completion
+        // ahead of the next animation frame in practice.
+        requestAnimationFrame(() => handleDeepLinkInstall(installIntent));
+    }
+}
+
+/**
+ * Deep-link install entry point. Called both:
+ *   - from init() when the URL carries `?install=<id>` (cold launch
+ *     from a `kage://install/<id>` click), and
+ *   - from Rust via eval_script when the store window was already
+ *     open (warm reuse — the URL change isn't reflected, so we
+ *     re-enter from the host side).
+ *
+ * Behaviour:
+ *   - If the extension is already installed, scroll to the row and
+ *     surface a brief flash so the user sees their click did
+ *     something. Don't re-prompt — they have it.
+ *   - Otherwise, scroll to the card and call installFromStore which
+ *     stages → prompts for capability approval → commits.
+ *   - If the id isn't in the catalog (typo in the URL, the catalog
+ *     hasn't reloaded yet, etc.) we just log and let the user
+ *     discover it.
+ */
+async function handleDeepLinkInstall(rawId) {
+    if (typeof rawId !== 'string') return;
+    // Defence in depth — Rust already validated, but the eval_script
+    // path is a separate trust boundary.
+    const id = rawId.replace(/[^a-z0-9_-]/gi, '');
+    if (!id) return;
+    console.log('[store] deep-link install intent:', id);
+
+    // Make sure we're on the extensions tab — themes and commands
+    // can't be the target of an install URL today.
+    if (currentTab !== 'extensions') {
+        switchTab('extensions');
+        // switchTab kicks off renderTab; wait one frame so the new
+        // grid is in the DOM before we look for the card.
+        await new Promise((r) => requestAnimationFrame(r));
+    }
+
+    // Wait briefly for the card to appear. The catalog fetch may
+    // still be in flight; poll for ~3 seconds, then give up.
+    const card = await waitForCard(id, 3000);
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Visible cue so the user sees they're in the right place.
+        card.classList.add('store-card-deep-link');
+        setTimeout(() => card.classList.remove('store-card-deep-link'), 1200);
+    }
+
+    if (installedMap.has(id)) {
+        console.log(`[store] '${id}' already installed; not re-prompting`);
+        return;
+    }
+    try {
+        await installFromStore(id);
+    } catch (e) {
+        console.warn('[store] deep-link install failed', e);
+    }
+}
+
+function waitForCard(id, timeoutMs) {
+    const sel = `.store-card[data-item-id="${CSS.escape(id)}"]`;
+    const found = document.querySelector(sel);
+    if (found) return Promise.resolve(found);
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const tick = () => {
+            const el = document.querySelector(sel);
+            if (el) return resolve(el);
+            if (Date.now() - start > timeoutMs) return resolve(null);
+            setTimeout(tick, 100);
+        };
+        tick();
+    });
 }
 
 async function refreshInstalled() {
@@ -539,7 +626,14 @@ window.__kageStore = {
     toggleInstalledFilter: _toggleInstalledFilter,
     onSearch,
     renderTab,
+    handleDeepLinkInstall,
 };
+// Top-level alias for the eval_script path: the Rust deep-link
+// handler injects `handleDeepLinkInstall('<id>')` into an
+// already-open store window via webview.eval(), and a direct
+// global is the simplest contract that doesn't depend on the
+// __kageStore facade existing at the eval time.
+window.handleDeepLinkInstall = handleDeepLinkInstall;
 
 waitForTauri(() => {
     init();

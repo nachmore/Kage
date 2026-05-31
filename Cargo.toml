@@ -56,7 +56,19 @@ privacy    = "https://github.com/nachmore/Kage/blob/main/docs/PRIVACY.md"
 tauri = { version = "2.10", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-shell = "2"
-tauri-plugin-single-instance = "2"
+# `deep-link` feature flag: tells single-instance to forward URLs from
+# the second-instance argv (Windows/Linux) into the deep-link plugin's
+# `on_open_url` channel, so we get a uniform handler regardless of
+# whether Kage was already running. Without the feature flag, a
+# `kage://install/<id>` click while Kage is already up would bounce
+# off the existing instance and the URL would be lost.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# Custom URL-scheme handler. Registers Kage as the handler for
+# `kage://` so links from the public extension store and email/IM
+# share-sheets land in the running app. See src/setup.rs for the
+# argv/event wiring; tauri.conf.json declares the schemes; the NSIS
+# installer + macOS Info.plist register the handler with the OS.
+tauri-plugin-deep-link = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Explicit tokio feature list rather than `full` — we don't use the

@@ -69,6 +69,11 @@
       "windows": {
         "installMode": "quiet"
       }
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["kage"]
+      }
     }
   },
   "bundle": {

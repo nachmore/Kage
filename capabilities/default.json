@@ -34,6 +34,7 @@
     "notification:allow-request-permission",
     "notification:allow-notify",
     "dialog:default",
-    "updater:default"
+    "updater:default",
+    "deep-link:default"
   ]
 }

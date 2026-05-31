@@ -150,6 +150,17 @@
             border-color: var(--kage-accent);
             box-shadow: 0 0 0 1px var(--kage-accent-glow);
         }
+        /* Brief flash applied when a deep link points the user at this
+           card. Helps "yes, this is what your kage:// click landed on"
+           without being noisy enough to bother regular browsing. */
+        .store-card-deep-link {
+            animation: store-card-deep-link-pulse 1.2s ease-out;
+        }
+        @keyframes store-card-deep-link-pulse {
+            0%   { box-shadow: 0 0 0 0 var(--kage-accent-glow); border-color: var(--kage-accent); }
+            70%  { box-shadow: 0 0 0 6px transparent; border-color: var(--kage-accent); }
+            100% { box-shadow: 0 0 0 0 transparent; }
+        }
         .store-card-header {
             display: flex;
             align-items: center;
