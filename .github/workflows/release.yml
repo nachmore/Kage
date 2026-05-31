@@ -367,7 +367,13 @@ jobs:
           node-version: "24"
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.10.0 --locked
+        # Cached compiled binary; see ci.yml for the rationale and key
+        # invalidation behaviour. Shared key space across both
+        # workflows so whichever one runs first warms the cache for
+        # the other.
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: tauri-cli@2.10.0
 
       - name: Build signed release
         env:

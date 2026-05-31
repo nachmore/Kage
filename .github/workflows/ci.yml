@@ -128,7 +128,18 @@ jobs:
       - name: Install Tauri CLI
         # Pinned to match the local dev env. Bump deliberately when
         # tauri itself bumps, not automatically.
-        run: cargo install tauri-cli --version 2.10.0 --locked
+        #
+        # `taiki-e/cache-cargo-install-action` caches the compiled
+        # `cargo-tauri` binary in `~/.cargo/bin/` keyed on the crate
+        # name + version + OS, so a warm cache turns a 2–3 min
+        # (Windows) / ~5 min (macOS) source compile into a ~5s
+        # download. Bumping the `version` here invalidates the
+        # cache automatically. Shared with release.yml — same key
+        # space, so the first workflow to land a new version warms
+        # the cache for the other.
+        uses: taiki-e/cache-cargo-install-action@v2
+        with:
+          tool: tauri-cli@2.10.0
 
       # `cargo tauri build --debug` does what we want:
       #   - runs tauri codegen so the frontend (./ui) is embedded in the exe
