@@ -1,9 +1,9 @@
 {
   "id": "math",
-  "name": "Math Calculator",
+  "name": "__MSG_manifest.name__",
   "version": "1.0.0",
   "type": "extension",
-  "description": "Inline math expression evaluator with unit conversions",
+  "description": "__MSG_manifest.description__",
   "icon": "🧮",
   "author": "kage",
 

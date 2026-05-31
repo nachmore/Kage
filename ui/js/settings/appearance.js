@@ -148,6 +148,12 @@ export class AppearanceSettingsModule extends SettingsModule {
     load(config) {
         if (!config.ui) return;
 
+        // Snapshot the active language so save() can detect a change and
+        // raise the restart-required flag. Empty / null means "follow
+        // system" — a switch to that from an explicit override IS a
+        // change, so normalise both sides to an empty string.
+        this._initialLanguage = config.ui.language || '';
+
         // Populate language dropdown from the embedded catalog list and set
         // the current selection. An empty value means "follow system locale".
         this._populateLanguageDropdown(config.ui.language || '');
@@ -206,6 +212,18 @@ export class AppearanceSettingsModule extends SettingsModule {
             // system-locale change is still honoured. Anything else is a hard
             // override the user explicitly picked.
             config.ui.language = v || null;
+            // A language change requires a window restart to fully reflow.
+            // The catalog reload event flips data-i18n attributes inline,
+            // but most surfaces render their strings via t() at render time
+            // — chat session list, settings rows, floating banners, etc.
+            // — and the existing DOM stays frozen until the next render
+            // pass. Rather than trigger a full re-render of every window
+            // (a significant refactor), the manager.js save flow surfaces a
+            // restart prompt when this flag is set, mirroring the same
+            // pattern as connection-mode changes.
+            if ((this._initialLanguage || '') !== (v || '')) {
+                this._needsRestart = true;
+            }
             // Ask the backend to switch locales immediately. The backend
             // also persists this in config.ui.language and broadcasts
             // config_updated, but we save explicitly here so the rest of

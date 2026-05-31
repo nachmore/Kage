@@ -1,0 +1,152 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "rtl": false,
+    "machine_translated": false
+  },
+  "manifest.name": {
+    "message": "Calendar",
+    "description": "Extension display name"
+  },
+  "manifest.description": {
+    "message": "Show upcoming meetings with join button overlay",
+    "description": "Extension description"
+  },
+  "result.refresh.label": {
+    "message": "Refresh calendar",
+    "description": "Result label for the cal-refresh command"
+  },
+  "result.refresh.description": {
+    "message": "Force refresh calendar data from Outlook",
+    "description": "Result description for cal-refresh"
+  },
+  "result.refresh.executed": {
+    "message": "Calendar refreshed",
+    "description": "Display value after a refresh succeeds"
+  },
+  "result.no_match.label": {
+    "message": "No meetings matching \"{query}\"",
+    "description": "Result label when a search term matches no events"
+  },
+  "result.no_match.description": {
+    "message": "Try a different search term or date",
+    "description": "Helper for the no-match result"
+  },
+  "result.no_upcoming.label": {
+    "message": "No upcoming meetings",
+    "description": "Result label when the lookahead window is empty"
+  },
+  "result.no_upcoming.description": {
+    "message": "{count, plural, one {No events found in the next 1 hour} other {No events found in the next # hours}}",
+    "description": "Helper showing the lookahead window in hours"
+  },
+  "result.no_date.label": {
+    "message": "No meetings on {label}",
+    "description": "Result label when a specific date has no events"
+  },
+  "result.day.tomorrow": {
+    "message": "[Tomorrow]",
+    "description": "Bracketed prefix for tomorrow's events in time labels"
+  },
+  "result.duration.minutes": {
+    "message": "{minutes}m",
+    "description": "Duration: minutes"
+  },
+  "result.duration.hours_minutes": {
+    "message": "{hours}h {minutes}m",
+    "description": "Duration: hours and minutes"
+  },
+  "result.duration.hours": {
+    "message": "{hours}h",
+    "description": "Duration: hours only"
+  },
+  "result.duration.day": {
+    "message": "1 day",
+    "description": "Duration: exactly one day"
+  },
+  "result.duration.days": {
+    "message": "{days} days",
+    "description": "Duration: multiple days"
+  },
+  "result.join_btn": {
+    "message": "Join",
+    "description": "Button label to open a meeting URL"
+  },
+  "widget.now": {
+    "message": "Now",
+    "description": "Widget time label when a meeting is currently happening"
+  },
+  "widget.in_minutes": {
+    "message": "in {minutes}m",
+    "description": "Widget time label for an imminent meeting"
+  },
+  "widget.concurrent_more": {
+    "message": "+{count} more",
+    "description": "Suffix when multiple concurrent meetings overlap"
+  },
+  "widget.dismiss_title": {
+    "message": "Dismiss this meeting",
+    "description": "Tooltip on the widget's ✕ dismiss button"
+  },
+  "settings.description": {
+    "message": "Type \"cal\" or \"meetings\" to see upcoming events.",
+    "description": "Top-of-pane description"
+  },
+  "settings.show_overlay.label": {
+    "message": "Show next meeting overlay",
+    "description": "Toggle: show the next-meeting widget"
+  },
+  "settings.show_overlay.description": {
+    "message": "Display the next upcoming meeting above the input with a join button.",
+    "description": "Helper for the show-overlay toggle"
+  },
+  "settings.lookahead.label": {
+    "message": "Lookahead (hours)",
+    "description": "Label for the lookahead-hours number input"
+  },
+  "settings.lookahead.description": {
+    "message": "How far ahead to look for meetings (1–72 hours).",
+    "description": "Helper for the lookahead input"
+  },
+  "settings.lookahead.error": {
+    "message": "Lookahead must be between 1 and 72 hours",
+    "description": "Validation error when lookahead is out of range"
+  },
+  "settings.test_btn": {
+    "message": "🔄 Test Calendar Access",
+    "description": "Button: probe whether the OS calendar permission is granted"
+  },
+  "settings.commands.label": {
+    "message": "Launcher Commands",
+    "description": "Label for the launcher-commands info panel"
+  },
+  "settings.commands.html": {
+    "message": "<code>cal</code> or <code>meetings</code> — show upcoming events<br><code>cal tomorrow</code> — events for a specific day<br><code>cal-refresh</code> — force refresh calendar data from Outlook",
+    "description": "HTML body for the launcher-commands info panel (HTML allowed)"
+  },
+  "settings.test.success": {
+    "message": "{count, plural, =0 {✅ No events in the next {hours, plural, one {1 hour} other {# hours}}} one {✅ Found 1 event in the next {hours, plural, one {1 hour} other {# hours}}} other {✅ Found # events in the next {hours, plural, one {1 hour} other {# hours}}}}",
+    "description": "Status after a successful calendar-access test"
+  },
+  "settings.test.denied": {
+    "message": "❌ Calendar access denied — opened System Settings. Grant Calendar permission to Kage, then test again.",
+    "description": "Status after a permission-denied result on macOS"
+  },
+  "settings.test.failed": {
+    "message": "❌ {message}",
+    "description": "Status when the test_calendar_access call throws"
+  },
+  "trigger.meeting_starting.description": {
+    "message": "A meeting is starting within 5 minutes",
+    "description": "Description shown in the automations trigger picker"
+  },
+  "trigger.meeting_started.description": {
+    "message": "A meeting has started (time reached)",
+    "description": "Description shown in the automations trigger picker"
+  },
+  "trigger.day_summary.description": {
+    "message": "Daily summary of upcoming meetings",
+    "description": "Description shown in the automations trigger picker"
+  }
+}

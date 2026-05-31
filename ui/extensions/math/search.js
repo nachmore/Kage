@@ -13,6 +13,7 @@ export default class MathSearchProvider {
     initialize(context) {
         this.config = context.config || {};
         this._runSandboxed = context.runSandboxed;
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     onConfigUpdate(config) {
@@ -34,7 +35,7 @@ export default class MathSearchProvider {
             id: 'math',
             type: 'math',
             label: '= ' + display,
-            description: 'Press Enter to copy result',
+            description: this.t('result.copy_hint'),
             icon: '🧮',
             score: 93,
             data: { value: display, raw: mathResult.result },

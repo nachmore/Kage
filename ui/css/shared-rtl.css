@@ -72,10 +72,29 @@ html[dir="rtl"] .setting-row .setting-control {
 
 /* ===== Chat / Floating windows =========================================== */
 
-/* Mascot peeks from one side of the floating window; flip the side. */
+/* Mascot is a flex item, so flex auto-flips its position to the right edge
+   under RTL — but the border-radius doesn't follow direction. The mascot is
+   rounded on its outside edge (away from the speech bubble) and flat on
+   the seam where it joins the bubble. Swap the curve so it stays rounded-
+   outside / flat-inside in RTL. Same logic for the bubble. */
 html[dir="rtl"] .mascot-container {
+    border-radius: 0 12px 12px 0;
+}
+html[dir="rtl"] .speech-bubble {
+    border-radius: 12px 0 0 12px;
+}
+
+/* Resize handle pins to the bottom-right of the speech bubble in LTR. In
+   RTL it should pin bottom-left so the user resizes from the corner that's
+   visible (the right corner is now occupied by the mascot). The diagonal
+   gradient of the handle's grip also needs to mirror — the LTR gradient
+   shows lines going from top-right to bottom-left, which is correct for a
+   bottom-right handle but wrong for bottom-left. Mirror via scaleX. */
+html[dir="rtl"] .resize-handle {
     right: auto;
     left: 0;
+    cursor: nesw-resize;
+    transform: scaleX(-1);
 }
 
 /* Toolbar arrows: the existing icons point in the LTR direction. We can't

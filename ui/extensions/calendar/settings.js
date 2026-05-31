@@ -5,6 +5,7 @@ export default class CalendarSettingsProvider {
     initialize(context) {
         this.config = context.config || {};
         this.invoke = context.invoke;
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     onConfigUpdate(config) {
@@ -12,23 +13,24 @@ export default class CalendarSettingsProvider {
     }
 
     getSettings() {
+        const t = this.t;
         return {
-            description: 'Type "cal" or "meetings" to see upcoming events.',
+            description: t('settings.description'),
             sections: [
                 {
                     controls: [
                         {
                             type: 'checkbox',
                             id: 'show_overlay',
-                            label: 'Show next meeting overlay',
-                            description: 'Display the next upcoming meeting above the input with a join button.',
+                            label: t('settings.show_overlay.label'),
+                            description: t('settings.show_overlay.description'),
                             default: true,
                         },
                         {
                             type: 'number',
                             id: 'lookahead_hours',
-                            label: 'Lookahead (hours)',
-                            description: 'How far ahead to look for meetings (1–72 hours).',
+                            label: t('settings.lookahead.label'),
+                            description: t('settings.lookahead.description'),
                             default: 8,
                             min: 1,
                             max: 72,
@@ -37,15 +39,13 @@ export default class CalendarSettingsProvider {
                         {
                             type: 'action',
                             id: 'test',
-                            label: '🔄 Test Calendar Access',
+                            label: t('settings.test_btn'),
                             action: 'test',
                         },
                         {
                             type: 'info',
-                            label: 'Launcher Commands',
-                            html: '<code>cal</code> or <code>meetings</code> — show upcoming events<br>'
-                                + '<code>cal tomorrow</code> — events for a specific day<br>'
-                                + '<code>cal-refresh</code> — force refresh calendar data from Outlook',
+                            label: t('settings.commands.label'),
+                            html: t('settings.commands.html'),
                         },
                     ],
                 },
@@ -56,7 +56,7 @@ export default class CalendarSettingsProvider {
     validate(values) {
         const hours = Number(values.lookahead_hours);
         if (!Number.isFinite(hours) || hours < 1 || hours > 72) {
-            return { valid: false, error: 'Lookahead must be between 1 and 72 hours' };
+            return { valid: false, error: this.t('settings.lookahead.error') };
         }
         return { valid: true };
     }
@@ -68,7 +68,7 @@ export default class CalendarSettingsProvider {
                 const events = await this.invoke('get_calendar_events', { hours });
                 const count = events?.length || 0;
                 return {
-                    status: `✅ Found ${count} event${count === 1 ? '' : 's'} in the next ${hours} hour${hours === 1 ? '' : 's'}`,
+                    status: this.t('settings.test.success', { count, hours }),
                 };
             } catch (e) {
                 const msg = e?.message || e || '';
@@ -77,9 +77,9 @@ export default class CalendarSettingsProvider {
                     try {
                         await this.invoke('open_url', { url: 'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Calendars' });
                     } catch (_) { /* best effort */ }
-                    return { status: `❌ Calendar access denied — opened System Settings. Grant Calendar permission to Kage, then test again.` };
+                    return { status: this.t('settings.test.denied') };
                 }
-                return { status: `❌ ${msg}` };
+                return { status: this.t('settings.test.failed', { message: msg }) };
             }
         }
         return {};

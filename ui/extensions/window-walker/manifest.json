@@ -1,9 +1,9 @@
 {
   "id": "window-walker",
-  "name": "Window Walker",
+  "name": "__MSG_manifest.name__",
   "version": "1.0.0",
   "type": "extension",
-  "description": "Switch between open windows. Type 'w ' to list and filter windows.",
+  "description": "__MSG_manifest.description__",
   "icon": "🪟",
   "author": "kage",
 

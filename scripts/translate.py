@@ -482,10 +482,20 @@ def collect_tasks(targets: dict[str, dict], catalogs: str) -> list[dict]:
                     _log(f"  ! host {lang} task-build failed: {e}", err=True)
 
     if catalogs in ("extensions", "all"):
-        if not EXTENSIONS_DIR.exists():
-            _log(f"WARN: extensions dir not found at {EXTENSIONS_DIR}, skipping", err=True)
+        # Both Kage-Extensions/<id>/ (user-installed source) and
+        # ui/extensions/<id>/ (built-in, ships with the binary) follow the
+        # same _locales/<lang>/messages.json convention. Walk both.
+        ext_roots = []
+        if EXTENSIONS_DIR.exists():
+            ext_roots.append(EXTENSIONS_DIR)
         else:
-            for ext_dir in sorted(p for p in EXTENSIONS_DIR.iterdir() if p.is_dir()):
+            _log(f"WARN: extensions dir not found at {EXTENSIONS_DIR}, skipping", err=True)
+        builtin_dir = ROOT / "ui" / "extensions"
+        if builtin_dir.exists():
+            ext_roots.append(builtin_dir)
+
+        for root_dir in ext_roots:
+            for ext_dir in sorted(p for p in root_dir.iterdir() if p.is_dir()):
                 en_path = ext_dir / "_locales" / "en" / "messages.json"
                 if not en_path.exists():
                     continue

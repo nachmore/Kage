@@ -7,6 +7,7 @@
 export default class MathSettingsProvider {
     initialize(context) {
         this.config = context.config || {};
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     onConfigUpdate(config) {
@@ -14,16 +15,17 @@ export default class MathSettingsProvider {
     }
 
     getSettings() {
+        const t = this.t;
         return {
-            description: 'Evaluate math expressions directly in the input bar without sending them to the agent.',
+            description: t('settings.description'),
             sections: [
                 {
                     controls: [
                         {
                             type: 'number',
                             id: 'precision',
-                            label: 'Decimal Precision',
-                            description: 'Number of decimal places to display (-1 = auto, 0 = integer)',
+                            label: t('settings.precision.label'),
+                            description: t('settings.precision.description'),
                             default: 2,
                             min: -1,
                             max: 15,
@@ -32,15 +34,15 @@ export default class MathSettingsProvider {
                         {
                             type: 'checkbox',
                             id: 'auto_copy',
-                            label: 'Auto-copy Result',
-                            description: 'Automatically copy the answer to clipboard when pressing Enter',
+                            label: t('settings.auto_copy.label'),
+                            description: t('settings.auto_copy.description'),
                             default: true,
                         },
                         {
                             type: 'checkbox',
                             id: 'thousands_separator',
-                            label: 'Use Thousands Separator',
-                            description: 'Format large numbers with commas (e.g. 1,000,000)',
+                            label: t('settings.thousands.label'),
+                            description: t('settings.thousands.description'),
                             default: false,
                         },
                     ],
@@ -52,7 +54,7 @@ export default class MathSettingsProvider {
     validate(values) {
         const p = Number(values.precision);
         if (!Number.isFinite(p) || p < -1 || p > 15) {
-            return { valid: false, error: 'Math precision must be between -1 and 15' };
+            return { valid: false, error: this.t('settings.precision.error') };
         }
         return { valid: true };
     }

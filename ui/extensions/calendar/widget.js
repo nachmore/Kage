@@ -12,6 +12,7 @@ export default class CalendarNextMeetingWidget {
         this._dismissedIds = new Set();
         this._cachedEvent = null;
         this._cachedConcurrent = 1;
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     onConfigUpdate(config) {
@@ -37,20 +38,21 @@ export default class CalendarNextMeetingWidget {
 
         let timeLabel;
         if (diffMin <= 0) {
-            timeLabel = 'Now';
+            timeLabel = this.t('widget.now');
         } else if (diffMin < 60 && !dayPrefix) {
-            timeLabel = `in ${diffMin}m`;
+            timeLabel = this.t('widget.in_minutes', { minutes: diffMin });
         } else {
             const time = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             timeLabel = dayPrefix ? `${dayPrefix} ${time}` : time;
         }
 
         const concurrentHtml = concurrent > 1
-            ? `<span style="font-size:10px;opacity:0.7;margin-left:4px;">+${concurrent - 1} more</span>`
+            ? `<span style="font-size:10px;opacity:0.7;margin-left:4px;">${escape(this.t('widget.concurrent_more', { count: concurrent - 1 }))}</span>`
             : '';
+        const joinLabel = this.t('result.join_btn');
         const joinHtml = event.online_url
             ? `<button data-ext-action="join" class="extension-bar-btn cal-join-btn"
-                       style="font-size:11px;padding:2px 10px;" title="${escape(event.online_url)}">Join</button>`
+                       style="font-size:11px;padding:2px 10px;" title="${escape(event.online_url)}">${escape(joinLabel)}</button>`
             : '';
 
         return {
@@ -63,7 +65,7 @@ export default class CalendarNextMeetingWidget {
                 <div class="extension-bar-controls">
                     ${joinHtml}
                     <button data-ext-action="dismiss" class="extension-bar-btn"
-                            style="font-size:11px;padding:1px 4px;" title="Dismiss this meeting">✕</button>
+                            style="font-size:11px;padding:1px 4px;" title="${escape(this.t('widget.dismiss_title'))}">✕</button>
                 </div>
             `,
             actions: [

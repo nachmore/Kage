@@ -552,6 +552,13 @@ export class WindowManager {
         let startHeight = 0;
         let scaleFactor = 1;
 
+        // Under RTL the resize handle sits at bottom-left (mirror of LTR's
+        // bottom-right). The natural expectation is "drag the handle in
+        // the direction you want the corner to move" — so under RTL,
+        // dragging LEFT should grow the window. Detect direction at
+        // mousedown time and flip dx accordingly.
+        let isRtl = false;
+
         const onMouseMove = async (e) => {
             const maxWidth = Math.floor(window.screen.availWidth * 0.95);
             let maxHeight;
@@ -566,7 +573,8 @@ export class WindowManager {
             } catch {
                 maxHeight = window.screen.availHeight * scaleFactor;
             }
-            const dx = (e.screenX - startX) * scaleFactor;
+            const dxRaw = (e.screenX - startX) * scaleFactor;
+            const dx = isRtl ? -dxRaw : dxRaw;
             const dy = (e.screenY - startY) * scaleFactor;
             const minWidth = Math.floor(570 * scaleFactor);
             const inputContainer = document.querySelector('.input-container');
@@ -615,6 +623,7 @@ export class WindowManager {
             this.isResizing = true;
             startX = e.screenX;
             startY = e.screenY;
+            isRtl = document.documentElement.getAttribute('dir') === 'rtl';
             try {
                 const appWindow = window.__TAURI__.webviewWindow.getCurrentWebviewWindow();
                 const size = await appWindow.innerSize();

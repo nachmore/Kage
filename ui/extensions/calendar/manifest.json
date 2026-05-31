@@ -1,9 +1,9 @@
 {
   "id": "calendar",
-  "name": "Calendar",
+  "name": "__MSG_manifest.name__",
   "version": "1.0.0",
   "type": "extension",
-  "description": "Show upcoming meetings with join button overlay",
+  "description": "__MSG_manifest.description__",
   "icon": "📅",
   "author": "kage",
 

@@ -1,0 +1,52 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "rtl": false,
+    "machine_translated": false
+  },
+  "manifest.name": {
+    "message": "Math Calculator",
+    "description": "Extension display name"
+  },
+  "manifest.description": {
+    "message": "Inline math expression evaluator with unit conversions",
+    "description": "Extension description"
+  },
+  "result.copy_hint": {
+    "message": "Press Enter to copy result",
+    "description": "Description shown on a math result row"
+  },
+  "settings.description": {
+    "message": "Evaluate math expressions directly in the input bar without sending them to the agent.",
+    "description": "Top-of-pane description"
+  },
+  "settings.precision.label": {
+    "message": "Decimal Precision",
+    "description": "Label for the decimal-precision number input"
+  },
+  "settings.precision.description": {
+    "message": "Number of decimal places to display (-1 = auto, 0 = integer)",
+    "description": "Helper for the precision input"
+  },
+  "settings.auto_copy.label": {
+    "message": "Auto-copy Result",
+    "description": "Toggle: copy math result to clipboard on Enter"
+  },
+  "settings.auto_copy.description": {
+    "message": "Automatically copy the answer to clipboard when pressing Enter",
+    "description": "Helper for the auto-copy toggle"
+  },
+  "settings.thousands.label": {
+    "message": "Use Thousands Separator",
+    "description": "Toggle: format large numbers with thousands separators"
+  },
+  "settings.thousands.description": {
+    "message": "Format large numbers with commas (e.g. 1,000,000)",
+    "description": "Helper for the thousands-separator toggle"
+  },
+  "settings.precision.error": {
+    "message": "Math precision must be between -1 and 15",
+    "description": "Validation error when precision is out of range"
+  }
+}

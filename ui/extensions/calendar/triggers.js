@@ -9,6 +9,7 @@ export default class CalendarTriggerProvider {
         initCache(context.invoke);
         this._interval = null;
         this._lastNotified = new Set();
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
         this._startPolling();
     }
 
@@ -18,9 +19,9 @@ export default class CalendarTriggerProvider {
 
     getTriggers() {
         return [
-            { name: 'calendar:meeting_starting', description: 'A meeting is starting within 5 minutes', icon: '📅' },
-            { name: 'calendar:meeting_started', description: 'A meeting has started (time reached)', icon: '📅' },
-            { name: 'calendar:day_summary', description: 'Daily summary of upcoming meetings', icon: '📅' },
+            { name: 'calendar:meeting_starting', description: this.t('trigger.meeting_starting.description'), icon: '📅' },
+            { name: 'calendar:meeting_started', description: this.t('trigger.meeting_started.description'), icon: '📅' },
+            { name: 'calendar:day_summary', description: this.t('trigger.day_summary.description'), icon: '📅' },
         ];
     }
 

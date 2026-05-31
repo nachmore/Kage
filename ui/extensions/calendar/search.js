@@ -9,6 +9,7 @@ export default class CalendarSearchProvider {
         this._invoke = context.invoke;
         initCache(context.invoke);
         this._config = context.config || {};
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     async onConfigUpdate(config) {
@@ -30,8 +31,8 @@ export default class CalendarSearchProvider {
             return [{
                 id: 'cal:refresh',
                 type: 'calendar_refresh',
-                label: 'Refresh calendar',
-                description: 'Force refresh calendar data from Outlook',
+                label: this.t('result.refresh.label'),
+                description: this.t('result.refresh.description'),
                 icon: '🔄',
                 score: 90,
                 data: { action: 'refresh' },
@@ -52,8 +53,8 @@ export default class CalendarSearchProvider {
                 return [{
                     id: 'cal:no-match',
                     type: 'calendar_event',
-                    label: `No meetings matching "${dateArg}"`,
-                    description: 'Try a different search term or date',
+                    label: this.t('result.no_match.label', { query: dateArg }),
+                    description: this.t('result.no_match.description'),
                     icon: '📅',
                     score: 85,
                     data: null,
@@ -67,8 +68,10 @@ export default class CalendarSearchProvider {
             return [{
                 id: 'cal:no-upcoming',
                 type: 'calendar_event',
-                label: 'No upcoming meetings',
-                description: 'No events found in the next ' + (this._config.lookahead_hours || 8) + ' hours',
+                label: this.t('result.no_upcoming.label'),
+                description: this.t('result.no_upcoming.description', {
+                    count: this._config.lookahead_hours || 8,
+                }),
                 icon: '📅',
                 score: 85,
                 data: null,
@@ -80,7 +83,7 @@ export default class CalendarSearchProvider {
     execute(result) {
         if (result.type === 'calendar_refresh') {
             this._fetchEvents(true);
-            return { type: 'display', value: 'Calendar refreshed' };
+            return { type: 'display', value: this.t('result.refresh.executed') };
         }
         const e = result.data;
         if (!e) return null;
@@ -96,7 +99,8 @@ export default class CalendarSearchProvider {
         if (e.organizer) lines.push(`👤 ${e.organizer}`);
         if (e.online_url) {
             const provider = this._meetingProvider(e.online_url);
-            lines.push(`🔗 [Join ${provider}](${e.online_url})`);
+            const joinLabel = this.t('result.join_btn');
+            lines.push(`🔗 [${joinLabel} ${provider}](${e.online_url})`);
         }
         const info = lines.join('\n');
 
@@ -135,9 +139,10 @@ export default class CalendarSearchProvider {
             this._lastJoinUrlByResultId = this._lastJoinUrlByResultId || new Map();
             this._lastJoinUrlByResultId.set(result.id, e.online_url);
         }
+        const joinLabel = this.t('result.join_btn');
         const joinBtn = e.online_url
             ? `<button data-ext-action="join:${escape(result.id)}" class="extension-bar-btn"
-                       style="font-size:11px;padding:2px 8px;" title="${escape(e.online_url)}">Join${provider ? ' ' + escape(provider) : ''}</button>`
+                       style="font-size:11px;padding:2px 8px;" title="${escape(e.online_url)}">${escape(joinLabel)}${provider ? ' ' + escape(provider) : ''}</button>`
             : '';
         const locSuffix = e.location && !/^https?:\/\//i.test(e.location.trim()) ? ' · ' + escape(e.location) : '';
         return {
@@ -200,7 +205,7 @@ export default class CalendarSearchProvider {
                 return [{
                     id: 'cal:no-date:' + dateStr,
                     type: 'calendar_event',
-                    label: `No meetings on ${label}`,
+                    label: this.t('result.no_date.label', { label }),
                     description: dateStr,
                     icon: '📅',
                     score: 85,
@@ -253,20 +258,22 @@ export default class CalendarSearchProvider {
         const eventDay = new Date(eventDate); eventDay.setHours(0,0,0,0);
         const diffDays = Math.round((eventDay - todayStart) / 86400000);
         if (diffDays === 0) return null;
-        if (diffDays === 1) return '[Tomorrow]';
+        if (diffDays === 1) return this.t('result.day.tomorrow');
         return '[' + eventDate.toLocaleDateString(undefined, { weekday: 'long' }) + ']';
     }
 
     _formatDuration(minutes) {
         if (!minutes) return '';
-        if (minutes < 60) return `${minutes}m`;
+        if (minutes < 60) return this.t('result.duration.minutes', { minutes });
         if (minutes < 1440) {
             const h = Math.floor(minutes / 60);
             const m = minutes % 60;
-            return m > 0 ? `${h}h ${m}m` : `${h}h`;
+            return m > 0
+                ? this.t('result.duration.hours_minutes', { hours: h, minutes: m })
+                : this.t('result.duration.hours', { hours: h });
         }
         const days = Math.round(minutes / 1440);
-        return days === 1 ? '1 day' : `${days} days`;
+        return days === 1 ? this.t('result.duration.day') : this.t('result.duration.days', { days });
     }
 
     _meetingProvider(url) {

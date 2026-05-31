@@ -8,6 +8,7 @@
 export default class WindowWalkerSettingsProvider {
     initialize(context) {
         this.config = context.config || {};
+        this.t = context.i18n?.t?.bind(context.i18n) || ((k) => k);
     }
 
     onConfigUpdate(config) {
@@ -15,17 +16,18 @@ export default class WindowWalkerSettingsProvider {
     }
 
     getSettings() {
+        const t = this.t;
         const storedTrigger = (this.config.trigger ?? 'w ').replace(/\s+$/, '');
         return {
-            description: 'Quickly switch between open windows. Type the trigger keyword to list and filter windows.',
+            description: t('settings.description'),
             sections: [
                 {
                     controls: [
                         {
                             type: 'text',
                             id: 'trigger',
-                            label: 'Trigger keyword',
-                            description: 'Type this in the floating window to activate window search. (A trailing space is added automatically.)',
+                            label: t('settings.trigger.label'),
+                            description: t('settings.trigger.description'),
                             default: storedTrigger,
                             placeholder: 'w',
                             maxWidth: 120,
@@ -33,15 +35,15 @@ export default class WindowWalkerSettingsProvider {
                         {
                             type: 'checkbox',
                             id: 'show_icons',
-                            label: 'Show window icons',
-                            description: 'Extract and display application icons next to each window. Disable for faster results on slower machines.',
+                            label: t('settings.show_icons.label'),
+                            description: t('settings.show_icons.description'),
                             default: true,
                         },
                         {
                             type: 'checkbox',
                             id: 'hide_minimized',
-                            label: 'Hide minimized windows',
-                            description: 'Exclude minimized windows from the list.',
+                            label: t('settings.hide_minimized.label'),
+                            description: t('settings.hide_minimized.description'),
                             default: false,
                         },
                     ],
@@ -53,7 +55,7 @@ export default class WindowWalkerSettingsProvider {
     validate(values) {
         const trigger = String(values.trigger || '').trim();
         if (!trigger) {
-            return { valid: false, error: 'Trigger keyword cannot be empty' };
+            return { valid: false, error: this.t('settings.trigger.error_empty') };
         }
         return { valid: true };
     }
