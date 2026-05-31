@@ -122,17 +122,33 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; Installer icon
 !if "${INSTALLERICON}" != ""
   !define MUI_ICON "${INSTALLERICON}"
+  ; Reuse the installer icon for the uninstaller. Tauri 2.11 added
+  ; `uninstallerIcon` config for distinct assets (rendered as
+  ; {{uninstaller_icon}} in the upstream template), but we don't
+  ; ship a separate uninstall mark — using the same icon avoids
+  ; the default red-X NSIS fallback while staying brand-consistent.
+  !define MUI_UNICON "${INSTALLERICON}"
 !endif
 
 ; Installer sidebar image
 !if "${SIDEBARIMAGE}" != ""
   !define MUI_WELCOMEFINISHPAGE_BITMAP "${SIDEBARIMAGE}"
+  ; Same logic as MUI_UNICON: reuse the welcome sidebar for the
+  ; uninstall flow's welcome/finish page so the visual language
+  ; carries through. The uninstaller doesn't show a welcome page
+  ; today (we go straight to MUI_UNPAGE_CONFIRM), but defining this
+  ; is harmless and future-proofs adding one.
+  !define MUI_UNWELCOMEFINISHPAGE_BITMAP "${SIDEBARIMAGE}"
 !endif
 
 ; Installer header image
 !if "${HEADERIMAGE}" != ""
   !define MUI_HEADERIMAGE
   !define MUI_HEADERIMAGE_BITMAP  "${HEADERIMAGE}"
+  ; Header strip shown across the top of UNPAGE_CONFIRM and
+  ; UNPAGE_INSTFILES during uninstall. Without this the header is
+  ; blank under MUI2's unbitmap branch.
+  !define MUI_HEADERIMAGE_UNBITMAP "${HEADERIMAGE}"
 !endif
 
 ; Define registry key to store installer language

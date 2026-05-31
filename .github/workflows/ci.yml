@@ -139,7 +139,7 @@ jobs:
         # the cache for the other.
         uses: taiki-e/cache-cargo-install-action@v2
         with:
-          tool: tauri-cli@2.10.0
+          tool: tauri-cli@2.11.2
 
       # `cargo tauri build --debug` does what we want:
       #   - runs tauri codegen so the frontend (./ui) is embedded in the exe

@@ -373,7 +373,7 @@ jobs:
         # the other.
         uses: taiki-e/cache-cargo-install-action@v2
         with:
-          tool: tauri-cli@2.10.0
+          tool: tauri-cli@2.11.2
 
       - name: Build signed release
         env:
