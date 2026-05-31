@@ -45,8 +45,10 @@
 #
 # What IS NOT yet in this workflow:
 #   - Linux (Kage ships only Windows + macOS today).
-#   - Universal Apple binaries (we build Intel + Apple Silicon
-#     separately; revisit if we ever ship an arch-agnostic .dmg).
+#   - Intel Macs. We shipped Apple Silicon + Intel side-by-side until
+#     2026-05-31, when Intel was dropped — Apple has retired x86_64
+#     and the GitHub `macos-15-intel` runner is much slower than the
+#     arm64 image. Restore the matrix entry if demand re-emerges.
 #   - Code-signing certificates for Windows/macOS OS-level trust (the
 #     updater plugin signature is cryptographically strong, but Windows
 #     SmartScreen and macOS notarization are separate, orthogonal
@@ -242,15 +244,16 @@ jobs:
             target: x86_64-pc-windows-msvc
           - os: macos-latest
             target: aarch64-apple-darwin
-          # Intel Mac builds. macos-13 was retired by GitHub on
-          # 2025-12-04 (https://github.blog/changelog/2025-09-19-github-actions-macos-13-runner-image-is-closing-down/);
-          # we use the macos-15-intel free-tier label instead.
-          # Apple discontinued x86_64 support, so this runner — and
-          # therefore Intel Mac builds entirely — go away when the
-          # macOS 15 image is retired (Fall 2027). At that point we
-          # ship arm64 only.
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
+          # Intel Mac builds previously shipped via the `macos-15-intel`
+          # free-tier runner. Removed on 2026-05-31 — Intel Macs are a
+          # diminishing share of installs, the runner is significantly
+          # slower than apple-silicon, and Apple already retired x86_64
+          # so this code path is end-of-life regardless. If demand
+          # surfaces (or stable-channel adoption shows real Intel
+          # users), restore by re-adding the matrix entry, the
+          # `darwin-x86_64` line in the `Assemble latest.json` step,
+          # and the matching mention in the workflow header. Reference
+          # commit: see git log for the removal.
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -533,7 +536,8 @@ jobs:
 
           build_platform "windows-x86_64"  "artefacts/bundle-windows-x86_64-pc-windows-msvc" "*.exe"
           build_platform "darwin-aarch64"  "artefacts/bundle-macos-aarch64-apple-darwin"     "*.app.tar.gz"
-          build_platform "darwin-x86_64"   "artefacts/bundle-macos-x86_64-apple-darwin"      "*.app.tar.gz"
+          # darwin-x86_64 (Intel Mac) intentionally absent — see matrix
+          # comment in the build job for context.
 
           jq -n \
             --arg version "$VERSION" \
