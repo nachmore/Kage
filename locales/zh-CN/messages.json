@@ -6497,18 +6497,6 @@
     "_machine_translated": true,
     "_source_hash": "dd805976c57d47d7"
   },
-  "settings.manager.cap.shell.label": {
-    "message": "Shell",
-    "description": "Capability badge label",
-    "_machine_translated": true,
-    "_source_hash": "4d17844356d054ed"
-  },
-  "settings.manager.cap.shell.desc": {
-    "message": "在外部打开 URL、路径和应用",
-    "description": "Capability badge tooltip",
-    "_machine_translated": true,
-    "_source_hash": "202db98f367bf719"
-  },
   "settings.manager.cap.automation.label": {
     "message": "自动化",
     "description": "Capability badge label",
@@ -7540,5 +7528,53 @@
     "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
     "_machine_translated": true,
     "_source_hash": "a79b07bd014f80ea"
+  },
+  "settings.manager.cap.urls.label": {
+    "message": "打开链接",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "7cc236e934cbb7f5"
+  },
+  "settings.manager.cap.urls.desc": {
+    "message": "打开网页链接以及少量安全的深层链接（邮件、系统设置）",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "4626d1c714307376"
+  },
+  "settings.manager.cap.launch.label": {
+    "message": "启动应用和文件",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2abd79df97ed3fe7"
+  },
+  "settings.manager.cap.launch.desc": {
+    "message": "启动其他应用并打开任意文件路径",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "05ab75d1a6eca9e5"
+  },
+  "settings.manager.cap.network.label": {
+    "message": "网络访问",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "cbb4bb7201d5c9f7"
+  },
+  "settings.manager.cap.network.desc": {
+    "message": "在浏览器沙箱之外抓取 URL（例如链接预览）",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "bb67490ba634e868"
+  },
+  "settings.manager.cap.oauth.label": {
+    "message": "OAuth 登录",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "dd5f61f0b648d181"
+  },
+  "settings.manager.cap.oauth.desc": {
+    "message": "开启一次性回环监听，以便服务通过登录码重定向回来",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "635884ef7f1b2346"
   }
 }

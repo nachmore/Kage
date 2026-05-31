@@ -59,7 +59,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
         const rawInvoke = vi.fn();
         const { sb, sent } = makeSandbox({
             // Grant everything possible — the forbidden list must still block.
-            capabilities: ['storage','clipboard','shell','filesystem','window','windows','notifications','calendar','session','agent','activity','automation','tts'],
+            capabilities: ['storage','clipboard','urls','launch','network','oauth','filesystem','window','windows','notifications','calendar','session','agent','activity','automation','tts'],
             rawInvoke,
         });
 
@@ -85,13 +85,13 @@ describe('ExtensionSandbox._handleInvoke', () => {
     it('propagates errors thrown by the underlying invoke', async () => {
         const rawInvoke = vi.fn().mockRejectedValue(new Error('backend boom'));
         const { sb, sent } = makeSandbox({
-            capabilities: ['shell'],
+            capabilities: ['urls'],
             rawInvoke,
         });
 
-        await sb._handleInvoke({ id: 5, command: 'open_url', args: { url: 'x' } });
+        await sb._handleInvoke({ id: 5, command: 'open_url', args: { url: 'https://example.com' } });
 
-        expect(rawInvoke).toHaveBeenCalledWith('open_url', { url: 'x' });
+        expect(rawInvoke).toHaveBeenCalledWith('open_url', { url: 'https://example.com' });
         expect(sent[0].error).toMatch(/backend boom/);
     });
 
@@ -147,7 +147,7 @@ describe('ExtensionSandbox._handleInvoke', () => {
         // arg appearing in their backend call.
         const rawInvoke = vi.fn().mockResolvedValue(null);
         const { sb } = makeSandbox({
-            capabilities: ['shell'],
+            capabilities: ['urls'],
             rawInvoke,
         });
 
@@ -160,5 +160,115 @@ describe('ExtensionSandbox._handleInvoke', () => {
         const [, passedArgs] = rawInvoke.mock.calls[0];
         expect(passedArgs).toEqual({ url: 'https://example.com' });
         expect(passedArgs.extension_id).toBeUndefined();
+    });
+
+    // ---- urls cap: scheme allowlist ----------------------------------
+
+    it('blocks open_url for schemes outside the urls allowlist', async () => {
+        const rawInvoke = vi.fn();
+        const { sb, sent } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+
+        // file:// can navigate to arbitrary local content; never allowed.
+        await sb._handleInvoke({
+            id: 100,
+            command: 'open_url',
+            args: { url: 'file:///etc/passwd' },
+        });
+
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent[0].error).toMatch(/scheme 'file:'/);
+    });
+
+    it('blocks custom app URI schemes from the urls cap', async () => {
+        const rawInvoke = vi.fn();
+        const { sb, sent } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+        // Custom app schemes (spotify://, vscode://, etc.) launch other
+        // apps. They need the `launch` cap, not `urls`.
+        await sb._handleInvoke({
+            id: 101,
+            command: 'open_url',
+            args: { url: 'spotify://album/foo' },
+        });
+
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent[0].error).toMatch(/'launch' capability/);
+    });
+
+    it('allows http/https with the urls cap', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue(null);
+        const { sb } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+
+        await sb._handleInvoke({
+            id: 102,
+            command: 'open_url',
+            args: { url: 'http://example.com' },
+        });
+        await sb._handleInvoke({
+            id: 103,
+            command: 'open_url',
+            args: { url: 'https://example.com/path?q=1' },
+        });
+
+        expect(rawInvoke).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows mailto/tel and OS-settings deep links with the urls cap', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue(null);
+        const { sb } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+
+        const allowed = [
+            'mailto:nobody@example.com',
+            'tel:+15551234567',
+            'sms:+15551234567',
+            'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Calendars',
+            'ms-settings:privacy-location',
+        ];
+        for (let i = 0; i < allowed.length; i++) {
+            await sb._handleInvoke({
+                id: 200 + i,
+                command: 'open_url',
+                args: { url: allowed[i] },
+            });
+        }
+        expect(rawInvoke).toHaveBeenCalledTimes(allowed.length);
+    });
+
+    it('rewrites bare www.* as https for validation', async () => {
+        const rawInvoke = vi.fn().mockResolvedValue(null);
+        const { sb } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+        await sb._handleInvoke({
+            id: 300,
+            command: 'open_url',
+            args: { url: 'www.example.com' },
+        });
+        expect(rawInvoke).toHaveBeenCalled();
+    });
+
+    it('rejects open_url with no url argument', async () => {
+        const rawInvoke = vi.fn();
+        const { sb, sent } = makeSandbox({
+            capabilities: ['urls'],
+            rawInvoke,
+        });
+
+        await sb._handleInvoke({ id: 400, command: 'open_url', args: {} });
+
+        expect(rawInvoke).not.toHaveBeenCalled();
+        expect(sent[0].error).toMatch(/no 'url' argument/);
     });
 });

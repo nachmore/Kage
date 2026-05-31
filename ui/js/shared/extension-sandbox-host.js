@@ -394,6 +394,23 @@ export class ExtensionSandbox {
             return;
         }
 
+        // Per-command argument validation that's tighter than the
+        // capability gate. Lives here rather than in the Rust command
+        // because the same command can be called from host UI with a
+        // wider set of legal arguments — only extension-originated calls
+        // are constrained. Returning an error here is exactly equivalent
+        // to a capability denial from the extension's perspective.
+        const argError = validateArgsForExtension(command, args);
+        if (argError) {
+            this._port.postMessage({
+                type: 'invoke-response',
+                id,
+                error: `Extension '${this.extensionId}': ${argError}`,
+            });
+            console.warn(`[sandbox ${this.extensionId}] BLOCKED invoke('${command}'): ${argError}`);
+            return;
+        }
+
         // For storage commands, force-inject the extension's identity. The
         // host owns the sandbox -> extension mapping (it created the
         // iframe), so this is authoritative. Any extension_id the sandbox
@@ -434,6 +451,79 @@ export class ExtensionSandbox {
                 break;
         }
     }
+}
+
+/**
+ * Schemes that the `urls` capability is allowed to hand to the OS via
+ * `open_url`. Anything outside this list — including custom app URI
+ * schemes like `spotify://`, `vscode://`, `slack://` — must use the
+ * `launch` capability instead.
+ *
+ * Why each entry is on the list:
+ *   - http/https: web pages.
+ *   - mailto/tel/sms/facetime/imessage: comms — every OS pre-registers
+ *     handlers and they don't accept arbitrary code paths.
+ *   - x-apple.systempreferences / ms-settings / prefs: deep links into
+ *     the user's own OS settings panes (e.g. macOS calendar privacy).
+ *     They cannot navigate to arbitrary apps.
+ *
+ * Naked scheme strings, no trailing colon. Comparison is
+ * case-insensitive (RFC 3986 §3.1).
+ */
+const URLS_CAP_ALLOWED_SCHEMES = Object.freeze([
+    'http',
+    'https',
+    'mailto',
+    'tel',
+    'sms',
+    'facetime',
+    'facetime-audio',
+    'imessage',
+    'x-apple.systempreferences',
+    'ms-settings',
+    'prefs', // iOS-style; macOS occasionally accepts via reverse-dns variants
+]);
+
+function extractScheme(url) {
+    if (typeof url !== 'string') return null;
+    // Trim leading whitespace; URI parsers tolerate it but our own
+    // matching shouldn't depend on call-site cleanliness.
+    const trimmed = url.replace(/^\s+/, '');
+    // Common typo we already auto-fix in open_url's Rust side: bare
+    // "www.foo.com". Pretend that's https for validation purposes; the
+    // Rust side will rewrite to https://.
+    if (/^www\./i.test(trimmed)) return 'https';
+    const m = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);
+    return m ? m[1].toLowerCase() : null;
+}
+
+/**
+ * Per-command argument validation for extension-originated calls.
+ * Returns null if the args are acceptable, or a human-readable string
+ * describing why they aren't (which the host surfaces back to the
+ * extension as the invoke error).
+ *
+ * Today this validates the URL scheme passed to `open_url` so the
+ * `urls` capability can't be used to launch arbitrary apps via
+ * `file:///` or custom URI schemes (`spotify://`, `vscode://`, etc.).
+ * Add more entries as new commands need extension-specific argument
+ * narrowing.
+ */
+function validateArgsForExtension(command, args) {
+    if (command === 'open_url') {
+        const url = args?.url;
+        if (typeof url !== 'string' || !url.trim()) {
+            return "open_url called with no 'url' argument.";
+        }
+        const scheme = extractScheme(url);
+        if (!scheme) {
+            return `open_url rejected: '${url}' has no scheme. Use http(s), mailto, tel, or an OS-settings deep link.`;
+        }
+        if (!URLS_CAP_ALLOWED_SCHEMES.includes(scheme)) {
+            return `open_url rejected: scheme '${scheme}:' is not allowed for the 'urls' capability. Custom app URI schemes need the 'launch' capability.`;
+        }
+    }
+    return null;
 }
 
 /**

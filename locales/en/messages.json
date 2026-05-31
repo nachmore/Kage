@@ -3773,12 +3773,36 @@
     "message": "Read/write its own sandboxed data and config",
     "description": "Capability badge tooltip"
   },
-  "settings.manager.cap.shell.label": {
-    "message": "Shell",
+  "settings.manager.cap.urls.label": {
+    "message": "Open links",
     "description": "Capability badge label"
   },
-  "settings.manager.cap.shell.desc": {
-    "message": "Open URLs, paths, and apps externally",
+  "settings.manager.cap.urls.desc": {
+    "message": "Open web links and a few safe deep links (email, OS settings)",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.launch.label": {
+    "message": "Launch apps & files",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.launch.desc": {
+    "message": "Launch other apps and open arbitrary file paths",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.network.label": {
+    "message": "Network access",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.network.desc": {
+    "message": "Fetch URLs from outside the browser sandbox (e.g. link previews)",
+    "description": "Capability badge tooltip"
+  },
+  "settings.manager.cap.oauth.label": {
+    "message": "OAuth sign-in",
+    "description": "Capability badge label"
+  },
+  "settings.manager.cap.oauth.desc": {
+    "message": "Open a one-shot loopback listener so a service can redirect back with a sign-in code",
     "description": "Capability badge tooltip"
   },
   "settings.manager.cap.automation.label": {

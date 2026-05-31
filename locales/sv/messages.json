@@ -6497,18 +6497,6 @@
     "_machine_translated": true,
     "_source_hash": "dd805976c57d47d7"
   },
-  "settings.manager.cap.shell.label": {
-    "message": "Skal",
-    "description": "Capability badge label",
-    "_machine_translated": true,
-    "_source_hash": "4d17844356d054ed"
-  },
-  "settings.manager.cap.shell.desc": {
-    "message": "Öppna URL:er, sökvägar och appar externt",
-    "description": "Capability badge tooltip",
-    "_machine_translated": true,
-    "_source_hash": "202db98f367bf719"
-  },
   "settings.manager.cap.automation.label": {
     "message": "Automatisering",
     "description": "Capability badge label",
@@ -7540,5 +7528,53 @@
     "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
     "_machine_translated": true,
     "_source_hash": "a79b07bd014f80ea"
+  },
+  "settings.manager.cap.urls.label": {
+    "message": "Öppna länkar",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "7cc236e934cbb7f5"
+  },
+  "settings.manager.cap.urls.desc": {
+    "message": "Öppna webblänkar och några säkra djuplänkar (e-post, OS-inställningar)",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "4626d1c714307376"
+  },
+  "settings.manager.cap.launch.label": {
+    "message": "Starta appar och filer",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2abd79df97ed3fe7"
+  },
+  "settings.manager.cap.launch.desc": {
+    "message": "Starta andra appar och öppna godtyckliga filsökvägar",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "05ab75d1a6eca9e5"
+  },
+  "settings.manager.cap.network.label": {
+    "message": "Nätverksåtkomst",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "cbb4bb7201d5c9f7"
+  },
+  "settings.manager.cap.network.desc": {
+    "message": "Hämta URL:er utanför webbläsarens sandlåda (t.ex. länkförhandsvisningar)",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "bb67490ba634e868"
+  },
+  "settings.manager.cap.oauth.label": {
+    "message": "OAuth-inloggning",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "dd5f61f0b648d181"
+  },
+  "settings.manager.cap.oauth.desc": {
+    "message": "Öppna en engångs-loopback-lyssnare så att en tjänst kan omdirigera tillbaka med en inloggningskod",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "635884ef7f1b2346"
   }
 }

@@ -6497,18 +6497,6 @@
     "_machine_translated": true,
     "_source_hash": "dd805976c57d47d7"
   },
-  "settings.manager.cap.shell.label": {
-    "message": "Shell",
-    "description": "Capability badge label",
-    "_machine_translated": true,
-    "_source_hash": "4d17844356d054ed"
-  },
-  "settings.manager.cap.shell.desc": {
-    "message": "Buka URL, path, dan aplikasi secara eksternal",
-    "description": "Capability badge tooltip",
-    "_machine_translated": true,
-    "_source_hash": "202db98f367bf719"
-  },
   "settings.manager.cap.automation.label": {
     "message": "Otomatisasi",
     "description": "Capability badge label",
@@ -7540,5 +7528,53 @@
     "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
     "_machine_translated": true,
     "_source_hash": "a79b07bd014f80ea"
+  },
+  "settings.manager.cap.urls.label": {
+    "message": "Buka tautan",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "7cc236e934cbb7f5"
+  },
+  "settings.manager.cap.urls.desc": {
+    "message": "Buka tautan web dan beberapa deep link yang aman (email, pengaturan OS)",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "4626d1c714307376"
+  },
+  "settings.manager.cap.launch.label": {
+    "message": "Jalankan aplikasi & berkas",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2abd79df97ed3fe7"
+  },
+  "settings.manager.cap.launch.desc": {
+    "message": "Jalankan aplikasi lain dan buka jalur berkas apa pun",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "05ab75d1a6eca9e5"
+  },
+  "settings.manager.cap.network.label": {
+    "message": "Akses jaringan",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "cbb4bb7201d5c9f7"
+  },
+  "settings.manager.cap.network.desc": {
+    "message": "Ambil URL dari luar sandbox peramban (mis. pratinjau tautan)",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "bb67490ba634e868"
+  },
+  "settings.manager.cap.oauth.label": {
+    "message": "Masuk OAuth",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "dd5f61f0b648d181"
+  },
+  "settings.manager.cap.oauth.desc": {
+    "message": "Buka listener loopback sekali pakai agar layanan dapat mengarahkan kembali dengan kode masuk",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "635884ef7f1b2346"
   }
 }

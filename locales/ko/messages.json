@@ -6497,18 +6497,6 @@
     "_machine_translated": true,
     "_source_hash": "dd805976c57d47d7"
   },
-  "settings.manager.cap.shell.label": {
-    "message": "셸",
-    "description": "Capability badge label",
-    "_machine_translated": true,
-    "_source_hash": "4d17844356d054ed"
-  },
-  "settings.manager.cap.shell.desc": {
-    "message": "URL, 경로, 앱을 외부에서 열기",
-    "description": "Capability badge tooltip",
-    "_machine_translated": true,
-    "_source_hash": "202db98f367bf719"
-  },
   "settings.manager.cap.automation.label": {
     "message": "자동화",
     "description": "Capability badge label",
@@ -7540,5 +7528,53 @@
     "description": "Initial-load state shown in the chat sidebar before list_sessions resolves",
     "_machine_translated": true,
     "_source_hash": "a79b07bd014f80ea"
+  },
+  "settings.manager.cap.urls.label": {
+    "message": "링크 열기",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "7cc236e934cbb7f5"
+  },
+  "settings.manager.cap.urls.desc": {
+    "message": "웹 링크와 몇 가지 안전한 딥 링크(이메일, OS 설정)를 엽니다",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "4626d1c714307376"
+  },
+  "settings.manager.cap.launch.label": {
+    "message": "앱 및 파일 실행",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "2abd79df97ed3fe7"
+  },
+  "settings.manager.cap.launch.desc": {
+    "message": "다른 앱을 실행하고 임의의 파일 경로를 엽니다",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "05ab75d1a6eca9e5"
+  },
+  "settings.manager.cap.network.label": {
+    "message": "네트워크 액세스",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "cbb4bb7201d5c9f7"
+  },
+  "settings.manager.cap.network.desc": {
+    "message": "브라우저 샌드박스 외부에서 URL을 가져옵니다(예: 링크 미리 보기)",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "bb67490ba634e868"
+  },
+  "settings.manager.cap.oauth.label": {
+    "message": "OAuth 로그인",
+    "description": "Capability badge label",
+    "_machine_translated": true,
+    "_source_hash": "dd5f61f0b648d181"
+  },
+  "settings.manager.cap.oauth.desc": {
+    "message": "서비스가 로그인 코드를 리디렉션할 수 있도록 일회성 루프백 리스너를 엽니다",
+    "description": "Capability badge tooltip",
+    "_machine_translated": true,
+    "_source_hash": "635884ef7f1b2346"
   }
 }

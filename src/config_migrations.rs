@@ -24,11 +24,14 @@ use serde_json::{json, Value};
 /// you add a migration; add the migration function to `migrate_one_step`
 /// below.
 ///
-/// Pre-launch baseline: we're at v1. Concrete migrations between
-/// versions don't exist yet because there are no users with prior
-/// schemas to migrate. The framework + tests stay so adding a real
-/// migration later is mechanical.
-pub const CURRENT_VERSION: u32 = 1;
+/// Versions:
+///   1 — pre-launch baseline.
+///   2 — split the legacy `shell` extension capability into `urls` +
+///       `launch`. Every existing grant containing `shell` keeps the
+///       same effective surface (open_url still works, open_path still
+///       works) but the user-visible permission is now described in
+///       two pills, one of which they can revoke later.
+pub const CURRENT_VERSION: u32 = 2;
 
 /// The lowest version we can still migrate from. If a config on disk is
 /// older than this we treat it as corrupt and reset (after backing up).
@@ -106,13 +109,56 @@ fn read_version(value: &Value) -> u32 {
 
 /// Dispatch a single migration step. Add a new arm here when you add
 /// a new migration function.
+fn migrate_one_step(from: u32, value: Value) -> Result<Value> {
+    match from {
+        1 => migrate_v1_to_v2(value),
+        _ => bail!("no migration registered from version {}", from),
+    }
+}
+
+/// v1 → v2: split the legacy `shell` extension capability into the
+/// granular `urls` + `launch` pair. Walks `extension_grants` and
+/// rewrites each `granted` array.
 ///
-/// Currently empty: there are no shipped users with prior schemas to
-/// migrate from, so concrete migrations don't exist yet. The chain
-/// runner above will only call this when `CURRENT_VERSION` is bumped
-/// past 1, at which point the new arm goes here.
-fn migrate_one_step(from: u32, _value: Value) -> Result<Value> {
-    bail!("no migration registered from version {}", from)
+/// We DO NOT downgrade — a user who had `shell` granted gave consent
+/// to "open URLs, file paths, and launch other apps," so they get
+/// both pieces of that surface. The split is purely for clearer
+/// post-install permission management (the user can now revoke
+/// `launch` independently if they decide they only want URL handoff).
+fn migrate_v1_to_v2(mut value: Value) -> Result<Value> {
+    let Some(grants) = value
+        .get_mut("extension_grants")
+        .and_then(|v| v.as_object_mut())
+    else {
+        return Ok(value); // no grants — nothing to do
+    };
+    for (_id, record) in grants.iter_mut() {
+        let Some(granted) = record.get_mut("granted").and_then(|v| v.as_array_mut()) else {
+            continue;
+        };
+        let mut needs_split = false;
+        let mut already_has_urls = false;
+        let mut already_has_launch = false;
+        for entry in granted.iter() {
+            match entry.as_str() {
+                Some("shell") => needs_split = true,
+                Some("urls") => already_has_urls = true,
+                Some("launch") => already_has_launch = true,
+                _ => {}
+            }
+        }
+        if !needs_split {
+            continue;
+        }
+        granted.retain(|v| v.as_str() != Some("shell"));
+        if !already_has_urls {
+            granted.push(json!("urls"));
+        }
+        if !already_has_launch {
+            granted.push(json!("launch"));
+        }
+    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -172,17 +218,90 @@ mod tests {
         assert_eq!(out, v);
     }
 
-    /// When the next migration is added: bump CURRENT_VERSION, write
-    /// the migration function, register it in `migrate_one_step`, and
-    /// add a test here that verifies before/after JSON shape. This
-    /// stub reminds future-us that it's wired up:
     #[test]
     fn migrate_one_step_rejects_unknown_versions() {
-        // Sanity check: even with no migrations registered, the
-        // dispatcher must reject unknown versions cleanly rather than
-        // panicking. This is the failure mode if CURRENT_VERSION gets
-        // bumped without adding a corresponding match arm.
-        let err = migrate_one_step(1, json!({})).unwrap_err();
+        // Sanity check: the dispatcher must reject unknown versions
+        // cleanly rather than panicking. This is the failure mode if
+        // CURRENT_VERSION gets bumped without adding a corresponding
+        // match arm. Use a version we'll never have a migration FROM
+        // to keep this future-proof.
+        let err = migrate_one_step(9999, json!({})).unwrap_err();
         assert!(format!("{}", err).contains("no migration registered"));
+    }
+
+    // ---- v1 → v2: shell → urls + launch ----------------------------
+
+    #[test]
+    fn v1_to_v2_splits_shell_grant_into_urls_and_launch() {
+        let v = json!({
+            "version": 1,
+            "extension_grants": {
+                "bookmarks": {
+                    "granted": ["storage", "shell"],
+                    "approved_version": "1.0.0",
+                    "approved_at": "2026-05-31T00:00:00Z",
+                }
+            }
+        });
+        let out = migrate(v).unwrap();
+        assert_eq!(out.get("version"), Some(&json!(2)));
+        let granted = out
+            .pointer("/extension_grants/bookmarks/granted")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        let names: Vec<_> = granted.iter().filter_map(|v| v.as_str()).collect();
+        assert!(names.contains(&"storage"));
+        assert!(names.contains(&"urls"));
+        assert!(names.contains(&"launch"));
+        assert!(!names.contains(&"shell"));
+    }
+
+    #[test]
+    fn v1_to_v2_does_not_duplicate_when_urls_already_present() {
+        // Defensive: a hand-edited config (or a prior partial run) might
+        // already have urls/launch alongside shell. Don't re-add them.
+        let v = json!({
+            "version": 1,
+            "extension_grants": {
+                "x": { "granted": ["shell", "urls"] }
+            }
+        });
+        let out = migrate(v).unwrap();
+        let granted = out
+            .pointer("/extension_grants/x/granted")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        let names: Vec<_> = granted.iter().filter_map(|v| v.as_str()).collect();
+        let urls_count = names.iter().filter(|&&n| n == "urls").count();
+        let launch_count = names.iter().filter(|&&n| n == "launch").count();
+        assert_eq!(urls_count, 1, "urls must not duplicate");
+        assert_eq!(launch_count, 1, "launch must be added once");
+        assert!(!names.contains(&"shell"));
+    }
+
+    #[test]
+    fn v1_to_v2_leaves_grants_without_shell_alone() {
+        let v = json!({
+            "version": 1,
+            "extension_grants": {
+                "calendar": { "granted": ["calendar", "automation"] }
+            }
+        });
+        let out = migrate(v).unwrap();
+        let names: Vec<_> = out
+            .pointer("/extension_grants/calendar/granted")
+            .and_then(|v| v.as_array())
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert_eq!(names, vec!["calendar", "automation"]);
+    }
+
+    #[test]
+    fn v1_to_v2_handles_missing_extension_grants() {
+        let v = json!({ "version": 1 });
+        let out = migrate(v).unwrap();
+        assert_eq!(out.get("version"), Some(&json!(2)));
     }
 }

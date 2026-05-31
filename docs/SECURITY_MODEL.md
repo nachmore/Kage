@@ -89,7 +89,7 @@ An extension's manifest declares the capabilities it needs:
 ```json
 {
   "id": "my-extension",
-  "permissions": ["storage", "shell"]
+  "permissions": ["storage", "urls"]
 }
 ```
 
@@ -201,9 +201,9 @@ Uninstalling an extension clears its grant.
 See [`EXTENSIONS.md`](./EXTENSIONS.md) for the authoritative list
 with per-capability descriptions. Summary:
 
-`storage` · `clipboard` · `shell` · `filesystem` · `window` ·
-`windows` · `notifications` · `calendar` · `session` · `agent` ·
-`activity` · `automation` · `tts`
+`storage` · `clipboard` · `urls` · `launch` · `network` · `oauth` ·
+`filesystem` · `window` · `windows` · `notifications` · `calendar` ·
+`session` · `agent` · `activity` · `automation` · `tts`
 
 ## Content Security Policy (CSP)
 

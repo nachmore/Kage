@@ -137,7 +137,7 @@ Request what you need in the manifest:
 
 ```json
 {
-  "permissions": ["storage", "shell", "notifications"]
+  "permissions": ["storage", "urls", "notifications"]
 }
 ```
 
@@ -159,7 +159,10 @@ for users.
 |-----------------|------|-------------------|
 | `storage`       | 💾  | The extension's own sandboxed data and config: `save_extension_data`, `load_extension_data`, `delete_extension_data`, `get_extension_config`, `save_extension_config`, read-only `get_config`, `save_frecency`, `load_frecency`. |
 | `clipboard`     | 📋  | `read_clipboard`, `get_clipboard_history`, `paste_clipboard_item`. |
-| `shell`         | 🌐  | `open_url`, `open_path`, `launch_app_by_name`, `fetch_favicon`, `fetch_link_metadata`. |
+| `urls`          | 🔗  | `open_url` for web links and a small allowlist of safe schemes (http, https, mailto, tel, sms, facetime, x-apple.systempreferences, ms-settings, prefs). Custom app URI schemes (`spotify://`, `vscode://`, etc.) are explicitly rejected — they need `launch`. |
+| `launch`        | 🚀  | `open_path` (open arbitrary files in their default OS handler) and `launch_app_by_name`. Distinct from `urls` because the blast radius is "execute external code on the user's behalf." Only request this when an extension genuinely needs to start programs. |
+| `network`       | 📡  | Outbound HTTP from the Rust runtime: `fetch_favicon`, `fetch_link_metadata`. Bypasses CORS and can reach intranet endpoints, so it's a separate capability from `urls`. |
+| `oauth`         | 🔐  | One-shot loopback HTTP listener for OAuth callbacks: `oauth_loopback_start`, `oauth_loopback_await`, `oauth_loopback_cancel`. |
 | `filesystem`    | 📂  | `pick_folder`, `scan_folder`, `execute_folder_plan`, `get_common_folders`, `search_files`, `resolve_directories`. |
 | `window`        | 🪟  | Kage-owned window chrome: `resize_floating_window`, `set_floating_opacity`, `start_drag_window`, window geometry. |
 | `windows`       | 🧿  | Other apps' windows: `list_open_windows`, `focus_open_window`, `get_process_name`, `get_source_window`, `get_app_icon`. |
@@ -176,6 +179,17 @@ The authoritative command-to-capability mapping is in
 If you add a new Tauri command you want extensions to be able to
 call, add it to that table under an existing capability (or propose
 a new one).
+
+#### Legacy aliases
+
+`shell` was the previous catch-all for "open URLs, file paths, and
+launch other apps." It still parses — manifests that declare it get
+`urls + launch` for backwards compatibility — but new manifests
+should use the granular caps directly so the install prompt and the
+post-install permission badges are accurate. The Rust loader
+([`extensions::normalize_permissions`](../src/extensions.rs)) and the
+JS loader both expand the alias, so old shipped extensions keep
+working without a manifest update.
 
 ### Forbidden commands
 

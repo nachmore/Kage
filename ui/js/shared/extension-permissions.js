@@ -35,10 +35,20 @@ export const COMMAND_CAPABILITIES = Object.freeze({
     get_clipboard_history: 'clipboard',
     paste_clipboard_item: 'clipboard',
 
-    // --- shell: opening things externally ----------------------------------
-    open_url: 'shell',
-    open_path: 'shell',
-    launch_app_by_name: 'shell',
+    // --- urls: hand a link to the user's browser ---------------------------
+    // Scope-limited at the Rust boundary to http/https, common comms
+    // schemes (mailto/tel/sms/facetime), and OS-settings deep links
+    // (ms-settings, x-apple.systempreferences, prefs). Custom app URI
+    // schemes like spotify:// or vscode:// are explicitly NOT covered —
+    // those launch other apps and require `launch`.
+    open_url: 'urls',
+    // --- launch: run external code on the user's behalf -------------------
+    // Distinct from `urls` because the blast radius is "open arbitrary
+    // file by its OS handler" (which can run a .bat, .scpt, .app, .exe)
+    // or "spawn a named app." Extensions that only need to navigate to
+    // a web page should declare `urls` instead.
+    open_path: 'launch',
+    launch_app_by_name: 'launch',
 
     // --- oauth: loopback HTTP listener for OAuth callbacks ----------------
     // Spawning a local HTTP server (even bound to 127.0.0.1) is a distinct
@@ -326,10 +336,17 @@ export const CAPABILITIES = Object.freeze({
         label: 'Clipboard',
         description: 'Read your clipboard contents and history.',
     },
-    shell: {
-        icon: '🌐',
-        label: 'Shell',
-        description: 'Open URLs, file paths, and launch other apps on your behalf.',
+    urls: {
+        icon: '🔗',
+        label: 'Open links',
+        description:
+            'Open web links (http/https) and a few safe deep links (email, phone, OS settings) in your default handler. Cannot open files or launch other apps.',
+    },
+    launch: {
+        icon: '🚀',
+        label: 'Launch apps & open files',
+        description:
+            'Open arbitrary file paths and launch other apps by name. Files open in their default OS handler, which can run scripts and binaries — only grant this to extensions that genuinely need to start programs.',
     },
     network: {
         icon: '📡',
@@ -391,8 +408,29 @@ export const CAPABILITIES = Object.freeze({
 export const KNOWN_CAPABILITIES = Object.freeze(Object.keys(CAPABILITIES));
 
 /**
+ * Legacy capabilities that the manifest may still declare. Each maps to
+ * one or more current caps so old shipped extensions keep working
+ * without a manifest update. Authoring new manifests should use the
+ * granular caps directly.
+ *
+ * `shell` originally bundled URL opening + file opening + app launching
+ * under one badge labelled "Open URLs, file paths, and launch other
+ * apps." That was overly broad \u2014 most "shell"-using extensions only
+ * actually call `open_url`. We split it into `urls` (browser handoff,
+ * scheme-limited at the Rust boundary) and `launch` (arbitrary file/app
+ * execution). Existing manifests that say `shell` get both for
+ * compatibility, but the user-visible description on the install
+ * prompt will list both pills, prompting authors to tighten down.
+ */
+const LEGACY_PERMISSION_ALIASES = Object.freeze({
+    shell: ['urls', 'launch'],
+});
+
+/**
  * Normalize whatever the manifest provided into a deduped list of valid
  * capabilities. Unknown capabilities are dropped (with a warning).
+ * Legacy aliases (see LEGACY_PERMISSION_ALIASES) expand into one or
+ * more current caps; the alias itself is dropped from the output.
  * @param {unknown} raw
  * @param {string} extensionId - for log messages
  * @returns {string[]}
@@ -401,17 +439,30 @@ export function normalizePermissions(raw, extensionId) {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
     const out = [];
+    const push = (cap) => {
+        if (seen.has(cap)) return;
+        seen.add(cap);
+        out.push(cap);
+    };
     for (const entry of raw) {
         if (typeof entry !== 'string') continue;
         const cap = entry.trim().toLowerCase();
         if (!cap) continue;
+        const expanded = LEGACY_PERMISSION_ALIASES[cap];
+        if (expanded) {
+            console.warn(
+                `Extension '${extensionId}': capability '${cap}' is deprecated; expanding to ${expanded.join(' + ')}. Update manifest.json to declare these directly.`
+            );
+            for (const e of expanded) {
+                if (e in CAPABILITIES) push(e);
+            }
+            continue;
+        }
         if (!(cap in CAPABILITIES)) {
             console.warn(`Extension '${extensionId}': unknown capability '${cap}' \u2014 ignored`);
             continue;
         }
-        if (seen.has(cap)) continue;
-        seen.add(cap);
-        out.push(cap);
+        push(cap);
     }
     return out;
 }

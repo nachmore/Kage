@@ -19,7 +19,10 @@ import { registerSettingsActions, setSettingsManager } from './module-registry.j
 const CAPABILITY_ICONS = Object.freeze({
     storage: '💾',
     clipboard: '📋',
-    shell: '🌐',
+    urls: '🔗',
+    launch: '🚀',
+    network: '📡',
+    oauth: '🔐',
     filesystem: '📂',
     window: '🪟',
     windows: '🧿',
