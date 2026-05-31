@@ -13,7 +13,7 @@ import { ExtensionManager } from '../../ui/js/shared/extension-manager.js';
 /** Build a manager with stubbed fetch methods so we can drive the scanner. */
 function makeManager(fs) {
     const mgr = new ExtensionManager(async () => undefined);
-    mgr._fetchTextBundled = async (_base, rel) => {
+    mgr._fetchText = async (_id, rel) => {
         const key = rel.replace(/^\.\//, '');
         return fs[key] ?? null;
     };
@@ -26,7 +26,7 @@ describe('_fetchSharedSources', () => {
             'search.js': 'export default class { foo() { return 1 } }',
         });
         const sources = { searchProvider: 'export default class { foo() { return 1 } }' };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(out).toBeUndefined();
     });
 
@@ -40,7 +40,7 @@ describe('_fetchSharedSources', () => {
                 export default class {}
             `,
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(out).toBeDefined();
         expect(out['./cache.js']).toContain('export const C = 1');
     });
@@ -53,7 +53,7 @@ describe('_fetchSharedSources', () => {
         const sources = {
             searchProvider: "import { A } from './a.js'; export default class {}",
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(Object.keys(out).sort()).toEqual(['./a.js', './b.js']);
     });
 
@@ -68,7 +68,7 @@ describe('_fetchSharedSources', () => {
                 'w2': "import { C } from './cache.js'; export default class {}",
             },
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(Object.keys(out)).toEqual(['./cache.js']);
     });
 
@@ -83,7 +83,7 @@ describe('_fetchSharedSources', () => {
                 export default class {}
             `,
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         // The missing file simply isn't in the output; the sandbox runtime
         // logs + skips when the import fails to resolve at blob-build time.
         expect(out['./real.js']).toBeDefined();
@@ -102,7 +102,7 @@ describe('_fetchSharedSources', () => {
                 export default class {}
             `,
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(out['./a.js']).toBeDefined();
         expect(out['./b.js']).toBeDefined();
     });
@@ -116,7 +116,7 @@ describe('_fetchSharedSources', () => {
                 export default class {}
             `,
         };
-        const out = await mgr._fetchSharedSources(sources, '/fake', null);
+        const out = await mgr._fetchSharedSources(sources, 'test-ext');
         expect(out).toBeUndefined();
     });
 });

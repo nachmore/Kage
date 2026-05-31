@@ -228,21 +228,20 @@ window.addEventListener('DOMContentLoaded', async () => {
         installedUser = await invoke('list_extensions');
     } catch {}
 
-    // Helper: resolve granted capabilities for an extension. Bundled ones
-    // get what their manifest declares (implicit grant); user-installed
-    // ones get whatever `extension_grants[id].granted` says. See
-    // docs/SECURITY_MODEL.md for the install-time grant story.
-    function resolveCaps(manifest, bundled) {
+    // Helper: resolve granted capabilities for an extension. Each extension
+    // gets whatever `extension_grants[id].granted` says, intersected with
+    // what its manifest currently requests. See docs/SECURITY_MODEL.md
+    // for the install-time grant story.
+    function resolveCaps(manifest) {
         const requested = normalizeExtensionPermissions(manifest.permissions, manifest.id);
-        if (bundled) return requested;
         const record = currentConfig.extension_grants?.[manifest.id];
         if (!record) return [];
         const grantedSet = new Set(normalizeExtensionPermissions(record.granted, manifest.id));
         return requested.filter((cap) => grantedSet.has(cap));
     }
 
-    async function loadSandboxedSettings({ manifest, sourceCode, bundled }) {
-        const capabilities = resolveCaps(manifest, bundled);
+    async function loadSandboxedSettings({ manifest, sourceCode }) {
+        const capabilities = resolveCaps(manifest);
         const mod = await buildSandboxedSettingsModule({
             pool: sandboxPool,
             manifest,
@@ -254,43 +253,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         addExtensionSidebarItem(mod.id, manifest.icon || '📦', manifest.name);
     }
 
-    // 1. Load bundled extension settings.
+    // Load extension settings. Every extension lives under the per-user
+    // install dir now — the in-binary "bundled" path is gone.
     try {
-        const resp = await fetch('extensions/bundled.json');
-        if (resp.ok) {
-            const bundledList = await resp.json();
-            for (const entry of bundledList) {
-                try {
-                    const manifestResp = await fetch(`extensions/${entry.id}/manifest.json`);
-                    if (!manifestResp.ok) continue;
-                    const manifest = await manifestResp.json();
-                    const settingsPath = manifest.contributes?.settingsProvider;
-                    if (!settingsPath) continue; // extension has no settings UI
-                    const srcResp = await fetch(
-                        `extensions/${entry.id}/${settingsPath.replace('./', '')}`
-                    );
-                    if (!srcResp.ok) throw new Error(`HTTP ${srcResp.status}`);
-                    const sourceCode = await srcResp.text();
-                    await loadSandboxedSettings({ manifest, sourceCode, bundled: true });
-                } catch (e) {
-                    console.warn(`Failed to load bundled extension settings '${entry.id}':`, e);
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('Failed to load bundled.json:', e);
-    }
-
-    // 2. Load user-installed extension settings.
-    try {
-        const bundledIds = new Set();
-        try {
-            const resp = await fetch('extensions/bundled.json');
-            if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
-        } catch {}
-
         for (const item of installedUser) {
-            if (bundledIds.has(item.manifest.id)) continue;
             const manifest = item.manifest;
             const settingsPath = manifest.contributes?.settingsProvider;
             if (!settingsPath) continue;
@@ -300,7 +266,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                     kind: 'extension',
                     filePath: settingsPath.replace('./', ''),
                 });
-                await loadSandboxedSettings({ manifest, sourceCode, bundled: false });
+                await loadSandboxedSettings({ manifest, sourceCode });
             } catch (e) {
                 console.warn(`Failed to load user extension settings '${manifest.id}':`, e);
             }
@@ -362,15 +328,8 @@ window.addEventListener('DOMContentLoaded', async () => {
                 currentConfig = await invoke('get_config');
             } catch {}
 
-            const bundledIds = new Set();
-            try {
-                const resp = await fetch('extensions/bundled.json');
-                if (resp.ok) (await resp.json()).forEach((e) => bundledIds.add(e.id));
-            } catch {}
-
             let added = false;
             for (const item of userExts) {
-                if (bundledIds.has(item.manifest.id)) continue;
                 const manifest = item.manifest;
                 if (!manifest.contributes?.settingsProvider) continue;
 
@@ -401,7 +360,7 @@ window.addEventListener('DOMContentLoaded', async () => {
                         kind: 'extension',
                         filePath: settingsPath,
                     });
-                    const capabilities = resolveCaps(manifest, false);
+                    const capabilities = resolveCaps(manifest);
                     const mod = await buildSandboxedSettingsModule({
                         pool: sandboxPool,
                         manifest,
@@ -424,10 +383,7 @@ window.addEventListener('DOMContentLoaded', async () => {
             // Remove modules for uninstalled extensions
             const installedIds = new Set(userExts.map((e) => e.manifest.id));
             const toRemove = settingsManager.modules.filter(
-                (m) =>
-                    m._extensionId &&
-                    !bundledIds.has(m._extensionId) &&
-                    !installedIds.has(m._extensionId)
+                (m) => m._extensionId && !installedIds.has(m._extensionId)
             );
             for (const mod of toRemove) {
                 const idx = settingsManager.modules.indexOf(mod);

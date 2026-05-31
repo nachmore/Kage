@@ -1,14 +1,16 @@
 //! Extension and theme discovery, management, and store API.
 //!
-//! Extensions live in two locations:
-//! - Bundled: `<app_resource_dir>/extensions/` (read-only, ships with app)
-//! - User:    `<config_dir>/kage/extensions/` (user-installed)
+//! Every extension and theme installs to the per-user config dir:
+//!   - Extensions: `<config_dir>/kage/extensions/`
+//!   - Themes:     `<config_dir>/kage/themes/`
 //!
-//! Themes live similarly:
-//! - Bundled: `<app_resource_dir>/themes/`
-//! - User:    `<config_dir>/kage/themes/`
-//!
-//! User-installed items take precedence over bundled ones with the same ID.
+//! Items are fetched from the store catalog
+//! (`https://nachmore.github.io/Kage-Extensions/` by default), verified
+//! against their SHA-256, and extracted on install. There used to be a
+//! second "bundled" path that shipped a small set of read-only extensions
+//! inside the binary; that complicated the security model and made
+//! first-party extensions feel different from third-party ones, so it
+//! was removed in favour of one uniform install path.
 
 use anyhow::{Context, Result};
 use log::{info, warn};
@@ -190,7 +192,7 @@ pub const VALID_CAPABILITIES: &[&str] = &[
 ///
 /// This is the single point of authority for what can land in
 /// `config.extension_grants[*].granted`. Both the welcome batch path
-/// (`install_and_commit_bundled`) and the store path
+/// (`install_and_commit_direct`) and the store path
 /// (`commit_extension_install`) should funnel through it — drift
 /// between the two is what lets silent privilege escalation sneak in.
 pub fn normalize_permissions(raw: &[String], context: &str) -> Vec<String> {
@@ -236,9 +238,9 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub contributes: Option<ExtensionContributes>,
     /// Capabilities this extension is requesting. See docs/EXTENSIONS.md
-    /// for the full list. When the field is absent, the frontend falls back
-    /// to a legacy-safe default — bundled extensions get a broad set,
-    /// user-installed ones get `storage` only.
+    /// for the full list. When the field is absent, the frontend falls
+    /// back to a legacy-safe default of `storage` only — pre-permissions
+    /// manifests can still load, but they can't do anything else.
     #[serde(default)]
     pub permissions: Option<Vec<String>>,
     /// For command packs: the commands themselves
@@ -295,8 +297,6 @@ pub struct InstalledItem {
     pub manifest: ExtensionManifest,
     /// Absolute path to the item's directory
     pub path: String,
-    /// Whether this is a bundled (read-only) item or user-installed
-    pub bundled: bool,
     /// Whether the user has enabled this item (default true)
     pub enabled: bool,
 }
@@ -330,11 +330,7 @@ pub fn kind_to_subdir(kind: &str) -> Result<&'static str> {
 // ---------------------------------------------------------------------------
 
 /// Scan a directory for manifest.json files, returning discovered items.
-fn scan_directory(
-    dir: &PathBuf,
-    bundled: bool,
-    enabled_states: &HashMap<String, bool>,
-) -> Vec<InstalledItem> {
+fn scan_directory(dir: &PathBuf, enabled_states: &HashMap<String, bool>) -> Vec<InstalledItem> {
     let mut items = Vec::new();
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -355,7 +351,6 @@ fn scan_directory(
                     let enabled = enabled_states.get(&manifest.id).copied().unwrap_or(true);
                     items.push(InstalledItem {
                         path: path.to_string_lossy().to_string(),
-                        bundled,
                         enabled,
                         manifest,
                     });
@@ -372,26 +367,17 @@ fn scan_directory(
     items
 }
 
-/// Discover all installed items of a given kind (bundled + user). User items override bundled by ID.
-/// `kind` is "extension", "theme", or "commands".
-pub fn discover_items(
-    kind: &str,
-    bundled_dir: Option<&PathBuf>,
-    enabled_states: &HashMap<String, bool>,
-) -> Vec<InstalledItem> {
+/// Discover all installed items of a given kind. `kind` is "extension",
+/// "theme", or "commands". Reads from the per-user install dir under
+/// `<config_dir>/kage/<subdir>/`. Was previously bundled+user-merged with
+/// the binary shipping a small set of in-tree extensions; that mode is
+/// gone now — every extension goes through the normal store install path.
+pub fn discover_items(kind: &str, enabled_states: &HashMap<String, bool>) -> Vec<InstalledItem> {
     let mut by_id: HashMap<String, InstalledItem> = HashMap::new();
 
-    // Bundled first (lower priority)
-    if let Some(dir) = bundled_dir {
-        for item in scan_directory(dir, true, enabled_states) {
-            by_id.insert(item.manifest.id.clone(), item);
-        }
-    }
-
-    // User items override bundled
     if let Ok(subdir) = kind_to_subdir(kind) {
         if let Ok(user_dir) = user_item_dir(subdir) {
-            for item in scan_directory(&user_dir, false, enabled_states) {
+            for item in scan_directory(&user_dir, enabled_states) {
                 by_id.insert(item.manifest.id.clone(), item);
             }
         }
@@ -439,7 +425,6 @@ pub fn install_from_directory(source_dir: &PathBuf) -> Result<InstalledItem> {
 
     Ok(InstalledItem {
         path: target_dir.to_string_lossy().to_string(),
-        bundled: false,
         enabled: true,
         manifest,
     })
@@ -644,12 +629,7 @@ pub fn install_from_zip(zip_path: &PathBuf) -> Result<InstalledItem> {
 
 /// Load theme colors from a theme's JSON file.
 /// Returns the colors map or None if not found.
-pub fn load_theme_colors(
-    theme_id: &str,
-    variant: &str,
-    bundled_dir: Option<&PathBuf>,
-) -> Result<Option<serde_json::Value>> {
-    // Check user themes first
+pub fn load_theme_colors(theme_id: &str, variant: &str) -> Result<Option<serde_json::Value>> {
     if let Ok(user_dir) = user_item_dir("themes") {
         let theme_dir = user_dir.join(theme_id);
         log::info!("load_theme_colors: checking user dir {:?}", theme_dir);
@@ -658,17 +638,8 @@ pub fn load_theme_colors(
         }
     }
 
-    // Then bundled
-    if let Some(dir) = bundled_dir {
-        let theme_dir = dir.join(theme_id);
-        log::info!("load_theme_colors: checking bundled dir {:?}", theme_dir);
-        if let Some(colors) = try_load_theme_variant(&theme_dir, variant)? {
-            return Ok(Some(colors));
-        }
-    }
-
     log::warn!(
-        "load_theme_colors: theme '{}' ({}) not found in any directory",
+        "load_theme_colors: theme '{}' ({}) not found",
         theme_id,
         variant
     );

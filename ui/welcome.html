@@ -693,8 +693,9 @@
             // ui/js/settings/manager.js → renderCapabilityBadges; the two
             // live separately because the welcome DOM doesn't load the
             // settings CSS. The actual authority on what gets granted is
-            // the Rust-side install_and_commit_bundled — this function is
-            // just honest disclosure of what the extension will receive.
+            // the Rust-side welcome_provision_extensions install path —
+            // this function is just honest disclosure of what the
+            // extension will receive.
             function renderCapPills(permissions) {
                 if (!Array.isArray(permissions) || permissions.length === 0) {
                     return `<span class="ext-cap-pill ext-cap-pill-none" title="${escapeHtml(t('welcome.extensions.cap.none.title'))}">${t('welcome.extensions.cap.none')}</span>`;
@@ -846,7 +847,6 @@
 
                 const decisions = storeExtensions.map((ext, i) => ({
                     id: ext.id,
-                    bundled: !!ext.bundled,
                     checked: !!document.getElementById('ext-cb-' + i)?.checked,
                 }));
                 console.log(`[welcome] dispatching ${decisions.length} decisions (fire-and-forget)`);

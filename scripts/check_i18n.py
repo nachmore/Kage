@@ -189,13 +189,6 @@ def scan_source(root: Path, suffixes: Iterable[str], patterns: Iterable[re.Patte
     Skips third-party vendor code, build output, and test files. Test code
     references can collide with real keys (e.g. a test asserting `t("foo")`
     returns something) and shouldn't gate the build.
-
-    Built-in extension code (`ui/extensions/<id>/`) is also skipped here:
-    each extension owns its own `_locales/` catalog and is checked
-    independently by `check_builtin_extensions()`. Without this skip the
-    main EN catalog would report extension keys (e.g. `result.copy_hint`)
-    as "referenced from source but missing in EN", because they live in
-    the extension's catalog, not in `locales/en/messages.json`.
     """
     used: dict[str, list[Path]] = {}
     skip_dirs = {
@@ -206,7 +199,6 @@ def scan_source(root: Path, suffixes: Iterable[str], patterns: Iterable[re.Patte
         "ui-tests",                    # test fixtures use t() in assertions
         "tests",                       # Rust integration tests
         "dist",                        # built output
-        "extensions",                  # ui/extensions/* — bundled exts (own catalogs)
     }
     for path in root.rglob("*"):
         if not path.is_file():
@@ -402,14 +394,6 @@ def main() -> int:
     else:
         warnings.append(f"Kage-Extensions repo not found at {EXTENSIONS_DIR}; skipping extension i18n check")
 
-    # Built-in (bundled) extensions live inside the main repo at
-    # ui/extensions/<id>/ and follow the same _locales/<lang>/messages.json
-    # convention as user-installed ones. Run the same parity check on them.
-    builtin_dir = ROOT / "ui" / "extensions"
-    if builtin_dir.exists():
-        builtin_errors = check_extensions(builtin_dir)
-        errors.extend(builtin_errors)
-
     # ---- Report ---------------------------------------------------------
     for w in warnings:
         print(f"WARN: {w}")
@@ -430,8 +414,7 @@ def check_extensions(root_dir: Path) -> list[str]:
     string referenced via the extension's `i18n.t(...)` proxy in JS or
     extension-side `manifest.localized` declarations must be in the en catalog.
 
-    `root_dir` is the directory containing extension subdirs — either the
-    Kage-Extensions repo's `extensions/` or the bundled `ui/extensions/`.
+    `root_dir` is the Kage-Extensions repo's `extensions/` directory.
     """
     errs: list[str] = []
     for ext_dir in sorted(p for p in root_dir.iterdir() if p.is_dir()):

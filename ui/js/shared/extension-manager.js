@@ -17,8 +17,6 @@
  *     follow-up.
  */
 
-const BUNDLED_EXT_PATH = 'extensions';
-
 /**
  * Allow-list of vendor libraries an extension may declare in its
  * `sandboxVendor` manifest array. Keys are the names extensions use;
@@ -80,21 +78,9 @@ import { activeLanguage as hostLanguage, isRtl as hostIsRtl, t, tHtml } from './
 // same shape as the host catalog. The host fetches the active locale's
 // catalog plus the EN fallback at extension load time; both are passed to
 // the sandbox runtime so its `context.i18n.t(key, vars)` proxy can render
-// without a per-call IPC roundtrip.
-//
-// For bundled extensions we fetch via HTTP from the in-binary asset path; for
-// user-installed extensions we go through the `read_extension_locale` Tauri
-// command (which validates the extension id and stays inside the user dir).
-
-async function _fetchBundledJson(path) {
-    try {
-        const r = await fetch(path);
-        if (!r.ok) return null;
-        return await r.json();
-    } catch {
-        return null;
-    }
-}
+// without a per-call IPC roundtrip. The catalog is read via the
+// `read_extension_locale` Tauri command, which validates the extension id
+// and stays inside the user install dir.
 
 function _stripCatalogMeta(catalog) {
     if (!catalog || typeof catalog !== 'object') return {};
@@ -181,7 +167,7 @@ export class ExtensionManager {
     }
 
     /**
-     * Discover and load all enabled extensions (bundled + user-installed).
+     * Discover and load all enabled extensions.
      */
     async initialize() {
         try {
@@ -191,37 +177,18 @@ export class ExtensionManager {
             this._configCache = {};
         }
 
-        // 1. Load bundled extensions from ui/extensions/bundled.json
-        try {
-            const resp = await fetch(`${BUNDLED_EXT_PATH}/bundled.json`);
-            if (resp.ok) {
-                const bundledList = await resp.json();
-                for (const entry of bundledList) {
-                    try {
-                        await this._loadBundledExtension(entry.id);
-                    } catch (e) {
-                        console.warn(`Failed to load bundled extension '${entry.id}':`, e);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to load bundled.json:', e);
-        }
-
-        // 2. Load user-installed extensions from backend
         try {
             const userExts = await this.invoke('list_extensions');
             for (const item of userExts) {
                 if (!item.enabled) continue;
-                if (this.extensions.has(item.manifest.id)) continue; // bundled takes precedence
                 try {
-                    await this._loadUserExtension(item);
+                    await this._loadExtension(item);
                 } catch (e) {
-                    console.warn(`Failed to load user extension '${item.manifest.id}':`, e);
+                    console.warn(`Failed to load extension '${item.manifest.id}':`, e);
                 }
             }
         } catch (e) {
-            console.warn('Failed to list user extensions:', e);
+            console.warn('Failed to list extensions:', e);
         }
 
         console.log(`ExtensionManager: ${this.extensions.size} extensions loaded`);
@@ -247,29 +214,25 @@ export class ExtensionManager {
         }
     }
 
-    async _loadBundledExtension(id) {
-        const basePath = `${BUNDLED_EXT_PATH}/${id}`;
-        const manifestResp = await fetch(`${basePath}/manifest.json`);
-        if (!manifestResp.ok) return;
-        const manifest = await manifestResp.json();
+    async _loadExtension(item) {
+        const id = item.manifest.id;
+        const manifest = item.manifest;
 
         const states = this._configCache?.extension_states || {};
         if (states[id] === false) return;
 
-        const capabilities = this._resolveGrantedCapabilities(manifest, true);
+        const capabilities = this._resolveGrantedCapabilities(manifest);
         const ext = {
             manifest,
-            basePath,
-            userInstalled: false,
             capabilities,
             sandbox: null,
         };
 
-        const sources = await this._fetchProviderSourcesBundled(basePath, manifest);
+        const sources = await this._fetchProviderSources(id, manifest);
         const sharedSources = sources.sharedSources;
         delete sources.sharedSources;
         const vendorSources = await this._fetchVendorSources(manifest);
-        const i18n = await this._fetchExtensionLocaleBundled(basePath);
+        const i18n = await this._fetchExtensionLocale(id, manifest);
         // Resolve __MSG_*__ tokens in the manifest's name/description so
         // search results, settings rows, and the store all show localised
         // labels. Mutates a copy so the original manifest stays the wire
@@ -290,58 +253,11 @@ export class ExtensionManager {
                     i18nRtl: i18n.rtl,
                 });
             } catch (e) {
-                console.warn(`Sandbox boot failed for '${id}':`, e);
+                console.warn(`Sandbox boot failed for extension '${id}':`, e);
             }
         }
 
-        // Load CSS (still host-side — it's scoped to the parent DOM)
-        this._loadBundledCss(id, basePath, manifest);
-
-        this.extensions.set(id, ext);
-    }
-
-    async _loadUserExtension(item) {
-        const id = item.manifest.id;
-        const manifest = item.manifest;
-
-        const states = this._configCache?.extension_states || {};
-        if (states[id] === false) return;
-
-        const capabilities = this._resolveGrantedCapabilities(manifest, false);
-        const ext = {
-            manifest,
-            basePath: null,
-            userInstalled: true,
-            capabilities,
-            sandbox: null,
-        };
-
-        const sources = await this._fetchProviderSourcesUser(id, manifest);
-        const sharedSources = sources.sharedSources;
-        delete sources.sharedSources;
-        const vendorSources = await this._fetchVendorSources(manifest);
-        const i18n = await this._fetchExtensionLocaleUser(id, manifest);
-        ext.localizedManifest = applyManifestI18n(manifest, i18n.catalog, i18n.fallback);
-        if (this._hasSandboxedProvider(sources)) {
-            try {
-                ext.sandbox = await this._pool.load({
-                    extensionId: id,
-                    capabilities,
-                    config: this._getExtensionConfig(id, manifest),
-                    sources,
-                    sharedSources,
-                    vendorSources,
-                    i18nCatalog: i18n.catalog,
-                    i18nFallback: i18n.fallback,
-                    i18nLanguage: i18n.language,
-                    i18nRtl: i18n.rtl,
-                });
-            } catch (e) {
-                console.warn(`Sandbox boot failed for user extension '${id}':`, e);
-            }
-        }
-
-        await this._loadUserCss(id, manifest);
+        await this._loadExtensionCss(id, manifest);
 
         this.extensions.set(id, ext);
     }
@@ -359,48 +275,23 @@ export class ExtensionManager {
         );
     }
 
-    async _fetchProviderSourcesBundled(basePath, manifest) {
+    async _fetchProviderSources(id, manifest) {
         const out = {};
         const c = manifest.contributes || {};
-        if (c.searchProvider)
-            out.searchProvider = await this._fetchTextBundled(basePath, c.searchProvider);
-        if (c.toolProvider)
-            out.toolProvider = await this._fetchTextBundled(basePath, c.toolProvider);
-        if (c.triggerProvider)
-            out.triggerProvider = await this._fetchTextBundled(basePath, c.triggerProvider);
-        if (c.toolbarButtons)
-            out.toolbarProvider = await this._fetchTextBundled(basePath, c.toolbarButtons);
+        if (c.searchProvider) out.searchProvider = await this._fetchText(id, c.searchProvider);
+        if (c.toolProvider) out.toolProvider = await this._fetchText(id, c.toolProvider);
+        if (c.triggerProvider) out.triggerProvider = await this._fetchText(id, c.triggerProvider);
+        if (c.toolbarButtons) out.toolbarProvider = await this._fetchText(id, c.toolbarButtons);
         if (c.messageFormatters)
-            out.messageFormatter = await this._fetchTextBundled(basePath, c.messageFormatters);
+            out.messageFormatter = await this._fetchText(id, c.messageFormatters);
         if (Array.isArray(c.widgets) && c.widgets.length) {
             out.widgets = {};
             for (const w of c.widgets) {
                 if (!w?.id || !w?.module) continue;
-                out.widgets[w.id] = await this._fetchTextBundled(basePath, w.module);
+                out.widgets[w.id] = await this._fetchText(id, w.module);
             }
         }
-        out.sharedSources = await this._fetchSharedSources(out, basePath, null);
-        return out;
-    }
-
-    async _fetchProviderSourcesUser(id, manifest) {
-        const out = {};
-        const c = manifest.contributes || {};
-        if (c.searchProvider) out.searchProvider = await this._fetchTextUser(id, c.searchProvider);
-        if (c.toolProvider) out.toolProvider = await this._fetchTextUser(id, c.toolProvider);
-        if (c.triggerProvider)
-            out.triggerProvider = await this._fetchTextUser(id, c.triggerProvider);
-        if (c.toolbarButtons) out.toolbarProvider = await this._fetchTextUser(id, c.toolbarButtons);
-        if (c.messageFormatters)
-            out.messageFormatter = await this._fetchTextUser(id, c.messageFormatters);
-        if (Array.isArray(c.widgets) && c.widgets.length) {
-            out.widgets = {};
-            for (const w of c.widgets) {
-                if (!w?.id || !w?.module) continue;
-                out.widgets[w.id] = await this._fetchTextUser(id, w.module);
-            }
-        }
-        out.sharedSources = await this._fetchSharedSources(out, null, id);
+        out.sharedSources = await this._fetchSharedSources(out, id);
         return out;
     }
 
@@ -416,11 +307,10 @@ export class ExtensionManager {
      * file or declare them explicitly later.
      *
      * @param {object} sources - the sources bag accumulated so far
-     * @param {string | null} basePath - bundled base path (if bundled)
-     * @param {string | null} extensionId - user extension id (if user)
+     * @param {string} extensionId - extension id used for the read_extension_file IPC
      * @returns {Promise<object>} flat map of { "./rel/path.js": sourceText }
      */
-    async _fetchSharedSources(sources, basePath, extensionId) {
+    async _fetchSharedSources(sources, extensionId) {
         const collected = new Map();
         const queue = [];
 
@@ -448,10 +338,7 @@ export class ExtensionManager {
         while (queue.length) {
             const rel = queue.shift();
             if (collected.has(rel)) continue;
-            const text =
-                basePath !== null
-                    ? await this._fetchTextBundled(basePath, rel)
-                    : await this._fetchTextUser(extensionId, rel);
+            const text = await this._fetchText(extensionId, rel);
             if (text == null) continue;
             collected.set(rel, text);
             scan(text);
@@ -480,22 +367,11 @@ export class ExtensionManager {
      *   Map of allow-list name → source text, or undefined if none.
      */
     /**
-     * Fetch a bundled extension's `_locales/<lang>/messages.json` for the
-     * currently active host language, plus the EN fallback. Resolves to
-     * empty catalogs if the extension ships no `_locales/` directory.
+     * Fetch an extension's `_locales/<lang>/messages.json` via the Tauri
+     * command `read_extension_locale`, which path-validates the extension
+     * id and stays inside the user install dir.
      */
-    async _fetchExtensionLocaleBundled(basePath) {
-        return _resolveExtensionCatalog(async (code) => {
-            return await _fetchBundledJson(`${basePath}/_locales/${code}/messages.json`);
-        });
-    }
-
-    /**
-     * Fetch a user-installed extension's locale catalog via the Tauri command
-     * `read_extension_locale`, which path-validates the extension id and
-     * stays inside the user dir.
-     */
-    async _fetchExtensionLocaleUser(id, manifest) {
+    async _fetchExtensionLocale(id, manifest) {
         const kind = manifest?.type || 'extension';
         return _resolveExtensionCatalog(async (code) => {
             try {
@@ -540,19 +416,7 @@ export class ExtensionManager {
         return Object.keys(out).length ? out : undefined;
     }
 
-    async _fetchTextBundled(basePath, relPath) {
-        const url = `${basePath}/${relPath.replace('./', '')}`;
-        try {
-            const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            return await resp.text();
-        } catch (e) {
-            console.warn(`Failed to fetch '${url}':`, e);
-            return null;
-        }
-    }
-
-    async _fetchTextUser(id, relPath) {
+    async _fetchText(id, relPath) {
         try {
             return await this.invoke('read_extension_file', {
                 extensionId: id,
@@ -560,7 +424,7 @@ export class ExtensionManager {
                 filePath: relPath.replace('./', ''),
             });
         } catch (e) {
-            console.warn(`Failed to read user extension file '${id}/${relPath}':`, e);
+            console.warn(`Failed to read extension file '${id}/${relPath}':`, e);
             return null;
         }
     }
@@ -578,27 +442,18 @@ export class ExtensionManager {
      *      was approved. If the manifest later requests more caps, we
      *      drop the extras until the user re-approves.
      *
-     * Bundled extensions are ingested with an implicit grant of exactly
-     * what the bundled manifest requests — there's no install step, the
-     * user approves by installing Kage itself.
-     *
      * @returns {string[]}
      */
-    _resolveGrantedCapabilities(manifest, bundled) {
+    _resolveGrantedCapabilities(manifest) {
         const id = manifest.id;
         const requested = normalizePermissions(manifest.permissions, id);
-
-        if (bundled) {
-            // Bundled = shipped with the app = implicit grant.
-            return requested;
-        }
 
         const grants = this._configCache?.extension_grants || {};
         const record = grants[id];
         if (!record) {
-            // User-installed extension without a grant record. This shouldn't
-            // happen if install went through the permission prompt, but
-            // handle it defensively: grant nothing and log loudly.
+            // Extension without a grant record. This shouldn't happen if
+            // install went through the permission prompt, but handle it
+            // defensively: grant nothing and log loudly.
             console.warn(
                 `Extension '${id}': no user grant recorded, running with no capabilities. ` +
                     `The extension may be broken until it is reinstalled.`
@@ -613,21 +468,7 @@ export class ExtensionManager {
         return requested.filter((cap) => grantedSet.has(cap));
     }
 
-    _loadBundledCss(id, basePath, manifest) {
-        const cssFiles = manifest.contributes?.css;
-        if (!Array.isArray(cssFiles) || cssFiles.length === 0) return;
-        for (const cssPath of cssFiles) {
-            const fullPath = `${basePath}/${cssPath.replace('./', '')}`;
-            if (document.querySelector(`link[data-ext-css="${id}"]`)) continue;
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = fullPath;
-            link.dataset.extCss = id;
-            document.head.appendChild(link);
-        }
-    }
-
-    async _loadUserCss(id, manifest) {
+    async _loadExtensionCss(id, manifest) {
         const cssFiles = manifest.contributes?.css;
         if (!Array.isArray(cssFiles) || cssFiles.length === 0) return;
         for (const cssPath of cssFiles) {
@@ -1080,8 +921,7 @@ export class ExtensionManager {
             const installedIds = new Set(userExts.map((e) => e.manifest.id));
             const states = this._configCache?.extension_states || {};
 
-            for (const [id, ext] of this.extensions) {
-                if (!ext.userInstalled) continue;
+            for (const [id] of this.extensions) {
                 if (!installedIds.has(id) || states[id] === false) {
                     this._unloadExtension(id);
                 }
@@ -1098,7 +938,7 @@ export class ExtensionManager {
                     this._unloadExtension(item.manifest.id);
                 }
                 try {
-                    await this._loadUserExtension(item);
+                    await this._loadExtension(item);
                     // Mount any widgets this extension contributes.
                     if (Array.isArray(item.manifest.contributes?.widgets)) {
                         const ext = this.extensions.get(item.manifest.id);

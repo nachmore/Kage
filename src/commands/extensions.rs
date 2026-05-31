@@ -20,7 +20,6 @@ pub async fn list_extensions(
     let config = features.config.lock_or_recover();
     Ok(extensions::discover_items(
         "extension",
-        None,
         &config.extension_states,
     ))
 }
@@ -32,7 +31,6 @@ pub async fn list_themes(
     let config = features.config.lock_or_recover();
     Ok(extensions::discover_items(
         "theme",
-        None,
         &config.extension_states,
     ))
 }
@@ -44,7 +42,6 @@ pub async fn list_command_packs(
     let config = features.config.lock_or_recover();
     Ok(extensions::discover_items(
         "commands",
-        None,
         &config.extension_states,
     ))
 }
@@ -130,7 +127,7 @@ pub async fn load_theme_colors(
         "load_theme_colors: id='{}', variant='{}'",
         theme_id, variant
     );
-    match extensions::load_theme_colors(&theme_id, &variant, None) {
+    match extensions::load_theme_colors(&theme_id, &variant) {
         Ok(Some(colors)) => {
             info!("load_theme_colors: found colors for '{}'", theme_id);
             Ok(colors)
@@ -858,11 +855,7 @@ pub async fn check_extension_updates(
     };
 
     for kind in &["extension", "theme", "commands"] {
-        let items = extensions::discover_items(kind, None, &states);
-        for item in items {
-            if item.bundled {
-                continue;
-            }
+        for item in extensions::discover_items(kind, &states) {
             installed.push((
                 item.manifest.id.clone(),
                 item.manifest.version.clone(),
@@ -1127,21 +1120,15 @@ pub async fn delete_extension_data(extension_id: String, key: String) -> Result<
 // ---------------------------------------------------------------------------
 // First-run welcome: batch provisioning
 // ---------------------------------------------------------------------------
-// Non-bundled extensions selected on the welcome screen are pulled from the
+// Extensions selected on the welcome screen are pulled from the
 // configured store URL (production catalog by default). If the user is
-// offline at first launch, those installs will fail individually and be
-// reported in the WelcomeProvisionReport — bundled ones (code already in
-// the binary, just toggled on/off) still work, which is the right
-// degradation: the user can pick up the rest later from the store.
+// offline at first launch, individual installs will fail and be reported
+// in the WelcomeProvisionReport — the user can pick up the rest later
+// from the store.
 
 #[derive(Debug, serde::Deserialize)]
 pub struct WelcomeExtensionDecision {
     pub id: String,
-    /// True for extensions whose code ships inside the binary (math,
-    /// calendar, window-walker) — these only need an `enabled` flag
-    /// flipped. False for everything else; those get an atomic install
-    /// via `install_and_commit_bundled`.
-    pub bundled: bool,
     /// Whether the user ticked the box on the welcome screen.
     pub checked: bool,
 }
@@ -1230,7 +1217,7 @@ fn provision_decisions(
         };
         let mut set = std::collections::HashSet::new();
         for kind in &["extension", "theme"] {
-            for item in extensions::discover_items(kind, None, &states) {
+            for item in extensions::discover_items(kind, &states) {
                 set.insert(item.manifest.id);
             }
         }
@@ -1240,24 +1227,7 @@ fn provision_decisions(
     let mut report = WelcomeProvisionReport::default();
 
     for decision in decisions {
-        if decision.bundled {
-            let want_enabled = decision.checked;
-            match toggle_enabled_direct(config, app, &decision.id, want_enabled) {
-                Ok(()) => {
-                    if want_enabled {
-                        report.enabled += 1;
-                        info!("welcome_provision: enabled bundled '{}'", decision.id);
-                    } else {
-                        report.disabled += 1;
-                        info!("welcome_provision: disabled bundled '{}'", decision.id);
-                    }
-                }
-                Err(e) => {
-                    report.failed += 1;
-                    warn!("welcome_provision: toggle '{}' failed: {}", decision.id, e);
-                }
-            }
-        } else if decision.checked && !already_installed.contains(&decision.id) {
+        if decision.checked && !already_installed.contains(&decision.id) {
             match install_and_commit_direct(config, app, &decision.id) {
                 Ok(installed_id) => {
                     report.installed += 1;
@@ -1276,45 +1246,15 @@ fn provision_decisions(
     report
 }
 
-/// Toggle `extension_states[id]` directly against the shared config.
-/// Mirror of [`set_extension_enabled`] but without the Tauri State /
-/// async wrapping so it can be called from a spawn_blocking context.
-fn toggle_enabled_direct(
-    config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    app: &tauri::AppHandle,
-    id: &str,
-    enabled: bool,
-) -> Result<(), String> {
-    let mut cfg = config.lock_or_recover();
-    cfg.extension_states.insert(id.to_string(), enabled);
-    cfg.save()
-        .map_err(|e| format!("Failed to save config: {}", e))?;
-    drop(cfg);
-    crate::telemetry::track(
-        app,
-        "extension_enabled_toggled",
-        Some(serde_json::json!({
-            "extension_id": id,
-            "enabled": enabled,
-            "source": "welcome_batch",
-        })),
-    );
-    if let Err(e) = app.emit(events::CONFIG_UPDATED, ()) {
-        error!("Failed to emit config_updated: {}", e);
-    }
-    Ok(())
-}
-
 /// Install + commit in one go for the welcome flow.
 ///
-/// This used to read pre-bundled zips out of `store/packages/` next to
-/// the executable. With the move to a remote catalog
-/// (`https://nachmore.github.io/Kage-Extensions/`), the welcome flow
-/// fetches from the network like any other install. If the user is
-/// offline at first launch, individual installs fail and surface in the
-/// `WelcomeProvisionReport` — bundled-code extensions (math, calendar,
-/// window-walker) still toggle on cleanly because they don't need the
-/// network. The user can install the rest later from the store window.
+/// Fetches the extension package from the configured store URL
+/// (`https://nachmore.github.io/Kage-Extensions/` by default), verifies
+/// the SHA-256 against the catalog, extracts to the user's install dir,
+/// and commits the capability grant. If the user is offline at first
+/// launch, individual installs fail and surface in the
+/// `WelcomeProvisionReport`; the user can install the rest later from
+/// the store window.
 fn install_and_commit_direct(
     config: &std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     app: &tauri::AppHandle,

@@ -608,7 +608,7 @@ async function initExtension(init) {
     const context = buildContext();
     const sources = init.sources || {};
 
-    // Shared modules (e.g. extensions/calendar/cache.js) come in a
+    // Shared modules (e.g. an extension's cache.js sibling) come in a
     // separate bag keyed by their relative path. We build blob URLs
     // for them first so provider-level imports can be rewritten to
     // point at those blobs.

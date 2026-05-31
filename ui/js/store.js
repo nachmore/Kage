@@ -21,7 +21,6 @@ import { applyTheme, initThemeListener, loadAndApplyTheme } from './shared/theme
 let currentTab = 'extensions';
 let showInstalledOnly = false;
 let installedMap = new Map(); // id → { version, kind }
-const _bundledIds = new Set();
 let _isDevMode = false;
 let _hasMultipleSources = false;
 
@@ -43,15 +42,6 @@ async function init() {
     // Check dev mode
     try {
         _isDevMode = await invoke('is_dev_mode');
-    } catch {}
-
-    // Load bundled extension IDs
-    try {
-        const resp = await fetch('extensions/bundled.json');
-        if (resp.ok) {
-            const list = await resp.json();
-            for (const e of list) _bundledIds.add(e.id);
-        }
     } catch {}
 
     // Apply theme
@@ -118,20 +108,6 @@ async function refreshInstalled() {
         const packs = await invoke('list_command_packs');
         packs.forEach((e) => installedMap.set(e.manifest.id, captureManifest(e, 'commands')));
     } catch {}
-    _bundledIds.forEach((id) => {
-        if (!installedMap.has(id)) {
-            installedMap.set(id, {
-                version: '0.0.0',
-                kind: 'extension',
-                hasSettings: false,
-                name: id,
-                description: '',
-                icon: '',
-                author: null,
-                permissions: [],
-            });
-        }
-    });
 }
 
 function hasUpdate(itemId, remoteVersion) {
@@ -264,16 +240,13 @@ async function renderBrowse(container, type) {
 
 function renderCard(item, kind) {
     const isInstalled = installedMap.has(item.id);
-    const isBundled = _bundledIds.has(item.id);
     const updateAvailable = isInstalled && hasUpdate(item.id, item.version);
     const localInfo = installedMap.get(item.id);
     const itemSource = item._source || '';
 
     // Build action buttons
     let actionHtml = '';
-    if (isBundled) {
-        actionHtml = '<span class="store-card-btn installed">Built-in</span>';
-    } else if (isInstalled) {
+    if (isInstalled) {
         const buttons = [];
 
         // Settings deep link (if extension has a settings module)

@@ -1,5 +1,0 @@
-[
-  { "id": "math", "className": "MathExtSettingsModule", "sidebarIcon": "🧮", "sidebarLabel": "Math" },
-  { "id": "calendar", "className": "CalendarExtSettingsModule", "sidebarIcon": "📅", "sidebarLabel": "Calendar" },
-  { "id": "window-walker", "className": "WindowWalkerExtSettingsModule", "sidebarIcon": "🪟", "sidebarLabel": "Window Walker" }
-]
