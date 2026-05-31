@@ -591,12 +591,21 @@ pub fn maybe_show_welcome_window(app_handle: &AppHandle, first_run_completed: bo
 /// `updater::consume_install_source`) so a stale marker can never
 /// re-trigger this behaviour on a future launch.
 ///
-/// Why deferred: at this point in setup the floating window's webview
-/// JS may still be initialising, but `show()` is fine to call
-/// regardless — the window appears as soon as its frontend is
-/// painted, and `checkForUpdateBanner` (in floating/app.js) will
-/// already have queued the banner DOM by the time the user looks at
-/// it.
+/// Why we eval a suppression flag BEFORE `show()`: at this point the
+/// other preloaded webviews (chat, inline-assist) are still painting
+/// for the first time. Whichever paints LAST after we show the
+/// floating window steals focus and triggers our `tauri://blur`
+/// handler, which would normally hide the window. The blur handler
+/// in `floating/app.js` checks `_suppressBlurHideUntil`, but that
+/// flag was previously only set INSIDE `checkForUpdateBanner` —
+/// which runs on the first `tauri://focus`, well after the early
+/// focus-thrashing storm has already torn the window down. Setting
+/// the flag from Rust here, BEFORE `show()`, races the focus events
+/// to the JS engine and wins because eval runs synchronously in the
+/// webview's main thread before the next paint. 5 seconds is
+/// generous: chat-window first-paint is ~500ms cold, but we'd
+/// rather over-suppress than have the banner vanish on a slower
+/// machine.
 pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
     use crate::updater::{consume_install_source, InstallSource};
     let Some(source) = consume_install_source() else {
@@ -607,6 +616,18 @@ pub fn maybe_show_floating_after_interactive_install(app_handle: &AppHandle) {
         return;
     }
     if let Some(floating) = app_handle.get_webview_window(window_labels::FLOATING) {
+        // Pre-arm a window-scoped suppression flag the JS blur
+        // handler honours. Eval is queued onto the webview's main
+        // thread; the property assignment runs before the next paint
+        // and before the JS bootstrap has a chance to observe the
+        // first focus event. The matching read in floating/app.js is
+        // a guard at the top of the `tauri://blur` handler. 5s is
+        // generous: chat-window first-paint is ~500ms cold, but
+        // over-suppressing is much less bad than losing the banner.
+        let _ = floating.eval(
+            "window._kagePostUpdateSuppressUntil = Date.now() + 5000; \
+             console.log('[floating] post-update blur-hide suppression armed by Rust');",
+        );
         crate::commands::window::center_floating_on_active_monitor(&floating);
         let _ = floating.show();
         let _ = floating.set_focus();

@@ -1145,12 +1145,26 @@ export class FloatingApp {
 
         this.appWindow.listen('tauri://blur', async () => {
             this._windowFocused = false;
-            // Suppress blur-hide briefly after a post-update banner
-            // show. The chat window's preloaded webview paints
-            // shortly after we show the floating window for the
-            // celebration banner, and its focus-grab triggers blur
-            // here — without this guard the banner would vanish
-            // before the user sees it. See checkForUpdateBanner.
+            // Suppress blur-hide briefly after a post-update show. We
+            // honour two signals:
+            //
+            //   `this._suppressBlurHideUntil` — set by checkForUpdateBanner
+            //     once the banner is rendered. Catches blurs that happen
+            //     after focus stabilises.
+            //
+            //   `window._kagePostUpdateSuppressUntil` — pre-armed by the
+            //     Rust setup code (`maybe_show_floating_after_interactive_install`)
+            //     via WebviewWindow::eval BEFORE the floating window is
+            //     shown. Catches the early focus-thrashing storm that
+            //     fires while the chat / inline-assist preloaded webviews
+            //     paint for the first time — the JS bootstrap hasn't yet
+            //     run, so the instance flag above is undefined and the
+            //     blur would otherwise hide the window before the user
+            //     sees the celebration banner.
+            const winSuppress = window._kagePostUpdateSuppressUntil;
+            if (winSuppress && Date.now() < winSuppress) {
+                return;
+            }
             if (this._suppressBlurHideUntil && Date.now() < this._suppressBlurHideUntil) {
                 return;
             }
